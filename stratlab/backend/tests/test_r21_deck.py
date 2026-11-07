@@ -167,7 +167,7 @@ def test_the_layer_chart_plots_only_medians_of_three_or_more_with_their_count():
     v["chain"]["rows"][1]["ebitda"] = 12.0
     s = next(x for x in deck.theme_plan(v)[0] if x.title == "The value chain by layer")
     t = next(b for b in s.blocks if b["kind"] == "table")
-    assert t["rows"][0][t["head"].index("EBITDA margin")] == "– (1)"
+    assert t["rows"][0][t["head"].index("EBITDA margin")] == "– (1 of 2)"          # changed on purpose (R25): "N of M" beside the layer's count
     charts = [b for b in s.blocks if b["kind"] == "hbars"]
     assert not charts or all(c.endswith(("(3)",)) or int(c.rsplit("(", 1)[1][:-1]) >= 3 for b in charts for c in b["cats"])
 

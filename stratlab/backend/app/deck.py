@@ -1806,6 +1806,7 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
     sec = v.get("sections") or {}
     layers = [x for x in v.get("layers") or [] if any(c.get("status") != "unverified" for c in x.get("companies") or [])]
     from statistics import median as _median
+    from .intel.theme_data import COMPARE_MIN, of_words, rank_pair
     cards = []
     # 1. value-chain economics: only when there are layers to set side by side (R18: no card that says it can't be done)
     own = [x for x in layers if not x.get("official") and x.get("revenue")]
@@ -1815,7 +1816,7 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
         tot = sum(x["revenue"] for x in own)
         if own and tot and len(own) >= 2:
             big = max(own, key=lambda x: x["revenue"])
-            lines.append(f"{big['layer']} brings in {round(big['revenue'] / tot * 100)}% of the revenue of the map's own layers.")
+            lines.append(f"{big['layer']} brings in the most revenue of the map's own layers, {money(big['revenue'], v.get('unit') or ('$ million' if v.get('region') == 'US' else '₹ crore'))}.")
         cards.append({"title": "Where the return sits" if chain.get("measure") == "roe" else "Where the margin sits", "lines": lines,
                       "note": "⟦The value chain by layer⟧"})
     # 2. growth beside margin (a lender's: beside its return on equity)
@@ -1824,13 +1825,14 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
         cos = [c for c in x["companies"] if c.get("status") != "unverified" and not c.get("company_wide")]
         g = [c["sales_1y"] for c in cos if c.get("sales_1y") is not None]
         e = (x.get("stats") or {}).get(measure)
-        if len(g) >= MIN_BASE and e and e["n"] >= MIN_BASE:            # no finding on a base under 3 (R20)
-            gm.append((x["layer"], _median(g), e["median"], len(g)))
+        if g and e and e["n"] >= COMPARE_MIN:            # no finding on a base under 3 (R20), one floor for every comparison (R25)
+            gm.append((x["layer"], _median(g), e["median"], len(g), len(cos)))
     f_ = _pc if lender else ebm
-    if len(gm) >= 2:
-        fast, slow = max(gm, key=lambda t: t[1]), min(gm, key=lambda t: t[1])
-        lines = [f"Fastest revenue growth in the latest year: {fast[0]}, median {_chg(fast[1])} at a median {mword} of {f_(fast[2])} ({fast[3]} companies).",
-                 f"Slowest: {slow[0]}, median {_chg(slow[1])} at {f_(slow[2])} ({slow[3]} companies)."]
+    pair = rank_pair(gm, lambda t: t[1], lambda t: t[3]) if chained else None
+    if pair:
+        fast, slow = pair
+        lines = [f"Fastest revenue growth in the latest year: {fast[0]}, median {_chg(fast[1])} at a median {mword} of {f_(fast[2])} ({of_words(fast[3], fast[4])}).",
+                 f"Slowest: {slow[0]}, median {_chg(slow[1])} at {f_(slow[2])} ({of_words(slow[3], slow[4])})."]
     else:
         g = (sec.get("growth") or {}).get("median") or {}
         m_ = ((sec.get("medians") or {}).get(measure) or {}).get("median")
@@ -1929,7 +1931,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 24                  # part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 25                  # part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -1997,15 +1999,17 @@ MIN_BASE = 3                     # companies a median needs to be shown as one (
 
 
 def _medn(st, of: int | None = None, f=lambda v: f"{v:.1f}%", n: int | None = None, value=None) -> str:
-    """A median with its base (R20): "–" when no company has the figure; "– (2)" when fewer than MIN_BASE do (the companies' own values are
-    beside it); the median with "(n)" when it is of fewer companies than the `of` it stands for."""
+    """A median with its base (R20): "–" when no company has the figure; "– (2 of 6)" when fewer than MIN_BASE do (the companies' own values
+    are beside it); the median with "(5 of 6)" when it is of fewer companies than the `of` it stands for (R25: "N of M" wherever a count is
+    shown beside the group's own, never "6" beside "15% (5)")."""
     if st is not None:
         n, value = st.get("n") or 0, st.get("median")
     if value is None or not n:
         return "–"
+    base = f" ({n} of {of})" if of and n < of else f" ({n})"
     if n < MIN_BASE:
-        return f"– ({n})"
-    return f(value) + (f" ({n})" if of and n < of else "")
+        return "–" + base
+    return f(value) + (base if of and n < of else "")
 
 
 def drop_empty(head: list, rows: list, widths: list, numeric: list | None = None, keep=(0,)) -> tuple:
@@ -2027,8 +2031,6 @@ CO_COLS = [("revenue", "Revenue", 1.25), ("ebitda", "EBITDA margin", 1.3), ("net
            ("roe", "ROE", 1.0), ("nii_assets", "NII / assets", 1.2), ("gnpa", "Gross NPA", 1.1), ("nnpa", "Net NPA", 1.0),
            ("deposit_growth", "Deposit growth", 1.1),
            ("solvency", "Solvency", 1.0), ("combined_ratio", "Combined ratio", 1.1), ("sbc_share", "SBC / revenue", 1.1), ("fcf_margin", "FCF margin", 1.0)]
-LENDER_NOTE = ("Lenders: ROE is net profit over shareholders' equity; NII / assets is interest earned less interest paid over average total "
-               "assets (not the bank's own net interest margin); gross and net NPA are of the latest quarter that gives them.")
 
 
 def is_lender_set(cos: list) -> bool:
@@ -2039,7 +2041,7 @@ def is_lender_set(cos: list) -> bool:
 
 def co_cols(cos: list) -> list[tuple]:
     """The figure columns for a table of these companies: lenders' own measures only where a lender is among them."""
-    bank = any(c.get("bank") for c in cos or [])
+    bank = any(c.get("bank") and c.get("profile") != "insurer" for c in cos or [])        # R25: an insurer is no bank
     have = {k for k in FAMILY_COLS if any(c.get(k) is not None for c in cos or [])}
     return [c for c in CO_COLS if (bank or c[0] not in LENDER_ONLY) and (c[0] not in FAMILY_COLS or c[0] in have)]
 
@@ -2109,6 +2111,241 @@ def cover_line(v: dict, sector: str, total: int, cap, us: bool) -> str:
               f"; the {wv:,} with figures and a market value are worth {cap(size['total_cap'])} together") if size.get("total_cap") else "")
     lead = (f"; the largest are {', '.join(big[:-1])} and {big[-1]}" if len(big) > 1 else f"; the largest is {big[0]}") if big else ""
     return f"{sector}: {_n(total, 'company', 'companies')} {where}{worth}{lead}."
+
+
+# ---------- R25 (the owner's outside review of the R23 decks): one floor for comparisons, "N of M", every sentence checked, how figures are built ----------
+def _of_n(n: int, of: int | None) -> str:
+    """A count beside its group's own: "5 of 6" when the figure is of fewer companies than the group has, else "5" (R25)."""
+    return f"{n} of {of}" if of and n < of else str(n)
+
+
+CHAIN_FAMILY_COLS = (("cet1", "CET1", 0.95), ("solvency", "Solvency", 1.0), ("combined_ratio", "Combined ratio", 1.15),
+                     ("sbc_share", "SBC / revenue", 1.15), ("fcf_margin", "FCF margin", 1.05))
+
+
+def chain_family_cols(rows: list) -> list[tuple]:
+    """The value chain's columns of the families' filed figures that some layer has a median of (R25: a layer's columns follow its family;
+    drop_empty takes away the rest)."""
+    return [c for c in CHAIN_FAMILY_COLS if any(r.get(c[0]) is not None for r in rows)]
+
+
+def compare_note(chain: dict, key: str) -> str:
+    """The value chain's footnote on how layers are compared: the one floor (theme_data.COMPARE_MIN), said whatever is marked (R25)."""
+    from .intel.theme_data import COMPARE_MIN
+    what = "return on equity" if key == "roe" else "EBITDA margin"
+    if chain.get("highest"):
+        return (f"Highest median {what} in green, lowest in red, among the layers whose median is of at least {COMPARE_MIN} companies; "
+                "a layer with fewer is shown but not ranked.")
+    return f"A layer is ranked only on a median of at least {COMPARE_MIN} companies; a layer with fewer is shown but not ranked."
+
+
+def top_of(rows: list, value, count):
+    """The one row with the highest `value(row)` among those whose figure is of at least COMPARE_MIN companies, when two or more qualify and no
+    other ties it; else None (R25: a highest is said only against another layer on the same floor)."""
+    from .intel.theme_data import COMPARE_MIN
+    have = sorted((r for r in rows if value(r) is not None and (count(r) or 0) >= COMPARE_MIN), key=value)
+    return have[-1] if len(have) >= 2 and value(have[-1]) != value(have[-2]) else None
+
+
+NOTES_TITLE = "How the figures are built"
+# each figure a theme deck can show: (its name, what it measures and how it is worked out, its period and source, its limitation); facts about
+# the figure only, nothing on what a level of it means for a company (R25). Short, so a deck's figures fit one page.
+_YEAR_SRC = "Latest full year; annual accounts"
+_LAST_SRC = "Latest reported; annual accounts"
+METRIC_NOTES = {
+    "revenue": ("Revenue", "Sales of the year; a layer's is its companies' added together", _YEAR_SRC, "Consolidated where filed, else standalone"),
+    "sales_1y": ("Revenue growth", "Revenue over the year before's, less one; two consecutive full years only", _YEAR_SRC, "One year; deals and demergers move it"),
+    "ebitda": ("EBITDA margin", "Operating profit before depreciation, interest and tax, over revenue", _YEAR_SRC,
+               "None for banks, lenders, insurers; some file whole points"),
+    "net": ("Net margin", "Net profit over revenue; one above the EBITDA margin (†) is out of the median", _YEAR_SRC, "Moves with one-off items and tax"),
+    "roce": ("ROCE", "Operating profit before interest and tax over equity plus debt", _LAST_SRC, "None for banks, lenders, insurers"),
+    "roe": ("ROE", "Net profit over shareholders' equity", _LAST_SRC, "Debt raises it; lenders' and others' differ"),
+    "nii_assets": ("NII / assets", "Interest earned less interest paid, over average total assets", _YEAR_SRC, "Not the bank's own net interest margin"),
+    "gnpa": ("Gross NPA", "Gross non-performing assets over gross advances", "Latest quarter given; results", "One quarter's end"),
+    "nnpa": ("Net NPA", "Net non-performing assets over net advances", "Latest quarter given; results", "One quarter's end; after provisions"),
+    "deposit_growth": ("Deposit growth", "Deposits against a year before", "Reported balance sheets", "Two balance-sheet dates only"),
+    "pe": ("P/E", "Market value over net profit of the last four quarters", "Last close; last four quarters", "None for a loss-maker"),
+    "pb": ("P/B", "Market value over shareholders' equity", "Last close; latest balance sheet", "Book value at the balance-sheet date"),
+    "ev_ebitda": ("EV/EBITDA", "Market value plus debt less cash, over the year's EBITDA", "Last close; latest full year", "None for banks, lenders, insurers"),
+    "cap": ("Market value", "Price times shares in issue", "Last close", "Moves with the price every day"),
+}
+_FILED = {"bank": "Latest quarter; exchange filing", "insurer": "Latest period; exchange filing", "us": "Latest fiscal year; SEC filing"}
+_FILED_LIMIT = {"bank": "As filed; standalone", "insurer": "As filed; life and general differ", "us": "One fiscal year; US filers only"}
+_SECTOR_LIMIT = {"cet1": "Core capital only; no total capital ratio filed", "roa_f": "Annualised from the year to date",
+                 "credit_cost": "Annualised from the year to date", "sbc_share": "No cash cost in the year", "fcf_margin": "One fiscal year",
+                 "rpo_cover": "Contracts can be cancelled", "claims_ratio": "General insurers only", "combined_ratio": "General insurers; no investment income",
+                 "persistency_13": "Life insurers only"}
+_NOTE_LABELS = {"Revenue": "revenue", "Growth": "sales_1y", "Revenue growth, 1 year": "sales_1y", "EBITDA margin": "ebitda", "EBITDA": "ebitda",
+                "Net margin": "net", "Net": "net", "ROCE": "roce", "ROE": "roe", "NII / assets": "nii_assets", "Gross NPA": "gnpa", "GNPA": "gnpa",
+                "Net NPA": "nnpa", "Deposit growth": "deposit_growth", "P/E": "pe", "P/B": "pb", "EV/EBITDA": "ev_ebitda", "Market value": "cap",
+                "Solvency": "solvency", "Combined ratio": "combined_ratio", "SBC / revenue": "sbc_share", "FCF margin": "fcf_margin"}
+_NOTE_ORDER = ("revenue", "sales_1y", "ebitda", "net", "roce", "roe", "nii_assets", "gnpa", "nnpa", "deposit_growth", "pe", "pb", "ev_ebitda", "cap")
+
+
+def shown_metrics(slides: list) -> list[str]:
+    """The figures a deck shows, by key, in one order: from its tables' headings and first column (a measure's row), its charts' titles and its
+    tiles (R25: the notes page explains only these). A sector page's columns are its family's filed figures; a filed figure takes the place of the
+    page's own of the same name (one number per metric)."""
+    from .intel.sector_metrics import BY_KEY
+    by_label = {m[1]: k for k, m in BY_KEY.items()}
+    got = []
+
+    def add(k):
+        if k and k not in got:
+            got.append(k)
+
+    def label_key(text):
+        t = str(text or "").strip()
+        if t in _NOTE_LABELS:
+            return _NOTE_LABELS[t]
+        m = re.match(r"(?:Median )?([A-Za-z/ ]+?)(?:,| \(| by | and |$)", t)
+        return _NOTE_LABELS.get(m.group(1).strip()) if m else None
+    for s in slides:
+        sector = s.title.startswith(SECTOR_TITLE)
+        for b in s.blocks:
+            if b["kind"] == "table":
+                for h in b.get("head") or []:
+                    add(by_label.get(h) if sector else label_key(h))
+                if (b.get("head") or [""])[0] in ("Median", "Measure"):
+                    for r in b.get("rows") or []:
+                        if not isinstance(r, dict):
+                            add(label_key(r[0]))
+            elif b["kind"] in ("hbars", "columns", "lines"):
+                for part in re.split(r" and |, ", re.sub(r"^Median ", "", str(b.get("title") or ""))):
+                    add(label_key(part))
+            elif b["kind"] == "stats":
+                for it in b.get("items") or []:
+                    if isinstance(it, (tuple, list)):
+                        add(label_key(it[0]))
+    filed = {BY_KEY[k][1] for k in got if k in BY_KEY}
+    page = [k for k in _NOTE_ORDER if k in got and METRIC_NOTES[k][0] not in filed]
+    return page + [k for k in got if k in BY_KEY]
+
+
+# a figure's limitation in a deck with no bank, lender or insurer: no word on families the deck doesn't have (R25)
+_NO_FINANCIALS = {"ebitda": "Some companies file whole points", "roce": "Latest reported; its year can differ from the margins'",
+                  "roe": "Debt raises it", "ev_ebitda": "n/a where debt, cash or EBITDA isn't stored"}
+
+
+def metric_note_rows(keys: list[str], financials: bool = True) -> list[list[str]]:
+    """The notes page's rows for these figures: name, what it measures and how it is worked out, its period and source, its limitation (R25);
+    `financials`: whether the deck has a bank, lender or insurer (else no limitation names them)."""
+    from .intel.sector_metrics import BY_KEY
+    rows = []
+    for k in keys:
+        if k in METRIC_NOTES:
+            row = list(METRIC_NOTES[k])
+            if not financials and k in _NO_FINANCIALS:
+                row[3] = _NO_FINANCIALS[k]
+            rows.append(row)
+        elif k in BY_KEY:
+            _, name, fam, _, how = BY_KEY[k]
+            rows.append([name, how.rstrip("."), _FILED.get(fam, "As filed"), _SECTOR_LIMIT.get(k, _FILED_LIMIT.get(fam, "As filed"))])
+    return rows
+
+
+def notes_slides(slides: list, eyebrow: str, financials: bool = True) -> list[Slide]:
+    """One compact page (two at most) on how the figures the deck shows are built (R25): each figure's measure, arithmetic, period and source,
+    and limitation, in one table; nothing about what a level of a figure means."""
+    rows = metric_note_rows(shown_metrics(slides), financials)
+    if not rows:
+        return []
+    head, widths = ["Figure", "What it measures, how it is worked out", "Period and source", "Limitation"], [1.6, 5.1, 2.6, 2.8]
+    pages = table_pages(head, rows, widths, CW, BOT - TOP, most=26)          # every word shown: wrapped, never cut
+    out = []
+    for k, chunk in enumerate(pages):
+        s = Slide(NOTES_TITLE + (f" ({k + 1} of {len(pages)})" if len(pages) > 1 else ""),
+                  "Each figure this deck shows: what it measures, how it is worked out, its period and source, and its limits", eyebrow=eyebrow)
+        s.add("table", (M, TOP, CW, min(BOT - TOP, table_height(head, chunk, widths, CW))), head=head, rows=chunk, widths=widths,
+              numeric=[False] * 4, tight=True)
+        out.append(s)
+    return out
+
+
+def aggregate_margin_rows(mg: dict) -> list[list[str]]:
+    """The aggregate EBITDA margin (all the companies' operating profit over their revenue) of the last two years, as rows of the margins table, so
+    the figures the findings and the questions state are in a table (R25)."""
+    pe = [(y, x) for y, x in zip(mg.get("years") or [], mg.get("ebitda") or []) if x is not None]
+    return [[f"EBITDA margin, all together, {pe[-2][0]} to {pe[-1][0]}", f"{_pc(pe[-2][1])} → {_pc(pe[-1][1])}", str(mg.get("n") or "–"), "–"]] if len(pe) >= 2 else []
+
+
+CLAIM_CARDS = ("Key findings",)                  # the slides whose cards are findings; the questions card is checked wherever it sits
+_CHECK_SKIP = re.compile(r"within \d+% of|\d+% or more|\b\d+% (?:above|below) or|\(\d+% of value\)")
+
+
+def _deck_figures(slides: list) -> dict:
+    """Every figure the deck's tables, charts and tiles show (theme_data.shown_numbers), with each table's count of rows."""
+    from .intel.theme_data import shown_numbers
+    texts = []
+    for s in slides:
+        if s.title == "Contents":            # the contents repeat the parts' headlines: a sentence never vouches for itself
+            continue
+        for b in s.blocks:
+            if b["kind"] == "table":
+                rows = [r for r in b.get("rows") or [] if not isinstance(r, dict)]
+                texts += [x if not isinstance(x, dict) else x.get("text") for r in rows for x in r] + [len(rows)]
+            elif b["kind"] == "stats":
+                texts += [x for it in b.get("items") or [] for x in (it if isinstance(it, (tuple, list)) else [])]
+            elif b["kind"] in ("hbars", "columns", "lines"):
+                texts += list(b.get("vals") or []) + list(b.get("cats") or []) + [b.get("title")] + [len(b.get("cats") or [])]
+                texts += [x for ser in b.get("series") or [] for x in (ser[1] if isinstance(ser, (tuple, list)) else [])]
+            elif b["kind"] == "flow":
+                texts += [len(b.get("items") or [])]
+    out = shown_numbers(texts)
+    for s in slides:                         # a gap between two figures of one column ("within 1 point of each other")
+        for b in s.blocks:
+            if b["kind"] == "table" and s.title != "Contents":
+                rows = [r for r in b.get("rows") or [] if not isinstance(r, dict)]
+                for c in range(1, len(b.get("head") or [])):
+                    col = sorted(shown_numbers([r[c] for r in rows if c < len(r) and not isinstance(r[c], dict)])["pct"])
+                    out["gaps"] |= {round(abs(a - b_), 2) for i, a in enumerate(col) for b_ in col[i + 1:]}
+    return out
+
+
+def check_deck(slides: list) -> list[dict]:
+    """The consistency check before a deck is stored (R25): every percentage, multiple, gap in points and count that a headline (a slide's
+    subtitle), a finding or a question states is looked for among the figures the deck's own tables, charts and tiles show, the rows they all
+    come from. A headline part or a card line with a figure that isn't there is dropped (never shipped wrong) and logged. The dropped ones."""
+    import logging
+    from .intel.theme_data import claim_mismatches
+    shown = _deck_figures(slides)
+    log = logging.getLogger("stratlab.deck")
+    dropped = []
+
+    def bad(text):
+        return claim_mismatches(_CHECK_SKIP.sub("", text), shown)
+    for s in slides[1:]:
+        if s.subtitle and s.kind == "content":
+            keep = []
+            for part in s.subtitle.split("; "):
+                miss = bad(part)
+                if miss:
+                    dropped.append({"slide": s.title, "text": part, "figures": miss})
+                else:
+                    keep.append(part)
+            s.subtitle = "; ".join(keep) if keep and keep[0] == s.subtitle.split("; ")[0] else ""
+        for b in s.blocks:
+            if b["kind"] != "cards" or not (s.title in CLAIM_CARDS or any(it.get("title") == "Questions the figures raise" for it in b.get("items") or [])):
+                continue
+            for it in b["items"]:
+                lines = []
+                for ln in it.get("lines") or []:
+                    miss = bad(ln) if isinstance(ln, str) else []
+                    if miss:
+                        dropped.append({"slide": s.title, "text": ln, "figures": miss})
+                    else:
+                        lines.append(ln)
+                it["lines"] = lines
+            b["items"] = [it for it in b["items"] if it.get("lines")]
+    gone = {d["text"] for d in dropped}
+    for s in slides:                         # the contents repeat a part's headline: a dropped one goes there too
+        for b in s.blocks:
+            if s.title == "Contents" and b["kind"] == "table":
+                b["rows"] = [r if isinstance(r, dict) else [r[0], "; ".join(p for p in str(r[1]).split("; ") if p not in gone) or r[0], *r[2:]]
+                             for r in b["rows"]]
+    for d in dropped:
+        log.warning("deck check: dropped a sentence on %r whose figures %s no table shows: %s", d["slide"], d["figures"], d["text"])
+    return dropped
 
 
 def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
@@ -2266,7 +2503,8 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         cols = [("n", "Companies", 1.25), ("revenue", "Revenue", 1.35), ("ebitda", "EBITDA margin", 1.2), ("net", "Net margin", 1.1), ("roce", "ROCE", 1.0)]
         if lend_chain:
             cols += [("roe", "ROE", 1.0), ("nii_assets", "NII / assets", 1.15), ("gnpa", "Gross NPA", 1.1), ("pb", "P/B", 0.9)]
-        fmt_ = {"ebitda": ebm, "pb": _times}
+        cols += chain_family_cols(rows_c)            # R25: each family's own filed figures (CET1, solvency, combined ratio, SBC, FCF) where its layers have them
+        fmt_ = {"ebitda": ebm, "pb": _times, "solvency": lambda x: _times(x, 2)}
 
         def cell(r, k):                    # each median with its base: none under 3 companies, a count when under the layer's (R20)
             if k == "n":
@@ -2281,13 +2519,11 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         key = chain.get("measure") or "ebitda"
         # a chart follows the table's rule (R21): a layer is plotted only on a median of MIN_BASE companies or more, its count in its label
         charted = [r for r in rows_c if r.get(key) is not None and (r.get(f"{key}_n") or 0) >= MIN_BASE]
-        chart = 2 <= len(charted) <= 14
+        chart = 2 <= len(charted) <= 14 and len(head) <= 7         # a wide table keeps the full width (R25: no words broken)
         tw = 7.3 if chart else CW
-        foot = [v.get("basis") or f"Each company's latest full year, in {unit}.", "Layer revenue: its companies added together; margins and returns: its median company."]
-        if lend_chain:
-            foot.append(LENDER_NOTE)
-        if chain.get("highest"):
-            foot.append(f"Highest median {'return on equity' if key == 'roe' else 'EBITDA margin'} in green, lowest in red, among the layers with at least two companies.")
+        foot = [f"Each company's latest full year, in {unit}; how each figure is built: ⟦{NOTES_TITLE}⟧.",
+                "Layer revenue: its companies added together; margins and returns: its median company."]
+        foot.append(compare_note(chain, key))
         none_ = [x["layer"] for x in layers if not x.get("companies") and x.get("layer")]
         unsure_ = [x for x in empty if x not in none_]
         if none_:
@@ -2307,7 +2543,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             s.add("table", (M, TOP, tw, th), head=head, rows=chunk, widths=widths,
                   colors={(i, 0): mark[r[0]] for i, r in enumerate(chunk) if r[0] in mark and r[0]})
             if chart and k == 0:
-                s.add("hbars", (M + tw + 0.35, TOP, CW - tw - 0.35, th), title=f"Median {'ROE' if key == 'roe' else 'EBITDA margin'} by layer", cats=[f"{r['layer']} ({r.get(key + '_n') or 0})" for r in charted],
+                s.add("hbars", (M + tw + 0.35, TOP, CW - tw - 0.35, th), title=f"Median {'ROE' if key == 'roe' else 'EBITDA margin'} by layer", cats=[f"{r['layer']} ({_of_n(r.get(key + '_n') or 0, r.get('n'))})" for r in charted],
                       vals=[r[key] for r in charted], colors=[mark.get(r["layer"], BLUE) for r in charted], fmt="pctw" if whole and key == "ebitda" else "pct")
             s.add("text", (M, BOT - fh, CW, fh), paras=[" ".join(foot)], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
             slides.append(s)
@@ -2374,8 +2610,6 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             fparts.append("(not confirmed): its own words don't show this work, so it is left out of the medians and the revenue total.")
         if any(c.get("one_off") for c in cos):
             fparts.append(f"{ONE_OFF}: net margin above the EBITDA margin, so a one-off gain is in it; left out of the net margin's median.")
-        if lend:
-            fparts.append(LENDER_NOTE)
         chh = min(1.75, card_height(card, CW)) if card else 0.0
         below = TOP + (chh + 0.2 if card else 0)
         rest_h = REST_H if len(body) > 1 else 0
@@ -2462,6 +2696,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
 
     # 6. the appendix: ONE compact table of every confirmed company's key figures, one row each, so any figure can be checked (R19)
     layer_of = {c["symbol"]: x["layer"] for x in layers for c in x.get("companies") or []}
+    prof_of = {c["symbol"]: c.get("profile") for x in layers for c in x.get("companies") or []}          # R25: an insurer has no GNPA column
     figs_of = lambda x: x.get("revenue") is not None or x.get("profit") is not None or x.get("net") is not None      # noqa: E731
     confirmed_ = [x for x in sec.get("leaders") or [] if status.get(x["symbol"]) != "unverified"]
     bare = [x for x in confirmed_ if not figs_of(x)]           # a stored page with no key figure isn't "with figures" (R20)
@@ -2470,7 +2705,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         # short headings on one line, so 20 or more rows fit a page (R20: 8 rows a page)
         lcols = [("revenue", "Revenue", 1.15), ("sales_1y", "Growth", 0.95), ("ebitda", "EBITDA", 0.95), ("net", "Net", 0.9), ("roce", "ROCE", 0.85)]
         if any(x.get("bank") for x in lead):
-            lcols += [("roe", "ROE", 0.85), ("gnpa", "GNPA", 0.85)]
+            lcols += [("roe", "ROE", 0.85)] + ([("gnpa", "GNPA", 0.85)] if any(x.get("bank") and (x.get("profile") or prof_of.get(x["symbol"])) != "insurer" for x in lead) else [])
         lcols += [("pe", "P/E", 0.8), ("pb", "P/B", 0.8)]
         lcell = {"sales_1y": lambda x: _chg(x.get("sales_1y")), "pe": lambda x: _times(x.get("pe")), "pb": lambda x: _times(x.get("pb"))}
         head = ["Company", "Layer", "Market value"] + [c[1] for c in lcols]
@@ -2558,7 +2793,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     if p.get("timed_out"):
         who.append(f"{p['timed_out']:,} couldn't be checked just now; the check runs again later.")
     figs = v.get("figures") or {}
-    read = ["Every figure's year and basis are said under the value chain by layer; market value is price times shares in issue at the last close."]
+    read = [f"What each figure measures, how it is worked out, its period, source and limits: ⟦{NOTES_TITLE}⟧."]
     if figs.get("of") and figs.get("shown") and figs["of"] > figs["shown"]:
         read.append(f"Figures are worked out for {figs['shown']:,} of the theme's {figs['of']:,} companies: every one the map names, then the largest of the rest.")
     if wide:
@@ -2589,6 +2824,9 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     s.add("text", (M, BOT - note_h(closing), CW, note_h(closing)), paras=[closing], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
     notes = s
     slides.append(s)
+    fin = any(c.get("bank") for x in layers for c in x.get("companies") or []) or any(x.get("bank") for x in sec.get("leaders") or [])
+    built = notes_slides(slides + later_slides, eb("Notes"), fin)         # R25: one page on how the figures shown are built, before the appendix
+    slides.extend(built)
     if not members:
         s = Slide("No company yet", "No company has been placed in this theme yet", eyebrow=eb("Notes"))
         s.add("cards", (M, TOP, CW, 1.2), cols=1, fill=True, items=[{"title": "What to do", "lines": ["Try a more specific theme on the Themes page, then download the deck again."]}])
@@ -2599,10 +2837,13 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     firsts = [(t, line, next(iter(slides[at:end]), None)) for (t, line, at), end in zip(parts, ends)]
     crow = [[t, line, str(slides.index(first) + 1)] for t, line, first in firsts if first is not None and first.eyebrow and "Appendix" not in first.eyebrow]
     crow.append(["Notes", "How the companies got in, how to read the figures and what isn't in this deck.", str(slides.index(notes) + 1)])
+    if built:
+        crow.append([NOTES_TITLE, "What each figure shown measures, how it is worked out, its period and source, and its limits.", str(slides.index(built[0]) + 1)])
     if later_slides:
         crow.append(["Appendix", f"Every confirmed company's key figures, one row each ({_n(len(later_slides), 'page')}).", str(slides.index(later_slides[0]) + 1)])
     contents.add("table", (M, TOP, CW, min(BOT - TOP, table_height(["Part", "What it holds", "Page"], crow, [2.6, 8.4, 0.9], CW))),
                  head=["Part", "What it holds", "Page"], rows=crow, widths=[2.6, 8.4, 0.9], numeric=[False, False, True], tight=True)
+    slides[0].checked = check_deck(slides)          # R25: every headline and finding figure found again in the tables, else dropped
     _sections(sector, slides)
     _refs(slides)
     for x in slides:                  # a "Slide" column whose pages aren't in this deck says nothing: dropped (R19)
@@ -2626,12 +2867,13 @@ def economics_questions(v: dict, shown: list, sec: dict, ebm) -> list[str]:
     chain = v.get("chain") or {}
     rows = {r["layer"]: r for r in chain.get("rows") or []}
     hi, lo = rows.get(chain.get("highest")), rows.get(chain.get("lowest"))
+    from .intel.theme_data import of_words as ow, rank_pair
     if hi and lo and chain.get("measure") == "roe":
-        out.append(f"{hi['layer']} has the highest median return on equity ({_pc(hi['roe'])}, {hi['roe_n']} companies) and {lo['layer']} the lowest "
-                   f"({_pc(lo['roe'])}, {lo['roe_n']}). What in each layer's business makes that gap? The figures show the gap, not its cause.")
+        out.append(f"{hi['layer']} has the highest median return on equity ({_pc(hi['roe'])}, {ow(hi['roe_n'], hi.get('n'))}) and {lo['layer']} the lowest "
+                   f"({_pc(lo['roe'])}, {ow(lo['roe_n'], lo.get('n'))}). What in each layer's business makes that gap? The figures show the gap, not its cause.")
     elif hi and lo:
-        out.append(f"{hi['layer']} has the highest median EBITDA margin ({ebm(hi['ebitda'])}, {hi['ebitda_n']} companies) and {lo['layer']} the lowest "
-                   f"({ebm(lo['ebitda'])}, {lo['ebitda_n']}). What in each layer's business makes that gap? The figures show the gap, not its cause.")
+        out.append(f"{hi['layer']} has the highest median EBITDA margin ({ebm(hi['ebitda'])}, {ow(hi['ebitda_n'], hi.get('n'))}) and {lo['layer']} the lowest "
+                   f"({ebm(lo['ebitda'])}, {ow(lo['ebitda_n'], lo.get('n'))}). What in each layer's business makes that gap? The figures show the gap, not its cause.")
     q = sec.get("quarter") or {}
     if q.get("quarter") and (q.get("sales") or {}).get("n", 0) >= MIN_BASE:
         base = base_quarter(q["quarter"])
@@ -2653,14 +2895,14 @@ def economics_questions(v: dict, shown: list, sec: dict, ebm) -> list[str]:
     for x in shown:
         cos = [c for c in x.get("companies") or [] if c.get("status") != "unverified" and not c.get("company_wide")]
         g = sorted(c["sales_1y"] for c in cos if c.get("sales_1y") is not None)
-        if len(g) >= MIN_BASE:
+        if g and x.get("basis") != "rest":           # the "Other" group is never compared (R22)
             from statistics import median as _m
-            gm.append((x["layer"], _m(g), len(g)))
-    if len(gm) >= 2:
-        f_, s_ = max(gm, key=lambda t: t[1]), min(gm, key=lambda t: t[1])
-        if f_[0] != s_[0]:
-            out.append(f"Median revenue growth in the latest year: {_chg(f_[1])} in {f_[0]} ({f_[2]} companies), {_chg(s_[1])} in {s_[0]} ({s_[2]}). "
-                       "Is the difference in demand, in prices, or in the products each layer's companies make?")
+            gm.append((x["layer"], _m(g), len(g), len(cos)))
+    pair = rank_pair(gm, lambda t: t[1], lambda t: t[2])
+    if pair:
+        f_, s_ = pair
+        out.append(f"Median revenue growth in the latest year: {_chg(f_[1])} in {f_[0]} ({ow(f_[2], f_[3])}), {_chg(s_[1])} in {s_[0]} ({ow(s_[2], s_[3])}). "
+                   "Is the difference in demand, in prices, or in the products each layer's companies make?")
     return out[:1] + sector_questions(sec) + out[1:]
 
 
@@ -2708,17 +2950,17 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
         tw = 7.6 if chart else CW
         rk, rname = ("roe", "ROE") if lender else ("roce", "ROCE")
         cmp_ = [x for x in lay if not x.get("rest")]            # the "Other" group is never called highest or fastest (R22)
-        best_r = max((x for x in cmp_ if x[rk] is not None), key=lambda x: x[rk], default=None)
-        fast = max((x for x in cmp_ if x["growth"] is not None), key=lambda x: x["growth"], default=None)
+        best_r = top_of(cmp_, lambda x: x[rk], lambda x: x[f"{rk}_n"])
+        fast = top_of(cmp_, lambda x: x["growth"], lambda x: x["growth_n"])
         bits = []
-        if best_r and len(lay) > 1:
+        if best_r:
             bits.append(f"highest median {rname} in {best_r['layer']} ({_pc(best_r[rk])})")
-        if fast and len(lay) > 1:
+        if fast:
             bits.append(f"fastest median revenue growth in {fast['layer']} ({_chg(fast['growth'])})")
         msg = ("Medians by layer: " + "; ".join(bits) + ("; the \"Other\" group left out" if len(cmp_) < len(lay) else "")) if bits else \
             f"{_n(len(lay), 'layer')}: its median company's margins, returns, growth and P/E"
-        note = ("Medians of each layer's confirmed companies (whole-company figures left out where the layer has its own); growth and P/E show their "
-                "count in brackets. EBITDA margin and ROCE: the latest full year; P/E: the last four quarters.")
+        note = ("Medians of each layer's confirmed companies (whole-company figures left out where the layer has its own); a median of fewer companies "
+                f"than the layer has shows its count, as N of M. Periods: ⟦{NOTES_TITLE}⟧.")
         nh = note_h(note)
         for k, chunk in enumerate(pages := table_pages(head, rows, widths, tw, BOT - TOP - nh - 0.07)):
             s = Slide("Layers side by side" + (f" ({k + 1} of {len(pages)})" if len(pages) > 1 else ""), msg, eyebrow=eyebrow)
@@ -2737,6 +2979,7 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
                f"{_n(md['n'], 'company', 'companies')})" + (f"; {lead['layer']} accounts for {_pts(lead['part'])} of it" if lead and len(md["layers"]) > 1 else ""))
         rows = [[x["name"], x.get("layer") or "–", f"{ebm(x['margin_from'])} → {ebm(x['margin_to'])}", f"{_pc(x['share_from'])} → {_pc(x['share_to'])}", _pts(x["part"])]
                 for x in md["companies"]]
+        rows.append([f"All {md['n']} companies", "", f"{_pc(md['start'])} → {_pc(md['end'])}", "", _pts(md["change"])])      # the headline's figures (R25)
         head, widths = ["Company", "Layer", "EBITDA margin", "Share of revenue", "Part of the move"], [2.6, 2.2, 1.6, 1.6, 1.3]
         lw = 8.6 if len(md.get("layers") or []) > 1 else CW
         note = (f"Each company's part: its EBITDA as a share of all {md['n']} companies' revenue in {md['to']}, less the same in {md['from']}; the parts "
@@ -2744,7 +2987,7 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
         nh = note_h(note)
         s = Slide("What moved the aggregate margin", msg, eyebrow=eyebrow)
         th = min(BOT - TOP - nh - 0.07, table_height(head, rows, widths, lw))
-        s.add("table", (M, TOP, lw, th), head=head, rows=rows, widths=widths, tight=True)
+        s.add("table", (M, TOP, lw, th), head=head, rows=rows, widths=widths, tight=True, strong=[len(rows) - 1])
         room.append((s, M, TOP + th + 0.25, lw, BOT - nh - 0.15 - (TOP + th + 0.25)))
         if lw < CW:
             s.add("table", (M + lw + 0.3, TOP, CW - lw - 0.3, BOT - TOP - nh - 0.07), head=["Layer", "Part"],
@@ -2795,7 +3038,7 @@ def sector_lines(sec: dict) -> list[str]:
             st = (f.get("medians") or {}).get(k)
             if st and st.get("n", 0) >= MIN_BASE:
                 parts.append(f"{BY_KEY[k][1].lower().replace('npa', 'NPA').replace('cet1', 'CET1').replace('sbc', 'SBC').replace('rpo', 'RPO').replace('fcf', 'FCF')} "
-                             f"{sector_fmt(k)(st['median'])}" + (f" ({st['n']})" if st["n"] < f["n"] else ""))
+                             f"{sector_fmt(k)(st['median'])}" + (f" ({st['n']} of {f['n']})" if st["n"] < f["n"] else ""))
         if parts:
             one, many = SECTOR_WHO[fam]
             out.append(f"Median of the {_n(f['n'], one, many)} with filed figures: {', '.join(parts[:4])}.")
@@ -2830,7 +3073,6 @@ def _sector_slides(slides: list, v: dict, amt, eyebrow: str) -> None:
     the companies that have it (none under MIN_BASE), and how each is worked out, where it is from and what the filings don't state."""
     from .intel.sector_metrics import BY_KEY
     sec = (v.get("sections") or {}).get("sector") or {}
-    defs = []                     # (figure, how it is worked out) for every figure shown, on one page after the families' own (each says its source)
     for fam, f in (sec.get("families") or {}).items():
         keys = list(f.get("keys") or [])
         if not keys or not f.get("rows"):
@@ -2847,8 +3089,7 @@ def _sector_slides(slides: list, v: dict, amt, eyebrow: str) -> None:
         one, many = SECTOR_WHO[fam]
         lead = sector_lines({"sector": {"families": {fam: f}}})
         msg = (lead[0].rstrip(".") if lead else f"{_n(f['n'], one, many)} with filed figures") + (f"; {f['of'] - f['n']} more without" if f.get("of", 0) > f["n"] else "")
-        defs += [[BY_KEY[k][1], BY_KEY[k][4]] for k in keys if BY_KEY[k][1] in head]
-        note = (f"From {f['checked']}, each company's latest; the period is the latest it covers, and the next page says how each figure is worked out."
+        note = (f"From {f['checked']}, each company's latest; the period is the latest it covers; how each figure is worked out: ⟦{NOTES_TITLE}⟧."
                 + (f" Not shown: {f['not_filed']}." if f.get("not_filed") else "")
                 + f" Medians: the companies that have the figure, the count in brackets when fewer than the {f['n']}; none under {MIN_BASE}.")
         nh = note_h(note)
@@ -2864,13 +3105,6 @@ def _sector_slides(slides: list, v: dict, amt, eyebrow: str) -> None:
             s.add("table", (M, TOP, CW, th), head=head, rows=chunk, widths=widths, tight=True, compact=compact,
                   strong=[i for i, r in enumerate(chunk) if r is tail[0]])
             s.add("text", (M, BOT - nh, CW, nh), paras=[note], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
-            slides.append(s)
-    if defs:
-        head, widths = ["Figure", "How it is worked out"], [2.2, 9.9]
-        for k_, chunk in enumerate(pages := table_pages(head, defs, widths, CW, BOT - TOP)):
-            s = Slide(f"{SECTOR_TITLE}: how each is worked out" + (f" ({k_ + 1} of {len(pages)})" if len(pages) > 1 else ""),
-                      "Each figure as the filing states it, or the arithmetic on filed figures that gives it; nothing estimated", eyebrow=eyebrow)
-            s.add("table", (M, TOP, CW, min(BOT - TOP, table_height(head, chunk, widths, CW))), head=head, rows=chunk, widths=widths, tight=True)
             slides.append(s)
 
 
@@ -3022,9 +3256,11 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
                if size.get("top3_share") is not None else f"The theme's {_n(nv, 'company', 'companies')} with figures and a market value are worth {cap(size.get('total_cap'))} together")
         s = Slide("Size and shape", msg, eyebrow=E())
         rows = [[name_of(x["symbol"], x["name"]), cap(x.get("cap")), _pc(x.get("share"))] for x in big]
+        if size.get("top3_share") is not None:          # the headline's share is a row of the table (R25)
+            rows.append(["The three largest together", cap(sum(x.get("cap") or 0 for x in big[:3])), _pc(size["top3_share"])])
         rows.append([f"All {size.get('with_value', 0):,} companies with figures and a market value", cap(size.get("total_cap")), "100.0%"])
         lw = 6.2
-        s.add("table", (M, TOP, lw, BOT - TOP - 0.3), head=["Company", "Market value", "Share of the theme"], rows=rows, widths=[3.2, 1.5, 1.5], strong=[len(rows) - 1])
+        s.add("table", (M, TOP, lw, BOT - TOP - 0.3), head=["Company", "Market value", "Share of the theme"], rows=rows, widths=[3.2, 1.5, 1.5], strong=list(range(len(big), len(rows))))
         top = big[:10]
         s.add("hbars", (M + lw + 0.4, TOP, CW - lw - 0.4, BOT - TOP - 0.3), title="Share of the theme's market value", cats=[x["name"] for x in top],
               vals=[x.get("share") or 0 for x in top], fmt="pct")
@@ -3045,6 +3281,7 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
               ["ROE", _med(meds.get("roe")) if (v.get("checks") or {}).get("lenders") else "–", str((meds.get("roe") or {}).get("n", "–")), "–"],
               ["Revenue growth, 3 years a year", _med(gmed.get("revenue_3y"), _chg), str((gmed.get("revenue_3y") or {}).get("n", "–")), _med(mk.get("sales_cagr_3y"), _chg)]]
         vs = [r_ for r_ in vs if r_[1] != "–"]          # a median no company has (lenders' EBITDA margin) is no row (R18)
+        vs += aggregate_margin_rows(sec.get("margins") or {})
         vh_, vs, vw_, _ = drop_empty(["Median", "Theme", "Companies", "All listed"], vs, [2.8, 1.3, 1.3, 1.3], keep=(0, 1))
         r1 = (agg.get("revenue_1y") or {}).get("value")
         msg = (f"Revenue together grew {_chg(r1)} in the latest year ({_n((agg.get('revenue_1y') or {}).get('n') or 0, 'company', 'companies')})" if r1 is not None
@@ -3061,12 +3298,10 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
         s.add("table", (M, TOP + 0.36, lw, g_h), head=gh_, rows=grow, widths=gw, tight=True)
         y2 = TOP + 0.36 + g_h + 0.22
         s.add("text", (M, y2, lw, 0.3), paras=["Margins and returns: the theme against all listed companies"], size=12, floor=12, bold=True, color=INK2)
-        s.add("table", (M, y2 + 0.36, lw, BOT - y2 - 0.36 - 0.85), head=vh_, rows=vs, widths=vw_)
         note = ("Together: the companies' figures added up, for those that report both ends of the period. Median: the middle company's own rate. "
                 "Companies that run other businesses too, and net margins with a one-off gain, are left out.")
         if gmed.get("revenue_5y") or gmed.get("profit_5y"):
             note += f" Median company, 5 years a year: revenue {_med(gmed.get('revenue_5y'), _chg)}, profit {_med(gmed.get('profit_5y'), _chg)}."
-        s.add("text", (M, BOT - 0.72, lw, 0.72), paras=[note], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
         cats, th, al = [], [], []
         for label, a, bm in (("EBITDA margin", meds.get("ebitda"), mk.get("opm")), ("Net margin", meds.get("net"), mk.get("net_margin")),
                              ("ROCE", meds.get("roce"), mk.get("roce")), ("Revenue growth, 3y", gmed.get("revenue_3y"), mk.get("sales_cagr_3y"))):
@@ -3074,9 +3309,14 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
                 cats.append(label)
                 th.append(a["median"])
                 al.append(bm["median"])
+        # R25: the note sits under the chart, so the margins table has room for the aggregate margin the findings state
+        rw = CW - lw - 0.4
+        nh = note_h(note, rw)
+        s.add("table", (M, y2 + 0.36, lw, BOT - y2 - 0.36 - 0.1), head=vh_, rows=vs, widths=vw_)
         if cats:
-            s.add("columns", (M + lw + 0.4, TOP, CW - lw - 0.4, BOT - TOP), title="Median company: the theme against all listed", cats=cats, fmt="pct",
+            s.add("columns", (M + lw + 0.4, TOP, rw, BOT - TOP - nh - 0.15), title="Median company: the theme against all listed", cats=cats, fmt="pct",
                   series=[("Theme", th, BLUE), ("All listed", al, LINE2)])
+        s.add("text", (M + lw + 0.4, BOT - nh, rw, nh) if cats else (M + lw + 0.4, TOP + 0.36, rw, nh), paras=[note], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
         slides.append(s)
 
     # margins over time: the findings and "What moved the aggregate margin" carry the change, so no page of its own (R19)
