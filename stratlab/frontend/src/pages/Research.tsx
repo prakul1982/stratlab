@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, type ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { writtenAt, asOf, dayIn, fmtDate, marketTz, pct, price, quoteAt, safeHref, signed } from "../lib/format";
+import { asOf, dayIn, fmtDate, marketTz, pct, price, quoteAt, safeHref, signed } from "../lib/format";
 import { HELP } from "../lib/help";
 import { marketState } from "../lib/marketHours";
 import { eyebrowOf } from "../lib/eyebrow";
@@ -29,6 +29,7 @@ import { MoreMenu } from "../components/MoreMenu";
 import { suggestions, type Suggestion } from "../components/CompanyCombobox";
 import { rememberName, useDocTitle } from "../lib/title";
 import { DealsPanel } from "../components/Deals";
+import { StoredNote, StoredStamp, useStoredRefresh } from "../components/StoredStamp";
 import { BizUpdatesPanel } from "../components/BizUpdates";
 import { NamedHoldersPanel } from "../components/NamedHolders";
 import { SurvBadges } from "../components/Surveillance";
@@ -499,6 +500,11 @@ export function PulsePage() {
   const [aiErr, setAiErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const seq = useRef(0);   // a late answer for the market you left is ignored, and doesn't clear the newer read's busy
+  const rf = useStoredRefresh();
+  const refreshAI = () => {
+    const mine = seq.current;
+    rf.run(async () => { const out = await researchApi.pulseAI(region, "", true); if (mine === seq.current) setAi(out); return out; });
+  };
   const loadAI = async (refresh = false) => {
     const mine = ++seq.current;
     setBusy(true); setAiErr(null);
@@ -525,7 +531,8 @@ export function PulsePage() {
       {/* R15 #17 (owner, 7 Nov): what the headlines say sits with the mood, at the top, not under every table */}
       <Card>
         <CardHead title="What the headlines say" info={HELP.researchPulse}
-          actions={ai && !aiErr ? <><span className="k-note">Written {writtenAt(ai.generated_at, marketTz(region))}</span><button className="btn quiet sm" disabled={busy} onClick={() => loadAI(true)}>{busy ? "Reading…" : "Refresh"}</button></> : undefined} />
+          actions={ai && !aiErr ? <StoredStamp at={ai.generated_at} tz={marketTz(region)} busy={busy || rf.busy} onRefresh={refreshAI} /> : undefined} />
+        {ai && !aiErr && <StoredNote busy={rf.busy} state={rf.state} at={ai.generated_at} tz={marketTz(region)} />}
         {aiErr ? (
           <div className="k-row ai-read-off" role="status">
             <span className="k-small k-muted">No AI read of the headlines right now{aiReason(aiErr)} The tables below don't depend on it.</span>
@@ -618,6 +625,11 @@ export function ComparePage() {
   });
   // only the AI's part is asked again; the numbers already on the page stay. The answer is put on the page only while
   // the same pair is shown (a late answer for an earlier pair is dropped)
+  const rf = useStoredRefresh();
+  const refreshAI = () => {
+    const key = shownKey;
+    rf.run(async () => { const x = await researchApi.compare(region, a, b, true); if (pair.current === key) setRes((r) => (r ? { ...r, ai: x.ai } : x)); return x.ai; });
+  };
   const askAgain = () => {
     const key = shownKey;
     setAsking(key);
@@ -737,9 +749,11 @@ export function ComparePage() {
           {/* the AI's read comes after the figures it reads: a five-line paragraph above the two companies and the chart pushed them
               down the page (LIVE1A-049) */}
           <Card>
-            <CardHead title="AI comparison" />
+            <CardHead title="AI comparison" actions={res.ai && !res.ai.error && res.ai.verdict
+              ? <StoredStamp at={res.ai.generated_at} tz={marketTz(region)} busy={rf.busy} onRefresh={refreshAI} /> : undefined} />
             {res.ai && !res.ai.error && res.ai.verdict ? (
               <>
+                <StoredNote busy={rf.busy} state={rf.state} at={res.ai.generated_at} tz={marketTz(region)} />
                 <p className="inv-summary">{res.ai.verdict}</p>
                 {res.ai.differences.length > 0 && <ul className="k-list">{res.ai.differences.map((d) => <li key={d}>{d}</li>)}</ul>}
               </>

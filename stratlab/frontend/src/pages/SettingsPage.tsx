@@ -13,6 +13,7 @@ import { FOCUSES, LEVELS } from "../components/LevelPrompt";
 import { AlertSettingsCard } from "../components/AlertSettings";
 import { NewslettersCard } from "../components/NewslettersCard";
 import { TipsCard } from "../components/TipsCard";
+import { UsageTable } from "../components/StoredStamp";
 import { ConnectCards } from "../components/ConnectedAccounts";
 import { Badge, Card, CardHead, FieldGroup, LinkCard, Notice, PageHeader, Seg } from "../components/kit";
 import { AccountWait } from "../components/AccountWait";
@@ -26,9 +27,10 @@ const SECTIONS = [
   { value: "experience", label: "Experience" },
   { value: "accounts", label: "Connected accounts" },
   { value: "check", label: "Connection check" },
+  { value: "usage", label: "Your usage" },
 ];
 /** Older links and the ids of the cards inside a section. */
-const ALIAS: Record<string, string> = { theme: "experience", newsletters: "notifications", emails: "notifications", alerts: "notifications", connected: "accounts", inbox: "accounts", zerodha: "accounts", connection: "check" };
+const ALIAS: Record<string, string> = { quota: "usage", limits: "usage", theme: "experience", newsletters: "notifications", emails: "notifications", alerts: "notifications", connected: "accounts", inbox: "accounts", zerodha: "accounts", connection: "check" };
 
 type Row = { t: string; s: "pass" | "fail" | "warn"; d: string };
 const TONE = { pass: "ok", warn: "warn", fail: "warn" } as const;
@@ -58,13 +60,19 @@ export function SettingsPage() {
 
   return (
     <div className="k-page">
-      <PageHeader title="Settings" lede="Where your alerts and emails go, what you see first, and the accounts and files StratLab reads." />
+      <PageHeader title="Settings" lede="Where your alerts and emails go, what you see first, the accounts and files StratLab reads, and what your plan allows." />
       <div className="k-section-nav"><Seg label="Settings sections" options={SECTIONS} value={section} onChange={go} /></div>
       {!me ? <Card label="Loading your settings"><AccountWait label="Loading your settings" /></Card> : <>
         {section === "notifications" && <><AlertSettingsCard /><TipsCard /><NewslettersCard /></>}
         {section === "experience" && <ExperienceCards />}
         {section === "accounts" && <><ConnectedAccounts /><ConnectCards /></>}
         {section === "check" && <ConnectionCheck />}
+        {section === "usage" && (
+          <Card id="usage" label="Your usage">
+            <CardHead title="Your usage" info="Every limit your plan has, what you've used and when it starts again. Refreshes are for reads kept for everyone (an AI read, a theme): a Refresh writes it again for everyone who opens it next." />
+            <UsageTable />
+          </Card>
+        )}
       </>}
     </div>
   );

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { writtenAt, marketTz } from "../lib/format";
+import { fmtDate, marketTz } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { THEME_IDEAS, researchApi, useRegion, type SectorAI } from "../lib/research";
-import { themeApi, type Business, type Dive, type Listing, type NewsRow, type Prices } from "../lib/theme";
+import { themeApi, type Business, type Dive, type LibraryTheme, type Listing, type NewsRow, type Prices } from "../lib/theme";
+import { StoredNote, StoredStamp, useStoredRefresh } from "../components/StoredStamp";
 import { RegionSwitch } from "../components/Research";
 import { ChainCard, ClaimsCard, LayerCard, ListingsCard, MembersCard, NewsCard, NumbersCards, SubThemesCard, ThemeDownloads } from "../components/ThemeDive";
 import { Card, CardHead, DataTable, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PageNav, Skeleton, Working } from "../components/kit";
@@ -40,6 +41,13 @@ export function ThemesPage() {
   const [ipos, setIpos] = useState<{ items: Listing[]; checked: boolean } | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
   const seq = useRef(0);   // a late answer for an earlier theme or market is ignored, and doesn't clear "Mapping…" for the newer one
+  const rf = useStoredRefresh();
+  const refreshed = useRef(false);  // after a Refresh, the figures are worked out again too (the company figures other themes share)
+  const refresh = () => {
+    const mine = ++seq.current;
+    tries.current = 0; setStopped(false); refreshed.current = true;
+    rf.run(async () => { const out = await researchApi.sector(region, q, true); if (mine === seq.current) setR(out); return out; });
+  };
   const run = async (theme: string, o: { refresh?: boolean; keep?: boolean } = {}) => {
     if (!theme.trim()) return;
     const mine = ++seq.current;
@@ -65,7 +73,8 @@ export function ThemesPage() {
     // the shown numbers stay while the theme is read again (owner, 7 Nov: "it was vanishing all the data for a sec and then bringing it
     // all back"); a new theme or market clears them in run()
     setDiveError(null);
-    themeApi.dive(region, q).then((d) => live && setDive(d)).catch((e) => live && setDiveError((e as Error).message));
+    const again = refreshed.current; refreshed.current = false;
+    themeApi.dive(region, q, again).then((d) => live && setDive(d)).catch((e) => live && setDiveError((e as Error).message));
     setNewsBusy(true); themeApi.news(region, q).then((n) => live && setNews(n.items)).catch(() => live && setNews(null)).finally(() => live && setNewsBusy(false));
     themeApi.business(region, q).then((b) => live && setBiz(b)).catch(() => live && setBiz(null));
     themeApi.listings(region, q).then((l) => live && setIpos(l)).catch(() => live && setIpos({ items: [], checked: false }));
@@ -123,6 +132,7 @@ export function ThemesPage() {
       <Card>
         <FormGrid label="Map a theme" onSubmit={(e) => { e.preventDefault(); go(text); }}>
           <Field label="Theme" wide value={text} onChange={(e) => setText(e.target.value)} placeholder={region === "IN" ? "India defence, railways capex…" : "AI data centers, grid electrification…"} />
+          <AlreadyRead region={region} typed={text} current={q} onPick={go} />
           <FormActions>
             <button className="btn" disabled={busy}>{busy ? "Mapping…" : "Map it"}</button>
             <span className="k-small k-muted">Or try</span>
@@ -135,8 +145,8 @@ export function ThemesPage() {
       {r && (
         <>
           <Card>
-            <CardHead title={r.sector} actions={<>{r.generated_at > 0 && <span className="k-note">Written {writtenAt(r.generated_at, marketTz(region))}</span>}
-              <button className="btn quiet sm" disabled={busy} onClick={() => run(q, { refresh: true })}>{busy ? "Mapping…" : "Refresh"}</button></>} />
+            <CardHead title={r.sector} actions={<StoredStamp at={r.generated_at > 0 ? r.generated_at : null} tz={marketTz(region)} busy={busy || rf.busy} onRefresh={refresh} />} />
+            <StoredNote busy={rf.busy} state={rf.state} at={r.generated_at > 0 ? r.generated_at : null} tz={marketTz(region)} />
             {r.summary && <p className="k-lede">{r.summary}</p>}
             {r.core && <p className="k-small">Everything converges on <b>{r.core}</b>.</p>}
             <ThemeDownloads r={r} dive={dive} region={region} theme={q} />
@@ -196,6 +206,33 @@ export function ThemesPage() {
           <p className="k-note">The text on this page that describes how a layer or sub-theme works is written by AI from general knowledge, with no figures. Every company of the theme's official industries is listed, whatever the AI says; a company the AI added from another industry is kept only while its own description doesn't show otherwise, with its words shown where they confirm the work. Every figure is from the companies' reported numbers or stored pages, with its year and basis.</p>
         </>
       )}
+    </div>
+  );
+}
+
+const REGION_WORD: Record<string, string> = { IN: "India", US: "US" };
+
+/** "Already read": themes kept for everyone that match what's typed, so a search for one of them opens at once (R19). Signed-in only,
+ *  as the page is; nothing shows until there is one. */
+function AlreadyRead({ region, typed, current, onPick }: { region: "IN" | "US"; typed: string; current: string; onPick: (t: string) => void }) {
+  const [items, setItems] = useState<LibraryTheme[]>([]);
+  useEffect(() => {
+    let live = true;
+    const t = setTimeout(() => {
+      themeApi.suggest(region, typed.trim()).then((x) => live && setItems(x.items)).catch(() => live && setItems([]));
+    }, 250);
+    return () => { live = false; clearTimeout(t); };
+  }, [region, typed]);
+  const shown = items.filter((i) => i.name.toLowerCase() !== current.trim().toLowerCase()).slice(0, 4);
+  if (!shown.length) return null;
+  return (
+    <div className="k-row theme-already" data-testid="theme-already">
+      <span className="k-small k-muted">Already read:</span>
+      {shown.map((i) => (
+        <button key={i.q} type="button" className="btn quiet sm" onClick={() => onPick(i.name)}>
+          {i.name} · {REGION_WORD[i.region] ?? i.region}{i.at ? `, read ${fmtDate(i.at.slice(0, 10), { year: false })}` : ""}
+        </button>
+      ))}
     </div>
   );
 }

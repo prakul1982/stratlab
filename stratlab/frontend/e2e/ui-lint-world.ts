@@ -112,8 +112,8 @@ export async function seedWorld(request: APIRequestContext): Promise<World> {
     "/invest/holders?region=US", "/research/corporate-actions?scope=all", "/research/corporate-actions?region=US&scope=all",
     "/research/themes?region=IN&q=India%20steel%20and%20mining", "/research/IN/RELIANCE", "/research/IN/TCS", "/research/US/AAPL", "/research/IN/RELIANCE/deep", "/research/US/AAPL/deep",
     "/invest/ipos/in-bonfig", "/invest/ipos/in-sfctech", "/invest/ipos/us-1273626-119431",
-    "/plans", "/account", "/settings", "/settings#experience", "/settings#accounts", "/settings#check", "/assistant", "/invite",
-    "/admin", "/admin/users", "/admin/money", "/admin/data", "/admin/quality", "/admin/system", "/admin/feedback", "/admin/emails", "/help#feedback"];
+    "/plans", "/account", "/settings", "/settings#experience", "/settings#accounts", "/settings#check", "/settings#usage", "/assistant", "/invite",
+    "/admin", "/admin/users", "/admin/money", "/admin/data", "/admin/quality", "/admin/system", "/admin/library", "/admin/feedback", "/admin/emails", "/help#feedback"];
   if (nb?.id) app.push(`/n/${nb.id}`, `/n/${nb.id}/market`, `/n/${nb.id}/compare`, `/n/${nb.id}/e/1`);
   if (nb2?.id) app.push(`/n/${nb2.id}`);
   if (nb3?.id) app.push(`/n/${nb3.id}`);

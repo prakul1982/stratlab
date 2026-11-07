@@ -103,7 +103,7 @@ test("item 11: Compare shows its two companies as one table; a link with no mark
   const r = read("src/pages/Research.tsx");
   assert.match(r, /<DataTable label="The two companies"/);
   assert.ok(r.indexOf('label="The two companies"') < r.indexOf('title="The numbers side by side"'));
-  assert.ok(r.indexOf('title="The numbers side by side"') < r.indexOf('<CardHead title="AI comparison" />'));       // the figures first, the AI paragraph after (LIVE1A-049)
+  assert.ok(r.indexOf('title="The numbers side by side"') < r.indexOf('<CardHead title="AI comparison"'));       // the figures first, the AI paragraph after (LIVE1A-049)
   assert.match(r, /if \(!params\.get\("region"\) && !t\.tried\)/);                                              // LIVE2-021
 });
 

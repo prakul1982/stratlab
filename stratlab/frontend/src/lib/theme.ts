@@ -67,6 +67,8 @@ export interface Listing { id: string; name: string; symbol: string | null; stag
 export interface Business { allowed: boolean; layers: { layer: string; rows: BizRow[] }[]; subs: { name: string; rows: BizRow[] }[]; companies: number; of: number }
 
 const q = (r: Region, theme: string) => `region=${r}&q=${encodeURIComponent(theme)}`;
+export type LibraryTheme = { name: string; q: string; region: Region; at: string | null; members: number | null; searched: number };
+
 export const themeApi = {
   dive: (r: Region, theme: string, refresh = false) => api<Dive>(`/research/theme-dive?${q(r, theme)}${refresh ? "&refresh=true" : ""}`),
   prices: (r: Region, theme: string) => api<Prices>(`/research/theme-dive/prices?${q(r, theme)}`),
@@ -75,6 +77,8 @@ export const themeApi = {
   business: (r: Region, theme: string) => api<Business>(`/research/theme-dive/business?${q(r, theme)}`),
   /** EXPORT: the theme's deck, PowerPoint or PDF (counted against the plan's monthly decks, as a company's deck is) */
   deck: (r: Region, theme: string, format: "pptx" | "pdf") => api<Response>(`/research/theme-dive/deck?${q(r, theme)}&format=${format}`, { raw: true }),
+  /** Themes already read and kept for everyone that match what's typed (R19: the search box's "Already read"). */
+  suggest: (r: Region, typed: string) => api<{ items: LibraryTheme[] }>(`/research/theme-library/suggest?${q(r, typed)}`),
   draft: (r: Region, theme: string) => api<{ result: string; slug: string | null; problem?: string }>("/admin/blog/theme", { method: "POST", body: { q: theme, region: r } }),
 };
 
