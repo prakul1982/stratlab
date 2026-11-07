@@ -128,6 +128,8 @@ test("R15 #16, #17: Market today's mood: the headlines read sits under the mood;
     expect(Math.abs(a!.height - b!.height)).toBeLessThan(2);
   }
   await sane(page, errors);
+  // the mood is read again behind the page (stale-while-revalidate): a read still in flight when the test ends is let go, not failed on
+  await page.unrouteAll({ behavior: "ignoreErrors" });
 });
 
 test("R15 #11: Results' Implied column only on days with an F&O stock; a non-F&O row says Not F&O; F&O rows fill in", async ({ page }, info) => {
