@@ -600,13 +600,15 @@ class Sources:
     results(frm, to, symbols), actions(frm, to, symbols), red_flags(symbols, frm, to) -> stored rows;
     card(symbol, row) -> the management report card checked against the reported years ({met, missed}) or None;
     history(key, point) -> the theme's kept points after adding `point` (a day's median P/E and the like), oldest first;
-    segments(symbol) -> the business segments the company's documents report ([{name, share_pct}]) or None (is_diversified)."""
+    segments(symbol) -> the business segments the company's documents report ([{name, share_pct}]) or None (is_diversified);
+    corp_history(symbol) -> the company's stored corporate actions (every kind, each with "kind" and "ex_date"), never read from a source."""
 
     def __init__(self, today: date, facts, index_rows=lambda: [], shareholding=lambda s: None, insider_buys=lambda: {},
                  results=lambda a, b, s: [], actions=lambda a, b, s: [], red_flags=lambda s, a, b: [], card=lambda s, r: None,
-                 history=lambda k, p: [p], segments=lambda s: None):
+                 history=lambda k, p: [p], segments=lambda s: None, corp_history=lambda s: []):
         self.today, self.facts, self.index_rows, self.shareholding, self.insider_buys = today, facts, index_rows, shareholding, insider_buys
         self.results, self.actions, self.red_flags, self.card, self.history, self.segments = results, actions, red_flags, card, history, segments
+        self.corp_history = corp_history
 
 
 _STOP = {"company", "companies", "limited", "india", "indian", "sector", "theme", "other", "others", "product", "products", "service", "services",
@@ -720,7 +722,8 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
                             "company_wide": r["symbol"] in wide, "year": r["year"]})
         subs.append({"name": s.get("name") or "", "detail": s.get("detail") or "", "companies": cos})
     for r in rows.values():                 # a merger or demerger broke the company's series: no growth figure for it, none in the growth totals
-        if series_break(r):
+        r["demerger"] = demerger_on(src, r["symbol"])
+        if series_break(r) or r["demerger"]:
             r["series_break"] = True
             for k in ("sales_1y", "sales_3y", "sales_5y", "profit_1y", "profit_3y", "profit_5y"):
                 r[k] = None
@@ -797,6 +800,25 @@ def series_break(r: dict) -> bool:
     return False
 
 
+DEMERGER_YEARS = 3            # a demerger this recent splits the years a growth figure is worked out from
+
+
+def demerger_on(src, symbol: str) -> str | None:
+    """The ex-date of a demerger (or scheme of arrangement) in the company's stored corporate actions within the last DEMERGER_YEARS, or
+    None (R17-005: a demerger was found only from a jump in revenue, so a company whose years moved less than SERIES_JUMP kept its growth
+    figures across the split)."""
+    try:
+        acts = src.corp_history(symbol) or []
+    except Exception as e:
+        print("theme data: corporate actions not read:", symbol, type(e).__name__, str(e)[:100])
+        return None
+    since = (src.today - timedelta(days=365 * DEMERGER_YEARS)).isoformat()
+    hits = sorted(str(a.get("ex_date") or a.get("record_date") or "")[:10] for a in acts
+                  if isinstance(a, dict) and (a.get("kind") == "demerger" or re.search(r"demerger|scheme of arrangement|spin[- ]?off", str(a.get("text") or a.get("purpose") or ""), re.I)))
+    hits = [d for d in hits if d and since <= d <= src.today.isoformat()]
+    return hits[-1] if hits else None
+
+
 def data_checks(rows: list[dict], blocks: list[dict], dive: dict) -> dict:
     """The checks every figure in the dive went through, with what was found (the deck's "data confidence" page; facts, each with its
     companies): one-off earnings, broken series, membership not confirmed, a quarter apart from the median's, and the count each median is on."""
@@ -806,7 +828,7 @@ def data_checks(rows: list[dict], blocks: list[dict], dive: dict) -> dict:
     return {
         "one_off": [{"symbol": r["symbol"], "name": r["name"], "ebitda": r["ebitda"], "net": r["net"]} for r in rows if r.get("one_off") and r.get("status") != "unverified"],
         "net_with": (meds.get("net_all") or {}).get("median"), "net_without": (meds.get("net") or {}).get("median"),
-        "series": [{"symbol": r["symbol"], "name": r["name"]} for r in rows if series_break(r)],
+        "series": [{"symbol": r["symbol"], "name": r["name"], **({"demerger": r["demerger"]} if r.get("demerger") else {})} for r in rows if r.get("series_break") or series_break(r)],
         "unverified": [{"symbol": r["symbol"], "name": r["name"]} for r in rows if r.get("status") == "unverified"],
         "earlier_quarter": q.get("earlier") or [], "quarter": q.get("quarter"),
         "n": {k: (meds.get(k) or {}).get("n", 0) for k in ("ebitda", "net", "roce")},

@@ -44,8 +44,8 @@ JOB_DAYS = 45                   # the daily job reads updates filed this recentl
 RUN_AT = "19:30"                # India time: after the day's monthly updates (the 1st of the month, mostly by noon)
 # how filings are read now: a read made by an older reader is read again, newest first, as the day's budget allows. 2: the
 # period's own column (DF-009), sales over production and the company's own business (DF-010, DF-011), the quarterly
-# updates and the press releases that weren't recognised (DF-012)
-READER = 2
+# updates and the press releases that weren't recognised (DF-012). 3: the year-ago figure is the year-ago column's (R17-005)
+READER = 3
 SYMBOL = re.compile(r"^[A-Z0-9][A-Z0-9&\-_.]{0,19}$")
 NOTE = ("Figures as the company filed them with the exchange, copied from its own document; each one links to the filing "
         "with the page and the line it's on. Changes are arithmetic on those filed figures. Facts, not advice.")
@@ -270,28 +270,74 @@ def header_periods(page: str, period: str) -> list[str]:
     return []
 
 
-def own_column(value: float, prior: float | None, quote: str, page: str, period: str) -> tuple[float, float | None]:
-    """The value of the period's own column, when the AI copied the year-ago column instead (DF-009: Mahindra's
-    "102092 121722 ..." under "Sep-25 Sep-26 ...", read as Sep 2026's 1,02,092 when Sep 2026 was 1,21,722). The row's
-    numbers are matched to the page's column headings one to one; when they don't line up, the figure stays as read."""
-    seq = header_periods(page, period)
-    nums = []
+def column_periods(page: str, period: str) -> list[str]:
+    """The month columns of the first line on the page that heads columns for `period` and at least one other month, in their order
+    ("Oct-26 Sep-26" → ["2026-10", "2026-09"]; "Sep-25 Sep-26 Sep-25 Sep-26" → ["2025-09", "2026-09", "2025-09", "2026-09"]); [] when
+    no line does. Wider than header_periods: a table whose other column is the month before, not the year before, is read too (R17-005)."""
+    for line in (page or "").splitlines():
+        got = []
+        for m in _LABEL.finditer(line):
+            y = int(m.group(2))
+            y = y + 2000 if y < 100 else y
+            got.append(f"{y:04d}-{_MON[m.group(1)[:3].lower()]:02d}")
+        if len(got) >= 2 and period in got and len(set(got)) >= 2:
+            return got
+    return []
+
+
+def _plain_numbers(quote: str) -> list[tuple[float, int, int]]:
+    """The plain numbers in a line (no scale word, no percentage, not the year of a month's name), with where each is."""
+    out = []
+    years = [(m.start(2), m.end(2)) for m in _LABEL.finditer(quote or "")]
     for m in _NUM.finditer(quote or ""):
-        if m.group(2):
+        if m.group(2) or (quote or "")[m.end():m.end() + 2].lstrip().startswith("%") or any(a <= m.start() < b for a, b in years):
             continue
         try:
-            nums.append(float(m.group(1).replace(",", "")))
+            out.append((float(m.group(1).replace(",", "")), m.start(), m.end()))
         except ValueError:
             continue
-    if not seq or len(nums) != len(seq):
+    return out
+
+
+def own_column(value: float, prior: float | None, quote: str, page: str, period: str) -> tuple[float, float | None]:
+    """The value of the period's own column and the year-ago figure of the column beside it. DF-009: the AI copied the year-ago column
+    (Mahindra's "102092 121722 ..." under "Sep-25 Sep-26 ...", read as Sep 2026's 1,02,092 when Sep 2026 was 1,21,722). R17-005: the
+    year-ago figure must be the year-ago column's: a table whose other column is the month before gives no year-ago figure (Mahindra's
+    38,563 against 1,14,737), and a line holding two companies' rows (a group's filing, Tata Motors PV's and CV's volumes) gives each
+    company its own (both had read 37,530). The row's numbers are matched to the page's column headings, repeated when the line holds
+    several rows; with no headings to go on, a year-ago figure is kept only when it follows the value, or precedes it with nothing but
+    separators between (the row before's figure is not this one's)."""
+    seq = column_periods(page, period)
+    found = _plain_numbers(quote)
+    nums = [n for n, _, _ in found]
+    if seq and nums and len(nums) % len(seq) == 0:
+        cols = seq * (len(nums) // len(seq))
+        ago = shift(period, -12)
+        at = next((i for i, x in enumerate(nums) if abs(x - value) < 1e-9 and cols[i] == period), None)
+        if at is None:
+            hit = next((i for i, x in enumerate(nums) if abs(x - value) < 1e-9), None)
+            if hit is None:
+                return value, prior
+            at = next((j for j in (hit + 1, hit - 1) if 0 <= j < len(cols) and cols[j] == period and j // len(seq) == hit // len(seq)), None)
+            if at is None:
+                return value, prior
+        row = at // len(seq)
+        # the year-ago column paired with this one: on the side the headings put the year-ago column first or last
+        first = next((c for c in seq if c in (period, ago)), period)
+        side = -1 if first == ago else 1
+        near = sorted((j for j in range(row * len(seq), (row + 1) * len(seq)) if cols[j] == ago),
+                      key=lambda j: (abs(j - at), 0 if (j - at) * side > 0 else 1))
+        pj = near[0] if near else None
+        return nums[at], (nums[pj] if pj is not None else None)
+    if prior is None:
         return value, prior
-    at = next((i for i, x in enumerate(nums) if abs(x - value) < 1e-9), None)
-    if at is None or seq[at] == period:
-        return value, prior
-    for j in (at + 1, at - 1):
-        if 0 <= j < len(seq) and seq[j] == period:
-            return nums[j], nums[at]
-    return value, prior
+    vs = [i for i, (x, _, _) in enumerate(found) if abs(x - value) < 1e-9]
+    ps = [i for i, (x, _, _) in enumerate(found) if abs(x - prior) < 1e-9]
+    for i in vs:
+        for k in ps:
+            if k == i + 1 or (k == i - 1 and not re.search(r"[A-Za-z]", quote[found[k][2]:found[i][1]])):
+                return value, prior
+    return value, (prior if not vs or not ps else None)
 
 
 # a filing about a subsidiary's or joint venture's own volumes, as its cover letter says (DF-011: "sales volume of VE

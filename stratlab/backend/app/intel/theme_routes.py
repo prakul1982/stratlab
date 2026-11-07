@@ -462,7 +462,8 @@ def sources(region: str, theme: str):
         shareholding=(lambda s: shareholders.company(s)) if region == "IN" else (lambda s: None),
         insider_buys=(lambda: deals.buys().get("buys") or {}) if region == "IN" else (lambda: {}),
         results=lambda a, b, s: results.between(region, a, b, s), actions=lambda a, b, s: corp_actions.between(region, a, b, s),
-        red_flags=red, card=card, history=history, segments=segments)
+        red_flags=red, card=card, history=history, segments=segments,
+        corp_history=lambda s: corp_actions.history(region, s, None, fetch=False))
 
 
 @router.get("/theme-dive")
