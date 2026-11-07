@@ -43,6 +43,8 @@ test("R17-004: no section card draws its own h2: the deep dive's document cards 
   const nav = read("src/pages/NavPages.tsx");
   assert.match(nav, /<CardHead title=\{<Link to="\/mine">\{MINE_NAME\}<\/Link>\} \/>/);
   assert.match(nav, /<CardHead title=\{<Link to=\{s\.home\}>\{s\.label\}<\/Link>\} \/>/);
+  // the read buttons in the header row take a line of their own on a phone rather than wrap their words (UI-lint R4)
+  assert.match(read("src/styles.css"), /\.dd-ask \{ flex-wrap: wrap; \}\n\.dd-ask > \.btn \{ white-space: nowrap; max-width: 100%; \}/);
   for (const f of ["src/pages/DeepDive.tsx", "src/pages/NavPages.tsx"]) {
     const s = read(f);
     // a raw card title right inside a Card (the page-link tiles of a group page keep theirs: a grid of links, not sections)
