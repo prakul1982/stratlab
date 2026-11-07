@@ -267,6 +267,9 @@ test("R16: the highlighted Themes link heads the menu in My space and Invest (no
     // on the first row, beside the home link, and tinted with the accent
     const [home, t] = await Promise.all([again.locator(".side-home > a").first().boundingBox(), themes.boundingBox()]);
     expect(Math.abs(home!.y - t!.y), `${name}: Themes shares the home link's row`).toBeLessThanOrEqual(1);
+    // the home link's words stay on one line, whole (owner, 7 Nov: "Invest home" broke onto two lines)
+    const label = again.locator(".side-home > a").first().locator(".side-home-label");
+    expect(await label.evaluate((el) => el.scrollWidth <= el.clientWidth + 1 && el.getBoundingClientRect().height < 24), `${name}: home label fits on one line`).toBe(true);
     expect(await themes.evaluate((el) => getComputedStyle(el).borderLeftWidth)).toBe("3px");
     if (phone) await page.keyboard.press("Escape");
   }

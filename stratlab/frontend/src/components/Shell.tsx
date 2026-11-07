@@ -296,7 +296,7 @@ export function Shell({ children }: { children: ReactNode }) {
             in the phone's drawer, beside the space's home: no row of its own, so the menu still fits a 1280x800 laptop unscrolled (IA-2).
             It stays in Invest's menu too, where its breadcrumb puts it; that entry is the one highlighted item on its page (ui-lint R7) */}
         <div className="side-list side-home">
-          <NavLink to={homeOf(space)} end><Compass size={16} />{homeLabel}</NavLink>
+          <NavLink to={homeOf(space)} end><Compass size={16} /><span className="side-home-label">{homeLabel}</span></NavLink>
           {/* owner, 7 Nov: on My space and Invest only, where people research; Trade and Money stay as they were */}
           {(space === "invest" || space === "mine") && <Link to={THEMES} className="side-feature" title="Themes: map a sector or trend and see the listed companies linked to it"><Compass size={16} />Themes</Link>}
         </div>

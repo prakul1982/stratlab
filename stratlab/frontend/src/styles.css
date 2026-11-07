@@ -279,8 +279,10 @@ a.link { margin-inline: -2px; }
 .side-list a:focus-visible, .side-toggle:focus-visible { outline-offset: -2px; }
 /* R16: Themes, highlighted beside the space's home on the menu's first row: an accent edge and tint, the icon in the accent */
 .side-home { flex-direction: row; align-items: center; gap: 6px; }
-.side-home > a:first-child { flex: 1; }
-.side-list a.side-feature { flex: none; gap: 6px; padding: 0 10px 0 8px; border: 1px solid var(--line-2); border-left: 3px solid var(--orange);
+/* the home link stays on one line beside Themes (owner, 7 Nov: "Invest home" broke onto two lines in its 32px row) */
+.side-home > a:first-child { flex: 1; gap: 8px; white-space: nowrap; }
+.side-home-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.side-list a.side-feature { flex: none; gap: 6px; padding: 0 9px 0 7px; white-space: nowrap; border: 1px solid var(--line-2); border-left: 3px solid var(--orange);
   background: var(--orange-soft); color: var(--ink); font-weight: 600; }
 .side-list a.side-feature > svg { color: var(--orange-ink); }
 .side-list a.side-feature:hover { border-color: var(--orange); background: var(--orange-soft); }
