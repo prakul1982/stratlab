@@ -29,7 +29,7 @@ export function textOf(node: ReactNode): string {
 /** The row at the top of a card: the title and its (i) on the left, the card's controls (range, Table, a button) on the
  * right in the same row. It wraps under the title on a narrow screen. The (i) sits beside the heading, not inside it,
  * and is named after the title ("About Markets") unless `infoLabel` says otherwise. */
-export function CardHead({ title, info, infoLabel, actions, level = 2 }: { title: ReactNode; info?: ReactNode; infoLabel?: string; actions?: ReactNode; level?: 2 | 3 }) {
+export function CardHead({ title, info, infoLabel, actions, sub, level = 2 }: { title: ReactNode; info?: ReactNode; infoLabel?: string; actions?: ReactNode; sub?: ReactNode; level?: 2 | 3 }) {
   const H = `h${level}` as "h2" | "h3";
   const words = textOf(title).replace(/\s+/g, " ").trim();
   // a card's main title (h2) names its section, which gets the close and move buttons; a sub-title (h3) does not
@@ -43,14 +43,16 @@ export function CardHead({ title, info, infoLabel, actions, level = 2 }: { title
     setHeadingId(hid);
     return () => { setTitle(""); setHeadingId(null); };
   }, [mine, words, hid, setTitle, setHeadingId]);
+  const heading = info ? (
+    <div className="k-card-titlerow">
+      <H className="k-card-title" id={mine ? hid : undefined}>{title}</H>
+      <Info label={infoLabel ?? (words ? `About ${words}` : "About this card")}>{info}</Info>
+    </div>
+  ) : <H className="k-card-title" id={mine ? hid : undefined}>{title}</H>;
   return (
     <div className="k-card-head">
-      {info ? (
-        <div className="k-card-titlerow">
-          <H className="k-card-title" id={mine ? hid : undefined}>{title}</H>
-          <Info label={infoLabel ?? (words ? `About ${words}` : "About this card")}>{info}</Info>
-        </div>
-      ) : <H className="k-card-title" id={mine ? hid : undefined}>{title}</H>}
+      {/* `sub`: a line under the title, beside the controls (R17-004: the cards that drew their own h2 for it had no section frame) */}
+      {sub != null ? <div className="k-stack k-card-headtext">{heading}<span className="k-small k-muted">{sub}</span></div> : heading}
       {actions && <div className="k-card-actions">{actions}</div>}
       {mine && frame.on && <SectionControls frame={frame} />}
     </div>

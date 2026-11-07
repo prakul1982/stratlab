@@ -36,6 +36,11 @@ export type PageMeta = {
 };
 
 /** Pages anyone can open, and what each says about itself. */
+// words two or more pages share, written once so the landing page's download carries them once (R17-003: the landing budget)
+const PLANS_SUMMARY = ["StratLab has three plans: Free, Basic and Pro. Free costs nothing and needs no card. Basic and Pro are subscriptions billed monthly or yearly, with higher limits on backtests, AI builds and how many strategies you can paper trade at a time.",
+  "Prices are in Indian rupees, with the dollar figure beside each at today's rate, and the payment is charged in rupees. You can cancel any time from Account."];
+const CONTACT_LINE = "How to reach StratLab for help, billing and refunds, or a privacy request, with the email address for each.";
+
 export const PAGES: PageMeta[] = [
   // the home page's heading is the one the landing page draws (R8V-008: the raw page said "StratLab: test it, research it,
   // track it" over a drawn "Test it, research it, track it.")
@@ -54,15 +59,13 @@ export const PAGES: PageMeta[] = [
   { path: "/pricing", title: "Plans · StratLab",
     description: "What the Free, Basic and Pro plans include and cost. Prices are in rupees, with the dollar figure beside each, and charged in rupees.", index: true, canonical: "/plans", updated: "2026-10-08",     // the landing page scrolled to its prices: the plans page is the one address for them (R26-006, RC1-011)
     heading: "Plans and prices",
-    summary: ["StratLab has three plans: Free, Basic and Pro. Free costs nothing and needs no card. Basic and Pro are subscriptions billed monthly or yearly, with higher limits on backtests, AI builds and how many strategies you can paper trade at a time.",
-      "Prices are in Indian rupees, with the dollar figure beside each at today's rate, and the payment is charged in rupees. You can cancel any time from Account."] },
+    summary: PLANS_SUMMARY },
   // /plans: the prices on their own page (the landing page scrolled to them is /pricing). Indexed, with its own address as the canonical
   // one, and listed in the sitemap (DK-006: it was noindex with no canonical, a page the sitemap and the menus point to)
   { path: "/plans", title: "Plans and prices · StratLab",
     description: "Free, Basic and Pro side by side: what each plan includes and costs, with prices in rupees and about how much each is in dollars, and how to cancel.", index: true, updated: "2026-10-24",
     heading: "Plans and prices",
-    summary: ["StratLab has three plans: Free, Basic and Pro. Free costs nothing and needs no card. Basic and Pro are subscriptions billed monthly or yearly, with higher limits on backtests, AI builds and how many strategies you can paper trade at a time.",
-      "Prices are in Indian rupees, with the dollar figure beside each at today's rate, and the payment is charged in rupees. You can cancel any time from Account."] },
+    summary: PLANS_SUMMARY },
   { path: "/faq", title: "Questions · StratLab",
     description: "Answers about StratLab: whether it gives tips or places real trades, how the four checks work, options, invite rewards, who can see your money data, and the app.", index: true, updated: "2026-10-08",
     heading: "Questions" },
@@ -83,9 +86,9 @@ export const PAGES: PageMeta[] = [
     description: "How to cancel a StratLab plan, the 7-day refund on any payment and how to ask. You can cancel any time from Account.", index: true, updated: "2026-10-25",
     heading: "Cancellation and refunds" },
   { path: "/contact", title: "Contact · StratLab",
-    description: "How to reach StratLab for help, billing and refunds, or a privacy request, with the email address for each.", index: true, updated: "2026-09-26",
+    description: CONTACT_LINE, index: true, updated: "2026-09-26",
     heading: "Contact us",
-    summary: ["How to reach StratLab for help, billing and refunds, or a privacy request, with the email address for each.",
+    summary: [CONTACT_LINE,
       "Help: support@stratlab.studio. Billing and refunds: billing@stratlab.studio. Privacy requests: privacy@stratlab.studio."] },
   // addresses that open the landing page at a place, or ask for sign-in: not pages of their own, so not indexed (R10V-005
   // checked /about: the app sends it to /features signed in, scrolls the landing page to its About place signed out, and
