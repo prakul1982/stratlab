@@ -422,7 +422,7 @@ def theme_list(x, n: int, length: int = 400) -> list:
     return [t for t in (theme_text(i, length) for i in _clip(x, n, 2000)) if t]
 
 
-def ask(system: str, text: str, ai, max_tokens: int = 3000) -> dict:
+def ask(system: str, text: str, ai, max_tokens: int = 6000) -> dict:          # R25: the placement answer carries every company's revenue model
     """A JSON answer to a check the theme map's claims go through (theme_check.py): the same providers as every other read."""
     return _ask(system, text, ai, max_tokens)
 
@@ -449,7 +449,10 @@ direct link to the theme, in value-chain order, not ranked), up to 4 ETFs, 4-6 v
 as tailwinds). The layers follow the industry's own production chain or business models, each a distinct step or model of it (what is designed,
 made, supplied, sold or serviced, and to whom), never one layer for the whole industry or an exchange's industry name; business models whose
 economics differ stay apart. Each layer groups companies by their main business, so each company belongs to one layer; never an activity every
-company of the theme does. The sub-themes follow the main layers (one sub-theme a layer at most). Nothing generic.
+company of the theme does. The companies of a layer earn the same way (project services, managed services, software licences or subscriptions,
+hardware resale, manufacturing, lending, underwriting, fees...): a reseller of others' hardware or a software-product company never sits with
+service firms, and no catch-all layer ("mid-tier", "other", "diversified players"); name a layer by what its companies do and how they earn.
+The sub-themes follow the main layers (one sub-theme a layer at most). Nothing generic.
 Put a listed company in a layer or sub-theme only when its own business is that very work (it makes, mines, refines, builds or operates it); a customer, a
 supplier of something else or another company of the same group does not belong. Fewer companies, all of them right, is better than many.
 Name a policy, scheme or rule only when it exists today and you know whether it is in force; leave "policy" and "search" empty for a tailwind or risk that rests on none.
@@ -486,8 +489,8 @@ policies that exist; leave out anything you aren't sure of.
 
 
 # the map prompt's version (R21: 4-6 layers that follow the industry's own chain, as many risks as tailwinds): a map kept from an older prompt
-# with fewer than MAP_LAYERS named layers is written again once (routes.sector_map)
-MAP_V = 22
+# with fewer than MAP_LAYERS named layers is written again once (routes.sector_map). R25: 23, a layer's companies earn the same way
+MAP_V = 23
 MAP_LAYERS = 4
 
 

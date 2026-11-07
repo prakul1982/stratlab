@@ -252,30 +252,84 @@ def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None
     return out
 
 
+# ---------- how each company earns (R25: the owner's outside review, "avoid grouping businesses with fundamentally different revenue
+# models just because they belong to the same broad theme": hardware resellers beside IT services, an 18-company "mid-tier" catch-all) ----------
+# id: (family, the name a layer of such companies gets, what they have in common). Companies of one family earn the same way; a layer never
+# mixes families (theme_base.by_model). The list is the same for every theme and both markets; "unknown" when the evidence doesn't show it.
+MODELS = {
+    "project_services": ("services", "Project and consulting services", "fees for projects and time worked for clients"),
+    "managed_services": ("services", "Managed and outsourced services", "multi-year contracts to run systems or business processes for clients"),
+    "software": ("software", "Software products and subscriptions", "licences and subscriptions for software they own"),
+    "royalties": ("royalties", "Designs licensed for royalties", "licence fees and royalties on designs and patents they own"),
+    "platform": ("platform", "Platforms and marketplaces", "commissions, listing fees or advertising on platforms they run"),
+    "hardware_resale": ("resale", "Hardware resale and integration", "selling and installing hardware that others make"),
+    "distribution": ("resale", "Distribution and trading", "the margin on goods bought from makers and sold on to businesses"),
+    "retail": ("resale", "Retail", "the margin on goods sold to consumers in their own stores or online"),
+    "manufacturing": ("making", "Makers of their own products", "making and selling products of their own"),
+    "contract_manufacturing": ("making", "Contract manufacturing", "making products to other companies' designs and orders"),
+    "capacity": ("capacity", "Data centres, hosting and networks", "renting out computing, data-centre or network capacity, and connectivity subscriptions"),
+    "construction": ("construction", "Engineering and construction contracts", "contracts to design and build projects for clients"),
+    "lending": ("lending", "Lenders", "interest on loans they make"),
+    "underwriting": ("underwriting", "Insurers", "premiums for the risks they insure, and returns on the premiums they invest"),
+    "broking": ("financial_fees", "Brokers and distributors of financial products", "commissions and fees for selling or arranging others' financial and insurance products"),
+    "asset_management": ("financial_fees", "Fund and asset managers", "fees on the money they manage"),
+    "market_infrastructure": ("financial_fees", "Exchanges, depositories and ratings", "fees for trading, settling, holding or rating securities"),
+    "resources": ("resources", "Mining, oil, gas and farming", "selling what they mine, drill or grow"),
+    "utility": ("utility", "Power, gas and water supply", "selling power, gas or water, much of it at regulated tariffs"),
+    "property": ("property", "Property and leasing", "rent, leases and sales of property or equipment they own"),
+    "care": ("care", "Hospitals, clinics and diagnostics", "fees for care, treatment and tests"),
+    "media": ("media", "Media and content", "advertising, subscriptions and licences for content they own"),
+    "transport": ("transport", "Transport and logistics", "fees for moving and storing goods or people"),
+    "consumer_services": ("consumer_services", "Hotels, travel and consumer services", "fees paid by consumers for stays, trips, meals or courses"),
+    "holding": ("holding", "Diversified groups", "several businesses that earn in different ways"),
+}
+
+
+# a layer holding more than one model of a family: its name and what its companies have in common (one model: the model's own)
+FAMILIES = {
+    "services": ("Services for clients", "fees from clients for projects, time worked or multi-year service contracts"),
+    "resale": ("Resale and distribution", "the margin on goods that others make"),
+    "making": ("Manufacturers", "making and selling products, their own or to other companies' designs"),
+    "financial_fees": ("Financial fees and commissions", "fees and commissions on financial products, money managed or securities"),
+}
+
+
+def model_family(model) -> str:
+    """A revenue model's family ("services", "resale", "lending"...), or "" for "unknown" or a word not on the list."""
+    return MODELS[model][0] if model in MODELS else ""
+
+
 # ---------- the companies the map didn't place, each in the best of its layers (R21) ----------
 PLACE_SYSTEM2 = """You sort listed companies into the layers of a map of an industry theme. Every company given is in the theme already (the
 stock exchange files it under the theme's industry). Use only the companies' descriptions and industries given, no other knowledge, and no figure.
 1. PLACE: for each COMPANY, pick the one LAYER (by its id) whose work its own description shows best; "none" when no layer fits.
 2. RENAME: for a layer whose name or description doesn't fit the companies in it after step 1 (its MEMBERS and those you placed there), give a
-   name (at most 6 words) and a description (2 sentences: what these companies do, and what sets this layer apart) that fit them. Leave out a
-   layer that fits.
+   name (at most 6 words) and a description (2 sentences: what these companies do and how they earn, and what sets this layer apart) that fit
+   them. Leave out a layer that fits. Never a catch-all name ("mid-tier", "other", "diversified players").
 3. EXTRA: when 5 or more of the companies (or more than a sixth of all) fit no layer, propose up to 2 more layers for them, from their own
    descriptions, each with the symbols it holds. Keep business models whose economics differ apart (what is designed, made, supplied or serviced,
    and to whom); never one layer for the whole industry.
+4. MODEL: for every symbol given (each COMPANY and each layer's MEMBERS, written "SYMBOL · name"), the ONE way it earns most of its revenue, as its
+   own description shows it, from this list: """ + ", ".join(MODELS) + """; "unknown" when the description doesn't show it.
+   A company that resells or installs hardware others make is hardware_resale, one that makes its own is manufacturing; one that sells
+   licences or subscriptions to software it owns is software, one paid for projects or people's time is project_services.
 Reply with ONLY this JSON: {"place": [{"symbol": "", "layer": "<layer id or none>"}], "rename": [{"layer": "<layer id>", "name": "", "description": ""}],
-"extra": [{"name": "", "description": "", "symbols": [""]}]}"""
+"extra": [{"name": "", "description": "", "symbols": [""]}], "models": {"<symbol>": "<model>"}}"""
+MODEL_MEMBERS = 40            # a layer's members sent with their symbols for step 4 (the largest first, as the layer lists them)
 
 
 def place_in_layers(layers: list[dict], companies: list[dict], ask, theme: str) -> dict:
     """One AI answer for a map (R21, R22): {"place": {symbol: layer name or ""}, "rename": {layer name: {"name", "description"}}, "extra":
-    [{"name", "description", "symbols"}]}. A layer id that isn't the map's, a symbol not asked about, a name that is empty or a description with
+    [{"name", "description", "symbols"}], "models": {symbol: model}} (R25: each company's revenue model from MODELS, for the companies given and
+    the layers' members; "unknown" left out). A layer id that isn't the map's, a symbol not asked about, a name that is empty or a description with
     a figure are dropped (the caller keeps the map's own name, and places the rest by their words)."""
     import json
     from .ai import theme_text
     ids = {f"L{i}": v.get("layer") or "" for i, v in enumerate(layers)}
     payload = {"theme": theme, "layers": {k: {"name": ids[k], "what_it_is": str(layers[i].get("description") or "")[:240],
-                                              "members": [(c.get("name") or c.get("ticker") or "") + (f": {str(c.get('what'))[:120]}" if c.get("what") else "")
-                                                          for c in (layers[i].get("companies") or [])[:15]]}
+                                              "members": [f"{c.get('ticker') or ''} · " + (c.get("name") or c.get("ticker") or "")
+                                                          + (f": {str(c.get('what'))[:120]}" if c.get("what") else "")
+                                                          for c in (layers[i].get("companies") or [])[:MODEL_MEMBERS]]}
                                           for i, k in enumerate(ids)},
                "companies": [{"symbol": c["symbol"], "name": c["name"], "industry": c.get("industry") or "",
                               "description": clean_description(c.get("about") or "", 220)} for c in companies]}
@@ -304,7 +358,12 @@ def place_in_layers(layers: list[dict], companies: list[dict], ask, theme: str) 
             syms = [s_ for s_ in x.get("symbols") or [] if s_ in asked and place.get(s_, "") == ""]
             if name and not re.search(r"\d", name) and len(syms) >= 2:
                 extra.append({"name": name, "description": theme_text(x.get("description"), 400) or "", "symbols": syms})
-    return {"place": place, "rename": rename, "extra": extra}
+    members = {c.get("ticker") for v in layers for c in (v.get("companies") or [])[:MODEL_MEMBERS] if c.get("ticker")}
+    raw = got.get("models")
+    pairs = raw.items() if isinstance(raw, dict) else [(x.get("symbol"), x.get("model")) for x in raw or [] if isinstance(x, dict)] if isinstance(raw, list) else []
+    # how each company earns (R25): only a symbol asked about and a model on the list; "unknown" and anything else is left out (it stays put)
+    models = {s_: str(md) for s_, md in pairs if (s_ in asked or s_ in members) and str(md) in MODELS}
+    return {"place": place, "rename": rename, "extra": extra, "models": models}
 
 
 # ---------- claims: tailwinds, risks and a layer's policy line ----------

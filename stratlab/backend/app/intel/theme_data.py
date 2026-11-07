@@ -940,6 +940,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         b["policy"] = v.get("policy")
         b["official"], b["basis"] = bool(v.get("official")), v.get("basis")     # a layer that is one official industry's companies the AI didn't place (theme_base.py)
         b["by_industry"] = bool(v.get("by_industry"))
+        b["model"] = v.get("model") or None                 # what the layer's companies have in common: how they earn (theme_base.by_model, R25)
         blocks.append(b)
         sure = [r for r in mine if r.get("status") != "unverified"]
         histories[b["layer"]] = layer_history([r for r in sure if r["symbol"] not in wide] or sure)
