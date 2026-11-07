@@ -602,11 +602,9 @@ def theme_source_from_blocks(post: dict) -> dict | None:
 
 def _theme_gap(rows: list[dict]) -> dict | None:
     """The layers with the highest and lowest median EBITDA margin among the chain's layers (never a group no layer took), from those whose
-    median is of two companies or more; all layers with a figure when fewer than two have that many."""
+    median is of COMPARE_MIN companies or more (the decks' floor); no comparison when fewer than two layers have that many."""
     from .intel import theme_data as td
-    have = [r for r in rows if not r.get("official") and r.get("ebitda") is not None]
-    solid = [r for r in have if (r.get("ebitda_n") or 0) >= td.MIN_LAYER]
-    pool = solid if len(solid) >= 2 else have
+    pool = [r for r in rows if not r.get("official") and r.get("ebitda") is not None and (r.get("ebitda_n") or 0) >= td.COMPARE_MIN]
     if len(pool) < 2:
         return None
     hi, lo = max(pool, key=lambda r: r["ebitda"]), min(pool, key=lambda r: r["ebitda"])
