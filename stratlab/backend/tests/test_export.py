@@ -61,13 +61,16 @@ def test_the_theme_deck_has_the_cover_chain_layers_members_claims_and_notes():
     titles = [s.title for s in slides]
     # R16 (owner, 7 Nov): changed on purpose; findings up front (key findings, data confidence, worth a watch), the companies' figures in the
     # core, every company's own words in the appendix; the cover counts the companies the figures are for instead of the AI's additions
+    # R17 (owner, 7 Nov): changed on purpose; data confidence carries the table of counts each total is of (under the checks, or on a page of
+    # its own when it doesn't fit), and the Industry economics part follows the value chain
     assert titles == ["Test theme", "The theme at a glance", "Findings", "Key findings", "Data confidence", "Worth a watch",
                       "The value chain", "The value chain by layer", "Layer 1 · Mining", "Layer 2 · Cells",
-                      "Sub-themes and the companies that do them", "The companies", "Every company's figures",
+                      "Sub-themes and the companies that do them", "Industry economics", "Layers side by side", "What moved the aggregate margin",
+                      "The companies", "Every company's figures",
                       "Tailwinds, risks and news", "Tailwinds and risks", "The theme in numbers", "Size and shape", "Growth and profitability",
                       "Margins over time", "Valuation", "Balance sheet and cash", "Price", "Appendix", "Every company in this theme", "How to read this deck"]
     assert slides[0].kind == "cover" and slides[0].subtitle == "India (NSE and BSE) · Theme deep dive" and "Theme deep dive" in footer
-    assert [s.part for s in slides if s.kind == "section"] == ["01", "02", "03", "04", "05", "06"]
+    assert [s.part for s in slides if s.kind == "section"] == ["01", "02", "03", "04", "05", "06", "07"]
     assert slides[6].contents[:2] == [("The value chain by layer", 8), ("Layer 1 · Mining", 9)]          # a section lists its slides with their pages
     cover = dict((t[0], t[1]) for t in next(b for b in slides[0].blocks if b["kind"] == "stats")["items"])
     assert cover["Companies"] == "6" and cover["Layers"] == "2" and cover["With figures"] == "5 of 6 (100% of value)"

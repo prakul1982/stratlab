@@ -150,7 +150,7 @@ test("the start-up block is kept as drawn, without its fade-in class, so drawing
 
 test("the visitor half draws the kept words while a page's code downloads, and the app starts from them (R10V-006)", () => {
   const visitor = read("src/visitor/VisitorApp.tsx");
-  assert.match(visitor, /const words = view\.kind === "landing" && view\.section === "faq" \? "" : heldStartup\(\);/);   // not /faq (R80-003)
+  assert.match(visitor, /const words = pathname !== BOOT_PATH \|\| \(view\.kind === "landing" && view\.section === "faq"\) \? "" : heldStartup\(\);/);   // not /faq (R80-003); only on the address the visit opened on (R17-003, changed on purpose)
   assert.match(visitor, /words \? <div style=\{\{ display: "contents" \}\} data-held dangerouslySetInnerHTML=\{\{ __html: words \}\} \/> : wait/);
   assert.match(visitor, /<Suspense fallback=\{view\.kind === "ad" \? wait : fallback\}>/);      // R15: the ad landing waits on the splash, not the landing's words
   // with nothing kept, the splash is still a main landmark with a heading (R6V-013)

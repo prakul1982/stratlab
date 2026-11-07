@@ -878,7 +878,8 @@ def yahoo_symbol(row: dict) -> str | None:
     if row["market"] == "US":
         return (row.get("symbol") or "").replace(".", "-") or None
     if row.get("symbol"):
-        return f"{row['symbol']}.NS"
+        # an NSE SME stock is quoted as SYMBOL-SM.NS (RAVITA-SM.NS; RAVITA.NS is not found), so SME issues had no trading since listing (R17)
+        return f"{row['symbol']}-SM.NS" if row.get("segment") == "sme" else f"{row['symbol']}.NS"
     # a BSE-only issue: the scrip code it trades under once listed (the issue list's code is the offer's own number, not the stock's)
     code = row.get("bse_scrip") or row.get("bse_code")
     return f"{code}.BO" if code else None
@@ -1438,6 +1439,10 @@ class Job:
             rows, problems = refresh_us(_wire["calendar"](), _wire["edgar"](), today, now, check=missing)
         if perf:
             attach_perf(rows, now)
+        if market == "IN":
+            # the listed issues go into the two-year history too (ipo_history.py), so it stays current without reading anything again
+            from . import ipo_history
+            _try(problems, "the IPO history", lambda: ipo_history.absorb(rows, today, now))
         load_ = load(market)
         # (the check compares with what the lists said this read; when they weren't read, nothing is compared)
         checked = {**load_["checked"], "read": now.isoformat(timespec="seconds"), "problems": problems[:6], "missing": missing[:12]}

@@ -133,8 +133,11 @@ def report(feed, symbol: str, days: int = DEALS_DAYS) -> dict:
     if last is not None and len(problems) == len(KINDS):
         raise last
     items = tidy_items(sort_deals(items))
+    # insider trades read from BSE's list because NSE's didn't answer (R17-002): the table says where they came from
+    from_bse = any(d.get("kind") == "insider" and d.get("exchange") == "BSE" for d in items)
     return {"symbol": symbol, "days": days, "items": items[:300], "count": len(items), "problems": problems,
-            "flow": flow(items), "flow_days": FLOW_DAYS, "source": SOURCE, "trust_note": trust_note(items)}
+            "flow": flow(items), "flow_days": FLOW_DAYS, "source": SOURCE, "trust_note": trust_note(items),
+            "insider_from": "BSE" if from_bse else None}
 
 
 def trust_note(items: list[dict], today: date | None = None, days: int = FLOW_DAYS) -> str | None:

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
-import { Card, EmptyState, PageHeader } from "../components/kit";
+import { Card, CardHead, EmptyState, PageHeader } from "../components/kit";
 import { PageTags } from "../components/PageTags";
 import { TileGrid } from "../components/TileGrid";
 import { ALL_GROUPS, NAV, SPACE_LIST, groupPath, locateGroup, type NavPage } from "../lib/nav";
@@ -88,7 +88,7 @@ export function FeaturesPage() {
       {!spaces.length && !mine.length && <EmptyState title="No page matches that" action={{ label: "Show everything", onClick: () => setQ("") }}>Try a shorter word, or press Ctrl K to ask in your own words.</EmptyState>}
       {mine.length > 0 && (
         <Card testId="features-mine">
-          <h2 className="k-card-title"><Link to="/mine">{MINE_NAME}</Link></h2>
+          <CardHead title={<Link to="/mine">{MINE_NAME}</Link>} />
           <ul className="feat-list">
             {mine.map((p) => <li key={p.to}><Link to={p.to}><b>{p.label}</b></Link><span className="feat-line">{p.line}</span></li>)}
           </ul>
@@ -96,7 +96,7 @@ export function FeaturesPage() {
       )}
       {spaces.map((s) => (
         <Card key={s.id} testId={`features-${s.id}`}>
-          <h2 className="k-card-title"><Link to={s.home}>{s.label}</Link></h2>
+          <CardHead title={<Link to={s.home}>{s.label}</Link>} />
           {s.homeShown && <ul className="feat-list"><li><Link to={s.home}><b>{s.label} home</b></Link><span className="feat-line">{HOME_LINE[s.id]}</span></li></ul>}
           {s.groups.map(({ g, pages }) => (
             <section key={g.id} className="feat-group" aria-label={`${s.label}: ${g.label}`}>

@@ -12,11 +12,15 @@ export interface Deal {
   mode_text: string | null; qty: number | null; price: number | null; value: number | null; pct_after: number | null; url: string;
   /** the company's employee stock option trust: it buys for staff options, not as an insider (LIVE4-021) */
   trust?: boolean;
+  /** "BSE": an insider trade read from BSE's list while NSE's didn't answer (R17-002) */
+  exchange?: "NSE" | "BSE";
 }
 export interface DealsReport {
   symbol: string; days: number; items: Deal[]; count: number; problems: string[]; flow_text: string | null; flow_days: number;
   /** says an ESOP trust's trades are left out of the insiders' count, naming it */
   trust_note?: string | null;
+  /** "BSE": the insider trades are BSE's list, NSE's didn't answer (R17-002) */
+  insider_from?: "BSE" | null;
 }
 
 const SIDE: Record<Deal["side"], string> = { bought: "Bought", sold: "Sold", pledged: "Pledged", released: "Pledge released", invoked: "Pledge invoked" };
@@ -86,12 +90,13 @@ export function DealsPanel({ symbol }: { symbol: string }) {
               { key: "date", header: "Date", cell: (d) => day(d.date) },
               { key: "what", header: "What", wrap: true, cell: (d) => <>{d.label}{d.kind === "insider" || d.kind === "sast" ? <span className="k-sub-line">{MODE[d.mode] ?? d.mode}{afterText(d.pct_after) ? ` · ${afterText(d.pct_after)}` : ""}</span>
                 : afterText(d.pct_after) ? <span className="k-sub-line">{afterText(d.pct_after)}</span> : null}</> },
-              { key: "src", header: "Source", cell: (d) => <a className="link" href={safeHref(d.url)} target="_blank" rel="noopener noreferrer">Disclosure ↗</a> },
+              { key: "src", header: "Source", cell: (d) => <a className="link" href={safeHref(d.url)} target="_blank" rel="noopener noreferrer">{d.exchange === "BSE" ? "BSE disclosure" : "Disclosure"} ↗</a> },
             ]} />
         </div>
       )}
       {rows.length > list.length && <button className="btn quiet sm k-btn-end" onClick={() => setMore(true)}>Show all {rows.length}</button>}
       {more && rows.length > 12 && <ShowLess className="btn quiet sm k-btn-end" onLess={() => setMore(false)} />}
+      {rep.insider_from === "BSE" && <p className="k-note" data-testid="deals-from-bse">Insider trades here are from BSE's disclosures: NSE's list didn't answer just now.</p>}
       {rep.problems.length > 0 && <p className="k-note">Not available right now: {rep.problems.join(", ")}. Try again later.</p>}
       <p className="k-note">From exchange disclosures over the last year, as filed: insider trades and pledges by promoters, directors and key staff, substantial acquisitions, and bulk and block deals. Facts, not advice.</p>
     </div>

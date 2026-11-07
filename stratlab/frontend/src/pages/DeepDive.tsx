@@ -11,7 +11,7 @@ import { eyebrowOf } from "../lib/eyebrow";
 import { marginText, millionsOf, scaleFor, usdAmount } from "../lib/research";
 import { Panel, TrendBars } from "../components/Research";
 import { BizUpdatesPanel } from "../components/BizUpdates";
-import { Badge, Card, CsvButton, DataTable, ErrorState, Meter, PageHeader, PlanNote, Select, Signed, Skeleton, Stat, StatRow, type Column } from "../components/kit";
+import { Badge, Card, CardHead, CsvButton, DataTable, ErrorState, Meter, PageHeader, PlanNote, Select, Signed, Skeleton, Stat, StatRow, type Column } from "../components/kit";
 import { AlertButton } from "../components/AlertForm";
 import { ShareCompanyButton } from "../components/ShareCompany";
 import { track } from "../lib/analytics";
@@ -357,18 +357,13 @@ export function DeepDivePage() {
           )}
 
           <Card>
-            <div className="k-spread">
-              <div className="k-stack">
-                <h2 className="k-card-title">From the company's own documents</h2>
-                <span className="k-small k-muted">{v.reads ? `Read ${day(v.reads.at)}, from the documents below.` : us ? `${v.documents.filter((d) => d.kind === "annual_report").length} annual report${v.documents.filter((d) => d.kind === "annual_report").length === 1 ? "" : "s"} and ${v.documents.filter((d) => d.kind === "earnings_release").length} earnings releases filed in the last two years.`
-                  : `${v.documents.length} presentations and call transcripts found in the last two years.`}</span>
-              </div>
-              <div className="k-row dd-ask">
+            <CardHead title="From the company's own documents" sub={v.reads ? `Read ${day(v.reads.at)}, from the documents below.` : us ? `${v.documents.filter((d) => d.kind === "annual_report").length} annual report${v.documents.filter((d) => d.kind === "annual_report").length === 1 ? "" : "s"} and ${v.documents.filter((d) => d.kind === "earnings_release").length} earnings releases filed in the last two years.`
+                  : `${v.documents.length} presentations and call transcripts found in the last two years.`}
+              actions={<div className="k-row dd-ask">
                 <Select small label="Years to look back" value={span} onChange={(x) => setSpan(Number(x))} options={[1, 2, 3, 4, 5].map((y) => ({ value: y, label: y === 1 ? "Last year" : `Last ${y} years` }))} />
               <button className="btn sm" disabled={reading || (!v.documents.length && !v.about)} onClick={() => readDocs(!!v.reads || span !== 2)}>
                 {reading ? "Reading… about a minute" : v.reads ? (v.reads_stale ? "Read the newest documents" : "Read again") : us ? "Read the annual report and releases" : "Read the latest presentation and calls"}</button>
-              </div>
-            </div>
+              </div>} />
             {v.reads && <DocTable label="The documents the read used" docs={v.reads.read.map((d) => ({ kind: d.kind, at: d.at, title: d.title, url: v.documents.find((x) => x.at === d.at && x.kind === d.kind)?.url ?? "" }))}
               empty="Only the company profile was read: no document was found." />}
             {v.doc_note && <p className="k-note">Filings: {v.doc_note}</p>}
@@ -439,21 +434,16 @@ export function DeepDivePage() {
           )}
 
           <Card>
-            <div className="k-spread">
-              <div className="k-stack">
-                <h2 className="k-card-title">Management report card</h2>
-                <span className="k-small k-muted">{us
+            <CardHead title="Management report card" sub={us
                   ? (v.card ? `What they said in ${v.card.read.length} earnings release${v.card.read.length === 1 ? "" : "s"}, and what the numbers showed. Checked ${day(v.card.at)}.`
                     : `What management forecast in its earnings releases, against what happened. ${v.calls} release${v.calls === 1 ? "" : "s"} found.`)
                   : v.card ? `What they said on ${v.card.read.length} earnings call${v.card.read.length === 1 ? "" : "s"} over ${v.card.years ?? 2} year${(v.card.years ?? 2) === 1 ? "" : "s"}, and what happened. Checked ${day(v.card.at)}.`
-                  : `What management promised on past earnings calls, against what happened. ${v.calls} call transcript${v.calls === 1 ? "" : "s"} found.`}</span>
-              </div>
-              <div className="k-row dd-ask">
+                  : `What management promised on past earnings calls, against what happened. ${v.calls} call transcript${v.calls === 1 ? "" : "s"} found.`}
+              actions={<div className="k-row dd-ask">
                 <Select small label="Years to look back" value={span} onChange={(x) => setSpan(Number(x))} options={[1, 2, 3, 4, 5].map((y) => ({ value: y, label: y === 1 ? "Last year" : `Last ${y} years` }))} />
               <button className="btn sm" disabled={carding || !v.calls} onClick={() => checkCalls(!!v.card || span !== 2)}>
                 {carding ? (us ? "Reading the releases… about a minute" : "Reading the calls… about a minute") : v.card ? (v.card_stale ? (us ? "Check the newest releases" : "Check the newest calls") : "Check again") : us ? "Check past releases" : "Check past calls"}</button>
-              </div>
-            </div>
+              </div>} />
             {carding && <Skeleton label={us ? "Reading past earnings releases" : "Reading past earnings calls"} lines={3} />}
             {!v.card && !carding && <p className="k-small k-muted">{v.calls ? `Reads up to ${({ 1: 4, 2: 6, 3: 9 } as Record<number, number>)[span] ?? 12} ${us ? "earnings releases" : "calls"} over the last ${span === 1 ? "year" : `${span} years`} (pick how far back) for the targets management gave (growth, margins, capex), then checks each against the reported results. Counts as one of your daily AI reads; kept for a week and shared.`
               : us ? "No earnings releases were found in the company's filings for the last two years." : "No earnings-call transcripts were found in the company's filings for the last two years."}</p>}

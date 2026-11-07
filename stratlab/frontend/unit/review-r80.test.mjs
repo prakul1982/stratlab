@@ -37,7 +37,7 @@ test("R80-012: the library's filter says what all its strategies share", () => {
 });
 
 test("R80-003: a cold /faq shows the splash, not a one-line page the landing then jumps over", () => {
-  assert.match(read("src/visitor/VisitorApp.tsx"), /const words = view\.kind === "landing" && view\.section === "faq" \? "" : heldStartup\(\);/);
+  assert.match(read("src/visitor/VisitorApp.tsx"), /const words = pathname !== BOOT_PATH \|\| \(view\.kind === "landing" && view\.section === "faq"\) \? "" : heldStartup\(\);/);   // R17-003 (changed on purpose): only on the address the visit opened on
 });
 
 test("R80-007: the first screen's fonts are asked for by index.html", () => {

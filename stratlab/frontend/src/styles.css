@@ -279,8 +279,10 @@ a.link { margin-inline: -2px; }
 .side-list a:focus-visible, .side-toggle:focus-visible { outline-offset: -2px; }
 /* R16: Themes, highlighted beside the space's home on the menu's first row: an accent edge and tint, the icon in the accent */
 .side-home { flex-direction: row; align-items: center; gap: 6px; }
-.side-home > a:first-child { flex: 1; }
-.side-list a.side-feature { flex: none; gap: 6px; padding: 0 10px 0 8px; border: 1px solid var(--line-2); border-left: 3px solid var(--orange);
+/* the home link stays on one line beside Themes (owner, 7 Nov: "Invest home" broke onto two lines in its 32px row) */
+.side-home > a:first-child { flex: 1; gap: 8px; white-space: nowrap; }
+.side-home-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.side-list a.side-feature { flex: none; gap: 6px; padding: 0 9px 0 7px; white-space: nowrap; border: 1px solid var(--line-2); border-left: 3px solid var(--orange);
   background: var(--orange-soft); color: var(--ink); font-weight: 600; }
 .side-list a.side-feature > svg { color: var(--orange-ink); }
 .side-list a.side-feature:hover { border-color: var(--orange); background: var(--orange-soft); }
@@ -2063,6 +2065,9 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-spread { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
 /* VR3-010: the look-back box and its button on one line, the box as wide as its words in both deep-dive cards (it filled the row and sent the button under it) */
 .dd-ask > select.k-input { width: auto; flex: none; min-width: 150px; }
+/* the deep dive's read buttons in the card's header row (R17-004): the button takes a line of its own on a phone rather than wrap its words */
+.dd-ask { flex-wrap: wrap; }
+.dd-ask > .btn { white-space: nowrap; max-width: 100%; }
 .k-note { font-size: var(--t-note); color: var(--muted); }
 .k-note.k-down, .k-small.k-down { color: var(--down); }
 .k-sub { font-size: var(--t-body); font-weight: 600; }
@@ -2684,6 +2689,10 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .page-lock { margin-bottom: var(--s4); }
 .page-lock-slot:empty { display: none; }       /* the slot under every page title: nothing in it, no space */
 .page-lock-slot > .page-lock { margin-top: var(--s3); }
+/* the plan note and the page's lifted notices share the slot, each portalled in whenever it draws (the plan note is redrawn as the plan
+   loads, so it can land after a notice): the plan note always shows first, straight under the title (RC7-003) */
+.page-lock-slot { display: flex; flex-direction: column; }
+.page-lock-slot > .page-lock { order: -1; }
 
 /* signed out on an app address, a page that doesn't exist, a page that isn't yours (pages/Gate.tsx) */
 .gate { max-width: 640px; }
