@@ -248,7 +248,9 @@ def study(rows: list[dict], closes_of, bench: dict[str, dict[str, float]], today
         items.append(issue_figures(r, closes, bench, today, opens))
     items.sort(key=lambda i: (i["listing"], i["id"]), reverse=True)
     days = [i["listing"] for i in items]
-    out = {"as_of": today.isoformat(), "window": {"from": window[0] if window else (min(days) if days else None),
+    closed = sorted(i["last_day"] for i in items if i.get("last_day"))
+    # "as of" is the latest close the figures use, not the day the study ran (a Sunday run said "the close of" a Sunday)
+    out = {"as_of": closed[-1] if closed else today.isoformat(), "run_on": today.isoformat(), "window": {"from": window[0] if window else (min(days) if days else None),
                                                  "to": window[1] if window else (max(days) if days else None)},
            "benchmarks": {k: label for k, label, _s in BENCH},
            "coverage": {"issues": len(items), **{seg: sum(1 for i in items if i["segment"] == seg) for seg, _l in SEGMENTS},

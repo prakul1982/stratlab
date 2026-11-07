@@ -166,6 +166,21 @@ def razorpay_confirms_what_the_event_says(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def no_sector_filings_read():
+    """Sector figures (app/intel/sector_metrics.py) are never read from the exchange or the SEC in a test: a test that wants them passes its
+    own reader or fakes."""
+    sm = sys.modules.get("app.intel.sector_metrics")
+    if sm is not None:
+        sm.setup(None, None)
+        sm.forget()
+    yield
+    sm = sys.modules.get("app.intel.sector_metrics")
+    if sm is not None:
+        sm.setup(None, None)
+        sm.forget()
+
+
+@pytest.fixture(autouse=True)
 def no_official_close_reads():
     """The official-close store (app/official_close.py) never reads the exchange's file or the broker from a test: a
     test that wants it sets its own sources. Its memory doesn't carry over from one test to the next."""

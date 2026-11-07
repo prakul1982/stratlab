@@ -2803,6 +2803,8 @@ def with_industry(sym: str, p: dict) -> dict:
 
 
 sec_feed = SEC()
+from .intel import sector_metrics as _sector_metrics  # noqa: E402
+_sector_metrics.setup(nse=lambda: filings_feed.nse, sec=lambda: sec_feed)   # R23: banks' and insurers' results XBRL, US company facts
 REGIONS = ("IN", "US")
 
 

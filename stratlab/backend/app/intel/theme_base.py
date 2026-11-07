@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 
 # the version of the membership rules (who is in a theme, which industries, which layers): part of every cached read's key, so a read kept
 # from before a deploy never keeps the old rules' companies or figures (R18: "Private banks" kept the public banks after the fix)
-RULES = 23                       # R21: every confirmed company in one of the map's layers (place_rest); R22: layer names fit, currencies, extra layers
+RULES = 24                       # R21: every confirmed company in one of the map's layers (place_rest); R22: layer names fit, currencies, extra layers
 INDUSTRIES_DAYS = 30            # the AI's pick of a free-text theme's industries is made again after this long (at most monthly)
 FIGURES_MAX = 60                # companies the dive works figures out for: every one the AI named, then the largest of the base
 DESCRIBE_MAX = 120              # base companies whose own one-line description is looked up for the page, largest first

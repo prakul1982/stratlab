@@ -147,3 +147,9 @@ def test_an_issue_that_may_carry_an_unadjusted_split_is_out_of_every_figure_afte
     s = St.stats(ok + odd)
     assert s["split_left_out"] == 2 and s["with_return"] == 3 and s["median_return_pct"] == 6.0 and s["below_issue_now"] == 0
     assert s["with_vs_nifty50"] == 3 and s["median_vs_nifty50_pct"] == 6.0 and s["vs_nifty50_from"] == s["vs_nifty50_to"] == "2026-01-02"
+
+
+def test_as_of_is_the_latest_close_the_figures_use_not_the_run_day():
+    r = res()
+    last = max(i["last_day"] for i in r["issues"] if i.get("last_day"))
+    assert r["as_of"] == last and r["run_on"] == TODAY.isoformat()
