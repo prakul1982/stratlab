@@ -487,6 +487,9 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
             monkeypatch.setattr(mod, "complete", ai)
     from app.intel import ai as intel_ai
     intel_ai._cache.clear()
+    intel_ai._missed.clear()
+    from app import computed
+    computed.reset_for_tests()
     from app import audit
     runner = audit.Runner()
     monkeypatch.setattr(main, "audit_runner", runner)

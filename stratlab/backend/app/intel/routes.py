@@ -149,38 +149,57 @@ def _drop_finished_builds() -> None:
 
 
 def ai_call(profile, kind: str, key: tuple, ttl: float, refresh: bool, build, counted: bool = True, min_age: float = 0,
-            kind_used: str = "research_ai", cap: int | None = None):
+            kind_used: str = "research_ai", cap: int | None = None, gated: bool = False):
     """Serve an AI read from the shared cache (every user's, one read per company or market per key), or build it.
     `counted`: a fresh build counts against the person's daily cap and is refused past it; False for reads shared by
     everyone (the market mood) and a company read written as its page opens on a paid plan, which neither count nor are
     refused. `min_age`: a refresh of a shared read younger than this is the read already written (one person's "Ask
     again" can't make everyone's read be written over and over). `kind_used`, `cap`: count under another usage kind with
-    its own daily cap (the search box's), instead of the company reads' ones."""
+    its own daily cap (the search box's), instead of the company reads' ones.
+
+    R19: a read is kept in the shared store and served to everyone until someone presses Refresh. A Refresh of a read written within the
+    guard window (min_age, else computed.DEFAULT_GUARD) or past the person's refreshes for the day gives the stored read with
+    "refresh_state" "fresh" or "capped"; one that fails gives the stored read with "failed" (never an error while there is a read);
+    one that is written replaces the read for everyone ("done"). `gated`: the caller already passed computed.refresh_gate."""
+    from .. import computed
     if not refresh and A.peek(kind, key):
         return A.cached(kind, key, ttl, False, build)[0]
-    if refresh and min_age and (hit := A.get(kind, key)) and time.time() - float(hit.get("generated_at") or 0) < min_age:
-        return hit
+    old = A.get(kind, key) if refresh else None
+    if old is not None and not gated:
+        state = computed.refresh_gate(profile, "ai:" + kind, float(old.get("generated_at") or 0) or None, guard=min_age or None)
+        if state != "go":
+            return {**old, "refresh_state": state}
+    by = computed.plan_word(profile) if refresh else None
     k = repr((kind, key))
     with _building_lock:
         one = _building.setdefault(k, threading.Lock())
-    with read_slot(profile, (cap if kind_used != "research_ai" else ai_cap(profile)) if counted else None, kind_used):
-        try:
-            with one:                     # two people opening the same company at once: one read, written once
-                if not refresh and A.peek(kind, key):
-                    return A.cached(kind, key, ttl, False, build)[0]
-                with ask_again() if refresh else contextlib.nullcontext():
-                    out, fresh = A.cached(kind, key, ttl, refresh, build)
-        except AIBusy as e:
-            err(503, "ai_busy", str(e))
-        except AIError as e:          # there's no idea to rephrase on a research page: the reader can only try again
-            err(422, "ai_failed", str(e).replace("Try rephrasing the idea.", "Press Refresh to try again."))
-        finally:
-            with _building_lock:
-                if len(_building) > 2000:
-                    _drop_finished_builds()
-        if fresh and counted:
-            db.add_usage(profile["id"], kind_used)
-    return out
+    try:
+        with read_slot(profile, (cap if kind_used != "research_ai" else ai_cap(profile)) if counted else None, kind_used):
+            try:
+                with one:                     # two people opening the same company at once: one read, written once
+                    if not refresh and A.peek(kind, key):
+                        return A.cached(kind, key, ttl, False, build)[0]
+                    with ask_again() if refresh else contextlib.nullcontext():
+                        out, fresh = A.cached(kind, key, ttl, refresh, build, by=by)
+            except AIBusy as e:
+                if old is not None:
+                    return {**old, "refresh_state": "failed"}
+                err(503, "ai_busy", str(e))
+            except AIError as e:          # there's no idea to rephrase on a research page: the reader can only try again
+                if old is not None:
+                    return {**old, "refresh_state": "failed"}
+                err(422, "ai_failed", str(e).replace("Try rephrasing the idea.", "Press Refresh to try again."))
+            finally:
+                with _building_lock:
+                    if len(_building) > 2000:
+                        _drop_finished_builds()
+            if fresh and counted:
+                db.add_usage(profile["id"], kind_used)
+    except HTTPException:
+        if old is not None:                # past the day's AI cap: the stored read stays, with its date
+            return {**old, "refresh_state": "capped"}
+        raise
+    return {**out, "refresh_state": "done"} if refresh and fresh else out
 
 
 # ---------- data ----------
@@ -705,7 +724,8 @@ def company_ai(region: str, symbol: str, refresh: bool = False, background: bool
         except Exception:
             pass
         return A.company(c, _ai, pro, company_key_facts(r, c))
-    key = (r, s, pro, datetime.now(IST).date().isoformat())
+    # R19: one read per company, kept for everyone until someone presses Refresh (owner, 7 Nov: no automatic re-reads)
+    key = (r, s, pro)
     counted = refresh or ai_auto_counts(profile)
     if background and not refresh and not A.peek("company", key):
         # within the cap the read is written behind the page; past it, the page hears so now, not after a wait
@@ -860,7 +880,8 @@ def sector_map(profile, region: str, q: str, refresh: bool = False):
     else:
         # LIVE3-001: the AI's map is written in the background, never while the request waits; until it is in, the page has the theme's
         # official-industry base (theme_routes.quick) and the map kept from before, if any
-        theme_routes.later(("map",) + key, lambda: ai_call(profile, "sector", key, 24 * 3600, refresh, build))
+        # a Refresh here has passed computed.refresh_gate already (GET /sector)
+        theme_routes.later(("map",) + key, lambda: ai_call(profile, "sector", key, 24 * 3600, refresh, build, gated=True))
         got = A.get("sector", key) or blank_map(theme)
     # no unsourced market size or growth rate, even on a map kept from before (R7O-012); no figure in the text and no
     # company that isn't listed, and the exchange's own list of the theme's industries beside the map (DE-013)
@@ -873,15 +894,64 @@ def blank_map(theme: str) -> dict:
             "sub_themes": [], "clusters": [], "screen": [], "value_chain": [], "tailwinds": [], "risks": [], "generated_at": 0}
 
 
-@router.get("/sector")
-def sector(q: str, region: str = "IN", refresh: bool = False, profile=Depends(current_profile)):
+def theme_map(profile, region: str, q: str):
+    """sector_map for the theme page's other parts (the dive, prices, news, listings, business, the deck, a blog draft): the theme
+    library's stored read when there is one (theme_library.py: already checked and described, marked "_library" so it isn't checked
+    again), else the map as sector_map gives it."""
+    from . import theme_library
+    r = region_of(region)
+    hit = theme_library.stored(r, q)
+    if hit is not None:
+        return r, " ".join(q.split())[:80], {**hit["payload"], "_library": hit["name"]}, index_rows(r)
+    return sector_map(profile, region, q, False)
+
+
+def sector_payload(profile, region: str, q: str, refresh: bool = False, wait: bool = False) -> dict:
+    """What GET /sector answers, worked out (not from the library). `wait`: the checks are worked out here (Admin's Refresh now)."""
     r, theme, got, rows = sector_map(profile, region, q, refresh)
     # THEME-1: a company sits in an AI layer or sub-theme only when its own description shows it does that work, and a tailwind or
     # risk is shown beside the dated headline that supports it (theme_routes.checked); THEMES: every company of the theme's official
     # industries is in it, each with its own one-line description where it is known
-    got = theme_routes.with_descriptions(r, theme_routes.checked(r, theme, got))
-    return ok({**got, "market_size": "", "cagr": None, "cagr_note": "", "exchange": grounding.exchange_list(got, rows) or None,
-               "ai": theme_routes.ai_state(r, theme, got)})
+    got = theme_routes.with_descriptions(r, theme_routes.checked(r, theme, got, wait=wait))
+    return {**got, "market_size": "", "cagr": None, "cagr_note": "", "exchange": grounding.exchange_list(got, rows) or None,
+            "ai": theme_routes.ai_state(r, theme, got)}
+
+
+def sector_served(r: str, payload: dict) -> dict:
+    """A stored theme read as the page gets it: today's market values from the stored index (no AI, no outside call)."""
+    out = theme_routes.with_caps(payload, index_rows(r))
+    return {**{k: v for k, v in out.items() if k != "_library"}, "ai": None}
+
+
+@router.get("/sector")
+def sector(q: str, region: str = "IN", refresh: bool = False, profile=Depends(current_profile)):
+    """A theme's read. R19: from the theme library when it holds this theme (however it's written), at once and for everyone; worked
+    out and kept there otherwise. Refresh works it out again for everyone, past the guard window and within the person's day
+    (computed.refresh_gate); until the new read is in, the page is given the live work. The answer's shape is unchanged; a Refresh adds
+    "refresh_state" ("fresh", "capped", "started", "done")."""
+    from .. import computed
+    from . import theme_library
+    r = region_of(region)
+    hit = theme_library.stored(r, q)
+    state = None
+    if hit is not None:
+        if not refresh:
+            return ok(sector_served(r, hit["payload"]))
+        state = computed.refresh_gate(profile, "theme", hit["at"])
+        if state != "go":
+            return ok({**sector_served(r, hit["payload"]), "refresh_state": state})
+        theme_library.mark_refreshing(r, hit["name"], by=computed.plan_word(profile))
+    elif refresh:
+        state = computed.refresh_gate(profile, "theme", A.stored_at("sector", (r, " ".join(q.split())[:80].lower())))
+        if state != "go":
+            refresh = False
+    out = sector_payload(profile, region, q, refresh)
+    kept = theme_library.keep(r, q, out)
+    if state == "go":                   # "started": the new read is still being written; the page asks again until it's in
+        out = {**out, "refresh_state": "done" if kept else "started"}
+    elif state:
+        out = {**out, "refresh_state": state}
+    return ok(out)
 
 
 def index_rows(region: str) -> list[dict]:
@@ -918,7 +988,7 @@ def compare(a: str, b: str, region: str = "IN", refresh: bool = False, profile=D
     if ca.get("symbol") and ca.get("symbol") == cb.get("symbol"):
         err(400, "same_symbol", f"{sa} and {sb} are the same company ({ca['symbol']}). Pick a different company in one of the boxes.")
     try:
-        verdict = ai_call(profile, "compare", (r, sa, sb, datetime.now(IST).date().isoformat()), 12 * 3600, refresh,
+        verdict = ai_call(profile, "compare", (r, sa, sb), 12 * 3600, refresh,      # kept for everyone until Refresh (R19)
                           lambda: A.compare(ca, cb, _ai))
     except HTTPException as e:
         verdict = {"error": (e.detail or {}).get("message") if isinstance(e.detail, dict) else str(e.detail)}

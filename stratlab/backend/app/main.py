@@ -59,7 +59,7 @@ from . import suggest
 from . import admin, audit, compute, invoices, pricing, basket, platform_check, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
 from .ai_providers import last_from_cache
 from .ai_providers import health as ai_health
-from . import ai_admin, ai_providers
+from . import ai_admin, ai_providers, library_admin
 from . import ai_writer
 from .ai_writer import AIBusy, AIError, _anthropic, _gemini, ask_json, write_strategy
 from . import alerts
@@ -506,6 +506,7 @@ app.include_router(slb.router)                 # /invest/stock-lending
 app.include_router(mtf.router)                 # /invest/margin-funding
 app.include_router(stock_desks.admin_router)   # /admin/stock-desks
 app.include_router(ai_admin.router)            # /admin/ai: the AI panel
+app.include_router(library_admin.router)       # /admin/stored: everything kept once for every user (R19)
 app.include_router(mcp_server.router)          # /mcp and /me/assistant: StratLab in your AI assistant
 
 
@@ -1041,6 +1042,47 @@ def my_limits(profile=Depends(current_profile)):
     got = {k: _usage_pool.submit(n, f) for k, f in jobs.items()}
     rows = [{"key": k, "used": got[k].result() if k in got else None, "limit": PLANS[plan][k], "next": bigger_plan(plan, k)}
             for k in ("stock_alerts", "screens", "holdings", "mf_schemes", "networth_items", "journal_trades")]
+    return ok({"plan": PLANS[plan]["name"], "rows": rows})
+
+
+USAGE_LABELS = {"refresh": "Refreshes of stored reads", "research_ai": "Fresh AI reads", "backtest": "Backtests", "ai": "AI strategy builds",
+                "deepdive": "Company deep dives", "deck": "Decks (PDF or PowerPoint)", "stock_alerts": "Active stock alerts",
+                "screens": "Saved screens", "holdings": "Stocks in My Holdings", "mf_schemes": "Mutual fund schemes",
+                "networth_items": "Net worth entries", "journal_trades": "Journal trades kept"}
+
+
+@app.get("/me/usage")
+def my_usage(profile=Depends(current_profile)):
+    """Every per-person limit the app enforces, each with what's used, the limit (None: no limit) and when it starts again ("day":
+    midnight India time, "month": the 1st, None: a kept count that goes down when something is removed). R19 (owner, 7 Nov: "tell them
+    about their daily quota left"): Settings' "Your usage" table and the note beside every Refresh button read this one call."""
+    from . import computed
+    from .plans import refreshes_per_day
+    plan, uid = profile["_plan"], profile["id"]
+    info = plan_info(plan)
+    is_admin = admin.is_admin(profile)
+
+    def n(fn):
+        try:
+            return fn()
+        except Exception:
+            return None
+    day, month = research_routes.ai_day_start(), month_start_iso()
+    counts = {"refresh": _usage_pool.submit(n, lambda: db.count_usage(uid, "refresh", day)),
+              "research_ai": _usage_pool.submit(n, lambda: research_routes.ai_reads_today(profile)),
+              **{k: _usage_pool.submit(n, lambda k=k: db.count_usage(uid, k, month)) for k in ("backtest", "ai", "deepdive", "deck")}}
+    limits = {"refresh": None if is_admin else refreshes_per_day(computed.plan_word(profile)), "research_ai": research_routes.ai_cap(profile),
+              "backtest": info["backtests_per_month"], "ai": info["ai_builds_per_month"], "deepdive": info["deepdives_per_month"],
+              "deck": info["decks_per_month"]}
+    resets = {"refresh": "day", "research_ai": "day", "backtest": "month", "ai": "month", "deepdive": "month", "deck": "month"}
+    rows = [{"key": k, "label": USAGE_LABELS[k], "used": counts[k].result(), "limit": limits[k], "resets": resets[k]} for k in counts]
+    try:
+        kept = json.loads(my_limits(profile).body)["rows"]
+    except Exception:
+        kept = []
+    rows += [{"key": r["key"], "label": USAGE_LABELS.get(r["key"], r["key"]), "used": r["used"], "limit": r["limit"], "resets": None} for r in kept]
+    for r in rows:
+        r["left"] = None if r["limit"] is None or r["used"] is None else max(0, r["limit"] - r["used"])
     return ok({"plan": PLANS[plan]["name"], "rows": rows})
 
 

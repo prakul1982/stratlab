@@ -34,33 +34,86 @@ def _key(*parts) -> str:
     return hashlib.sha1(json.dumps(parts, sort_keys=True, default=str).encode(), usedforsecurity=False).hexdigest()   # a cache key
 
 
-def cached(kind: str, key_parts: tuple, ttl: float, refresh: bool, build) -> tuple[dict, bool]:
-    """(result, fresh) where result carries generated_at; `build` runs only on a miss or refresh."""
+# R19: AI reads every user shares are kept in the shared store (computed.py) as well as here, so a read survives a restart or a deploy
+# and is served to everyone until someone presses Refresh (no expiry of its own: owner, 7 Nov). This memory is only the first place
+# looked; a miss here reads the store once, and a miss there is remembered for MISS_FOR seconds so a page's repeated asks don't each
+# read the database.
+PERSIST = {"company", "compare", "ideas", "ask", "sector", "sector_claims", "sector_checked3", "pulse"}
+MEMORY_TTL = 6 * 3600
+MISS_FOR = 60
+_missed: dict = {}
+
+
+def _stored(kind: str, key_parts: tuple):
+    """The shared store's read for (kind, key) or None; put back in memory when found."""
+    if kind not in PERSIST:
+        return None
+    from .. import computed
+    k = _key(kind, *key_parts)
+    t = _missed.get(k)
+    if t is not None and time.time() - t < MISS_FOR:
+        return None
+    e = computed.get("ai:" + kind, k)
+    if e is None or not isinstance(e.get("value"), dict):
+        if len(_missed) > 5000:
+            _missed.clear()
+        _missed[k] = time.time()
+        return None
+    _cache.set(k, e["value"], MEMORY_TTL)
+    return e["value"]
+
+
+def _persist(kind: str, key_parts: tuple, out: dict, by: str | None = None) -> None:
+    if kind not in PERSIST:
+        return
+    from .. import computed
+    k = _key(kind, *key_parts)
+    _missed.pop(k, None)
+    region = next((p for p in key_parts if p in ("IN", "US")), "")
+    label = " · ".join(str(p) for p in key_parts if isinstance(p, (str, int)) and p not in ("IN", "US"))[:120]
+    computed.put("ai:" + kind, k, out, label=label or kind, region=region, by=by)
+
+
+def stored_at(kind: str, key_parts: tuple) -> float | None:
+    """When the read kept for (kind, key) was written (its generated_at), or None when there is none."""
+    hit = get(kind, key_parts)
+    return float(hit.get("generated_at") or 0) or None if hit else None
+
+
+def cached(kind: str, key_parts: tuple, ttl: float, refresh: bool, build, by: str | None = None) -> tuple[dict, bool]:
+    """(result, fresh) where result carries generated_at; `build` runs only on a miss or refresh. `by`: the plan of the person whose
+    Refresh this is (counted in the shared store's index)."""
     k = _key(kind, *key_parts)
     if not refresh:
         hit = _cache.get(k)
+        if hit is None:
+            hit = _stored(kind, key_parts)
         if hit is not None:
             return hit, False
     out = build()
     out["generated_at"] = time.time()
-    _cache.set(k, out, ttl)
+    _cache.set(k, out, max(ttl, MEMORY_TTL) if kind in PERSIST else ttl)
+    _persist(kind, key_parts, out, by if refresh else None)
     return out, True
 
 
-def keep(kind: str, key_parts: tuple, out: dict, ttl: float) -> dict:
-    """Store a read built elsewhere (a checked theme map) as `cached` would."""
+def keep(kind: str, key_parts: tuple, out: dict, ttl: float, persist: bool = True) -> dict:
+    """Store a read built elsewhere (a checked theme map) as `cached` would. `persist` False: memory only (a partly checked map)."""
     out = {**out, "generated_at": out["generated_at"] if out.get("generated_at") is not None else time.time()}   # 0: no AI map yet (LIVE3-001)
     _cache.set(_key(kind, *key_parts), out, ttl)
+    if persist:
+        _persist(kind, key_parts, out)
     return out
 
 
 def peek(kind: str, key_parts: tuple) -> bool:
-    return _cache.get(_key(kind, *key_parts)) is not None
+    return get(kind, key_parts) is not None
 
 
 def get(kind: str, key_parts: tuple) -> dict | None:
     """The stored read itself, or None."""
-    return _cache.get(_key(kind, *key_parts))
+    hit = _cache.get(_key(kind, *key_parts))
+    return hit if hit is not None else _stored(kind, key_parts)
 
 
 def _ask(system: str, facts: dict | str, ai, max_tokens: int) -> dict:
