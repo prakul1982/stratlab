@@ -451,6 +451,10 @@ def sources(region: str, theme: str):
                 "quarters": [], "fye": 3, "bank": row.get("bank"), "unit": row.get("unit") or "₹ crore"}
         return report_card.view(stored, nums, today)
 
+    def segments(sym):                    # the business segments the company's documents report, when they were read (is_diversified)
+        from .. import deepdive
+        return (((deepdive.stored(sym) or {}).get("business") or {}).get("segments")) or None
+
     def red(symbols, frm, to):
         return redflags.listing(region, frm=frm.isoformat(), to=to.isoformat(), symbols=symbols, size=200, today=today)["items"]
     return theme_data.Sources(
@@ -458,7 +462,7 @@ def sources(region: str, theme: str):
         shareholding=(lambda s: shareholders.company(s)) if region == "IN" else (lambda s: None),
         insider_buys=(lambda: deals.buys().get("buys") or {}) if region == "IN" else (lambda: {}),
         results=lambda a, b, s: results.between(region, a, b, s), actions=lambda a, b, s: corp_actions.between(region, a, b, s),
-        red_flags=red, card=card, history=history)
+        red_flags=red, card=card, history=history, segments=segments)
 
 
 @router.get("/theme-dive")
@@ -588,6 +592,7 @@ def deck_view(r: str, m: dict, dive: dict, extra: dict | None = None) -> dict:
             "members_with_figures": dive.get("members"),
             "members": members_of(m, dive), "tailwinds": m.get("tailwinds") or [], "risks": m.get("risks") or [],
             "placements": m.get("placements") or {}, "figures": dive.get("figures") or {}, "median_ebitda": med.get("median"),
+            "checks": dive.get("checks") or {}, "status": dive.get("status") or {}, "with_figures": dive.get("with_figures"),
             "news": None, "listings": None, "prices": None, "business": None, **(extra or {})}
 
 
@@ -885,6 +890,7 @@ def theme_news(region: str, theme: str, members: list[dict], search, today: date
         for rows in pool.map(one, queries):
             items += rows
     seen, out = set(), []
+    items = [i for i in items if theme_data.headline_kept(i, region)]          # no quote pages, picks or other markets' news (R16)
     for i in sorted((i for i in items if i.get("at") and i.get("headline")), key=lambda i: str(i["at"]), reverse=True):
         k = " ".join(str(i["headline"]).lower().split())[:80]
         if k in seen:
