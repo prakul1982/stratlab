@@ -15,6 +15,7 @@ const MoneySection = lazy(() => importWithRetry(() => import("./admin/MoneySecti
 const DataSection = lazy(() => importWithRetry(() => import("./admin/DataSection")).then((m) => ({ default: m.DataSection })));
 const QualitySection = lazy(() => importWithRetry(() => import("./admin/QualitySection")).then((m) => ({ default: m.QualitySection })));
 const SystemSection = lazy(() => importWithRetry(() => import("./admin/SystemSection")).then((m) => ({ default: m.SystemSection })));
+const LibrarySection = lazy(() => importWithRetry(() => import("./admin/LibrarySection")).then((m) => ({ default: m.LibrarySection })));
 const FeedbackSection = lazy(() => importWithRetry(() => import("./admin/FeedbackSection")).then((m) => ({ default: m.FeedbackSection })));
 const EmailSection = lazy(() => importWithRetry(() => import("./admin/EmailSection")).then((m) => ({ default: m.EmailSection })));
 
@@ -62,6 +63,7 @@ function Frame() {
             <Route path="data" element={<DataSection />} />
             <Route path="quality" element={<QualitySection />} />
             <Route path="system" element={<SystemSection />} />
+            <Route path="library" element={<LibrarySection />} />
             <Route path="feedback" element={<FeedbackSection />} />
             <Route path="emails" element={<EmailSection />} />
             <Route path="emails/:kind" element={<EmailSection />} />

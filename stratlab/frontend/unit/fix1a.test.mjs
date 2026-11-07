@@ -14,7 +14,7 @@ test("LIVE1A-048/049: the compare page's qualifier is one numbered note under it
   assert.match(r, /<sup className="cmp-foot-mark"/);
   assert.match(r, /className="k-note cmp-foots" data-testid="cmp-note"/);
   // the AI card is drawn after "The numbers side by side"
-  assert.ok(r.indexOf('<CardHead title="AI comparison" />') > r.indexOf('<CardHead title="The numbers side by side" />'));
+  assert.ok(r.indexOf('<CardHead title="AI comparison"') > r.indexOf('<CardHead title="The numbers side by side" />'));
   assert.match(read("src/charts/price/PriceChart.tsx"), /data-testid="pc-cmp-since"/);
   assert.match(read("src/styles.css"), /\.cmp-foots \{[^}]*overflow-wrap: anywhere/);
 });

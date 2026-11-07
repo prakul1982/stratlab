@@ -78,7 +78,7 @@ def test_the_theme_deck_has_the_cover_chain_layers_members_claims_and_notes():
     assert [(r[0], r[2]) for r in contents[:2]] == [("Findings", "3"), ("The value chain", "5")]          # each part with its first page
     assert contents[-1][0] == "Appendix" and contents[-1][2] == "16"
     cover = dict((t[0], t[1]) for t in next(b for b in slides[0].blocks if b["kind"] == "stats")["items"])
-    assert cover["Companies"] == "6" and cover["Layers"] == "2" and cover["With figures"] == "5 of 6 (100% of value)"
+    assert cover["Companies"] == "6" and cover["Layers"] == "2" and cover["With figures"] == "5"          # R20: its share and the universe beneath
     figs = table_of(slides, "Every company's figures")
     assert figs["head"][:3] == ["Company", "Layer", "Market value"] and figs["rows"][1][:3] == ["Mine A", "Mining", "₹40,000 cr"]
     assert table_of(slides, "Layer 1 · Mining")["rows"][0] == ["Mine A", "₹1,500 cr", "50%", "24%", "15%", "Mar 2026"]   # R16: whole points as filed; R18: every whole figure
@@ -157,6 +157,14 @@ def test_the_deck_route_downloads_both_formats_as_one_deck_and_stops_at_the_plan
         finally:
             deck.build_theme = real_build
         assert again.status_code == 200 and again.content == r.content and built == [] and len(theme_routes.DECK_CACHE._d) >= 1
+        # R20: the file is in the shared store too: after a restart (the process's copy gone) it is sent again without a rebuild
+        theme_routes.DECK_CACHE._d.clear()
+        deck.build_theme = lambda v, pdf=False: built.append(pdf) or real_build(v, pdf)
+        try:
+            restarted = api.get("/research/theme-dive/deck?q=AI%20data%20centers&region=US&format=pdf")
+        finally:
+            deck.build_theme = real_build
+        assert restarted.status_code == 200 and restarted.content == r.content and built == []
         assert api.usage.count("deck") == 1 and "deck:theme:US:ai-data-centers" in api.usage
         r = api.get("/research/theme-dive/deck?q=AI%20data%20centers&region=US&format=pptx")      # the same theme's other format: free
         assert r.status_code == 200 and r.content[:2] == b"PK" and r.headers["content-disposition"].endswith('.pptx"')

@@ -1,3 +1,4 @@
+import type { RefreshState } from "./usage";
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "./api";
@@ -78,7 +79,7 @@ export interface CompanyAI {
   summary: string; facts: FactRow[];
   valuation_note: string;
   bull: string[]; bear: string[]; segments: { label: string; share: number }[]; position: string; watch: string[];
-  ideas: Idea[]; generated_at: number;
+  ideas: Idea[]; generated_at: number; refresh_state?: RefreshState;
 }
 /** `what`: the words from the company's own description that show it does the work of the layer or sub-theme it sits in (THEME-1) */
 /** A theme map's company. `base`: in one of the theme's official industries (the exchange's own classification), so it is in the theme
@@ -94,7 +95,7 @@ export interface SectorAI {
   screen: { name: string; ticker: string; layer: string; one_line: string }[];
   /** `official`: one official industry's companies that the AI didn't place in a layer of its own */
   value_chain: { layer: string; description: string; companies: Co[]; official?: boolean; basis?: "industry" | "list" }[];
-  tailwinds: SectorClaim[]; risks: SectorClaim[]; generated_at: number;
+  tailwinds: SectorClaim[]; risks: SectorClaim[]; generated_at: number; refresh_state?: RefreshState;
   /** the placement check: `checked` false while some companies' descriptions are still being read (they are not shown until checked) */
   placements?: {
     checked: boolean; pending: number; left_out: number; placed: number;
@@ -195,7 +196,7 @@ export function indexWhen(i: Pick<IndexLevel, "day" | "live" | "stale" | "settli
 export interface PulseAI {
   tone: string; hot: { name: string; ticker: string; why: string }[];
   flows: { title: string; detail: string; direction: "INFLOW" | "OUTFLOW" | "ROTATION" | "" }[];
-  themes: { theme: string; detail: string; example: string }[]; generated_at: number; levels_at?: string | null;
+  themes: { theme: string; detail: string; example: string }[]; generated_at: number; refresh_state?: RefreshState; levels_at?: string | null;
   /** The main story as one sentence, and the headlines it counts (the positions of the carrying ones in `headlines`), so "3 of 8"
    *  can be counted on the page (MOOD-1). The mood itself is the tables' (`PulseMood`), not a sentence of this read. */
   story_line?: string;
@@ -229,7 +230,7 @@ export interface PulseMood {
 }
 export interface CompareAI {
   verdict: string; differences: string[];
-  generated_at?: number; error?: string;
+  generated_at?: number; error?: string; refresh_state?: RefreshState;
 }
 export interface WatchItem { region: Region; symbol: string; name: string | null }
 

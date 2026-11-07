@@ -19,6 +19,7 @@ MARKET_PREFIXES = (
     "audit:", "deep:", "breadth:hist:", "breadth:sectors:", "breadth:members:", "corpact:cal:", "corpact:hist:",
     "deals:", "results:cal:", "results:past:", "results:mv:", "surv:", "screens:index:", "screens:known:", "fmv2018:", "fxhist:", "mfnav:", "isin:",
     "scanres:", "redflags:", "pos:", "holidays-auto:", "mfter:", "closeauc:", "vix:", "mktevents:cal:", "shp:", "bizupd:", "fnostk:", "slb:", "mtf:", "rates:", "ipo:rows:", "ipo:history:", "ipo:state", "ipo:sum:", "ipo:facts:", "ipo:ran:", "ipo:try:", "ipo:ai:",
+    "cres:",            # the shared store of results worked out once for everyone (computed.py: AI reads, the theme library)
     "stocks:",          # the stored company pages, their lists and the marks on them: the largest group by far
 )
 
@@ -140,6 +141,13 @@ class Store:
     def all_with_prefix(self, prefix: str) -> list[tuple[str, str]]:
         return [(k, v) for k, v in self._run("select key, value from app_settings where key like %s escape '\\' order by key",
                                               (_like(prefix),), fetch=True)]
+
+    def prefix_stats(self, prefix: str) -> dict:
+        """How many settings a prefix holds, their total size in bytes and the oldest and newest change (Admin → Library)."""
+        rows = self._run("select count(*), coalesce(sum(octet_length(value)), 0), min(updated_at), max(updated_at) from app_settings "
+                         "where key like %s escape '\\'", (_like(prefix),), fetch=True)
+        n, size, lo, hi = rows[0] if rows else (0, 0, None, None)
+        return {"entries": int(n or 0), "bytes": int(size or 0), "oldest": lo.isoformat() if lo else None, "newest": hi.isoformat() if hi else None}
 
     # ---- option chains
     def add_snapshot(self, row: dict) -> None:

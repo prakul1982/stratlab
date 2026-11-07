@@ -139,8 +139,13 @@ def test_company_ai_is_cleaned_cached_and_counted(api, monkeypatch):
     assert "EMA" in api.calls[0] and "MACD" not in api.calls[0]          # free plan: basic indicators only
     api.get("/research/company/US/NVDA/ai")                              # cached: no new AI call, not counted
     assert len(api.calls) == 1 and api.usage == ["research_ai"]
-    api.get("/research/company/US/NVDA/ai?refresh=true")
-    assert len(api.calls) == 2 and len(api.usage) == 2
+    # R19 (owner, 7 Nov): a Refresh within the guard window gives the stored read, "already fresh": no AI call, nothing counted
+    r = api.get("/research/company/US/NVDA/ai?refresh=true").json()
+    assert r["refresh_state"] == "fresh" and len(api.calls) == 1 and api.usage == ["research_ai"]
+    from app import computed
+    monkeypatch.setattr(computed, "DEFAULT_GUARD", 0)                  # past the window: written again, for everyone
+    r = api.get("/research/company/US/NVDA/ai?refresh=true").json()
+    assert r["refresh_state"] == "done" and len(api.calls) == 2 and api.usage == ["research_ai", "refresh", "research_ai"]
 
 
 def test_daily_ai_allowance(api, monkeypatch):
@@ -226,7 +231,7 @@ def test_an_old_stored_read_with_scores_shows_none(api):
     """A read cached before scores were removed still goes out without them."""
     old = {"summary": "Old read.", "scores": {"moat": 90, "growth": 80}, "composite": 70, "valuation": "rich",
            "valuation_note": "", "bull": [], "bear": [], "segments": [], "position": "", "watch": [], "ideas": []}
-    key = ("US", "NVDA", routes.has_indicators("free"), routes.datetime.now(routes.IST).date().isoformat())
+    key = ("US", "NVDA", routes.has_indicators("free"))        # R19: one read per company until Refresh (no date in the key)
     A._cache.set(A._key("company", *key), dict(old, generated_at=1.0), 3600)
     r = api.get("/research/company/US/NVDA/ai").json()
     assert r["summary"] == "Old read." and r["facts"] == [] and not api.calls

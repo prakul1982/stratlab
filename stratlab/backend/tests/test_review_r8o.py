@@ -157,7 +157,9 @@ def test_the_market_mood_never_counts_and_is_never_refused(usage):
     got = routes.ai_call(FREE, "pulse", ("IN", "", "h", "k"), 60, False, read, counted=False, min_age=300)
     assert got["summary"] and routes.ai_reads_today(FREE) == 2
     # "Ask again" on a mood under five minutes old is that mood, not a new one written for everyone
-    assert routes.ai_call(FREE, "pulse", ("IN", "", "h", "k"), 60, True, read, counted=False, min_age=300) == got
+    # (R19: said so: "refresh_state" "fresh", the stored read otherwise unchanged)
+    again = routes.ai_call(FREE, "pulse", ("IN", "", "h", "k"), 60, True, read, counted=False, min_age=300)
+    assert again.pop("refresh_state") == "fresh" and again == got
 
 
 def test_the_pulse_and_company_routes_say_what_counts(usage, monkeypatch):

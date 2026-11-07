@@ -157,6 +157,43 @@ CONCEPTS = [
 ]
 
 
+# the exchange's industry names as a layer shows them (R20, the owner: "Computer Peripheral Equipment, Nec" and "Services-Prepackaged Software" as
+# layer names): the common ones by a plain name, any other cleaned (no "Services-" prefix, no "Nec", no "(No ...)", "&" for "And")
+PLAIN_INDUSTRY = {
+    "services-prepackaged software": "Software", "services-computer programming services": "IT services",
+    "services-computer integrated systems design": "IT services", "services-computer programming, data processing, etc.": "IT services",
+    "services-computer processing & data preparation": "Data processing", "computer peripheral equipment, nec": "Computer hardware",
+    "electronic computers": "Computer hardware", "computer communications equipment": "Networking equipment",
+    "computer storage devices": "Computer hardware", "semiconductors & related devices": "Semiconductors",
+    "services-business services, nec": "Business services", "telephone communications (no radiotelephone)": "Telecom services",
+    "radiotelephone communications": "Wireless telecom", "pharmaceutical preparations": "Pharmaceuticals",
+    "biological products, (no diagnostic substances)": "Biotech products", "in vitro & in vivo diagnostic substances": "Diagnostics",
+    "national commercial banks": "Commercial banks", "state commercial banks": "Commercial banks", "commercial banks, nec": "Commercial banks",
+    "motor vehicles & passenger car bodies": "Vehicle makers", "motor vehicle parts & accessories": "Vehicle parts",
+    "crude petroleum & natural gas": "Oil and gas producers", "petroleum refining": "Refining", "electric services": "Electric utilities",
+    "real estate investment trusts": "REITs", "retail-eating places": "Restaurants", "services-medical laboratories": "Medical laboratories",
+    "surgical & medical instruments & apparatus": "Medical instruments", "electromedical & electrotherapeutic apparatus": "Medical devices",
+    "aircraft parts & auxiliary equipment, nec": "Aircraft parts", "guided missiles & space vehicles & parts": "Missiles and space",
+}
+
+
+def plain_industry(name) -> str:
+    """An official industry's name as a layer shows it: the common ones by a plain name (PLAIN_INDUSTRY), any other cleaned. Both markets."""
+    raw = " ".join(str(name or "").split())
+    if not raw:
+        return raw
+    hit = PLAIN_INDUSTRY.get(raw.lower())
+    if hit:
+        return hit
+    t = re.sub(r"^services-\s*", "", raw, flags=re.I)
+    t = re.sub(r",?\s*\bnec\b\.?", "", t, flags=re.I)
+    t = re.sub(r",?\s*\((?:no|not|except)\b[^)]*\)", "", t, flags=re.I)
+    t = re.sub(r"\s+and\s+", " & ", t, flags=re.I).strip(" ,-")
+    if t.isupper() or t.islower():
+        t = t.title()
+    return t or raw
+
+
 def key(name) -> str:
     """An industry name as compared: case and spacing aside (the SEC writes "Drawing & Insulating Of  Nonferrous Wire")."""
     return " ".join(str(name or "").split()).lower()
@@ -400,6 +437,7 @@ def with_base(m_before: dict, out: dict, rows: list[dict], industries: list[str]
         return key(r.get("industry")) in gone or (sized is not None and sym in idx and sym not in sized)
     out = {**out, "value_chain": [{**v, "companies": [c for c in v.get("companies") or [] if not outside(c)]} for v in out.get("value_chain") or []],
            "sub_themes": [{**x, "companies": [c for c in x.get("companies") or [] if not outside(c)]} for x in out.get("sub_themes") or []]}
+    out["value_chain"] = keep_map_layers(m_before, out["value_chain"], base)
 
     def tag(c):
         r = idx.get(c.get("ticker")) or {}
@@ -415,7 +453,7 @@ def with_base(m_before: dict, out: dict, rows: list[dict], industries: list[str]
     for name, basis, members in groups:
         cos = sorted((r for r in members if r["symbol"] not in in_layer), key=lambda r: (-(r.get("market_cap") or 0), r["symbol"]))
         if cos:
-            out["value_chain"].append({"layer": name, "description": "", "official": True, "basis": basis,
+            out["value_chain"].append({"layer": plain_industry(name) if basis == "industry" else name, "description": "", "official": True, "basis": basis,
                                        "companies": [{"ticker": r["symbol"], "name": name_of(r.get("name"), r["symbol"]), "what": "", "verified": False,
                                                       "base": True, "basis": basis, "industry": r.get("industry") or "", "cap": r.get("market_cap")} for r in cos]})
     placed = _named(out)
@@ -425,6 +463,31 @@ def with_base(m_before: dict, out: dict, rows: list[dict], industries: list[str]
     out["placements"] = {**(out.get("placements") or {}), "placed": len(placed), "total": len(placed), "base": len(base), "named": len(by_list),
                          "added": len(added), "confirmed": len(confirmed), "unconfirmed": len(added) - len(confirmed),
                          "left_out": len({s for s in _named(m_before) if s not in placed and s not in base}), "industries": list(industries)}
+    return out
+
+
+def keep_map_layers(m_before: dict, layers: list[dict], base: dict) -> list[dict]:
+    """The AI map's own layers kept as the theme's scheme (R20: "Private banks" lost "Deposit gathering", "Retail and SME lending"... when
+    the check of each bank's own words against each layer said no for nearly all of them, and every bank fell back to its exchange industry,
+    one layer). When the check leaves fewer than two of the map's layers with a company but the map placed companies of the theme's own
+    industries in two or more, each such company goes back to the first of the map's layers that named it ("verified" False: placed by the
+    map, its words not checked for that layer). A company from another industry the check said no to stays out."""
+    own = [v for v in layers if not v.get("official") and v.get("companies")]
+    if len(own) >= 2:
+        return layers
+    before = {v.get("layer"): [c for c in v.get("companies") or [] if c.get("ticker") in base] for v in m_before.get("value_chain") or [] if not v.get("official")}
+    if sum(1 for cos in before.values() if cos) < 2:
+        return layers
+    seen = {c.get("ticker") for v in layers for c in v.get("companies") or []}
+    out = []
+    for v in layers:
+        add = []
+        if not v.get("official"):
+            for c in before.get(v.get("layer")) or []:
+                if c.get("ticker") not in seen:
+                    seen.add(c.get("ticker"))
+                    add.append({**c, "what": "", "verified": False, "by_map": True})
+        out.append({**v, "companies": list(v.get("companies") or []) + add} if add else v)
     return out
 
 

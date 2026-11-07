@@ -206,6 +206,13 @@ def history_status(_=Depends(admin.admin_profile)):
     return ok(summary(I._now().astimezone(I.IST).date()))
 
 
+@router.get("/admin/ipos/history/rows")
+def history_rows(_=Depends(admin.admin_profile)):
+    """Admin: every stored row of the two-year history, as the IPO study takes them (python -m app.ipo_study --rows FILE)."""
+    cur = load()
+    return ok({"as_of": cur["as_of"], "rows": cur["rows"]})
+
+
 @router.post("/admin/ipos/history/backfill")
 def history_backfill(_=Depends(admin.admin_profile)):
     """Admin: one run of the two-year import, in the background (a few minutes). Run it again until nothing is pending."""

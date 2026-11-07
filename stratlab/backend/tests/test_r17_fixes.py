@@ -143,7 +143,7 @@ def test_membership_reads_the_layers_own_words_and_a_sentence_that_says_nothing_
     t = texts(slides)
     assert "20 in the exchange's industry list; 18 confirmed by their own description, 2 not yet" in t       # p2 and data confidence
     cover = dict((it[0], it[2] if len(it) > 2 else None) for b in slides[0].blocks if b["kind"] == "stats" for it in b["items"])
-    assert cover["Companies"] == "18 confirmed, 2 not yet"
+    assert cover["Companies"] == "in the exchange's industries; 2 not confirmed"          # R20: the universe's one wording, with what isn't confirmed
     # US, most companies with no stored figures: the counts are of every company checked, with figures or not
     vb, sb = deck_of(*theme_b())
     assert vb["membership"]["placed"] == 10 and "10 in the exchange's industry list; 10 confirmed by their own description, 0 not yet" in texts(sb)
@@ -200,7 +200,7 @@ def test_no_divider_without_anything_after_it_and_every_total_says_its_count():
         # changed on purpose (R19): data confidence is one page, its counts one line under the checks
         assert [s.title for s in slides if s.title.startswith("Data confidence")] == ["Data confidence"]
         line = next(p for s in slides if s.title == "Data confidence" for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))
-        assert f"companies in the theme's list {v['placements']['total']}" in line and "with a market value (the theme's total market value)" in line
+        assert line.startswith(f"Counts: {deck.coverage(v)['line']};") and "with a market value (the theme's total market value)" in line   # R20: one wording
         assert _re.search(r"in each median: EBITDA margin \d+ · net margin \d+", line)
 
 

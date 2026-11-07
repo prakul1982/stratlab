@@ -232,6 +232,15 @@ def ai_reads_per_day(plan: str) -> int | None:
     return None if plan == "pro" else settings.RESEARCH_AI_PER_DAY
 
 
+REFRESHES_PER_DAY = {"free": 3, "basic": 10, "pro": 30}
+
+
+def refreshes_per_day(plan: str) -> int | None:
+    """Refreshes of a stored shared result (an AI read, a theme's read) a person may ask for in a day (computed.refresh_gate). A
+    refresh within a few hours of the last one gives the stored result and isn't counted."""
+    return REFRESHES_PER_DAY.get(plan, REFRESHES_PER_DAY["free"])
+
+
 def plan_info(plan: str) -> dict:
     info = {k: v for k, v in PLANS[plan].items() if k != "features"}
     return {**info, "group_size": group_size(plan), "holdings": holdings_limit(plan), "stock_alerts": stock_alerts(plan),

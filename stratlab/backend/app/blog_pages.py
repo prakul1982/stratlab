@@ -386,7 +386,7 @@ def admin_blog_theme(req: ThemeDraft, profile=Depends(admin.admin_profile)):
     button is on every theme with figures now). The post is stored hidden: the owner reads it in the list above and publishes it by hand.
     Nothing is published here."""
     from .intel import routes as R, theme_routes
-    r, theme, m, _ = R.sector_map(profile, req.region, req.q, False)
+    r, theme, m, _ = R.theme_map(profile, req.region, req.q)
     m = theme_routes.checked(r, theme, m, wait=True)
     from .intel import theme_data
     dive = theme_data.build(r, theme, m, theme_routes.sources(r, theme))

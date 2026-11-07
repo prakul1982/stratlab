@@ -2069,6 +2069,11 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .dd-ask { flex-wrap: wrap; }
 .dd-ask > .btn { white-space: nowrap; max-width: 100%; }
 .k-note { font-size: var(--t-note); color: var(--muted); }
+/* a stored shared read's "Last updated", Refresh and refreshes left (components/StoredStamp.tsx, R19): one line that wraps on a phone */
+.stored-stamp { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--s1) var(--s2); }
+@media (max-width: 640px) { .stored-stamp { justify-content: flex-start; } }
+.stored-note { margin: 0 0 var(--s2); }
+.theme-already { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
 .k-note.k-down, .k-small.k-down { color: var(--down); }
 .k-sub { font-size: var(--t-body); font-weight: 600; }
 .k-list { margin: 0; padding-left: var(--s5); display: flex; flex-direction: column; gap: var(--s1); font-size: var(--t-label); }

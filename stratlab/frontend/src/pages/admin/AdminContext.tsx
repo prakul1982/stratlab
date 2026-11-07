@@ -137,6 +137,7 @@ export const SECTIONS: { path: string; label: string; title: string; lede: strin
   { path: "data", label: "Data and jobs", title: "Data and jobs", tabs: ["checks"], lede: "Every background job: when it last ran, when it runs next, and a button to run it now." },
   { path: "quality", label: "Quality", title: "Quality", tabs: [], lede: "Audits of the company data, strategies users reported, and the rates and rules StratLab uses." },
   { path: "system", label: "System", title: "System", tabs: ["services"], lede: "Server errors, other services, AI providers, platform checks and real prices for testing." },
+  { path: "library", label: "Library", title: "Library", tabs: [], lede: "Everything worked out once and kept for every user: theme reads, AI reads and the rest, with how often each was served, its size and when it was last read." },
   { path: "feedback", label: "Feedback", title: "Feedback", tabs: [], lede: "What people reported from the Feedback button: something broken, a feature not working, or an idea. Each new one is also emailed to you." },
   { path: "emails", label: "Email previews", title: "Email previews", tabs: [], lede: "Every email StratLab sends, as a reader gets it. The market briefs are the newest real issues; the rest use made-up details. Nothing here is sent." },
 ];

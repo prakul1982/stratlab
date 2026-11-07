@@ -17,13 +17,13 @@ from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
 
-from .. import db
+from .. import computed, db
 from ..ai_providers import AIError
 from ..auth import current_profile
 from ..guard import Window
 from ..responses import err
 from . import ai as A
-from . import grounding, theme_base, theme_check, theme_data, theme_prices
+from . import grounding, theme_base, theme_check, theme_data, theme_library, theme_prices
 from .net import SourceError, TTLCache
 from .news import aggregator_url, company_headline, plain_headline, publisher_url
 
@@ -314,6 +314,8 @@ def checked(region: str, theme: str, m: dict, wait: bool = False) -> dict:
     """The map as the page shows it, never waiting on the AI (LIVE3-001): the checked map when it is in; otherwise the checks are started
     in the background (`_check`) and the request gets the latest partly checked map, or the base with nothing checked yet (`quick`).
     `wait`: work the checks out here (an admin's blog draft)."""
+    if m.get("_library"):                       # the theme library's stored read: checked already (theme_library.py)
+        return with_caps(m, _rows(region))
     key = check_key(region, theme, m)
     hit = A.get("sector_checked3", key)
     if hit is None and wait:
@@ -380,7 +382,7 @@ def _check(region: str, theme: str, m: dict) -> dict:
         elif time.time() - _pending_since.setdefault(key, time.time()) > PENDING_GIVE_UP:
             p["checked"], p["timed_out"] = True, p.get("pending") or 0
             _pending_since.pop(key, None)
-            A.keep("sector_checked3", key, out, 2 * 3600)
+            A.keep("sector_checked3", key, out, 2 * 3600, persist=False)     # checked again later, so not kept for everyone
         p["checked"] = p["checked"] and inds["how"] != "pending" or bool(p.get("timed_out"))
         if not p["checked"]:
             A.keep("sector_checking", key, out, 30 * 60)       # served while the next run goes on (LIVE3-001)
@@ -424,6 +426,8 @@ def with_descriptions(region: str, m: dict, reads: int = 0) -> dict:
     """The map with each official-industry company's own one-line description where it is known (theme_base.described). A request reads
     none itself (`reads` 0: a company page can be slow, LIVE3-001): the ones not stored yet are read in the background, DESCRIBE_READS a
     run, for the next view."""
+    if m.get("_library"):                       # described already when it was kept
+        return m
     want = set(theme_base.to_describe(m))
     read = _about_reader(region, {c["ticker"]: c.get("name") for v in m.get("value_chain") or [] for c in v.get("companies") or []}, reads)
     out = theme_base.described(m, lambda s: read(s) if s in want else None)
@@ -433,8 +437,34 @@ def with_descriptions(region: str, m: dict, reads: int = 0) -> dict:
 
 
 # ---------- the dive ----------
-def sources(region: str, theme: str):
-    """The stored readers a dive uses, each on the market it is for."""
+def facts_piece(region: str, sym: str, fresh: bool = False) -> tuple[dict | None, float | None]:
+    """(a company's stored page facts as themes use them, when they were kept): kept once for every theme in the shared store (kind
+    "theme:facts"), so two themes with the same company read the same figures, and a Refresh of one theme (`fresh`: taken again from the
+    company's stored page) gives the other its new figures too (dive_of: a theme's figures are worked out again when a company piece it
+    used was refreshed). A company with no stored page: (None, None)."""
+    R = _routes()
+    if not fresh:
+        hit = computed.get(theme_library.FACTS, [region, sym])
+        if hit is not None and isinstance(hit.get("value"), dict):
+            return hit["value"], hit.get("at")
+    f = R.public_facts(region, sym) if callable(R.public_facts) else None
+    if not f:
+        return None, None
+    kept = computed.put(theme_library.FACTS, [region, sym], f, label=sym, region=region)
+    return f, (kept or {}).get("at")
+
+
+def pieces_moved(region: str, pieces: dict) -> bool:
+    """Whether a company piece a stored dive used ({symbol: when kept}) has been kept again since (another theme's Refresh)."""
+    if not pieces:
+        return False
+    ix = computed.index(theme_library.FACTS)["entries"]
+    return any(float((ix.get(computed.hkey([region, s])) or {}).get("at") or 0) > float(at or 0) for s, at in pieces.items())
+
+
+def sources(region: str, theme: str, fresh: bool = False):
+    """The stored readers a dive uses, each on the market it is for. Companies' facts come from the shared pieces (facts_piece), taken
+    again from their stored pages when `fresh` (a Refresh); the pieces used are on the result's `pieces`."""
     from .. import corp_actions, deals, redflags, report_card, results, shareholders
     R = _routes()
     today = datetime.now(R.IST).date() if region == "IN" else datetime.now(timezone.utc).date()
@@ -468,42 +498,75 @@ def sources(region: str, theme: str):
 
     def red(symbols, frm, to):
         return redflags.listing(region, frm=frm.isoformat(), to=to.isoformat(), symbols=symbols, size=200, today=today)["items"]
-    return theme_data.Sources(
-        today, facts=lambda s: R.public_facts(region, s) if callable(R.public_facts) else None, index_rows=lambda: R.index_rows(region),
+    pieces: dict = {}
+
+    def facts(sym):
+        f, at = facts_piece(region, sym, fresh)
+        if at:
+            pieces[sym] = at
+        return f
+    src = theme_data.Sources(
+        today, facts=facts, index_rows=lambda: R.index_rows(region),
         shareholding=(lambda s: shareholders.company(s)) if region == "IN" else (lambda s: None),
         insider_buys=(lambda: deals.buys().get("buys") or {}) if region == "IN" else (lambda: {}),
         results=lambda a, b, s: results.between(region, a, b, s), actions=lambda a, b, s: corp_actions.between(region, a, b, s),
         red_flags=red, card=card, history=history, segments=segments,
         corp_history=lambda s: corp_actions.history(region, s, None, fetch=False))
+    src.pieces = pieces
+    return src
 
 
 @router.get("/theme-dive")
 def theme_dive(q: str, region: str = "IN", refresh: bool = False, profile=Depends(current_profile)):
+    """The theme's figures. R19: kept for everyone in the shared store (dive_of) and served until a Refresh; a Refresh just after the
+    theme's own Refresh (its new map) is part of that one and isn't counted again."""
     R = _routes()
-    r, theme, m, _ = R.sector_map(profile, region, q, False)
+    r, theme, m, _ = R.theme_map(profile, region, q)
     m = with_descriptions(r, checked(r, theme, m))
-    return R.ok(dive_of(r, theme, m, refresh))
+    by = None
+    if refresh:
+        kept = computed.get(theme_library.DIVE, dive_key(r, theme, m), count=False)
+        state = "go" if kept is None else computed.refresh_gate(profile, "theme:dive", kept.get("at"))
+        if state != "go":
+            return R.ok({**kept["value"]["dive"], "refresh_state": state})
+        by = computed.plan_word(profile)
+    out = dive_of(r, theme, m, refresh, by=by)
+    return R.ok({**out, "refresh_state": "done"} if refresh else out)
 
 
-def dive_of(r: str, theme: str, m: dict, refresh: bool = False) -> dict:
-    """The dive for a checked map with its descriptions (the page's tables and sections), from DIVE_CACHE while it is fresh."""
-    fm, figures = theme_base.for_figures(m)
+def dive_key(r: str, theme: str, m: dict) -> list:
+    """A dive's key in the shared store: the market, the stored theme's name (or the search's normalised one), the map's time, how many
+    companies are placed and described, and the rules' version."""
+    fm = theme_base.for_figures(m)[0]
     said = sum(1 for v in fm["value_chain"] if v.get("official") for c in v["companies"] if c.get("what"))
-    key = (r, theme.lower(), int(float(m.get("generated_at") or 0)), (m.get("placements") or {}).get("placed"), said, theme_base.RULES)
-    hit = None if refresh else DIVE_CACHE.get(key)
-    if hit is None:
-        hit = theme_data.build(r, theme, fm, sources(r, theme))
-        hit["placements"], hit["figures"] = m.get("placements"), figures
-        late = {x["symbol"]: x["filed_unread"] for x in ((hit.get("sections") or {}).get("quarter") or {}).get("earlier") or [] if x.get("filed_unread")}
-        if late:                      # results filed since the stored page was built: the screens' sweep builds those pages first (R18)
-            try:
-                from .. import stock_pages
-                stock_pages.mark_due(r, late)
-            except Exception as e:
-                print("theme: pages behind a filing not marked:", type(e).__name__, str(e)[:100])
-        if (m.get("placements") or {}).get("checked"):
-            DIVE_CACHE.set(key, hit, DIVE_TTL)
-            auto_post(r, theme, hit)
+    return [r, m.get("_library") or theme_library.normalise(theme, r), int(float(m.get("generated_at") or 0)),
+            (m.get("placements") or {}).get("placed"), said, theme_base.RULES]
+
+
+def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None = None) -> dict:
+    """The dive for a checked map with its descriptions (the page's tables and sections): kept once for everyone in the shared store
+    (kind "theme:dive") and served from there, however old, until a Refresh (owner, 7 Nov); worked out again from the stored company
+    pieces (no AI) when one of them was refreshed by another theme (pieces_moved)."""
+    fm, figures = theme_base.for_figures(m)
+    key = dive_key(r, theme, m)
+    if not refresh:
+        kept = computed.get(theme_library.DIVE, key)
+        if kept is not None and isinstance((kept.get("value") or {}).get("dive"), dict) and not pieces_moved(r, kept["value"].get("pieces") or {}):
+            return kept["value"]["dive"]
+    src = sources(r, theme, fresh=True) if refresh else sources(r, theme)
+    hit = theme_data.build(r, theme, fm, src)
+    hit["placements"], hit["figures"] = m.get("placements"), figures
+    late = {x["symbol"]: x["filed_unread"] for x in ((hit.get("sections") or {}).get("quarter") or {}).get("earlier") or [] if x.get("filed_unread")}
+    if late:                      # results filed since the stored page was built: the screens' sweep builds those pages first (R18)
+        try:
+            from .. import stock_pages
+            stock_pages.mark_due(r, late)
+        except Exception as e:
+            print("theme: pages behind a filing not marked:", type(e).__name__, str(e)[:100])
+    if (m.get("placements") or {}).get("checked"):
+        computed.put(theme_library.DIVE, key, {"dive": hit, "pieces": getattr(src, "pieces", None) or {}}, label=m.get("sector") or theme,
+                     region=r, by=by)
+        auto_post(r, theme, hit)
     return hit
 
 
@@ -657,6 +720,30 @@ def deck_file_name(theme: str, r: str, fmt: str, day: date) -> str:
     return f"StratLab - {clean} - {day.day} {day.strftime('%b %Y')}.{fmt}"
 
 
+DECK_MAP_WAIT = 20.0         # seconds a deck waits for the AI map and its checks that are being written (a proxy closes a request at 30 s)
+
+
+def map_for_deck(R, profile, region: str, q: str, wait: float = DECK_MAP_WAIT):
+    """(market, theme, the checked map with its descriptions) for a deck. The page fills in as the AI parts arrive, but a file is made once:
+    a deck made while the AI map was still being written had no map at all (R20: every live R19 deck, made after a deploy emptied the kept
+    maps: "Private banks" with no value chain, "Cybersecurity" with the SEC's industries as layers). So it waits, at most `wait` seconds,
+    for a map and a check that are running, then is made with what there is."""
+    t0 = time.time()
+    r, theme, m, _ = R.theme_map(profile, region, q)     # R19: the theme library's stored read when there is one (kept across deploys)
+    if not float(m.get("generated_at") or 0):
+        j = job_of(("map", r, theme.lower()))
+        if j and j["state"] == "running":
+            j["done"].wait(max(0.0, wait - (time.time() - t0)))
+            r, theme, m, _ = R.sector_map(profile, region, q, False)
+    c = checked(r, theme, m)
+    if not (c.get("placements") or {}).get("checked"):
+        j = job_of(("check",) + check_key(r, theme, m))
+        if j and j["state"] == "running":
+            j["done"].wait(max(0.0, wait - (time.time() - t0)))
+            c = checked(r, theme, m)
+    return r, theme, with_descriptions(r, c)
+
+
 @router.get("/theme-dive/deck")
 def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=Depends(current_profile)):
     """The theme deep dive as slides, PowerPoint or PDF (EXPORT): the cover, the value chain, every company with its figures, the
@@ -667,8 +754,7 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
     if format not in ("pptx", "pdf"):
         err(400, "bad_format", "Pick PowerPoint or PDF.")
     R = _routes()
-    r, theme, m, _ = R.sector_map(profile, region, q, False)
-    m = with_descriptions(r, checked(r, theme, m))
+    r, theme, m = map_for_deck(R, profile, region, q)
     mark = main.check_deep(profile, "deck", "", r, mark=f"deck:theme:{r}:{theme_data.slug(theme)}")
     today = datetime.now(R.IST).date()
     biz = r == "IN" and bool(biz_updates._allowed(profile))       # the one part of the deck that depends on the plan
@@ -677,9 +763,19 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
             bool((IPO_CACHE.get((r, theme.lower(), stamp)) or {}).get("checked")))     # a part read since is in a new file
     key = (r, theme.lower(), format, today.isoformat(), stamp, biz, seen, theme_base.RULES, deck.THEME_DECK_VERSION)
     body = DECK_CACHE.get(key)
-    if body is None:
-        view = deck_view(r, m, dive_of(r, theme, m), deck_extras(r, theme, m, profile))
-        body = deck.build_theme(view, pdf=format == "pdf")
+    if body is None:                           # R20: the file is kept in the shared store too, so a restart or a deploy doesn't rebuild it
+        import base64
+        from .. import computed
+        got = computed.get("deck:theme", list(key))
+        if got and isinstance(got.get("value"), str):
+            try:
+                body = base64.b64decode(got["value"])
+            except ValueError:
+                body = None
+        if body is None:
+            view = deck_view(r, m, dive_of(r, theme, m), deck_extras(r, theme, m, profile))
+            body = deck.build_theme(view, pdf=format == "pdf")
+            computed.put("deck:theme", list(key), base64.b64encode(body).decode(), label=f"{theme} ({format.upper()}, {today.isoformat()})", region=r)
         DECK_CACHE.set(key, body, DECK_TTL, size=len(body))
     if mark:                                   # counted once the file is made: a deck that failed to build uses nothing
         db.add_usage(profile["id"], "deck")
@@ -718,7 +814,7 @@ def theme_dive_business(q: str, region: str = "IN", profile=Depends(current_prof
         return R.ok({"allowed": True, "layers": [], "subs": [], "companies": 0, "of": 0})
     if not biz_updates._allowed(profile):
         return R.ok({"allowed": False, "layers": [], "subs": [], "companies": 0, "of": 0})
-    r, theme, m, _ = R.sector_map(profile, region, q, False)
+    r, theme, m, _ = R.theme_map(profile, region, q)
     return R.ok(business_of(r, checked(r, theme, m)))
 
 
@@ -757,11 +853,15 @@ def ipo_items(region: str, today: date) -> list[dict]:
 def theme_dive_listings(q: str, region: str = "IN", profile=Depends(current_profile)):
     """New issues in the IPO tracker that belong in the theme, each kept only with words from its own offer that show the work."""
     R = _routes()
-    r, theme, m, _ = R.sector_map(profile, region, q, False)
+    r, theme, m, _ = R.theme_map(profile, region, q)
     m = checked(r, theme, m)
     m = {**m, "value_chain": [v for v in m.get("value_chain") or [] if not v.get("official")]}     # an official industry's layer has no work to match an offer on
     key = (r, theme.lower(), int(float(m.get("generated_at") or 0)))
-    hit = IPO_CACHE.get(key)
+    skey = [r, m.get("_library") or theme_library.normalise(theme, r), key[2]]
+    kept = computed.get("theme:listings", skey)       # R19: kept for everyone with the theme's read
+    hit = kept["value"] if kept is not None else IPO_CACHE.get(key)
+    if kept is not None:
+        IPO_CACHE.set(key, hit, 6 * 3600)              # (the deck reads the page's listings here)
     if hit is None:
         today = datetime.now(timezone.utc).date()
         try:
@@ -782,6 +882,7 @@ def theme_dive_listings(q: str, region: str = "IN", profile=Depends(current_prof
                          "open": p.get("open"), "close": p.get("close"), "listing": p.get("listing"), "groups": h["groups"], "what": h["what"]})
         hit = {"items": rows, "checked": True}
         IPO_CACHE.set(key, hit, 6 * 3600)
+        computed.put("theme:listings", skey, hit, label=m.get("sector") or theme, region=r)
     return R.ok(hit)
 
 
@@ -861,7 +962,7 @@ def gather_prices(region: str, members: list[tuple[str, str]], load, bench, budg
 @router.get("/theme-dive/prices")
 def theme_dive_prices(q: str, region: str = "IN", profile=Depends(current_profile)):
     R = _routes()
-    r, theme, m, _ = R.sector_map(profile, region, q, False)
+    r, theme, m, _ = R.theme_map(profile, region, q)
     m = theme_base.for_figures(checked(r, theme, m))[0]
     names = _map_names(m)
     placed = {c["ticker"]: names.get(c["ticker"]) for grp in (m.get("value_chain") or []) + (m.get("sub_themes") or []) for c in grp.get("companies") or []}
@@ -923,10 +1024,13 @@ def theme_news(region: str, theme: str, members: list[dict], search, today: date
 @router.get("/theme-dive/news")
 def theme_dive_news(q: str, region: str = "IN", profile=Depends(current_profile)):
     R = _routes()
-    r, theme, m, _ = R.sector_map(profile, region, q, False)
+    r, theme, m, _ = R.theme_map(profile, region, q)
     m = theme_base.for_figures(checked(r, theme, m))[0]
-    key = (r, theme.lower(), int(float(m.get("generated_at") or 0)))
-    hit = NEWS_CACHE.get(key)
+    key = [r, m.get("_library") or theme_library.normalise(theme, r), int(float(m.get("generated_at") or 0))]
+    kept = computed.get("theme:news", key)            # R19: kept for everyone with the theme's read; a Refresh of the theme is a new key
+    hit = kept["value"] if kept is not None else None
+    if hit is not None:
+        NEWS_CACHE.set((r, theme.lower(), key[2]), hit, 20 * 60)     # (the deck reads the page's latest headlines here)
     if hit is None:
         names = _map_names(m)
         members = []
@@ -935,5 +1039,15 @@ def theme_dive_news(q: str, region: str = "IN", profile=Depends(current_profile)
             members.append({"symbol": sym, "name": name, "cap": f.get("market_cap"), "filings": (f.get("filings") or [])[:6]})
         today = datetime.now(timezone.utc).date()
         hit = {"items": theme_news(r, theme, members, _headlines(r), today), "as_of": datetime.now(timezone.utc).isoformat(timespec="minutes")}
-        NEWS_CACHE.set(key, hit, 20 * 60)
+        NEWS_CACHE.set((r, theme.lower(), key[2]), hit, 20 * 60)
+        computed.put("theme:news", key, hit, label=m.get("sector") or theme, region=r)
     return R.ok(hit)
+
+
+# ---------- the theme library's index, for the search box (R19) ----------
+@router.get("/theme-library/suggest")
+def theme_library_suggest(q: str = "", region: str = "IN", profile=Depends(current_profile)):
+    """Themes already read and kept for everyone that match what's typed ("Already read: Automotive · India, read 7 Nov"): the one the
+    search would be served from first, then names that start with or contain it; with nothing typed, the most searched."""
+    R = _routes()
+    return R.ok({"items": theme_library.suggest(R.region_of(region), q[:80])})
