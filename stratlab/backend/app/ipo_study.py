@@ -150,12 +150,15 @@ def issue_figures(row: dict, closes: dict[str, float], bench: dict[str, dict[str
     return out
 
 
+MIN_BASE = 10                   # a median or a share of fewer issues than this is not given (the SME listing day had 2 of 203)
+
+
 def _median(xs: list[float]) -> float | None:
-    return round(statistics.median(xs), 2) if xs else None
+    return round(statistics.median(xs), 2) if len(xs) >= MIN_BASE else None
 
 
 def _share(part: int, whole: int) -> float | None:
-    return round(part / whole * 100, 1) if whole else None
+    return round(part / whole * 100, 1) if whole >= MIN_BASE else None
 
 
 def stats(items: list[dict]) -> dict:
@@ -166,14 +169,15 @@ def stats(items: list[dict]) -> dict:
     sized = [i for i in items if _num(i.get("size_cr"))]
     split = [i for i in sized if _num(i.get("fresh_cr")) and _num(i.get("ofs_cr"))]
     out = {"issues": len(items), "with_listing_close": len(lc), "median_listing_open_pct": _median(lo), "median_listing_close_pct": _median(lc),
-           "mean_listing_close_pct": round(statistics.fmean(lc), 2) if lc else None,
+           "mean_listing_close_pct": round(statistics.fmean(lc), 2) if len(lc) >= MIN_BASE else None, "with_listing_open": len(lo),
            "closed_above_issue_pct": _share(sum(1 for x in lc if x > 0), len(lc)),
            "with_return": len(now), "median_return_pct": _median([i["return_pct"] for i in now]),
            "below_issue_now": sum(1 for i in now if i["below_issue"]), "below_issue_now_pct": _share(sum(1 for i in now if i["below_issue"]), len(now)),
            "raised_cr": round(sum(i["size_cr"] for i in sized), 2) if sized else None, "with_size": len(sized),
            "fresh_cr": round(sum(i["fresh_cr"] for i in split), 2) if split else None, "ofs_cr": round(sum(i["ofs_cr"] for i in split), 2) if split else None,
            "with_split": len(split)}
-    out["fresh_share_pct"] = _share(out["fresh_cr"] or 0, (out["fresh_cr"] or 0) + (out["ofs_cr"] or 0)) if split else None
+    money_ = (out["fresh_cr"] or 0) + (out["ofs_cr"] or 0)          # a share of rupees, given when enough issues have both parts
+    out["fresh_share_pct"] = round((out["fresh_cr"] or 0) / money_ * 100, 1) if len(split) >= MIN_BASE and money_ else None
     for k, _l, _s in BENCH:
         out[f"with_vs_{k}"] = len(vs[k])
         out[f"median_vs_{k}_pct"] = _median(vs[k])
@@ -181,7 +185,7 @@ def stats(items: list[dict]) -> dict:
     rt = [i["retail_times"] for i in items if _num(i.get("retail_times"))]
     out["with_retail_times"], out["median_retail_times"] = len(rt), _median(rt)
     fill = [i["retail_fill_pct"] for i in items if _num(i.get("retail_fill_pct"))]
-    out["median_retail_fill_pct"] = _median(fill)
+    out["with_retail_fill"], out["median_retail_fill_pct"] = len(fill), _median(fill)
     odds = [i["retail_odds_pct"] for i in items if _num(i.get("retail_odds_pct"))]
     out["with_retail_odds"], out["median_retail_odds_pct"] = len(odds), _median(odds)
     return out
@@ -357,13 +361,21 @@ def drafts(res: dict, site: str = SITE) -> dict[str, str]:
     """The research note, the X article and the LinkedIn post, from the study's figures only (marked DRAFT)."""
     ipos = f"{site}/invest/ipos"
     win = f"{res['window']['from']} to {res['window']['to']}"
-    banner = ("> DRAFT: figures to be refreshed from the full two-year history before publishing. The title's claim (India first by number "
-              "of IPOs) is not from these figures: cite the global count it comes from, or drop it.\n")
+    banner = ("> DRAFT for review. The title's claim (India first by number of IPOs) is not from these figures: cite the global count it "
+              "comes from, or drop it. Figures in brackets are the number of issues each figure is worked out on; a figure from fewer than "
+              f"{MIN_BASE} issues is not given.\n")
+    horizon = (f"Return to date runs from each issue's listing day to the close of {res['as_of']}, so the holding periods differ, from days to "
+               "two years: it is not a same-length comparison between issues.")
+
+    def nb(v, n, signed: bool = True) -> str:
+        """A figure with the number of issues it is worked out on."""
+        return f"{fmt_pct(v, signed)} ({n})"
 
     def seg_lines(f: Figures, seg: str, label: str) -> list[str]:
         p = f"segments.{seg}.all"
-        return [f"| {label} | {f(p + '.issues')} | {fmt_pct(f(p + '.median_listing_close_pct'))} | {fmt_pct(f(p + '.closed_above_issue_pct'), False)} | "
-                f"{fmt_pct(f(p + '.median_return_pct'))} | {fmt_pct(f(p + '.below_issue_now_pct'), False)} | {fmt_pct(f(p + '.median_vs_nifty50_pct'))} | "
+        lc, rt, vs = f(p + '.with_listing_close'), f(p + '.with_return'), f(p + '.with_vs_nifty50')
+        return [f"| {label} | {f(p + '.issues')} | {nb(f(p + '.median_listing_close_pct'), lc)} | {nb(f(p + '.closed_above_issue_pct'), lc, False)} | "
+                f"{nb(f(p + '.median_return_pct'), rt)} | {nb(f(p + '.below_issue_now_pct'), rt, False)} | {nb(f(p + '.median_vs_nifty50_pct'), vs)} | "
                 f"{fmt_cr(f(p + '.raised_cr'))} ({f(p + '.with_size')} of {f(p + '.issues')} sized) |"]
 
     def retail_rows(f: Figures, seg: str) -> list[str]:
@@ -388,15 +400,16 @@ def drafts(res: dict, site: str = SITE) -> dict[str, str]:
             "## The headline figures", "",
             "| Segment | Issues | Median listing-day close | Closed above issue on day 1 | Median return to date | Below issue now | Median vs NIFTY 50 | Raised |",
             "|---|---:|---:|---:|---:|---:|---:|---:|", *seg_lines(f, "mainboard", "Main board"), *seg_lines(f, "sme", "SME"), "",
-            "A dash: not in the data yet. Raised: the issues whose size is stored, out of all.", "",
+            f"In brackets: the issues each figure is worked out on. A dash: fewer than {MIN_BASE} issues have it. Raised: the issues whose size is "
+            "stored, out of all. " + horizon, "",
             f"On the main board, the median issue closed its first day {fmt_pct(f(mb + '.median_listing_close_pct'))} against its issue price, "
-            f"and {fmt_pct(f(mb + '.closed_above_issue_pct'), False)} closed above it. To the latest close, the median return is "
+            f"and {fmt_pct(f(mb + '.closed_above_issue_pct'), False)} closed above it (the {f(mb + '.with_listing_close')} issues with a first-day close stored). To the latest close, the median return is "
             f"{fmt_pct(f(mb + '.median_return_pct'))}, and {f(mb + '.below_issue_now')} of {f(mb + '.with_return')} issues "
             f"({fmt_pct(f(mb + '.below_issue_now_pct'), False)}) trade below the price people paid.", "",
             "## The listing day is not the whole story", "",
             f"Measured over the same days, the median main-board issue did {fmt_pct(f(mb + '.median_vs_nifty50_pct'))} against the NIFTY 50 and "
-            f"{fmt_pct(f(mb + '.median_vs_smallcap250_pct'))} against the NIFTY Smallcap 250; {fmt_pct(f(mb + '.beat_nifty50_pct'), False)} "
-            f"did better than the NIFTY 50. For SME issues the median against the NIFTY 50 is {fmt_pct(f(sme + '.median_vs_nifty50_pct'))}, "
+            f"{fmt_pct(f(mb + '.median_vs_smallcap250_pct'))} against the NIFTY Smallcap 250 (the {f(mb + '.with_vs_smallcap250')} issues with that index's "
+            f"closes over their days); {fmt_pct(f(mb + '.beat_nifty50_pct'), False)} of {f(mb + '.with_vs_nifty50')} did better than the NIFTY 50. For SME issues the median against the NIFTY 50 is {fmt_pct(f(sme + '.median_vs_nifty50_pct'))}, "
             f"and {f(sme + '.below_issue_now')} of {f(sme + '.with_return')} SME issues trade below their issue price.", "",
             f"The spread between issues is wide. On the main board, {f('segments.mainboard.best.name')} (listed {f('segments.mainboard.best.listing')}) is "
             f"{fmt_pct(f('segments.mainboard.best.return_pct'))} from its issue price; {f('segments.mainboard.worst.name')} (listed "
@@ -458,13 +471,14 @@ def drafts(res: dict, site: str = SITE) -> dict[str, str]:
          "exchanges' own figures show.", "",
          "## 1. " + ("Day one was mostly up" if (f(mb + '.closed_above_issue_pct') or 0) > 50 else "Day one was mixed"), "",
          f"The median main-board issue closed its first day {fmt_pct(f(mb + '.median_listing_close_pct'))} against its issue price; "
-         f"{fmt_pct(f(mb + '.closed_above_issue_pct'), False)} closed above it. SME issues: median {fmt_pct(f(sme + '.median_listing_close_pct'))}.", "",
+         f"{fmt_pct(f(mb + '.closed_above_issue_pct'), False)} closed above it ({f(mb + '.with_listing_close')} issues with a first-day close stored)."
+         + (f" SME issues: median {nb(f(sme + '.median_listing_close_pct'), f(sme + '.with_listing_close'))}." if _num(f(sme + '.median_listing_close_pct')) else ""), "",
          "## 2. " + ("Then the gains narrowed" if _num(f(mb + '.median_return_pct')) and _num(f(mb + '.median_listing_close_pct')) and f(mb + '.median_return_pct') < f(mb + '.median_listing_close_pct') else "After the listing day"), "",
          f"To the latest close, the median main-board issue is {fmt_pct(f(mb + '.median_return_pct'))} from its issue price, and "
          f"{fmt_pct(f(mb + '.below_issue_now_pct'), False)} trade below it. Against the NIFTY 50 over the same days: "
          f"{fmt_pct(f(mb + '.median_vs_nifty50_pct'))} (median), and {fmt_pct(f(mb + '.beat_nifty50_pct'), False)} did better than the index. "
          f"The range is wide: {f('segments.mainboard.best.name')} is {fmt_pct(f('segments.mainboard.best.return_pct'))} from its issue price, "
-         f"{f('segments.mainboard.worst.name')} {fmt_pct(f('segments.mainboard.worst.return_pct'))}.", "",
+         f"{f('segments.mainboard.worst.name')} {fmt_pct(f('segments.mainboard.worst.return_pct'))}. " + horizon, "",
          "[Chart 1: median listing-day close and median return to date, by retail subscription, main board]", "",
          "## 3. A heavily bid retail book means few get shares", "",
          f"The median retail book was {fmt_x(f(mb + '.median_retail_times'))} subscribed, so at most {fmt_pct(f(mb + '.median_retail_fill_pct'), False)} "
@@ -475,8 +489,8 @@ def drafts(res: dict, site: str = SITE) -> dict[str, str]:
          "was existing holders selling.", "",
          "## 5. SME issues are a different market", "",
          f"{f('coverage.sme')} SME issues listed in the same period. To the latest close their median is {fmt_pct(f(sme + '.median_return_pct'))} "
-         f"from the issue price, {fmt_pct(f(sme + '.below_issue_now_pct'), False)} trade below it, and against the NIFTY 50 the median is "
-         f"{fmt_pct(f(sme + '.median_vs_nifty50_pct'))}.", "",
+         f"from the issue price, {f(sme + '.below_issue_now')} of the {f(sme + '.with_return')} with a latest close ({fmt_pct(f(sme + '.below_issue_now_pct'), False)}) "
+         f"trade below it, and against the NIFTY 50 the median is {nb(f(sme + '.median_vs_nifty50_pct'), f(sme + '.with_vs_nifty50'))}.", "",
          "[Chart 2: share of issues below their issue price now, main board and SME]", "",
          "## 6. See every issue", "",
          f"Bids by investor type, listing day and performance since listing are tracked on [StratLab's IPOs page]({ipos}).", f.sources()]
@@ -486,12 +500,12 @@ def drafts(res: dict, site: str = SITE) -> dict[str, str]:
     f = Figures(res)
     li = [banner, "India is the world's #1 IPO market. Is retail winning?", "",
           f"I counted {f('coverage.issues')} Indian IPOs that listed from {win}, using the exchanges' own figures, on StratLab.", "",
-          f"- Main board: the median issue closed day one {fmt_pct(f(mb + '.median_listing_close_pct'))} against its issue price.",
+          f"- Main board: the median issue closed day one {fmt_pct(f(mb + '.median_listing_close_pct'))} against its issue price ({f(mb + '.with_listing_close')} issues with a first-day close).",
           f"- To date, the median is {fmt_pct(f(mb + '.median_return_pct'))}, and {fmt_pct(f(mb + '.below_issue_now_pct'), False)} trade below the issue price.",
           f"- Against the NIFTY 50 over the same days, the median issue is {fmt_pct(f(mb + '.median_vs_nifty50_pct'))}.",
-          f"- The median retail book was {fmt_x(f(mb + '.median_retail_times'))} subscribed: at most {fmt_pct(f(mb + '.median_retail_fill_pct'), False)} of retail demand could be filled.",
+          f"- The median retail book was {fmt_x(f(mb + '.median_retail_times'))} subscribed: at most {fmt_pct(f(mb + '.median_retail_fill_pct'), False)} of retail demand could be filled ({f(mb + '.with_retail_times')} of {f(mb + '.issues')} issues with final bids stored).",
           f"- {fmt_pct(f(mb + '.fresh_share_pct'), False)} of the money (where the split is known) was fresh capital; the rest went to selling holders.", "",
-          "The listing-day figures and the figures to date are different measures: both are on the page below.", "",
+          "The listing-day figures and the figures to date are different measures. " + horizon, "",
           f"Every issue, with bids by investor type and performance since listing: {ipos}", f.sources()]
     li_md = "\n".join(li) + "\n"
     return {"research-note.md": note_md, "x-article.md": x_md, "linkedin-post.md": li_md}
@@ -500,13 +514,18 @@ def drafts(res: dict, site: str = SITE) -> dict[str, str]:
 def chart_specs(res: dict) -> list[dict]:
     """The X article's two charts as specs (rendered by `render_charts` when matplotlib is installed)."""
     rb = res["segments"]["mainboard"]["by_retail"]
-    return [{"file": "chart-1-retail-subscription.png", "type": "grouped_bar",
-             "title": "Main board IPOs: listing day vs to date, by retail subscription", "categories": [r["label"] for r in rb],
+    mb = res["segments"]["mainboard"]["all"]
+    note = (f"Return to date: each issue from its listing day to {res['as_of']}, so holding periods differ. In brackets: issues in the group. "
+            f"Retail subscription is stored for {mb['with_retail_times']} of {mb['issues']} main-board issues.")
+    return [{"file": "chart-1-retail-subscription.png", "type": "grouped_bar", "note": note,
+             "title": f"Main board IPOs: listing day vs to date, by retail subscription (as of {res['as_of']})",
+             "categories": [f"{r['label']} ({r['issues']})" for r in rb],
              "series": [{"name": "Median listing-day close", "values": [r["median_listing_close_pct"] for r in rb], "source": "segments.mainboard.by_retail.*.median_listing_close_pct"},
                         {"name": "Median return to date", "values": [r["median_return_pct"] for r in rb], "source": "segments.mainboard.by_retail.*.median_return_pct"}],
              "y_label": "% against the issue price"},
-            {"file": "chart-2-below-issue.png", "type": "bar", "title": "Share of IPOs below their issue price now",
-             "categories": [label for seg, label in SEGMENTS],
+            {"file": "chart-2-below-issue.png", "type": "bar", "title": f"Share of IPOs below their issue price (as of {res['as_of']})",
+             "note": "In brackets: issues with a latest close. The issues listed on different days, so each has been held for a different time.",
+             "categories": [f"{label} ({res['segments'][seg]['all']['with_return']})" for seg, label in SEGMENTS],
              "series": [{"name": "Below issue price now", "values": [res["segments"][seg]["all"]["below_issue_now_pct"] for seg, _l in SEGMENTS],
                          "source": "segments.<segment>.all.below_issue_now_pct"}], "y_label": "% of issues"}]
 
@@ -539,8 +558,10 @@ def render_charts(specs: list[dict], out: Path) -> list[str]:
             ax.spines[side].set_visible(False)
         if n > 1:
             ax.legend(frameon=False, fontsize=8)
+        if s.get("note"):
+            fig.text(0.01, 0.045, s["note"], fontsize=6.5, color="#444", wrap=True)
         fig.text(0.01, 0.01, "Source: exchanges' public-issue pages and daily closes. StratLab, stratlab.studio/invest/ipos", fontsize=7, color="#666")
-        fig.tight_layout(rect=(0, 0.03, 1, 1))
+        fig.tight_layout(rect=(0, 0.09 if s.get("note") else 0.03, 1, 1))
         fig.savefig(out / s["file"])
         plt.close(fig)
         done.append(s["file"])

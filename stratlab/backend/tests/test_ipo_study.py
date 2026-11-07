@@ -4,6 +4,8 @@ import json
 import re
 from datetime import date
 
+import pytest
+
 from app import ipo_study as St
 from tests.test_ipo import ADVICE, PROVIDERS
 
@@ -120,3 +122,19 @@ def test_run_writes_the_json_the_markdown_the_drafts_and_the_charts(tmp_path):
     specs = St.chart_specs(got)
     assert [s["file"] for s in specs] == ["chart-1-retail-subscription.png", "chart-2-below-issue.png"]
     assert specs[1]["series"][0]["values"] == [100.0, 100.0]          # with no daily closes, Beta has no latest close to count
+
+
+@pytest.fixture(autouse=True)
+def few_issues(monkeypatch, request):
+    """The synthetic rows are a handful of issues: the 10-issue floor is lowered for them (its own test keeps it)."""
+    if "min_base" not in request.node.name:
+        monkeypatch.setattr(St, "MIN_BASE", 1)
+
+
+def test_min_base_a_figure_from_too_few_issues_is_not_given_and_each_says_its_count():
+    # R21 review: the SME listing-day figures (+69.8%, "100% closed above") came from 2 of 203 issues
+    items = [{"listing_close_pct": 10.0, "listing_open_pct": 8.0, "return_pct": -5.0, "below_issue": True}] * 2 + [{"return_pct": 3.0, "below_issue": False}] * 12
+    s = St.stats(items)
+    assert s["with_listing_close"] == 2 and s["median_listing_close_pct"] is None and s["closed_above_issue_pct"] is None
+    assert s["with_return"] == 14 and s["median_return_pct"] == 3.0 and s["below_issue_now"] == 2 and s["below_issue_now_pct"] == 14.3
+
