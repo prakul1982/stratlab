@@ -20,6 +20,8 @@ import { buildIdea } from "../components/IdeaComposer";
 import { mkRef } from "../lib/rules";
 import type { Cond } from "../lib/types";
 import { STAGES_EXPLAINED } from "../lib/stageNote";
+import { SaveButton, SavedList } from "../components/SavedSearches";
+import { readSaved } from "../lib/saved";
 import { unreadLine, unreadSymbols } from "../lib/filingsText";
 import { FilingRow, SummaryLine, type FilingItem, type FilingSummary } from "../components/Filings";
 import { QUADRANTS, QuadrantTag, RotationChart, useAnimate, type Quadrant, type RotationRow } from "../components/Rotation";
@@ -726,11 +728,17 @@ function AllFilings({ region, scope, pro }: { region: Region; scope: "all" | "mi
 
   if (!pro) return null;
   const noun = scope === "mine" ? "of your stocks" : "across companies";
+  // R19: the filters as the address keeps them, and a name that says what they are ("India red flags · Pledges · Last 30 days")
+  const saveParams = { region, view: scope, flag, range, frm: custom ? frmP : "", to: custom ? toP : "", q: qP.trim() };
+  const flagName = flag ? flag.split(",").map((id) => data?.types.find((t) => t.id === id)?.label ?? id).join(", ") : "All types";
+  const rangeName = custom ? `${frmP || "…"} to ${toP || "today"}` : RANGES.find((x) => x.value === range)?.label ?? `Last ${range} days`;
+  const saveName = [`${REGION_NAME[region]} red flags`, flagName, rangeName, qP.trim()].filter(Boolean).join(" · ");
   return (
     <>
       <Card>
         <CardHead title={scope === "mine" ? "Your stocks' red flags" : "Red flags across companies"}
-          info={data ? <>{data.covers}. {data.as_of ? `Read through ${asOf(data.as_of, { tz: marketTz(region) })}. ` : ""}Filings are read once a day in the evening, so today's may not be in yet.</> : undefined} />
+          info={data ? <>{data.covers}. {data.as_of ? `Read through ${asOf(data.as_of, { tz: marketTz(region) })}. ` : ""}Filings are read once a day in the evening, so today's may not be in yet.</> : undefined}
+          actions={<SaveButton kind="filings" label="Save these filters" name={saveName} params={saveParams} snap={() => readSaved({ kind: "filings", params: saveParams })} />} />
         <FieldGroup label="Type of flag" wide>
           <ChipBar label="Flag types" value={flag} onChange={(v) => setParam({ flag: v || null })}
             options={[{ value: "", label: "All types" }, ...(data?.types ?? []).map((t) => ({ value: t.id, label: `${t.label} · ${t.count}` }))]} />
@@ -797,6 +805,7 @@ export function FilingsPage() {
         <Seg label="Which companies" value={view} onChange={pickView} options={SCOPE_OPTIONS} />
       </div>
       {!pro && me && <PlanNote>Red flags for your whole watchlist, with an evening alert, and the latest red flags across every company are on the Basic plan. Each company's own page shows its red flags on every plan.</PlanNote>}
+      {pro && <SavedList kind="filings" id="saved-filings" title="Your saved filters" />}
       {view === "mine" && region === "IN" ? <WatchlistFilings pro={pro} /> : <AllFilings region={region} scope={view} pro={pro} />}
       <p className="k-note inv-text">
         {region === "IN"

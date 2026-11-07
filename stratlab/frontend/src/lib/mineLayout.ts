@@ -7,6 +7,7 @@ export const CARDS = [
   { id: "markets", label: "Markets" },
   { id: "coming", label: "Coming up" },
   { id: "watch", label: "Your watchlist today" },
+  { id: "saved", label: "Saved searches and reads" },
 ] as const;
 export type CardId = (typeof CARDS)[number]["id"];
 export interface Layout { order: CardId[]; hidden: CardId[] }
@@ -23,7 +24,7 @@ export function cleanLayout(raw: unknown): Layout {
 }
 
 /** How wide each card would like to be on a wide screen, out of 12 columns. */
-const WANT: Record<CardId, number> = { networth: 4, pnl: 4, paper: 4, markets: 12, coming: 7, watch: 5 };
+const WANT: Record<CardId, number> = { networth: 4, pnl: 4, paper: 4, markets: 12, coming: 7, watch: 5, saved: 12 };
 
 /** Each shown card's width (of 12) on a wide screen, from its place in the person's order: cards go into rows in that order,
  * and a row a card no longer fits in is closed and its cards widened to fill it. The grid used to fill gaps by itself and

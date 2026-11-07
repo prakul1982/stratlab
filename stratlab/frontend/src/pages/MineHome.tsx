@@ -23,6 +23,8 @@ import { FirstSteps } from "../components/FirstSteps";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { PlanInline } from "../components/PlanInterest";
 import { notRunning } from "../lib/tradeUi";
+import { SavedList } from "../components/SavedSearches";
+import { useSaved } from "../lib/saved";
 
 
 /* /mine: "My space", the person's own home. Every figure is read from what the app already has (net worth, holdings, paper
@@ -58,7 +60,7 @@ export function MineHome() {
   const upAll = useComingUpAll(later);
   const coming = upAll ? upAll.slice(0, 6) : null;
   const first = firstName(session?.user?.user_metadata as Record<string, unknown> | undefined);
-  const shown = layout.order.filter((id) => !layout.hidden.includes(id));
+  let shown = layout.order.filter((id) => !layout.hidden.includes(id));
 
   const now = useMinute();
   // one line: when the market opens or closes. The next dates are the first rows of "Coming up" right below, so they are not said twice
@@ -78,6 +80,7 @@ export function MineHome() {
   const change = (next: Layout) => { setRaw(next); void savePrefs({ mine: next }, true); };
   const cardFor = (id: CardId) => ({
     networth: <NetWorthCard />, pnl: <PnlCard />, paper: <PaperCard />, markets: <MarketsCard later={later} />, coming: <ComingCard rows={comingShown} more={upAll ? upAll.length - (comingShown?.length ?? 0) : 0} />, watch: <WatchCard />,
+    saved: <SavedList id="mine-saved" title="Saved searches and reads" />,
   })[id];
   // each card's width from its place in the chosen order, so the grid keeps that order with no gaps (DI-005)
   // VR6-010: an empty watchlist is one short message: it takes its own row (Coming up widens to fill the one before), instead of standing
@@ -86,6 +89,9 @@ export function MineHome() {
   // beside a watchlist of one to three stocks, "Coming up" is a few rows shorter than its six, so the pair ends near level instead of one at half
   // the other's height with a block of nothing under it (LIVE1C-091); the rest are one tap away in the calendar ("+N more")
   const comingShown = coming && watchItems && watchItems.length > 0 && watchItems.length <= 3 ? coming.slice(0, Math.max(3, watchItems.length + 2)) : coming;
+  // R19: the saved searches and reads take their place only once there is one (no empty card for everyone else)
+  const { items: savedItems } = useSaved();
+  if (!savedItems?.length) shown = shown.filter((id) => id !== "saved");
   const spans = slotSpans(shown, watchItems !== null && watchItems.length === 0 ? ["watch"] : []);
 
   return (

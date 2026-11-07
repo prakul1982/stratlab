@@ -60,7 +60,7 @@ test("search finds a page by its everyday words", () => {
 test("a saved My space layout is made safe", () => {
   const l = cleanLayout({ order: ["coming", "nope", "coming", "markets"], hidden: ["paper", "x"] });
   assert.deepEqual(l.order.slice(0, 2), ["coming", "markets"]);
-  assert.equal(l.order.length, 6);
+  assert.equal(l.order.length, 7);          // R19: the saved searches and reads card is the seventh (shown once something is saved)
   assert.deepEqual(l.hidden, ["paper"]);
-  assert.equal(cleanLayout(null).order.length, 6);
+  assert.equal(cleanLayout(null).order.length, 7);
 });

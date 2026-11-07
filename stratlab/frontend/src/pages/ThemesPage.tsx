@@ -7,6 +7,8 @@ import { THEME_IDEAS, researchApi, useRegion, type SectorAI } from "../lib/resea
 import { themeApi, type Business, type Dive, type Listing, type NewsRow, type Prices } from "../lib/theme";
 import { RegionSwitch } from "../components/Research";
 import { ChainCard, ClaimsCard, LayerCard, ListingsCard, MembersCard, NewsCard, NumbersCards, SubThemesCard, ThemeDownloads } from "../components/ThemeDive";
+import { SaveButton, SavedList } from "../components/SavedSearches";
+import { themeReady, themeSnap } from "../lib/savedSnap";
 import { Card, CardHead, DataTable, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PageNav, Skeleton, Working } from "../components/kit";
 
 /* ================= Themes: a theme deep dive =================
@@ -130,13 +132,16 @@ export function ThemesPage() {
           </FormActions>
         </FormGrid>
       </Card>
+      {/* R19: the themes the person saved, each with when it was last read, Open, Update (what changed since), Rename and Remove */}
+      <SavedList kind="theme" id="saved-themes" title="Your saved themes" />
       {error && <ErrorState title="The theme couldn't be mapped" action={{ label: "Try again", onClick: () => run(q, { refresh: true }) }}>{error}</ErrorState>}
       {busy && !r && <Card><Skeleton label={`Mapping "${q}"`} lines={4} /></Card>}
       {r && (
         <>
           <Card>
             <CardHead title={r.sector} actions={<>{r.generated_at > 0 && <span className="k-note">Written {writtenAt(r.generated_at, marketTz(region))}</span>}
-              <button className="btn quiet sm" disabled={busy} onClick={() => run(q, { refresh: true })}>{busy ? "Mapping…" : "Refresh"}</button></>} />
+              <button className="btn quiet sm" disabled={busy} onClick={() => run(q, { refresh: true })}>{busy ? "Mapping…" : "Refresh"}</button>
+              <SaveButton kind="theme" label="Save theme" name={r.sector || q} params={{ q, region }} snap={() => (themeReady(r) ? themeSnap(r) : null)} /></>} />
             {r.summary && <p className="k-lede">{r.summary}</p>}
             {r.core && <p className="k-small">Everything converges on <b>{r.core}</b>.</p>}
             <ThemeDownloads r={r} dive={dive} region={region} theme={q} />
