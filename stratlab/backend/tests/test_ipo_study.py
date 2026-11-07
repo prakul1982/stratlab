@@ -138,3 +138,12 @@ def test_min_base_a_figure_from_too_few_issues_is_not_given_and_each_says_its_co
     assert s["with_listing_close"] == 2 and s["median_listing_close_pct"] is None and s["closed_above_issue_pct"] is None
     assert s["with_return"] == 14 and s["median_return_pct"] == 3.0 and s["below_issue_now"] == 2 and s["below_issue_now_pct"] == 14.3
 
+
+
+def test_an_issue_that_may_carry_an_unadjusted_split_is_out_of_every_figure_after_listing_alike():
+    # data review: 18 SME issues were out of the best/worst range but in the median (-0.2% with them, +6.3% without)
+    ok = [{"return_pct": float(r), "below_issue": r < 0, "vs_nifty50_pct": float(r), "listing": "2026-01-02"} for r in (5, 6, 7)]
+    odd = [{"return_pct": -80.0, "below_issue": True, "vs_nifty50_pct": -80.0, "check_split": True, "listing": "2025-05-05"}] * 2
+    s = St.stats(ok + odd)
+    assert s["split_left_out"] == 2 and s["with_return"] == 3 and s["median_return_pct"] == 6.0 and s["below_issue_now"] == 0
+    assert s["with_vs_nifty50"] == 3 and s["median_vs_nifty50_pct"] == 6.0 and s["vs_nifty50_from"] == s["vs_nifty50_to"] == "2026-01-02"
