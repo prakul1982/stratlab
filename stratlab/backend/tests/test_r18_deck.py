@@ -25,8 +25,8 @@ def deck_of(region, m, f, theme=None, **kw):
 
 
 def core(slides):
-    """The slides before the appendix."""
-    at = next(i for i, s in enumerate(slides) if s.kind == "section" and s.title == "Appendix")
+    """The slides before the appendix (R19: the appendix is the one table of every company's figures, no divider)."""
+    at = next((i for i, s in enumerate(slides) if s.eyebrow and s.eyebrow.endswith("· Appendix")), len(slides))
     return slides[:at]
 
 
@@ -164,10 +164,12 @@ def test_layers_are_one_scheme_the_maps_own_with_the_rest_in_the_appendix():
     layer_titles = [s.title for s in core(slides) if re.match(r"Layer \d+ ·", s.title)]
     assert layer_titles == ["Layer 1 · Deposit gathering", "Layer 2 · Retail and SME lending"]
     assert "Private Sector Bank" not in [r[0] for r in table_of(slides, "The value chain by layer")["rows"]]
-    rest = table_of(slides, "In the theme, not placed in a layer")
-    assert {r[0] for r in plain(rest["rows"])} == {f"Private Lender {i} Ltd" for i in range(4, 8)}
     t = texts(slides)
-    assert "4 more companies of the theme's industries the map doesn't place in a layer: appendix, p." in t
+    # R19: the unplaced companies are a count and their names (up to five), and rows of the appendix's one table; no list page of their own
+    assert ("4 more companies of the theme's industries the map doesn't place in a layer: Private Lender 4 Ltd, Private Lender 5 Ltd, "
+            "Private Lender 6 Ltd, Private Lender 7 Ltd; in every median and total, and in the appendix.") in t
+    figs = [r for s in slides if s.title.startswith("Every company's figures") for b in s.blocks if b["kind"] == "table" for r in b["rows"]]
+    assert {r[0] for r in figs} >= {f"Private Lender {i} Ltd" for i in range(4, 8)}
     assert "No listed company is shown for Fee and distribution income:" in t and "shown for , " not in t      # never an empty name in a list
 
 
@@ -205,7 +207,7 @@ def test_the_deck_says_one_count_of_companies_not_confirmed_and_no_line_that_con
     assert "8 confirmed, 0 not yet" in t
     region, m, f = us_list_theme()
     v, slides = deck_of(region, m, f)
-    how = next(it for b in slides[1].blocks if b["kind"] == "cards" for it in b["items"])["lines"]
+    how = next(it for s in slides if s.title == "How to read this deck" for b in s.blocks if b["kind"] == "cards" for it in b["items"])["lines"]
     assert how[0].startswith("No official industry is this theme's core on its own; its companies are the theme's own named list.")
     assert not any("The base is every listed company" in x for x in how)
     v["checks"]["one_off"] = [{"symbol": "SEC0", "name": "Secure 0 Inc", "net": 30.0, "ebitda": 25.0}]
@@ -251,15 +253,15 @@ def test_each_layer_is_one_page_and_the_full_table_is_in_the_appendix_with_its_p
     conv = [s for s in c if s.title.startswith("Layer 2 · Converters")]
     assert len(conv) == 1 and conv[0].title == "Layer 2 · Converters"
     note = next(p for b in conv[0].blocks if b["kind"] == "text" for p in b["paras"] if p.startswith("The largest"))
-    full = [i for i, s in enumerate(slides, 1) if s.title.startswith("Layer 2 · Converters, all companies")]
+    full = [i for i, s in enumerate(slides, 1) if s.title.startswith("Every company's figures")]          # R19: the appendix's one table
     assert full and note.endswith(f"appendix, p. {full[0]}.") and full[0] > len(c)
-    rows = [r[0] for s in slides if s.title.startswith("Layer 2 · Converters, all companies") for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])]
+    rows = [r[0] for s in slides if s.title.startswith("Every company's figures") for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])]
     assert len([r for r in rows if r.startswith("Converter")]) == 14
     assert not any(s.title.startswith("Every company's figures") for s in c)            # per-company tables are out of the core
     assert not any(s.kind == "section" for s in c)                                      # one contents page instead of a divider a part
     contents = table_of(slides, "Contents")
     pages = {r[0]: int(r[2]) for r in contents["rows"]}
-    assert slides[pages["The value chain"] - 1].title == "The value chain by layer" and slides[pages["Appendix"] - 1].title == "Appendix"
+    assert slides[pages["The value chain"] - 1].title == "The value chain by layer" and slides[pages["Appendix"] - 1].title.startswith("Every company's figures")
 
 
 def test_page_counts_of_the_synthetic_themes_stay_short():
