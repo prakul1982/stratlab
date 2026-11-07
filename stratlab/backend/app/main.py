@@ -115,6 +115,7 @@ from . import closing_auction
 from . import replay_routes, signals_routes
 from . import market_events_routes
 from . import ipo
+from . import ipo_history
 from . import mcp_server
 from . import mtf, slb, stock_desks, stock_futures     # the per-stock market desks: futures, lending, margin funding
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, OptGreeksReq, OptRollReq, HoldingsImportReq, HoldingsReq)
@@ -498,6 +499,7 @@ app.include_router(vix.router)                 # /trade/vix
 app.include_router(biz_updates.router)         # /research/business-updates, /invest/business-updates
 app.include_router(shareholders.router)        # /research/holders, /invest/holders
 app.include_router(ipo.router)                 # /invest/ipos
+app.include_router(ipo_history.router)         # /admin/ipos/history
 app.include_router(redflags_routes.router)     # /research/redflags, /research/holders-us
 app.include_router(stock_futures.router)       # /trade/stock-futures
 app.include_router(slb.router)                 # /invest/stock-lending
