@@ -278,7 +278,7 @@ def test_a_lender_theme_keeps_the_maps_layers_when_the_check_empties_them():
     region, m, f, _, _ = bank_theme()
     v, slides = deck_of(region, m, f)
     assert [s.title for s in slides if s.title.startswith("Layer ")] == ["Layer 1 · Deposit gathering", "Layer 2 · Retail and SME lending",
-                                                                          "Layer 3 · Other private banks companies"]          # R21
+                                                                          "Layer 3 · Other private bank companies"]          # R21; R22: "bank", as an adjective reads
 
 
 def test_a_map_layer_without_a_name_is_never_drawn():
@@ -351,8 +351,8 @@ def test_with_figures_means_key_figures_and_the_valuation_says_whose_pe_it_is():
     assert "Sparse 2 Ltd, Sparse 3 Ltd" in note
     v, slides = deck_of(*us_map_theme())
     val = table_of(slides, "Valuation")
-    assert val["rows"][0][0] == "P/E, the 10 profitable companies (77% of 13; 3 loss-makers with none)"
-    assert "P/E of the 10 profitable companies, 3 loss-makers with none" in next(s.subtitle for s in slides if s.title == "Valuation")
+    assert val["rows"][0][0] == "P/E, the 10 companies with one (77% of 13; 3 loss-makers with none)"           # R22: of the population stated
+    assert "P/E of 10 of the 13 companies, 3 loss-makers with none" in next(s.subtitle for s in slides if s.title == "Valuation")
 
 
 def test_deposit_growth_comes_from_the_reported_balance_sheet_and_only_where_it_is():

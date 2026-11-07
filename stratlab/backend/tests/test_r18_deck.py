@@ -166,7 +166,7 @@ def test_layers_are_one_scheme_the_maps_own_with_the_rest_in_the_appendix():
     v, slides = deck_of(region, m, f)
     layer_titles = [s.title for s in core(slides) if re.match(r"Layer \d+ ·", s.title)]
     # changed on purpose (R21): the two companies no layer fits are one "Other ..." layer, never the exchange's industry beside the map's
-    assert layer_titles == ["Layer 1 · Deposit gathering", "Layer 2 · Retail and SME lending", "Layer 3 · Other private banks companies"]
+    assert layer_titles == ["Layer 1 · Deposit gathering", "Layer 2 · Retail and SME lending", "Layer 3 · Other private bank companies"]
     assert "Private Sector Bank" not in [r[0] for r in table_of(slides, "The value chain by layer")["rows"]]
     t = texts(slides)
     # R19: the unplaced companies are a count and their names (up to five), and rows of the appendix's one table; no list page of their own

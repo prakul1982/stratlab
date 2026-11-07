@@ -29,6 +29,7 @@ _YEAR = re.compile(r"^([A-Za-z]{3})\s+(\d{4})$")
 NOTABLE_GAP = 10.0            # points between the highest and lowest layer median EBITDA margin that make a post worth drafting
 NOTABLE_MOVE = 5.0            # points a layer's EBITDA margin moved over three years
 MIN_BASE = 3                  # companies a median needs to be shown as one, and a layer to be called highest or lowest (R20: no finding on a base under 3)
+FEW_BASE = 4                  # a highest or lowest median on this many companies or fewer says its count
 MIN_LAYER = 2                 # companies a layer needs for its median to be called a layer's figure (a post, the chain's highest and lowest)
 ROUNDING = 1.0                # points: EBITDA margins are filed in whole points, so two medians this close may be the same figure rounded
 FINANCIAL_KEYS = ("ebitda", "roce", "debt_equity")
@@ -120,6 +121,34 @@ def growth_between(years: list[dict], key: str, back: int) -> float | None:
     return ((new / old) ** (1 / back) - 1) * 100
 
 
+THEME_CURRENCY = {"US": ("USD", "$ million"), "IN": ("INR", "₹ crore")}
+_UNIT_CUR = re.compile(r"^([A-Z]{3}) million$")
+_RATE_A = re.compile(r"1 ([A-Z]{3}) = ([\d.,]+) USD")
+_RATE_B = re.compile(r"1 USD = ([\d.,]+) ([A-Z]{3})")
+
+
+def report_fx(f: dict, region: str) -> tuple[str, float | None, str | None]:
+    """(the currency a company reports in, the theme's currency for one unit of it, the rate's day) (R22: TSMC's NT$ revenue shown as US
+    dollars, $3,809 bn). From the page's own record of it (report_currency and fx, or its unit "TWD million" and its currency note's rate);
+    1.0 for the theme's own currency, None when no rate is known."""
+    home, _ = THEME_CURRENCY.get(region, ("USD", "$ million"))
+    m = _UNIT_CUR.match(str(f.get("unit") or ""))
+    cur = str(f.get("report_currency") or (m.group(1) if m else "") or home).upper()
+    if cur == home:
+        return home, 1.0, None
+    fx = f.get("fx") if isinstance(f.get("fx"), dict) else {}
+    rate, at = num(fx.get("rate")), fx.get("at")
+    note = str(f.get("currency_note") or "")
+    if not rate and (a := _RATE_A.search(note)) and a.group(1) == cur:
+        rate = num(a.group(2).replace(",", ""))
+    if not rate and (b := _RATE_B.search(note)) and b.group(2) == cur:
+        back = num(b.group(1).replace(",", ""))
+        rate = 1 / back if back else None
+    if home != "USD":                      # the app keeps dollar rates only: a company reporting in another currency in an Indian theme has none
+        return cur, None, None
+    return cur, rate, (str(at)[:10] if at else (str(f.get("built_at") or "")[:10] or None))
+
+
 def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
     """One company's line, from its stored page facts; None when the page holds nothing to show."""
     if not isinstance(f, dict) or not f or f.get("not_company"):
@@ -132,12 +161,19 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
     last = years[-1] if years and not old else None
     profile = profile_of(f)
     lender = profile != "other"
-    sales = num(last.get("sales")) if last else None
-    profit = num(last.get("profit")) if last else None
+    # every money figure in the theme's one currency (R22): a company reporting in another is converted at the rate its page states; with no
+    # rate its money figures are left out (margins, growth and returns don't depend on the currency and stay)
+    cur, k, fx_at = report_fx(f, region)
+    money = (lambda v: None if v is None or k is None else v * k)      # noqa: E731
+    sales = money(num(last.get("sales"))) if last else None
+    profit = money(num(last.get("profit"))) if last else None
     net = (profit / sales * 100) if sales and sales > 0 and profit is not None else None
     ebitda = num(last.get("opm")) if last and not lender else None
-    cfo = num(last.get("cfo")) if last else None
-    cap, debt, cash = base.get("market_cap"), num(f.get("debt")), num(f.get("cash"))
+    cfo = money(num(last.get("cfo"))) if last else None
+    if k is None and last:                 # no rate: its margin from its own figures, its money figures out
+        s_, p_ = num(last.get("sales")), num(last.get("profit"))
+        net = (p_ / s_ * 100) if s_ and s_ > 0 and p_ is not None else None
+    cap, debt, cash = base.get("market_cap"), money(num(f.get("debt"))), money(num(f.get("cash")))
     ebitda_amt = sales * ebitda / 100 if sales and ebitda is not None and sales > 0 else None
     # enterprise value over EBITDA: market value plus debt less cash, over the year's EBITDA; n/a where any of the four is missing, or EBITDA isn't positive
     ev = (cap + debt - cash) / ebitda_amt if None not in (cap, debt, cash) and ebitda_amt and ebitda_amt > 0 and not wild and not lender else None
@@ -146,7 +182,9 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
     shown_e = None if wild or ebitda is None or abs(ebitda) > stock_pages.EXTREME else r1(ebitda)
     shown_n = None if wild or net is None or abs(net) > stock_pages.EXTREME else r1(net)
     return {
-        "symbol": symbol, "name": base["name"], "year": last["year"] if last else None, "unit": f.get("unit"), "bank": lender, "profile": profile,
+        "symbol": symbol, "name": base["name"], "year": last["year"] if last else None, "bank": lender, "profile": profile,
+        "unit": THEME_CURRENCY.get(region, ("", f.get("unit")))[1] if cur != THEME_CURRENCY.get(region, ("USD",))[0] else f.get("unit"),
+        "currency": cur, "fx": {"rate": k, "at": fx_at} if cur != THEME_CURRENCY.get(region, ("USD",))[0] else None,
         "revenue": sales if sales and sales > 0 else None, "profit": profit,
         "ebitda": shown_e, "net": shown_n,
         # net margin above the EBITDA margin: profit beyond what the business earned before depreciation, interest and tax, so a one-off
@@ -171,7 +209,8 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
         "stage": base.get("stage"), "from_high": base.get("from_high"), "price": num(f.get("price")), "price_at": base.get("price_at"),
         "high52": num(f.get("high52")), "low52": num(f.get("low52")), "st_up": f.get("st_up"),
         "red_flags": base.get("red_flags"), "basis": f.get("basis"), "industry": f.get("industry") or [],
-        "years": [{"year": y["year"], "sales": num(y.get("sales")), "profit": num(y.get("profit")), "opm": None if lender else num(y.get("opm"))} for y in years],
+        "years": [{"year": y["year"], "sales": money(num(y.get("sales"))), "profit": money(num(y.get("profit"))), "opm": None if lender else num(y.get("opm"))}
+                  for y in years],
     }
 
 
@@ -257,14 +296,15 @@ def chain_table(blocks: list[dict]) -> dict:
     for b in blocks:
         e, n, c = (b["stats"].get(k) for k in ("ebitda", "net", "roce"))
         rows.append({"layer": b["layer"], "n": b["n"], "revenue": b["revenue"], "ebitda": e["median"] if e else None, "net": n["median"] if n else None,
-                     "roce": c["median"] if c else None, "ebitda_n": e["n"] if e else 0, "official": bool(b.get("official")),
+                     "roce": c["median"] if c else None, "ebitda_n": e["n"] if e else 0, "official": bool(b.get("official")), "rest": b.get("basis") == "rest",
                      **{k: (b["stats"].get(k) or {}).get("median") for k in LENDER_KEYS}, "roe_n": (b["stats"].get("roe") or {}).get("n", 0),
                      **{f"{k}_n": (b["stats"].get(k) or {}).get("n", 0) for k in STAT_KEYS if k not in ("ebitda", "roe")}})
     # only the map's own layers (an official industry's leftover companies overlap them: "Vehicle assembly" and "Commercial Vehicles"), each
     # with MIN_BASE companies in its median, and only a gap wider than the rounding of whole-point margins, name a highest and a lowest
+    # the "Other ..." group (companies that fit none of the map's layers) is never compared (R22)
     have = [r for r in rows if r["ebitda"] is not None and r["ebitda_n"] >= MIN_BASE and not r["official"]]
     if len(have) < 2:          # a map whose layers are the official industries themselves: they are its layers (R17-011)
-        have = [r for r in rows if r["ebitda"] is not None and r["ebitda_n"] >= MIN_BASE]
+        have = [r for r in rows if r["ebitda"] is not None and r["ebitda_n"] >= MIN_BASE and not r["rest"]]
     line, hi, lo = None, None, None
     if len(have) >= 2:
         hi, lo = max(have, key=lambda r: r["ebitda"]), min(have, key=lambda r: r["ebitda"])
@@ -275,14 +315,15 @@ def chain_table(blocks: list[dict]) -> dict:
                     "points of each other, the rounding of whole points.")
         else:
             whole = whole_points([c for b in blocks for c in b["companies"]])
-            line = (f"Median EBITDA margin is highest in {hi['layer']} ({pts(hi['ebitda'], whole)}) and lowest in {lo['layer']} ({pts(lo['ebitda'], whole)}), "
+            line = (f"Median EBITDA margin is highest in {hi['layer']} ({pts(hi['ebitda'], whole)}{few(hi['ebitda_n'])}) and lowest in {lo['layer']} "
+                    f"({pts(lo['ebitda'], whole)}{few(lo['ebitda_n'])}), "
                     f"a gap of {f1(hi['ebitda'] - lo['ebitda'])} points.")
     measure = "ebitda"
     if len(have) < 2:
         # lenders have no EBITDA margin: their layers are set side by side on return on equity (R18)
         lend = [r for r in rows if r["roe"] is not None and r["roe_n"] >= MIN_BASE and not r["official"]]
         if len(lend) < 2:
-            lend = [r for r in rows if r["roe"] is not None and r["roe_n"] >= MIN_BASE]
+            lend = [r for r in rows if r["roe"] is not None and r["roe_n"] >= MIN_BASE and not r["rest"]]
         if len(lend) >= 2:
             measure, have = "roe", lend
             hi, lo = max(lend, key=lambda r: r["roe"]), min(lend, key=lambda r: r["roe"])
@@ -290,12 +331,20 @@ def chain_table(blocks: list[dict]) -> dict:
                 hi = lo = None
                 line = f"The median return on equity of the {len(lend)} layers with at least {MIN_BASE} companies is the same."
             else:
-                line = (f"Median return on equity is highest in {hi['layer']} ({pts(hi['roe'], True)}) and lowest in {lo['layer']} ({pts(lo['roe'], True)}), "
+                line = (f"Median return on equity is highest in {hi['layer']} ({pts(hi['roe'], True)}{few(hi['roe_n'])}) and lowest in {lo['layer']} "
+                        f"({pts(lo['roe'], True)}{few(lo['roe_n'])}), "
                         f"a gap of {f1(hi['roe'] - lo['roe'])} points.").replace(".0 points", " points")
         else:
             line = None             # nothing to set side by side: no line at all (R18: the deck said it couldn't be done)
+    if line and hi and any(r["rest"] for r in rows):
+        line = line.rstrip(".") + "; among the map's layers, the \"Other\" group left out."
     return {"rows": rows, "line": line, "highest": hi["layer"] if hi else None, "lowest": lo["layer"] if lo else None, "measure": measure,
             "compared": [r["layer"] for r in have], "gap": round(hi[measure] - lo[measure], 1) if hi else None}
+
+
+def few(n: int) -> str:
+    """", 3 companies" after a layer's median when it rests on FEW_BASE companies or fewer (R22: a 50% median of 3 called highest)."""
+    return f", {n} companies" if n and n <= FEW_BASE else ""
 
 
 def layer_history(rows: list[dict]) -> dict | None:
@@ -461,7 +510,8 @@ def valuation_section(rows: list[dict], market: list[dict]) -> dict:
     ev = stat(r["ev_ebitda"] for r in rows)
     losses = sum(1 for r in rows if r.get("profit") is not None and r["profit"] <= 0)
     return {"pe": pe, "market_pe": mkt, "market_n": mkt["n"] if mkt else 0, "pb": pb, "market_pb": mpb, "ev_ebitda": ev,
-            "ev_missing": sum(1 for r in rows if r.get("ev_ebitda") is None and not r.get("bank")), "losses": losses, "peers": peers_section(rows, market)}
+            "ev_missing": sum(1 for r in rows if r.get("ev_ebitda") is None and not r.get("bank")), "losses": losses, "peers": peers_section(rows, market),
+            "n": len(rows)}                 # the population every count here is of (R22: 11 with a P/E and 6 loss-makers of 15)
 
 
 def balance_section(rows: list[dict]) -> dict:
@@ -778,7 +828,8 @@ def membership(c: dict, words: set[str]) -> str:
         # own words that say nothing of the work ("The Company was established in 1981", "flagship company of the group"), or that describe
         # a business without the theme's words but no other kind of work ("motorcycle manufacturers"): nothing contradicts the exchange's
         # classification, so it stands (R17-012, R18)
-        if not BUSINESS.search(c.get("what") or "") or not other_work(c.get("what") or "", words):
+        if not BUSINESS.search(c.get("what") or "") or not other_work(c.get("what") or "", words) or c.get("fit"):
+            # (a company the placement found a layer for, from its own words, is the theme's: R22, a CRO in a pharma theme)
             return "core"
         return "unverified"
     return "exposure" if c.get("verified") else "unverified"
@@ -883,7 +934,8 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
                 r[k] = None
     listed = sorted(rows.values(), key=lambda r: -(r.get("cap") or 0))
     syms = [r["symbol"] for r in listed]
-    members = [r for r in listed if r.get("status") != "unverified"]          # every total and median: the confirmed companies only
+    # every total and median: the confirmed companies with their key figures (R22: one population, so no count is larger than the one stated)
+    members = [r for r in listed if r.get("status") != "unverified" and has_figures(r)]
     own = [r for r in members if r["symbol"] not in wide] or members
     val = valuation_section(members, market)
     point = {"d": src.today.isoformat(), "pe": val["pe"]["median"] if val["pe"] else None, "n": len(members)}
@@ -996,6 +1048,9 @@ def data_checks(rows: list[dict], blocks: list[dict], dive: dict) -> dict:
         "earlier_quarter": q.get("earlier") or [], "quarter": q.get("quarter"),
         "n": {k: (meds.get(k) or {}).get("n", 0) for k in ("ebitda", "net", "roce", "roe")},
         "lenders": sum(1 for r in rows if r.get("bank") and r.get("status") != "unverified"),
+        # companies reporting in another currency (R22): converted at the stated rate, or left out of money totals when there is none
+        "currency": [{"symbol": r["symbol"], "name": r["name"], "currency": r["currency"], "rate": (r.get("fx") or {}).get("rate"), "at": (r.get("fx") or {}).get("at")}
+                     for r in rows if r.get("fx")],
         "whole_points": sum(1 for r in rows if r.get("ebitda_dp") == 0), "with_ebitda": sum(1 for r in rows if r.get("ebitda") is not None),
     }
 

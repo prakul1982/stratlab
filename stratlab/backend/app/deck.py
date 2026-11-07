@@ -1731,6 +1731,16 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> li
     if old:
         rows.append(["Old operating figures", f"{_n(len(old), 'figure')} for a period that ended months ago: " + ", ".join(f"{r['name']} ({_period(r.get('period'), r.get('span') or 'month')})" for r in old[:4]) + ".",
                      "Marked (old) in red."])
+    fxs = ch.get("currency") or []
+    if fxs:                        # R22: every money figure in one currency, the rates said
+        done = [x for x in fxs if x.get("rate")]
+        none = [x for x in fxs if not x.get("rate")]
+        home = "US dollars" if v.get("region") == "US" else "rupees"
+        said = "; ".join(f"{x['name']} reports in {x['currency']}, converted at {fx_words(x['currency'], x['rate'], v.get('region'))}"
+                         + (f" (rate of {_day(x['at'])})" if x.get("at") else "") for x in done[:4]) + (f"; and {len(done) - 4} more" if len(done) > 4 else "")
+        rows.append(["Currency", (said + "." if done else "") + (f" No rate for {names5(none)}: their revenue and other money figures are left out." if none else ""),
+                     f"Every money figure in {home}; the app keeps today's rate, not each period's, so a year's figures use it too. Margins, growth and returns "
+                     "don't depend on the currency."])
     if ch.get("with_ebitda") and ch.get("whole_points") == ch.get("with_ebitda"):
         rows.append(["Precision", "EBITDA margins are filed in whole points.", "Printed as whole points; a gap of a point or less between medians is not called a difference."])
     n = ch.get("n") or {}
@@ -1807,8 +1817,8 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
     if (peers.get("pe") or {}).get("premium") is not None:
         lines.append(pe_peer_line(peers["pe"]) + ".")
     for key, label, f in (("sales_3y", "Revenue growth, 3 years a year", _chg), ("roce", "ROCE", _pc)):
-        if peers.get(key):
-            lines.append(f"{label}: {f(peers[key]['theme'])} against {f(peers[key]['peers'])}.")
+        if peers.get(key):        # the population said (R22: a ROCE of the companies with peers beside the theme's own median read as one figure)
+            lines.append(f"{label}, the {peers[key]['n']} with such peers: {f(peers[key]['theme'])} against {f(peers[key]['peers'])}.")
     if not lines:
         lines = ["Too few listed companies of similar market value have the figures to compare."]
     cards.append({"title": "Price beside growth and returns", "lines": lines, "note": "⟦Valuation⟧"})
@@ -1888,7 +1898,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 21                  # part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 22                  # part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -2018,6 +2028,12 @@ def quarter_words(q: dict) -> str:
     if profit.get("n", 0) >= MIN_BASE:
         out += f", net profit {_chg(profit['median'])} ({_n(profit['n'], 'company', 'companies')})"
     return out
+
+
+def fx_words(cur: str, rate: float, region: str | None = None) -> str:
+    """A rate as people read it: "1 USD = 31.25 TWD" for a currency worth less than a dollar, else "1 EUR = 1.0800 USD"."""
+    home = "USD" if region != "IN" else "INR"
+    return f"1 {cur} = {rate:.4f} {home}" if rate >= 0.5 else f"1 {home} = {1 / rate:,.2f} {cur}"
 
 
 def names5(cos: list) -> str:
@@ -2603,7 +2619,7 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
         pe = [c["pe"] for c in cos if c.get("pe") and c["pe"] > 0]
         # a median of fewer than MIN_BASE companies is no median here (R20): no value, its count kept for the cell
         med = lambda k: (st.get(k) or {}).get("median") if ((st.get(k) or {}).get("n") or 0) >= MIN_BASE else None      # noqa: E731
-        lay.append({"layer": x["layer"], "n": len(cos), "ebitda": med("ebitda"), "roce": med("roce"),
+        lay.append({"layer": x["layer"], "n": len(cos), "rest": x.get("basis") == "rest", "ebitda": med("ebitda"), "roce": med("roce"),
                     "growth": _m(g) if len(g) >= MIN_BASE else None, "growth_n": len(g), "pe": _m(pe) if len(pe) >= MIN_BASE else None, "pe_n": len(pe),
                     **{k: med(k) for k in ("net", "roe", "nii_assets", "gnpa", "pb")}, **{f"{k}_n": (st.get(k) or {}).get("n") or 0 for k in STATS_SHOWN}})
     lay = [x for x in lay if x["n"]]
@@ -2632,14 +2648,16 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
         chart = 2 <= len(both) <= 10
         tw = 7.6 if chart else CW
         rk, rname = ("roe", "ROE") if lender else ("roce", "ROCE")
-        best_r = max((x for x in lay if x[rk] is not None), key=lambda x: x[rk], default=None)
-        fast = max((x for x in lay if x["growth"] is not None), key=lambda x: x["growth"], default=None)
+        cmp_ = [x for x in lay if not x.get("rest")]            # the "Other" group is never called highest or fastest (R22)
+        best_r = max((x for x in cmp_ if x[rk] is not None), key=lambda x: x[rk], default=None)
+        fast = max((x for x in cmp_ if x["growth"] is not None), key=lambda x: x["growth"], default=None)
         bits = []
         if best_r and len(lay) > 1:
             bits.append(f"highest median {rname} in {best_r['layer']} ({_pc(best_r[rk])})")
         if fast and len(lay) > 1:
             bits.append(f"fastest median revenue growth in {fast['layer']} ({_chg(fast['growth'])})")
-        msg = ("Medians by layer: " + "; ".join(bits)) if bits else f"{_n(len(lay), 'layer')}: its median company's margins, returns, growth and P/E"
+        msg = ("Medians by layer: " + "; ".join(bits) + ("; the \"Other\" group left out" if len(cmp_) < len(lay) else "")) if bits else \
+            f"{_n(len(lay), 'layer')}: its median company's margins, returns, growth and P/E"
         note = ("Medians of each layer's confirmed companies (whole-company figures left out where the layer has its own); growth and P/E show their "
                 "count in brackets. EBITDA margin and ROCE: the latest full year; P/E: the last four quarters.")
         nh = note_h(note)
@@ -2899,7 +2917,8 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
         pp = peers.get("pe") or {}
         # who the P/E is of (R20): the profitable companies, with how many loss-makers have none and the profitable share
         pe_n, losses = (val.get("pe") or {}).get("n", 0), val.get("losses") or 0
-        pe_label = (f"P/E, the {pe_n} profitable companies ({round(pe_n / (pe_n + losses) * 100)}% of {pe_n + losses}; {_n(losses, 'loss-maker')} with none)"
+        pop = val.get("n") or (pe_n + losses)
+        pe_label = (f"P/E, the {pe_n} companies with one ({round(pe_n / pop * 100)}% of {pop}; {_n(losses, 'loss-maker')} with none)"
                     if losses and pe_n else "P/E (last four quarters)")
         rows = [[pe_label, _medn(val.get("pe"), None, _times), _span(val.get("pe"), _times), str((val.get("pe") or {}).get("n", "–")),
                  "–", _med(val.get("market_pe"), _times)]]
@@ -2912,7 +2931,7 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
                  if r_[1] != "–"]           # a measure no company has (EV/EBITDA for lenders) is no row (R18)
         for key, label, f in (("sales_3y", "Revenue growth, 3 years a year", _chg), ("roce", "ROCE", _pc)):
             if peers.get(key):
-                rows.append([label, f(peers[key]["theme"]), "", str(peers[key]["n"]), f(peers[key]["peers"]), "–"])
+                rows.append([f"{label}, companies with similar-size peers", f(peers[key]["theme"]), "", str(peers[key]["n"]), f(peers[key]["peers"]), "–"])
         if pp.get("premium") is not None:
             msg = pe_peer_line(pp)
         elif val.get("pe") and val.get("market_pe"):
@@ -2920,7 +2939,7 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
         else:
             msg = "Price against earnings, book value and EBITDA, the theme against companies of similar market value"
         if losses and pe_n:
-            msg += f"; P/E of the {pe_n} profitable companies, {_n(losses, 'loss-maker')} with none"
+            msg += f"; P/E of {pe_n} of the {pop} companies, {_n(losses, 'loss-maker')} with none"
         s = Slide("Valuation", msg, eyebrow=E())
         hist = val.get("history") or []
         lw = 7.0 if len(hist) >= 2 else CW

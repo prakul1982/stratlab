@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 
 # the version of the membership rules (who is in a theme, which industries, which layers): part of every cached read's key, so a read kept
 # from before a deploy never keeps the old rules' companies or figures (R18: "Private banks" kept the public banks after the fix)
-RULES = 21                       # R21: every confirmed company in one of the map's layers (place_rest)
+RULES = 22                       # R21: every confirmed company in one of the map's layers (place_rest); R22: layer names fit, currencies, extra layers
 INDUSTRIES_DAYS = 30            # the AI's pick of a free-text theme's industries is made again after this long (at most monthly)
 FIGURES_MAX = 60                # companies the dive works figures out for: every one the AI named, then the largest of the base
 DESCRIBE_MAX = 120              # base companies whose own one-line description is looked up for the page, largest first
@@ -523,26 +523,50 @@ def _place_words(layers: list[dict], what: str, industry: str) -> str:
     return best if score else ""
 
 
+RESIDUAL_SHARE, RESIDUAL_MIN = 0.15, 5      # an "Other" layer this large (a share of the companies, or a count) gets extra layers proposed
+
+
+def other_label(theme: str) -> str:
+    """"Other <theme> companies" with the theme's last word singular, as an adjective reads (R22: "Other semiconductors companies")."""
+    words = " ".join(str(theme or "the theme").split()).split(" ")
+    last = words[-1]
+    if last.lower().endswith("ies") and len(last) > 4:
+        last = last[:-3] + "y"
+    elif last.lower().endswith("s") and not last.lower().endswith(("ss", "us", "is")) and len(last) > 3 and not last.isupper():
+        last = last[:-1]
+    words[-1] = last
+    label = " ".join(words)
+    if label[:1].isupper() and not label[:2].isupper():
+        label = label[:1].lower() + label[1:]
+    return f"Other {label} companies"
+
+
 def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None) -> tuple[dict, dict]:
-    """(the map with every base company in one of the map's own layers, {symbol: {"layer", "by"}} as worked out). Runs only when the map
-    has layers of its own; companies in its official-industry or named-list layers (not a list grouped by industry) are placed: from `kept`
-    (the answer kept with the map), else one `ask` answer for up to PLACE_MAX of them, else by their words. A company placed this way is
-    marked "placed" (its words weren't checked against that layer, so it isn't "verified"); one that fits none goes to "Other <theme> companies"."""
+    """(the map with every base company in one of the map's own layers, the answer as worked out: {"assign": {symbol: {"layer", "by"}},
+    "rename": {layer: {"name", "description"}}, "extra": [{"name", "description", "symbols"}]}). Runs only when the map has layers of its own;
+    companies in its official-industry or named-list layers (not a list grouped by industry) are placed: from `kept` (the answer kept with the map),
+    else one `ask` answer for up to PLACE_MAX of them, which also renames a layer whose name doesn't fit the companies it then holds and proposes
+    up to two more layers when many fit none (R22); else by their words, the map's names kept. A company placed this way is marked "placed" (its
+    words weren't checked against that layer, so it isn't "verified"); one that fits none goes to one "Other <theme> companies" layer."""
     vc = list(m.get("value_chain") or [])
     own = [v for v in vc if not v.get("official") and v.get("layer")]
     rest = [v for v in vc if v.get("official") and v.get("basis") in ("industry", "list") and not v.get("by_industry")]
     todo = [c for v in rest for c in v.get("companies") or []]
+    kept = kept if isinstance(kept, dict) and "assign" in kept else {}
     if not own or not todo:
-        return m, dict(kept or {})
+        return m, kept
     names = {v["layer"] for v in own}
-    got = {s: x for s, x in (kept or {}).items() if isinstance(x, dict) and (x.get("layer") in names or x.get("layer") == "")}
+    got = {s: x for s, x in (kept.get("assign") or {}).items() if isinstance(x, dict) and (x.get("layer") in names or x.get("layer") == "")}
+    rename, extra = dict(kept.get("rename") or {}), list(kept.get("extra") or [])
     need = [c for c in sorted(todo, key=lambda c: -(c.get("cap") or 0)) if c["ticker"] not in got]
     if need and ask is not None:
         from .theme_check import place_in_layers
         try:
             ans = place_in_layers(own, [{"symbol": c["ticker"], "name": c.get("name") or c["ticker"], "industry": c.get("industry") or "",
                                          "about": about_of(c["ticker"]) or ""} for c in need[:PLACE_MAX]], ask, theme)
-            got.update({s: {"layer": x if x in names else "", "by": "ai"} for s, x in ans.items()})
+            got.update({s: {"layer": x if x in names else "", "by": "ai"} for s, x in ans["place"].items()})
+            rename = {k: v for k, v in ans["rename"].items() if k in names}
+            extra = ans["extra"]
         except Exception as e:               # the AI busy: the words place them now, the AI is asked again on the next check
             print("theme base: companies not placed by the AI:", theme[:40], type(e).__name__, str(e)[:100])
     for c in need:
@@ -552,19 +576,32 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
     other = []
     for c in todo:
         x = got.get(c["ticker"]) or {}
-        tag = {**c, "placed": x.get("by") or "words", "verified": False}
+        tag = {**c, "placed": x.get("by") or "words", "verified": False, **({"fit": True} if x.get("layer") else {})}
         (by_layer.setdefault(x["layer"], []) if x.get("layer") else other).append(tag)
+    total = sum(len(v.get("companies") or []) for v in vc)
+    extra_layers = []
+    if extra and other and (len(other) >= RESIDUAL_MIN or len(other) > RESIDUAL_SHARE * max(1, total)):
+        left = {c["ticker"]: c for c in other}
+        for x in extra[:2]:
+            cos = [{**left.pop(s_), "fit": True} for s_ in x.get("symbols") or [] if s_ in left]
+            if len(cos) >= 2:
+                extra_layers.append({"layer": x["name"], "description": x.get("description") or "", "by_place": True, "companies": cos})
+        other = list(left.values())
     out_vc = []
     for v in vc:
         if v in rest:
             continue
-        out_vc.append({**v, "companies": list(v.get("companies") or []) + by_layer.get(v.get("layer"), [])} if v in own else v)
+        if v in own:
+            v = {**v, "companies": list(v.get("companies") or []) + by_layer.get(v.get("layer"), [])}
+            r = rename.get(v["layer"])
+            if r and r.get("name"):            # a name that fits the companies the layer now holds; the map's name kept as "was" (R22)
+                v = {**v, "layer": r["name"], "description": r.get("description") or v.get("description") or "", "was": v["layer"]}
+        out_vc.append(v)
+    out_vc += extra_layers
     if other:
-        label = " ".join(str(theme or "the theme").split())
-        out_vc.append({"layer": f"Other {label[:1].lower() + label[1:] if label[:2].istitle() and not label[:2].isupper() else label} companies",
-                       "description": "", "official": True, "basis": "rest",
+        out_vc.append({"layer": other_label(theme), "description": "", "official": True, "basis": "rest",
                        "companies": sorted(other, key=lambda c: (-(c.get("cap") or 0), c["ticker"]))})
-    return {**m, "value_chain": out_vc}, got
+    return {**m, "value_chain": out_vc}, {"assign": got, "rename": rename, "extra": extra}
 
 
 def for_figures(m: dict, cap: int = FIGURES_MAX) -> tuple[dict, dict]:

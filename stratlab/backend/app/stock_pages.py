@@ -1364,6 +1364,9 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
         "region": region, "symbol": symbol, "name": name, "exchange": exchange,
         "industry": _dedupe(public_text(str(x)) for x in (p.get("industry_path") or []) if x)[:4],
         "currency": "USD" if region == "US" else "INR", "unit": nums.get("unit") or ("$ million" if region == "US" else "₹ crore"),
+        # the currency the figures are reported in and today's dollar rate for it (R22: a theme converts every money figure to one currency)
+        **({"report_currency": p["currency"], "fx": p["fx"]} if p.get("currency") and p.get("currency") not in ("USD", "INR") and p.get("fx") else
+           {"report_currency": p["currency"]} if p.get("currency") and p.get("currency") not in ("USD", "INR") else {}),
         "price": prices.get("price"), "price_at": prices.get("price_at"),
         "price_basis": prices.get("price_basis"),
         "high52": prices.get("high52") or snap.get("high52"), "low52": prices.get("low52") or snap.get("low52"),
