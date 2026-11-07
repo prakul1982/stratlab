@@ -435,7 +435,7 @@ def drafts(res: dict, site: str = SITE) -> dict[str, str]:
             f"{fmt_pct(f('segments.mainboard.best.return_pct'))} from its issue price; {f('segments.mainboard.worst.name')} (listed "
             f"{f('segments.mainboard.worst.listing')}) is {fmt_pct(f('segments.mainboard.worst.return_pct'))}. Among SME issues the range is "
             f"{fmt_pct(f('segments.sme.worst.return_pct'))} to {fmt_pct(f('segments.sme.best.return_pct'))}.", "",
-            "## Does a hot retail book mean a good result?", "",
+            "## Does a heavily bid retail book mean a good result?", "",
             "Retail subscription is the retail bids as a multiple of the shares kept for retail, from the exchange's final figures.", "",
             "| Main board | Issues | Median listing-day close | Median return to date | Below issue now | Median vs NIFTY 50 |",
             "|---|---:|---:|---:|---:|---:|", *retail_rows(f, "mainboard"), "",

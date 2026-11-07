@@ -758,3 +758,77 @@ def save_brief(issue: dict, now: datetime | None = None) -> bool:
     market brief or a day that already has its post."""
     post = brief_post(issue, now)
     return add_once(post) if post else False
+
+
+# ---------- a note written by hand (markdown) as a research post ----------
+_MD_LINK = re.compile(r"\[([^\]]+)\]\(([^)\s]+)\)")
+
+
+def _md_inline(text: str, site: str):
+    """A line of markdown text as a block's text: [words](address) on this site becomes a link (the site's own address made a path),
+    any other link keeps only its words; ** and ` marks go."""
+    text = re.sub(r"(\*\*|__|`)", "", text)
+    parts, at = [], 0
+    for m in _MD_LINK.finditer(text):
+        if m.start() > at:
+            parts.append(text[at:m.start()])
+        href = m.group(2)
+        if site and href.startswith(site):
+            href = href[len(site):] or "/"
+        parts.append({"a": m.group(1), "href": href} if HREF.match(href) else m.group(1))
+        at = m.end()
+    if at < len(text):
+        parts.append(text[at:])
+    return parts if any(isinstance(p, dict) for p in parts) else "".join(parts)
+
+
+def markdown_blocks(md: str, site: str = "") -> tuple[str, list[dict]]:
+    """(title, blocks) from a note in markdown: "# " is the title, "## "/"### " headings, "| a | b |" tables (the row under the head
+    of dashes and colons sets each column's side), "- " lists, "> " notes, the rest paragraphs. Only these kinds; cleaned by clean_blocks
+    when stored, like every post."""
+    title, blocks, para, lines = "", [], [], md.replace("\r", "").split("\n")
+
+    def flush():
+        if para:
+            blocks.append({"t": "p", "text": _md_inline(" ".join(para), site)})
+            para.clear()
+    i = 0
+    while i < len(lines):
+        ln = lines[i].rstrip()
+        s = ln.strip()
+        if not s or s == "---":
+            flush()
+        elif s.startswith("# ") and not title:
+            flush()
+            title = s[2:].strip()
+        elif s.startswith("### ") or s.startswith("## "):
+            flush()
+            blocks.append({"t": "h3" if s.startswith("### ") else "h2", "text": s.lstrip("#").strip()})
+        elif s.startswith("|"):
+            flush()
+            rows = []
+            while i < len(lines) and lines[i].strip().startswith("|"):
+                rows.append([c.strip() for c in lines[i].strip().strip("|").split("|")])
+                i += 1
+            i -= 1
+            if len(rows) >= 2 and all(re.fullmatch(r":?-{3,}:?", c) for c in rows[1]):
+                head, spec, body = rows[0], rows[1], rows[2:]
+                align = "".join("r" if c.endswith(":") else "l" for c in spec)
+                blocks.append({"t": "table", "caption": "", "head": head, "align": align,
+                               "rows": [[_md_inline(c, site) for c in r] for r in body]})
+        elif s.startswith("- ") or s.startswith("* "):
+            flush()
+            items = []
+            while i < len(lines) and lines[i].strip()[:2] in ("- ", "* "):
+                items.append(_md_inline(lines[i].strip()[2:], site))
+                i += 1
+            i -= 1
+            blocks.append({"t": "ul", "items": items})
+        elif s.startswith(">"):
+            flush()
+            blocks.append({"t": "note", "text": _md_inline(s.lstrip("> ").strip(), site)})
+        else:
+            para.append(s)
+        i += 1
+    flush()
+    return title, blocks
