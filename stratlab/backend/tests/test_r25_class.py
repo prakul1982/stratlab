@@ -243,3 +243,32 @@ def test_on_every_synthetic_theme_an_outlier_moves_out_and_every_rule_still_hold
     every_rule(name, v, slides)
     if own:
         assert "In common: they earn mainly from" in texts(slides)
+
+
+# ---------- a layer named by a stand-in ("placeholder" in the live R24 Insurance map) is nameless ----------
+@pytest.mark.parametrize("name", ["placeholder", "Placeholder.", "PLACE-HOLDER", "TBD", "t.b.d.", "N/A", "n.a.", "unknown", "None", "Layer", "Layer 1",
+                                  "layer-2", "Segment", "Segment B", "Example", "misc.", "Miscellaneous", "  ", "3", "Other", "Untitled", "XXX"])
+def test_a_stand_in_layer_name_is_no_name(name):
+    assert A.stand_in(name) and A.layer_name({"layer": name}) == ""
+
+
+def test_real_layer_names_are_kept_and_a_stand_in_layer_is_dropped_everywhere():
+    for real in ("Life insurers", "General insurers", "Insurance brokers", "Unknown-risk specialty underwriters", "Segment reporting software",
+                 "Other services", "Layer 1 chip designers", "Reinsurance"):
+        assert not A.stand_in(real) and A.layer_name({"layer": real}) == real, real
+    assert A.layer_name({"layer": "placeholder", "name": "Health insurers"}) == "Health insurers"    # the name under another key is used
+    # a map kept in the store from before: the stand-in layer is dropped, its companies placed as any the AI didn't name
+    rows = [{"symbol": s, "name": s, "industry": "Life Insurance", "market_cap": 100} for s in ("LI1", "LI2", "LI3")]
+    m = {"sector": "Insurance", "sub_themes": [], "value_chain": [
+        {"layer": "Life insurers", "description": "x", "companies": [{"ticker": "LI1", "name": "LI1", "verified": True}]},
+        {"layer": "Placeholder", "description": "", "companies": [{"ticker": "LI2", "name": "LI2", "verified": True}]},
+        {"layer": "TBD", "description": "", "companies": []}]}
+    out = B.with_base(m, m, rows, ["Life Insurance"])
+    names = [v["layer"] for v in out["value_chain"]]
+    assert not any(A.stand_in(n) for n in names) and "LI2" in {c["ticker"] for v in out["value_chain"] for c in v["companies"]}
+    # the placement answer never renames a layer to a stand-in or proposes one
+    ans = C.place_in_layers([{"layer": "Life insurers", "companies": []}], [{"symbol": "A1", "name": "A"}, {"symbol": "A2", "name": "B"}],
+                            lambda s, t: {"place": [{"symbol": "A1", "layer": "none"}, {"symbol": "A2", "layer": "none"}],
+                                          "rename": [{"layer": "L0", "name": "N/A", "description": "x"}],
+                                          "extra": [{"name": "placeholder", "symbols": ["A1", "A2"]}]}, "Insurance")
+    assert ans["rename"] == {} and ans["extra"] == []

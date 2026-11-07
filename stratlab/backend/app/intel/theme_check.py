@@ -324,7 +324,7 @@ def place_in_layers(layers: list[dict], companies: list[dict], ask, theme: str) 
     the layers' members; "unknown" left out). A layer id that isn't the map's, a symbol not asked about, a name that is empty or a description with
     a figure are dropped (the caller keeps the map's own name, and places the rest by their words)."""
     import json
-    from .ai import theme_text
+    from .ai import stand_in, theme_text
     ids = {f"L{i}": v.get("layer") or "" for i, v in enumerate(layers)}
     payload = {"theme": theme, "layers": {k: {"name": ids[k], "what_it_is": str(layers[i].get("description") or "")[:240],
                                               "members": [f"{c.get('ticker') or ''} · " + (c.get("name") or c.get("ticker") or "")
@@ -349,14 +349,14 @@ def place_in_layers(layers: list[dict], companies: list[dict], ask, theme: str) 
         if isinstance(x, dict) and str(x.get("layer")) in ids:
             name = " ".join(str(x.get("name") or "").split())[:60]
             desc = theme_text(x.get("description"), 400)
-            if name and not re.search(r"\d", name):
+            if name and not re.search(r"\d", name) and not stand_in(name):
                 rename[ids[str(x["layer"])]] = {"name": name, "description": desc or ""}
     extra = []
     for x in (got.get("extra") or [])[:2]:
         if isinstance(x, dict):
             name = " ".join(str(x.get("name") or "").split())[:60]
             syms = [s_ for s_ in x.get("symbols") or [] if s_ in asked and place.get(s_, "") == ""]
-            if name and not re.search(r"\d", name) and len(syms) >= 2:
+            if name and not re.search(r"\d", name) and not stand_in(name) and len(syms) >= 2:
                 extra.append({"name": name, "description": theme_text(x.get("description"), 400) or "", "symbols": syms})
     members = {c.get("ticker") for v in layers for c in (v.get("companies") or [])[:MODEL_MEMBERS] if c.get("ticker")}
     raw = got.get("models")

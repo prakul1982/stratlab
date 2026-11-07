@@ -349,12 +349,26 @@ def clean_company(read: dict) -> dict:
 _CALL_OPENING = re.compile(r"^\W*(buy|sell|accumulate|avoid|add|pick|hold|load|go long)\b(?![-\w])", re.I)
 
 
+# a name that stands in for one (R25: the live R24 Insurance map had a layer named "placeholder", shown as "No listed company is shown for
+# placeholder"): case, punctuation and a trailing number or letter ignored ("Layer 1", "N/A", "TBD.", "Segment B")
+_STAND_IN = re.compile(r"^(?:placeholder|place holder|tbd|tba|tbc|to be (?:decided|determined|confirmed)|n ?a|not applicable|unknown|none|null|nil|"
+                       r"undefined|misc|miscellaneous|example|sample|test|todo|untitled|default|other|others|xx+|layer|layer name|segment|stage|"
+                       r"name|category|group|value chain layer)(?: (?:\d+|[a-z]))?$")
+
+
+def stand_in(name) -> bool:
+    """Whether a layer's name is empty or a generic stand-in, not a name (placeholder, TBD, n/a, unknown, Layer 1, segment, misc...)."""
+    s = " ".join(re.sub(r"[^a-z0-9]+", " ", str(name or "").lower()).split())
+    return not s or s.isdigit() or bool(_STAND_IN.match(s) or _STAND_IN.match(s.replace(" ", "")))      # "t.b.d." too
+
+
 def layer_name(v: dict) -> str:
     """A value-chain layer's name. The model is asked for "layer" but sometimes writes it under another key (R20: the live Cybersecurity
-    map had four layers with an empty "layer", drawn as "Layer 2 ·" and "lowest in (6.6%)"); a layer with no name at all is dropped."""
+    map had four layers with an empty "layer", drawn as "Layer 2 ·" and "lowest in (6.6%)"); a layer with no name at all, or only a stand-in
+    for one ("placeholder", R25), is dropped."""
     for k in ("layer", "name", "title", "stage", "segment"):
         s = " ".join(str(v.get(k) or "").split())
-        if s:
+        if s and not stand_in(s):
             return s
     return ""
 
