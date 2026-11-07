@@ -66,7 +66,7 @@ def test_the_theme_deck_has_the_cover_chain_layers_members_claims_and_notes():
     assert titles == ["Test theme", "The theme at a glance", "Findings", "Key findings", "Data confidence", "Worth a watch",
                       "The value chain", "The value chain by layer", "Layer 1 · Mining", "Layer 2 · Cells",
                       "Sub-themes and the companies that do them", "Industry economics", "Layers side by side", "What moved the aggregate margin",
-                      "Questions the figures raise", "The companies", "Every company's figures",
+                      "The companies", "Every company's figures",
                       "Tailwinds, risks and news", "Tailwinds and risks", "The theme in numbers", "Size and shape", "Growth and profitability",
                       "Margins over time", "Valuation", "Balance sheet and cash", "Price", "Appendix", "Every company in this theme", "How to read this deck"]
     assert slides[0].kind == "cover" and slides[0].subtitle == "India (NSE and BSE) · Theme deep dive" and "Theme deep dive" in footer

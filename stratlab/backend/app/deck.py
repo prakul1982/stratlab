@@ -2376,12 +2376,15 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
         lay.append({"layer": x["layer"], "n": len(cos), "ebitda": (st.get("ebitda") or {}).get("median"), "roce": (st.get("roce") or {}).get("median"),
                     "growth": _m(g) if g else None, "growth_n": len(g), "pe": _m(pe) if pe else None, "pe_n": len(pe)})
     lay = [x for x in lay if x["n"]]
+    if len(lay) < 2:          # one layer: its own slide already shows its medians, so no page that sets it beside nothing
+        lay = []
     md = sec.get("margin_drivers") or {}
     qs = economics_questions(v, shown, sec, ebm)
     if not lay and not md and not qs:
         return
     section("", "Industry economics", "Each layer's margins, returns, growth and valuation side by side, what moved the aggregate margin, and the questions "
                                       "the figures raise, each computed from the reported figures.")
+    room = []              # (slide, x, y, w, h): the space a page leaves under its table, where the questions go when they fit
     if lay:
         rows = [[x["layer"], str(x["n"]), ebm(x["ebitda"]), _pc(x["roce"]), _chg(x["growth"]) + (f" ({x['growth_n']})" if x["growth"] is not None else ""),
                  _times(x["pe"]) + (f" ({x['pe_n']})" if x["pe"] is not None else "")] for x in lay]
@@ -2402,7 +2405,9 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
         nh = note_h(note)
         for k, chunk in enumerate(pages := table_pages(head, rows, widths, tw, BOT - TOP - nh - 0.07)):
             s = Slide("Layers side by side" + (f" ({k + 1} of {len(pages)})" if len(pages) > 1 else ""), msg, eyebrow=eyebrow)
-            s.add("table", (M, TOP, tw, BOT - TOP - nh - 0.07), head=head, rows=chunk, widths=widths)
+            th = min(BOT - TOP - nh - 0.07, table_height(head, chunk, widths, tw))
+            s.add("table", (M, TOP, tw, th), head=head, rows=chunk, widths=widths, tight=True)
+            room.append((s, M, TOP + th + 0.25, tw, BOT - nh - 0.15 - (TOP + th + 0.25)))
             if chart and k == 0:
                 s.add("columns", (M + tw + 0.4, TOP, CW - tw - 0.4, BOT - TOP - nh - 0.07), title="Median EBITDA margin and ROCE", fmt="pct",
                       cats=[clip(x["layer"], 10, 1.2, 1) for x in both], series=[("EBITDA margin", [x["ebitda"] for x in both], BLUE), ("ROCE", [x["roce"] for x in both], ORANGE)])
@@ -2420,17 +2425,25 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
                 "add up to the change. A part moves with the company's own margin and with its weight in the group's revenue. The companies that moved it most.")
         nh = note_h(note)
         s = Slide("What moved the aggregate margin", msg, eyebrow=eyebrow)
-        s.add("table", (M, TOP, lw, BOT - TOP - nh - 0.07), head=head, rows=rows, widths=widths)
+        th = min(BOT - TOP - nh - 0.07, table_height(head, rows, widths, lw))
+        s.add("table", (M, TOP, lw, th), head=head, rows=rows, widths=widths, tight=True)
+        room.append((s, M, TOP + th + 0.25, lw, BOT - nh - 0.15 - (TOP + th + 0.25)))
         if lw < CW:
             s.add("table", (M + lw + 0.3, TOP, CW - lw - 0.3, BOT - TOP - nh - 0.07), head=["Layer", "Part"],
                   rows=[[x["layer"], _pts(x["part"])] for x in md["layers"]], widths=[2.0, 1.0])
         s.add("text", (M, BOT - nh, CW, nh), paras=[note], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
         slides.append(s)
     if qs:
-        s = Slide("Questions the figures raise", "Each question with the computed figures it rests on; the figures don't answer them", eyebrow=eyebrow)
-        card = {"title": "Questions", "lines": qs[:5]}
-        s.add("cards", (M, TOP, CW, min(BOT - TOP, card_height(card, CW, True, 13) + 0.1)), cols=1, fill=True, bullets=True, size=13, items=[card])
-        slides.append(s)
+        # under a table of this part where they fit (no half-empty page), else on a page of their own
+        card = {"title": "Questions the figures raise", "lines": qs[:5]}
+        spot = next((r for r in room if card_height(card, r[3], True, 12) + 0.1 <= r[4]), None)
+        if spot:
+            sl, x, y, w, _ = spot
+            sl.add("cards", (x, y, w, card_height(card, w, True, 12) + 0.1), cols=1, fill=True, bullets=True, size=12, items=[card])
+        else:
+            s = Slide("Questions the figures raise", "Each question with the computed figures it rests on; the figures don't answer them", eyebrow=eyebrow)
+            s.add("cards", (M, TOP, CW, min(BOT - TOP, card_height(card, CW, True, 13) + 0.1)), cols=1, fill=True, bullets=True, size=13, items=[card])
+            slides.append(s)
 
 
 REST_H = 0.32           # the room the first page of a long table keeps for the line that says where the rest of it is

@@ -210,15 +210,17 @@ def test_industry_economics_is_computed_and_traceable():
     md = v["sections"]["margin_drivers"]
     assert md and abs(sum(x["part"] for x in md["layers"]) - md["change"]) < 0.1             # the parts add up to the change
     titles = [s.title for s in slides]
-    for t in ("Industry economics", "Layers side by side", "What moved the aggregate margin", "Questions the figures raise"):
+    for t in ("Industry economics", "Layers side by side", "What moved the aggregate margin"):
         assert t in titles, t
-    q = next(b for s in slides if s.title == "Questions the figures raise" for b in s.blocks if b["kind"] == "cards")["items"][0]["lines"]
+    # the questions sit under a table of the part when they fit, so no page is half empty
+    q = next(it for s in slides for b in s.blocks if b["kind"] == "cards" for it in b["items"] if it.get("title") == "Questions the figures raise")["lines"]
     assert any("on the quarter to Jun 2025" in x for x in q)                                    # the base quarter is stated
     assert any(x.startswith("Film has the highest median EBITDA margin") for x in q)
     t = texts([s for s in slides if s.eyebrow and "Industry economics" in s.eyebrow]).lower()
     for word in ("buy", "sell", "avoid", "attractive", "undervalued", "overvalued", "recommend", "target price"):
         assert not _re.search(rf"\b{word}\b", t), word
-    # US, one layer, a loss-maker: the part still draws what exists, and the loss-maker has no P/E
+    # US, one layer, a loss-maker: no page setting the one layer beside nothing; what moved the margin is still worked out, the loss-maker's part too
     vb, sb = deck_of(*theme_b())
-    side = next(b for s in sb if s.title == "Layers side by side" for b in s.blocks if b["kind"] == "table")
-    assert side["rows"][0][0] == "Processors" and side["rows"][0][5].endswith("(2)")
+    assert "Layers side by side" not in [s.title for s in sb] and "What moved the aggregate margin" in [s.title for s in sb]
+    parts = {x["symbol"]: x["part"] for x in vb["sections"]["margin_drivers"]["companies"]}
+    assert set(parts) == {"PAY0", "PAY1", "PAY2"} and abs(sum(parts.values()) - vb["sections"]["margin_drivers"]["change"]) < 0.1
