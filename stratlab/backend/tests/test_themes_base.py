@@ -48,7 +48,7 @@ def base_of(region, theme, rows):
 # ---------- the theme -> industries map ----------
 def test_india_defence_is_every_company_of_the_defence_industries_from_the_exchanges_own_list():
     got, inds = base_of("IN", "India defence", ROWS)
-    assert inds == {"industries": ["Aerospace & Defense", "Ship Building & Allied Services", "Explosives"], "how": "list", "named": ["BEML"], "except": []}
+    assert inds == {"industries": ["Aerospace & Defense", "Ship Building & Allied Services", "Explosives"], "how": "list", "named": ["BEML"], "except": [], "drop": []}
     # BEML: the exchange puts it under construction vehicles; it is in by the theme's own named list (THEMES, 4 Nov)
     assert got == {"HAL", "BEL", "BDL", "MAZDOCK", "GRSE", "COCHINSHIP", "DATAPATTNS", "SOLARINDS", "ASTRAMICRO", "PARAS", "BEML"}
 
@@ -70,7 +70,7 @@ def test_banks_pharma_renewables_and_us_semiconductors_have_their_industries():
     assert base_of("US", "Defense drones", LIVE_US)[0] == {"LMT"}
     assert base_of("US", "US banks", LIVE_US)[0] == {"JPM"}
     # a narrow theme inside a wide industry has no official base (500 drug makers aren't the GLP-1 chain)
-    assert base_of("US", "GLP-1 supply chain", LIVE_US) == (set(), {"industries": [], "how": "list", "named": [], "except": []})
+    assert base_of("US", "GLP-1 supply chain", LIVE_US) == (set(), {"industries": [], "how": "list", "named": [], "except": [], "drop": []})
     assert B.curated("IN", "specialty chemicals", {B.key("Specialty Chemicals"): "Specialty Chemicals", B.key("Commodity Chemicals"): "Commodity Chemicals"}) == ["Specialty Chemicals"]
 
 
@@ -410,7 +410,7 @@ def test_a_theme_answers_with_its_official_base_at_once_while_the_ai_is_slow_and
     theme_routes.job_of(("map", "IN", "india defence"))["done"].wait(30)
     later = api.get("/research/sector?q=India%20defence&region=IN").json()
     assert later["generated_at"] > 0 and later["summary"]                       # the AI's map is in on the next ask
-    theme_routes.job_of(("check", "IN", "india defence", int(later["generated_at"])))["done"].wait(30)
+    theme_routes.job_of(("check", "IN", "india defence", int(later["generated_at"]), B.RULES))["done"].wait(30)      # the rules' version is in the key (R18)
     done = api.get("/research/sector?q=India%20defence&region=IN").json()
     assert done["ai"] is None and done["placements"]["checked"] is True
 

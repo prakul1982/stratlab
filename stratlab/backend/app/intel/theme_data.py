@@ -31,6 +31,10 @@ NOTABLE_MOVE = 5.0            # points a layer's EBITDA margin moved over three 
 MIN_LAYER = 2                 # companies a layer needs for its median to be called a layer's figure (a post, the chain's highest and lowest)
 ROUNDING = 1.0                # points: EBITDA margins are filed in whole points, so two medians this close may be the same figure rounded
 FINANCIAL_KEYS = ("ebitda", "roce", "debt_equity")
+# a lender's own measures (R18, the owner: banks' EBITDA margin, ROCE and EV/EBITDA were "–" everywhere): return on equity, net interest income
+# and profit over assets, gross and net NPA and price to book, each where the company's stored figures have it
+LENDER_KEYS = ("roe", "nii_assets", "roa", "gnpa", "nnpa", "nii_growth", "pb")
+STAT_KEYS = ("ebitda", "net", "roce") + LENDER_KEYS
 
 
 def num(v):
@@ -130,6 +134,8 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
         "ebitda_dp": 0 if opms and all(float(x).is_integer() for x in opms) else 1,
         "roce": None if lender or old else r1(num(f.get("roce"))),
         "cap": cap, "pe": base.get("pe"), "pb": None if old else r1(num(f.get("pb"))),
+        "roe": None if old or wild else r1(num(f.get("roe"))),
+        **{k: (None if old else num((f.get("lender") or {}).get(k))) for k in ("nii_assets", "roa", "gnpa", "nnpa", "nii_growth")},
         "interest_cover": None if lender or old else r1(num(f.get("interest_cover"))), "ev_ebitda": r1(ev),
         "quarter": {"of": yoy.get("of"), "sales": r1(num(yoy.get("sales"))), "profit": r1(num(yoy.get("profit")))} if yoy else None,
         "debt_equity": None if lender else base.get("debt_equity"),
@@ -187,8 +193,7 @@ def layer_block(name: str, rows: list[dict], wide: set[str]) -> dict:
     sure = [r for r in rows if r.get("status") != "unverified"]
     own = [r for r in sure if r["symbol"] not in wide]
     pool = own or sure
-    keys = ("ebitda", "net", "roce")
-    stats = {k: stat(r.get(k) for r in pool if not (k == "net" and r.get("one_off"))) for k in keys}
+    stats = {k: stat(r.get(k) for r in pool if not (k == "net" and r.get("one_off")) and not (k == "pb" and (r.get(k) or 0) <= 0)) for k in STAT_KEYS}
     return {"layer": name, "companies": rows, "stats": stats, "n": len(sure), "listed": len(rows),
             "net_all": stat(r.get("net") for r in pool), "one_off": sorted(r["symbol"] for r in pool if r.get("one_off")),
             "revenue": sum(r["revenue"] for r in sure if r.get("revenue")) or None,
@@ -225,7 +230,8 @@ def chain_table(blocks: list[dict]) -> dict:
     for b in blocks:
         e, n, c = (b["stats"].get(k) for k in ("ebitda", "net", "roce"))
         rows.append({"layer": b["layer"], "n": b["n"], "revenue": b["revenue"], "ebitda": e["median"] if e else None, "net": n["median"] if n else None,
-                     "roce": c["median"] if c else None, "ebitda_n": e["n"] if e else 0, "official": bool(b.get("official"))})
+                     "roce": c["median"] if c else None, "ebitda_n": e["n"] if e else 0, "official": bool(b.get("official")),
+                     **{k: (b["stats"].get(k) or {}).get("median") for k in LENDER_KEYS}, "roe_n": (b["stats"].get("roe") or {}).get("n", 0)})
     # only the map's own layers (an official industry's leftover companies overlap them: "Vehicle assembly" and "Commercial Vehicles"), each
     # with MIN_LAYER companies in its median, and only a gap wider than the rounding of whole-point margins, name a highest and a lowest
     have = [r for r in rows if r["ebitda"] is not None and r["ebitda_n"] >= MIN_LAYER and not r["official"]]
@@ -243,10 +249,25 @@ def chain_table(blocks: list[dict]) -> dict:
             whole = whole_points([c for b in blocks for c in b["companies"]])
             line = (f"Median EBITDA margin is highest in {hi['layer']} ({pts(hi['ebitda'], whole)}) and lowest in {lo['layer']} ({pts(lo['ebitda'], whole)}), "
                     f"a gap of {f1(hi['ebitda'] - lo['ebitda'])} points.")
+    measure = "ebitda"
     if len(have) < 2:
-        line = f"Fewer than two layers have {MIN_LAYER} or more companies with an EBITDA margin, so no highest and lowest are named."
-    return {"rows": rows, "line": line, "highest": hi["layer"] if hi else None, "lowest": lo["layer"] if lo else None,
-            "compared": [r["layer"] for r in have], "gap": round(hi["ebitda"] - lo["ebitda"], 1) if hi else None}
+        # lenders have no EBITDA margin: their layers are set side by side on return on equity (R18)
+        lend = [r for r in rows if r["roe"] is not None and r["roe_n"] >= MIN_LAYER and not r["official"]]
+        if len(lend) < 2:
+            lend = [r for r in rows if r["roe"] is not None and r["roe_n"] >= MIN_LAYER]
+        if len(lend) >= 2:
+            measure, have = "roe", lend
+            hi, lo = max(lend, key=lambda r: r["roe"]), min(lend, key=lambda r: r["roe"])
+            if hi["layer"] == lo["layer"] or hi["roe"] - lo["roe"] < 0.05:
+                hi = lo = None
+                line = f"The median return on equity of the {len(lend)} layers with at least {MIN_LAYER} companies is the same."
+            else:
+                line = (f"Median return on equity is highest in {hi['layer']} ({pts(hi['roe'], True)}) and lowest in {lo['layer']} ({pts(lo['roe'], True)}), "
+                        f"a gap of {f1(hi['roe'] - lo['roe'])} points.").replace(".0 points", " points")
+        else:
+            line = None             # nothing to set side by side: no line at all (R18: the deck said it couldn't be done)
+    return {"rows": rows, "line": line, "highest": hi["layer"] if hi else None, "lowest": lo["layer"] if lo else None, "measure": measure,
+            "compared": [r["layer"] for r in have], "gap": round(hi[measure] - lo[measure], 1) if hi else None}
 
 
 def layer_history(rows: list[dict]) -> dict | None:
@@ -481,7 +502,7 @@ def stored_price_section(rows: list[dict]) -> dict:
 def leaders(rows: list[dict]) -> list[dict]:
     """The table of every company in the theme with the figures to sort it by."""
     return [{k: r.get(k) for k in ("symbol", "name", "cap", "revenue", "year", "ebitda", "net", "roce", "sales_1y", "sales_3y", "profit_1y", "profit_3y",
-                                    "pe", "pb", "ev_ebitda", "debt_equity", "stage", "from_high", "one_off", "ebitda_dp", "status")} for r in rows]
+                                    "pe", "pb", "ev_ebitda", "debt_equity", "stage", "from_high", "one_off", "ebitda_dp", "status", "bank") + LENDER_KEYS} for r in rows]
 
 
 # ---------- stored events, holdings and cards ----------
@@ -696,6 +717,26 @@ BUSINESS = re.compile(r"\b(?:manufactur\w*|mak(?:e|es|er|ers|ing)|produc\w*|sell
                       r"design\w*|distribut\w*|operat\w*|speciali[sz]\w*|deal(?:s|er|ers|ing)?\s+in|portfolio|business\s+of|services?)\b", re.I)
 
 
+# kinds of work far from making or doing a theme's own thing: a company of the theme's own industry whose own words name one of these, and
+# none of the theme's words, describes other work ("supplies software to insurance companies" filed under auto parts). A company whose words
+# simply don't repeat the theme's vocabulary ("one of India's first motorcycle manufacturers", "storage batteries", "aluminium die casting")
+# stays: the exchange's classification is the base and nothing in its words says otherwise (R18: Hero MotoCorp, Exide, Endurance and
+# Escorts Kubota were "not confirmed" in the Automotive deck)
+OTHER_WORK = re.compile(r"\b(?:software|saas|it services|information technology|staffing|recruitment|manpower|insurance|insurer|banking|bank|"
+                        r"lending|lender|nbfc|microfinance|broking|brokerage|stock ?broker|asset management|mutual fund|real estate|realty|"
+                        r"hotels?|hospitality|restaurants?|education|schools?|edtech|consulting|consultancy|advertising|media|broadcast\w*|"
+                        r"entertainment|films?|hospitals?|healthcare services|diagnostics|pharmaceutical\w*|drugs?|telecom\w*|"
+                        r"e-?commerce|retail stores?|trading company|logistics|courier|shipping line)\b", re.I)
+
+
+def other_work(what: str, words: set[str]) -> bool:
+    """Whether a company's own sentence names a kind of work that isn't the theme's (OTHER_WORK, unless the theme's own words name it too)."""
+    for m in OTHER_WORK.finditer(str(what or "")):
+        if not does_the_work(m.group(0), words):
+            return True
+    return False
+
+
 def membership(c: dict, words: set[str]) -> str:
     """How sure the theme is of a company (the owner, 7 Nov: a membership check for official-industry companies too, so an insurance software
     house filed under auto parts isn't in the auto figures): "core", a company of the theme's own industries or list whose own words (or a
@@ -706,9 +747,10 @@ def membership(c: dict, words: set[str]) -> str:
     if c.get("base"):
         if c.get("basis") == "list" or c.get("verified") or does_the_work(c.get("what") or "", words):
             return "core"
-        # own words that say nothing of the work ("The Company was established in 1981", "flagship company of the group"): nothing
-        # contradicts the exchange's classification, so it stands (R17-012: real makers were "not confirmed" on such a sentence)
-        if not BUSINESS.search(c.get("what") or ""):
+        # own words that say nothing of the work ("The Company was established in 1981", "flagship company of the group"), or that describe
+        # a business without the theme's words but no other kind of work ("motorcycle manufacturers"): nothing contradicts the exchange's
+        # classification, so it stands (R17-012, R18)
+        if not BUSINESS.search(c.get("what") or "") or not other_work(c.get("what") or "", words):
             return "core"
         return "unverified"
     return "exposure" if c.get("verified") else "unverified"
@@ -718,9 +760,32 @@ def slug(theme: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", str(theme or "").lower()).strip("-")[:60]
 
 
+def by_industry(checked: dict) -> dict:
+    """A theme with no AI map whose only layer is its own named list (R18: Cybersecurity, one layer "Named in the theme's list") gets its
+    layers from its companies' own official industries: each industry with MIN_LAYER companies or more is a layer, the rest one layer of
+    "Other industries" (when it has MIN_LAYER too). Unchanged when that doesn't give two layers, or the map has layers of its own."""
+    vc = checked.get("value_chain") or []
+    if len(vc) != 1 or not vc[0].get("official") or vc[0].get("basis") != "list":
+        return checked
+    groups: dict[str, list] = {}
+    for c in vc[0].get("companies") or []:
+        groups.setdefault(str(c.get("industry") or "").strip(), []).append(c)
+    big = {k: v for k, v in groups.items() if k and len(v) >= MIN_LAYER}
+    rest = [c for k, v in groups.items() if k not in big for c in v]
+    if len(big) + (1 if len(rest) >= MIN_LAYER else 0) < 2 or (rest and len(rest) < MIN_LAYER):
+        return checked
+    cap = lambda cos: -sum(c.get("cap") or 0 for c in cos)      # noqa: E731
+    layers = [{"layer": k, "description": "", "official": True, "basis": "list", "by_industry": True, "companies": v}
+              for k, v in sorted(big.items(), key=lambda kv: (cap(kv[1]), kv[0]))]
+    if rest:
+        layers.append({"layer": "Other industries", "description": "", "official": True, "basis": "list", "by_industry": True, "companies": rest})
+    return {**checked, "value_chain": layers}
+
+
 def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     """The dive for a checked map (see theme_check.check_placements): the tables by layer, the whole chain in one table, the sub-themes'
     companies, and the sections for the theme as a whole. Every figure is from the stored facts; nothing here calls a source."""
+    checked = by_industry(checked)
     # one layer per company: a company the map puts in two layers stays in the first (the owner, 7 Nov), so no company is counted twice
     first: dict[str, str] = {}
     for v in checked.get("value_chain") or []:
@@ -759,6 +824,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         b["description"] = v.get("description") or ""
         b["policy"] = v.get("policy")
         b["official"], b["basis"] = bool(v.get("official")), v.get("basis")     # a layer that is one official industry's companies the AI didn't place (theme_base.py)
+        b["by_industry"] = bool(v.get("by_industry"))
         blocks.append(b)
         sure = [r for r in mine if r.get("status") != "unverified"]
         histories[b["layer"]] = layer_history([r for r in sure if r["symbol"] not in wide] or sure)
@@ -776,7 +842,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
             r = rows.get(c["ticker"])
             if r:
                 cos.append({"symbol": r["symbol"], "name": r["name"], "what": c.get("what"), "cap": r["cap"], "sales_1y": r["sales_1y"], "ebitda": r["ebitda"],
-                            "company_wide": r["symbol"] in wide, "year": r["year"]})
+                            "company_wide": r["symbol"] in wide, "year": r["year"], "bank": r.get("bank"), "net": r.get("net"), "roe": r.get("roe")})
         subs.append({"name": s.get("name") or "", "detail": s.get("detail") or "", "companies": cos})
     for r in rows.values():                 # a merger or demerger broke the company's series: no growth figure for it, none in the growth totals
         r["demerger"] = demerger_on(src, r["symbol"])
@@ -802,7 +868,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         "region": region, "sector": checked.get("sector") or theme, "as_of": as_of, "unit": next((r["unit"] for r in members if r.get("unit")), None),
         "basis": basis_text(members, region), "layers": blocks, "chain": chain, "subs": subs, "members": len(members), "company_wide": sorted(wide & set(syms)),
         "sections": {
-            "size": size_section(members), "medians": {k: stat(r.get(k) for r in own if not (k == "net" and r.get("one_off"))) for k in ("ebitda", "net", "roce")},
+            "size": size_section(members), "medians": {k: stat(r.get(k) for r in own if not (k == "net" and r.get("one_off"))) for k in ("ebitda", "net", "roce", "roe")},
             "growth": aggregate_growth([r for r in own if not r.get("series_break")]), "margins": margin_history(own), "valuation": val,
             "balance": balance_section(own), "price": stored_price_section(members), "market": market_med,
             "ownership": ownership_section(syms, names, src), "events": events_section(syms, names, src),
@@ -893,7 +959,8 @@ def data_checks(rows: list[dict], blocks: list[dict], dive: dict) -> dict:
         "series": [{"symbol": r["symbol"], "name": r["name"], **({"demerger": r["demerger"]} if r.get("demerger") else {})} for r in rows if r.get("series_break") or series_break(r)],
         "unverified": [{"symbol": r["symbol"], "name": r["name"]} for r in rows if r.get("status") == "unverified"],
         "earlier_quarter": q.get("earlier") or [], "quarter": q.get("quarter"),
-        "n": {k: (meds.get(k) or {}).get("n", 0) for k in ("ebitda", "net", "roce")},
+        "n": {k: (meds.get(k) or {}).get("n", 0) for k in ("ebitda", "net", "roce", "roe")},
+        "lenders": sum(1 for r in rows if r.get("bank") and r.get("status") != "unverified"),
         "whole_points": sum(1 for r in rows if r.get("ebitda_dp") == 0), "with_ebitda": sum(1 for r in rows if r.get("ebitda") is not None),
     }
 
@@ -932,6 +999,8 @@ def hold_suspect(rows: list[dict]) -> list[dict]:
     for r in rows:
         r = dict(r)
         held = []
+        wild = "%" not in (r.get("unit") or "") and ((r.get("change_prev") is not None and abs(r["change_prev"]) >= MOVE_HELD) or
+                                                     (r.get("change_year") is not None and abs(r["change_year"]) >= 3 * MOVE_HELD))
         for k, ck in (("prev", "change_prev"), ("year_ago", "change_year")):
             v = r.get(k)
             if v is not None and seen[(r.get("unit"), v)] > 1 and len({x["symbol"] for x in rows if v in (x.get("prev"), x.get("year_ago"))}) > 1:
@@ -944,6 +1013,11 @@ def hold_suspect(rows: list[dict]) -> list[dict]:
             if r.get("change_year") is not None and abs(r["change_year"]) >= 3 * MOVE_HELD:
                 held.append(f"a {r['change_year']:+.1f}% move on the year")
                 r["year_ago"], r["change_year"] = None, None
+        if wild:
+            # a move too large to take as filed puts the latest figure itself in doubt: neither comparison is shown (R18: Mahindra's 38,563 held
+            # for −66.4% on the month still showed a year ago of 1,00,298 and −61.6% on the year)
+            r["prev"] = r["change_prev"] = r["year_ago"] = r["change_year"] = None
+            r["held_latest"] = True
         r["held"] = "; ".join(held) or None
         out.append(r)
     return out

@@ -1073,6 +1073,47 @@ def annual_behind(f: dict | None) -> bool:
         return False
 
 
+# ---------- pages behind a results filing (R18) ----------
+# A page is read as stored by a theme (peek never builds), so a company whose quarter was filed days ago still showed the quarter before
+# (Akamai, Varonis, Rapid7: filed 3 to 5 Nov, still "Jun 2026" on 7 Nov) until someone opened its page. A reader that sees a filing newer
+# than a page's figures marks it; the screens' sweep builds a marked page before the others, until a build came after the filing's data.
+DUE_KEY = "stocks:due:"                # stocks:due:<region> = {symbol: the filing's day}
+DUE_KEEP = 300
+DUE_RETRY = 6 * 3600                   # a marked page is built again at most this often while the filing's data may still be on its way
+
+
+def mark_due(region: str, filed: dict) -> None:
+    """Note pages whose company filed results newer than the page's figures ({symbol: "YYYY-MM-DD"}): built first by the next sweep."""
+    if not filed:
+        return
+    marks = _setting(DUE_KEY + region) or {}
+    new = {s: d for s, d in filed.items() if s and d and marks.get(s) != d}
+    if not new:
+        return
+    marks.update(new)
+    if len(marks) > DUE_KEEP:
+        marks = dict(sorted(marks.items(), key=lambda kv: kv[1])[-DUE_KEEP:])
+    _put(DUE_KEY + region, marks)
+
+
+def due_marks(region: str) -> dict:
+    return _setting(DUE_KEY + region) or {}
+
+
+def filing_due(filed: str | None, ts: float | None, now: float | None = None) -> bool:
+    """Whether a page marked behind a results filing on `filed` should be built now: its build came before the filing's data could be out
+    (SEC_DATA_LAG after the filing) and not within DUE_RETRY."""
+    if not filed:
+        return False
+    now = time.time() if now is None else now
+    ts = ts or 0.0
+    try:
+        filed_ts = datetime.fromisoformat(str(filed)[:10]).replace(tzinfo=timezone.utc).timestamp()
+    except ValueError:
+        return False
+    return ts < filed_ts + SEC_DATA_LAG and now - ts >= DUE_RETRY
+
+
 BEHIND_RETRY = 7 * 86400       # a page still behind after a build that came after its report was filed: swept again weekly
 SEC_DATA_LAG = 4 * 86400       # how long after a filing the SEC's data has it
 
@@ -1219,6 +1260,57 @@ def _theme_figures(p: dict, snap: dict, financial: bool) -> dict:
             "cash": None if financial else cash, "latest_yoy": snap.get("latest_yoy")}
 
 
+def _row_of(table: dict | None, *prefixes: str) -> list:
+    for label, vals in ((table or {}).get("rows") or {}).items():
+        if any(str(label).lower().startswith(x) for x in prefixes):
+            return list(vals or [])
+    return []
+
+
+def _at(vals: list, i: int):
+    return _num(vals[i]) if 0 <= i < len(vals) else None
+
+
+def lender_figures(p: dict) -> dict | None:
+    """A lender's own measures from its reported tables, for a theme's figures (R18, the owner: a bank theme showed EBITDA margin, ROCE and
+    EV/EBITDA as "–" everywhere): gross and net NPA from the latest quarter that gives them; for the latest full year, net interest income
+    (interest earned less interest paid) and the net profit over average total assets ("nii_assets" and "roa", %), and net interest income's
+    growth on the year before. Only what the tables hold: CASA, capital adequacy and cost to income aren't in them. None when none is."""
+    out: dict = {}
+    qt = p.get("quarters") or {}
+    qcols = [str(c).strip() for c in qt.get("cols") or []]
+    for key, label in (("gnpa", "gross npa"), ("nnpa", "net npa")):
+        vals = _row_of(qt, label)
+        at = next((i for i in range(min(len(vals), len(qcols)) - 1, -1, -1) if _num(vals[i]) is not None), None)
+        if at is not None:
+            out[key], out["npa_of"] = round(_num(vals[at]), 2), qcols[at]
+    pl, bal = p.get("pl") or {}, p.get("balance") or {}
+    cols = [str(c).strip() for c in pl.get("cols") or []]
+    years = [i for i, c in enumerate(cols) if c.upper() != "TTM"]
+    rev, paid, net = _row_of(pl, "revenue", "sales"), _row_of(pl, "interest"), _row_of(pl, "net profit")
+    if years:
+        i = years[-1]
+        bcols = [str(c).strip() for c in bal.get("cols") or []]
+        assets = dict(zip(bcols, (_num(x) for x in _row_of(bal, "total assets"))))
+        prev = cols[years[-2]] if len(years) > 1 else None
+        avg = [a for a in (assets.get(cols[i]), assets.get(prev)) if a]
+        nii = (_at(rev, i) - _at(paid, i)) if _at(rev, i) is not None and _at(paid, i) is not None else None
+        if avg:
+            base = sum(avg) / len(avg)
+            if nii is not None:
+                out["nii_assets"] = round(nii / base * 100, 2)
+            if _at(net, i) is not None:
+                out["roa"] = round(_at(net, i) / base * 100, 2)
+        if nii is not None and len(years) > 1:
+            j = years[-2]
+            before = (_at(rev, j) - _at(paid, j)) if _at(rev, j) is not None and _at(paid, j) is not None else None
+            if before and before > 0 and nii > 0:
+                out["nii_growth"] = round((nii / before - 1) * 100, 1)
+        if out:
+            out["year"] = cols[i]
+    return out or None
+
+
 def quarter_yoy(snap: dict) -> dict | None:
     """The latest reported quarter's revenue and profit against the same quarter a year before, as the results calendar's table
     shows them: {"sales": %, "profit": %, "of": "Sep 2026 vs Sep 2025"}. None unless the source gave a quarter (a year's figures
@@ -1282,6 +1374,8 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
         # for a theme's deep dive (THEME-1), from the figures the company page shows: book value and P/B (the page's Valuation), interest cover (its Debt
         # and cash), cash on hand (the balance sheet's breakdown, for enterprise value) and the latest quarter against the year-ago quarter
         **_theme_figures(p, snap, financial),
+        # a lender's own measures (NPA, net interest income and profit over assets) for a theme's lender columns (R18)
+        **({"lender": lf} if (lf := lender_figures(p) if financial and region == "IN" else None) else {}),
         "growth": {k: (nums.get("growth") or {}).get(k) for k in ("sales_cagr_3y", "profit_cagr_3y", "sales_cagr_5y", "profit_cagr_5y")},
         "q": quarter_yoy(snap),
         "stage": (trend or {}).get("stage"), "stage_days": (trend or {}).get("stage_days"),

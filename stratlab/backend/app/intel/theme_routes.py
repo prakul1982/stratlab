@@ -267,7 +267,7 @@ def ai_state(region: str, theme: str, m: dict) -> dict | None:
     "message"} when the map couldn't be written (the base is shown without it), None when everything is in."""
     t = theme.lower()
     mj = job_of(("map", region, t))
-    cj = job_of(("check", region, t, int(float(m.get("generated_at") or 0))))
+    cj = job_of(("check",) + check_key(region, theme, m))
     if (mj and mj["state"] == "running") or (cj and cj["state"] == "running"):
         return {"state": "working", "message": ""}
     if not float(m.get("generated_at") or 0):
@@ -275,6 +275,18 @@ def ai_state(region: str, theme: str, m: dict) -> dict | None:
             return {"state": "failed", "message": mj["message"], "code": mj.get("code") or ""}
         return {"state": "working", "message": ""}         # not started yet (JOBS_MAX were running): the page's next ask starts it
     return None
+
+
+def check_key(region: str, theme: str, m: dict) -> tuple:
+    """A checked map's cache key: the market, the theme, the AI map's time and the membership rules' version (theme_base.RULES), so a check
+    kept from before a deploy that changed the rules is worked out again, never served with the old companies (R18)."""
+    return (region, theme.lower(), int(float(m.get("generated_at") or 0)), theme_base.RULES)
+
+
+def _base_args(region: str, theme: str, inds: dict) -> dict:
+    """with_base's arguments for a theme: its named list, the companies kept out, the industries its name leaves out and the size it names."""
+    return {"named": inds.get("named") or (), "exclude": inds.get("except") or (), "drop": inds.get("drop") or (),
+            "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
 def _no_ai(system: str, text: str) -> dict:
@@ -290,8 +302,8 @@ def quick(region: str, theme: str, m: dict) -> dict:
     out = {**m, "value_chain": [{**v, "companies": unconfirmed(v.get("companies"))} for v in m.get("value_chain") or []],
            "sub_themes": [{**x, "companies": unconfirmed(x.get("companies"))} for x in m.get("sub_themes") or []]}
     out["placements"] = {"checked": False, "pending": len(_map_names(m)), "left_out": 0}
-    out = theme_base.with_base(m, out, _rows(region), inds["industries"], grounding.listed_name, inds.get("named") or (), inds.get("except") or ())
-    key = (region, theme.lower(), int(float(m.get("generated_at") or 0)))
+    out = theme_base.with_base(m, out, _rows(region), inds["industries"], grounding.listed_name, **_base_args(region, theme, inds))
+    key = check_key(region, theme, m)
     claims = A.get("sector_claims", key) or _plain_claims(m)
     out["tailwinds"], out["risks"] = claims["tailwinds"], claims["risks"]
     out["placements"]["industries_by"] = inds["how"]
@@ -302,7 +314,7 @@ def checked(region: str, theme: str, m: dict, wait: bool = False) -> dict:
     """The map as the page shows it, never waiting on the AI (LIVE3-001): the checked map when it is in; otherwise the checks are started
     in the background (`_check`) and the request gets the latest partly checked map, or the base with nothing checked yet (`quick`).
     `wait`: work the checks out here (an admin's blog draft)."""
-    key = (region, theme.lower(), int(float(m.get("generated_at") or 0)))
+    key = check_key(region, theme, m)
     hit = A.get("sector_checked3", key)
     if hit is None and wait:
         hit = _check(region, theme, m)
@@ -327,7 +339,7 @@ def _check(region: str, theme: str, m: dict) -> dict:
     another industry is left out), claims against dated headlines. A part that can't be checked right now (a source or the AI is busy) is
     left to the next run; after PENDING_GIVE_UP it is served as it stands, its companies not yet confirmed, and checked again two hours
     on, so the page never waits on one company for minutes (THEMES item 6: "1 company is still being checked" for over two minutes)."""
-    key = (region, theme.lower(), int(float(m.get("generated_at") or 0)))
+    key = check_key(region, theme, m)
     hit = A.get("sector_checked3", key)
     if hit is not None:
         return hit
@@ -345,8 +357,7 @@ def _check(region: str, theme: str, m: dict) -> dict:
             except Exception as e:
                 print("theme: SEC codes not filled:", type(e).__name__, str(e)[:100])
         inds = _industries(region, theme)
-        out = theme_base.with_base(m, out, _rows(region), inds["industries"], grounding.listed_name,
-                                   inds.get("named") or (), inds.get("except") or ())
+        out = theme_base.with_base(m, out, _rows(region), inds["industries"], grounding.listed_name, **_base_args(region, theme, inds))
         claims = A.get("sector_claims", key)
         if claims is None:
             try:
@@ -478,11 +489,18 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False) -> dict:
     """The dive for a checked map with its descriptions (the page's tables and sections), from DIVE_CACHE while it is fresh."""
     fm, figures = theme_base.for_figures(m)
     said = sum(1 for v in fm["value_chain"] if v.get("official") for c in v["companies"] if c.get("what"))
-    key = (r, theme.lower(), int(float(m.get("generated_at") or 0)), (m.get("placements") or {}).get("placed"), said)
+    key = (r, theme.lower(), int(float(m.get("generated_at") or 0)), (m.get("placements") or {}).get("placed"), said, theme_base.RULES)
     hit = None if refresh else DIVE_CACHE.get(key)
     if hit is None:
         hit = theme_data.build(r, theme, fm, sources(r, theme))
         hit["placements"], hit["figures"] = m.get("placements"), figures
+        late = {x["symbol"]: x["filed_unread"] for x in ((hit.get("sections") or {}).get("quarter") or {}).get("earlier") or [] if x.get("filed_unread")}
+        if late:                      # results filed since the stored page was built: the screens' sweep builds those pages first (R18)
+            try:
+                from .. import stock_pages
+                stock_pages.mark_due(r, late)
+            except Exception as e:
+                print("theme: pages behind a filing not marked:", type(e).__name__, str(e)[:100])
         if (m.get("placements") or {}).get("checked"):
             DIVE_CACHE.set(key, hit, DIVE_TTL)
             auto_post(r, theme, hit)
@@ -657,7 +675,7 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
     stamp = int(float(m.get("generated_at") or 0))
     seen = (NEWS_CACHE.get((r, theme.lower(), int(float(theme_base.for_figures(m)[0].get("generated_at") or 0)))) is not None,
             bool((IPO_CACHE.get((r, theme.lower(), stamp)) or {}).get("checked")))     # a part read since is in a new file
-    key = (r, theme.lower(), format, today.isoformat(), stamp, biz, seen)
+    key = (r, theme.lower(), format, today.isoformat(), stamp, biz, seen, theme_base.RULES, deck.THEME_DECK_VERSION)
     body = DECK_CACHE.get(key)
     if body is None:
         view = deck_view(r, m, dive_of(r, theme, m), deck_extras(r, theme, m, profile))

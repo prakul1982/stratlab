@@ -294,6 +294,7 @@ def build_index(region: str, store: bool = True) -> dict:
     prefix = f"stocks:page:{region}:"
     rows, ages, empty, old = [], {}, set(), {}
     bought = deals.buys()["buys"] if region == "IN" else {}
+    marks = stock_pages.due_marks(region)          # pages behind a results filing a theme saw (stock_pages.mark_due)
     shown = []
     for key, raw in db.all_settings_with_prefix(prefix):
         stored = db.json_value(raw, {})
@@ -306,7 +307,7 @@ def build_index(region: str, store: bool = True) -> dict:
         # ...or a page whose table is a year behind the company's newest annual report (R10V-002: Dr. Reddy's and Caledonia
         # kept a table to the report before the last one, as long as nobody opened the page)
         # (a page still behind after a build that came after its report was out waits a week, R12-006: see behind_due)
-        due = stock_pages.behind_due(facts, ages[sym], started)
+        due = stock_pages.behind_due(facts, ages[sym], started) or stock_pages.filing_due(marks.get(sym), ages[sym], started)
         if not facts or (facts.get("v") or 1) < stock_pages.FACTS_VERSION or due:
             empty.add(sym)
             if stock_pages.has_content(facts):

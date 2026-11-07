@@ -19,6 +19,9 @@ import json
 import re
 from datetime import datetime, timezone
 
+# the version of the membership rules (who is in a theme, which industries, which layers): part of every cached read's key, so a read kept
+# from before a deploy never keeps the old rules' companies or figures (R18: "Private banks" kept the public banks after the fix)
+RULES = 18
 INDUSTRIES_DAYS = 30            # the AI's pick of a free-text theme's industries is made again after this long (at most monthly)
 FIGURES_MAX = 60                # companies the dive works figures out for: every one the AI named, then the largest of the base
 DESCRIBE_MAX = 120              # base companies whose own one-line description is looked up for the page, largest first
@@ -260,6 +263,59 @@ def words_pick(theme: str, known: dict[str, str]) -> list[str]:
     return [name for k, name in sorted(known.items()) if tw & _stems(k)] if tw else []
 
 
+# a theme that names a subset (R18, the owner: "Private banks" pulled in the public-sector banks): the words people write for one, as the
+# exchange's industry names spell it
+_ALIAS = {"psu": "public", "government": "public", "pvt": "private", "listed": ""}
+
+
+def _concept_stems(theme: str) -> set[str]:
+    """The stems of the curated entries' own trigger words and phrases that this theme names (they say which theme, not which part of it)."""
+    out = set()
+    for c in concepts_of(theme):
+        out |= _stems(" ".join(c["words"]) + " " + " ".join(c.get("phrases", ())))
+    return out
+
+
+def subset_pick(theme: str, industries: list[str]) -> tuple[list[str], list[str]]:
+    """(the industries kept, the industries left out) when the theme's name narrows its curated industries: a word of the theme that is not
+    the entry's own trigger ("private" in "Private banks", "components" in "Auto components") and that some of the industries' names carry
+    keeps only those. A theme that names no such word keeps them all."""
+    t = " ".join(_ALIAS.get(w, w) for w in re.findall(r"[a-z0-9]+", str(theme or "").lower()))
+    want = _stems(t) - _concept_stems(theme) - {_stem(w) for w in SIZE_WORDS}
+    if not want or len(industries) < 2:
+        return list(industries), []
+    keep = [i for i in industries if want & _stems(i)]
+    if not keep or len(keep) == len(industries):
+        return list(industries), []
+    return keep, [i for i in industries if i not in keep]
+
+
+# a theme of one size of company (the owner: "small-cap"): India by SEBI's ranks of market value (the largest 100 large, the next 150 mid,
+# the rest small), the US by market value ($10 bn and up large, $2 bn to $10 bn mid, below small)
+SIZE_WORDS = ("cap", "caps", "smallcap", "smallcaps", "midcap", "midcaps", "largecap", "largecaps")
+IN_RANKS = {"large": (1, 100), "mid": (101, 250), "small": (251, 10 ** 9)}
+US_BANDS = {"large": (10000.0, 1e18), "mid": (2000.0, 10000.0), "small": (0.0, 2000.0)}       # $ million
+
+
+def size_band(theme: str) -> str | None:
+    """"small", "mid" or "large" when the theme names a size of company ("Small-cap pharma", "midcap IT"), else None."""
+    t = " ".join(re.findall(r"[a-z0-9]+", str(theme or "").lower()))
+    m = re.search(r"\b(small|mid|large)\s?caps?\b", t)
+    return m.group(1) if m else None
+
+
+def in_band(region: str, band: str | None, rows: list[dict]) -> set[str] | None:
+    """The symbols of the market's companies of that size (None: no size named, everyone is in)."""
+    if not band:
+        return None
+    caps = sorted(((r.get("market_cap") or 0, r["symbol"]) for r in rows or [] if r.get("symbol") and r.get("market_cap")), key=lambda x: (-x[0], x[1]))
+    if region == "US":
+        lo, hi = US_BANDS[band]
+        return {s for c, s in caps if lo <= c < hi}
+    lo, hi = IN_RANKS[band]
+    return {s for k, (_, s) in enumerate(caps, 1) if lo <= k <= hi}
+
+
 def industries_for(region: str, theme: str, rows: list[dict], ask, get_setting, set_setting, now=None) -> dict:
     """{"industries", "how", "named", "except"}: the official industries at the theme's core. "how":
     - "list": the curated table (with its named members and exclusions);
@@ -276,8 +332,8 @@ def industries_for(region: str, theme: str, rows: list[dict], ask, get_setting, 
     if cur is not None:
         named, out = named_lists(region, theme)
         listed = {r.get("symbol") for r in rows or []}
-        return {"industries": cur + ([exact] if exact and exact not in cur else []), "how": "list",
-                "named": [s for s in named if s in listed], "except": out}
+        cur, drop = subset_pick(theme, cur + ([exact] if exact and exact not in cur else []))
+        return {"industries": cur, "how": "list", "named": [s for s in named if s in listed], "except": out, "drop": drop}
     if exact:
         return {"industries": [exact], "how": "words", "named": [], "except": []}
 
@@ -292,7 +348,7 @@ def industries_for(region: str, theme: str, rows: list[dict], ask, get_setting, 
         hit = json.loads(get_setting(skey) or "null")
     except Exception:
         hit = None
-    if isinstance(hit, dict) and hit.get("at"):
+    if isinstance(hit, dict) and hit.get("at") and hit.get("rules") == RULES:       # a pick kept under older rules is made again
         try:
             fresh = (now - datetime.fromisoformat(hit["at"])).days < INDUSTRIES_DAYS
         except ValueError:
@@ -305,7 +361,7 @@ def industries_for(region: str, theme: str, rows: list[dict], ask, get_setting, 
         print("theme base: industries not picked:", theme[:40], type(e).__name__, str(e)[:100])
         return answer([], "pending")
     try:
-        set_setting(skey, json.dumps({"at": now.isoformat(timespec="seconds"), "industries": picked}, ensure_ascii=False))
+        set_setting(skey, json.dumps({"at": now.isoformat(timespec="seconds"), "industries": picked, "rules": RULES}, ensure_ascii=False))
     except Exception as e:
         print("theme base: industries not kept:", str(e)[:100])
     return answer(picked, "ai")
@@ -316,7 +372,8 @@ def _named(m: dict) -> set[str]:
     return {c.get("ticker") for g in (m.get("value_chain") or []) + (m.get("sub_themes") or []) for c in g.get("companies") or [] if c.get("ticker")}
 
 
-def with_base(m_before: dict, out: dict, rows: list[dict], industries: list[str], name_of=lambda n, s: n or s, named=(), exclude=()) -> dict:
+def with_base(m_before: dict, out: dict, rows: list[dict], industries: list[str], name_of=lambda n, s: n or s, named=(), exclude=(),
+              drop=(), sized: set[str] | None = None) -> dict:
     """The checked map (`out`, from theme_check.check_placements on `m_before`) with every company of the theme's industries in it. Each
     company carries `base` (it is in an official industry of the theme), its `industry` and `cap` (the index's market value). A base company
     the AI put in a layer stays there when its words show it or weren't checked yet; one the check moved out of every layer, or the AI never
@@ -324,13 +381,25 @@ def with_base(m_before: dict, out: dict, rows: list[dict], industries: list[str]
     `total`, `base`, `added` (companies from other industries the AI named that are kept), `confirmed` (of those, shown in their own words),
     `left_out` (named additions whose own words said no) and the `industries`. `named`: the curated table's own members of the theme, base too
     (`basis` "list", listed under "Named in the theme's list" when the AI didn't place them); `exclude`: companies of the industries that are
-    another theme's (solar-cell makers filed as semiconductors), out of the base unless the AI names them."""
+    another theme's (solar-cell makers filed as semiconductors), out of the base unless the AI names them. `drop`: the industries a theme's
+    name leaves out (subset_pick: the public-sector banks of "Private banks") and `sized`: the companies of the size it names (in_band), so
+    a company the AI names from them is out too (R18)."""
     idx = {r["symbol"]: r for r in rows or [] if r.get("symbol")}
     inset = {key(i) for i in industries}
     skip = set(exclude)
-    by_industry = {s: r for s, r in idx.items() if key(r.get("industry")) in inset and s not in skip}
-    by_list = {s: idx[s] for s in named if s in idx and s not in by_industry}
+    gone = {key(i) for i in drop}
+    by_industry = {s: r for s, r in idx.items() if key(r.get("industry")) in inset and s not in skip and (sized is None or s in sized)}
+    by_list = {s: idx[s] for s in named if s in idx and s not in by_industry and (sized is None or s in sized)}
     base = {**by_industry, **by_list}
+
+    def outside(c) -> bool:              # a company the theme's own name leaves out, whoever named it
+        sym = c.get("ticker")
+        if sym in base:
+            return False
+        r = idx.get(sym) or {}
+        return key(r.get("industry")) in gone or (sized is not None and sym in idx and sym not in sized)
+    out = {**out, "value_chain": [{**v, "companies": [c for c in v.get("companies") or [] if not outside(c)]} for v in out.get("value_chain") or []],
+           "sub_themes": [{**x, "companies": [c for c in x.get("companies") or [] if not outside(c)]} for x in out.get("sub_themes") or []]}
 
     def tag(c):
         r = idx.get(c.get("ticker")) or {}

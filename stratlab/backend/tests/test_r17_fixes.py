@@ -66,7 +66,7 @@ from datetime import datetime as _dt, timezone as _tz
 from app import deck
 from app.intel import theme_data as D
 from app.intel import theme_routes as T
-from tests.test_export import texts
+from tests.test_export import table_of, texts
 from tests.test_theme1 import TODAY, facts
 
 NOW = _dt(2026, 10, 5, 6, 0, tzinfo=_tz.utc)
@@ -128,7 +128,8 @@ def test_a_layer_whose_companies_are_all_not_confirmed_gets_no_slide_and_the_lay
     assert not any(t.startswith("Layer 3") for t in titles)
     assert "No slide for Machinery: none of its companies is confirmed by its own description." in texts(slides)
     _, b = deck_of(*theme_b())
-    assert [t.title for t in b if t.title.startswith("Layer")][0].startswith("Layer 1 · Processors")
+    # changed on purpose (R18): one layer is nothing to set side by side, so no layer slide and no value chain
+    assert not [t.title for t in b if t.title.startswith("Layer")] and "The value chain by layer" not in [t.title for t in b]
 
 
 def test_membership_reads_the_layers_own_words_and_a_sentence_that_says_nothing_of_the_work_leaves_the_industry_standing():
@@ -167,25 +168,24 @@ def test_the_highest_and_lowest_layer_are_named_when_every_layer_is_an_official_
     assert (chain["highest"], chain["lowest"]) == ("Film", "Converters") and chain["gap"] == 7.0
     cards = next(b for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards")["items"]
     where = next(c for c in cards if c["title"] == "Where the margin sits")["lines"][0]
-    assert where == "Median EBITDA margin is highest in Film (19%) and lowest in Converters (12%), a gap of 7.0 points."
+    assert where == "Median EBITDA margin is highest in Film (19%) and lowest in Converters (12%), a gap of 7 points."          # R18: whole figures print whole
     assert "stands apart" not in texts(slides)
-    _, sb = deck_of(*theme_b())                 # one layer: said so, nothing claimed
-    assert "Fewer than two layers have 2 or more companies with an EBITDA margin, so no highest and lowest are named." in texts(sb)
+    _, sb = deck_of(*theme_b())                 # one layer: nothing claimed and (R18, changed on purpose) nothing said about it
+    assert "Fewer than two layers" not in texts(sb) and not any(c["title"] == "Where the margin sits" for s in sb if s.title == "Key findings"
+                                                               for b in s.blocks if b["kind"] == "cards" for c in b["items"])
 
 
 def test_long_tables_keep_their_first_page_in_the_core_and_the_rest_in_the_appendix_with_its_page():
     v, slides = deck_of(*theme_a())
     titles = [s.title for s in slides]
     app = titles.index("Appendix")
-    for base in ("Every company's figures", "The latest quarter against a year earlier"):
-        assert base in titles[:app], base
-        cont = [i for i, t in enumerate(titles) if t.startswith(f"{base}, continued")]
-        assert cont and all(i > app for i in cont), base
-        first = slides[titles.index(base)]
-        rest = next(p for b in first.blocks if b["kind"] == "text" for p in b["paras"] if p.startswith("The rest of this table"))
-        assert rest.endswith(f"appendix, p. {cont[0] + 1}.")
+    # changed on purpose (R18, the owner: "move per-company tables out of the core"): every company's figures and the per-company tables of
+    # the theme in numbers are wholly in the appendix; a long layer keeps its largest companies on its one page, the rest in the appendix
+    for base in ("Every company's figures", "The latest quarter against a year earlier", "Layer 2 · Converters, all companies"):
+        at = [i for i, t in enumerate(titles) if t.startswith(base)]
+        assert at and all(i > app for i in at), base
     assert not any(_re.search(r"\(\d+ of \d+\)$", t) and t.split(" (")[0] in deck.SPILL for t in titles)
-    assert app <= 40                                                     # the core before the appendix stays short
+    assert app <= 25                                                     # the core before the appendix stays short
 
 
 def test_no_divider_without_anything_after_it_and_every_total_says_its_count():
@@ -210,8 +210,9 @@ def test_industry_economics_is_computed_and_traceable():
     md = v["sections"]["margin_drivers"]
     assert md and abs(sum(x["part"] for x in md["layers"]) - md["change"]) < 0.1             # the parts add up to the change
     titles = [s.title for s in slides]
-    for t in ("Industry economics", "Layers side by side", "What moved the aggregate margin"):
+    for t in ("Layers side by side", "What moved the aggregate margin"):
         assert t in titles, t
+    assert "Industry economics" in [r[0] for r in table_of(slides, "Contents")["rows"]]          # R18: a part on the contents page, no divider
     # the questions sit under a table of the part when they fit, so no page is half empty
     q = next(it for s in slides for b in s.blocks if b["kind"] == "cards" for it in b["items"] if it.get("title") == "Questions the figures raise")["lines"]
     assert any("on the quarter to Jun 2025" in x for x in q)                                    # the base quarter is stated
@@ -219,8 +220,9 @@ def test_industry_economics_is_computed_and_traceable():
     t = texts([s for s in slides if s.eyebrow and "Industry economics" in s.eyebrow]).lower()
     for word in ("buy", "sell", "avoid", "attractive", "undervalued", "overvalued", "recommend", "target price"):
         assert not _re.search(rf"\b{word}\b", t), word
-    # US, one layer, a loss-maker: no page setting the one layer beside nothing; what moved the margin is still worked out, the loss-maker's part too
+    # US, one layer, a loss-maker: what moved the margin is still worked out, the loss-maker's part too; changed on purpose (R18): with one
+    # layer there is no industry economics part at all
     vb, sb = deck_of(*theme_b())
-    assert "Layers side by side" not in [s.title for s in sb] and "What moved the aggregate margin" in [s.title for s in sb]
+    assert "Layers side by side" not in [s.title for s in sb] and "What moved the aggregate margin" not in [s.title for s in sb]
     parts = {x["symbol"]: x["part"] for x in vb["sections"]["margin_drivers"]["companies"]}
     assert set(parts) == {"PAY0", "PAY1", "PAY2"} and abs(sum(parts.values()) - vb["sections"]["margin_drivers"]["change"]) < 0.1
