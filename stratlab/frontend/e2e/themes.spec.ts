@@ -42,13 +42,15 @@ test("the theme page is a deep dive made of tables, with each company only where
   const members = page.locator("#theme-members");
   await expect(members.getByTestId("theme-counts")).toHaveText(/^6 companies: 5 from the official industry list, 1 added \(1 confirmed from its own description\)\.$/);
   await expect(members).toContainText("Official industries: Iron & Steel");
-  await expect(members.getByRole("heading", { name: /Diversified Metals · official industry/ })).toBeVisible();
-  await expect(members.getByRole("table", { name: /Diversified Metals: companies in the theme/ })).toContainText("Vedanta");
+  // R21: Vedanta, which the map doesn't name, is placed in the map's own layer that fits it (mining), never in an exchange-industry layer
+  // beside the map's
+  await expect(members.getByRole("heading", { name: /official industry/ })).toHaveCount(0);
+  await expect(members.getByRole("table", { name: /Coal and metal mining: companies in the theme/ })).toContainText("Vedanta");
   await expect(members.getByRole("table", { name: /Power generation: companies in the theme/ })).toContainText("Added");
   // the whole chain in one table, with the basis said
   const chain = page.getByRole("table", { name: /value chain by layer/i });
   await expect(chain.locator("thead th")).toHaveText([/^Layer$/, /^Companies$/, /^i?Revenue$/, /^i?EBITDA margin$/, /^Net margin$/, /^i?ROCE$/]);
-  await expect(chain.locator("tbody tr")).toHaveCount(4);          // the map's three layers, and Diversified Metals for Vedanta (THEMES)
+  await expect(chain.locator("tbody tr")).toHaveCount(3);          // the map's three layers (R21: Vedanta placed in one of them)
   await expect(main).toContainText("Consolidated accounts where the company files them");
   // a layer: its companies in their own words, the median and the range as rows; the wrong placement (ONGC under steel) isn't there
   const steel = page.locator("#layer-1");
