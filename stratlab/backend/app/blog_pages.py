@@ -393,6 +393,35 @@ def admin_blog_theme(req: ThemeDraft, profile=Depends(admin.admin_profile)):
     return ok(blog_research.draft_theme_post(dive, theme, r, notable_only=False))
 
 
+class Note(BaseModel):
+    slug: str
+    markdown: str
+    summary: str
+    market: str | None = "IN"
+    published: bool = False
+
+
+@admin_router.post("/admin/blog/note")
+def admin_blog_note(req: Note, _=Depends(admin.admin_profile)):
+    """Store a note the owner approved (a research note written in markdown) as a research post: its "# " line is the title, its
+    headings, paragraphs, tables and lists become the post's blocks, cleaned like every post (links only to this site, no advice words).
+    Stored hidden unless `published`; a second call with the same slug updates the words and keeps the first date."""
+    title, blocks = blog.markdown_blocks(req.markdown, _site())
+    if not title or not blocks:
+        err(400, "bad_note", "A note needs a '# ' title and some text.")
+    said = blog_research.advice_words({"title": title, "summary": req.summary, "blocks": blocks})
+    if said:
+        err(400, "advice_words", f"The note has advice wording ({said}); it isn't stored.")
+    try:
+        result = blog.upsert_research({"slug": req.slug, "kind": "research", "market": req.market, "title": title, "summary": req.summary,
+                                       "blocks": blocks, "published": req.published})
+    except ValueError as ex:
+        err(400, "bad_note", str(ex))
+    if req.published:
+        blog.set_published(req.slug, True)
+    return ok({"slug": req.slug, "result": result, "url": f"{_site()}/blog/{req.slug}", "blocks": len(blocks)})
+
+
 @admin_router.post("/admin/blog/briefs")
 def admin_blog_briefs(_=Depends(admin.admin_profile)):
     """Add posts for the daily Market Briefs already stored (the newest 60 of each market) that have none yet."""

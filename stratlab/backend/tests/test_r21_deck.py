@@ -132,7 +132,8 @@ def test_a_map_from_the_older_prompt_with_few_layers_is_written_again_once():
     coarse = {"generated_at": 3.0, "value_chain": [{"layer": "Semiconductors", "companies": [{"ticker": "A"}]}, {"layer": "Named", "companies": [{"ticker": "B"}]}]}
     assert A.map_due(coarse) and not A.map_due({**coarse, "map_v": A.MAP_V}) and not A.map_due({"generated_at": 0, "value_chain": []})
     fine = {"generated_at": 3.0, "value_chain": [{"layer": f"L{i}", "companies": [{"ticker": f"T{i}"}]} for i in range(4)]}
-    assert not A.map_due(fine)                                                     # four named layers with companies: kept
+    # changed on purpose (R23): any map from an older prompt is written again once, however many layers it has; one with the current version is kept
+    assert A.map_due(fine) and not A.map_due({**fine, "map_v": A.MAP_V})
     from app.intel import ai
     src = open(ai.__file__).read()
     assert "4-6 value-chain layers" in src and "as many risks\nas tailwinds" in src and "production chain or business models" in src

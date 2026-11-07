@@ -301,7 +301,7 @@ def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
     names = {c["ticker"]: c.get("name") for v in out.get("value_chain") or [] for c in v.get("companies") or []}
     about = _about_reader(region, names, 0)                           # stored descriptions only: nothing is read from a page here
     new, got = theme_base.place_rest(out, theme, lambda s_: about(s_), ask=ask, kept=kept)
-    if ask is not None and got and got != kept and any(x.get("by") == "ai" for x in (got.get("assign") or {}).values()):
+    if ask is not None and got and got != kept and (got.get("names_for") or any(x.get("by") == "ai" for x in (got.get("assign") or {}).values())):
         try:
             computed.put("theme:place", key, got, label=m.get("sector") or theme, region=region)
         except Exception as e:

@@ -1898,15 +1898,26 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 22                  # part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 23                  # part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
 
 
+# one money format (R23: "$1,947.2 bn" beside "$4,498 bn"): an amount of 1,000 bn or more prints with no decimal
+_BIG_BN = re.compile(r"(?<![\d.,])(\d{1,3}(?:,\d{3})+)\.(\d+)(?= (?:bn|billion)\b)")
+
+
+def _big_bn(m) -> str:
+    from decimal import ROUND_HALF_UP, Decimal
+    v = Decimal(m.group(1).replace(",", "") + "." + m.group(2)).quantize(Decimal("1"), ROUND_HALF_UP)
+    return f"{int(v):,}"
+
+
 def whole_figures(text):
-    """A text with every whole figure printed whole (the owner, 7 Nov: 149 "15.0%"-like figures in one deck); anything else as it is."""
-    return _WHOLE.sub(r"\1", text) if isinstance(text, str) else text
+    """A text with every whole figure printed whole (the owner, 7 Nov: 149 "15.0%"-like figures in one deck) and every amount of 1,000 bn or
+    more with no decimal; anything else as it is."""
+    return _WHOLE.sub(r"\1", _BIG_BN.sub(_big_bn, text)) if isinstance(text, str) else text
 
 
 CHART_FMT = {"pct": "pct1", "chg": "chg1", "x": "x1", "num1": "num1t"}

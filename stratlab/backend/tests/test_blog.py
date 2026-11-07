@@ -717,3 +717,16 @@ def test_only_the_owner_can_draft_a_theme_post(w, monkeypatch):
     assert c.post("/admin/blog/theme", json={"q": "cybersecurity", "region": "US"}).status_code in (401, 403)
     r = c.post("/admin/blog/theme", json={"q": "cybersecurity", "region": "US"}, headers=headers("pro-token"))
     assert r.status_code == 403 and "not_admin" in r.text
+
+
+def test_a_note_in_markdown_becomes_a_research_post_of_clean_blocks():
+    from app import blog
+    md = ("# India's IPOs\n\nIntro with a [link](https://stratlab.studio/invest/ipos) and an [outside one](https://example.com/x).\n\n"
+          "## The figures\n\n| Segment | Issues |\n|---|---:|\n| Main board | 235 |\n| SME | 203 |\n\n- one\n- two\n\n> a note\n\n---\nlast line\n")
+    title, blocks = blog.markdown_blocks(md, "https://stratlab.studio")
+    assert title == "India's IPOs" and [b["t"] for b in blocks] == ["p", "h2", "table", "ul", "note", "p"]
+    assert blocks[0]["text"][1] == {"a": "link", "href": "/invest/ipos"} and "outside one" in blocks[0]["text"] and not any(isinstance(x, dict) and "example" in x["href"] for x in blocks[0]["text"])
+    t = blocks[2]
+    assert t["head"] == ["Segment", "Issues"] and t["align"] == "lr" and t["rows"] == [["Main board", "235"], ["SME", "203"]]
+    clean = blog.clean_blocks(blocks)
+    assert len(clean) == 6 and not any("example.com" in str(b) for b in clean)

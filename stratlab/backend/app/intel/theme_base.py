@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 
 # the version of the membership rules (who is in a theme, which industries, which layers): part of every cached read's key, so a read kept
 # from before a deploy never keeps the old rules' companies or figures (R18: "Private banks" kept the public banks after the fix)
-RULES = 22                       # R21: every confirmed company in one of the map's layers (place_rest); R22: layer names fit, currencies, extra layers
+RULES = 23                       # R21: every confirmed company in one of the map's layers (place_rest); R22: layer names fit, currencies, extra layers
 INDUSTRIES_DAYS = 30            # the AI's pick of a free-text theme's industries is made again after this long (at most monthly)
 FIGURES_MAX = 60                # companies the dive works figures out for: every one the AI named, then the largest of the base
 DESCRIBE_MAX = 120              # base companies whose own one-line description is looked up for the page, largest first
@@ -553,13 +553,15 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
     rest = [v for v in vc if v.get("official") and v.get("basis") in ("industry", "list") and not v.get("by_industry")]
     todo = [c for v in rest for c in v.get("companies") or []]
     kept = kept if isinstance(kept, dict) and "assign" in kept else {}
-    if not own or not todo:
+    if not own:
         return m, kept
     names = {v["layer"] for v in own}
     got = {s: x for s, x in (kept.get("assign") or {}).items() if isinstance(x, dict) and (x.get("layer") in names or x.get("layer") == "")}
     rename, extra = dict(kept.get("rename") or {}), list(kept.get("extra") or [])
     need = [c for c in sorted(todo, key=lambda c: -(c.get("cap") or 0)) if c["ticker"] not in got]
+    asked = False
     if need and ask is not None:
+        asked = True
         from .theme_check import place_in_layers
         try:
             ans = place_in_layers(own, [{"symbol": c["ticker"], "name": c.get("name") or c["ticker"], "industry": c.get("industry") or "",
@@ -587,6 +589,19 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
             if len(cos) >= 2:
                 extra_layers.append({"layer": x["name"], "description": x.get("description") or "", "by_place": True, "companies": cos})
         other = list(left.values())
+    # the layers' names checked against the companies they hold once a map and its placements (R23: a map with nothing left to place kept
+    # "Raw materials and castings" for forgers, since the check rode only on the placement call): asked again only when the members change
+    sig = names_signature(own, by_layer)
+    names_for = kept.get("names_for") if kept.get("names_for") == sig else None
+    if asked:
+        names_for = sig
+    elif ask is not None and names_for is None:
+        from .theme_check import place_in_layers
+        try:
+            ans = place_in_layers([{**v, "companies": list(v.get("companies") or []) + by_layer.get(v["layer"], [])} for v in own], [], ask, theme)
+            rename, names_for = {k: x for k, x in ans["rename"].items() if k in names}, sig
+        except Exception as e:
+            print("theme base: layer names not checked:", theme[:40], type(e).__name__, str(e)[:100])
     out_vc = []
     for v in vc:
         if v in rest:
@@ -601,7 +616,15 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
     if other:
         out_vc.append({"layer": other_label(theme), "description": "", "official": True, "basis": "rest",
                        "companies": sorted(other, key=lambda c: (-(c.get("cap") or 0), c["ticker"]))})
-    return {**m, "value_chain": out_vc}, {"assign": got, "rename": rename, "extra": extra}
+    return {**m, "value_chain": out_vc}, {"assign": got, "rename": rename, "extra": extra, **({"names_for": names_for} if names_for else {})}
+
+
+def names_signature(own: list[dict], by_layer: dict) -> str:
+    """Which companies each of the map's layers holds once placed: the layer-name check is asked again only when this changes."""
+    import hashlib
+    parts = sorted(f"{v['layer']}:" + ",".join(sorted(c.get("ticker") or "" for c in list(v.get("companies") or []) + by_layer.get(v["layer"], [])))
+                   for v in own)
+    return hashlib.sha1("|".join(parts).encode(), usedforsecurity=False).hexdigest()[:16]
 
 
 def for_figures(m: dict, cap: int = FIGURES_MAX) -> tuple[dict, dict]:
