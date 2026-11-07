@@ -1581,6 +1581,13 @@ def membership_words(v: dict, total: int) -> str:
     return head
 
 
+def layer_common(layer: dict) -> str:
+    """The one line a layer's page shows of what its companies have in common: how they earn (theme_base.by_model, R25: the owner's review,
+    "avoid grouping businesses with fundamentally different revenue models"), from their own descriptions; "" when none is known."""
+    line = str((layer.get("model") or {}).get("line") or "").strip()
+    return f"In common: {line[:1].lower()}{line[1:]}" if line else ""
+
+
 def claim_layers(text: str, layers: list[str]) -> list[str]:
     """The layers a tailwind or risk names, by the layer's own words (at most two), so each claim says which part of the chain it is about."""
     from .intel.theme_data import _stems, does_the_work
@@ -2346,8 +2353,9 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
                     "Companies of the theme's list that the exchange files under this industry." if layer.get("by_industry") else
                     "The theme's own named companies that the layers above don't place." if layer.get("basis") == "list" else
                     "Companies the exchange classifies under this industry that the layers above don't place.") if layer.get("official") else ""
-        card = {"title": "What this layer does", "lines": [clip(desc, 13, CW - 0.5, 3)] + ([official] if official else []), "note": AI_NOTE} if desc else \
-            {"title": "Who is here", "lines": [official]} if official else None
+        common = layer_common(layer)
+        card = {"title": "What this layer does", "lines": [clip(desc, 13, CW - 0.5, 3)] + [x for x in (common, official) if x], "note": AI_NOTE} if desc else \
+            {"title": "Who is here", "lines": [x for x in (common, official) if x]} if official or common else None
         hist = layer.get("history") or {}
         mkey, mname = ("roe", "ROE") if lend else ("ebitda", "EBITDA margin")
         bars = [c for c in cos if c.get(mkey) is not None and c["symbol"] not in unsure]
