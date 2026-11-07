@@ -28,12 +28,13 @@ _PART_YEAR = re.compile(r"\s\d+m$")
 _YEAR = re.compile(r"^([A-Za-z]{3})\s+(\d{4})$")
 NOTABLE_GAP = 10.0            # points between the highest and lowest layer median EBITDA margin that make a post worth drafting
 NOTABLE_MOVE = 5.0            # points a layer's EBITDA margin moved over three years
+MIN_BASE = 3                  # companies a median needs to be shown as one, and a layer to be called highest or lowest (R20: no finding on a base under 3)
 MIN_LAYER = 2                 # companies a layer needs for its median to be called a layer's figure (a post, the chain's highest and lowest)
 ROUNDING = 1.0                # points: EBITDA margins are filed in whole points, so two medians this close may be the same figure rounded
 FINANCIAL_KEYS = ("ebitda", "roce", "debt_equity")
 # a lender's own measures (R18, the owner: banks' EBITDA margin, ROCE and EV/EBITDA were "–" everywhere): return on equity, net interest income
 # and profit over assets, gross and net NPA and price to book, each where the company's stored figures have it
-LENDER_KEYS = ("roe", "nii_assets", "roa", "gnpa", "nnpa", "nii_growth", "pb")
+LENDER_KEYS = ("roe", "nii_assets", "roa", "gnpa", "nnpa", "nii_growth", "deposit_growth", "pb")
 STAT_KEYS = ("ebitda", "net", "roce") + LENDER_KEYS
 
 
@@ -135,7 +136,7 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
         "roce": None if lender or old else r1(num(f.get("roce"))),
         "cap": cap, "pe": base.get("pe"), "pb": None if old else r1(num(f.get("pb"))),
         "roe": None if old or wild else r1(num(f.get("roe"))),
-        **{k: (None if old else num((f.get("lender") or {}).get(k))) for k in ("nii_assets", "roa", "gnpa", "nnpa", "nii_growth")},
+        **{k: (None if old else num((f.get("lender") or {}).get(k))) for k in ("nii_assets", "roa", "gnpa", "nnpa", "nii_growth", "deposit_growth")},
         "interest_cover": None if lender or old else r1(num(f.get("interest_cover"))), "ev_ebitda": r1(ev),
         "quarter": {"of": yoy.get("of"), "sales": r1(num(yoy.get("sales"))), "profit": r1(num(yoy.get("profit")))} if yoy else None,
         "debt_equity": None if lender else base.get("debt_equity"),
@@ -151,6 +152,11 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
         "red_flags": base.get("red_flags"), "basis": f.get("basis"), "industry": f.get("industry") or [],
         "years": [{"year": y["year"], "sales": num(y.get("sales")), "profit": num(y.get("profit")), "opm": None if lender else num(y.get("opm"))} for y in years],
     }
+
+
+def has_figures(r: dict) -> bool:
+    """Whether a company's key figures exist: its latest year's revenue or profit (R20)."""
+    return r.get("revenue") is not None or r.get("profit") is not None
 
 
 def one_off(ebitda, net) -> bool:
@@ -207,7 +213,7 @@ def margin_line(block: dict, chain_median: float | None, several: bool = True, w
     company's. (The median and range are rows of the table, not said again.) None when there is nothing more to say."""
     e = block["stats"].get("ebitda")
     parts = []
-    if e and chain_median is not None and several:
+    if e and chain_median is not None and several and e.get("n", MIN_BASE) >= MIN_BASE:
         d = e["median"] - chain_median
         if abs(d) > ROUNDING:
             # whole points print whole: 9% and 15% are 6 points apart, not "6.0 points" (R17-007); a median's half stays
@@ -231,19 +237,20 @@ def chain_table(blocks: list[dict]) -> dict:
         e, n, c = (b["stats"].get(k) for k in ("ebitda", "net", "roce"))
         rows.append({"layer": b["layer"], "n": b["n"], "revenue": b["revenue"], "ebitda": e["median"] if e else None, "net": n["median"] if n else None,
                      "roce": c["median"] if c else None, "ebitda_n": e["n"] if e else 0, "official": bool(b.get("official")),
-                     **{k: (b["stats"].get(k) or {}).get("median") for k in LENDER_KEYS}, "roe_n": (b["stats"].get("roe") or {}).get("n", 0)})
+                     **{k: (b["stats"].get(k) or {}).get("median") for k in LENDER_KEYS}, "roe_n": (b["stats"].get("roe") or {}).get("n", 0),
+                     **{f"{k}_n": (b["stats"].get(k) or {}).get("n", 0) for k in STAT_KEYS if k not in ("ebitda", "roe")}})
     # only the map's own layers (an official industry's leftover companies overlap them: "Vehicle assembly" and "Commercial Vehicles"), each
-    # with MIN_LAYER companies in its median, and only a gap wider than the rounding of whole-point margins, name a highest and a lowest
-    have = [r for r in rows if r["ebitda"] is not None and r["ebitda_n"] >= MIN_LAYER and not r["official"]]
+    # with MIN_BASE companies in its median, and only a gap wider than the rounding of whole-point margins, name a highest and a lowest
+    have = [r for r in rows if r["ebitda"] is not None and r["ebitda_n"] >= MIN_BASE and not r["official"]]
     if len(have) < 2:          # a map whose layers are the official industries themselves: they are its layers (R17-011)
-        have = [r for r in rows if r["ebitda"] is not None and r["ebitda_n"] >= MIN_LAYER]
+        have = [r for r in rows if r["ebitda"] is not None and r["ebitda_n"] >= MIN_BASE]
     line, hi, lo = None, None, None
     if len(have) >= 2:
         hi, lo = max(have, key=lambda r: r["ebitda"]), min(have, key=lambda r: r["ebitda"])
         if hi["layer"] == lo["layer"] or hi["ebitda"] - lo["ebitda"] <= ROUNDING:
             gap = max(r["ebitda"] for r in have) - min(r["ebitda"] for r in have)
             hi = lo = None
-            line = (f"The median EBITDA margins of the {len(have)} layers with at least {MIN_LAYER} companies are within {f1(gap)} "
+            line = (f"The median EBITDA margins of the {len(have)} layers with at least {MIN_BASE} companies are within {f1(gap)} "
                     "points of each other, the rounding of whole points.")
         else:
             whole = whole_points([c for b in blocks for c in b["companies"]])
@@ -252,15 +259,15 @@ def chain_table(blocks: list[dict]) -> dict:
     measure = "ebitda"
     if len(have) < 2:
         # lenders have no EBITDA margin: their layers are set side by side on return on equity (R18)
-        lend = [r for r in rows if r["roe"] is not None and r["roe_n"] >= MIN_LAYER and not r["official"]]
+        lend = [r for r in rows if r["roe"] is not None and r["roe_n"] >= MIN_BASE and not r["official"]]
         if len(lend) < 2:
-            lend = [r for r in rows if r["roe"] is not None and r["roe_n"] >= MIN_LAYER]
+            lend = [r for r in rows if r["roe"] is not None and r["roe_n"] >= MIN_BASE]
         if len(lend) >= 2:
             measure, have = "roe", lend
             hi, lo = max(lend, key=lambda r: r["roe"]), min(lend, key=lambda r: r["roe"])
             if hi["layer"] == lo["layer"] or hi["roe"] - lo["roe"] < 0.05:
                 hi = lo = None
-                line = f"The median return on equity of the {len(lend)} layers with at least {MIN_LAYER} companies is the same."
+                line = f"The median return on equity of the {len(lend)} layers with at least {MIN_BASE} companies is the same."
             else:
                 line = (f"Median return on equity is highest in {hi['layer']} ({pts(hi['roe'], True)}) and lowest in {lo['layer']} ({pts(lo['roe'], True)}), "
                         f"a gap of {f1(hi['roe'] - lo['roe'])} points.").replace(".0 points", " points")
@@ -502,7 +509,7 @@ def stored_price_section(rows: list[dict]) -> dict:
 def leaders(rows: list[dict]) -> list[dict]:
     """The table of every company in the theme with the figures to sort it by."""
     return [{k: r.get(k) for k in ("symbol", "name", "cap", "revenue", "year", "ebitda", "net", "roce", "sales_1y", "sales_3y", "profit_1y", "profit_3y",
-                                    "pe", "pb", "ev_ebitda", "debt_equity", "stage", "from_high", "one_off", "ebitda_dp", "status", "bank") + LENDER_KEYS} for r in rows]
+                                    "pe", "pb", "ev_ebitda", "debt_equity", "stage", "from_high", "one_off", "ebitda_dp", "status", "bank", "profit") + LENDER_KEYS} for r in rows]
 
 
 # ---------- stored events, holdings and cards ----------
@@ -767,9 +774,10 @@ def by_industry(checked: dict) -> dict:
     vc = checked.get("value_chain") or []
     if len(vc) != 1 or not vc[0].get("official") or vc[0].get("basis") != "list":
         return checked
+    from .theme_base import plain_industry
     groups: dict[str, list] = {}
-    for c in vc[0].get("companies") or []:
-        groups.setdefault(str(c.get("industry") or "").strip(), []).append(c)
+    for c in vc[0].get("companies") or []:          # by the industry's plain name, so two codes of one trade are one layer (R20)
+        groups.setdefault(plain_industry(c.get("industry") or "").strip(), []).append(c)
     big = {k: v for k, v in groups.items() if k and len(v) >= MIN_LAYER}
     rest = [c for k, v in groups.items() if k not in big for c in v]
     if len(big) + (1 if len(rest) >= MIN_LAYER else 0) < 2 or (rest and len(rest) < MIN_LAYER):
@@ -820,7 +828,9 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     for v in checked.get("value_chain") or []:
         mine = [rows[c["ticker"]] for c in v.get("companies") or [] if c["ticker"] in rows]
         what = {c["ticker"]: c.get("what") for c in v.get("companies") or []}
-        b = layer_block(v.get("layer") or "", [{**r, "what": what.get(r["symbol"]), "company_wide": r["symbol"] in wide} for r in mine], wide)
+        ind = {c["ticker"]: c.get("industry") for c in v.get("companies") or []}          # the exchange's industry, a column of an AI layer (R20)
+        b = layer_block(v.get("layer") or "", [{**r, "what": what.get(r["symbol"]), "company_wide": r["symbol"] in wide, "official_industry": ind.get(r["symbol"]) or ""}
+                                               for r in mine], wide)
         b["description"] = v.get("description") or ""
         b["policy"] = v.get("policy")
         b["official"], b["basis"] = bool(v.get("official")), v.get("basis")     # a layer that is one official industry's companies the AI didn't place (theme_base.py)
@@ -866,7 +876,10 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     own_set = {r["symbol"] for r in own}
     out = {
         "region": region, "sector": checked.get("sector") or theme, "as_of": as_of, "unit": next((r["unit"] for r in members if r.get("unit")), None),
-        "basis": basis_text(members, region), "layers": blocks, "chain": chain, "subs": subs, "members": len(members), "company_wide": sorted(wide & set(syms)),
+        "basis": basis_text(members, region), "layers": blocks, "chain": chain, "subs": subs, "company_wide": sorted(wide & set(syms)),
+        # "with figures" means the key figures exist (revenue or profit), not just a stored page (R20: a bank with dashes in every field
+        # counted among "20 of 20 with figures")
+        "members": sum(1 for r in members if has_figures(r)),
         "sections": {
             "size": size_section(members), "medians": {k: stat(r.get(k) for r in own if not (k == "net" and r.get("one_off"))) for k in ("ebitda", "net", "roce", "roe")},
             "growth": aggregate_growth([r for r in own if not r.get("series_break")]), "margins": margin_history(own), "valuation": val,
@@ -877,7 +890,8 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         # the theme's companies by how sure the theme is of each (R17-012), every placed company, with figures or not
         "membership": {"placed": len(every_status), "confirmed": sum(1 for x in every_status.values() if x != "unverified"),
                        "not_confirmed": sum(1 for x in every_status.values() if x == "unverified")},
-        "status": {r["symbol"]: r.get("status") or "core" for r in listed}, "with_figures": len(listed),
+        "status": {r["symbol"]: r.get("status") or "core" for r in listed}, "with_figures": sum(1 for r in listed if has_figures(r)),
+        "without_figures": [{"symbol": r["symbol"], "name": r["name"]} for r in listed if not has_figures(r) and r.get("status") != "unverified"],
     }
     out["sections"]["medians"]["net_all"] = stat(r.get("net") for r in own)
     layer_of = {c["symbol"]: b["layer"] for b in blocks for c in b["companies"]}

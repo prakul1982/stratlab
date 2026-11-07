@@ -1306,6 +1306,10 @@ def lender_figures(p: dict) -> dict | None:
             before = (_at(rev, j) - _at(paid, j)) if _at(rev, j) is not None and _at(paid, j) is not None else None
             if before and before > 0 and nii > 0:
                 out["nii_growth"] = round((nii / before - 1) * 100, 1)
+        # deposits on the year, from the balance sheet's last two years (advances aren't a line of these tables, so no loan growth)
+        dep = dict(zip(bcols, (_num(x) for x in _row_of(bal, "deposits"))))
+        if len(bcols) > 1 and dep.get(bcols[-1]) and dep.get(bcols[-2]) and dep[bcols[-2]] > 0:
+            out["deposit_growth"] = round((dep[bcols[-1]] / dep[bcols[-2]] - 1) * 100, 1)
         if out:
             out["year"] = cols[i]
     return out or None

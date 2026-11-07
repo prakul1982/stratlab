@@ -129,7 +129,7 @@ def test_the_chain_names_a_highest_and_lowest_only_among_its_own_layers_of_two_o
     close = [{**blocks[0], "stats": {"ebitda": {"median": 14.0, "n": 3}}}, blocks[1]]
     # changed on purpose (R17-011): a gap within the rounding is said, with the layers counted, never left to a sentence that isn't checked
     assert D.chain_table(close)["highest"] is None
-    assert D.chain_table(close)["line"] == "The median EBITDA margins of the 2 layers with at least 2 companies are within 1.0 points of each other, the rounding of whole points."
+    assert D.chain_table(close)["line"] == "The median EBITDA margins of the 2 layers with at least 3 companies are within 1.0 points of each other, the rounding of whole points."   # R20: a base of 3
 
 
 def test_the_valuation_says_its_bases_the_loss_makers_left_out_and_each_medians_count():
@@ -140,7 +140,10 @@ def test_the_valuation_says_its_bases_the_loss_makers_left_out_and_each_medians_
     t = texts(slides)
     assert "so the two are on different periods" in t and "A loss-maker has no P/E: 2 companies left out of the P/E median." in t
     layer = table_of(slides, "Layer 1 · Mining")
-    assert any(r[0] == "Median, of 2 · 2 · 1 companies" for r in plain(layer["rows"]))       # n per metric when they differ
+    # changed on purpose (R20): a median of fewer than 3 companies isn't shown as one: "–" with its count, the companies' own values above it
+    med = next(r for r in plain(layer["rows"]) if r[0].startswith("Median"))
+    assert med[0] == "Median (companies)" and "– (2)" in med and "– (1)" in med
+    assert "P/E, the 4 profitable companies (67% of 6; 2 loss-makers with none)" in [r[0] for r in table_of(slides, "Valuation")["rows"]]
 
 
 # ---------- part 2: classification ----------
@@ -202,11 +205,11 @@ def test_the_cover_and_the_next_slide_say_how_many_companies_the_figures_are_for
     v["members"] = v["members"] + [{"symbol": f"Z{i}", "name": f"Z {i}", "layer": "Cells", "cap": 100.0, "by": "Official industry"} for i in range(4)]
     v["placements"] = {**v["placements"], "total": 10}
     cov = deck.coverage(v)
-    assert cov["text"].startswith("5 of 10") and cov["share"] < 100
+    assert cov["text"] == f"10 in the theme · 5 with figures ({cov['share']}% of value)" and cov["share"] < 100     # R20: one wording
     slides = slides_of(v)
     cover = dict((t[0], t[1]) for t in next(b for b in slides[0].blocks if b["kind"] == "stats")["items"])
-    assert cover["With figures"] == cov["text"] and "Their market value" in cover
-    assert f"Figures for {cov['line']}." in texts([s for s in slides if s.title == "Key findings"])      # R19: no overview page; the findings say it
+    assert cover["With figures"] == str(cov["n"]) and "Their market value" in cover               # R20: the count, its share beneath
+    assert f"{cov['line']}." in texts([s for s in slides if s.title == "Key findings"])      # R19: no overview page; the findings say it
 
 
 # ---------- part 3: findings ----------

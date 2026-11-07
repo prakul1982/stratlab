@@ -59,8 +59,8 @@ def test_a_layer_has_a_median_and_a_range_and_the_whole_chain_one_table():
     assert mining["stats"]["net"]["median"] == pytest.approx(22.85, abs=0.01)         # 24.0 and 21.7
     rows = {r["layer"]: r for r in out["chain"]["rows"]}
     assert rows["Mining"]["ebitda"] == 49.0 and rows["Cells"]["ebitda"] == 9.5       # Reliance's 16 is left out of the median
-    assert out["chain"]["highest"] == "Mining" and out["chain"]["lowest"] == "Cells"
-    assert "highest in Mining (49%)" in out["chain"]["line"] and "gap of 39.5 points" in out["chain"]["line"]     # R16: whole points as filed
+    # changed on purpose (R20): no layer is called highest or lowest on a median of fewer than 3 companies (each layer here has 2)
+    assert out["chain"]["highest"] is None and out["chain"]["lowest"] is None and out["chain"]["line"] is None
     assert "Mar" in out["basis"] and "₹ crore" in out["basis"] and "Consolidated" in out["basis"]
 
 
