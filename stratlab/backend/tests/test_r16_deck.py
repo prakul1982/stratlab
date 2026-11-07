@@ -126,7 +126,9 @@ def test_the_chain_names_a_highest_and_lowest_only_among_its_own_layers_of_two_o
     c = D.chain_table(blocks)
     assert (c["highest"], c["lowest"]) == ("A", "B") and c["compared"] == ["A", "B"]
     close = [{**blocks[0], "stats": {"ebitda": {"median": 14.0, "n": 3}}}, blocks[1]]
-    assert D.chain_table(close)["highest"] is None and D.chain_table(close)["line"] is None
+    # changed on purpose (R17-011): a gap within the rounding is said, with the layers counted, never left to a sentence that isn't checked
+    assert D.chain_table(close)["highest"] is None
+    assert D.chain_table(close)["line"] == "The median EBITDA margins of the 2 layers with at least 2 companies are within 1.0 points of each other, the rounding of whole points."
 
 
 def test_the_valuation_says_its_bases_the_loss_makers_left_out_and_each_medians_count():
@@ -146,7 +148,9 @@ def test_a_company_whose_own_words_dont_show_the_work_is_listed_not_confirmed_an
                            "value_chain": [{"layer": "Vehicle assembly and brands"}], "sub_themes": [{"name": "Commercial vehicles", "detail": "Trucks and buses."}]}, "Automotive")
     assert D.membership({"base": True, "basis": "industry", "what": "Olectra makes electric buses and composite insulators"}, words) == "core"
     assert D.membership({"base": True, "basis": "industry", "what": "Ebix supplies on-demand software to insurance companies"}, words) == "unverified"
-    assert D.membership({"base": True, "basis": "industry", "what": ""}, words) == "unverified"
+    # changed on purpose (R17-012): own words that say nothing of the work (none, or "established in 1981") leave the exchange's industry standing
+    assert D.membership({"base": True, "basis": "industry", "what": ""}, words) == "core"
+    assert D.membership({"base": True, "basis": "industry", "what": "The Company was established in 1981"}, words) == "core"
     assert D.membership({"base": False, "verified": True, "what": "x"}, words) == "exposure"
     assert D.membership({"base": False, "verified": False, "what": ""}, words) == "unverified"
     assert D.membership({"ticker": "OLD"}, words) == "core"                                  # a map from before the checks
@@ -181,7 +185,13 @@ def test_valuation_is_set_beside_listed_companies_of_similar_market_value_with_g
     slides = slides_of(v)
     val = table_of(slides, "Valuation")
     assert "Similar market value" in val["head"] and any(r[0] == "ROCE" for r in val["rows"])
-    assert "above the median of listed companies of similar market value" in next(s.subtitle for s in slides if s.title == "Valuation")
+    # changed on purpose (R17-010): one P/E basis, the companies with similar-size peers against their peers' median, in the headline and the table
+    sub = next(s.subtitle for s in slides if s.title == "Valuation")
+    pp = peers["pe"]
+    assert sub == f"Median P/E {pp['theme']:.1f}x for the {pp['n']} companies with listed peers of similar market value, {pp['premium']:.1f}% above their peers' median of 10.0x"
+    row = next(r for r in val["rows"] if r[0] == "P/E, companies with similar-size peers")
+    assert row[1] == f"{pp['theme']:.1f}x" and row[4] == "10.0x" and row[2] == f"{pp['premium']:.1f}% above peers"
+    assert pp["premium"] == round((pp["theme"] / pp["peers"] - 1) * 100, 1)        # the ratio of the two medians the table shows
 
 
 def test_the_cover_and_the_next_slide_say_how_many_companies_the_figures_are_for_and_their_share_of_value():

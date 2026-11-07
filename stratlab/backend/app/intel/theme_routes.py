@@ -594,6 +594,7 @@ def deck_view(r: str, m: dict, dive: dict, extra: dict | None = None) -> dict:
             "members": members_of(m, dive), "tailwinds": m.get("tailwinds") or [], "risks": m.get("risks") or [],
             "placements": m.get("placements") or {}, "figures": dive.get("figures") or {}, "median_ebitda": med.get("median"),
             "checks": dive.get("checks") or {}, "status": dive.get("status") or {}, "with_figures": dive.get("with_figures"),
+            "membership": dive.get("membership") or {},
             "news": None, "listings": None, "prices": None, "business": None, **(extra or {})}
 
 
