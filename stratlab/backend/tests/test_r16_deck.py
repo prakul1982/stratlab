@@ -101,9 +101,10 @@ def test_one_quarter_per_median_and_newer_results_filed_but_not_read_are_marked(
     v = view()
     v["sections"]["quarter"] = q
     slides = slides_of(v)
-    t = table_of(slides, "The latest quarter")
-    assert {"group": "On an earlier quarter, not in the median"} in t["rows"]
-    assert any("results filed 05 Nov 2026, not yet in these figures" in r[0] for r in plain(t["rows"]))
+    # changed on purpose (R19): the latest quarter is a summary page; the companies on an earlier quarter and those with newer results filed are named
+    q_lines = next(it for s in slides if s.title == "The latest quarter against a year earlier" for b in s.blocks if b["kind"] == "cards" for it in b["items"])["lines"]
+    assert any("still on an earlier quarter, left out of the median: MM Co, BO Co" in x for x in q_lines)
+    assert any(x == "Newer results filed but not yet in the figures: MM Co." for x in q_lines)
     watch = table_of(slides, "Worth a watch")
     assert any(r[0] == "MM Co" and "Results filed on 05 Nov 2026" in r[1] for r in watch["rows"])
 
@@ -205,7 +206,7 @@ def test_the_cover_and_the_next_slide_say_how_many_companies_the_figures_are_for
     slides = slides_of(v)
     cover = dict((t[0], t[1]) for t in next(b for b in slides[0].blocks if b["kind"] == "stats")["items"])
     assert cover["With figures"] == cov["text"] and "Their market value" in cover
-    assert f"figures for {cov['line']}" in slides[1].subtitle
+    assert f"Figures for {cov['line']}." in texts([s for s in slides if s.title == "Key findings"])      # R19: no overview page; the findings say it
 
 
 # ---------- part 3: findings ----------
@@ -271,8 +272,11 @@ def test_ownership_lists_the_changes_only_with_quarters_as_months_and_no_signed_
         {"symbol": "A", "name": "A Co", "quarter": "2026-09-30", "promoter": 50.0, "institutions": 10.0, "promoter_change": 0.01, "institutions_change": -0.2},
         {"symbol": "B", "name": "B Co", "quarter": "2026-09-30", "promoter": 40.0, "institutions": 20.0, "promoter_change": 0.8, "institutions_change": 0.1},
         {"symbol": "C", "name": "C Co", "quarter": "2026-09-30", "promoter": 30.0, "institutions": 20.0, "promoter_change": -0.02, "institutions_change": 1.7}]
-    t = table_of(slides_of(v), "Ownership")
-    assert [r[0] for r in t["rows"]] == ["B Co", "C Co"] and t["rows"][0][5] == "Sep 2026" and t["rows"][1][2] == "0 pts"      # R18: whole figures print whole
+    # changed on purpose (R19, the owner: "keep the important ones"): ownership is a per-company list on the theme's page, no deck page; a stake
+    # move of a point or more is in "Worth a watch"
+    slides = slides_of(v)
+    assert "Ownership" not in [s.title for s in slides]
+    assert not any("B Co" in r[0] for r in table_of(slides, "Worth a watch")["rows"])          # 0.8 points: under the rule
     assert deck._pts(-0.04) == "0.0 pts" and deck._pts(0.04) == "0.0 pts" and deck._pts(-1.25) == "−1.2 pts"
 
 
@@ -288,11 +292,10 @@ def test_red_flags_are_said_once_a_rights_issue_is_a_corporate_action_and_an_aud
     v = full()
     v["sections"]["ownership"]["red_flags"] = [{**x, "name": x["symbol"]} for x in reversed(flags)]
     v["sections"]["ownership"]["fund_raises"] = [{**x, "name": "OLA"} for x in D.fund_raises(items, {})]
-    ev = table_of(slides_of(v), "Events")
-    kinds = [(r[1], r[2]) for r in ev["rows"]]
-    assert ("OLA", "Fund raise") in kinds and ("OLA", "Red-flag filing") not in kinds
-    reds = [r for r in ev["rows"] if r[2] == "Red-flag filing"]
-    assert reds[0][3] == "Auditor resigned"
+    # changed on purpose (R19): no events page; an auditor's resignation is a dated fact in "Worth a watch"
+    slides = slides_of(v)
+    assert "Events" not in [s.title for s in slides]
+    assert any(r[0] == "TML" and r[1] == "Auditor resigned" for r in table_of(slides, "Worth a watch")["rows"])
 
 
 def test_quote_pages_picks_and_other_markets_headlines_are_left_out():
@@ -327,9 +330,9 @@ def test_what_a_company_does_is_a_business_sentence_never_a_heading_a_glued_word
 def test_the_deck_is_shorter_every_companys_own_words_in_the_appendix():
     slides = slides_of(full())
     titles = [s.title for s in slides]
-    assert titles.index("Appendix") < titles.index("Every company in this theme") < titles.index("How to read this deck")
-    assert titles.index("Every company in this theme") > titles.index("Events")
-    assert deck.MEMBER_SLIDES <= 12
+    # changed on purpose (R19): every company's own words are on the theme's page; the appendix is one table of every confirmed company's figures
+    assert "Every company in this theme" not in titles and titles.index("How to read this deck") < titles.index("Every company's figures")
+    assert all(s.title.startswith("Every company's figures") for s in slides[titles.index("How to read this deck") + 1:])
 
 
 # ---------- part 5: layout ----------

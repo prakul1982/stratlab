@@ -178,14 +178,13 @@ def test_the_highest_and_lowest_layer_are_named_when_every_layer_is_an_official_
 def test_long_tables_keep_their_first_page_in_the_core_and_the_rest_in_the_appendix_with_its_page():
     v, slides = deck_of(*theme_a())
     titles = [s.title for s in slides]
-    app = titles.index("Appendix")
-    # changed on purpose (R18, the owner: "move per-company tables out of the core"): every company's figures and the per-company tables of
-    # the theme in numbers are wholly in the appendix; a long layer keeps its largest companies on its one page, the rest in the appendix
-    for base in ("Every company's figures", "The latest quarter against a year earlier", "Layer 2 · Converters, all companies"):
-        at = [i for i, t in enumerate(titles) if t.startswith(base)]
-        assert at and all(i > app for i in at), base
-    assert not any(_re.search(r"\(\d+ of \d+\)$", t) and t.split(" (")[0] in deck.SPILL for t in titles)
-    assert app <= 25                                                     # the core before the appendix stays short
+    app = next(i for i, s in enumerate(slides) if s.title.startswith("Every company's figures"))
+    # changed on purpose (R18, then R19, the owner: "keep the important ones not everything"): the appendix is one table of every confirmed
+    # company's figures; a long layer keeps its largest companies on its one page and points there; nothing is "continued"
+    assert all(t.startswith("Every company's figures") for t in titles[app:])
+    assert not any("continued" in t or "all companies" in t for t in titles)
+    conv = next(s for s in slides if s.title == "Layer 2 · Converters")
+    assert any(p.endswith(f"every one: appendix, p. {app + 1}.") for b in conv.blocks for p in b.get("paras") or [])
 
 
 def test_no_divider_without_anything_after_it_and_every_total_says_its_count():
@@ -198,11 +197,11 @@ def test_no_divider_without_anything_after_it_and_every_total_says_its_count():
                 assert i + 1 < len(slides) and slides[i + 1].kind != "section", s.title
         size = next(s for s in slides if s.title == "Size and shape")
         assert _re.search(r"\(\d+ compan(y|ies) with figures and a market value\)|\d+ compan(y|ies) with figures and a market value", size.subtitle)
-        dc = [b for s in slides if s.title.startswith("Data confidence") for b in s.blocks if b["kind"] == "table" and b["head"][0] == "Companies"]
-        rows = {r[0]: r[1] for r in dc[0]["rows"]}
-        assert rows["Companies in the theme's list"] == str(v["placements"]["total"]) and "With a market value (the theme's total market value)" in rows
-        each = next(r[2] for r in dc[0]["rows"] if r[0] == "In each median and total")
-        assert _re.search(r"EBITDA margin \d+ · net margin \d+", each)
+        # changed on purpose (R19): data confidence is one page, its counts one line under the checks
+        assert [s.title for s in slides if s.title.startswith("Data confidence")] == ["Data confidence"]
+        line = next(p for s in slides if s.title == "Data confidence" for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))
+        assert f"companies in the theme's list {v['placements']['total']}" in line and "with a market value (the theme's total market value)" in line
+        assert _re.search(r"in each median: EBITDA margin \d+ · net margin \d+", line)
 
 
 def test_industry_economics_is_computed_and_traceable():
