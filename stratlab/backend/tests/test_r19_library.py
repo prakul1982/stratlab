@@ -273,3 +273,15 @@ def test_my_usage_lists_every_limit_and_the_refreshes_left(lib, monkeypatch):
     _sector(lib, "AI data centers", refresh=True)
     r = {x["key"]: x for x in lib.get("/me/usage").json()["rows"]}["refresh"]
     assert r["used"] == 1 and r["left"] == r["limit"] - 1
+
+
+def test_a_theme_map_and_its_check_survive_a_deploy(lib):
+    """R20's deck lane: after a deploy the kept maps were empty (memory only), so the first decks had no map. Kept in the shared store, the
+    map and its check are there for a new process, with no AI call."""
+    first = _sector(lib, "AI data centers")
+    calls = len(lib.calls)
+    A._cache.clear()                                   # a new process
+    r, theme, m, _ = routes.sector_map({"id": "u1", "_plan": "free", "plan": "free"}, "US", "AI data centers")
+    assert m["generated_at"] == first["generated_at"]
+    c = theme_routes.checked(r, theme, m)
+    assert c["placements"]["checked"] and len(lib.calls) == calls

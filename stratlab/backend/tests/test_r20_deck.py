@@ -275,6 +275,10 @@ def test_a_deck_waits_briefly_for_the_map_and_its_check_that_are_being_written(m
         def sector_map(profile, region, q, refresh):
             calls["n"] += 1
             return "IN", "x theme", maps[min(calls["n"] - 1, 1)], []
+
+        @staticmethod
+        def theme_map(profile, region, q):          # R19: the theme library's stored read first (none kept here)
+            return R.sector_map(profile, region, q, False)
     monkeypatch.setattr(T, "job_of", lambda key: {"state": "running", "done": done} if key[0] == "map" else None)
     monkeypatch.setattr(T, "checked", lambda r, theme, m: {**m, "placements": {"checked": True}})
     monkeypatch.setattr(T, "with_descriptions", lambda r, m: m)
