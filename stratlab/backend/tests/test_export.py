@@ -157,6 +157,14 @@ def test_the_deck_route_downloads_both_formats_as_one_deck_and_stops_at_the_plan
         finally:
             deck.build_theme = real_build
         assert again.status_code == 200 and again.content == r.content and built == [] and len(theme_routes.DECK_CACHE._d) >= 1
+        # R20: the file is in the shared store too: after a restart (the process's copy gone) it is sent again without a rebuild
+        theme_routes.DECK_CACHE._d.clear()
+        deck.build_theme = lambda v, pdf=False: built.append(pdf) or real_build(v, pdf)
+        try:
+            restarted = api.get("/research/theme-dive/deck?q=AI%20data%20centers&region=US&format=pdf")
+        finally:
+            deck.build_theme = real_build
+        assert restarted.status_code == 200 and restarted.content == r.content and built == []
         assert api.usage.count("deck") == 1 and "deck:theme:US:ai-data-centers" in api.usage
         r = api.get("/research/theme-dive/deck?q=AI%20data%20centers&region=US&format=pptx")      # the same theme's other format: free
         assert r.status_code == 200 and r.content[:2] == b"PK" and r.headers["content-disposition"].endswith('.pptx"')
