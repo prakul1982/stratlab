@@ -134,7 +134,7 @@ def test_the_chain_names_a_highest_and_lowest_only_among_its_own_layers_of_two_o
 
 def test_the_valuation_says_its_bases_the_loss_makers_left_out_and_each_medians_count():
     v = view()
-    v["sections"]["valuation"].update(losses=2)
+    v["sections"]["valuation"].update(losses=2, n=6)
     v["layers"][0]["stats"]["roce"] = {**(v["layers"][0]["stats"]["roce"] or {}), "n": 1, "median": 15.0, "min": 15.0, "max": 15.0}
     slides = slides_of(v)
     t = texts(slides)
@@ -143,7 +143,7 @@ def test_the_valuation_says_its_bases_the_loss_makers_left_out_and_each_medians_
     # changed on purpose (R20): a median of fewer than 3 companies isn't shown as one: "–" with its count, the companies' own values above it
     med = next(r for r in plain(layer["rows"]) if r[0].startswith("Median"))
     assert med[0] == "Median (companies)" and "– (2)" in med and "– (1)" in med
-    assert "P/E, the 4 profitable companies (67% of 6; 2 loss-makers with none)" in [r[0] for r in table_of(slides, "Valuation")["rows"]]
+    assert "P/E, the 4 companies with one (67% of 6; 2 loss-makers with none)" in [r[0] for r in table_of(slides, "Valuation")["rows"]]
 
 
 # ---------- part 2: classification ----------
@@ -188,7 +188,7 @@ def test_valuation_is_set_beside_listed_companies_of_similar_market_value_with_g
     v["sections"]["valuation"]["peers"] = peers
     slides = slides_of(v)
     val = table_of(slides, "Valuation")
-    assert "Similar market value" in val["head"] and any(r[0] == "ROCE" for r in val["rows"])
+    assert "Similar market value" in val["head"] and any(r[0] == "ROCE, companies with similar-size peers" for r in val["rows"])     # R22: the population said
     # changed on purpose (R17-010): one P/E basis, the companies with similar-size peers against their peers' median, in the headline and the table
     sub = next(s.subtitle for s in slides if s.title == "Valuation")
     pp = peers["pe"]

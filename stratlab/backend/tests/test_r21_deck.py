@@ -46,7 +46,7 @@ def test_every_base_company_goes_to_one_of_the_maps_layers_by_its_own_words_or_t
     assert not any(v.get("official") and v.get("basis") != "rest" for v in out["value_chain"])         # no exchange industry beside the map's layers
     placed = [c for v in out["value_chain"] for c in v["companies"] if c.get("placed")]
     assert {c["ticker"] for c in placed} == {"EL2", "MS2", "SH2", "XX1"} and all(c["verified"] is False and c["base"] for c in placed)
-    assert {s: x["by"] for s, x in got.items()} == {"EL2": "words", "MS2": "words", "SH2": "words", "XX1": "words"}
+    assert {s: x["by"] for s, x in got["assign"].items()} == {"EL2": "words", "MS2": "words", "SH2": "words", "XX1": "words"}      # R22: one answer, kept whole
 
 
 def test_one_ai_answer_places_them_and_a_kept_answer_is_never_asked_again():
@@ -58,12 +58,13 @@ def test_one_ai_answer_places_them_and_a_kept_answer_is_never_asked_again():
                           {"symbol": "NOTASKED", "layer": "L0"}, {"symbol": "EL2", "layer": "L9"}]}
     out, got = B.place_rest(mapped(), "Defence", ABOUT.get, ask=ask)
     assert len(asked) == 1 and [c["symbol"] for c in asked[0]["companies"]] == ["EL2", "MS2", "SH2", "XX1"]       # one batch, largest first
-    assert got["MS2"] == {"layer": "Missiles and rockets", "by": "ai"} and got["XX1"] == {"layer": "", "by": "ai"} and "NOTASKED" not in got
+    a_ = got["assign"]
+    assert a_["MS2"] == {"layer": "Missiles and rockets", "by": "ai"} and a_["XX1"] == {"layer": "", "by": "ai"} and "NOTASKED" not in a_
     again, _ = B.place_rest(mapped(), "Defence", ABOUT.get, ask=lambda s, t: pytest.fail("asked again"), kept=got)
     assert again == out
     # the AI busy: the words place them now
     busy, got2 = B.place_rest(mapped(), "Defence", ABOUT.get, ask=lambda s, t: (_ for _ in ()).throw(RuntimeError("busy")))
-    assert all(x["by"] == "words" for x in got2.values()) and busy == B.place_rest(mapped(), "Defence", ABOUT.get)[0]
+    assert all(x["by"] == "words" for x in got2["assign"].values()) and busy == B.place_rest(mapped(), "Defence", ABOUT.get)[0]
 
 
 def test_the_answer_is_kept_in_the_shared_store_with_the_map(monkeypatch):

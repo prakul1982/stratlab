@@ -254,30 +254,56 @@ def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None
 
 # ---------- the companies the map didn't place, each in the best of its layers (R21) ----------
 PLACE_SYSTEM2 = """You sort listed companies into the layers of a map of an industry theme. Every company given is in the theme already (the
-stock exchange files it under the theme's industry). For each COMPANY, pick the one LAYER (by its id) whose work its own description shows
-best, from its description and industry only. Pick "none" when no layer fits.
-Reply with ONLY this JSON: {"place": [{"symbol": "<symbol>", "layer": "<layer id or none>"}]}"""
+stock exchange files it under the theme's industry). Use only the companies' descriptions and industries given, no other knowledge, and no figure.
+1. PLACE: for each COMPANY, pick the one LAYER (by its id) whose work its own description shows best; "none" when no layer fits.
+2. RENAME: for a layer whose name or description doesn't fit the companies in it after step 1 (its MEMBERS and those you placed there), give a
+   name (at most 6 words) and a description (2 sentences: what these companies do, and what sets this layer apart) that fit them. Leave out a
+   layer that fits.
+3. EXTRA: when 5 or more of the companies (or more than a sixth of all) fit no layer, propose up to 2 more layers for them, from their own
+   descriptions, each with the symbols it holds. Keep business models whose economics differ apart (what is designed, made, supplied or serviced,
+   and to whom); never one layer for the whole industry.
+Reply with ONLY this JSON: {"place": [{"symbol": "", "layer": "<layer id or none>"}], "rename": [{"layer": "<layer id>", "name": "", "description": ""}],
+"extra": [{"name": "", "description": "", "symbols": [""]}]}"""
 
 
-def place_in_layers(layers: list[dict], companies: list[dict], ask, theme: str) -> dict[str, str]:
-    """{symbol: layer name or ""} for companies ({symbol, name, industry, about}) in one AI answer; a layer id that isn't one of the map's,
-    or a symbol not asked about, is dropped (the caller places those by their words)."""
+def place_in_layers(layers: list[dict], companies: list[dict], ask, theme: str) -> dict:
+    """One AI answer for a map (R21, R22): {"place": {symbol: layer name or ""}, "rename": {layer name: {"name", "description"}}, "extra":
+    [{"name", "description", "symbols"}]}. A layer id that isn't the map's, a symbol not asked about, a name that is empty or a description with
+    a figure are dropped (the caller keeps the map's own name, and places the rest by their words)."""
     import json
+    from .ai import theme_text
     ids = {f"L{i}": v.get("layer") or "" for i, v in enumerate(layers)}
-    payload = {"theme": theme, "layers": {k: {"name": ids[k], "what_it_is": str(layers[i].get("description") or "")[:240]} for i, k in enumerate(ids)},
+    payload = {"theme": theme, "layers": {k: {"name": ids[k], "what_it_is": str(layers[i].get("description") or "")[:240],
+                                              "members": [c.get("name") or c.get("ticker") for c in (layers[i].get("companies") or [])[:12]]}
+                                          for i, k in enumerate(ids)},
                "companies": [{"symbol": c["symbol"], "name": c["name"], "industry": c.get("industry") or "",
                               "description": clean_description(c.get("about") or "", 220)} for c in companies]}
     got = ask(PLACE_SYSTEM2, "COMPANIES:\n" + json.dumps(payload, ensure_ascii=False))
+    got = got if isinstance(got, dict) else {}
     asked = {c["symbol"] for c in companies}
-    out = {}
-    for x in (got.get("place") if isinstance(got, dict) else None) or []:
+    place = {}
+    for x in got.get("place") or []:
         if isinstance(x, dict) and x.get("symbol") in asked:
             lid = str(x.get("layer") or "")
             if lid in ids:
-                out[x["symbol"]] = ids[lid]
+                place[x["symbol"]] = ids[lid]
             elif lid.lower() == "none":
-                out[x["symbol"]] = ""
-    return out
+                place[x["symbol"]] = ""
+    rename = {}
+    for x in got.get("rename") or []:
+        if isinstance(x, dict) and str(x.get("layer")) in ids:
+            name = " ".join(str(x.get("name") or "").split())[:60]
+            desc = theme_text(x.get("description"), 400)
+            if name and not re.search(r"\d", name):
+                rename[ids[str(x["layer"])]] = {"name": name, "description": desc or ""}
+    extra = []
+    for x in (got.get("extra") or [])[:2]:
+        if isinstance(x, dict):
+            name = " ".join(str(x.get("name") or "").split())[:60]
+            syms = [s_ for s_ in x.get("symbols") or [] if s_ in asked and place.get(s_, "") == ""]
+            if name and not re.search(r"\d", name) and len(syms) >= 2:
+                extra.append({"name": name, "description": theme_text(x.get("description"), 400) or "", "symbols": syms})
+    return {"place": place, "rename": rename, "extra": extra}
 
 
 # ---------- claims: tailwinds, risks and a layer's policy line ----------

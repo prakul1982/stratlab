@@ -447,7 +447,9 @@ Return ONLY this JSON:
 Sizes: 4-5 clusters of 4-6 real listed companies, 4 sub-themes of 2-5 listed companies each, 6-8 screen names (listed companies with the most
 direct link to the theme, in value-chain order, not ranked), up to 4 ETFs, 4-6 value-chain layers of 3-5 listed companies, 4 tailwinds, 4 risks (as many risks
 as tailwinds). The layers follow the industry's own production chain or business models, each a distinct step or model of it (what is designed,
-made, supplied, sold or serviced, and to whom), never one layer for the whole industry or an exchange's industry name. Nothing generic.
+made, supplied, sold or serviced, and to whom), never one layer for the whole industry or an exchange's industry name; business models whose
+economics differ stay apart. Each layer groups companies by their main business, so each company belongs to one layer; never an activity every
+company of the theme does. The sub-themes follow the main layers (one sub-theme a layer at most). Nothing generic.
 Put a listed company in a layer or sub-theme only when its own business is that very work (it makes, mines, refines, builds or operates it); a customer, a
 supplier of something else or another company of the same group does not belong. Fewer companies, all of them right, is better than many.
 Name a policy, scheme or rule only when it exists today and you know whether it is in force; leave "policy" and "search" empty for a tailwind or risk that rests on none.
@@ -485,7 +487,7 @@ policies that exist; leave out anything you aren't sure of.
 
 # the map prompt's version (R21: 4-6 layers that follow the industry's own chain, as many risks as tailwinds): a map kept from an older prompt
 # with fewer than MAP_LAYERS named layers is written again once (routes.sector_map)
-MAP_V = 21
+MAP_V = 22
 MAP_LAYERS = 4
 
 

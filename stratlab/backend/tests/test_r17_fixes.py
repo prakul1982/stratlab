@@ -168,7 +168,8 @@ def test_the_highest_and_lowest_layer_are_named_when_every_layer_is_an_official_
     assert (chain["highest"], chain["lowest"]) == ("Film", "Converters") and chain["gap"] == 7.0
     cards = next(b for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards")["items"]
     where = next(c for c in cards if c["title"] == "Where the margin sits")["lines"][0]
-    assert where == "Median EBITDA margin is highest in Film (19%) and lowest in Converters (12%), a gap of 7 points."          # R18: whole figures print whole
+    # R18: whole figures print whole; R22: a highest or lowest median on 4 companies or fewer says its count
+    assert where == "Median EBITDA margin is highest in Film (19%, 4 companies) and lowest in Converters (12%), a gap of 7 points."
     assert "stands apart" not in texts(slides)
     _, sb = deck_of(*theme_b())                 # one layer: nothing claimed and (R18, changed on purpose) nothing said about it
     assert "Fewer than two layers" not in texts(sb) and not any(c["title"] == "Where the margin sits" for s in sb if s.title == "Key findings"
