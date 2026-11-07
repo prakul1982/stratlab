@@ -24,6 +24,7 @@ from ..guard import Window
 from ..responses import err
 from . import ai as A
 from . import grounding, theme_base, theme_check, theme_data, theme_library, theme_prices
+from . import sector_metrics
 from .net import SourceError, TTLCache
 from .news import aggregator_url, company_headline, plain_headline, publisher_url
 
@@ -533,7 +534,8 @@ def sources(region: str, theme: str, fresh: bool = False):
         insider_buys=(lambda: deals.buys().get("buys") or {}) if region == "IN" else (lambda: {}),
         results=lambda a, b, s: results.between(region, a, b, s), actions=lambda a, b, s: corp_actions.between(region, a, b, s),
         red_flags=red, card=card, history=history, segments=segments,
-        corp_history=lambda s: corp_actions.history(region, s, None, fetch=False))
+        corp_history=lambda s: corp_actions.history(region, s, None, fetch=False),
+        metrics=sector_metrics.reader(region, fresh))           # R23: filed sector figures, read once and kept for everyone
     src.pieces = pieces
     return src
 
@@ -562,7 +564,7 @@ def dive_key(r: str, theme: str, m: dict) -> list:
     fm = theme_base.for_figures(m)[0]
     said = sum(1 for v in fm["value_chain"] if v.get("official") for c in v["companies"] if c.get("what"))
     return [r, m.get("_library") or theme_library.normalise(theme, r), int(float(m.get("generated_at") or 0)),
-            (m.get("placements") or {}).get("placed"), said, theme_base.RULES]
+            (m.get("placements") or {}).get("placed"), said, theme_base.RULES, f"sm{sector_metrics.VERSION}"]
 
 
 def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None = None) -> dict:
@@ -573,7 +575,8 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
     key = dive_key(r, theme, m)
     if not refresh:
         kept = computed.get(theme_library.DIVE, key)
-        if kept is not None and isinstance((kept.get("value") or {}).get("dive"), dict) and not pieces_moved(r, kept["value"].get("pieces") or {}):
+        if kept is not None and isinstance((kept.get("value") or {}).get("dive"), dict) and not pieces_moved(r, kept["value"].get("pieces") or {}) \
+                and not sector_metrics.any_stored(r, kept["value"]["dive"].get("metrics_pending") or []):
             return kept["value"]["dive"]
     src = sources(r, theme, fresh=True) if refresh else sources(r, theme)
     hit = theme_data.build(r, theme, fm, src)
