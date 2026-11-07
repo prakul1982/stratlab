@@ -71,12 +71,13 @@ def test_the_theme_deck_has_the_cover_chain_layers_members_claims_and_notes():
     assert titles == ["Test theme", "Contents", "Key findings", "Data confidence",
                       "The value chain by layer", "Layer 1 · Mining", "Layer 2 · Cells", "Layers side by side", "What moved the aggregate margin",
                       "Tailwinds and risks", "Size and shape", "Growth and profitability", "Valuation", "Price", "How to read this deck",
-                      "Every company's figures"]
+                      "How the figures are built", "Every company's figures"]       # R25: changed on purpose, the figures' notes before the appendix
     assert slides[0].kind == "cover" and slides[0].subtitle == "India (NSE and BSE) · Theme deep dive" and "Theme deep dive" in footer
     assert not [s for s in slides if s.kind == "section"]
     contents = table_of(slides, "Contents")["rows"]
     assert [(r[0], r[2]) for r in contents[:2]] == [("Findings", "3"), ("The value chain", "5")]          # each part with its first page
-    assert contents[-1][0] == "Appendix" and contents[-1][2] == "16"
+    assert contents[-1][0] == "Appendix" and contents[-1][2] == "17"            # R25: one page later (the figures' notes)
+    assert contents[-2][0] == "How the figures are built" and contents[-2][2] == "16"
     cover = dict((t[0], t[1]) for t in next(b for b in slides[0].blocks if b["kind"] == "stats")["items"])
     assert cover["Companies"] == "6" and cover["Layers"] == "2" and cover["With figures"] == "5"          # R20: its share and the universe beneath
     figs = table_of(slides, "Every company's figures")
