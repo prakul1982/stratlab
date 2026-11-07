@@ -344,10 +344,19 @@ def test_the_latest_news_has_a_date_a_company_and_a_link_and_no_opinion():
 NOTABLE_DIVE = None
 
 
+@pytest.fixture
+def two_company_layers(monkeypatch):
+    """The test theme's layers have two companies with figures: these tests check how a post is written and stored, so they lower the
+    floors to two (R25 raised them to three; the floor itself is checked in test_a_layer_of_two_companies_is_never_notable)."""
+    monkeypatch.setattr(D, "COMPARE_MIN", 2)
+    monkeypatch.setattr(D, "MIN_BASE", 2)
+
+
 def dive():
     return D.build("IN", "Test theme", CHECKED, src())
 
 
+@pytest.mark.usefixtures("two_company_layers")
 def test_a_draft_post_is_made_only_when_the_data_is_notable_and_is_never_published():
     d = dive()
     assert d["notable"] and d["notable"][0]["kind"] == "gap"
@@ -405,6 +414,7 @@ def test_a_checked_dive_asks_for_its_post_and_an_unchecked_one_does_not(monkeypa
     assert asked == [("IN", "Auto test theme")]
 
 
+@pytest.mark.usefixtures("two_company_layers")
 def test_storing_the_draft_keeps_it_hidden_and_an_update_does_not_publish_it(monkeypatch):
     stored = {}
 
@@ -417,12 +427,14 @@ def test_storing_the_draft_keeps_it_hidden_and_an_update_does_not_publish_it(mon
     assert res == {"result": "new", "slug": "theme-test-theme-margins-in"} and stored[res["slug"]]["published"] is False
 
 
+@pytest.mark.usefixtures("two_company_layers")
 def test_the_draft_goes_through_the_blog_rows_as_a_hidden_post():
     from app import blog
     row = blog._row(blog_research.theme_post(dive(), "Test theme", "IN"))
     assert row["published"] is False and row["kind"] == "research" and row["body"]["blocks"]
 
 
+@pytest.mark.usefixtures("two_company_layers")
 def test_a_move_over_three_years_is_notable_too():
     d = D.build("IN", "Test theme", CHECKED, src())
     assert [n["layer"] for n in d["notable"] if n["kind"] == "move"][:1] == ["Mining"]     # 40 to 50 over three years
@@ -547,3 +559,9 @@ def test_a_busy_or_empty_cash_answer_is_not_asked_again_until_the_fundamentals_a
         out = scr.with_cash(copy.deepcopy(page))
         assert "Cash Equivalents" not in out["balance"]["rows"]
     assert len(seen) == 1
+
+
+def test_a_layer_of_two_companies_is_never_notable():
+    """R25: with the decks' floors, the test theme's two-company layers give no gap and no move, so no post is drafted from them."""
+    d = dive()
+    assert not [i for i in d["notable"] if i["kind"] in ("gap", "move")]

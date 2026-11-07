@@ -770,10 +770,11 @@ def notable_items(blocks: list[dict], chain: dict, histories: dict) -> list[dict
     and a layer whose aggregate EBITDA margin moved a lot over three years. Empty when nothing is. A group of the theme's companies that no
     layer took (an official industry's, or "Named in the theme's list": "official" in theme_base.with_base) isn't a layer of the chain, so it
     is never the high or the low end of a gap and its margin's move isn't a layer's (R11: the cybersecurity post set "Named in the theme's
-    list" against a layer)."""
+    list" against a layer). The decks' floors hold (R25): a gap is between layers of COMPARE_MIN companies with the figure or more, and a move
+    is of an aggregate of MIN_BASE companies or more."""
     out = []
     apart = {b.get("layer") for b in blocks if b.get("official")} | {r["layer"] for r in chain["rows"] if r.get("official")}
-    have = [r for r in chain["rows"] if r["ebitda"] is not None and r["ebitda_n"] >= MIN_LAYER and r["layer"] not in apart]
+    have = [r for r in chain["rows"] if r["ebitda"] is not None and r["ebitda_n"] >= COMPARE_MIN and r["layer"] not in apart]
     if len(have) >= 2:
         hi, lo = max(have, key=lambda r: r["ebitda"]), min(have, key=lambda r: r["ebitda"])
         if hi["ebitda"] - lo["ebitda"] >= NOTABLE_GAP:
@@ -782,7 +783,7 @@ def notable_items(blocks: list[dict], chain: dict, histories: dict) -> list[dict
     for layer, h in histories.items():
         if layer in apart:
             continue
-        if h and len(h["years"]) >= 4 and h["ebitda"][-1] is not None and h["ebitda"][-4] is not None:
+        if h and (h.get("n") or 0) >= MIN_BASE and len(h["years"]) >= 4 and h["ebitda"][-1] is not None and h["ebitda"][-4] is not None:
             move = h["ebitda"][-1] - h["ebitda"][-4]
             if abs(move) >= NOTABLE_MOVE:
                 out.append({"kind": "move", "layer": layer, "from_year": h["years"][-4], "to_year": h["years"][-1], "from": h["ebitda"][-4], "to": h["ebitda"][-1],
