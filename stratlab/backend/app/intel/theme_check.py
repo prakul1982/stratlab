@@ -274,11 +274,12 @@ def place_in_layers(layers: list[dict], companies: list[dict], ask, theme: str) 
     from .ai import theme_text
     ids = {f"L{i}": v.get("layer") or "" for i, v in enumerate(layers)}
     payload = {"theme": theme, "layers": {k: {"name": ids[k], "what_it_is": str(layers[i].get("description") or "")[:240],
-                                              "members": [c.get("name") or c.get("ticker") for c in (layers[i].get("companies") or [])[:12]]}
+                                              "members": [(c.get("name") or c.get("ticker") or "") + (f": {str(c.get('what'))[:120]}" if c.get("what") else "")
+                                                          for c in (layers[i].get("companies") or [])[:15]]}
                                           for i, k in enumerate(ids)},
                "companies": [{"symbol": c["symbol"], "name": c["name"], "industry": c.get("industry") or "",
                               "description": clean_description(c.get("about") or "", 220)} for c in companies]}
-    got = ask(PLACE_SYSTEM2, "COMPANIES:\n" + json.dumps(payload, ensure_ascii=False))
+    got = ask(PLACE_SYSTEM2, "COMPANIES:\n" + json.dumps(payload, ensure_ascii=False)) if companies or layers else {}
     got = got if isinstance(got, dict) else {}
     asked = {c["symbol"] for c in companies}
     place = {}

@@ -492,10 +492,10 @@ MAP_LAYERS = 4
 
 
 def map_due(m: dict | None) -> bool:
-    """Whether a kept map is from an older prompt and too coarse to keep: fewer than MAP_LAYERS layers with a name and a company."""
-    if not isinstance(m, dict) or not float(m.get("generated_at") or 0) or (m.get("map_v") or 0) >= MAP_V:
-        return False
-    return sum(1 for v in m.get("value_chain") or [] if v.get("layer") and v.get("companies")) < MAP_LAYERS
+    """Whether a kept map was written under an older map prompt (its "map_v" below MAP_V): it is written again once, whatever its layers (R23:
+    Private banks' activity layers, a map of four or more layers, were kept from before the prompt asked for layers by main business). The new
+    map carries MAP_V, so it is then reused."""
+    return isinstance(m, dict) and bool(float(m.get("generated_at") or 0)) and (m.get("map_v") or 0) < MAP_V
 
 
 def pulse(region: str, focus: str, indices: list[dict], headlines: list[dict], ai, closed: bool | None = None,
