@@ -241,7 +241,7 @@ test("settings: notifications keep their settings, with the alerts, StratLab ema
   const main = page.locator("main");
   await expect(main.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible({ timeout: 30_000 });
   const nav = main.getByRole("radiogroup", { name: "Settings sections" });
-  await expect(nav.getByRole("radio")).toHaveText(["Notifications", "Experience", "Connected accounts", "Connection check"]);
+  await expect(nav.getByRole("radio")).toHaveText(["Notifications", "Experience", "Connected accounts", "Connection check", "Your usage"]);
   await expect(nav.getByRole("radio", { name: "Notifications" })).toHaveAttribute("aria-checked", "true");
   for (const h of [/^Paper-trade alerts/, /^Newsletters/]) await expect(main.getByRole("heading", { name: h })).toBeVisible({ timeout: 30_000 });
   await expect(main.getByRole("heading", { name: "Emails from StratLab" })).toBeVisible();
