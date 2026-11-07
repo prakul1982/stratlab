@@ -186,9 +186,7 @@ and the landing page's e2e test checks the plans it shows against the server's.
 | Advance tax amounts and the long-term exemption lot by lot, US stocks in Indian tax, the ITR-ready export | – | – | ✓ |
 | Every market, company pages and price charts, the options builder with Greeks, the payoff today and breakevens after charges, F&O changes, ETF vs NAV, IPO lists, pages and bids, the events calendar, today's closing auction, stock futures and margin funding, each fund's TER in rupees, a plain SIP test, rates, screens, rotation, results, corporate actions, deals, surveillance, red flags on any company, today's positioning and breadth, My Holdings, the tax report and total tax estimate, the money calendar and its feed, share cards, invites | ✓ | ✓ | ✓ |
 
-Each plan gets what its card lists whether or not payments are set up; until Razorpay's keys and monthly plan IDs are
-set nobody can buy Basic or Pro (the Plans page says so and how to ask for early access). The admin can also run a
-**launch offer** (Pro for everyone for N days), and invite rewards give free months of Basic. Visitors outside India see prices in their own currency; every payment gets a
+Invite rewards give free months of Basic. Visitors outside India see prices in their own currency; every payment gets a
 GST invoice.
 
 <picture>
@@ -198,59 +196,20 @@ GST invoice.
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    UI["Frontend<br/>Vite + React + TypeScript<br/>(Vercel)"] -- "REST + Supabase JWT" --> API["Backend<br/>FastAPI, one process<br/>(Railway)"]
-    UI -- "Google sign-in" --> SB[("Supabase<br/>Auth")]
-    API -- "sign-in check" --> SB
-    API --> MDB[("Postgres on Railway<br/>users' data + market data")]
-    API --> MD["Market data<br/>(broker feed for India, public data elsewhere)"]
-    API --> CO["Company data<br/>(reported results, exchange filings, SEC filings, company documents)"]
-    API --> AI["AI layer<br/>(free providers, measured and ranked)"]
-    API --> PAY["Razorpay"]
-    API --> OUT["Phone push, Telegram, email<br/>(Brevo, Resend or SMTP)"]
-    UI -. "optional" .-> PH["PostHog, Sentry"]
-```
-
-- **Frontend** (`stratlab/frontend`): a Vite + React 19 + TypeScript single-page app on **Vercel**. Pages load on
-  demand. `public/config.js` holds the API address and public keys and is read at runtime. Vercel forwards `/v/*`,
-  `/c/*`, `/stocks/*`, `/blog/*`, `/sitemap.xml` and `/sitemaps/*` to the backend, which renders those public pages itself.
-- **Backend** (`stratlab/backend`): **FastAPI** on **Railway**, run as one process, because live paper sessions, the
-  tick feed and the scheduled jobs (newsletters, alerts, audits, the daily checks) live in memory. Backtests run in
-  worker processes. The backend owns every secret; the browser only talks to it and to Supabase sign-in.
-- **Memory** is the hosting cost, so the process keeps it low (`backend/app/memguard.py`): the heavy background jobs
-  take turns on one lock and hand their memory back after each run, the caches share one budget (`CACHE_BUDGET_MB`,
-  256 by default), and malloc returns freed memory. The whole-market data audit runs monthly; new listings are checked
-  daily for their first 10 days. `/admin/memory` shows the process's memory and, with `?detail=true`, what the heap holds.
-- **Database and sign-in**: **Supabase** for Google sign-in. Users' data starts in Supabase's Postgres
-  (`stratlab/supabase/schema.sql`) and moves with one Admin button to a Postgres on **Railway** next to the server
-  (`backend/app/pgdb.py`, `backend/app/maindb.py`), which also holds the bulky market-wide data
-  (`MARKET_DATABASE_URL`). Per-user settings and job state live in the `app_settings` key-value table. A nightly
-  GitHub Action keeps an encrypted copy ([docs/ADMIN.md](docs/ADMIN.md#backups)).
+- **Frontend** (`stratlab/frontend`): a Vite + React 19 + TypeScript single-page app.
+- **Backend** (`stratlab/backend`): a FastAPI app with the backtest engine, the verdict checks, live paper trading,
+  company research and the money tools. It keeps every key on the server; the browser talks only to it and to sign-in.
+- **Database and sign-in:** Postgres, with Google sign-in through Supabase (`stratlab/supabase/schema.sql`).
 - The same engine runs backtests, the verdict checks and live paper trading, so a strategy behaves the same everywhere.
-- **AI** goes through one layer (`backend/app/ai_providers.py`) that heals itself: it measures each provider's models
-  every few hours, uses the ones that answer correctly and fast, checks every reply, pauses a failing model or provider
-  and moves on, and never names a provider to users. Free providers are enough; the admin AI panel shows each one
-  ([docs/ADMIN.md](docs/ADMIN.md#ai-providers)).
-- **Charts**: one shared chart system (`frontend/src/components/chart/`: crosshair, zoom, ranges, legends, linked charts,
-  a table view) draws every chart, and the price chart (`frontend/src/charts/price/`) is StratLab's own canvas engine,
-  loaded only on pages that show one.
 
 ```
 stratlab/
-├── backend/app/      main.py (routes), engine/ (backtests, costs, verdict, walk-forward), options/, data/ (markets),
-│                     intel/ (company research, filings), newsletter/, and one module per feature: deepdive, screens,
-│                     holdings, tax_lots, results, corp_actions, deals, surveillance, stock_alerts, breadth, positioning,
-│                     journal, fo_changes, etf_nav, money_* (net worth, funds, fund costs, tax tools, US tax, ITR,
-│                     calendar), ai_* (the AI layer: catalog, ranking, providers), storage, invite_rewards…
-├── backend/tests/    pytest: units, every route with hostile input, failing sources, tricky dates, security, load
-├── frontend/src/     pages/ (trade/, money/ and the rest), components/ (chart/: the shared chart system), charts/price/
-│                     (the price chart), lib/ (API client, plans, spaces, Greeks, formatting, analytics)
-├── frontend/e2e/     Playwright: every page on desktop and phone, every route at several sizes, the landing page, and the
-│                     UI checker (ui-lint.spec.ts: layout rules R1 to R26 on every page)
-├── frontend/scripts/ docs-shots: retakes the README's screenshots from the fake world
+├── backend/app/      the API, the backtest engine, market data, company research and one module per feature
+├── backend/tests/    pytest, against a fake world of synthetic market data
+├── frontend/src/     pages, components (the shared chart system), lib (API client, formatting)
+├── frontend/e2e/     Playwright browser tests and the UI layout checker
 └── supabase/         schema.sql
-docs/                 FEATURES.md, ADMIN.md, ROADMAP.md, AI_ASSISTANT.md, UI_CHECKER.md, images/, screenshots/
+docs/                 FEATURES.md, UI_CHECKER.md, AI_ASSISTANT.md, ROADMAP.md, images/, screenshots/
 ```
 
 ## Local setup
@@ -260,7 +219,7 @@ docs/                 FEATURES.md, ADMIN.md, ROADMAP.md, AI_ASSISTANT.md, UI_CHE
 cd stratlab/backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env          # fill in what you need (table below); everything but Supabase is optional
+cp .env.example .env          # fill in what you need; everything but Supabase is optional
 uvicorn app.main:app --reload --port 8000
 
 # frontend (another terminal)
@@ -269,110 +228,28 @@ npm install
 npm run dev                   # http://localhost:5500; point public/config.js at http://localhost:8000
 ```
 
-The **[setup guide](stratlab/README.md)** walks through Supabase, the broker data API and its daily login, Razorpay,
-the AI keys, alerts and deploys.
-
-## Environment variables
-
-Set on the backend (Railway, or `stratlab/backend/.env`). Names and purposes only; never commit values.
-
-| Variable | Purpose |
-| --- | --- |
-| `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | The database and sign-in check (service-role key, server only) |
-| `KITE_API_KEY`, `KITE_API_SECRET` | The broker market data API for Indian prices, F&O, MCX and live ticks |
-| `KITE_USER_ID`, `KITE_PASSWORD`, `KITE_TOTP_SECRET` | Optional automatic daily broker login (off unless all three are set) |
-| `KITE_AUTO_LOGIN_AT` | Time of the automatic login, IST (default 08:00) |
-| `KITE_RESTART_AFTER_LOGIN` | Restart the live feed after the daily login (default true) |
-| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | Payments and the payment webhook |
-| `RAZORPAY_PLAN_BASIC`, `RAZORPAY_PLAN_PRO` | Monthly plan IDs; paid features lock to plans once these and the keys are set |
-| `RAZORPAY_PLAN_BASIC_YEAR`, `RAZORPAY_PLAN_PRO_YEAR` | Optional yearly plan IDs |
-| `AI_PROVIDERS`, `AI_PROVIDERS_RESEARCH`, `AI_PROVIDER` | The order AI providers are tried in, for quick jobs and long research reads |
-| `GROQ_API_KEY`, `SAMBANOVA_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `OLLAMA_API_KEY`, `ANTHROPIC_API_KEY`, `MISTRAL_API_KEY` | AI provider keys; each is used only when set (Mistral is paid only since November 2026) |
-| `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`, `ZAI_API_KEY`, `HF_TOKEN`, `NVIDIA_API_KEY` | More optional free AI providers; free limits, terms and key links in [docs/ADMIN.md](docs/ADMIN.md#ai-providers) |
-| `GROQ_MODEL`, `OLLAMA_MODEL`, `SAMBANOVA_MODEL`, `MISTRAL_MODEL`, `OPENROUTER_MODEL`, `GEMINI_MODEL`, `ANTHROPIC_MODEL`, `CLOUDFLARE_MODEL`, `ZAI_MODEL`, `HUGGINGFACE_MODEL`, `NVIDIA_MODEL` | Pin a model per provider (`auto`, the default, uses the models the server measured) |
-| `FINNHUB_API_KEY` | US company data for the research pages |
-| `RESEARCH_AI_PER_DAY` | Fresh AI research reads per user per day (default 60) |
-| `TELEGRAM_BOT_TOKEN` | Telegram alerts |
-| `ADMIN_TELEGRAM_CHAT_ID` | Where a failed automatic login is reported |
-| `BREVO_API_KEY`, `RESEND_API_KEY` | Email over HTTPS, tried in that order |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Email over SMTP, the last resort |
-| `ALERT_FROM_EMAIL` | The sender address for every email |
-| `MAIL_TOKEN_SECRET` | Signs unsubscribe and confirm links (derived from the service key when unset) |
-| `FRONTEND_ORIGIN` | Allowed browser origins for CORS, comma-separated |
-| `PUBLIC_SITE_URL` | The public site, for shared links, public pages and sitemaps (default https://stratlab.studio) |
-| `PUBLIC_API_URL` | The backend's public address, for links in emails (defaults to `RAILWAY_PUBLIC_DOMAIN` on Railway) |
-| `STOCK_PAGE_BUILDS_PER_MINUTE` | Fresh public company pages built a minute (default 6) |
-| `ADMIN_EMAILS` | Google addresses that can open Admin |
-| `OPTION_SNAPSHOTS`, `OPTION_SNAPSHOT_MINUTES`, `OPTION_SNAPSHOT_KEEP_DAYS` | Which option chains are recorded (NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY and SENSEX by default), how often, and for how long |
-| `MARKET_DATABASE_URL` | Optional second Postgres for the bulky market-wide data (see [docs/ADMIN.md](docs/ADMIN.md#storage)) |
-| `DB_LIMIT_MB` | The main database's size limit for the storage warning (default 500, Supabase's free plan) |
-| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Optional own key pair for phone notifications (made automatically otherwise) |
-| `SENTRY_DSN`, `SENTRY_ENV` | Optional server error alerts |
-| `POSTHOG_KEY`, `POSTHOG_HOST` | Optional server-side usage events (a completed payment) |
-| `BACKTEST_PROCESSES` | Backtest worker processes (default 2; 0 runs them in the server process) |
-| `HEAVY_SLOTS` | Heavy requests (backtests, scans, document reads) run at once (default 2) |
-| `CACHE_BUDGET_MB`, `HEAVY_JOB_WAIT`, `MALLOC_TUNE`, `PYTHONMALLOC` | Memory: all caches together (default 256 MB), how long a heavy background job waits for its turn before running anyway (default 45 minutes), `0` to leave malloc's settings alone, and `pymalloc` to keep Python's small objects in its own arenas (the start command sets `malloc`: they live in malloc's heap) |
-| `CONNECT_SECRET_KEY` | Encrypts users' stored broker tokens and passwords for Connected accounts (Fernet; see [docs/ADMIN.md](docs/ADMIN.md)) |
-| `INBOUND_DOMAIN`, `INBOUND_PROVIDER`, `INBOUND_WEBHOOK_SECRET` | The statements inbox: mail to a user's private address at this domain, parsed by Brevo (default) or sent as signed JSON |
-| `KITE_MULTIUSER_APPROVED`, `KITE_CONNECT_API_KEY`, `KITE_CONNECT_API_SECRET` | Zerodha connections for every user, once Zerodha approves the multi-user app (until then only admins can connect) |
-| `REPLY_TO_EMAIL` | The reply-to address on emails (default support@stratlab.studio) |
-| `RAILWAY_VOLUME_MB` | The Railway Postgres volume's size, for the storage figure in Admin (Railway sets `RAILWAY_PROJECT_ID` itself) |
-| `MAIN_DATABASE`, `LEADER_LEASE` | `supabase` keeps users' data on Supabase; `off` turns off the lease that lets only one server run the scheduled jobs |
-| `TRUSTED_PROXY_HOPS`, `TRUST_X_REAL_IP` | How the caller's address is read behind proxies (default: one hop of X-Forwarded-For; X-Real-IP only when set to `1`) |
-
-The frontend's `public/config.js` sets `API_BASE`, `SUPABASE_URL`, `SUPABASE_ANON_KEY` (public), and optionally
-`SENTRY_DSN`, `POSTHOG_KEY`, `POSTHOG_HOST`, `BUSINESS_NAME`, `CONTACT_EMAIL`, `BILLING_EMAIL`, `PRIVACY_EMAIL`, `BUSINESS_ADDRESS` and `BUSINESS_GSTIN` (the last two are listed on the Contact page when set). The file is served to every visitor as it is, so keep comments and notes out of it (`unit/seo.test.mjs` checks).
+`stratlab/backend/.env.example` lists the settings the backend reads. The **[setup guide](stratlab/README.md)** has
+more on running it locally.
 
 ## Tests
 
 ```bash
-# backend: the whole suite, about 5,000 tests (~8 minutes in parallel: add -n auto with pytest-xdist)
-cd stratlab/backend && python -m pytest -q
-
-# frontend: typecheck and production build
-cd stratlab/frontend && npx tsc --noEmit && npx vite build
-
-# browser tests (Playwright) against the backend's fake world; E2E_API_PORT / E2E_WEB_PORT move the servers
-cd stratlab/frontend && npx playwright test
-
-# the layout checker (needs the built site): report only, or UI_LINT_STRICT=1 to fail on any problem
-cd stratlab/frontend && npm run build && npm run ui-lint
+cd stratlab/backend && python -m pytest -q -n auto          # backend (pytest-xdist)
+cd stratlab/frontend && npx tsc --noEmit && npm run build   # frontend typecheck and build
+cd stratlab/frontend && npx playwright test                 # browser tests against the fake world
+cd stratlab/frontend && npm run ui-lint                     # the layout checker, after a build
 ```
 
-- **Backend:** units for every module, every route called with hostile input (`test_stress_fuzz.py`: no route may
-  return a 500), every data source failing in every way it fails in real life, the app at tricky moments (holidays,
-  expiry days, midnight IST), a security sweep (sign-in, admin-only routes, other users' data), and a load test.
-- **Browser:** every main page on desktop and phone (no errors, no broken numbers, nothing wider than the screen,
-  every control at least 32px tall on a phone), every route at five screen sizes in light and dark
-  (`E2E_ALL_SIZES=1` sweeps ten, 320 to 1920 px), a new user's first session, and the landing page's sections and plans.
-- **Layout:** the UI checker measures every page at 1440, 1280 and 390 px for 25 kinds of layout problem (dead space beside
-  a short card, floating controls, wrapped buttons, a figure said three times, sideways scroll and more) and fails the
-  build on any that the allowlist doesn't accept with a written reason. See **[docs/UI_CHECKER.md](docs/UI_CHECKER.md)**.
-- **On live data:** **Check every feature** runs daily at 4:50 pm IST, and the whole-market audit checks every new
-  listing. See [docs/ADMIN.md](docs/ADMIN.md).
-- **On GitHub** (`.github/workflows/tests.yml`, Node 22 and Python 3.11 on Ubuntu 24.04): the backend suite in parallel
-  and the frontend build side by side, then the browser tests on the built site (six runners at once, each with an even share)
-  and the UI checker (its own job, in strict mode); a newer push cancels the run before it.
-- **Screenshots:** `npx playwright test -c scripts/docs-shots.config.ts` (from `stratlab/frontend`, after a build)
-  retakes the README's pictures in `docs/screenshots` from the same fake world.
-
-## Deploy
-
-- **Backend → Railway**, one process: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
-- **Frontend → Vercel**, root `stratlab/frontend`; `vercel.json` sets the build (`npm run build`, output `dist`),
-  security headers, the CSP and the rewrites to the backend.
-- Pull requests merge once the backend, frontend and browser tests pass and the preview builds; Railway and Vercel then
-  deploy. Run **Admin → System → Check every feature** after a deploy.
-- **Backups:** a GitHub Action copies the main database every night at 02:10 IST, encrypted
-  ([docs/ADMIN.md](docs/ADMIN.md#backups)).
-
-Running it day to day (the Admin page, the audits, email, PostHog, Sentry): **[docs/ADMIN.md](docs/ADMIN.md)**.
+The tests run on synthetic data only. The layout checker is described in **[docs/UI_CHECKER.md](docs/UI_CHECKER.md)**.
 
 ## What's new
 
-The [changelog](CHANGELOG.md) lists what shipped, by month; the [roadmap](docs/ROADMAP.md) lists what's next and the
-known gaps. The other guides: [what StratLab does and where to find it](docs/FEATURES.md), [running it](docs/ADMIN.md),
-[the AI assistant connection](docs/AI_ASSISTANT.md) and [the UI checker](docs/UI_CHECKER.md).
+The [changelog](CHANGELOG.md) has short release notes; the [roadmap](docs/ROADMAP.md) lists what's next. More:
+[what StratLab does and where to find it](docs/FEATURES.md) and [StratLab in your AI assistant](docs/AI_ASSISTANT.md).
+
+## Security
+
+Please report security problems privately: see [SECURITY.md](SECURITY.md).
 
 ## Disclaimer
 
