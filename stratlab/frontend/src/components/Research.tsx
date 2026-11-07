@@ -20,6 +20,8 @@ import { Card, CardHead, DataTable, Delta, Disclosure, Meter, Notice, Seg, Signe
 import { SurvBadges } from "./Surveillance";
 import { AiAd } from "./AiAd";
 import { StoredNote, StoredStamp, useStoredRefresh } from "./StoredStamp";
+import { SaveButton } from "./SavedSearches";
+import { readSnap } from "../lib/savedSnap";
 import { track } from "../lib/analytics";
 
 export { CompanySearch } from "./CompanySearch";
@@ -527,7 +529,8 @@ export function AIRead({ region, symbol, onTest }: { region: Region; symbol: str
     <div className="ai-read">
       <Card label="AI read">
         <CardHead title="AI read" info={"A written read from the live numbers on this page, with no scores or ratings. \"The numbers\" are worked out from the reported results and daily prices, not by the AI. Segment shares are estimates. A starting point for ideas, not advice."}
-          actions={error || !r ? undefined : <StoredStamp at={r.generated_at} tz={marketTz(region)} busy={busy || rf.busy} onRefresh={refresh} />} />
+          actions={error || !r ? undefined : <><StoredStamp at={r.generated_at} tz={marketTz(region)} busy={busy || rf.busy} onRefresh={refresh} />
+            <SaveButton kind="company_ai" label="Save read" name={`${symbol} AI read`} params={{ region, symbol }} snap={() => readSnap(r.generated_at)} /></>} />
         {r && !error && <StoredNote busy={rf.busy} state={rf.state} at={r.generated_at} tz={marketTz(region)} />}
         {/* a missing AI read is not a fault with the company's numbers: one calm line and one way to ask again */}
         {error ? (

@@ -720,6 +720,30 @@ def deck_file_name(theme: str, r: str, fmt: str, day: date) -> str:
     return f"StratLab - {clean} - {day.day} {day.strftime('%b %Y')}.{fmt}"
 
 
+DECK_MAP_WAIT = 20.0         # seconds a deck waits for the AI map and its checks that are being written (a proxy closes a request at 30 s)
+
+
+def map_for_deck(R, profile, region: str, q: str, wait: float = DECK_MAP_WAIT):
+    """(market, theme, the checked map with its descriptions) for a deck. The page fills in as the AI parts arrive, but a file is made once:
+    a deck made while the AI map was still being written had no map at all (R20: every live R19 deck, made after a deploy emptied the kept
+    maps: "Private banks" with no value chain, "Cybersecurity" with the SEC's industries as layers). So it waits, at most `wait` seconds,
+    for a map and a check that are running, then is made with what there is."""
+    t0 = time.time()
+    r, theme, m, _ = R.theme_map(profile, region, q)     # R19: the theme library's stored read when there is one (kept across deploys)
+    if not float(m.get("generated_at") or 0):
+        j = job_of(("map", r, theme.lower()))
+        if j and j["state"] == "running":
+            j["done"].wait(max(0.0, wait - (time.time() - t0)))
+            r, theme, m, _ = R.sector_map(profile, region, q, False)
+    c = checked(r, theme, m)
+    if not (c.get("placements") or {}).get("checked"):
+        j = job_of(("check",) + check_key(r, theme, m))
+        if j and j["state"] == "running":
+            j["done"].wait(max(0.0, wait - (time.time() - t0)))
+            c = checked(r, theme, m)
+    return r, theme, with_descriptions(r, c)
+
+
 @router.get("/theme-dive/deck")
 def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=Depends(current_profile)):
     """The theme deep dive as slides, PowerPoint or PDF (EXPORT): the cover, the value chain, every company with its figures, the
@@ -730,8 +754,7 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
     if format not in ("pptx", "pdf"):
         err(400, "bad_format", "Pick PowerPoint or PDF.")
     R = _routes()
-    r, theme, m, _ = R.theme_map(profile, region, q)
-    m = with_descriptions(r, checked(r, theme, m))
+    r, theme, m = map_for_deck(R, profile, region, q)
     mark = main.check_deep(profile, "deck", "", r, mark=f"deck:theme:{r}:{theme_data.slug(theme)}")
     today = datetime.now(R.IST).date()
     biz = r == "IN" and bool(biz_updates._allowed(profile))       # the one part of the deck that depends on the plan

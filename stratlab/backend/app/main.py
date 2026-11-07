@@ -49,6 +49,7 @@ from . import user_data
 from .connect import brokers as connect_brokers, routes as connect_routes, sync as connect_sync, jobs as connect_jobs, kite_user as connect_kite, redact as connect_redact
 from . import chart_routes
 from . import drawings_routes, watch_routes
+from . import saved_routes
 from . import maindb, market_store, memguard, storage, usage_slots
 from . import official_close
 from . import ads
@@ -489,6 +490,8 @@ app.include_router(_admin_jobs.router)           # /admin/jobs: every background
 autofix.attach(app)                              # the self-healing sweep re-runs a failed job through its own Run now route
 app.include_router(chart_routes.router)       # /chart: candles and drawings for the price chart
 app.include_router(drawings_routes.router)    # /me/drawings/{region}/{symbol}: drawings and layout saved per user
+app.include_router(saved_routes.router)       # /me/saved: saved searches and AI reads (R19)
+app.include_router(saved_routes.admin_router)  # /admin/saved-searches: their counts by kind
 app.include_router(watch_routes.router)       # /watch: Market Watch lists, prices and the live stream (MW-1)
 app.include_router(watch_routes.public_router)  # /public/markets/watch: the visitor's fixed board
 app.include_router(money_us_routes.router)     # /money/us-tax

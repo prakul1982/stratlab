@@ -198,7 +198,7 @@ def test_the_sector_route_lists_every_company_of_the_industries_and_marks_the_ai
     chips = s["value_chain"][0]
     assert [(c["ticker"], c["base"]) for c in chips["companies"]] == [("NVDA", True), ("VRT", False)]      # VRT: added, in its own words
     official = s["value_chain"][1]
-    assert official["layer"] == "Semiconductors & Related Devices" and official["official"] and [c["ticker"] for c in official["companies"]] == ["AMD"]
+    assert official["layer"] == "Semiconductors" and official["official"] and [c["ticker"] for c in official["companies"]] == ["AMD"]       # R20: plain name
     p = s["placements"]
     assert [c["ticker"] for c in s["value_chain"][2]["companies"]] == ["LRCX"]              # the named list: Lam Research files as machinery
     assert (p["total"], p["base"], p["named"], p["added"], p["industries"], p["industries_by"]) == (4, 3, 1, 1, ["Semiconductors & Related Devices"], "list")
@@ -232,7 +232,7 @@ def test_a_named_member_is_base_and_a_solar_maker_filed_as_a_chipmaker_is_not_in
     out = B.with_base({"value_chain": [], "sub_themes": []}, {"value_chain": [], "sub_themes": [], "placements": {}}, rows, inds["industries"],
                       named=inds["named"], exclude=inds["except"])
     layers = {v["layer"]: v for v in out["value_chain"]}
-    assert [c["ticker"] for c in layers["Semiconductors & Related Devices"]["companies"]] == ["NVDA", "AMD"]
+    assert [c["ticker"] for c in layers["Semiconductors"]["companies"]] == ["NVDA", "AMD"]          # R20: the industry's plain name as a layer
     assert [(c["ticker"], c["basis"]) for c in layers["Named in the theme's list"]["companies"]] == [("LRCX", "list")]
     assert (out["placements"]["base"], out["placements"]["named"]) == (3, 1)
     # the solar maker is in renewables' named list instead

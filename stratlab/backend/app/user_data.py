@@ -222,6 +222,11 @@ def _replay(uid: str) -> None:
     replay.forget(uid)
 
 
+def _saved(uid: str) -> int:
+    from . import saved_searches
+    return saved_searches.forget(uid)
+
+
 def _signals(uid: str) -> None:
     from . import signals
     signals.forget(uid)
@@ -240,6 +245,7 @@ STEPS: list[Step] = [
     ("replay", "Chart replay sessions", _replay),
     ("signals", "Signal webhook", _signals),
     ("watchlist", "Watchlist", _watchlist),
+    ("saved_searches", "Saved searches and AI reads", _saved),
     ("assistant", "AI assistant keys and their log", _assistant),
     ("referrals", "Invite link and invites", _referrals),
     ("free_basic", "Free Basic time", _free_basic),
@@ -395,6 +401,7 @@ EXPORT: list[tuple[str, str, Callable[[str], object]]] = [
     ("connected_accounts", "Connected accounts (no tokens or passwords)", _x_connect),
     ("watchlist", "Watchlist", _settings_of(WATCHLIST)),
     ("market_watch", "Market Watch lists", _x_market_watch),
+    ("saved_searches", "Saved searches and AI reads", _x_mod("saved_searches", "export")),
     ("sessions", "Paper and live sessions and their orders", _x_sessions),
     ("ai_assistant", "AI assistant key names and their log (no keys)", _x_assistant),
     ("referrals", "Invite link and invites", _x_referrals),

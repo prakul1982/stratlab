@@ -163,6 +163,10 @@ def test_the_admin_routes(hist, monkeypatch):
     assert c.post("/admin/ipos/history/backfill", headers=headers("admin-token")).json()["started"] is True and started
     got = c.get("/admin/ipos/history", headers=headers("admin-token")).json()
     assert got["rows"] == 3 and got["segments"] == {"mainboard": 2, "sme": 1, "not recorded": 0} and got["last_runs"][-1]["detailed"] == 1
+    # the stored rows, for the study (python -m app.ipo_study --rows FILE): admin only
+    assert c.get("/admin/ipos/history/rows", headers=headers("basic-token")).status_code in (401, 403)
+    rows = c.get("/admin/ipos/history/rows", headers=headers("admin-token")).json()
+    assert len(rows["rows"]) == 3 and all(r.get("id") for r in rows["rows"]) and rows["as_of"]
     from app import admin_jobs
     row = next(r for r in admin_jobs.rows() if r["id"] == "ipo")
     assert {"label": "Import two-year history", "path": "/admin/ipos/history/backfill"} in row["run"]

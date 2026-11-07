@@ -25,8 +25,8 @@ def deck_of(region, m, f, theme=None, **kw):
 
 
 def core(slides):
-    """The slides before the appendix."""
-    at = next(i for i, s in enumerate(slides) if s.kind == "section" and s.title == "Appendix")
+    """The slides before the appendix (R19: the appendix is the one table of every company's figures, no divider)."""
+    at = next((i for i, s in enumerate(slides) if s.eyebrow and s.eyebrow.endswith("· Appendix")), len(slides))
     return slides[:at]
 
 
@@ -47,10 +47,12 @@ def bank_theme():
           "value_chain": [{"layer": "Deposit gathering", "description": "Raise current and savings deposits through branches.",
                            "companies": [{"ticker": "PVT0", "name": "Private Lender 0 Ltd", "what": "accepts deposits through branches", "verified": True},
                                          {"ticker": "PVT1", "name": "Private Lender 1 Ltd", "what": "accepts deposits through branches", "verified": True},
+                                         {"ticker": "PVT2", "name": "Private Lender 2 Ltd", "what": "accepts deposits through branches", "verified": True},
                                          {"ticker": "PSU0", "name": "State Lender 0 Ltd", "what": "accepts deposits through branches", "verified": True}]},
                           {"layer": "Retail and SME lending", "description": "Lend to households and small firms.",
-                           "companies": [{"ticker": "PVT2", "name": "Private Lender 2 Ltd", "what": "lends to households and small firms", "verified": True},
-                                         {"ticker": "PVT3", "name": "Private Lender 3 Ltd", "what": "lends to households and small firms", "verified": True}]},
+                           "companies": [{"ticker": "PVT3", "name": "Private Lender 3 Ltd", "what": "lends to households and small firms", "verified": True},
+                                         {"ticker": "PVT4", "name": "Private Lender 4 Ltd", "what": "lends to households and small firms", "verified": True},
+                                         {"ticker": "PVT5", "name": "Private Lender 5 Ltd", "what": "lends to households and small firms", "verified": True}]},
                           {"layer": "", "description": "", "companies": []},
                           {"layer": "Fee and distribution income", "description": "Sell third-party products.", "companies": []}],
           "sub_themes": [], "tailwinds": [], "risks": [], "generated_at": 1.0, "placements": {"checked": True, "pending": 3}}
@@ -164,10 +166,12 @@ def test_layers_are_one_scheme_the_maps_own_with_the_rest_in_the_appendix():
     layer_titles = [s.title for s in core(slides) if re.match(r"Layer \d+ ·", s.title)]
     assert layer_titles == ["Layer 1 · Deposit gathering", "Layer 2 · Retail and SME lending"]
     assert "Private Sector Bank" not in [r[0] for r in table_of(slides, "The value chain by layer")["rows"]]
-    rest = table_of(slides, "In the theme, not placed in a layer")
-    assert {r[0] for r in plain(rest["rows"])} == {f"Private Lender {i} Ltd" for i in range(4, 8)}
     t = texts(slides)
-    assert "4 more companies of the theme's industries the map doesn't place in a layer: appendix, p." in t
+    # R19: the unplaced companies are a count and their names (up to five), and rows of the appendix's one table; no list page of their own
+    assert ("2 more companies of the theme's industries the map doesn't place in a layer: "
+            "Private Lender 6 Ltd, Private Lender 7 Ltd; in every median and total, and in the appendix.") in t
+    figs = [r for s in slides if s.title.startswith("Every company's figures") for b in s.blocks if b["kind"] == "table" for r in b["rows"]]
+    assert {r[0] for r in figs} >= {f"Private Lender {i} Ltd" for i in range(6, 8)}
     assert "No listed company is shown for Fee and distribution income:" in t and "shown for , " not in t      # never an empty name in a list
 
 
@@ -202,10 +206,10 @@ def test_the_deck_says_one_count_of_companies_not_confirmed_and_no_line_that_con
     v, slides = deck_of(region, m, f)
     t = texts(slides)
     assert "Still being checked" not in t and "still being checked" not in t            # the AI's pending checks aren't a membership count
-    assert "8 confirmed, 0 not yet" in t
+    assert "8 in the exchange's industries · 8 with figures (100% of value)" in t          # R20: one wording of the universe and the figures
     region, m, f = us_list_theme()
     v, slides = deck_of(region, m, f)
-    how = next(it for b in slides[1].blocks if b["kind"] == "cards" for it in b["items"])["lines"]
+    how = next(it for s in slides if s.title == "How to read this deck" for b in s.blocks if b["kind"] == "cards" for it in b["items"])["lines"]
     assert how[0].startswith("No official industry is this theme's core on its own; its companies are the theme's own named list.")
     assert not any("The base is every listed company" in x for x in how)
     v["checks"]["one_off"] = [{"symbol": "SEC0", "name": "Secure 0 Inc", "net": 30.0, "ebitda": 25.0}]
@@ -251,15 +255,15 @@ def test_each_layer_is_one_page_and_the_full_table_is_in_the_appendix_with_its_p
     conv = [s for s in c if s.title.startswith("Layer 2 · Converters")]
     assert len(conv) == 1 and conv[0].title == "Layer 2 · Converters"
     note = next(p for b in conv[0].blocks if b["kind"] == "text" for p in b["paras"] if p.startswith("The largest"))
-    full = [i for i, s in enumerate(slides, 1) if s.title.startswith("Layer 2 · Converters, all companies")]
+    full = [i for i, s in enumerate(slides, 1) if s.title.startswith("Every company's figures")]          # R19: the appendix's one table
     assert full and note.endswith(f"appendix, p. {full[0]}.") and full[0] > len(c)
-    rows = [r[0] for s in slides if s.title.startswith("Layer 2 · Converters, all companies") for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])]
+    rows = [r[0] for s in slides if s.title.startswith("Every company's figures") for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])]
     assert len([r for r in rows if r.startswith("Converter")]) == 14
     assert not any(s.title.startswith("Every company's figures") for s in c)            # per-company tables are out of the core
     assert not any(s.kind == "section" for s in c)                                      # one contents page instead of a divider a part
     contents = table_of(slides, "Contents")
     pages = {r[0]: int(r[2]) for r in contents["rows"]}
-    assert slides[pages["The value chain"] - 1].title == "The value chain by layer" and slides[pages["Appendix"] - 1].title == "Appendix"
+    assert slides[pages["The value chain"] - 1].title == "The value chain by layer" and slides[pages["Appendix"] - 1].title.startswith("Every company's figures")
 
 
 def test_page_counts_of_the_synthetic_themes_stay_short():
@@ -275,9 +279,9 @@ def test_page_counts_of_the_synthetic_themes_stay_short():
 def test_a_theme_with_no_map_takes_its_layers_from_its_companies_industries_or_has_no_value_chain():
     region, m, f = us_list_theme()
     v, slides = deck_of(region, m, f)
-    assert [x["layer"] for x in v["layers"]] == ["Services-Prepackaged Software", "Services-Computer Programming Services", "Other industries"]
+    assert [x["layer"] for x in v["layers"]] == ["Software", "IT services", "Other industries"]          # R20: plain names
     titles = [s.title for s in slides]
-    assert "The value chain by layer" in titles and "Layer 1 · Services-Prepackaged Software" in titles
+    assert "The value chain by layer" in titles and "Layer 1 · Software" in titles
     assert "Named in the theme's list" not in [r[0] for r in table_of(slides, "The value chain by layer")["rows"]]
     region, m, f = us_list_theme(spread=False)
     v, slides = deck_of(region, m, f)

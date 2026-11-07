@@ -8,6 +8,8 @@ import { themeApi, type Business, type Dive, type LibraryTheme, type Listing, ty
 import { StoredNote, StoredStamp, useStoredRefresh } from "../components/StoredStamp";
 import { RegionSwitch } from "../components/Research";
 import { ChainCard, ClaimsCard, LayerCard, ListingsCard, MembersCard, NewsCard, NumbersCards, SubThemesCard, ThemeDownloads } from "../components/ThemeDive";
+import { SaveButton, SavedList } from "../components/SavedSearches";
+import { themeReady, themeSnap } from "../lib/savedSnap";
 import { Card, CardHead, DataTable, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PageNav, Skeleton, Working } from "../components/kit";
 
 /* ================= Themes: a theme deep dive =================
@@ -140,12 +142,15 @@ export function ThemesPage() {
           </FormActions>
         </FormGrid>
       </Card>
+      {/* R19: the themes the person saved, each with when it was last read, Open, Update (what changed since), Rename and Remove */}
+      <SavedList kind="theme" id="saved-themes" title="Your saved themes" />
       {error && <ErrorState title="The theme couldn't be mapped" action={{ label: "Try again", onClick: () => run(q, { refresh: true }) }}>{error}</ErrorState>}
       {busy && !r && <Card><Skeleton label={`Mapping "${q}"`} lines={4} /></Card>}
       {r && (
         <>
           <Card>
-            <CardHead title={r.sector} actions={<StoredStamp at={r.generated_at > 0 ? r.generated_at : null} tz={marketTz(region)} busy={busy || rf.busy} onRefresh={refresh} />} />
+            <CardHead title={r.sector} actions={<><StoredStamp at={r.generated_at > 0 ? r.generated_at : null} tz={marketTz(region)} busy={busy || rf.busy} onRefresh={refresh} />
+              <SaveButton kind="theme" label="Save theme" name={r.sector || q} params={{ q, region }} snap={() => (themeReady(r) ? themeSnap(r) : null)} /></>} />
             <StoredNote busy={rf.busy} state={rf.state} at={r.generated_at > 0 ? r.generated_at : null} tz={marketTz(region)} />
             {r.summary && <p className="k-lede">{r.summary}</p>}
             {r.core && <p className="k-small">Everything converges on <b>{r.core}</b>.</p>}
