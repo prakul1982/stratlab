@@ -385,13 +385,52 @@ def to_describe(m: dict, n: int = DESCRIBE_MAX) -> list[str]:
 
 
 _FIRST = re.compile(r"^(.{20,240}?[.;])(?:\s|$)")
+# what a company's description says before its business (the owner, 7 Nov: "**Company Overview **", "Incorporatedin1994", "Business Overview:")
+_MARKUP = re.compile(r"\*+|#+")
+_HEADING = re.compile(r"\s*\b(?:company|business|corporate)\s+(?:overview|profile|description)\s*:?|\s*\babout\s+(?:us|the\s+company)\s*:", re.I)
+_GLUED = re.compile(r"(?i)\b(incorporated|established|founded|set up|formed)(in)(\d{4})")
+_HISTORY = re.compile(r"^(?:originally\s+)?(?:incorporated|established|founded|set up|formed|promoted)\b[^,.;]*?\b(?:in|on)\s+\d{4}\s*(?:,|as\b[^,]*,|and\b)?\s*", re.I)
+# a results or sales line, not what the company does: "reported total dispatches of 7,34,403 units in October 2026"
+_PRESS = re.compile(r"\b(?:reported|announced|posted|recorded|registered|clocked)\b.{0,60}\d|\b\d[\d,.]*\s*(?:units|crore|lakh|million|billion)\b.{0,30}"
+                    r"\b(?:in|for|during)\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|q[1-4]|fy)", re.I)
+_DOES = re.compile(r"\b(?:manufactur|make|produc|suppl|provid|engag|offer|design|develop|sell|operat|build|distribut|deal|trad|serv|run|own|"
+                   r"leader|maker|player|largest|company|business)", re.I)
+
+
+def _sentences(t: str) -> list[str]:
+    return [x.strip() for x in re.split(r"(?<=[.;])\s+(?=[A-Z“\"(])", t) if x.strip()]
 
 
 def one_line(about: str) -> str:
-    """The first sentence of a company's own description (its words, cut at a full stop), or ""."""
-    t = " ".join(str(about or "").split())
-    m = _FIRST.match(t)
-    return (m.group(1) if m else t[:200]).rstrip(" .;") if t else ""
+    """The first sentence of a company's own description that says what it does (its words): headings and markdown left off, words an
+    extraction glued together parted ("Incorporatedin1994"), a founding-history opening and a results line (units sold in a month) skipped.
+    A sentence too long for the line is cut at a word with an ellipsis, never mid-word. "" when there is no description."""
+    t = _HEADING.sub(". ", _MARKUP.sub(" ", _GLUED.sub(r"\1 \2 \3", str(about or ""))))
+    t = " ".join(re.sub(r"^[\s.]+|(?<=[.;])\s*\.\s", " ", t).split())
+    if not t:
+        return ""
+    if t.startswith("From its own filings:"):           # the filings that back a company with no description: said as filings (own_filings)
+        m = _FIRST.match(t)
+        return (m.group(1) if m else t[:200]).rstrip(" .;")
+    picks = []
+    for x in _sentences(t):
+        x = _HISTORY.sub("", x).strip(" ,;:-–—")
+        if len(x) < 15 or _PRESS.search(x):
+            continue
+        picks.append(x)
+    best = next((x for x in picks if _DOES.search(x)), picks[0] if picks else "")
+    if not best:
+        m = _FIRST.match(t)
+        best = "" if _PRESS.search(t) else (m.group(1) if m else t)
+    if not best:
+        return ""
+    m = _FIRST.match(best + " ")
+    if m:
+        return m.group(1).rstrip(" .;")
+    if len(best) <= 240:
+        return best.rstrip(" .;")
+    cut = best[:220]
+    return cut[:cut.rfind(" ")].rstrip(" ,;:") + "…"
 
 
 def described(m: dict, about_of) -> dict:

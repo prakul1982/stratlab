@@ -225,15 +225,61 @@ test("the menu (IA-1): a space's short list of entries, the one you are in lit, 
   await expect(page.getByRole("radiogroup", { name: "Watchlist view" }).getByRole("radio", { name: "At a glance" })).toHaveAttribute("aria-checked", "true");
   await expect(page.getByTestId("hub-tabs").locator("a")).toHaveText(["Stocks", "Alerts"]);
 
-  // the keyboard: Tab from the search button passes the space's home and lands on the first entry, with a visible focus ring
+  // the keyboard: Tab from the search button passes the space's home and the highlighted Themes beside it (R16, changed on purpose:
+  // owner, 7 Nov) and lands on the first entry, with a visible focus ring
   side = await menu(page, phone);
   await side.getByRole("button", { name: /Ask or do anything/ }).focus();
   await page.keyboard.press("Tab");
   await expect(side.getByRole("link", { name: "Invest home" })).toBeFocused();
   await page.keyboard.press("Tab");
+  const themes = side.locator(".side-home a.side-feature");
+  await expect(themes).toBeFocused();
+  await expect(themes).toHaveText("Themes");
+  await expect(themes).toHaveAttribute("href", "/research/themes");
+  await expect(themes).not.toHaveAttribute("aria-current", /.*/);
+  await page.keyboard.press("Tab");
   const first = side.locator(".side-entries > .side-entry > .side-head > a").first();
   await expect(first).toBeFocused();
   expect(await first.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe("solid");
+  await sane(page, errors);
+});
+
+// R16 (owner, 7 Nov: Themes is one of StratLab's best tools but was buried in Invest → Themes): highlighted beside the space's home on
+// the menu's first row, in every space, on a laptop and in the phone's drawer; it opens Themes, whose own Invest entry is the one lit
+test("R16: the highlighted Themes link heads the menu in My space and Invest (not Trade or Money) and opens Themes", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  await page.route("**/me/prefs", (r) => (r.request().method() === "PUT" ? r.fulfill({ json: { prefs: {} } }) : r.fallback()));
+  const errors = await open(page, "/research", "Companies");
+  for (const name of ["My space", "Trade", "Invest", "Money"]) {
+    const side = await menu(page, phone);
+    await side.getByRole("group", { name: "Space" }).getByRole("button", { name }).click();
+    const again = await menu(page, phone);
+    await expect(again.getByRole("group", { name: "Space" }).getByRole("button", { name })).toHaveAttribute("aria-pressed", "true");
+    const themes = again.getByRole("navigation", { name: "Main" }).locator(".side-home a.side-feature");
+    // owner, 7 Nov (changed on purpose): My space and Invest only; Trade and Money stay as they were
+    if (name === "Trade" || name === "Money") {
+      await expect(themes, name).toHaveCount(0);
+      if (phone) await page.keyboard.press("Escape");
+      continue;
+    }
+    await expect(themes, name).toBeVisible();
+    await expect(themes).toHaveText("Themes");
+    // on the first row, beside the home link, and tinted with the accent
+    const [home, t] = await Promise.all([again.locator(".side-home > a").first().boundingBox(), themes.boundingBox()]);
+    expect(Math.abs(home!.y - t!.y), `${name}: Themes shares the home link's row`).toBeLessThanOrEqual(1);
+    expect(await themes.evaluate((el) => getComputedStyle(el).borderLeftWidth)).toBe("3px");
+    if (phone) await page.keyboard.press("Escape");
+  }
+  const side = await menu(page, phone);
+  await side.getByRole("group", { name: "Space" }).getByRole("button", { name: "Invest" }).click();
+  await (await menu(page, phone)).locator(".side-home a.side-feature").click();
+  await expect(page).toHaveURL(/\/research\/themes$/);
+  await expect(page.getByTestId("page-breadcrumb").or(page.locator(".crumb-row")).first()).toContainText(/Invest\s*›\s*Themes/);
+  const after = await menu(page, phone);
+  // the one lit item is Invest's own Themes entry, never the shortcut
+  await expect(after.locator(".side-home a.side-feature")).not.toHaveAttribute("aria-current", /.*/);
+  await expect(after.locator('[aria-current="page"]')).toHaveCount(1);
+  await expect(after.locator('.side-entry[data-group="themes"] a')).toHaveAttribute("aria-current", "page");
   await sane(page, errors);
 });
 

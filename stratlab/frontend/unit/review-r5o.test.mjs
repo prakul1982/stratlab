@@ -183,7 +183,8 @@ test("library cards: facts about the checks, buy and hold beside the return, whi
   // LIVE3-013 changed this on purpose: the strategy's own page says the gap once, in its headline, and both totals in one table
   // (the full sentence beside them repeated it); the cards keep their one line
   assert.match(pub, /\{ id: "hold", k: "Buy and hold, same dates", v: figure\(sh\.buy_hold, tone\(sh\.buy_hold\)\) \}/);
-  assert.match(lib, /lede=\{onlyOurs \?/);
+  // R16 changed this on purpose (owner, 7 Nov: "remove the all option"): the intro follows the Whose filter, StratLab's own or Everyone's
+  assert.match(lib, /lede=\{ours \?/);
   const ui = read("src/components/ui.tsx");
   assert.match(ui, /edge: "Passed the checks"/);
   for (const p of ["src/pages/Login.tsx", "src/pages/SpaceHomes.tsx", "src/pages/LibraryPage.tsx"])

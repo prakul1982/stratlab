@@ -28,7 +28,8 @@ _PART_YEAR = re.compile(r"\s\d+m$")
 _YEAR = re.compile(r"^([A-Za-z]{3})\s+(\d{4})$")
 NOTABLE_GAP = 10.0            # points between the highest and lowest layer median EBITDA margin that make a post worth drafting
 NOTABLE_MOVE = 5.0            # points a layer's EBITDA margin moved over three years
-MIN_LAYER = 2                 # companies a layer needs for its median to be called a layer's figure in a post
+MIN_LAYER = 2                 # companies a layer needs for its median to be called a layer's figure (a post, the chain's highest and lowest)
+ROUNDING = 1.0                # points: EBITDA margins are filed in whole points, so two medians this close may be the same figure rounded
 FINANCIAL_KEYS = ("ebitda", "roce", "debt_equity")
 
 
@@ -53,9 +54,16 @@ def f1(v: float) -> str:
     return str(Decimal(float(v)).quantize(Decimal("0.1"), ROUND_HALF_UP))
 
 
-def pts(v: float) -> str:
-    """12.3% (one decimal, a real minus)."""
-    return f"{f1(v)}%".replace("-", "−")
+def pts(v: float, whole: bool = False) -> str:
+    """12.3% (one decimal, a real minus); `whole`, for margins filed in whole points, prints 13% for 13.0 (a median's half stays: 16.5%)."""
+    text = f"{f1(v)}%".replace("-", "−")
+    return text.replace(".0%", "%") if whole else text
+
+
+def whole_points(rows) -> bool:
+    """Whether every EBITDA margin among these companies is filed in whole points (company_row's ebitda_dp)."""
+    have = [r for r in rows if r.get("ebitda") is not None]
+    return bool(have) and all(r.get("ebitda_dp") == 0 for r in have)
 
 
 def full_years(f: dict) -> list[dict]:
@@ -108,11 +116,18 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
     # enterprise value over EBITDA: market value plus debt less cash, over the year's EBITDA; n/a where any of the four is missing, or EBITDA isn't positive
     ev = (cap + debt - cash) / ebitda_amt if None not in (cap, debt, cash) and ebitda_amt and ebitda_amt > 0 and not wild and not lender else None
     yoy = f.get("latest_yoy") if isinstance(f.get("latest_yoy"), dict) and f["latest_yoy"].get("basis") == "quarter" else None
+    opms = [num(y.get("opm")) for y in years if num(y.get("opm")) is not None]
+    shown_e = None if wild or ebitda is None or abs(ebitda) > stock_pages.EXTREME else r1(ebitda)
+    shown_n = None if wild or net is None or abs(net) > stock_pages.EXTREME else r1(net)
     return {
         "symbol": symbol, "name": base["name"], "year": last["year"] if last else None, "unit": f.get("unit"), "bank": lender,
         "revenue": sales if sales and sales > 0 else None, "profit": profit,
-        "ebitda": None if wild or ebitda is None or abs(ebitda) > stock_pages.EXTREME else r1(ebitda),
-        "net": None if wild or net is None or abs(net) > stock_pages.EXTREME else r1(net),
+        "ebitda": shown_e, "net": shown_n,
+        # net margin above the EBITDA margin: profit beyond what the business earned before depreciation, interest and tax, so a one-off
+        # gain (a demerger, an asset sale) is in it (the owner, 7 Nov: Tata Motors PV's 24.6% net on a 6% EBITDA margin)
+        "one_off": one_off(shown_e, shown_n),
+        # the page files the EBITDA margin in whole points (13, never 13.04): printed as 13%, not 13.0% (false precision)
+        "ebitda_dp": 0 if opms and all(float(x).is_integer() for x in opms) else 1,
         "roce": None if lender or old else r1(num(f.get("roce"))),
         "cap": cap, "pe": base.get("pe"), "pb": None if old else r1(num(f.get("pb"))),
         "interest_cover": None if lender or old else r1(num(f.get("interest_cover"))), "ev_ebitda": r1(ev),
@@ -132,11 +147,27 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
     }
 
 
-def is_diversified(row: dict, layers_in: int) -> bool:
-    """Whether a company's figures are the whole company's, not one layer's: a group that runs several businesses, a company the
-    exchange files as diversified, or one that does the work of several layers of this map."""
+def one_off(ebitda, net) -> bool:
+    """Whether a year's net margin is above its EBITDA margin (both shown, the net positive): only a gain outside the business does that."""
+    return ebitda is not None and net is not None and net > 0 and net > ebitda
+
+
+MAIN_SEGMENT = 66.0           # a company whose largest business segment brings in less than this share of revenue runs several businesses
+
+
+def is_diversified(row: dict, segments: list | None = None) -> bool:
+    """Whether a company's figures are the whole company's, not one layer's, from its own data: the segments its documents report (no one
+    segment brings in MAIN_SEGMENT% of revenue), else the exchange filing it as diversified or a conglomerate. Only a company with no segments
+    read falls back to the groups known to run several businesses (DIVERSIFIED). A company placed in two layers is not diversified for that:
+    it is kept in its first layer only (one layer per company)."""
     ind = " ".join(row.get("industry") or []).lower()
-    return row["symbol"] in DIVERSIFIED or "diversified" in ind or "conglomerate" in ind or layers_in > 1
+    if "diversified" in ind or "conglomerate" in ind:
+        return True
+    shares = [num(x.get("share_pct")) for x in segments or [] if isinstance(x, dict)]
+    shares = [x for x in shares if x is not None and x > 0]
+    if len(shares) >= 2:
+        return max(shares) < MAIN_SEGMENT
+    return row["symbol"] in DIVERSIFIED
 
 
 def basis_text(rows: list[dict], region: str) -> str:
@@ -150,26 +181,31 @@ def basis_text(rows: list[dict], region: str) -> str:
 # ---------- layers and sub-themes ----------
 def layer_block(name: str, rows: list[dict], wide: set[str]) -> dict:
     """A layer's table and its median and range for each figure. A company-wide figure (a group that runs other businesses too) is
-    marked and left out of the median when the layer has any company that is its own; the layer says how many were left out."""
-    own = [r for r in rows if r["symbol"] not in wide]
-    pool = own or rows
+    marked and left out of the median when the layer has any company that is its own; the layer says how many were left out. A company
+    whose membership isn't confirmed (status "unverified") is listed but left out of the medians and the revenue total; a net margin with a
+    one-off gain in it is left out of the net margin's median (`net_all` keeps the median with it)."""
+    sure = [r for r in rows if r.get("status") != "unverified"]
+    own = [r for r in sure if r["symbol"] not in wide]
+    pool = own or sure
     keys = ("ebitda", "net", "roce")
-    stats = {k: stat(r.get(k) for r in pool) for k in keys}
-    return {"layer": name, "companies": rows, "stats": stats, "n": len(rows),
-            "revenue": sum(r["revenue"] for r in rows if r.get("revenue")) or None,
-            "company_wide": sorted(r["symbol"] for r in rows if r["symbol"] in wide),
-            "stats_over": "all" if not own and rows else "own", "left_out": len(rows) - len(pool)}
+    stats = {k: stat(r.get(k) for r in pool if not (k == "net" and r.get("one_off"))) for k in keys}
+    return {"layer": name, "companies": rows, "stats": stats, "n": len(sure), "listed": len(rows),
+            "net_all": stat(r.get("net") for r in pool), "one_off": sorted(r["symbol"] for r in pool if r.get("one_off")),
+            "revenue": sum(r["revenue"] for r in sure if r.get("revenue")) or None,
+            "company_wide": sorted(r["symbol"] for r in sure if r["symbol"] in wide),
+            "unverified": sorted(r["symbol"] for r in rows if r.get("status") == "unverified"),
+            "stats_over": "all" if not own and sure else "own", "left_out": len(sure) - len(pool)}
 
 
-def margin_line(block: dict, chain_median: float | None, several: bool = True) -> str | None:
+def margin_line(block: dict, chain_median: float | None, several: bool = True, whole: bool = False) -> str | None:
     """What a layer's table doesn't say by itself: how its median EBITDA margin stands against the whole map's, and which figures are the whole
     company's. (The median and range are rows of the table, not said again.) None when there is nothing more to say."""
     e = block["stats"].get("ebitda")
     parts = []
     if e and chain_median is not None and several:
         d = e["median"] - chain_median
-        if abs(d) >= 0.05:
-            parts.append(f"The median EBITDA margin ({pts(e['median'])}) is {f1(abs(d))} points {'above' if d > 0 else 'below'} the median of the whole map ({pts(chain_median)}).")
+        if abs(d) > ROUNDING:
+            parts.append(f"The median EBITDA margin ({pts(e['median'], whole)}) is {f1(abs(d))} points {'above' if d > 0 else 'below'} the median of the whole map ({pts(chain_median, whole)}).")
     if block["left_out"]:
         parts.append(f"{block['left_out']} figure{'s are' if block['left_out'] > 1 else ' is'} the whole company's and left out of the medians"
                      " because the company runs other businesses too.")
@@ -186,16 +222,20 @@ def chain_table(blocks: list[dict]) -> dict:
         e, n, c = (b["stats"].get(k) for k in ("ebitda", "net", "roce"))
         rows.append({"layer": b["layer"], "n": b["n"], "revenue": b["revenue"], "ebitda": e["median"] if e else None, "net": n["median"] if n else None,
                      "roce": c["median"] if c else None, "ebitda_n": e["n"] if e else 0, "official": bool(b.get("official"))})
-    have = [r for r in rows if r["ebitda"] is not None and r["ebitda_n"] >= 1]
-    line = None
+    # only the map's own layers (an official industry's leftover companies overlap them: "Vehicle assembly" and "Commercial Vehicles"), each
+    # with MIN_LAYER companies in its median, and only a gap wider than the rounding of whole-point margins, name a highest and a lowest
+    have = [r for r in rows if r["ebitda"] is not None and r["ebitda_n"] >= MIN_LAYER and not r["official"]]
+    line, hi, lo = None, None, None
     if len(have) >= 2:
         hi, lo = max(have, key=lambda r: r["ebitda"]), min(have, key=lambda r: r["ebitda"])
-        if hi["layer"] != lo["layer"] and hi["ebitda"] != lo["ebitda"]:
-            line = (f"Median EBITDA margin is highest in {hi['layer']} ({pts(hi['ebitda'])}) and lowest in {lo['layer']} ({pts(lo['ebitda'])}), "
+        if hi["layer"] == lo["layer"] or hi["ebitda"] - lo["ebitda"] <= ROUNDING:
+            hi = lo = None
+        else:
+            whole = whole_points([c for b in blocks for c in b["companies"]])
+            line = (f"Median EBITDA margin is highest in {hi['layer']} ({pts(hi['ebitda'], whole)}) and lowest in {lo['layer']} ({pts(lo['ebitda'], whole)}), "
                     f"a gap of {f1(hi['ebitda'] - lo['ebitda'])} points.")
-    spread = len(have) >= 2 and max(r["ebitda"] for r in have) != min(r["ebitda"] for r in have)       # layers with the same figure have no highest or lowest
-    return {"rows": rows, "line": line, "highest": max(have, key=lambda r: r["ebitda"])["layer"] if spread else None,
-            "lowest": min(have, key=lambda r: r["ebitda"])["layer"] if spread else None}
+    return {"rows": rows, "line": line, "highest": hi["layer"] if hi else None, "lowest": lo["layer"] if lo else None,
+            "compared": [r["layer"] for r in have]}
 
 
 def layer_history(rows: list[dict]) -> dict | None:
@@ -214,13 +254,23 @@ def layer_history(rows: list[dict]) -> dict | None:
     if not best:
         return None
     span, keep = best
+
+    def year_of(r, lb):
+        return next(y for y in r["years"] if y["year"] == lb)
+    # a company with a one-off gain in any year of the span (net margin above its EBITDA margin) is left out of the net line, so the theme's
+    # net margin never tops its EBITDA margin on a demerger gain (the owner, 7 Nov: 12.0% net on 11.8% EBITDA in Mar 2026)
+    clean = [r for r in keep if not any(one_off(year_of(r, lb)["opm"], year_of(r, lb)["profit"] / year_of(r, lb)["sales"] * 100
+                                                if year_of(r, lb)["profit"] is not None else None) for lb in span)]
     ebitda, net = [], []
     for lb in span:
-        ys = [next(y for y in r["years"] if y["year"] == lb) for r in keep]
+        ys = [year_of(r, lb) for r in keep]
         s = sum(y["sales"] for y in ys)
         ebitda.append(round(sum(y["sales"] * y["opm"] for y in ys) / s, 1) if s else None)
-        net.append(round(sum(y["profit"] for y in ys if y["profit"] is not None) / s * 100, 1) if s and all(y["profit"] is not None for y in ys) else None)
-    return {"years": span, "ebitda": ebitda, "net": net, "n": len(keep), "companies": [r["symbol"] for r in keep]}
+        ns = [year_of(r, lb) for r in clean]
+        sn = sum(y["sales"] for y in ns)
+        net.append(round(sum(y["profit"] for y in ns) / sn * 100, 1) if sn and all(y["profit"] is not None for y in ns) else None)
+    return {"years": span, "ebitda": ebitda, "net": net, "n": len(keep), "net_n": len(clean), "companies": [r["symbol"] for r in keep],
+            "one_off": sorted(r["symbol"] for r in keep if r not in clean)}
 
 
 def _year_key(label: str):
@@ -271,14 +321,53 @@ def margin_history(rows: list[dict]) -> dict | None:
     return h
 
 
+PEER_BAND = 2.0               # companies of similar market value: between half and twice a company's own
+
+
+def _peer_median(cap, market: list[dict], key: str, ok, theme: set) -> float | None:
+    if not cap:
+        return None
+    xs = [num(m.get(key)) for m in market if m.get("symbol") not in theme and num(m.get("market_cap")) and cap / PEER_BAND <= num(m.get("market_cap")) <= cap * PEER_BAND]
+    xs = [x for x in xs if x is not None and ok(x)]
+    return median(xs) if len(xs) >= 3 else None
+
+
+def peers_section(rows: list[dict], market: list[dict]) -> dict:
+    """Each company against listed companies outside the theme of similar market value (between half and twice its own): its P/E, its revenue
+    growth over three years and its ROCE beside their medians, and the theme's median company of each (the owner, 7 Nov: "valuation premium vs
+    same-size peers beside growth and ROCE", not against every listed company). Facts: a comparison, never a view of what is cheap."""
+    theme = {r["symbol"] for r in rows}
+    out = {}
+    for key, mkey, ok in (("pe", "pe", lambda x: 0 < x <= stock_pages.PE_MAX), ("sales_3y", "sales_cagr_3y", lambda x: True), ("roce", "roce", lambda x: True)):
+        own, peer, prem = [], [], []
+        for r in rows:
+            v = num(r.get(key))
+            if v is None or not ok(v):
+                continue
+            pm = _peer_median(r.get("cap"), market, mkey, ok, theme)
+            if pm is None:
+                continue
+            own.append(v)
+            peer.append(pm)
+            if key == "pe" and pm > 0:
+                prem.append((v / pm - 1) * 100)
+        if own:
+            out[key] = {"n": len(own), "theme": round(median(own), 1), "peers": round(median(peer), 1),
+                        "premium": round(median(prem), 1) if prem else None}
+    return out
+
+
 def valuation_section(rows: list[dict], market: list[dict]) -> dict:
+    """The theme's median P/E, P/B and EV/EBITDA, each over the companies that have one (a loss-maker has no P/E and is left out, and the
+    count says so), beside companies of similar market value (peers_section) and the whole market's median."""
     pe = stat(r["pe"] for r in rows if r.get("pe"))
     mkt = stat(m.get("pe") for m in market if m.get("pe") and 0 < m["pe"] <= stock_pages.PE_MAX)
     pb = stat(r["pb"] for r in rows if r.get("pb") is not None and r["pb"] > 0)
     mpb = stat(m.get("pb") for m in market if m.get("pb") and m["pb"] > 0)
     ev = stat(r["ev_ebitda"] for r in rows)
+    losses = sum(1 for r in rows if r.get("profit") is not None and r["profit"] <= 0)
     return {"pe": pe, "market_pe": mkt, "market_n": mkt["n"] if mkt else 0, "pb": pb, "market_pb": mpb, "ev_ebitda": ev,
-            "ev_missing": sum(1 for r in rows if r.get("ev_ebitda") is None and not r.get("bank"))}
+            "ev_missing": sum(1 for r in rows if r.get("ev_ebitda") is None and not r.get("bank")), "losses": losses, "peers": peers_section(rows, market)}
 
 
 def balance_section(rows: list[dict]) -> dict:
@@ -290,14 +379,43 @@ def balance_section(rows: list[dict]) -> dict:
             "cover_under_2": sum(1 for r in rows if r.get("interest_cover") is not None and r["interest_cover"] < 2)}
 
 
-def quarter_section(rows: list[dict]) -> dict:
+_MON = {m: i for i, m in enumerate(("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"), 1)}
+
+
+def quarter_end(label) -> date | None:
+    """The last day of the quarter a label like "Sep 2026 vs Sep 2025" or "Sep 2026" names, or None."""
+    m = re.match(r"\s*([A-Za-z]{3})\w*\s+(\d{4})", str(label or ""))
+    if not m or m.group(1).title() not in _MON:
+        return None
+    y, mo = int(m.group(2)), _MON[m.group(1).title()]
+    return (date(y + (mo == 12), mo % 12 + 1, 1) - timedelta(days=1))
+
+
+def quarter_section(rows: list[dict], filed: list[dict] | None = None) -> dict:
     """The latest reported quarter of each company against the same quarter a year before (revenue and net profit change), as the company page's
-    "Latest YoY" gives it, with how many are up and down. Facts only: it compares a company with its own year-ago quarter, not with anyone's estimate."""
+    "Latest YoY" gives it, with how many are up and down. One quarter per median (the owner, 7 Nov: June and September mixed in one median): the
+    newest quarter at least MIN_LAYER companies report is the median's; a company still on an earlier quarter is listed apart, and one whose
+    newer results were filed (`filed`: the events' results filed) but aren't in its figures yet is marked with the filing's day. Facts only: it
+    compares a company with its own year-ago quarter, not with anyone's estimate."""
     have = [r for r in rows if r.get("quarter") and (r["quarter"]["sales"] is not None or r["quarter"]["profit"] is not None)]
-    return {"companies": [{"symbol": r["symbol"], "name": r["name"], "of": r["quarter"]["of"], "sales": r["quarter"]["sales"], "profit": r["quarter"]["profit"]} for r in have],
-            "sales_up": sum(1 for r in have if (r["quarter"]["sales"] or 0) > 0), "sales_down": sum(1 for r in have if (r["quarter"]["sales"] or 0) < 0),
-            "profit_up": sum(1 for r in have if (r["quarter"]["profit"] or 0) > 0), "profit_down": sum(1 for r in have if (r["quarter"]["profit"] or 0) < 0),
-            "sales": stat(r["quarter"]["sales"] for r in have), "profit": stat(r["quarter"]["profit"] for r in have)}
+    ends = Counter(quarter_end(r["quarter"]["of"]) for r in have)
+    ends.pop(None, None)
+    usual = max((d for d, k in ends.items() if k >= MIN_LAYER), default=None) or (max(ends, key=lambda d: (ends[d], d)) if ends else None)
+    cur = [r for r in have if quarter_end(r["quarter"]["of"]) == usual] if usual else have
+    late = {f["symbol"]: f["date"] for f in filed or [] if f.get("date")}
+    earlier = []
+    for r in have:
+        if r in cur:
+            continue
+        end = quarter_end(r["quarter"]["of"])
+        newer = late.get(r["symbol"])
+        earlier.append({"symbol": r["symbol"], "name": r["name"], "of": r["quarter"]["of"], "sales": r["quarter"]["sales"], "profit": r["quarter"]["profit"],
+                        "filed_unread": newer if newer and end and str(newer) > end.isoformat() else None})
+    return {"companies": [{"symbol": r["symbol"], "name": r["name"], "of": r["quarter"]["of"], "sales": r["quarter"]["sales"], "profit": r["quarter"]["profit"]} for r in cur],
+            "quarter": usual.strftime("%b %Y") if usual else None, "earlier": earlier,
+            "sales_up": sum(1 for r in cur if (r["quarter"]["sales"] or 0) > 0), "sales_down": sum(1 for r in cur if (r["quarter"]["sales"] or 0) < 0),
+            "profit_up": sum(1 for r in cur if (r["quarter"]["profit"] or 0) > 0), "profit_down": sum(1 for r in cur if (r["quarter"]["profit"] or 0) < 0),
+            "sales": stat(r["quarter"]["sales"] for r in cur), "profit": stat(r["quarter"]["profit"] for r in cur)}
 
 
 def stored_price_section(rows: list[dict]) -> dict:
@@ -318,7 +436,7 @@ def stored_price_section(rows: list[dict]) -> dict:
 def leaders(rows: list[dict]) -> list[dict]:
     """The table of every company in the theme with the figures to sort it by."""
     return [{k: r.get(k) for k in ("symbol", "name", "cap", "revenue", "year", "ebitda", "net", "roce", "sales_1y", "sales_3y", "profit_1y", "profit_3y",
-                                    "pe", "pb", "ev_ebitda", "debt_equity", "stage", "from_high")} for r in rows]
+                                    "pe", "pb", "ev_ebitda", "debt_equity", "stage", "from_high", "one_off", "ebitda_dp", "status")} for r in rows]
 
 
 # ---------- stored events, holdings and cards ----------
@@ -366,7 +484,8 @@ def ownership_section(symbols: list[str], names: dict, src) -> dict:
             pledges.append({"symbol": i["symbol"], "name": names.get(i["symbol"]) or i.get("company") or i["symbol"], "at": i["at"], "label": i.get("label") or i.get("category"),
                             "url": i.get("url")})
     return {"holdings": rows, "promoter_up": sum(1 for r in rows if (r["promoter_change"] or 0) > 0), "promoter_down": sum(1 for r in rows if (r["promoter_change"] or 0) < 0),
-            "promoter_median": stat(r["promoter"] for r in rows), "insider_buys": bought, "pledges": pledges, "red_flags": flagged_rows(flagged, names)}
+            "promoter_median": stat(r["promoter"] for r in rows), "insider_buys": bought, "pledges": pledges, "red_flags": flagged_rows(flagged, names),
+            "fund_raises": fund_raises(flagged, names)}
 
 
 INSTITUTION_KINDS = {"mutual fund", "insurance company", "provident or pension fund", "alternative investment fund", "foreign portfolio investor",
@@ -374,10 +493,36 @@ INSTITUTION_KINDS = {"mutual fund", "insurance company", "provident or pension f
 PLEDGE_CATEGORIES = {"pledge"}
 
 
+FUND_RAISE = re.compile(r"rights issue|fund ?rais|preferential|qip\b|qualified institution", re.I)
+
+
 def flagged_rows(items: list[dict], names: dict) -> list[dict]:
-    return [{"symbol": i["symbol"], "name": names.get(i["symbol"]) or i.get("company") or i["symbol"], "at": i["at"], "label": i.get("label") or i.get("category"),
-             "severity": i.get("severity"), "subject": i.get("subject") or i.get("title") or "", "url": i.get("url")}
-            for i in sorted(items, key=lambda i: (i["at"], i["symbol"]), reverse=True)[:15]]
+    """The red-flag filings, newest first: one row for a company's same flag on the same day (an exchange posts a filing twice), and a rights
+    issue or other fund raise left out (it is a corporate action, not a warning on its own: fund_raises lists them)."""
+    seen, out = set(), []
+    for i in sorted(items, key=lambda i: (i["at"], i["symbol"]), reverse=True):
+        label = i.get("label") or i.get("category")
+        if FUND_RAISE.search(f"{label} {i.get('category') or ''}"):
+            continue
+        key = (i["symbol"], str(i["at"])[:10], label)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"symbol": i["symbol"], "name": names.get(i["symbol"]) or i.get("company") or i["symbol"], "at": i["at"], "label": label,
+                    "severity": i.get("severity"), "subject": i.get("subject") or i.get("title") or "", "url": i.get("url")})
+    return out[:15]
+
+
+def fund_raises(items: list[dict], names: dict) -> list[dict]:
+    """Rights issues and other fund raises among the filings, once per company and day."""
+    seen, out = set(), []
+    for i in sorted(items, key=lambda i: (i["at"], i["symbol"]), reverse=True):
+        label = i.get("label") or i.get("category")
+        if not FUND_RAISE.search(f"{label} {i.get('category') or ''}") or (i["symbol"], str(i["at"])[:10]) in seen:
+            continue
+        seen.add((i["symbol"], str(i["at"])[:10]))
+        out.append({"symbol": i["symbol"], "name": names.get(i["symbol"]) or i.get("company") or i["symbol"], "at": i["at"], "label": label, "url": i.get("url")})
+    return out[:10]
 
 
 def events_section(symbols: list[str], names: dict, src) -> dict:
@@ -454,13 +599,61 @@ class Sources:
     shareholding(symbol) -> the stored shareholding quarters; insider_buys() -> {symbol: the latest purchase's day};
     results(frm, to, symbols), actions(frm, to, symbols), red_flags(symbols, frm, to) -> stored rows;
     card(symbol, row) -> the management report card checked against the reported years ({met, missed}) or None;
-    history(key, point) -> the theme's kept points after adding `point` (a day's median P/E and the like), oldest first."""
+    history(key, point) -> the theme's kept points after adding `point` (a day's median P/E and the like), oldest first;
+    segments(symbol) -> the business segments the company's documents report ([{name, share_pct}]) or None (is_diversified)."""
 
     def __init__(self, today: date, facts, index_rows=lambda: [], shareholding=lambda s: None, insider_buys=lambda: {},
                  results=lambda a, b, s: [], actions=lambda a, b, s: [], red_flags=lambda s, a, b: [], card=lambda s, r: None,
-                 history=lambda k, p: [p]):
+                 history=lambda k, p: [p], segments=lambda s: None):
         self.today, self.facts, self.index_rows, self.shareholding, self.insider_buys = today, facts, index_rows, shareholding, insider_buys
-        self.results, self.actions, self.red_flags, self.card, self.history = results, actions, red_flags, card, history
+        self.results, self.actions, self.red_flags, self.card, self.history, self.segments = results, actions, red_flags, card, history, segments
+
+
+_STOP = {"company", "companies", "limited", "india", "indian", "sector", "theme", "other", "others", "product", "products", "service", "services",
+         "industry", "industries", "these", "their", "which", "with", "from", "that", "this", "make", "makes", "made", "sell", "sells", "large", "small",
+         "main", "rising", "growth", "levers", "market", "markets", "demand", "through", "largely", "also", "several", "rest", "chain", "layer", "brand",
+         "brands", "global", "leading", "business", "businesses", "decide", "much", "each", "sale", "sales", "move", "moving", "towards", "into",
+         "tied", "mostly", "mainly", "most", "more", "than", "they", "them", "have", "work", "include", "including", "range", "wide", "firm", "firms",
+         "household", "households", "income", "incomes", "financing", "profit", "share", "scale", "cycle", "change", "changes", "depend", "depends",
+         "availability", "activity", "replacement", "network", "networks", "dealer", "dealers", "retained", "listed", "official", "equipments"}
+
+
+def _stems(text: str) -> set[str]:
+    out = set()
+    for w in re.findall(r"[a-z]+", str(text or "").lower()):
+        if len(w) < 4 or w in _STOP:
+            continue
+        out.add(w[:-2] if w.endswith("es") and len(w) > 5 else w[:-1] if w.endswith("s") and len(w) > 4 else w)
+    return out
+
+
+def theme_words(checked: dict, theme: str) -> set[str]:
+    """The words that say a company does the theme's work: the theme's, its official industries', its layers' and its sub-themes' names, and
+    the sub-themes' one-line details."""
+    parts = [theme, checked.get("sector") or ""] + list((checked.get("placements") or {}).get("industries") or [])
+    parts += [v.get("layer") or "" for v in checked.get("value_chain") or []]
+    parts += [f"{s.get('name') or ''} {s.get('detail') or ''}" for s in checked.get("sub_themes") or []]
+    return _stems(" ".join(parts))
+
+
+def does_the_work(what: str, words: set[str]) -> bool:
+    """Whether a company's own sentence uses one of the theme's words (a word of the sentence starting with one of them)."""
+    mine = _stems(what)
+    return any(m == w or (len(w) >= 4 and m.startswith(w)) for m in mine for w in words)
+
+
+def membership(c: dict, words: set[str]) -> str:
+    """How sure the theme is of a company (the owner, 7 Nov: a membership check for official-industry companies too, so an insurance software
+    house filed under auto parts isn't in the auto figures): "core", a company of the theme's own industries or list whose own words (or a
+    checked quote) show the work; "exposure", a company from another industry whose own words were checked to show the work; "unverified",
+    the rest: listed, but left out of every median and total."""
+    if c.get("base") is None and c.get("verified") is None:
+        return "core"                                 # a map from before the checks: as it was
+    if c.get("base"):
+        if c.get("basis") == "list" or c.get("verified") or does_the_work(c.get("what") or "", words):
+            return "core"
+        return "unverified"
+    return "exposure" if c.get("verified") else "unverified"
 
 
 def slug(theme: str) -> str:
@@ -470,20 +663,32 @@ def slug(theme: str) -> str:
 def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     """The dive for a checked map (see theme_check.check_placements): the tables by layer, the whole chain in one table, the sub-themes'
     companies, and the sections for the theme as a whole. Every figure is from the stored facts; nothing here calls a source."""
-    layers_in: Counter = Counter()
+    # one layer per company: a company the map puts in two layers stays in the first (the owner, 7 Nov), so no company is counted twice
+    first: dict[str, str] = {}
     for v in checked.get("value_chain") or []:
-        for t in {c["ticker"] for c in v.get("companies") or []}:
-            layers_in[t] += 1
+        for c in v.get("companies") or []:
+            first.setdefault(c["ticker"], v.get("layer") or "")
+    checked = {**checked, "value_chain": [{**v, "companies": [c for c in v.get("companies") or [] if first.get(c["ticker"]) == (v.get("layer") or "")]}
+                                          for v in checked.get("value_chain") or []]}
     placed: dict[str, dict] = {}
     for grp in (checked.get("value_chain") or []) + (checked.get("sub_themes") or []):
         for c in grp.get("companies") or []:
             placed.setdefault(c["ticker"], c)
+    words = theme_words(checked, theme)
     facts = {s: src.facts(s) for s in placed}
     rows = {s: r for s, r in ((s, company_row(region, s, f)) for s, f in facts.items()) if r}
     for s, c in placed.items():
         if s in rows:
             rows[s]["name"] = c.get("name") or rows[s]["name"]
-    wide = {s for s, r in rows.items() if is_diversified(r, layers_in[s])}
+            rows[s]["status"] = membership(c, words)
+
+    def segs(sym):
+        try:
+            return src.segments(sym)
+        except Exception as e:
+            print("theme data: segments not read:", sym, type(e).__name__, str(e)[:100])
+            return None
+    wide = {s for s, r in rows.items() if is_diversified(r, segs(s))}
     names = {s: r["name"] for s, r in rows.items()}
     market = [m for m in (src.index_rows() or []) if isinstance(m, dict)]
 
@@ -496,12 +701,14 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         b["policy"] = v.get("policy")
         b["official"], b["basis"] = bool(v.get("official")), v.get("basis")     # a layer that is one official industry's companies the AI didn't place (theme_base.py)
         blocks.append(b)
-        histories[b["layer"]] = layer_history([r for r in mine if r["symbol"] not in wide] or mine)
+        sure = [r for r in mine if r.get("status") != "unverified"]
+        histories[b["layer"]] = layer_history([r for r in sure if r["symbol"] not in wide] or sure)
     chain = chain_table(blocks)
-    pool = [r for b in blocks for r in b["companies"] if not r["company_wide"]] or [r for b in blocks for r in b["companies"]]
+    counted = [r for b in blocks for r in b["companies"] if r.get("status") != "unverified"]
+    pool = [r for r in counted if not r["company_wide"]] or counted
     allm = stat(r["ebitda"] for r in {r["symbol"]: r for r in pool}.values())
     for b in blocks:
-        b["line"] = margin_line(b, allm["median"] if allm else None, several=sum(1 for x in blocks if x["stats"].get("ebitda")) > 1)
+        b["line"] = margin_line(b, allm["median"] if allm else None, several=sum(1 for x in blocks if x["stats"].get("ebitda")) > 1, whole=whole_points(pool))
         b["history"] = histories.get(b["layer"])
     subs = []
     for s in checked.get("sub_themes") or []:
@@ -512,8 +719,14 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
                 cos.append({"symbol": r["symbol"], "name": r["name"], "what": c.get("what"), "cap": r["cap"], "sales_1y": r["sales_1y"], "ebitda": r["ebitda"],
                             "company_wide": r["symbol"] in wide, "year": r["year"]})
         subs.append({"name": s.get("name") or "", "detail": s.get("detail") or "", "companies": cos})
-    members = sorted(rows.values(), key=lambda r: -(r.get("cap") or 0))
-    syms = [r["symbol"] for r in members]
+    for r in rows.values():                 # a merger or demerger broke the company's series: no growth figure for it, none in the growth totals
+        if series_break(r):
+            r["series_break"] = True
+            for k in ("sales_1y", "sales_3y", "sales_5y", "profit_1y", "profit_3y", "profit_5y"):
+                r[k] = None
+    listed = sorted(rows.values(), key=lambda r: -(r.get("cap") or 0))
+    syms = [r["symbol"] for r in listed]
+    members = [r for r in listed if r.get("status") != "unverified"]          # every total and median: the confirmed companies only
     own = [r for r in members if r["symbol"] not in wide] or members
     val = valuation_section(members, market)
     point = {"d": src.today.isoformat(), "pe": val["pe"]["median"] if val["pe"] else None, "n": len(members)}
@@ -529,14 +742,76 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         "region": region, "sector": checked.get("sector") or theme, "as_of": as_of, "unit": next((r["unit"] for r in members if r.get("unit")), None),
         "basis": basis_text(members, region), "layers": blocks, "chain": chain, "subs": subs, "members": len(members), "company_wide": sorted(wide & set(syms)),
         "sections": {
-            "size": size_section(members), "medians": {k: stat(r.get(k) for r in own) for k in ("ebitda", "net", "roce")}, "growth": aggregate_growth(own), "margins": margin_history(own), "valuation": val, "quarter": quarter_section(members),
+            "size": size_section(members), "medians": {k: stat(r.get(k) for r in own if not (k == "net" and r.get("one_off"))) for k in ("ebitda", "net", "roce")},
+            "growth": aggregate_growth([r for r in own if not r.get("series_break")]), "margins": margin_history(own), "valuation": val,
             "balance": balance_section(own), "price": stored_price_section(members), "market": market_med,
             "ownership": ownership_section(syms, names, src), "events": events_section(syms, names, src),
-            "management": management_section(syms, names, rows, src), "leaders": leaders(members)},
+            "management": management_section(syms, names, rows, src), "leaders": leaders(listed)},
         "growth_basis_n": len(own_set),
+        "status": {r["symbol"]: r.get("status") or "core" for r in listed}, "with_figures": len(listed),
     }
+    out["sections"]["medians"]["net_all"] = stat(r.get("net") for r in own)
+    out["sections"]["quarter"] = quarter_section(members, out["sections"]["events"].get("results_filed"))
+    out["checks"] = data_checks(listed, blocks, out)
     out["notable"] = notable_items(blocks, chain, histories)
     return out
+
+
+# ---------- headlines worth a line ----------
+# a quote page, a derivatives table, a list of picks or a price-move roundup is not news about the business (the owner, 7 Nov: "Share Price -
+# Live", "Option Chain", put counts, Diwali picks)
+NOISE = re.compile(r"share price|stock price|price today|price live|\blive\b.*\bchart\b|option chain|\b(?:put|call) contracts?\b|open interest|"
+                   r"stock picks?|stocks? to (?:buy|watch)|top (?:gainers|losers)|gainers (?:&|and) losers|technical (?:signals|view|outlook)|"
+                   r"\bquote(?:,| and)|price,? news|multibagger|target price|\bbuy or sell\b|share price target|\bmuhurat\b", re.I)
+HOME = {"IN": re.compile(r"\bindia|\bindian\b|\bnse\b|\bbse\b|\bsebi\b|\brbi\b|\bgst\b|₹|\brs\.? ?\d|\bcrore|\blakh", re.I),
+        "US": re.compile(r"\bu\.?s\.?\b|\bamerica|\bunited states|\bsec\b|\bnyse\b|\bnasdaq\b|\bfed\b|\$", re.I)}
+
+
+def headline_kept(item: dict, region: str) -> bool:
+    """Whether a headline is about the business: not a quote page, a derivatives table, a list of picks or a price roundup; and a headline
+    about the theme in general (no company of the theme in it) must be about the theme's own market (the owner, 7 Nov: Mexico's tax plan,
+    Schaeffler's job cuts in Europe in an India theme). An exchange filing is always kept."""
+    text = str(item.get("headline") or "")
+    if item.get("kind") == "filing" or str(item.get("source") or "").lower() in ("exchange filing", "sec filing"):
+        return True
+    if NOISE.search(text):
+        return False
+    if not item.get("company") and region in HOME and not HOME[region].search(text):
+        return False
+    return True
+
+
+# ---------- what the figures can and can't carry ----------
+SERIES_JUMP = 60.0            # a year's revenue this many % above or below the year before: a merger or demerger has changed the company
+
+
+def series_break(r: dict) -> bool:
+    """Whether a company's years don't make one series: too few full years to compare (a new listing or a company formed by a demerger), or
+    a year's revenue jumping or falling by SERIES_JUMP% or more on the one before (a merger or demerger moved a business in or out)."""
+    ys = [y for y in r.get("years") or [] if y.get("sales")]
+    if r.get("revenue") and len(ys) < 2:
+        return True
+    for a, b in zip(ys[-3:], ys[-2:]):
+        if a["sales"] and b["sales"] and a["sales"] > 0 and abs(b["sales"] / a["sales"] - 1) * 100 >= SERIES_JUMP:
+            return True
+    return False
+
+
+def data_checks(rows: list[dict], blocks: list[dict], dive: dict) -> dict:
+    """The checks every figure in the dive went through, with what was found (the deck's "data confidence" page; facts, each with its
+    companies): one-off earnings, broken series, membership not confirmed, a quarter apart from the median's, and the count each median is on."""
+    sec = dive["sections"]
+    q = sec.get("quarter") or {}
+    meds = sec.get("medians") or {}
+    return {
+        "one_off": [{"symbol": r["symbol"], "name": r["name"], "ebitda": r["ebitda"], "net": r["net"]} for r in rows if r.get("one_off") and r.get("status") != "unverified"],
+        "net_with": (meds.get("net_all") or {}).get("median"), "net_without": (meds.get("net") or {}).get("median"),
+        "series": [{"symbol": r["symbol"], "name": r["name"]} for r in rows if series_break(r)],
+        "unverified": [{"symbol": r["symbol"], "name": r["name"]} for r in rows if r.get("status") == "unverified"],
+        "earlier_quarter": q.get("earlier") or [], "quarter": q.get("quarter"),
+        "n": {k: (meds.get(k) or {}).get("n", 0) for k in ("ebitda", "net", "roce")},
+        "whole_points": sum(1 for r in rows if r.get("ebitda_dp") == 0), "with_ebitda": sum(1 for r in rows if r.get("ebitda") is not None),
+    }
 
 
 # ---------- operating figures from business updates ----------
@@ -556,8 +831,43 @@ def business_rows(symbols: list[str], names: dict, read) -> list[dict]:
     return out
 
 
+MOVE_HELD = 50.0              # % a month's (or quarter's) figure moved on the one before, or 150% on a year before: held for checking
+
+
+def hold_suspect(rows: list[dict]) -> list[dict]:
+    """Operating figures held for checking before they're shown (the owner, 7 Nov): a previous or year-ago figure that is the same number for
+    two different companies (Tata Motors PV's and Tata Motors CV's 37,530: one filing read for both), and a change so large it is more likely a
+    misread column than a real move (Mahindra's −66.4% on the month). The figure as filed stays; the compared figure and its change are
+    blanked and `held` says why."""
+    seen: Counter = Counter()
+    for r in rows:
+        for k in ("prev", "year_ago"):
+            if r.get(k) is not None:
+                seen[(r.get("unit"), r[k])] += 1
+    out = []
+    for r in rows:
+        r = dict(r)
+        held = []
+        for k, ck in (("prev", "change_prev"), ("year_ago", "change_year")):
+            v = r.get(k)
+            if v is not None and seen[(r.get("unit"), v)] > 1 and len({x["symbol"] for x in rows if v in (x.get("prev"), x.get("year_ago"))}) > 1:
+                held.append(f"the {'previous' if k == 'prev' else 'year-ago'} figure is the same as another company's")
+                r[k], r[ck] = None, None
+        if "%" not in (r.get("unit") or ""):
+            if r.get("change_prev") is not None and abs(r["change_prev"]) >= MOVE_HELD:
+                held.append(f"a {r['change_prev']:+.1f}% move on the previous period")
+                r["prev"], r["change_prev"] = None, None
+            if r.get("change_year") is not None and abs(r["change_year"]) >= 3 * MOVE_HELD:
+                held.append(f"a {r['change_year']:+.1f}% move on the year")
+                r["year_ago"], r["change_year"] = None, None
+        r["held"] = "; ".join(held) or None
+        out.append(r)
+    return out
+
+
 def business_section(blocks: list[dict], subs: list[dict], names: dict, read) -> dict:
-    """Operating figures by layer and sub-theme, plus how many of the theme's companies have one."""
+    """Operating figures by layer and sub-theme, plus how many of the theme's companies have one; figures that need checking are held
+    (hold_suspect) across the whole theme, since two companies can share a misread filing."""
     every = {}
     for b in blocks:
         b["business"] = business_rows([c["symbol"] for c in b["companies"]], names, read)
@@ -565,6 +875,9 @@ def business_section(blocks: list[dict], subs: list[dict], names: dict, read) ->
     for s in subs:
         s["business"] = business_rows([c["symbol"] for c in s["companies"]], names, read)
         every.update({r["symbol"]: r for r in s["business"]})
+    checked = {r["symbol"]: r for r in hold_suspect(list(every.values()))}
+    for g in blocks + subs:
+        g["business"] = [checked.get(r["symbol"], r) for r in g["business"]]
     total = len({c["symbol"] for b in blocks for c in b["companies"]} | {c["symbol"] for s in subs for c in s["companies"]})
     return {"layers": [{"layer": b["layer"], "rows": b["business"]} for b in blocks], "subs": [{"name": s["name"], "rows": s["business"]} for s in subs],
-            "companies": len(every), "of": total}
+            "companies": len(every), "of": total, "held": [{"symbol": r["symbol"], "name": r["name"], "why": r["held"]} for r in checked.values() if r.get("held")]}

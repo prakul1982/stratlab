@@ -172,11 +172,16 @@ test("strategy library: StratLab's own strategies, each with the verdict it earn
   await expect(first.getByRole("button", { name: "Take down" })).toHaveCount(0);       // not anyone's to take down
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/library-stratlab-${info.project.name}.png`, fullPage: true });
   await sane(page, errors);
-  // R15 (owner: "in everyone don't show stratlab ones"): Everyone's is what people published, none of StratLab's own; All has both
+  // R15 (owner: "in everyone don't show stratlab ones"): Everyone's is what people published, none of StratLab's own.
+  // R16 changed this on purpose (owner, 7 Nov: "remove the all option"): two choices, StratLab's own first and picked when the page opens
   await page.getByRole("radio", { name: "Everyone's" }).click();
   await expect(page.getByText("By StratLab", { exact: true })).toHaveCount(0, { timeout: 20_000 });
-  await page.getByRole("radio", { name: "All" }).click();
-  await expect(cards.first()).toBeVisible();
+  const whose = page.getByRole("radiogroup", { name: "Whose" });
+  await expect(whose.getByRole("radio")).toHaveText(["StratLab's own", "Everyone's"]);
+  await expect(whose.getByRole("radio", { name: "All" })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("radio", { name: "StratLab's own" })).toBeChecked({ timeout: 30_000 });
+  await expect(cards.first()).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText("By StratLab", { exact: true }).first()).toBeVisible();
 });
 
