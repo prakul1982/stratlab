@@ -52,7 +52,7 @@ def test_the_theme_deck_carries_every_part_of_the_page():
     page = ["Contents", "Key findings", "Data confidence", "Worth a watch",
             "The value chain by layer",                 # ChainCard
             *[f"Layer {i + 1} · {x['layer']}" for i, x in enumerate(v["layers"])],      # LayerCard, every layer with companies
-            "Operating figures",                        # the layers' business updates, one table
+            # (operating figures: one company files them in this fixture, under 3: a line in data confidence, no page, R21)
             "Tailwinds and risks",                      # ClaimsCard
             "Size and shape", "Growth and profitability", "Valuation", "The latest quarter against a year earlier",       # NumbersCards
             "How to read this deck",                    # the page's notes
@@ -63,7 +63,7 @@ def test_the_theme_deck_carries_every_part_of_the_page():
                  "Ownership", "Events", "Management report cards"):
         assert gone not in titles, gone
     words = texts(slides)
-    for must in ("ore turned into cells", "BATT", "Digs it out.", "Makes cells.", "Subsidy scheme extended", "Ore dispatched", "1,23,456 tonnes",
+    for must in ("ore turned into cells", "BATT", "Digs it out.", "Makes cells.", "Subsidy scheme extended", "filed operating figures between results",
                  "Auditor resigned", "Quarterly results", "Written by AI from general knowledge"):
         assert must in words, must
     lead = [r[0].removesuffix(" (whole company)") for s in slides if s.title.startswith("Every company's figures") for b in s.blocks if b["kind"] == "table" for r in b["rows"]]

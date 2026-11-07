@@ -83,9 +83,9 @@ def test_the_theme_deck_has_the_cover_chain_layers_members_claims_and_notes():
     assert figs["head"][:3] == ["Company", "Layer", "Market value"] and figs["rows"][1][:3] == ["Mine A", "Mining", "₹40,000 cr"]
     assert table_of(slides, "Layer 1 · Mining")["rows"][0] == ["Mine A", "₹1,500 cr", "50%", "24%", "15%", "Mar 2026"]   # R16: whole points as filed; R18: every whole figure
     claims = next(b for s in slides if s.title == "Tailwinds and risks" for b in s.blocks if b["kind"] == "flow")["items"]
-    assert claims[0]["text"] == "A battery subsidy" and [t[0] for t in claims[0]["tags"]] == ["Tailwind", "Recent headline"]   # R16: "Checked" meant only that a headline exists
+    assert claims[0]["text"] == "A battery subsidy" and [t[0] for t in claims[0]["tags"]] == ["Tailwind", "Dated source"]   # R16: "Checked" meant only that a headline exists
     assert claims[0]["sub"] == "Subsidy scheme extended · 01 Sep 2026 · A daily" and claims[0]["url"] == "https://example.com/news/subsidy"
-    assert [t[0] for t in claims[1]["tags"]] == ["Risk", "General background"] and claims[1]["sub"] is None
+    assert [t[0] for t in claims[1]["tags"]] == ["Risk", "General background (AI, no dated source)"] and claims[1]["sub"] is None
     t = texts(slides)
     assert "2 of the 4 added are confirmed by their own description; 2 not yet." in t and "1 couldn't be checked just now" in t
     assert "Not investment advice." in t

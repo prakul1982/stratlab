@@ -257,7 +257,7 @@ def test_tailwinds_say_a_recent_headline_exists_and_name_the_layer_they_are_abou
     v = view()
     v["tailwinds"] = [{"text": "Cells demand rises with a battery subsidy", "status": "current", "source": {"headline": "Subsidy", "at": "2026-09-01", "outlet": "A", "url": "u"}}]
     items = next(b for s in slides_of(v) if s.title == "Tailwinds and risks" for b in s.blocks if b["kind"] == "flow")["items"]
-    assert items[0]["tags"][1][0] == "Recent headline" and items[0]["sub"].endswith("Layer: Cells")
+    assert items[0]["tags"][1][0] == "Dated source" and items[0]["sub"].endswith("Layer: Cells")          # R21: "Dated source" / "General background (AI, no dated source)"
 
 
 # ---------- part 4: shorter, cleaner ----------

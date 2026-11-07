@@ -289,6 +289,26 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
+def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
+    """The checked map with every company of the theme's industries in one of the map's own layers (theme_base.place_rest, R21): the AI's
+    answer is asked once a map and kept in the shared store with it (app/computed.py), so it is never asked again for that map."""
+    from .. import computed
+    key = ["place", region, theme.lower(), int(float(m.get("generated_at") or 0)), theme_base.RULES]
+    try:
+        kept = (computed.get("theme:place", key) or {}).get("value") or {}
+    except Exception:
+        kept = {}
+    names = {c["ticker"]: c.get("name") for v in out.get("value_chain") or [] for c in v.get("companies") or []}
+    about = _about_reader(region, names, 0)                           # stored descriptions only: nothing is read from a page here
+    new, got = theme_base.place_rest(out, theme, lambda s_: about(s_), ask=ask, kept=kept)
+    if ask is not None and got and got != kept and any(x.get("by") == "ai" for x in got.values()):
+        try:
+            computed.put("theme:place", key, got, label=m.get("sector") or theme, region=region)
+        except Exception as e:
+            print("theme: placements not kept:", type(e).__name__, str(e)[:100])
+    return new
+
+
 def _no_ai(system: str, text: str) -> dict:
     raise AIError("Not asked while a page waits.")
 
@@ -303,6 +323,7 @@ def quick(region: str, theme: str, m: dict) -> dict:
            "sub_themes": [{**x, "companies": unconfirmed(x.get("companies"))} for x in m.get("sub_themes") or []]}
     out["placements"] = {"checked": False, "pending": len(_map_names(m)), "left_out": 0}
     out = theme_base.with_base(m, out, _rows(region), inds["industries"], grounding.listed_name, **_base_args(region, theme, inds))
+    out = placed(region, theme, m, out, ask=None)                  # the answer kept with the map, else by the companies' words (no AI here)
     key = check_key(region, theme, m)
     claims = A.get("sector_claims", key) or _plain_claims(m)
     out["tailwinds"], out["risks"] = claims["tailwinds"], claims["risks"]
@@ -360,6 +381,7 @@ def _check(region: str, theme: str, m: dict) -> dict:
                 print("theme: SEC codes not filled:", type(e).__name__, str(e)[:100])
         inds = _industries(region, theme)
         out = theme_base.with_base(m, out, _rows(region), inds["industries"], grounding.listed_name, **_base_args(region, theme, inds))
+        out = placed(region, theme, m, out, ask=_ask)
         claims = A.get("sector_claims", key)
         if claims is None:
             try:
@@ -720,14 +742,16 @@ def deck_file_name(theme: str, r: str, fmt: str, day: date) -> str:
     return f"StratLab - {clean} - {day.day} {day.strftime('%b %Y')}.{fmt}"
 
 
-DECK_MAP_WAIT = 20.0         # seconds a deck waits for the AI map and its checks that are being written (a proxy closes a request at 30 s)
+DECK_MAP_WAIT = 8.0          # seconds a deck request waits for the AI map and its checks before answering "preparing" (R21)
+DECK_RETRY = 10              # seconds the page waits before asking again
 
 
-def map_for_deck(R, profile, region: str, q: str, wait: float = DECK_MAP_WAIT):
+def map_for_deck(R, profile, region: str, q: str, wait: float = DECK_MAP_WAIT, pending: list | None = None):
     """(market, theme, the checked map with its descriptions) for a deck. The page fills in as the AI parts arrive, but a file is made once:
     a deck made while the AI map was still being written had no map at all (R20: every live R19 deck, made after a deploy emptied the kept
     maps: "Private banks" with no value chain, "Cybersecurity" with the SEC's industries as layers). So it waits, at most `wait` seconds,
-    for a map and a check that are running, then is made with what there is."""
+    for a map and a check that are running; R21: when they are still running after that (a first map takes longer than any wait), `pending`
+    gets True and the route answers "preparing" instead of making a file without the map. A map or check that failed isn't waited for."""
     t0 = time.time()
     r, theme, m, _ = R.theme_map(profile, region, q)     # R19: the theme library's stored read when there is one (kept across deploys)
     if not float(m.get("generated_at") or 0):
@@ -741,6 +765,11 @@ def map_for_deck(R, profile, region: str, q: str, wait: float = DECK_MAP_WAIT):
         if j and j["state"] == "running":
             j["done"].wait(max(0.0, wait - (time.time() - t0)))
             c = checked(r, theme, m)
+    if pending is not None:
+        mj = job_of(("map", r, theme.lower()))
+        cj = job_of(("check",) + check_key(r, theme, m))
+        pending.append((not float(m.get("generated_at") or 0) and bool(mj) and mj["state"] == "running")
+                       or (not (c.get("placements") or {}).get("checked") and bool(cj) and cj["state"] == "running"))
     return r, theme, with_descriptions(r, c)
 
 
@@ -754,8 +783,14 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
     if format not in ("pptx", "pdf"):
         err(400, "bad_format", "Pick PowerPoint or PDF.")
     R = _routes()
-    r, theme, m = map_for_deck(R, profile, region, q)
+    pending: list = []
+    r, theme, m = map_for_deck(R, profile, region, q, pending=pending)
     mark = main.check_deep(profile, "deck", "", r, mark=f"deck:theme:{r}:{theme_data.slug(theme)}")
+    if pending and pending[0]:
+        # R21: the AI map or its checks are still being written: no file without them, and nothing counted; the page asks again
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"preparing": True, "retry_after": DECK_RETRY,
+                             "message": "Preparing the deck: the AI map is being written."}, status_code=202)
     today = datetime.now(R.IST).date()
     biz = r == "IN" and bool(biz_updates._allowed(profile))       # the one part of the deck that depends on the plan
     stamp = int(float(m.get("generated_at") or 0))

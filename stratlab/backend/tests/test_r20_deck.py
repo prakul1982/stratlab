@@ -170,6 +170,20 @@ def test_every_rule_holds_on_every_synthetic_theme(name, v, slides):
         assert any(b["kind"] in IMPORTANT and (b.get("rows") or b.get("items") or b.get("vals") or b.get("series")) for b in s.blocks), s.title
     at = next(i for i, s in enumerate(slides) if s.title.startswith("Every company's figures"))
     assert all(s.title.startswith("Every company's figures") and [b["kind"] for b in s.blocks if b["kind"] != "text"] == ["table"] for s in slides[at:])
+    # R21: a theme with layers of its own has no exchange-industry layer beside them; a chart plots no layer median under 3
+    lays = v.get("layers") or []
+    if any(not x.get("official") for x in lays):
+        assert all(not x.get("official") or x.get("basis") == "rest" for x in lays), [x["layer"] for x in lays]
+    for s in slides:
+        for b in s.blocks:
+            if b["kind"] == "hbars" and str(b.get("title", "")).startswith("Median"):
+                for cat in b["cats"]:
+                    assert int(re.search(r"\((\d+)\)$", cat).group(1)) >= 3, cat
+    # no card line cut with an ellipsis
+    for s in slides:
+        for b in s.blocks:
+            if b["kind"] == "cards":
+                assert not any(str(x).endswith("…") for it in b["items"] for x in it.get("lines") or []), s.title
     # no "of 0", no ".0" figure, no advice word
     assert not re.search(r"\bof 0\b", t), re.findall(r".{40}\bof 0\b.{10}", t)
     assert not re.search(r"(?<![\w.,])\d[\d,]*\.0(?:%|x\b| pts| points)", t), re.findall(r".{20}\d\.0(?:%|x| pts).{10}", t)[:3]
@@ -236,7 +250,8 @@ def test_industries_shown_as_layers_have_plain_names_in_both_markets():
                         ("Services-Business Services, Nec", "Business services"), ("Telephone Communications (No Radiotelephone)", "Telecom services"),
                         ("Services-Help Supply Services", "Help Supply Services"), ("Wholesale-Drugs Proprietaries And Druggists' Sundries",
                                                                                    "Wholesale-Drugs Proprietaries & Druggists' Sundries"),
-                        ("Ship Building & Allied Services", "Ship Building & Allied Services"), ("AUTO PARTS", "Auto Parts"), ("", "")):
+                        ("Ship Building & Allied Services", "Shipbuilding"), ("Computers - Software & Consulting", "IT services"),
+                        ("Explosives", "Explosives"), ("AUTO PARTS", "Auto Parts"), ("", "")):
         assert B.plain_industry(raw) == plain_, raw
     v, _ = deck_of(*us_list_theme())
     assert [x["layer"] for x in v["layers"]] == ["Software", "IT services", "Other industries"]
@@ -255,14 +270,31 @@ def test_a_lender_theme_keeps_the_maps_layers_when_the_check_empties_them():
     out = B.with_base(ai, checked, rows, ["Private Sector Bank"])
     lay = {x["layer"]: [c["ticker"] for c in x["companies"]] for x in out["value_chain"]}
     assert lay["Deposit gathering"] == ["B0", "B1", "B2"] and lay["Retail and SME lending"] == ["B3", "B4", "B5"]      # each bank in its first layer
-    assert lay["Microfinance"] == [] and lay["Private Sector Bank"] == ["B6", "B7"]                                    # the rest under its industry
+    assert lay["Microfinance"] == [] and lay["Private banks"] == ["B6", "B7"]                     # the rest under its industry (R21: plain name)
     keep = {x["layer"]: [c["ticker"] for c in x["companies"]] for x in B.with_base(ai, {**checked, "value_chain": [
         {**ai["value_chain"][0], "companies": [{"ticker": "B0", "verified": True}]}, {**ai["value_chain"][1], "companies": [{"ticker": "B3", "verified": True}]},
         {**ai["value_chain"][2], "companies": []}]}, rows, ["Private Sector Bank"])["value_chain"]}
     assert keep["Deposit gathering"] == ["B0"] and keep["Retail and SME lending"] == ["B3"]                            # two layers kept: the check stands
     region, m, f, _, _ = bank_theme()
     v, slides = deck_of(region, m, f)
-    assert [s.title for s in slides if s.title.startswith("Layer ")] == ["Layer 1 · Deposit gathering", "Layer 2 · Retail and SME lending"]
+    assert [s.title for s in slides if s.title.startswith("Layer ")] == ["Layer 1 · Deposit gathering", "Layer 2 · Retail and SME lending",
+                                                                          "Layer 3 · Other private banks companies"]          # R21
+
+
+def test_a_map_layer_without_a_name_is_never_drawn():
+    # R20 live: the Cybersecurity map came back with four of five layers named "" ("Layer 2 ·", "lowest in (6.6%)")
+    from app.intel import ai as A
+    assert A.layer_name({"layer": "", "name": "Identity and access"}) == "Identity and access"
+    assert A.layer_name({"layer": "  ", "title": " Endpoint  security "}) == "Endpoint security" and A.layer_name({"layer": ""}) == ""
+    rows = [{"symbol": f"S{i}", "name": f"Sec {i}", "industry": "Software", "market_cap": 100 - i} for i in range(6)]
+    ai = {"value_chain": [{"layer": "Network security", "companies": [{"ticker": "S0"}, {"ticker": "S1"}, {"ticker": "S2"}]},
+                          {"layer": "", "companies": [{"ticker": "S3"}, {"ticker": "S4"}]}], "sub_themes": []}
+    checked = {"value_chain": [{**x, "companies": [{**c, "verified": True} for c in x["companies"]]} for x in ai["value_chain"]], "sub_themes": []}
+    out = B.with_base(ai, checked, rows, ["Software"])                  # a map kept in the store from before the reader's fix
+    names = [x["layer"] for x in out["value_chain"]]
+    assert "" not in names and all(n.strip() for n in names)
+    placed = {c["ticker"] for x in out["value_chain"] for c in x["companies"]}
+    assert {"S3", "S4"} <= placed                                       # its companies are still in the deck, under their industry
 
 
 def test_a_deck_waits_briefly_for_the_map_and_its_check_that_are_being_written(monkeypatch):

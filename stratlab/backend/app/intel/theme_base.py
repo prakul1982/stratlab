@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 
 # the version of the membership rules (who is in a theme, which industries, which layers): part of every cached read's key, so a read kept
 # from before a deploy never keeps the old rules' companies or figures (R18: "Private banks" kept the public banks after the fix)
-RULES = 18
+RULES = 21                       # R21: every confirmed company in one of the map's layers (place_rest)
 INDUSTRIES_DAYS = 30            # the AI's pick of a free-text theme's industries is made again after this long (at most monthly)
 FIGURES_MAX = 60                # companies the dive works figures out for: every one the AI named, then the largest of the base
 DESCRIBE_MAX = 120              # base companies whose own one-line description is looked up for the page, largest first
@@ -174,6 +174,13 @@ PLAIN_INDUSTRY = {
     "real estate investment trusts": "REITs", "retail-eating places": "Restaurants", "services-medical laboratories": "Medical laboratories",
     "surgical & medical instruments & apparatus": "Medical instruments", "electromedical & electrotherapeutic apparatus": "Medical devices",
     "aircraft parts & auxiliary equipment, nec": "Aircraft parts", "guided missiles & space vehicles & parts": "Missiles and space",
+    # India's exchange names where a plainer word says the same (R21: "Computers - Software & Consulting" as a layer)
+    "computers - software & consulting": "IT services", "it enabled services": "IT-enabled services", "software products": "Software products",
+    "passenger cars & utility vehicles": "Cars and utility vehicles", "2/3 wheelers": "Two- and three-wheelers", "auto components & equipments": "Auto components",
+    "tyres & rubber products": "Tyres", "private sector bank": "Private banks", "public sector bank": "Public sector banks",
+    "non banking financial company (nbfc)": "Non-bank lenders (NBFC)", "aerospace & defense": "Aerospace and defence",
+    "ship building & allied services": "Shipbuilding", "telecom - cellular & fixed line services": "Telecom services",
+    "residential, commercial projects": "Real estate developers", "road assetstoll, annuity, hybrid-annuity": "Road assets",
 }
 
 
@@ -421,6 +428,10 @@ def with_base(m_before: dict, out: dict, rows: list[dict], industries: list[str]
     another theme's (solar-cell makers filed as semiconductors), out of the base unless the AI names them. `drop`: the industries a theme's
     name leaves out (subset_pick: the public-sector banks of "Private banks") and `sized`: the companies of the size it names (in_band), so
     a company the AI names from them is out too (R18)."""
+    # a layer the AI left without a name (R20: four of the live Cybersecurity map's five, kept in the store from before ai.layer_name) is
+    # dropped here too, so a stored map never draws "Layer 2 ·": its companies are then placed as any company the AI didn't name
+    m_before = {**m_before, "value_chain": [v for v in m_before.get("value_chain") or [] if v.get("official") or str(v.get("layer") or "").strip()]}
+    out = {**out, "value_chain": [v for v in out.get("value_chain") or [] if v.get("official") or str(v.get("layer") or "").strip()]}
     idx = {r["symbol"]: r for r in rows or [] if r.get("symbol")}
     inset = {key(i) for i in industries}
     skip = set(exclude)
@@ -491,14 +502,80 @@ def keep_map_layers(m_before: dict, layers: list[dict], base: dict) -> list[dict
     return out
 
 
+# ---------- every company in one of the map's layers (R21) ----------
+# The AI's map names a few companies a layer (Defence: 12 of 42 in its five layers; IT services: one layer of its own beside three of the
+# exchange's industries). After the map, the companies of the theme's industries it didn't place are put in the best of its own layers from
+# their own words: one batched AI answer a theme (kept with the map), else by the words they share with each layer's name and description.
+# Only a company that fits no layer goes to one "Other <theme> companies" layer; the exchange's industries are never layers beside the map's.
+PLACE_MAX = 120                  # companies one AI answer places (the largest first); the rest by their words
+
+
+def _place_words(layers: list[dict], what: str, industry: str) -> str:
+    """The map layer whose name and description share the most words with a company's own words (and its industry's name), or "" for none."""
+    from .theme_data import _stems, does_the_work
+    best, score = "", 0
+    for v in layers:
+        words = _stems(f"{v.get('layer') or ''} {v.get('description') or ''}")
+        mine = _stems(what or industry)          # its own words; the industry's name only when it has none (every company shares it)
+        k = sum(1 for m_ in mine if any(m_ == w or (len(w) >= 5 and (m_.startswith(w) or w.startswith(m_))) for w in words))
+        if k > score or (k == score and k and does_the_work(what, _stems(v.get("layer") or ""))):
+            best, score = v.get("layer") or "", k
+    return best if score else ""
+
+
+def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None) -> tuple[dict, dict]:
+    """(the map with every base company in one of the map's own layers, {symbol: {"layer", "by"}} as worked out). Runs only when the map
+    has layers of its own; companies in its official-industry or named-list layers (not a list grouped by industry) are placed: from `kept`
+    (the answer kept with the map), else one `ask` answer for up to PLACE_MAX of them, else by their words. A company placed this way is
+    marked "placed" (its words weren't checked against that layer, so it isn't "verified"); one that fits none goes to "Other <theme> companies"."""
+    vc = list(m.get("value_chain") or [])
+    own = [v for v in vc if not v.get("official") and v.get("layer")]
+    rest = [v for v in vc if v.get("official") and v.get("basis") in ("industry", "list") and not v.get("by_industry")]
+    todo = [c for v in rest for c in v.get("companies") or []]
+    if not own or not todo:
+        return m, dict(kept or {})
+    names = {v["layer"] for v in own}
+    got = {s: x for s, x in (kept or {}).items() if isinstance(x, dict) and (x.get("layer") in names or x.get("layer") == "")}
+    need = [c for c in sorted(todo, key=lambda c: -(c.get("cap") or 0)) if c["ticker"] not in got]
+    if need and ask is not None:
+        from .theme_check import place_in_layers
+        try:
+            ans = place_in_layers(own, [{"symbol": c["ticker"], "name": c.get("name") or c["ticker"], "industry": c.get("industry") or "",
+                                         "about": about_of(c["ticker"]) or ""} for c in need[:PLACE_MAX]], ask, theme)
+            got.update({s: {"layer": x if x in names else "", "by": "ai"} for s, x in ans.items()})
+        except Exception as e:               # the AI busy: the words place them now, the AI is asked again on the next check
+            print("theme base: companies not placed by the AI:", theme[:40], type(e).__name__, str(e)[:100])
+    for c in need:
+        if c["ticker"] not in got:
+            got[c["ticker"]] = {"layer": _place_words(own, about_of(c["ticker"]) or c.get("what") or "", plain_industry(c.get("industry"))), "by": "words"}
+    by_layer: dict[str, list] = {}
+    other = []
+    for c in todo:
+        x = got.get(c["ticker"]) or {}
+        tag = {**c, "placed": x.get("by") or "words", "verified": False}
+        (by_layer.setdefault(x["layer"], []) if x.get("layer") else other).append(tag)
+    out_vc = []
+    for v in vc:
+        if v in rest:
+            continue
+        out_vc.append({**v, "companies": list(v.get("companies") or []) + by_layer.get(v.get("layer"), [])} if v in own else v)
+    if other:
+        label = " ".join(str(theme or "the theme").split())
+        out_vc.append({"layer": f"Other {label[:1].lower() + label[1:] if label[:2].istitle() and not label[:2].isupper() else label} companies",
+                       "description": "", "official": True, "basis": "rest",
+                       "companies": sorted(other, key=lambda c: (-(c.get("cap") or 0), c["ticker"]))})
+    return {**m, "value_chain": out_vc}, got
+
+
 def for_figures(m: dict, cap: int = FIGURES_MAX) -> tuple[dict, dict]:
     """(the map the dive's figures, prices and news are worked out on, {"shown", "of"}): every company the AI named, then the largest of
     the rest of the base, `cap` in all at most (a theme of 500 drug makers is listed in full, its figures on the largest). Official
     layers left with no company are dropped."""
-    named = {c["ticker"] for v in m.get("value_chain") or [] if not v.get("official") for c in v.get("companies") or []}
+    # the companies the AI named itself; one placed in a layer after the map (place_rest) is base, by size like the rest
+    named = {c["ticker"] for v in m.get("value_chain") or [] if not v.get("official") for c in v.get("companies") or [] if not c.get("placed")}
     named |= {c["ticker"] for s in m.get("sub_themes") or [] for c in s.get("companies") or []}
-    rest = sorted({(c.get("cap") or 0, c["ticker"]) for v in m.get("value_chain") or [] if v.get("official") for c in v.get("companies") or []
-                   if c["ticker"] not in named}, key=lambda x: (-x[0], x[1]))
+    rest = sorted({(c.get("cap") or 0, c["ticker"]) for v in m.get("value_chain") or [] for c in v.get("companies") or []
+                   if (v.get("official") or c.get("placed")) and c["ticker"] not in named}, key=lambda x: (-x[0], x[1]))
     keep = named | {s for _, s in rest[:max(0, cap - len(named))]}
     total = len(named | {s for _, s in rest})
     vc = []
@@ -511,8 +588,8 @@ def for_figures(m: dict, cap: int = FIGURES_MAX) -> tuple[dict, dict]:
 
 def to_describe(m: dict, n: int = DESCRIBE_MAX) -> list[str]:
     """The base companies whose own one-line description the page shows (official layers, largest first), at most `n`."""
-    rows = sorted({(c.get("cap") or 0, c["ticker"]) for v in m.get("value_chain") or [] if v.get("official") for c in v.get("companies") or []},
-                  key=lambda x: (-x[0], x[1]))
+    rows = sorted({(c.get("cap") or 0, c["ticker"]) for v in m.get("value_chain") or [] for c in v.get("companies") or []
+                   if v.get("official") or c.get("placed")}, key=lambda x: (-x[0], x[1]))
     return [s for _, s in rows[:n]]
 
 
@@ -572,11 +649,13 @@ def described(m: dict, about_of) -> dict:
     out = dict(m)
     vc = []
     for v in m.get("value_chain") or []:
-        if v.get("official"):
+        if v.get("official") or any(c.get("placed") for c in v.get("companies") or []):
             cos = []
             for c in v.get("companies") or []:
-                about = about_of(c["ticker"])
-                cos.append({**c, "what": one_line(about) if about else ""})
+                if v.get("official") or c.get("placed"):          # a company placed after the map shows its own words too (R21)
+                    about = about_of(c["ticker"])
+                    c = {**c, "what": one_line(about) if about else ""}
+                cos.append(c)
             v = {**v, "companies": cos}
         vc.append(v)
     out["value_chain"] = vc

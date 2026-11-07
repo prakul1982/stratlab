@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { deckFileName } from "../lib/deckName";
+import { deckWhenReady } from "../lib/deckReady";
 import { REGION_NAME } from "../lib/research";
 import { Link } from "react-router-dom";
 import { Badge, Card, CardHead, CsvButton, DataTable, ShowLess, Select, Spark, Signed, Meter, usePhone, Working, type Column } from "./kit";
@@ -148,20 +149,23 @@ export function memberColumns(region: Region, unit: string | null): Column<Membe
 export function ThemeDownloads({ r, dive, region, theme }: { r: SectorAI; dive: Dive | null; region: Region; theme: string }) {
   const { fail, refreshMe } = useApp();
   const [making, setMaking] = useState<"pptx" | "pdf" | null>(null);
+  const [preparing, setPreparing] = useState<string | null>(null);
   const rows = useMemo(() => memberRows(r, dive), [r, dive]);
   const deck = async (format: "pptx" | "pdf") => {
     setMaking(format);
     try {
-      const res = await themeApi.deck(region, theme, format);
-      download(await res.blob(), deckFileName(`${theme} theme (${REGION_NAME[region]})`, format));
+      // R21: while the theme's AI map is being written the server answers "preparing"; the kit's bar shows and the page asks again
+      const blob = await deckWhenReady(() => themeApi.deck(region, theme, format), { onWait: setPreparing });
+      download(blob, deckFileName(`${theme} theme (${REGION_NAME[region]})`, format));
       void refreshMe();                               // the deck count in Account
-    } catch (e) { fail(e); } finally { setMaking(null); }
+    } catch (e) { fail(e); } finally { setMaking(null); setPreparing(null); }
   };
   return (
     <div className="k-row" role="group" aria-label="Download this theme" data-testid="theme-downloads">
       <span className="k-small k-muted">Download</span>
       <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pdf")} title="The whole theme as slides in a PDF: the chain and each layer, every company with its figures, the tailwinds and risks with their sources, the news and the theme in numbers"><Download size={16} />{making === "pdf" ? "Making the PDF…" : "Slides (PDF)"}</button>
       <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pptx")} title="The same slides as PowerPoint"><Download size={16} />{making === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button>
+      {preparing && <Working small label={preparing} />}
       {rows.length > 0 && <CsvButton name={`theme ${theme} ${region} companies`} label="every company in this theme" columns={memberColumns(region, dive?.unit ?? null)} rows={rows} text="CSV" />}
     </div>
   );

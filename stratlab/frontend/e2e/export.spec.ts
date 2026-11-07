@@ -61,6 +61,31 @@ async function clickAll(page: Page, where: string) {
   return n;
 }
 
+test("R21: a theme's first deck shows the loading bar while the AI map is written, then saves the file", async ({ page }, info) => {
+  test.setTimeout(240_000);
+  const phone = info.project.name === "phone";
+  const errors = await open(page, THEME, "The whole chain in one table", as(0, phone));
+  let asked = 0;
+  await page.route("**/research/theme-dive/deck?**", async (route) => {
+    asked += 1;
+    if (asked === 1) {
+      await route.fulfill({ status: 202, contentType: "application/json",
+        body: JSON.stringify({ preparing: true, retry_after: 3, message: "Preparing the deck: the AI map is being written." }) });
+    } else {
+      await route.continue();
+    }
+  });
+  const box = page.getByTestId("theme-downloads");
+  const done = page.waitForEvent("download", { timeout: 60_000 });
+  await box.getByRole("button", { name: "Slides (PDF)" }).click();
+  await expect(box.getByRole("status").filter({ hasText: "Preparing the deck: the AI map is being written" }).first()).toBeAttached({ timeout: 5_000 });
+  const pdf = await done;
+  expect((await readFile((await pdf.path())!)).subarray(0, 5).toString()).toBe("%PDF-");
+  expect(asked).toBe(2);
+  await expect(box.getByRole("status")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test("themes: Slides (PDF), Slides (PowerPoint) and the companies' CSV each save a file", async ({ page }, info) => {
   test.setTimeout(240_000);
   const phone = info.project.name === "phone";

@@ -28,11 +28,11 @@ LABELS = {"ai:company": "Company AI reads", "ai:compare": "Head-to-head AI reads
           "ai:sector_checked3": "Theme membership (checked)", "ai:pulse": "Market mood: headline reads", "theme": "Theme library",
           "theme:dive": "Theme figures (dives)", "theme:facts": "Company figures used by themes",
           "theme:news": "Theme headlines and filings", "theme:listings": "Theme new listings (checked)",
-          "deck:theme": "Theme decks (PDF and PowerPoint files)"}
+          "deck:theme": "Theme decks (PDF and PowerPoint files)", "theme:place": "Theme companies placed in the map's layers"}
 # what one hit saves: (seconds of work, AI calls), rough figures from the reads' own timings, for Admin's estimate
 SAVES = {"ai:company": (25, 1), "ai:compare": (20, 1), "ai:ideas": (15, 1), "ai:ask": (15, 1), "ai:sector": (45, 1),
          "ai:sector_claims": (30, 1), "ai:sector_checked3": (120, 12), "ai:pulse": (20, 1), "theme": (180, 14), "theme:dive": (8, 0),
-         "theme:facts": (0.2, 0), "theme:news": (12, 0), "theme:listings": (20, 1), "deck:theme": (8, 0)}
+         "theme:facts": (0.2, 0), "theme:news": (12, 0), "theme:listings": (20, 1), "deck:theme": (8, 0), "theme:place": (25, 1)}
 HOUR = 3600
 GUARD = {"ai:pulse": 300}           # a Refresh within this long of the last one gives the stored result ("already fresh")
 DEFAULT_GUARD = 6 * HOUR

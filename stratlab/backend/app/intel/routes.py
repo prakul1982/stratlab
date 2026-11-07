@@ -877,6 +877,8 @@ def sector_map(profile, region: str, q: str, refresh: bool = False):
     build = lambda: grounding.drop_unrelated(grounding.ground_sector(A.sector(theme, r, _ai), r, hub.search), industry_lookup(r))  # noqa: E731
     if not refresh and A.peek("sector", key):
         got = ai_call(profile, "sector", key, 24 * 3600, False, build)
+        if A.map_due(got):            # R21: a map from the older prompt with under 4 layers is written again once, in the background
+            theme_routes.later(("map",) + key, lambda: ai_call(profile, "sector", key, 24 * 3600, True, build, gated=True))
     else:
         # LIVE3-001: the AI's map is written in the background, never while the request waits; until it is in, the page has the theme's
         # official-industry base (theme_routes.quick) and the map kept from before, if any

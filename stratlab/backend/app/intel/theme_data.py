@@ -37,6 +37,26 @@ FINANCIAL_KEYS = ("ebitda", "roce", "debt_equity")
 LENDER_KEYS = ("roe", "nii_assets", "roa", "gnpa", "nnpa", "nii_growth", "deposit_growth", "pb")
 STAT_KEYS = ("ebitda", "net", "roce") + LENDER_KEYS
 
+# the metric profile of a company's industry family, in one place (R21: an insurer's EBITDA margin and ROCE showed as medians of 1 company):
+# banks, other lenders and insurers are read on lenders' measures (ROE, P/B, net margin; their own ratios where stored), never on EBITDA
+# margin, ROCE, EV/EBITDA, debt to equity or interest cover; every other company on those
+FAMILIES = (("insurer", re.compile(r"\binsur", re.I)),
+            ("lender", re.compile(r"\bnbfc\b|non[- ]?bank|housing finance|microfinance|\blending\b|credit institution|business credit|mortgage banker|"
+                                  r"financial institution|consumer finance|vehicle finance", re.I)),
+            ("bank", re.compile(r"^(?:banks?|private sector bank|public sector bank|other bank|(?:national|state) commercial banks|commercial banks, nec|"
+                                r"savings institution.*)$", re.I)))
+PROFILES = {"bank": ("roe", "nii_assets", "gnpa", "nnpa", "deposit_growth", "pb", "net"), "lender": ("roe", "nii_assets", "gnpa", "nnpa", "pb", "net"),
+            "insurer": ("roe", "pb", "net"), "other": ("ebitda", "net", "roce", "ev_ebitda", "pe")}
+
+
+def profile_of(f: dict, industry: str = "") -> str:
+    """"bank", "lender", "insurer" or "other": from the company's own industry path and the exchange's industry, else its page's flag."""
+    names = [str(x).strip() for x in (f.get("industry") or []) if x] + ([industry] if industry else [])
+    for fam, rx in FAMILIES:
+        if any(rx.search(n) for n in names):
+            return fam
+    return "lender" if f.get("bank") else "other"
+
 
 def num(v):
     return screens._num(v)
@@ -110,7 +130,8 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
     old, wild = stock_pages.figures_stale(f), stock_pages.extreme(f)
     years = full_years(f)
     last = years[-1] if years and not old else None
-    lender = bool(f.get("bank"))
+    profile = profile_of(f)
+    lender = profile != "other"
     sales = num(last.get("sales")) if last else None
     profit = num(last.get("profit")) if last else None
     net = (profit / sales * 100) if sales and sales > 0 and profit is not None else None
@@ -125,7 +146,7 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
     shown_e = None if wild or ebitda is None or abs(ebitda) > stock_pages.EXTREME else r1(ebitda)
     shown_n = None if wild or net is None or abs(net) > stock_pages.EXTREME else r1(net)
     return {
-        "symbol": symbol, "name": base["name"], "year": last["year"] if last else None, "unit": f.get("unit"), "bank": lender,
+        "symbol": symbol, "name": base["name"], "year": last["year"] if last else None, "unit": f.get("unit"), "bank": lender, "profile": profile,
         "revenue": sales if sales and sales > 0 else None, "profit": profit,
         "ebitda": shown_e, "net": shown_n,
         # net margin above the EBITDA margin: profit beyond what the business earned before depreciation, interest and tax, so a one-off
