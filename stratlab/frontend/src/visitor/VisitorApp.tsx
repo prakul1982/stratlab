@@ -39,6 +39,8 @@ export function warmVisitorPage(path: string): Promise<unknown> {
   return load().catch(() => undefined);       // only a head start: the page itself reports a failed download
 }
 
+const BOOT_PATH = location.pathname;
+
 /** `userId`: someone signed in who opened a page anyone sees (a policy, a shared verdict): their Market Watch, not the visitor's board. */
 export function VisitorApp({ userId }: { userId?: string } = {}) {
   const { pathname, search } = useLocation();
@@ -64,7 +66,9 @@ export function VisitorApp({ userId }: { userId?: string } = {}) {
   // code downloads, instead of a splash that replaces them for a second (R10V-006); with none, the splash
   // (not for /faq: its words are one heading, and the landing page then drew above it and scrolled to its questions, a
   // 0.6 layout shift on a phone; the splash replaces nothing that moves (R80-003))
-  const words = view.kind === "landing" && view.section === "faq" ? "" : heldStartup();
+  // only for the address the visit opened on: a click to another page (no transition now, R17-003) waits on the splash, not on
+  // the first page's words
+  const words = pathname !== BOOT_PATH || (view.kind === "landing" && view.section === "faq") ? "" : heldStartup();
   const fallback = words ? <div style={{ display: "contents" }} data-held dangerouslySetInnerHTML={{ __html: words }} /> : wait;
   return (
     <>

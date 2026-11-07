@@ -500,6 +500,33 @@ def insider_rows(raw) -> list[dict]:
     return out
 
 
+# BSE's insider-trading list (SEBI's PIT regulation 7, "Insider Trading 2015" on bseindia.com): one company by scrip code,
+# the fields its own page shows (field names as its page's script reads them, 7 Nov 2026). Read only when NSE's list doesn't
+# answer (R17-002), for a company listed on both: the same disclosures, filed with both exchanges.
+BSE_PIT = "/InsiderTrade15/w"
+BSE_PIT_PAGE = "https://www.bseindia.com/corporates/Insider_Trading_new"
+
+
+def bse_insider_rows(raw, symbol: str) -> list[dict]:
+    """BSE's insider-trading rows for one company as deals under its NSE `symbol`, each marked `exchange` "BSE". As for
+    NSE's, only trades in the company's shares are kept."""
+    out = []
+    for r in _rows(raw):
+        sec = str(_field(r, "Fld_SecurityTypeNamePrior", "Fld_SecurityTypeName") or "equity").lower()
+        if "equity" not in sec and "share" not in sec:
+            continue
+        side = _side(_field(r, "Fld_TransactionType"))
+        how = _field(r, "ModeOfAquisation", "Fld_ModeOfAcquisition")
+        link = str(_field(r, "xbrlurl", "Fld_Attachment") or "").strip()
+        d = _deal("insider", symbol, _iso_day(_field(r, "Fld_ToDate", "Fld_FromDate")), _iso_day(_field(r, "Fld_StampDate")),
+                  _field(r, "Fld_PromoterName"), _relation(_field(r, "Fld_PersonCatgName")), side, _mode(how, side), how,
+                  _amount(_field(r, "Fld_SecurityNo")), None, _amount(_field(r, "Fld_SecurityValue")),
+                  _amount(_field(r, "Fld_PercentofShareholdingPost")), link if link.startswith("https://") else BSE_PIT_PAGE)
+        if d:
+            out.append({**d, "exchange": "BSE"})
+    return out
+
+
 # Since May 2026 the exchange lists insider-trading disclosures (SEBI's PIT regulation 7) on a new list that carries
 # only each filing (company, regulation, time, links); the trades themselves are in each filing's XBRL document on the
 # exchange's archive. The old list (/api/corporates-pit) stopped taking filings then: it answers nothing for the whole
@@ -1160,15 +1187,17 @@ class NSEFilings:
         self.cache.set(key, out, 3600 if symbol else 1800)
         return out
 
-    def insider_trades(self, symbol: str | None = None, days: int = DEALS_DAYS, to: datetime | None = None) -> list[dict]:
+    def insider_trades(self, symbol: str | None = None, days: int = DEALS_DAYS, to: datetime | None = None,
+                       stale: bool = True) -> list[dict]:
         """Trades by promoters, directors and key staff in the company's own shares (insider-trading disclosures),
         pledges made and released among them. When the exchange doesn't answer, the last list read (up to INSIDER_STALE_FOR
         old) is served instead, as `StaleRows` carrying the time it was read (R15: "Insider trades: Couldn't reach the exchange
-        (ReadTimeout)" in Needs your attention; BSE publishes no list of the same trades with the same fields to fall back on)."""
+        (ReadTimeout)" in Needs your attention). `stale` False: the error instead, for a caller that tries BSE's list first
+        (IndiaFilings.insider_trades)."""
         try:
             out = self._insider(symbol, days, to)
         except SourceError as e:
-            if not e.busy or to is not None:
+            if not e.busy or to is not None or not stale:
                 raise
             kept = self._insider_kept(symbol, days)
             if kept is None:
@@ -1621,6 +1650,22 @@ class BSEFilings:
                                          f"{str(data.get('Message') or 'no reason given')[:120]}")
         return data
 
+    def insider_trades(self, code: str, symbol: str, days: int = DEALS_DAYS) -> list[dict]:
+        """One company's insider trades over the last `days` from BSE's list (BSE_PIT), as deals under its NSE `symbol`.
+        A list in a shape we can't read is an error, not an empty list."""
+        key = ("insider", code, symbol, days)
+        hit = self.cache.get(key)
+        if hit is not None:
+            return hit
+        data = self._call(BSE_PIT, {"fromdt": "", "todt": "", "pageno": 1, "scripcode": code})
+        table = data.get("Table")
+        if not isinstance(table, list):
+            raise SourceError(self.name, "The exchange's insider-trading list wasn't in the expected shape.")
+        since = (ist_now() - timedelta(days=days)).date().isoformat()
+        out = sort_deals([d for d in bse_insider_rows(table, symbol) if d["date"] >= since])
+        self.cache.set(key, out, 1800)
+        return out
+
     def _failed(self):
         self._fails += 1
         if self._fails >= 3:
@@ -1769,8 +1814,26 @@ class IndiaFilings:
             raise SourceError(self.nse.name, "Deals and insider trades cover companies listed on NSE; this one is listed only on BSE.")
 
     def insider_trades(self, symbol: str | None = None, days: int = DEALS_DAYS, to: datetime | None = None) -> list[dict]:
+        """NSE's list; when it doesn't answer, one company's list from BSE (rows marked `exchange` "BSE", R17-002) for a
+        company listed there too, then NSE's last list read (StaleRows). The whole market's has only the last list."""
         self._nse_only(symbol)
-        return self.nse.insider_trades(symbol, days, to)
+        if not symbol or to is not None or not self.twin_of:
+            return self.nse.insider_trades(symbol, days, to)
+        try:
+            return self.nse.insider_trades(symbol, days, to, stale=False)
+        except SourceError as e:
+            if not e.busy:
+                raise
+            try:
+                twin = self.twin_of(symbol)
+                if twin:
+                    return self.bse.insider_trades(twin, symbol.upper(), days)
+            except SourceError:
+                pass                          # BSE not answering either: NSE's last list, if recent
+            kept = self.nse._insider_kept(symbol, days) if hasattr(self.nse, "_insider_kept") else None
+            if kept is None:
+                raise
+            return kept
 
     def sast(self, symbol: str | None = None, days: int = DEALS_DAYS, to: datetime | None = None) -> list[dict]:
         self._nse_only(symbol)

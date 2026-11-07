@@ -2065,6 +2065,9 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-spread { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
 /* VR3-010: the look-back box and its button on one line, the box as wide as its words in both deep-dive cards (it filled the row and sent the button under it) */
 .dd-ask > select.k-input { width: auto; flex: none; min-width: 150px; }
+/* the deep dive's read buttons in the card's header row (R17-004): the button takes a line of its own on a phone rather than wrap its words */
+.dd-ask { flex-wrap: wrap; }
+.dd-ask > .btn { white-space: nowrap; max-width: 100%; }
 .k-note { font-size: var(--t-note); color: var(--muted); }
 .k-note.k-down, .k-small.k-down { color: var(--down); }
 .k-sub { font-size: var(--t-body); font-weight: 600; }

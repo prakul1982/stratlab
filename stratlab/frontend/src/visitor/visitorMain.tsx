@@ -41,7 +41,8 @@ export function startVisitor(root: HTMLElement) {
   createRoot(root).render(
     <StrictMode>
       <LoadGuard>
-        <BrowserRouter>
+        {/* page moves are not transitions, as in the app (R17-003): a first click shows the next page's loading bar at once */}
+        <BrowserRouter useTransitions={false}>
           <Watch />
           <Tracking />{/* before the page in its order, so the keyboard meets the question first (A11Y-2) */}
           <VisitorApp />

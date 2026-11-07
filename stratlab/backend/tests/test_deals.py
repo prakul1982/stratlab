@@ -515,3 +515,80 @@ def test_an_esop_trust_is_not_an_insider_buying_and_deal_names_read_as_names():
     assert deals.tidy_party("ICICI PRUDENTIAL MUTUAL FUND") == "ICICI Prudential Mutual Fund"
     got = deals.tidy_items([{**trust}, {"kind": "block", "who": "SBI MUTUAL FUND MUTB400045828", "side": "bought"}])
     assert got[0]["trust"] is True and got[1]["who"] == "SBI Mutual Fund" and got[1]["trust"] is False
+
+
+# ---------- R17-002: BSE's insider-trading list when NSE's doesn't answer ----------
+def _bse_pit_row(**kw) -> dict:
+    """One row of BSE's InsiderTrade15 list, with the fields its own page reads."""
+    base = {"Fld_PromoterName": "Mukesh Shah Family Trust", "Fld_PersonCatgName": "Promoter Group", "Fld_SecurityTypeNamePrior": "Equity Shares",
+            "Fld_SecurityNoPrior": 100000, "Fld_SecurityNo": 25000, "Fld_SecurityValue": 72500000.0, "Fld_TransactionType": "Acquisition",
+            "Fld_SecurityNoPost": 125000, "Fld_PercentofShareholdingPost": 50.12, "Fld_FromDate": ago(21) + "T00:00:00",
+            "Fld_ToDate": ago(20) + "T00:00:00", "ModeOfAquisation": "Market Purchase", "Fld_StampDate": ago(18) + "T17:05:00",
+            "xbrlurl": "https://www.bseindia.com/xml-data/corpfiling/AttachLive/abc.xml"}
+    return {**base, **kw}
+
+
+def _bse_pit(calls: list, table) -> F.BSEFilings:
+    def handler(req: httpx.Request):
+        calls.append((req.url.path, dict(req.url.params)))
+        if req.url.host == "www.bseindia.com":
+            return httpx.Response(200, text="<html></html>")
+        return httpx.Response(200, json=table if isinstance(table, dict) else {"Table": table})
+    return F.BSEFilings(transport=httpx.MockTransport(handler), sleep=lambda s: None)
+
+
+def test_bses_insider_rows_become_the_same_deals_marked_from_bse():
+    rows = F.bse_insider_rows([_bse_pit_row(), _bse_pit_row(Fld_SecurityTypeNamePrior="Warrants"),
+                               _bse_pit_row(Fld_TransactionType="Disposal", ModeOfAquisation="Off Market", Fld_PromoterName="A Director",
+                                            Fld_PersonCatgName="Director", xbrlurl=""), "junk", _bse_pit_row(Fld_PromoterName="")], "RELIANCE")
+    assert len(rows) == 2                                                          # warrants, junk and a row with no one are left out
+    buy, sale = rows
+    assert (buy["symbol"], buy["who"], buy["relation"], buy["side"], buy["mode"], buy["qty"], buy["value"], buy["pct_after"], buy["date"], buy["filed"]) == \
+        ("RELIANCE", "Mukesh Shah Family Trust", "promoter", "bought", "market", 25000.0, 72500000.0, 50.12, ago(20), ago(18))
+    assert buy["exchange"] == "BSE" and buy["url"].startswith("https://www.bseindia.com/xml-data/")
+    assert (sale["side"], sale["mode"], sale["relation"]) == ("sold", "off_market", "director")
+    assert sale["url"] == F.BSE_PIT_PAGE                                          # no document link: BSE's insider-trading page
+
+
+def test_bses_insider_list_is_read_by_scrip_code_kept_to_the_window_and_cached():
+    calls = []
+    bse = _bse_pit(calls, [_bse_pit_row(), _bse_pit_row(Fld_ToDate=ago(400) + "T00:00:00", Fld_PromoterName="Old Trade")])
+    got = bse.insider_trades("500325", "RELIANCE", 365)
+    assert [d["who"] for d in got] == ["Mukesh Shah Family Trust"]
+    api = [c for c in calls if c[0].endswith(F.BSE_PIT)]
+    assert len(api) == 1 and api[0][1]["scripcode"] == "500325"
+    assert bse.insider_trades("500325", "RELIANCE", 365) == got and len([c for c in calls if c[0].endswith(F.BSE_PIT)]) == 1
+    with pytest.raises(SourceError):                                              # a changed shape is an error, not "no trades"
+        _bse_pit([], {"Message": "changed"}).insider_trades("500325", "RELIANCE", 365)
+
+
+def test_a_company_whose_nse_list_is_down_gets_its_insider_trades_from_bse(monkeypatch):
+    class Nse:
+        down = SourceError("the exchange", "Couldn't reach the exchange (ReadTimeout).", busy=True)
+
+        def insider_trades(self, symbol=None, days=365, to=None, stale=True):
+            raise self.down
+
+        def _insider_kept(self, symbol, days):
+            return F.StaleRows([{"kind": "insider", "who": "kept"}], "2026-10-13T20:00")
+
+        def __getattr__(self, name):                                              # every other kind: none, read fine
+            return lambda *a, **k: []
+    calls = []
+    feed = F.IndiaFilings(Nse(), _bse_pit(calls, [_bse_pit_row()]), lambda s: None, lambda s: "500325" if s == "RELIANCE" else None)
+    got = feed.insider_trades("RELIANCE")
+    assert [d["exchange"] for d in got] == ["BSE"] and got[0]["symbol"] == "RELIANCE"
+    rep = deals.report(feed, "RELIANCE")
+    assert rep["insider_from"] == "BSE" and rep["problems"] == [] and rep["items"][0]["who"] == "Mukesh Shah Family Trust"
+    # no BSE listing: NSE's last list read, as before
+    assert feed.insider_trades("TCS")[0]["who"] == "kept"
+    # BSE down too: the same
+    down = F.IndiaFilings(Nse(), _bse_pit([], {"Message": "changed"}), lambda s: None, lambda s: "500325")
+    assert down.insider_trades("RELIANCE")[0]["who"] == "kept"
+    # NSE read fine: no BSE call, and nothing is marked
+    assert deals.report(F.IndiaFilings(type("Ok", (), {"__getattr__": lambda self, n: (lambda *a, **k: [])})(), _bse_pit(calls, []),
+                                       lambda s: None, lambda s: "500325"), "RELIANCE")["insider_from"] is None
+    # NSE's list in a shape we can't read: ours to fix, never covered by BSE
+    Nse.down = SourceError("the exchange", "shape")
+    with pytest.raises(SourceError):
+        feed.insider_trades("RELIANCE")

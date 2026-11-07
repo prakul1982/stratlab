@@ -205,7 +205,11 @@ def margin_line(block: dict, chain_median: float | None, several: bool = True, w
     if e and chain_median is not None and several:
         d = e["median"] - chain_median
         if abs(d) > ROUNDING:
-            parts.append(f"The median EBITDA margin ({pts(e['median'], whole)}) is {f1(abs(d))} points {'above' if d > 0 else 'below'} the median of the whole map ({pts(chain_median, whole)}).")
+            # whole points print whole: 9% and 15% are 6 points apart, not "6.0 points" (R17-007); a median's half stays
+            gap = f1(abs(d))
+            if float(e["median"]).is_integer() and float(chain_median).is_integer():
+                gap = gap.replace(".0", "")
+            parts.append(f"The median EBITDA margin ({pts(e['median'], whole)}) is {gap} points {'above' if d > 0 else 'below'} the median of the whole map ({pts(chain_median, whole)}).")
     if block["left_out"]:
         parts.append(f"{block['left_out']} figure{'s are' if block['left_out'] > 1 else ' is'} the whole company's and left out of the medians"
                      " because the company runs other businesses too.")
@@ -225,17 +229,24 @@ def chain_table(blocks: list[dict]) -> dict:
     # only the map's own layers (an official industry's leftover companies overlap them: "Vehicle assembly" and "Commercial Vehicles"), each
     # with MIN_LAYER companies in its median, and only a gap wider than the rounding of whole-point margins, name a highest and a lowest
     have = [r for r in rows if r["ebitda"] is not None and r["ebitda_n"] >= MIN_LAYER and not r["official"]]
+    if len(have) < 2:          # a map whose layers are the official industries themselves: they are its layers (R17-011)
+        have = [r for r in rows if r["ebitda"] is not None and r["ebitda_n"] >= MIN_LAYER]
     line, hi, lo = None, None, None
     if len(have) >= 2:
         hi, lo = max(have, key=lambda r: r["ebitda"]), min(have, key=lambda r: r["ebitda"])
         if hi["layer"] == lo["layer"] or hi["ebitda"] - lo["ebitda"] <= ROUNDING:
+            gap = max(r["ebitda"] for r in have) - min(r["ebitda"] for r in have)
             hi = lo = None
+            line = (f"The median EBITDA margins of the {len(have)} layers with at least {MIN_LAYER} companies are within {f1(gap)} "
+                    "points of each other, the rounding of whole points.")
         else:
             whole = whole_points([c for b in blocks for c in b["companies"]])
             line = (f"Median EBITDA margin is highest in {hi['layer']} ({pts(hi['ebitda'], whole)}) and lowest in {lo['layer']} ({pts(lo['ebitda'], whole)}), "
                     f"a gap of {f1(hi['ebitda'] - lo['ebitda'])} points.")
+    if len(have) < 2:
+        line = f"Fewer than two layers have {MIN_LAYER} or more companies with an EBITDA margin, so no highest and lowest are named."
     return {"rows": rows, "line": line, "highest": hi["layer"] if hi else None, "lowest": lo["layer"] if lo else None,
-            "compared": [r["layer"] for r in have]}
+            "compared": [r["layer"] for r in have], "gap": round(hi["ebitda"] - lo["ebitda"], 1) if hi else None}
 
 
 def layer_history(rows: list[dict]) -> dict | None:
@@ -321,6 +332,37 @@ def margin_history(rows: list[dict]) -> dict | None:
     return h
 
 
+def margin_drivers(hist: dict | None, rows: dict, layer_of: dict) -> dict | None:
+    """What moved the aggregate EBITDA margin between the last two years of `hist` (margin_history: the same companies every year): each
+    company's part of the change, (its EBITDA ÷ everyone's revenue) this year less the same a year before, in points, so the parts add up to
+    the change; the companies that moved it most and each layer's part (R17-015). Arithmetic on reported figures only."""
+    if not hist or len(hist.get("years") or []) < 2:
+        return None
+    y0, y1 = hist["years"][-2], hist["years"][-1]
+
+    def year(sym, lb):
+        return next((y for y in rows[sym].get("years") or [] if y.get("year") == lb), None)
+    have = [s_ for s_ in hist.get("companies") or [] if s_ in rows and year(s_, y0) and year(s_, y1)]
+    r0 = sum(year(s_, y0)["sales"] for s_ in have)
+    r1 = sum(year(s_, y1)["sales"] for s_ in have)
+    if not have or not r0 or not r1:
+        return None
+    parts = []
+    for s_ in have:
+        a, b = year(s_, y0), year(s_, y1)
+        part = (b["sales"] * b["opm"] / r1 - a["sales"] * a["opm"] / r0)
+        parts.append({"symbol": s_, "name": rows[s_]["name"], "layer": layer_of.get(s_), "part": round(part, 2),
+                      "margin_from": a["opm"], "margin_to": b["opm"], "share_from": round(a["sales"] / r0 * 100, 1), "share_to": round(b["sales"] / r1 * 100, 1)})
+    start = sum(year(s_, y0)["sales"] * year(s_, y0)["opm"] for s_ in have) / r0
+    end = sum(year(s_, y1)["sales"] * year(s_, y1)["opm"] for s_ in have) / r1
+    by_layer: dict = {}
+    for x in parts:
+        by_layer[x["layer"] or "Other"] = by_layer.get(x["layer"] or "Other", 0.0) + x["part"]
+    return {"from": y0, "to": y1, "start": round(start, 1), "end": round(end, 1), "change": round(end - start, 1), "n": len(have),
+            "companies": sorted(parts, key=lambda x: -abs(x["part"]))[:6],
+            "layers": sorted(({"layer": k, "part": round(v, 2)} for k, v in by_layer.items()), key=lambda x: -abs(x["part"]))}
+
+
 PEER_BAND = 2.0               # companies of similar market value: between half and twice a company's own
 
 
@@ -352,8 +394,11 @@ def peers_section(rows: list[dict], market: list[dict]) -> dict:
             if key == "pe" and pm > 0:
                 prem.append((v / pm - 1) * 100)
         if own:
-            out[key] = {"n": len(own), "theme": round(median(own), 1), "peers": round(median(peer), 1),
-                        "premium": round(median(prem), 1) if prem else None}
+            # the P/E gap is the ratio of the two medians over the same companies, the two numbers a table shows (R17-010: the median of each
+            # company's own gap, 8.2%, sat beside medians 3.4% apart)
+            mo, mp = median(own), median(peer)
+            out[key] = {"n": len(own), "theme": round(mo, 1), "peers": round(mp, 1),
+                        "premium": round((round(mo, 1) / round(mp, 1) - 1) * 100, 1) if prem and round(mp, 1) > 0 else None}
     return out
 
 
@@ -600,13 +645,15 @@ class Sources:
     results(frm, to, symbols), actions(frm, to, symbols), red_flags(symbols, frm, to) -> stored rows;
     card(symbol, row) -> the management report card checked against the reported years ({met, missed}) or None;
     history(key, point) -> the theme's kept points after adding `point` (a day's median P/E and the like), oldest first;
-    segments(symbol) -> the business segments the company's documents report ([{name, share_pct}]) or None (is_diversified)."""
+    segments(symbol) -> the business segments the company's documents report ([{name, share_pct}]) or None (is_diversified);
+    corp_history(symbol) -> the company's stored corporate actions (every kind, each with "kind" and "ex_date"), never read from a source."""
 
     def __init__(self, today: date, facts, index_rows=lambda: [], shareholding=lambda s: None, insider_buys=lambda: {},
                  results=lambda a, b, s: [], actions=lambda a, b, s: [], red_flags=lambda s, a, b: [], card=lambda s, r: None,
-                 history=lambda k, p: [p], segments=lambda s: None):
+                 history=lambda k, p: [p], segments=lambda s: None, corp_history=lambda s: []):
         self.today, self.facts, self.index_rows, self.shareholding, self.insider_buys = today, facts, index_rows, shareholding, insider_buys
         self.results, self.actions, self.red_flags, self.card, self.history, self.segments = results, actions, red_flags, card, history, segments
+        self.corp_history = corp_history
 
 
 _STOP = {"company", "companies", "limited", "india", "indian", "sector", "theme", "other", "others", "product", "products", "service", "services",
@@ -631,7 +678,9 @@ def theme_words(checked: dict, theme: str) -> set[str]:
     """The words that say a company does the theme's work: the theme's, its official industries', its layers' and its sub-themes' names, and
     the sub-themes' one-line details."""
     parts = [theme, checked.get("sector") or ""] + list((checked.get("placements") or {}).get("industries") or [])
-    parts += [v.get("layer") or "" for v in checked.get("value_chain") or []]
+    # each layer's name and the AI's own description of its work (R17-012: "trucks and buses" is the commercial-vehicle layer's work even
+    # when no name says it)
+    parts += [f"{v.get('layer') or ''} {v.get('description') or ''}" for v in checked.get("value_chain") or []]
     parts += [f"{s.get('name') or ''} {s.get('detail') or ''}" for s in checked.get("sub_themes") or []]
     return _stems(" ".join(parts))
 
@@ -640,6 +689,11 @@ def does_the_work(what: str, words: set[str]) -> bool:
     """Whether a company's own sentence uses one of the theme's words (a word of the sentence starting with one of them)."""
     mine = _stems(what)
     return any(m == w or (len(w) >= 4 and m.startswith(w)) for m in mine for w in words)
+
+
+# words a sentence uses when it says what a company does (any trade): a sentence with none of them says nothing about the work
+BUSINESS = re.compile(r"\b(?:manufactur\w*|mak(?:e|es|er|ers|ing)|produc\w*|sell\w*|suppl\w*|provid\w*|offer\w*|engaged|develop\w*|"
+                      r"design\w*|distribut\w*|operat\w*|speciali[sz]\w*|deal(?:s|er|ers|ing)?\s+in|portfolio|business\s+of|services?)\b", re.I)
 
 
 def membership(c: dict, words: set[str]) -> str:
@@ -651,6 +705,10 @@ def membership(c: dict, words: set[str]) -> str:
         return "core"                                 # a map from before the checks: as it was
     if c.get("base"):
         if c.get("basis") == "list" or c.get("verified") or does_the_work(c.get("what") or "", words):
+            return "core"
+        # own words that say nothing of the work ("The Company was established in 1981", "flagship company of the group"): nothing
+        # contradicts the exchange's classification, so it stands (R17-012: real makers were "not confirmed" on such a sentence)
+        if not BUSINESS.search(c.get("what") or ""):
             return "core"
         return "unverified"
     return "exposure" if c.get("verified") else "unverified"
@@ -675,6 +733,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         for c in grp.get("companies") or []:
             placed.setdefault(c["ticker"], c)
     words = theme_words(checked, theme)
+    every_status = {s: membership(c, words) for s, c in placed.items()}
     facts = {s: src.facts(s) for s in placed}
     rows = {s: r for s, r in ((s, company_row(region, s, f)) for s, f in facts.items()) if r}
     for s, c in placed.items():
@@ -720,7 +779,8 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
                             "company_wide": r["symbol"] in wide, "year": r["year"]})
         subs.append({"name": s.get("name") or "", "detail": s.get("detail") or "", "companies": cos})
     for r in rows.values():                 # a merger or demerger broke the company's series: no growth figure for it, none in the growth totals
-        if series_break(r):
+        r["demerger"] = demerger_on(src, r["symbol"])
+        if series_break(r) or r["demerger"]:
             r["series_break"] = True
             for k in ("sales_1y", "sales_3y", "sales_5y", "profit_1y", "profit_3y", "profit_5y"):
                 r[k] = None
@@ -748,9 +808,14 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
             "ownership": ownership_section(syms, names, src), "events": events_section(syms, names, src),
             "management": management_section(syms, names, rows, src), "leaders": leaders(listed)},
         "growth_basis_n": len(own_set),
+        # the theme's companies by how sure the theme is of each (R17-012), every placed company, with figures or not
+        "membership": {"placed": len(every_status), "confirmed": sum(1 for x in every_status.values() if x != "unverified"),
+                       "not_confirmed": sum(1 for x in every_status.values() if x == "unverified")},
         "status": {r["symbol"]: r.get("status") or "core" for r in listed}, "with_figures": len(listed),
     }
     out["sections"]["medians"]["net_all"] = stat(r.get("net") for r in own)
+    layer_of = {c["symbol"]: b["layer"] for b in blocks for c in b["companies"]}
+    out["sections"]["margin_drivers"] = margin_drivers(out["sections"]["margins"], rows, layer_of)
     out["sections"]["quarter"] = quarter_section(members, out["sections"]["events"].get("results_filed"))
     out["checks"] = data_checks(listed, blocks, out)
     out["notable"] = notable_items(blocks, chain, histories)
@@ -797,6 +862,25 @@ def series_break(r: dict) -> bool:
     return False
 
 
+DEMERGER_YEARS = 3            # a demerger this recent splits the years a growth figure is worked out from
+
+
+def demerger_on(src, symbol: str) -> str | None:
+    """The ex-date of a demerger (or scheme of arrangement) in the company's stored corporate actions within the last DEMERGER_YEARS, or
+    None (R17-005: a demerger was found only from a jump in revenue, so a company whose years moved less than SERIES_JUMP kept its growth
+    figures across the split)."""
+    try:
+        acts = src.corp_history(symbol) or []
+    except Exception as e:
+        print("theme data: corporate actions not read:", symbol, type(e).__name__, str(e)[:100])
+        return None
+    since = (src.today - timedelta(days=365 * DEMERGER_YEARS)).isoformat()
+    hits = sorted(str(a.get("ex_date") or a.get("record_date") or "")[:10] for a in acts
+                  if isinstance(a, dict) and (a.get("kind") == "demerger" or re.search(r"demerger|scheme of arrangement|spin[- ]?off", str(a.get("text") or a.get("purpose") or ""), re.I)))
+    hits = [d for d in hits if d and since <= d <= src.today.isoformat()]
+    return hits[-1] if hits else None
+
+
 def data_checks(rows: list[dict], blocks: list[dict], dive: dict) -> dict:
     """The checks every figure in the dive went through, with what was found (the deck's "data confidence" page; facts, each with its
     companies): one-off earnings, broken series, membership not confirmed, a quarter apart from the median's, and the count each median is on."""
@@ -806,7 +890,7 @@ def data_checks(rows: list[dict], blocks: list[dict], dive: dict) -> dict:
     return {
         "one_off": [{"symbol": r["symbol"], "name": r["name"], "ebitda": r["ebitda"], "net": r["net"]} for r in rows if r.get("one_off") and r.get("status") != "unverified"],
         "net_with": (meds.get("net_all") or {}).get("median"), "net_without": (meds.get("net") or {}).get("median"),
-        "series": [{"symbol": r["symbol"], "name": r["name"]} for r in rows if series_break(r)],
+        "series": [{"symbol": r["symbol"], "name": r["name"], **({"demerger": r["demerger"]} if r.get("demerger") else {})} for r in rows if r.get("series_break") or series_break(r)],
         "unverified": [{"symbol": r["symbol"], "name": r["name"]} for r in rows if r.get("status") == "unverified"],
         "earlier_quarter": q.get("earlier") or [], "quarter": q.get("quarter"),
         "n": {k: (meds.get(k) or {}).get("n", 0) for k in ("ebitda", "net", "roce")},
