@@ -60,7 +60,7 @@ def test_a_layer_has_a_median_and_a_range_and_the_whole_chain_one_table():
     rows = {r["layer"]: r for r in out["chain"]["rows"]}
     assert rows["Mining"]["ebitda"] == 49.0 and rows["Cells"]["ebitda"] == 9.5       # Reliance's 16 is left out of the median
     assert out["chain"]["highest"] == "Mining" and out["chain"]["lowest"] == "Cells"
-    assert "highest in Mining (49.0%)" in out["chain"]["line"] and "gap of 39.5 points" in out["chain"]["line"]
+    assert "highest in Mining (49%)" in out["chain"]["line"] and "gap of 39.5 points" in out["chain"]["line"]     # R16: whole points as filed
     assert "Mar" in out["basis"] and "₹ crore" in out["basis"] and "Consolidated" in out["basis"]
 
 
@@ -73,10 +73,14 @@ def test_a_conglomerate_is_marked_company_wide_and_left_out_of_the_median():
     assert "RELIANCE" in out["company_wide"]
 
 
-def test_a_company_doing_several_layers_is_company_wide_too():
+def test_a_company_the_map_puts_in_two_layers_is_kept_in_its_first_only():
+    """R16 (owner, 7 Nov: one layer per company): behaviour changed on purpose; a company in two layers was marked company-wide, now it is
+    counted once, in the first layer the map gives it, and is not company-wide for that."""
     two = {**CHECKED, "value_chain": [LAYERS[0], {**LAYERS[1], "companies": LAYERS[1]["companies"][:2] + [LAYERS[0]["companies"][0]]}]}
     out = D.build("IN", "Test theme", two, src())
-    assert "MINEA" in out["company_wide"]
+    assert "MINEA" not in out["company_wide"]
+    assert [c["symbol"] for c in out["layers"][0]["companies"]] == ["MINEA", "MINEB"]
+    assert "MINEA" not in [c["symbol"] for c in out["layers"][1]["companies"]]
 
 
 def test_a_stale_year_or_a_lender_has_no_margin():
@@ -328,7 +332,8 @@ def test_the_latest_news_has_a_date_a_company_and_a_link_and_no_opinion():
         if "Mine A" in q:
             return [{"headline": "Mine A raises output", "at": "2026-10-03T00:00:00+00:00", "source": "Paper", "url": "https://p/a"},
                     {"headline": "Mine A is a strong buy for investors", "at": "2026-10-04T00:00:00+00:00", "source": "Blog", "url": ""}]
-        return [{"headline": "Government extends scheme", "at": "2026-10-02T00:00:00+00:00", "source": "Wire", "url": "https://w/s"}]
+        return [{"headline": "Government extends India scheme", "at": "2026-10-02T00:00:00+00:00", "source": "Wire", "url": "https://w/s"},
+                {"headline": "Mexico's car makers get tax relief", "at": "2026-10-02T00:00:00+00:00", "source": "Wire", "url": "https://w/m"}]
     members = [{"symbol": "MINEA", "name": "Mine A", "cap": 100, "filings": [{"at": "2026-10-04", "name": "Dividend: record date", "url": "https://x/f"}]}]
     items = T.theme_news("IN", "Test theme", members, lambda q: [h for h in search(q) if "strong buy" not in h["headline"]], TODAY)
     assert [(i["at"], i["kind"]) for i in items] == [("2026-10-04", "filing"), ("2026-10-03", "news"), ("2026-10-02", "news")]
