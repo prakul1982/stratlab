@@ -2689,6 +2689,10 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .page-lock { margin-bottom: var(--s4); }
 .page-lock-slot:empty { display: none; }       /* the slot under every page title: nothing in it, no space */
 .page-lock-slot > .page-lock { margin-top: var(--s3); }
+/* the plan note and the page's lifted notices share the slot, each portalled in whenever it draws (the plan note is redrawn as the plan
+   loads, so it can land after a notice): the plan note always shows first, straight under the title (RC7-003) */
+.page-lock-slot { display: flex; flex-direction: column; }
+.page-lock-slot > .page-lock { order: -1; }
 
 /* signed out on an app address, a page that doesn't exist, a page that isn't yours (pages/Gate.tsx) */
 .gate { max-width: 640px; }
