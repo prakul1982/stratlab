@@ -89,7 +89,8 @@ test("every table download goes through the one builder and the one save (lib/sh
 test("themes: Slides (PDF), Slides (PowerPoint) and the companies' CSV, the deck from the server's deck builder", () => {
   const d = read("src/components/ThemeDive.tsx");
   assert.match(d, /themeApi\.deck\(region, theme, format\)/);
-  assert.match(d, /download\(await res\.blob\(\), deckFileName\(`\$\{theme\} theme \(\$\{REGION_NAME\[region\]\}\)`, format\)\)/);
+  // R21: the file comes through deckWhenReady (the server answers "preparing" while the theme's AI map is written)
+  assert.match(d, /download\(blob, deckFileName\(`\$\{theme\} theme \(\$\{REGION_NAME\[region\]\}\)`, format\)\)/);
   assert.match(d, />\{making === "pdf" \? "Making the PDF…" : "Slides \(PDF\)"\}</);
   assert.match(d, />\{making === "pptx" \? "Making the deck…" : "Slides \(PowerPoint\)"\}</);
   assert.match(read("src/pages/ThemesPage.tsx"), /<ThemeDownloads r=\{r\} dive=\{dive\} region=\{region\} theme=\{q\} \/>/);

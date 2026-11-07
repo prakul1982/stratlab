@@ -252,6 +252,34 @@ def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None
     return out
 
 
+# ---------- the companies the map didn't place, each in the best of its layers (R21) ----------
+PLACE_SYSTEM2 = """You sort listed companies into the layers of a map of an industry theme. Every company given is in the theme already (the
+stock exchange files it under the theme's industry). For each COMPANY, pick the one LAYER (by its id) whose work its own description shows
+best, from its description and industry only. Pick "none" when no layer fits.
+Reply with ONLY this JSON: {"place": [{"symbol": "<symbol>", "layer": "<layer id or none>"}]}"""
+
+
+def place_in_layers(layers: list[dict], companies: list[dict], ask, theme: str) -> dict[str, str]:
+    """{symbol: layer name or ""} for companies ({symbol, name, industry, about}) in one AI answer; a layer id that isn't one of the map's,
+    or a symbol not asked about, is dropped (the caller places those by their words)."""
+    import json
+    ids = {f"L{i}": v.get("layer") or "" for i, v in enumerate(layers)}
+    payload = {"theme": theme, "layers": {k: {"name": ids[k], "what_it_is": str(layers[i].get("description") or "")[:240]} for i, k in enumerate(ids)},
+               "companies": [{"symbol": c["symbol"], "name": c["name"], "industry": c.get("industry") or "",
+                              "description": clean_description(c.get("about") or "", 220)} for c in companies]}
+    got = ask(PLACE_SYSTEM2, "COMPANIES:\n" + json.dumps(payload, ensure_ascii=False))
+    asked = {c["symbol"] for c in companies}
+    out = {}
+    for x in (got.get("place") if isinstance(got, dict) else None) or []:
+        if isinstance(x, dict) and x.get("symbol") in asked:
+            lid = str(x.get("layer") or "")
+            if lid in ids:
+                out[x["symbol"]] = ids[lid]
+            elif lid.lower() == "none":
+                out[x["symbol"]] = ""
+    return out
+
+
 # ---------- claims: tailwinds, risks and a layer's policy line ----------
 CLAIM_SYSTEM = """You check whether claims about a theme are still current, using ONLY the dated headlines given for each claim.
 TODAY is given. For each CLAIM decide:

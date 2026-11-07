@@ -144,9 +144,9 @@ def test_a_no_from_the_ai_moves_an_indexed_company_out_of_the_layer_never_out_of
     assert [c["ticker"] for c in layers["Missiles"]["companies"]] == ["BDL"]
     assert layers["Missiles"]["companies"][0]["verified"] and layers["Missiles"]["companies"][0]["base"]
     # HAL: the AI's "no" for the missile layer moved it to its own industry, with every company the map never named, largest first
-    ad = layers["Aerospace & Defense"]
+    ad = layers["Aerospace and defence"]          # R21: India's industry names plain too
     assert ad["official"] and [c["ticker"] for c in ad["companies"]] == ["HAL", "BEL", "GRSE", "DATAPATTNS", "ASTRAMICRO", "PARAS"]
-    assert [c["ticker"] for c in layers["Ship Building & Allied Services"]["companies"]] == ["MAZDOCK", "COCHINSHIP"]
+    assert [c["ticker"] for c in layers["Shipbuilding"]["companies"]] == ["MAZDOCK", "COCHINSHIP"]
     assert [c["ticker"] for c in layers["Explosives"]["companies"]] == ["SOLARINDS"]
     # BEML: an addition from another industry, kept in its own words; Reliance: an addition its own words don't back, left out
     assert [c["ticker"] for c in layers["Defence vehicles"]["companies"]] == ["BEML"] and not layers["Defence vehicles"]["companies"][0]["base"]
@@ -197,13 +197,15 @@ def test_the_sector_route_lists_every_company_of_the_industries_and_marks_the_ai
     s = api.get("/research/sector?q=semiconductors&region=US").json()
     chips = s["value_chain"][0]
     assert [(c["ticker"], c["base"]) for c in chips["companies"]] == [("NVDA", True), ("VRT", False)]      # VRT: added, in its own words
-    official = s["value_chain"][1]
-    assert official["layer"] == "Semiconductors" and official["official"] and [c["ticker"] for c in official["companies"]] == ["AMD"]       # R20: plain name
+    # changed on purpose (R21): every company of the theme's industries and list sits in one of the map's own layers (placed from its words
+    # after the map), or in one "Other ... companies" layer when it fits none; never in a layer named after the exchange's industry
     p = s["placements"]
-    assert [c["ticker"] for c in s["value_chain"][2]["companies"]] == ["LRCX"]              # the named list: Lam Research files as machinery
+    assert {c["ticker"] for v in s["value_chain"] for c in v["companies"]} == {"NVDA", "VRT", "AMD", "LRCX"}
+    assert all(not v.get("official") or v.get("basis") == "rest" for v in s["value_chain"])
+    assert all(c.get("placed") for v in s["value_chain"] for c in v["companies"] if c["ticker"] in ("AMD", "LRCX"))
     assert (p["total"], p["base"], p["named"], p["added"], p["industries"], p["industries_by"]) == (4, 3, 1, 1, ["Semiconductors & Related Devices"], "list")
     d = api.get("/research/theme-dive?q=semiconductors&region=US").json()
-    assert d["figures"] == {"shown": 4, "of": 4} and [b["official"] for b in d["layers"]] == [False, True, True]
+    assert d["figures"] == {"shown": 4, "of": 4} and [b["official"] for b in d["layers"]] == [bool(v.get("official")) for v in s["value_chain"]]
 
 
 def test_a_check_stuck_on_a_company_is_served_as_it_stands_after_a_while(api, monkeypatch):

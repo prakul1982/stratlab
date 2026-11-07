@@ -445,7 +445,9 @@ Return ONLY this JSON:
  "tailwinds": [{{"text": "one specific sentence naming the policy, programme, product or customer", "policy": "the programme or rule it rests on, or empty", "search": "3 to 5 words to search the news for it, or empty"}}],
  "risks": [{{"text": "one specific sentence naming what could go wrong", "policy": "", "search": ""}}]}}
 Sizes: 4-5 clusters of 4-6 real listed companies, 4 sub-themes of 2-5 listed companies each, 6-8 screen names (listed companies with the most
-direct link to the theme, in value-chain order, not ranked), up to 4 ETFs, 4-5 value-chain layers of 3-5 listed companies, 4 tailwinds, 4 risks. Nothing generic.
+direct link to the theme, in value-chain order, not ranked), up to 4 ETFs, 4-6 value-chain layers of 3-5 listed companies, 4 tailwinds, 4 risks (as many risks
+as tailwinds). The layers follow the industry's own production chain or business models, each a distinct step or model of it (what is designed,
+made, supplied, sold or serviced, and to whom), never one layer for the whole industry or an exchange's industry name. Nothing generic.
 Put a listed company in a layer or sub-theme only when its own business is that very work (it makes, mines, refines, builds or operates it); a customer, a
 supplier of something else or another company of the same group does not belong. Fewer companies, all of them right, is better than many.
 Name a policy, scheme or rule only when it exists today and you know whether it is in force; leave "policy" and "search" empty for a tailwind or risk that rests on none.
@@ -477,7 +479,21 @@ policies that exist; leave out anything you aren't sure of.
         "value_chain": [{"layer": layer_name(v)[:60], "description": theme_text(v.get("description"), 600),
                          "companies": cos(v.get("companies"))} for v in (r.get("value_chain") or []) if isinstance(v, dict) and layer_name(v)][:6],
         "tailwinds": claim_items(r.get("tailwinds"), 5), "risks": claim_items(r.get("risks"), 5),
+        "map_v": MAP_V,
     }
+
+
+# the map prompt's version (R21: 4-6 layers that follow the industry's own chain, as many risks as tailwinds): a map kept from an older prompt
+# with fewer than MAP_LAYERS named layers is written again once (routes.sector_map)
+MAP_V = 21
+MAP_LAYERS = 4
+
+
+def map_due(m: dict | None) -> bool:
+    """Whether a kept map is from an older prompt and too coarse to keep: fewer than MAP_LAYERS layers with a name and a company."""
+    if not isinstance(m, dict) or not float(m.get("generated_at") or 0) or (m.get("map_v") or 0) >= MAP_V:
+        return False
+    return sum(1 for v in m.get("value_chain") or [] if v.get("layer") and v.get("companies")) < MAP_LAYERS
 
 
 def pulse(region: str, focus: str, indices: list[dict], headlines: list[dict], ai, closed: bool | None = None,

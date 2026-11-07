@@ -553,6 +553,22 @@ def card_boxes(b: dict) -> list[tuple]:
     return out
 
 
+def whole_lines(items: list[dict], box: tuple, cols: int, bullets: bool = False) -> list[dict]:
+    """Cards whose lines all show in full at the smallest body size (R21: a findings card cut mid-sentence with an ellipsis): while a card
+    doesn't fit its share of the box, its last line gives way, a whole sentence at a time."""
+    items = [dict(it, lines=list(it.get("lines") or [])) for it in items]
+    if not items:
+        return items
+    x, y, w, h = box
+    cols = max(1, min(cols, len(items)))
+    rows = (len(items) + cols - 1) // cols
+    cw, room = (w - 0.25 * (cols - 1)) / cols, (h - 0.25 * (rows - 1)) / rows
+    for it in items:
+        while len(it["lines"]) > 1 and card_height(it, cw, bullets, BODY_MIN) > room:
+            it["lines"].pop()
+    return items
+
+
 def fit_chars(text: str, size: float, width: float) -> str:
     """One line no wider than `width`: characters dropped from the end, with an ellipsis."""
     if _width(text, size) <= width:
@@ -1707,6 +1723,10 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> li
     if held:
         rows.append(["Operating figures", f"{_n(len(held), 'figure')} held for checking: " + "; ".join(f"{x['name']} ({x['why']})" for x in held[:3]) + ".",
                      "The compared figure and its change are not shown; after a move too large to take as filed, neither comparison is."])
+    filed = {r["symbol"]: r["name"] for g in (biz.get("layers") or []) + (biz.get("subs") or []) for r in g.get("rows") or []}
+    if 0 < len(filed) < MIN_BASE:
+        rows.append(["Operating figures filed", f"{_n(len(filed), 'company', 'companies')} filed operating figures between results: {', '.join(filed.values())}.",
+                     "Too few to set side by side: no page of their own."])
     old = [r for g in (biz.get("layers") or []) for r in g.get("rows") or [] if biz_stale(r, today)]
     if old:
         rows.append(["Old operating figures", f"{_n(len(old), 'figure')} for a period that ended months ago: " + ", ".join(f"{r['name']} ({_period(r.get('period'), r.get('span') or 'month')})" for r in old[:4]) + ".",
@@ -1803,7 +1823,7 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
         lines.append(f"Aggregate EBITDA margin {_pc(pe[-2][1])} in {pe[-2][0]}, {_pc(pe[-1][1])} in {pe[-1][0]} ({_n(mg.get('n') or 0, 'company', 'companies')}).")
     own_ = sec.get("ownership") or {}
     if own_.get("holdings"):
-        lines.append(f"Promoters' stake rose at {own_.get('promoter_up', 0)} and fell at {own_.get('promoter_down', 0)} of {len(own_['holdings'])} companies last quarter.")
+        lines.append(promoter_words(own_.get("promoter_up", 0), own_.get("promoter_down", 0), len(own_["holdings"])))
     cards.append({"title": "What changed", "lines": lines or ["No quarter, margin history or shareholding filing to compare yet."], "note": "⟦The latest quarter⟧"})
     watch = watch_list(v, today)
     conf = confidence_rows(v, cov, today, lender)
@@ -1812,7 +1832,8 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
     cards.append({"title": "Worth a watch", "lines": [f"{_n(len(watch), 'company', 'companies')} with a dated fact, picked by fixed rules, each with its trigger." if watch
                                                       else "No company meets the rules today."], "note": "⟦Worth a watch⟧" if watch else ""})
     s = Slide("Key findings", "What the reported figures show, each with the slide it comes from; findings, not advice", eyebrow=eyebrow)
-    s.add("cards", (M, TOP, CW, BOT - TOP), cols=3 if len(cards) != 4 else 2, items=cards, fill=True, size=13)
+    ccols = 3 if len(cards) != 4 else 2
+    s.add("cards", (M, TOP, CW, BOT - TOP), cols=ccols, items=whole_lines(cards, (M, TOP, CW, BOT - TOP), ccols), fill=True, size=13)
     slides.append(s)
 
     # data confidence on ONE page (R19, the owner: "just keep the important ones"): the checks, then every count in one line under them; a
@@ -1867,7 +1888,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 18                  # part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 21                  # part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -1980,6 +2001,15 @@ def co_cell(c: dict, key: str, amt) -> str:
     return _pc(c.get(key))
 
 
+def promoter_words(up: int, down: int, n: int) -> str:
+    """The quarter's promoter-stake moves in plain words (R21: "rose at 0 and fell at 8 of 32" read awkwardly): the larger count first."""
+    if not up and not down:
+        return f"Promoters' stake was unchanged at all {n} companies with a filing last quarter."
+    first, second = (("fell", down), ("rose", up)) if down >= up else (("rose", up), ("fell", down))
+    rest = "none" if not second[1] else f"{second[1]}"
+    return f"Promoters' stake {first[0]} at {first[1]} of {n} companies last quarter and {second[0]} at {rest}."
+
+
 def quarter_words(q: dict) -> str:
     """The quarter's medians, each with its own count, the same counts its slide's tiles show (R20: "net profit +217.1% (3 companies)" beside
     "2 up, 0 down")."""
@@ -2041,7 +2071,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     # one scheme of layers (R18: "Deposit gathering" beside "Public Sector Bank"): when the map has two or more layers of its own, the companies
     # of the official industries (or the theme's list) it doesn't place are not layers of their own but one list in the appendix
     own_layers = [x for x in shown if not x.get("official")]
-    unplaced = [x for x in shown if x.get("official") and not x.get("by_industry")] if len(own_layers) >= 2 else []
+    unplaced = [x for x in shown if x.get("official") and not x.get("by_industry") and x.get("basis") != "rest"] if len(own_layers) >= 2 else []
     shown = [x for x in shown if x not in unplaced]
     # one layer, or none: nothing to set side by side, so no value chain, no industry economics and no highest-and-lowest finding (R18)
     chained = len(shown) >= 2
@@ -2178,7 +2208,8 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         head, rows, widths, _ = drop_empty(head, rows, widths)
         mark = {chain.get("highest"): UP, chain.get("lowest"): DOWN}
         key = chain.get("measure") or "ebitda"
-        charted = [r for r in rows_c if r.get(key) is not None]
+        # a chart follows the table's rule (R21): a layer is plotted only on a median of MIN_BASE companies or more, its count in its label
+        charted = [r for r in rows_c if r.get(key) is not None and (r.get(f"{key}_n") or 0) >= MIN_BASE]
         chart = 2 <= len(charted) <= 14
         tw = 7.3 if chart else CW
         foot = [v.get("basis") or f"Each company's latest full year, in {unit}.", "Layer revenue: its companies added together; margins and returns: its median company."]
@@ -2205,7 +2236,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             s.add("table", (M, TOP, tw, th), head=head, rows=chunk, widths=widths,
                   colors={(i, 0): mark[r[0]] for i, r in enumerate(chunk) if r[0] in mark and r[0]})
             if chart and k == 0:
-                s.add("hbars", (M + tw + 0.35, TOP, CW - tw - 0.35, th), title=f"Median {'ROE' if key == 'roe' else 'EBITDA margin'} by layer", cats=[r["layer"] for r in charted],
+                s.add("hbars", (M + tw + 0.35, TOP, CW - tw - 0.35, th), title=f"Median {'ROE' if key == 'roe' else 'EBITDA margin'} by layer", cats=[f"{r['layer']} ({r.get(key + '_n') or 0})" for r in charted],
                       vals=[r[key] for r in charted], colors=[mark.get(r["layer"], BLUE) for r in charted], fmt="pctw" if whole and key == "ebitda" else "pct")
             s.add("text", (M, BOT - fh, CW, fh), paras=[" ".join(foot)], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
             slides.append(s)
@@ -2247,7 +2278,8 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         msg = layer.get("line") or (f"{_n(layer.get('n', len(cos)), 'company', 'companies')}, revenue {amt(layer.get('revenue'))} together"
                                     + (f"; {', '.join(meds_)}" if meds_ else ""))
         desc = layer.get("description") or ""
-        official = ("Companies of the theme's list that the exchange files under this industry." if layer.get("by_industry") else
+        official = ("Companies of the theme's industries whose own words fit none of the map's layers." if layer.get("basis") == "rest" else
+                    "Companies of the theme's list that the exchange files under this industry." if layer.get("by_industry") else
                     "The theme's own named companies that the layers above don't place." if layer.get("basis") == "list" else
                     "Companies the exchange classifies under this industry that the layers above don't place.") if layer.get("official") else ""
         card = {"title": "What this layer does", "lines": [clip(desc, 13, CW - 0.5, 3)] + ([official] if official else []), "note": AI_NOTE} if desc else \
@@ -2256,7 +2288,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         mkey, mname = ("roe", "ROE") if lend else ("ebitda", "EBITDA margin")
         bars = [c for c in cos if c.get(mkey) is not None and c["symbol"] not in unsure]
         chart = None
-        if len(hist.get("years") or []) >= 2 and not lend:
+        if len(hist.get("years") or []) >= 2 and not lend and (hist.get("n") or 0) >= MIN_BASE:       # an aggregate of 3 or more (R21)
             chart = {"kind": "lines", "title": f"Margins by year, the same {_n(hist.get('n') or 0, 'company', 'companies')}",
                      "cats": hist["years"], "series": [("EBITDA margin", hist["ebitda"], BLUE), ("Net margin", hist["net"], ORANGE)], "fmt": "pct", "labels": True}
         elif len(bars) >= 2:
@@ -2315,6 +2347,9 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         if fresh:
             groups_b.append((g["name"], fresh))
             seen_b |= {r["symbol"] for r in fresh}
+    n_biz = sum(len(rows_) for _, rows_ in groups_b)
+    if n_biz and n_biz < MIN_BASE:            # one or two companies' figures: no page of their own; data confidence says how many (R21)
+        groups_b = []
     if groups_b:
         flat = []
         for name, rows_ in groups_b:
@@ -2395,26 +2430,37 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         section("", "Tailwinds and risks", f"{_n(len(tw_), 'tailwind')} and {_n(len(rk_), 'risk')}; {n_checked} with a dated headline from the last 18 months "
                 "that shows it is still current.")
         items = []
-        for kind, c in sorted(claims, key=lambda kc: 0 if kc[1].get("status") == "current" and kc[1].get("source") else 1):     # those with a headline first
+        dated = lambda c: c.get("status") == "current" and bool(c.get("source"))      # noqa: E731
+        # tailwinds and risks evenly (R21): the same number of each at most, those with a dated source first, one of each in turn
+        tw_s, rk_s = sorted(tw_, key=lambda c: not dated(c)), sorted(rk_, key=lambda c: not dated(c))
+        k_each = min(CLAIMS_EACH, max(len(tw_s), len(rk_s)))
+        turn = [x for pair in zip(tw_s[:k_each] + [None] * k_each, rk_s[:k_each] + [None] * k_each) for x in pair][:2 * k_each]
+        order = [(kind, c) for kind, c in zip(["Tailwind", "Risk"] * k_each, turn) if c is not None]
+        for kind, c in order:
             src = c.get("source") if c.get("status") == "current" else None
             tags = [(kind, UP if kind == "Tailwind" else DOWN, UP_SOFT if kind == "Tailwind" else DOWN_SOFT),
-                    ("Recent headline", INK2, CHIP) if src else ("General background", MUTED, CHIP)]
+                    ("Dated source", INK2, CHIP) if src else ("General background (AI, no dated source)", MUTED, CHIP)]
             tied = claim_layers(c.get("text") or "", [x["layer"] for x in shown])
             sub = f"{src['headline']} · {_day(src.get('at'))} · {src.get('outlet') or ''}".rstrip(" ·") if src else None
             if tied:
                 sub = (sub + " · " if sub else "") + "Layer: " + ", ".join(tied)
             items.append({"tags": tags, "text": c.get("text") or "", "url": (src or {}).get("url") or None, "sub": sub})
-        cnote = ("Recent headline: a dated headline exists; it is not a check of the claim. General background: written by AI from general knowledge, "
-                 "with no dated headline. A claim a headline showed had ended is left out.")
+        cnote = ("Dated source: a dated headline or filing exists; it is not a check of the claim. General background: written by AI from general "
+                 "knowledge, with no dated source. A claim a headline showed had ended is left out.")
         cnh = note_h(cnote)
         box = (M, TOP, CW, BOT - TOP - cnh - 0.1)
         cols, pages = 2, flow_pages(items, box, 2)
         if len(pages) > 1 and len(flow_pages(items, box, 3)) < len(pages):
             cols, pages = 3, flow_pages(items, box, 3)
         first = pages[0]
-        sub_line = f"{n_checked} of {len(claims)} have a recent headline: one dated within the last 18 months shows the claim is still current"
-        if len(first) < len(items):
-            sub_line = f"{len(first)} of {len(claims)}, those with a recent headline first; the rest are on the theme's page"
+        nt, nr = sum(1 for x in first if x["tags"][0][0] == "Tailwind"), sum(1 for x in first if x["tags"][0][0] == "Risk")
+        sub_line = f"{_n(nt, 'tailwind')} and {_n(nr, 'risk')}, {n_checked} of {len(claims)} with a dated source"
+        if len(rk_) < len(tw_):
+            sub_line += f"; the map names fewer risks ({len(rk_)}) than tailwinds ({len(tw_)})"
+        elif len(tw_) < len(rk_):
+            sub_line += f"; the map names fewer tailwinds ({len(tw_)}) than risks ({len(rk_)})"
+        if len(first) < len(claims):
+            sub_line += "; the rest are on the theme's page"
         s = Slide("Tailwinds and risks", sub_line, eyebrow=eb("Tailwinds and risks"))
         s.add("flow", box, cols=cols, items=first)
         s.add("text", (M, BOT - cnh, CW, cnh), paras=[cnote], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
@@ -2641,6 +2687,7 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
             slides.append(s)
 
 
+CLAIMS_EACH = 4                 # tailwinds and risks shown at most, each (R21: the same number of each)
 REST_H = 0.32           # the room the first page of a long table keeps for the line that says where the rest of it is
 # long tables whose first page stays in the core and the rest goes to the appendix (R17-008: the core ran 51 pages)
 SPILL = ("Operating figures", "Latest on this theme")
