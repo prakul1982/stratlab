@@ -290,7 +290,7 @@ export function UsTaxPage() {
               <Card>
                 <CardHead title="Each sale in rupees" />
                 {!y.rows?.length ? <EmptyState title={`No US sales in ${y.label}`}>Sales you add or upload show here with the rate used for each.</EmptyState>
-                  : <DataTable stack phonePage={10} label="US sales in rupees" columns={saleCols} rows={y.rows} rowKey={(r, i) => `${r.symbol}${r.bought}${r.sold}${r.qty}${r.cost_usd}-${i}`} />}
+                  : <DataTable stack phonePage={10} pageDesktop label="US sales in rupees" columns={saleCols} rows={y.rows} rowKey={(r, i) => `${r.symbol}${r.bought}${r.sold}${r.qty}${r.cost_usd}-${i}`} />}
                 <p className="k-note">Rule 115: the sale at SBI's TT buying rate on the last day of the month before the sale, the cost at the rate on the last day of the month before the purchase; the last rate SBI published when it has none that day. "RBI" marks the RBI reference rate, used where SBI's rate isn't known.</p>
               </Card>
 

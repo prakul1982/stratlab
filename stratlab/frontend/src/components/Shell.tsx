@@ -22,6 +22,7 @@ import { PLAN_NAME } from "../lib/plans";
 import { watchSize } from "../lib/resize";
 import { importWithRetry } from "../lib/lazyRetry";
 import { scrollBehavior } from "../lib/motion";
+import { setSectionUser } from "../lib/sections";
 
 // the pop-ups load when they first open, so they don't slow down the first page
 const SearchPalette = lazy(() => importWithRetry(() => import("./SearchPalette")).then((m) => ({ default: m.SearchPalette })));
@@ -48,6 +49,8 @@ export function Shell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const pins = usePins();
   const [opened, setOpened] = usePersisted<Record<string, boolean>>(`${OPEN_KEY}.${me?.id ?? "guest"}`, NO_CHOICE);
+  // each person's closed and moved page sections are their own (kit/Section.tsx)
+  useLayoutEffect(() => { setSectionUser(me?.id); }, [me?.id]);
   // on a laptop the menu can fold away for wide tables, remembered on this device (R1-082); a phone has its drawer
   const [slim, setSlim] = usePersisted<boolean>("stratlab.side.slim", false);
   const [search, setSearch] = useState(false);

@@ -116,7 +116,7 @@ test("DA-039, DA-040: the forward test says what it is for, lists India when it 
   assert.match(page, /lede="A forward test tries a strategy on days that have not happened yet: connect your TradingView or Chartink alerts/);
   assert.match(page, /m\.status === "live" \|\| m\.status === "offline"/);
   assert.match(page, /offlineLine\(market\.name, me\?\.data_note\)/);
-  assert.match(page, /title="Connect a TradingView alert"/);
+  assert.match(page, /aria-label="Connect a TradingView alert"/);      // R15 #19: a section of the URL's card now
   assert.match(page, /<LockedPreview title="Forward test" actions=\{false\}/);
   assert.match(read("src/pages/trade/ReplayPage.tsx"), /<LockedPreview title="Chart replay" actions=\{false\}/);
 });

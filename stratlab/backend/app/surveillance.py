@@ -281,6 +281,38 @@ def _diff(part: str, old_rows, new_rows, day: str) -> list[dict]:
     return out
 
 
+PART_TIMEOUT = 20.0                  # seconds each list has to answer; the lists are read side by side, so one slow file holds up none
+
+
+class Slow(SourceError):
+    """A list that didn't answer within PART_TIMEOUT (its read goes on in the background and is dropped)."""
+
+
+def read_parts(feed, parts=PARTS, timeout: float | None = None) -> dict:
+    """{part: (as_of, rows) or the exception it raised} for each list, read side by side, each with `timeout` seconds
+    (PART_TIMEOUT): a list still reading then is a `Slow` error, and the lists that answered stand (R15: "Surveillance
+    lists: Took longer than 45 seconds" while one exchange file hung)."""
+    from concurrent.futures import ThreadPoolExecutor, wait as futures_wait
+    import time
+    limit = PART_TIMEOUT if timeout is None else timeout
+    pool = ThreadPoolExecutor(max_workers=len(parts), thread_name_prefix="surv")
+    jobs = {p: pool.submit(_read, feed, p) for p in parts}
+    end = time.monotonic() + limit
+    futures_wait(list(jobs.values()), timeout=limit)
+    out = {}
+    for p, f in jobs.items():
+        if not f.done():
+            f.cancel()
+            out[p] = Slow("the exchange", f"No answer within {max(0.0, limit - max(0.0, end - time.monotonic())):.0f} seconds.", busy=True)
+            continue
+        try:
+            out[p] = f.result()
+        except Exception as e:
+            out[p] = e
+    pool.shutdown(wait=False)
+    return out
+
+
 def refresh(feed, today: date | None = None, now: datetime | None = None) -> dict:
     """Read every list; keep each one that answered (with its date) and the old copy of each one that didn't. The
     stocks that entered, left or moved stage are logged and returned. A list read for the first time logs nothing:
@@ -288,12 +320,16 @@ def refresh(feed, today: date | None = None, now: datetime | None = None) -> dic
     today = today or ist_now().date()
     now = now or ist_now()
     changes, problems = [], []
+    read = read_parts(feed)
     with _lock:
         st = db.json_value(db.get_setting(KEY), {})
         for part in PARTS:
             old = st.get(part) if isinstance(st.get(part), dict) else {}
             try:
-                day, rows = _read(feed, part)
+                got = read[part]
+                if isinstance(got, Exception):
+                    raise got
+                day, rows = got
             except (SourceError, ValueError, TypeError, AttributeError) as e:
                 problems.append(f"{part}: {str(e)[:160]}")
                 st[part] = {**old, "error": str(e)[:200], "tried": now.isoformat(timespec="minutes")}

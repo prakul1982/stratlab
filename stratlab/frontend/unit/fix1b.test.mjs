@@ -107,8 +107,7 @@ test("LIVE1B-009, 010, 011: one tax figure beside the total; the notes said once
   assert.match(t, /<CardHead title=\{`Total tax estimate, \$\{y\.label\}`\}/);
   assert.doesNotMatch(t, /rep\?\.disclaimer/);                                                      // the long note was the "Covers only..." paragraph twice
   assert.match(t, /for an individual of the age band and residency you choose\. House property, foreign income[^"]*advance tax and TDS already paid aren't included\./);
-  assert.match(t, /<Disclosure summary="How we got here">/);                                        // folded
-  assert.doesNotMatch(t, /<Disclosure summary="How we got here" open>/);
+  assert.match(t, /<Disclosure summary="How we got here" open>/);                                   // a fold, open to start with (R15 #6, owner 7 Nov)
   assert.doesNotMatch(t, /<Card label="Tax tools">/);                                              // 011
   assert.match(t, /are in <Link className="link" to=\{fyLink\("\/money\/tax-tools", y\.fy\)\}>Tax tools<\/Link>\./);
 });
@@ -150,7 +149,8 @@ test("LIVE1B-015: nothing held says so first; no empty tiles or table", () => {
 
 test("LIVE1B-016, 018, 049: the 'pick first' hint goes after a read, the choice goes back to Add, a wrong password is said under its box", () => {
   const p = read("src/pages/money/MutualFundsPage.tsx");
-  assert.match(p, /\{!picked && !result && <span className="k-note">Pick your statement first\./);
+  // R15 #6 (changed on purpose): the hint is the greyed-out button's title, now that the button sits in the one compact row
+  assert.match(p, /title=\{picked \? undefined : "Pick your statement first\./);
   assert.match(p, /setMode\("add"\);/);
   assert.match(p, /const passwordProblem = isPdf && problem && \/password\/i\.test\(problem\) \? problem : null;/);
   assert.match(p, /label="PDF password"[^\n]*error=\{passwordProblem\}/);

@@ -12,6 +12,7 @@ import { MoreMenu } from "../../components/MoreMenu";
 import { XYChart } from "../../components/Charts";
 import { Download, Plus, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
+import { scrollBehavior } from "../../lib/motion";
 import { Card, CardHead, ChartFrame, ConfirmDialog, DateField, DataTable, Delta, EmptyState, ErrorState, FactTable, Field, FormActions, FormGrid, Notice, Notes, PageHeader, PlanNote, Select, ShareTable, Skeleton, TilePicker, useRange, type Column, type TileGroup } from "../../components/kit";
 import { download as saveFile } from "../../lib/share";
 
@@ -399,6 +400,37 @@ export function NetWorthPage() {
   const marked = shown.flatMap((h, i) => (h.partial?.length ? [{ i, kind: "dot" as const, color: "var(--orange)" }] : []));
   const last = hist[hist.length - 1], move = t ? netWorthDelta(t.net, t.partial, hist, undefined, view?.valuation) : null;
 
+  // R15 #3 (owner, 7 Nov, picked from two designs): "Where you stand" is a headline (the figure large, its change beside it) on the left
+  // half and what you own, owe and are worth as a small table on the right, so the card is balanced edge to edge. History is the
+  // header's link: to the chart when there is one, else it opens the snapshots in this card (no "History: N snapshots" line at its foot)
+  const [snapsOpen, setSnapsOpen] = useState(false);
+  const toHistory = () => {
+    const chart = document.getElementById("nw-history");
+    if (chart) { chart.scrollIntoView({ behavior: scrollBehavior(), block: "start" }); return; }
+    setSnapsOpen((o) => !o);
+  };
+  const standHead = () => {
+    if (!t) return null;
+    const restated = move ? null : restatedNote(hist, view?.valuation, day);
+    return (
+      <div className="nw-head" data-testid="nw-headline">
+        <div className="nw-head-main">
+          <span className="nw-head-label">Net worth</span>
+          <span className="nw-head-line">
+            <span className="nw-head-figure" data-testid="nw-figure">{inr(t.net)}</span>
+            {move && <span className="nw-head-change"><Delta value={move.change}>{signedInrCompact(move.change)}</Delta> <span className="k-muted">{sinceNote(move, day, inrCompact)}</span></span>}
+          </span>
+          {restated && <span className="k-note">{restated}</span>}
+        </div>
+        <FactTable label="Where you stand" itemHead="Total" figureHead="Now" numeric rows={[
+          { id: "assets", k: "What you own", v: inr(t.assets) },
+          { id: "loans", k: "What you owe", v: inr(t.liabilities) },
+          { id: "net", k: <b>Net worth</b>, v: <b>{inr(t.net)}</b> },
+        ]} />
+      </div>
+    );
+  };
+
   // VR1-143: when every asset is as of the same day it is said once, in the card's head, not under each of ten values
   const oneDay = !!view && view.assets.length > 1 && new Set(view.assets.map((r) => r.as_of)).size === 1;
   const assetCols: Column<Row>[] = [
@@ -446,17 +478,21 @@ export function NetWorthPage() {
   ];
 
   // the history's snapshots, each removable: under the chart when there is one (DP2-006)
+  const snapsTable = (
+    <DataTable label="The history's snapshots" rows={[...hist].reverse()} rowKey={(h) => h.d} columns={[
+      { key: "d", header: "Date", rowHeader: true, cell: (h) => <b>{dateOnly(h.d)}</b> },
+      { key: "n", header: "Net worth", numeric: true, cell: (h) => inr(h.net) },
+      { key: "w", header: "How it was taken", wrap: true, cell: (h) => <span className="k-note">{[h.why === "change" ? "taken when an entry changed" : h.why === "month" ? "monthly" : "", h.added ? `${signedInrCompact(h.added)} from entries added or changed` : "", h.partial?.length ? `partial (not counted: ${h.partial.join("; ")})` : ""].filter(Boolean).join(" · ")}</span> },
+      { key: "x", header: "", action: true, cell: (h) => (
+        <button type="button" className="btn quiet sm" onClick={() => askRemoveSnapshot(h.d)} aria-label={`Remove the snapshot of ${dateOnly(h.d)}`} title="Remove this snapshot"><Trash size={14} /></button>) },
+    ]} />
+  );
+  // under the chart, once there is one (DP2-006); in the totals card before that, opened from its History button (R15 #3)
   const snapsList = (cls: string) => (
     <details className={cls} data-testid="nw-snapshots" open={empty || undefined}>
-      {/* VR1-142: a plain "History: 3 snapshots", not "The history's snapshots (3): remove one"; each row's date and figure, its notes smaller under it, an icon to remove */}
+      {/* VR1-142: a plain "History: 3 snapshots", not "The history's snapshots (3): remove one" */}
       <summary className="k-small">History: {hist.length} snapshot{hist.length === 1 ? "" : "s"}</summary>
-      <DataTable label="The history's snapshots" rows={[...hist].reverse()} rowKey={(h) => h.d} columns={[
-        { key: "d", header: "Date", rowHeader: true, cell: (h) => <b>{dateOnly(h.d)}</b> },
-        { key: "n", header: "Net worth", numeric: true, cell: (h) => inr(h.net) },
-        { key: "w", header: "How it was taken", wrap: true, cell: (h) => <span className="k-note">{[h.why === "change" ? "taken when an entry changed" : h.why === "month" ? "monthly" : "", h.added ? `${signedInrCompact(h.added)} from entries added or changed` : "", h.partial?.length ? `partial (not counted: ${h.partial.join("; ")})` : ""].filter(Boolean).join(" · ")}</span> },
-        { key: "x", header: "", action: true, cell: (h) => (
-          <button type="button" className="btn quiet sm" onClick={() => askRemoveSnapshot(h.d)} aria-label={`Remove the snapshot of ${dateOnly(h.d)}`} title="Remove this snapshot"><Trash size={14} /></button>) },
-      ]} />
+      {snapsTable}
     </details>
   );
   // "Prices as of" only over market prices: with none on the page the server dates it today, and "Prices as of 19 Oct" stood
@@ -483,13 +519,11 @@ export function NetWorthPage() {
       {view && t && (
         <>
           <Card label="Totals">
-            <CardHead title="Where you stand" info={t.oldest_as_of ? `The oldest value you entered is as of ${day(t.oldest_as_of)}.` : undefined} />
-            {/* with no loans the assets are the net worth: the same figure said again is left out (LIVE1C-056: ₹20,33,027 five times) */}
-            {/* TABLE-SWEEP: a named first column and right-aligned figures; the Change column only when there is a change or a restated note to show */}
-            <FactTable label="Where you stand" itemHead="Total" figureHead="Now" noteHead="Change" numeric across rows={[
-              { id: "net", k: "Net worth", v: <b>{inr(t.net)}</b>, n: move ? <><Delta value={move.change}>{signedInrCompact(move.change)}</Delta> {sinceNote(move, day, inrCompact)}</> : restatedNote(hist, view?.valuation, day) ?? undefined },
-              ...(t.liabilities > 0 ? [{ id: "assets", k: "Assets", v: inr(t.assets) }, { id: "loans", k: "Loans", v: inr(t.liabilities) }] : []),
-            ]} />
+            <CardHead title="Where you stand" info={t.oldest_as_of ? `The oldest value you entered is as of ${day(t.oldest_as_of)}.` : undefined}
+              actions={view.history_allowed && hist.length > 0 ? (
+                <button type="button" className="btn quiet sm" onClick={toHistory} aria-expanded={whole.length < 3 ? snapsOpen || !!empty : undefined}
+                  aria-controls={whole.length < 3 ? "nw-snaps-list" : undefined}>History · {hist.length} snapshot{hist.length === 1 ? "" : "s"}</button>) : undefined} />
+            {standHead()}
             {/* a source that couldn't be read or valued: named; snapshots of such a total are marked partial */}
             {/* DG-016: something with no price yet is a routine note; a source that couldn't be read is the warning */}
             {t.partial && t.partial.length > 0 && <Notice tone={t.partial_lasting ? "info" : "warn"} role="status" label="Partial total">Not in this total: {t.partial.join("; ")}. {t.partial_lasting ? "The history goes on meanwhile, with each snapshot marked partial." : "Only the monthly snapshot is kept meanwhile, marked partial."}</Notice>}
@@ -501,7 +535,7 @@ export function NetWorthPage() {
               ? <PlanNote>The net worth history is on the Basic plan{view.history_count ? ` (${view.history_count} snapshot${view.history_count === 1 ? "" : "s"} recorded so far)` : ""}.</PlanNote>
               : hist.length < 3 && !empty && <p className="k-note">A snapshot is taken on the 1st of each month and whenever you change an entry; the chart starts at the third{hist.length > 0 ? ` (${hist.length === 1 ? `the first is from ${day(hist[0].d)}` : `${hist.length} so far, the latest from ${day(hist[hist.length - 1].d)}`})` : ""}.</p>}
             {/* VR6-012: with no chart yet the snapshots list sits in this card under that line, not in a card of its own with one line in it (DP2-006's "empty-looking card" was still 97px of it) */}
-            {view.history_allowed && hist.length > 0 && whole.length < 3 && snapsList("nw-snaps")}
+            {view.history_allowed && hist.length > 0 && whole.length < 3 && (snapsOpen || empty) && <div id="nw-snaps-list" className="nw-snaps" data-testid="nw-snapshots">{snapsTable}</div>}
           </Card>
 
           {empty && (
@@ -531,7 +565,7 @@ export function NetWorthPage() {
           )}
 
           {view.history_allowed && whole.length >= 3 && (
-            <ChartFrame title="History" info="Net worth at each snapshot: the 1st of each month and the days you changed an entry." ranges={rng.options} range={rng.value} onRange={rng.pick} rangeFor={{ chart: "networth", times: days }}
+            <ChartFrame id="nw-history" title="History" info="Net worth at each snapshot: the 1st of each month and the days you changed an entry." ranges={rng.options} range={rng.value} onRange={rng.pick} rangeFor={{ chart: "networth", times: days }}
               footer={<><p className="k-note">Last snapshot {day(last.d)}.{marked.length > 0 && " Marked points are partial: something wasn't counted that day (named in the snapshots below)."}</p>{snapsList("nw-snaps")}</>}
               table={{ label: "Net worth at each snapshot", rows: [...shown].reverse(), rowKey: (h) => h.d,
                 columns: [{ key: "d", header: "Day", rowHeader: true, cell: (h) => dateOnly(h.d) }, { key: "net", header: "Net worth", numeric: true, cell: (h) => <>{inr(h.net)}{h.partial?.length ? <span className="k-sub-line">partial</span> : null}</> },

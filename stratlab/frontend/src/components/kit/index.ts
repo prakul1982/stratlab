@@ -26,6 +26,7 @@ export { Disclosure } from "./Disclosure";
 export { FoldCard } from "./FoldCard";
 export { FoldTable } from "./FoldTable";
 export { Pager } from "./Pager";
+export { ShowLess } from "./ShowLess";
 export { UploadButton, UploadProblem, useUploadProblem } from "./UploadButton";
 export { ChipSet, CheckField } from "./Choices";
 export { EmptyState, ErrorState, Skeleton, Working, type StateAction } from "./States";

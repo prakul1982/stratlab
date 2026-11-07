@@ -51,6 +51,25 @@ def test_currency_pairs_are_front_month_lots_in_rupees(monkeypatch):
     assert p2.instrument("USDINR")["token"] == 12
 
 
+def test_a_weekly_contract_is_passed_over_for_the_month_contract(monkeypatch):
+    """R15: "USDINR: last daily candle 5 Nov, but 6 Nov was a trading day": the pair resolved to the weekly USDINR26N13FUT (13 Nov), which
+    hardly trades (a month of one standing price with no volume, no 6 Nov candle). The month's contract is the one traded and charted."""
+    import app.data.mcx as mcx
+    monkeypatch.setattr(mcx, "ist_date", lambda: date(2026, 11, 7))
+
+    class Weekly(FakeKite):
+        def instruments_of(self, exch):
+            return [{"instrument_token": t, "tradingsymbol": s, "name": "USDINR", "instrument_type": "FUT", "expiry": date.fromisoformat(e)}
+                    for t, s, e in [(21, "USDINR26N13FUT", "2026-11-13"), (22, "USDINR26N20FUT", "2026-11-20"), (23, "USDINR26NOVFUT", "2026-11-26"),
+                                    (24, "USDINR26DECFUT", "2026-12-29")]]
+    u = CDSProvider(Weekly()).instrument("USDINR")
+    assert u["token"] == 23 and u["contract"] == "USDINR26NOVFUT" and u["expiry"] == "2026-11-26"
+    assert mcx.monthly("USDINR", "USDINR26NOVFUT") and not mcx.monthly("USDINR", "USDINR26N13FUT")
+    assert mcx.monthly("GOLDM", "GOLDM26DECFUT") and not mcx.monthly("GOLD", "GOLDM26DECFUT")
+    # only weeklies listed (no month contract): the nearest of them, as before
+    assert mcx.front([{"symbol": "X26N13FUT", "expiry": date(2026, 11, 13), "monthly": False}], date(2026, 11, 7))["symbol"] == "X26N13FUT"
+
+
 def test_currency_costs_have_no_stt():
     c = order_costs(kind_of({"market": "CDS", "type": "FUT"}), "sell", 1000, 88, 20)
     assert kind_of({"market": "CDS"}) == "in_cds_fut" and c["stt"] == 0 and c["stamp"] == 0

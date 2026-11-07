@@ -5,7 +5,14 @@ import type { History, Today } from "./breadth";
  * average of the last 20 days where the stored history has it. Pure, so the unit tests read it. */
 
 export type Unit = "count" | "pct" | "num" | "ratio" | "level";
-export type Part = { now: number | null; before: number | null; change: number | null; avg: number | null; unit: Unit; tone?: "up" | "down" };
+/** `tone`: a pair's colour (rose green, fell red), or "share" for a share of stocks above an average: green above half, red below (R15 #12) */
+export type Part = { now: number | null; before: number | null; change: number | null; avg: number | null; unit: Unit; tone?: "up" | "down" | "share" };
+
+/** The kit's signed colour of a share of stocks above an average: above 50% green, below it red, at 50% or unknown plain (owner, 7 Nov: "no colors"). */
+export const shareTone = (v: number | null | undefined): "k-up" | "k-down" | undefined => (v == null || !Number.isFinite(v) || v === 50 ? undefined : v > 50 ? "k-up" : "k-down");
+
+/** The class a breadth figure is drawn in: a pair's part by its side, a share by which side of half it is. */
+export const partTone = (p: Pick<Part, "tone">, v: number | null | undefined) => (p.tone === "up" ? "k-up" : p.tone === "down" ? "k-down" : p.tone === "share" ? shareTone(v) : undefined);
 export type MeasureRow = { key: string; label: string; means: string; info: "ad" | "ma" | "highs_lows" | "moves" | "stage2" | "mcclellan" | "summation" | "trin" | null; parts: Part[] };
 
 /** The mean of the last 20 days of a series (today's included), skipping days with no value; null with under 5 of them. */
@@ -24,9 +31,9 @@ export function measureRows(t: Today, h: History | null): MeasureRow[] {
   return [
     { key: "ad", label: "Rose / fell", means: "Stocks that closed above / below the previous close.", info: "ad", parts: [fig(t, "adv", h, "adv", "count", { tone: "up" }), fig(t, "dec", h, "dec", "count", { tone: "down" })] },
     { key: "ratio", label: "Rose for each fell", means: "Risers divided by fallers.", info: "ad", parts: [fig(t, "ad_ratio", h, "ad_ratio", "ratio")] },
-    { key: "p20", label: "Above 20-day average", means: "Share of stocks priced above their 20-day average.", info: "ma", parts: [fig(t, "pct20", h, "pct20", "pct")] },
-    { key: "p50", label: "Above 50-day average", means: "Share of stocks priced above their 50-day average.", info: "ma", parts: [fig(t, "pct50", h, "pct50", "pct")] },
-    { key: "p200", label: "Above 200-day average", means: "Share of stocks priced above their 200-day average.", info: "ma", parts: [fig(t, "pct200", h, "pct200", "pct")] },
+    { key: "p20", label: "Above 20-day average", means: "Share of stocks priced above their 20-day average.", info: "ma", parts: [fig(t, "pct20", h, "pct20", "pct", { tone: "share" })] },
+    { key: "p50", label: "Above 50-day average", means: "Share of stocks priced above their 50-day average.", info: "ma", parts: [fig(t, "pct50", h, "pct50", "pct", { tone: "share" })] },
+    { key: "p200", label: "Above 200-day average", means: "Share of stocks priced above their 200-day average.", info: "ma", parts: [fig(t, "pct200", h, "pct200", "pct", { tone: "share" })] },
     { key: "hl", label: "52-week highs / lows", means: "Stocks at their highest / lowest price of the past year.", info: "highs_lows", parts: [fig(t, "highs", h, "highs", "count", { tone: "up" }), fig(t, "lows", h, "lows", "count", { tone: "down" })] },
     { key: "mv", label: MOVES_LABEL, means: "Stocks that moved 4% or more in a day, up / down.", info: "moves", parts: [fig(t, "up4", h, "up4", "count", { tone: "up" }), fig(t, "down4", h, "down4", "count", { tone: "down" })] },
     { key: "s2", label: "In Stage 2", means: "Share of stocks in a Stage 2 uptrend.", info: "stage2", parts: [fig(t, "stage2", h, "stage2", "pct")] },
@@ -59,9 +66,9 @@ export function liveRows(l: { adv: number; dec: number; pct20: number | null; pc
   const part = (now: number | null, before: number | null, unit: Unit, extra: Partial<Part> = {}): Part => ({ now, before, change: now != null && before != null ? now - before : null, avg: null, unit, ...extra });
   return [
     { key: "ad", label: "Rose / fell", means: "Stocks above / below the previous close so far today.", info: "ad", parts: [part(l.adv, t.adv.value, "count", { tone: "up" }), part(l.dec, t.dec.value, "count", { tone: "down" })] },
-    { key: "p20", label: "Above 20-day average", means: "Share of stocks priced above their 20-day average.", info: "ma", parts: [part(l.pct20, t.pct20.value, "pct")] },
-    { key: "p50", label: "Above 50-day average", means: "Share of stocks priced above their 50-day average.", info: "ma", parts: [part(l.pct50, t.pct50.value, "pct")] },
-    { key: "p200", label: "Above 200-day average", means: "Share of stocks priced above their 200-day average.", info: "ma", parts: [part(l.pct200, t.pct200.value, "pct")] },
+    { key: "p20", label: "Above 20-day average", means: "Share of stocks priced above their 20-day average.", info: "ma", parts: [part(l.pct20, t.pct20.value, "pct", { tone: "share" })] },
+    { key: "p50", label: "Above 50-day average", means: "Share of stocks priced above their 50-day average.", info: "ma", parts: [part(l.pct50, t.pct50.value, "pct", { tone: "share" })] },
+    { key: "p200", label: "Above 200-day average", means: "Share of stocks priced above their 200-day average.", info: "ma", parts: [part(l.pct200, t.pct200.value, "pct", { tone: "share" })] },
     ...(l.idx != null ? [{ key: "idx", label: indexName, means: "The group's index, latest level.", info: null, parts: [part(l.idx, lastLevel, "level")] } as MeasureRow] : []),
   ];
 }

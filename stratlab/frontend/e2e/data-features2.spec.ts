@@ -172,9 +172,12 @@ test("strategy library: StratLab's own strategies, each with the verdict it earn
   await expect(first.getByRole("button", { name: "Take down" })).toHaveCount(0);       // not anyone's to take down
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/library-stratlab-${info.project.name}.png`, fullPage: true });
   await sane(page, errors);
-  // everyone's: still listed
+  // R15 (owner: "in everyone don't show stratlab ones"): Everyone's is what people published, none of StratLab's own; All has both
   await page.getByRole("radio", { name: "Everyone's" }).click();
+  await expect(page.getByText("By StratLab", { exact: true })).toHaveCount(0, { timeout: 20_000 });
+  await page.getByRole("radio", { name: "All" }).click();
   await expect(cards.first()).toBeVisible();
+  await expect(page.getByText("By StratLab", { exact: true }).first()).toBeVisible();
 });
 
 test("strategy library: one table, the same facts once, sortable columns, and a market filter with samples for every market (MO-5)", async ({ page }, info) => {

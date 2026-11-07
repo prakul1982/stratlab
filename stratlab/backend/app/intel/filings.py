@@ -812,6 +812,20 @@ DEAL_FEEDS = {
 }
 
 
+INSIDER_STALE_FOR = timedelta(days=3)    # how old a kept insider-trading list may be to stand in when the exchange doesn't answer
+
+
+class StaleRows(list):
+    """A list served from the last good read because the source didn't answer: the rows, and `stale_at`, when they were read."""
+
+    def __init__(self, rows, stale_at: str):
+        super().__init__(rows)
+        self.stale_at = stale_at
+
+
+EMPTY_TTL = 300                     # seconds an empty list of a company's filings is kept before NSE is asked again
+
+
 class NSEFilings:
     """NSE's public corporate-announcements feed. The site hands out session cookies on its home page and refuses
     API calls without them, so we visit the home page first and again whenever the cookies expire."""
@@ -926,7 +940,8 @@ class NSEFilings:
             data = self._get("/api/corporate-announcements", params)
             rows = data.get("data") if isinstance(data, dict) else data
             items = normalise(rows or [])
-        self.cache.set(key, items, 1800)
+        # an empty answer is kept EMPTY_TTL only: it may still be the bot guard's (R15, 6 Nov: TCS showed no filings for half an hour)
+        self.cache.set(key, items, 1800 if items else EMPTY_TTL)
         return items
 
     def market_flags(self, day) -> list[dict]:
@@ -1147,8 +1162,53 @@ class NSEFilings:
 
     def insider_trades(self, symbol: str | None = None, days: int = DEALS_DAYS, to: datetime | None = None) -> list[dict]:
         """Trades by promoters, directors and key staff in the company's own shares (insider-trading disclosures),
-        pledges made and released among them."""
-        return self._insider(symbol, days, to)
+        pledges made and released among them. When the exchange doesn't answer, the last list read (up to INSIDER_STALE_FOR
+        old) is served instead, as `StaleRows` carrying the time it was read (R15: "Insider trades: Couldn't reach the exchange
+        (ReadTimeout)" in Needs your attention; BSE publishes no list of the same trades with the same fields to fall back on)."""
+        try:
+            out = self._insider(symbol, days, to)
+        except SourceError as e:
+            if not e.busy or to is not None:
+                raise
+            kept = self._insider_kept(symbol, days)
+            if kept is None:
+                raise
+            return kept
+        if to is None:
+            self._keep_insider(symbol, days, out)
+        return out
+
+    INSIDER_KEY = "insider:last:market"
+
+    def _keep_insider(self, symbol: str | None, days: int, rows: list[dict]) -> None:
+        """The list as last read, by company and window: in memory, and the whole market's in storage too (it survives a restart)."""
+        at = ist_now().isoformat(timespec="minutes")
+        kept = self.__dict__.setdefault("_insider_last", {})
+        kept[(symbol, days)] = (at, list(rows))
+        if len(kept) > 300:
+            kept.pop(next(iter(kept)))
+        if symbol is None and rows:
+            try:
+                db.set_setting(f"{self.INSIDER_KEY}:{days}", json.dumps({"at": at, "rows": rows}, default=str))
+            except Exception as e:
+                print("insider trades: last list not stored:", str(e)[:100])
+
+    def _insider_kept(self, symbol: str | None, days: int):
+        """The last list read for the same company and window, as StaleRows, or None when there is none recent enough."""
+        hit = self.__dict__.get("_insider_last", {}).get((symbol, days))
+        if hit is None and symbol is None:
+            try:
+                st = db.json_value(db.get_setting(f"{self.INSIDER_KEY}:{days}"), {}) or {}
+                hit = (st["at"], st["rows"]) if st.get("at") and isinstance(st.get("rows"), list) else None
+            except Exception:
+                hit = None
+        if not hit:
+            return None
+        try:
+            age = ist_now() - datetime.fromisoformat(hit[0])
+        except (TypeError, ValueError):
+            return None
+        return StaleRows(hit[1], hit[0]) if age <= INSIDER_STALE_FOR else None
 
     def _insider(self, symbol: str | None, days: int, to: datetime | None) -> list[dict]:
         """The insider-trading list for one company (`symbol`) or the whole market (None) over the `days` up to `to`,

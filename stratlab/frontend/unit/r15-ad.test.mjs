@@ -12,7 +12,8 @@ register("data:text/javascript," + encodeURIComponent(`export async function res
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
 test("R15 ad landing: /start, and / with Meta's click id or a social utm_source, is the ad view; anything else is as before", async () => {
-  const { visitorView, isAdVisit } = await import("../src/lib/deepLinks.ts");
+  const { visitorView } = await import("../src/lib/deepLinks.ts");
+  const { isAdVisit } = await import("../src/lib/entry.ts");
   assert.deepEqual(visitorView("/start"), { kind: "ad" });
   assert.deepEqual(visitorView("/start/", "?utm_source=x"), { kind: "ad" });
   for (const q of ["?fbclid=abc", "?utm_source=facebook&utm_medium=paid", "?utm_source=IG", "?utm_source=instagram", "?utm_source=meta", "?utm_source=fb"]) {

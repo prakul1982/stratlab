@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { dateOnly, inr, qty as qtyText, signTone } from "../lib/format";
-import { Card, CardHead, DataTable, type Column } from "./kit";
+import { Card, CardHead, DataTable, ShowLess, type Column } from "./kit";
 
 /** Gold, silver, international and debt ETFs and gold bonds in one year: each sale under the head the law puts it,
  * from the server's instrument_kinds.other_year. Equity ETFs, REITs and InvITs are taxed like shares and sit with them. */
@@ -46,6 +46,7 @@ export function UnitsCard({ units, notes, name, label }: { units: Units | null |
       </p>
       <DataTable label="ETF and gold bond sales" columns={cols} rows={rows} rowKey={(r) => String(r.i)} />
       {units.rows.length > 20 && !all && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setAll(true)}>Show all {units.rows.length}</button>}
+      {units.rows.length > 20 && all && <ShowLess className="btn quiet sm k-btn-end" onLess={() => setAll(false)} />}
       {notes.length > 0 && <ul className="k-list muted">{notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
     </Card>
   );

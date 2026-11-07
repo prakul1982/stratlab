@@ -117,12 +117,14 @@ test("the tools fold into one row that opens to every group at once, and the men
   const errors = await open(page, "/new", "What trading idea do you want to test?");
   await page.getByRole("button", { name: /I've done a bit/ }).click({ timeout: 4000 }).catch(() => undefined);   // the experience question
   // owner, 5 Nov (R11): "make it like a dropdown everywhere": the tools are one closed row; opened, every group shows at once, with no
-  // second "Show N more tools" fold inside
-  const more = page.getByTestId("more-tools").getByRole("button", { expanded: false }).first();
-  await more.click();
+  // second "Show N more tools" fold inside. R15 #1 (owner, 7 Nov: "keep just More open by default"): it starts open and still folds
+  const more = page.getByTestId("more-tools").getByRole("button", { expanded: true }).first();
+  await expect(more).toBeVisible();
   await expect(page.getByRole("button", { name: /Show \d+ more tools/ })).toHaveCount(0);
   await expect(page.getByTestId("more-tools").getByRole("link", { name: /^Options builder/ }).first()).toBeVisible();          // IA-1: under Practise, by its menu name
   if (info.project.name === "desktop") await expect(page.getByRole("button", { name: /account menu$/ })).toBeInViewport();
+  await more.click();
+  await expect(page.getByTestId("more-tools").getByRole("link", { name: /^Options builder/ }).first()).toBeHidden();
   await sane(page, errors);
 });
 

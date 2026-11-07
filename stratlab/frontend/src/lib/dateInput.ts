@@ -53,3 +53,40 @@ export function showDay(iso: string | null | undefined): string {
   if (!m) return "";
   return `${+m[3]} ${MONTHS[+m[2] - 1].replace(/^./, (c) => c.toUpperCase())} ${m[1]}`;
 }
+
+/* The kit's calendar (DatePicker in kit/DateInput.tsx), as calendar-day arithmetic: no time zone ever moves a day. */
+const utc = (iso: string) => { const [y, m, d] = iso.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d)); };
+const isoOf = (t: Date) => `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())}`;
+
+/** A day moved by `n` days ("2026-02-28", 1 → "2026-03-01"). */
+export function addDays(iso: string, n: number): string { const t = utc(iso); t.setUTCDate(t.getUTCDate() + n); return isoOf(t); }
+
+/** The same day `n` months on, kept inside the month it lands in (31 Jan + 1 month → 28 Feb). */
+export function addMonths(iso: string, n: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const first = new Date(Date.UTC(y, m - 1 + n, 1));
+  const last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+  return `${first.getUTCFullYear()}-${pad(first.getUTCMonth() + 1)}-${pad(Math.min(d, last))}`;
+}
+
+/** The month a calendar shows for a day: six weeks of days, Monday first, starting on or before the 1st (the days of the months either
+ * side fill the first and last weeks). */
+export function monthGrid(iso: string): string[] {
+  const first = `${iso.slice(0, 7)}-01`;
+  const back = (utc(first).getUTCDay() + 6) % 7;      // Monday 0 … Sunday 6
+  const start = addDays(first, -back);
+  return Array.from({ length: 42 }, (_, i) => addDays(start, i));
+}
+
+/** "2026-11" → "November 2026", a calendar's title. */
+export function monthTitle(iso: string): string {
+  const [y, m] = iso.split("-").map(Number);
+  return `${MONTH_NAMES[m - 1].replace(/^./, (c) => c.toUpperCase())} ${y}`;
+}
+
+/** A day said in full for a screen reader: "Friday 6 November 2026". */
+export function dayName(iso: string): string {
+  const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const [y, m, d] = iso.split("-").map(Number);
+  return `${days[utc(iso).getUTCDay()]} ${d} ${MONTH_NAMES[m - 1].replace(/^./, (c) => c.toUpperCase())} ${y}`;
+}

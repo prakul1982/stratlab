@@ -264,6 +264,11 @@ def test_report_lists_every_kind_and_names_the_ones_that_are_down(w):
     w["faults"]["exchange"].mode = "down"
     main.filings_feed.nse.cache.clear()
     main.filings_feed.nse._circuits.clear()
+    # R15: the insider list read a moment ago stands while the exchange is down (with the time it was read); the other kinds are named
+    rep = deals.report(main.filings_feed, "RELIANCE")
+    assert {d["kind"] for d in rep["items"]} == {"insider"} and rep["problems"] == ["Substantial acquisition", "Bulk deal", "Block deal"]
+    main.filings_feed.nse.__dict__.pop("_insider_last", None)          # nothing kept: an error, not an empty list
+    main.filings_feed.nse._circuits.clear()
     with pytest.raises(SourceError):
         deals.report(main.filings_feed, "RELIANCE")
 
@@ -348,6 +353,7 @@ def test_deals_endpoint(w):
     assert c.get("/research/deals/RELIANCE", headers=headers("free-token")).json()["count"] == 7
     from app import swr
     swr.clear()
+    main.filings_feed.nse.__dict__.pop("_insider_last", None)          # the insider list kept by the feed (R15) gone too
     # ...and with nothing kept, it's an error, not an empty list
     assert c.get("/research/deals/RELIANCE", headers=headers("free-token")).status_code in (502, 503)
 

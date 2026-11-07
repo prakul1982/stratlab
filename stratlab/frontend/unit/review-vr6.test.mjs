@@ -35,7 +35,8 @@ test("VR6-011: the Invest home stacks its three cards when nothing is watched, i
 test("VR6-012: with fewer than three snapshots the list sits inside the totals card, not in a card of its own with one line", () => {
   const src = read("src/pages/money/NetWorthPage.tsx");
   assert.doesNotMatch(src, /snapsList\("k-card nw-snaps"\)/);
-  assert.match(src, /whole\.length < 3 && snapsList\("nw-snaps"\)\}\n\s*<\/Card>/);
+  // R15 #3 (changed on purpose): there, opened from the card's History button, with no "History: N snapshots" line at the card's foot
+  assert.match(src, /whole\.length < 3 && \(snapsOpen \|\| empty\) && <div id="nw-snaps-list" className="nw-snaps" data-testid="nw-snapshots">\{snapsTable\}<\/div>\}\n\s*<\/Card>/);
   // VR6-015: "My Holdings: Indian stocks · Indian stocks": a kind is not said again when the name ends with it
   assert.match(src, /!r\.name\.endsWith\(r\.label\) && <span className="k-note"> · \{r\.label\}<\/span>/);
 });

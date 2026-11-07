@@ -286,6 +286,44 @@ def test_platform_check_reads_every_list(w):
     assert "Surveillance lists" in [c[0] for c in main.platform_checks()]
 
 
+def test_one_slow_list_holds_up_neither_the_check_nor_the_job(w, monkeypatch):
+    """R15: "Surveillance lists: Took longer than 45 seconds: no answer yet, timed out" while one exchange file hung. The lists are read
+    side by side, each with its own short time: the ones that answered stand, and a slow one is "stale, from <its kept copy>", not a failure."""
+    import threading
+    import time
+    S.refresh(Feed(), TODAY - timedelta(days=1), now=datetime(2026, 10, 13, 19, 45))
+    gate = threading.Event()
+
+    class Hanging(Feed):
+        def security_bands(self):
+            gate.wait(10)
+            return super().security_bands()
+    try:
+        t = time.monotonic()
+        r = platform_check.check_surveillance(Hanging(), timeout=0.5)
+        assert time.monotonic() - t < 3
+        assert r["state"] == "pass" and "ASM 1, GSM 1, ESM 0, F&O ban 1." in r["detail"], r
+        assert "price bands: slow to answer, stale, from 13 Oct 19:45" in r["detail"] and "Failed" not in r["detail"]
+        # the job: the lists that answered are kept, the slow one keeps its old copy and is named
+        monkeypatch.setattr(S, "PART_TIMEOUT", 0.5)
+        t = time.monotonic()
+        out = S.refresh(Hanging(), TODAY)
+        assert time.monotonic() - t < 3 and [p.split(":")[0] for p in out["problems"]] == ["bands"]
+        info = {i["id"]: i for i in S.view(TODAY)["lists"]}
+        assert info["asm"]["as_of"] == TODAY.isoformat() and info["bands"]["as_of"] == (TODAY - timedelta(days=1)).isoformat()
+    finally:
+        gate.set()
+    # slow with no kept copy at all: named as a failure of that list, the rest still read
+    S._cache.clear()
+    monkeypatch.setattr(S, "load", lambda: {})
+    gate.clear()
+    try:
+        r = platform_check.check_surveillance(Hanging(), timeout=0.5)
+        assert r["state"] == "warn" and "price bands: No answer within" in r["detail"]
+    finally:
+        gate.set()
+
+
 # ---------- screens ----------
 def test_screen_filter_on_surveillance_lists(w):
     from tests.test_screens import store_pages

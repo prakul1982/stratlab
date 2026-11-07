@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { deckFileName } from "../lib/deckName";
 import { REGION_NAME } from "../lib/research";
 import { Link } from "react-router-dom";
-import { Badge, Card, CardHead, CsvButton, DataTable, Select, Spark, Signed, Meter, usePhone, Working, type Column } from "./kit";
+import { Badge, Card, CardHead, CsvButton, DataTable, ShowLess, Select, Spark, Signed, Meter, usePhone, Working, type Column } from "./kit";
 import { Download } from "./Icons";
 import { useApp } from "../lib/app";
 import { download } from "../lib/share";
@@ -100,7 +100,7 @@ function MemberGroup({ name, official, rows, cols }: { name: string; official: b
     <section className="k-stack">
       <h3 className="k-sub">{name}{official && <span className="k-muted"> · official industry</span>}</h3>
       <DataTable label={`${name}: companies in the theme`} columns={cols} rows={shown} rowKey={(c) => c.ticker} />
-      {rows.length > MEMBERS_SHOWN && <button type="button" className="btn quiet sm" onClick={() => setAll(!all)}>{all ? `Show the first ${MEMBERS_SHOWN}` : `Show all ${rows.length} companies`}</button>}
+      {rows.length > MEMBERS_SHOWN && (all ? <ShowLess onLess={() => setAll(false)} /> : <button type="button" className="btn quiet sm" onClick={() => setAll(true)}>{`Show all ${rows.length} companies`}</button>)}
     </section>
   );
 }
@@ -496,7 +496,8 @@ function PriceCards({ dive, prices, busy }: { dive: Dive; prices: Prices | null;
         { key: "b", header: "Theme, equal-weighted", numeric: true, cell: (x) => x.b }, { key: "c", header: prices?.benchmark || "Index", numeric: true, cell: (x) => x.c },
         { key: "d", header: "Companies", numeric: true, cell: (x) => x.d },
       ]} rows={retRows} rowKey={(x) => x.key} empty={busy ? "Reading prices…" : "No prices yet."} />
-      {(busy && !prices) || (prices && prices.pending > 0) ? <Working small label="Reading the companies' latest prices…" /> : null}
+      {busy ? <Working small label="Reading the companies' latest prices…" />
+        : prices && prices.pending > 0 ? <p className="k-note">{prices.pending.toLocaleString("en-IN")} {prices.pending === 1 ? "company's price isn't" : "companies' prices aren't"} read yet.</p> : null}
       {prices?.line && (
         <>
           <h3 className="k-sub">The theme against {prices.benchmark}, weekly, rebased to 100</h3>

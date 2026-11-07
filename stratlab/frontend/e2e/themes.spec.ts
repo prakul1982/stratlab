@@ -111,9 +111,21 @@ test("a theme whose AI read is slow shows its official companies within seconds,
   await expect(working).toBeVisible();
   await expect(working.locator(".k-working-bar")).toBeVisible();
   await expect(page.getByText("The theme couldn't be mapped")).toHaveCount(0);
+  // R15 (owner, 7 Nov: "it was vanishing all the data for a sec and then bringing it all back"): once the base's figures are shown, they
+  // stay on the page while the map arrives and the figures are read again; watched every 50 ms in the page
+  await expect(page.getByRole("heading", { name: "The whole chain in one table" })).toBeVisible({ timeout: 30_000 });
+  await page.evaluate(() => {
+    const w = window as unknown as { __blanked: number };
+    w.__blanked = 0;
+    setInterval(() => { if (!document.getElementById("theme-chain")) w.__blanked++; }, 50);
+  });
   // the AI's map arrives behind the page, with no reload and no error on the way
   await expect(page.getByText("Steel makers depend on ore and coal from miners")).toBeVisible({ timeout: 90_000 });
   await expect(page.getByText("The theme couldn't be mapped")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "The whole chain in one table" })).toBeVisible({ timeout: 60_000 });
+  await page.waitForTimeout(3000);                                             // the figures' second read is in
+  expect(await page.evaluate(() => (window as unknown as { __blanked: number }).__blanked), "the figures vanished while read again").toBe(0);
+  // and when the reads are done, no loading bar is left on the page (R15: "after finishing it's still loading")
+  await expect(page.locator(".k-working-bar")).toHaveCount(0, { timeout: 60_000 });
   expect(errors).toEqual([]);
 });

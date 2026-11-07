@@ -226,7 +226,8 @@ test("Upstox and Dhan are open to the owner: log in to each, holdings read, refr
 
   // My Holdings reads each again from there
   await page.goto("/holdings");
-  await expect(main.getByTestId("dhan-refresh")).toContainText("Dhan is connected", { timeout: 30_000 });
+  // R15 #4 (changed on purpose): each connected broker is a small chip, "● Dhan · 10 h ago ↻", whose tap reads it now
+  await expect(main.getByTestId("dhan-refresh")).toContainText("Dhan", { timeout: 30_000 });
   await main.getByTestId("upstox-refresh").getByRole("button", { name: "Read from Upstox now" }).click();
   await expect(page.getByText("Read 1 holding from Upstox.")).toBeVisible({ timeout: 30_000 });
   await sane(page, errors, phone);

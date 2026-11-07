@@ -72,6 +72,45 @@ def test_insider_trades_are_judged_across_the_whole_market():
     assert none["state"] == "warn" and "stopped updating" in none["detail"] and "may have changed shape" not in none["detail"]
 
 
+def test_insider_trades_serve_the_last_list_read_when_the_exchange_does_not_answer(monkeypatch):
+    """R15 ("Insider trades: Couldn't reach the exchange (ReadTimeout)" in Needs your attention): the last list read stands, with when it
+    was read, and the check passes saying so; with no recent list the exchange's error stands."""
+    from app import db
+    from app.intel import filings as F
+    from app.intel.net import SourceError
+    store = {}
+    monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    feed = F.NSEFilings()
+    today = date.today()
+    rows = [{"symbol": "TCS", "date": (today - timedelta(days=1)).isoformat()}]
+    answers = [rows]
+
+    def insider(symbol, days, to):
+        got = answers.pop(0)
+        if isinstance(got, Exception):
+            raise got
+        return got
+    monkeypatch.setattr(feed, "_insider", insider)
+    first = feed.insider_trades(None, 14)
+    assert first == rows and not hasattr(first, "stale_at")
+    answers.append(SourceError("the exchange", "Couldn't reach the exchange (ReadTimeout).", busy=True))
+    got = feed.insider_trades(None, 14)
+    assert got == rows and got.stale_at
+    r = platform_check.check_insider_trades(type("Feed", (), {"insider_trades": lambda self, s=None, d=14, to=None: got})())
+    assert r["state"] == "pass" and "the exchange didn't answer just now: the list as read at" in r["detail"]
+    # after a restart: the whole market's list from storage
+    fresh = F.NSEFilings()
+    monkeypatch.setattr(fresh, "_insider", lambda s, d, to: (_ for _ in ()).throw(SourceError("the exchange", "busy", busy=True)))
+    assert fresh.insider_trades(None, 14) == rows
+    # a company never read, or a shape error (ours to fix): the error stands
+    with pytest.raises(SourceError):
+        fresh.insider_trades("INFY", 14)
+    monkeypatch.setattr(fresh, "_insider", lambda s, d, to: (_ for _ in ()).throw(SourceError("the exchange", "shape")))
+    with pytest.raises(SourceError):
+        fresh.insider_trades(None, 14)
+
+
 # ---------- the whole-market audit: every mismatch is checked again after a day, not only prices ----------
 def test_a_mismatch_of_any_area_a_day_old_is_checked_again(w):
     a = audit.MarketAudit(lambda: {}, lambda s: {"symbol": s, "issues": []})

@@ -9,7 +9,7 @@ import { track } from "../lib/analytics";
 import { UnitsCard, type Units } from "../components/TaxUnits";
 import { UsTaxCard, type UsYear } from "../components/UsTaxCard";
 import { useMoreColumns } from "../components/MoreColumns";
-import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, FactTable, Field, FieldGroup, FigureTable, FormActions, FormGrid, Meter, Notice, PageHeader, PageNav, PlanNote, Seg, Select, Skeleton, UploadButton, type Column, UploadProblem, useUploadProblem } from "../components/kit";
+import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, ShowLess, EmptyState, ErrorState, FactTable, Field, FieldGroup, FigureTable, FormActions, FormGrid, Meter, Notice, PageHeader, PageNav, PlanNote, Seg, Select, Skeleton, UploadButton, type Column, UploadProblem, useUploadProblem } from "../components/kit";
 import { fyLink, movedYearNote, openFy, yearHasTrades } from "../lib/fy";
 import { useAskedFy } from "../lib/useFy";
 import { gainLabel, usSharesNote } from "../lib/usGains";
@@ -405,6 +405,7 @@ export function TaxReportPage() {
               <CardHead title="Each sale, matched to its purchase" actions={<><span className="k-note">{y.count} line{y.count === 1 ? "" : "s"}</span>{salesMore.toggle}</>} />
               <DataTable label="Realised sales" columns={saleCols} rows={(allSales ? y.rows : y.rows.slice(0, FIRST_SALES)).map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} stack />
               {y.rows.length > FIRST_SALES && !allSales && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setAllSales(true)}>Show all {y.rows.length}</button>}
+              {y.rows.length > FIRST_SALES && allSales && <ShowLess className="btn quiet sm k-btn-end" onLess={() => setAllSales(false)} />}
               {y.count > y.rows.length && <p className="k-note">The CSV download has all {y.count} lines.</p>}
               <p className="k-note">Cost includes brokerage and charges from your files; sale is after them. STT isn't deductible, so it isn't included. Each figure is rounded to the rupee and the gain is worked out from the exact amounts, so a line or a total can differ by ₹1 from subtracting the rounded figures.</p>
             </Card>
@@ -545,9 +546,10 @@ function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omi
       <InputsPanel key={y.fy} y={y} onSave={onSave} />
       {/* LIVE1B-011: the dividends, advance tax and the exemption are a line here, not a card holding one sentence and a button */}
       <p className="k-small k-muted">Dividends with their TDS, the advance tax due by each date and the long-term exemption used are in <Link className="link" to={fyLink("/money/tax-tools", y.fy)}>Tax tools</Link>.</p>
-      {/* LIVE1B-010: folded: the steps and the table below them said the same figures twice, open, under the inputs */}
+      {/* LIVE1B-010: a fold: the steps and the table below them said the same figures twice, open, under the inputs. Open to start
+          with (owner, 7 Nov: "keep this open by default"); the words stay folded inside */}
       {t.available && (
-        <Disclosure summary="How we got here">
+        <Disclosure summary="How we got here" open>
           {(t.notes ?? []).length > 0 && <ul className="k-list muted" aria-label="Notes on the estimate">{t.notes!.map((n) => <li key={n}>{n}</li>)}</ul>}
           <DataTable label="Total tax breakdown" columns={lineCols} rows={t.lines.map((l, i) => ({ ...l, i }))} rowKey={(l) => String(l.i)} />
           {/* the steps in words say what the table's lines say in figures: one fold under it, not the same working twice in full (LIVE1C-056) */}
@@ -668,6 +670,7 @@ function BusinessCard({ y }: { y: Year }) {
         <>
           <DataTable stack label="F&O by underlying" columns={underCols} rows={all ? top : top.slice(0, FIRST_UNDERLYINGS)} rowKey={(u) => String(u.i)} />
           {top.length > FIRST_UNDERLYINGS && !all && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setAll(true)}>Show all {top.length}</button>}
+          {top.length > FIRST_UNDERLYINGS && all && <ShowLess className="btn quiet sm k-btn-end" onLess={() => setAll(false)} />}
         </>
       )}
     </Card>

@@ -6,7 +6,7 @@ import { upDown } from "../../lib/tradeUi";
 import { aboveBelow, anyValue, gapText, LIVE_PHASES, PHASE_TEXT, qtyExact, qtyText, steps, type CasDay, type CasHistory, type CasPosition, type CasStock, type CasView } from "../../lib/closingAuction";
 import { Earlier } from "../../components/Earlier";
 import { Search } from "../../components/Icons";
-import { Badge, Card, CardHead, DataTable, EmptyState, ErrorState, PageHeader, Signed, Skeleton, type Column } from "../../components/kit";
+import { Badge, Card, CardHead, DataTable, ShowLess, EmptyState, ErrorState, PageHeader, Signed, Skeleton, type Column } from "../../components/kit";
 
 /** A gap against the 15:15 reference price: green when the indicative price is above it, red when below, the sign printed. */
 const Gap = ({ g }: { g: number | null | undefined }) => <Signed value={g}>{gapText(g)}</Signed>;
@@ -167,9 +167,10 @@ function Stocks({ v }: { v: CasView }) {
       {!rows.length ? <EmptyState title={v.stocks.length ? "No stock matches that." : "No auction recorded yet"}>{v.stocks.length ? "Try another symbol." : "Each trading day's auction shows here once it has run."}</EmptyState> : (
         <>
           <DataTable label="F&O stocks in the closing auction" columns={cols} rows={shown} rowKey={(r) => r.symbol} rowAttrs={attrs} stack phonePage={30} />
-          {rows.length > shown.length && (
-            <div className="k-row"><button type="button" className="btn quiet sm" data-testid="cas-more" onClick={() => setLimit((x) => x + 60)}>
-              Show {Math.min(60, rows.length - shown.length)} more stocks ({rows.length - shown.length} not shown)</button></div>
+          {(rows.length > shown.length || (limit > 40 && !q.trim() && rows.length > 40)) && (
+            <div className="k-row">{rows.length > shown.length && <button type="button" className="btn quiet sm" data-testid="cas-more" onClick={() => setLimit((x) => x + 60)}>
+              Show {Math.min(60, rows.length - shown.length)} more stocks ({rows.length - shown.length} not shown)</button>}
+              {limit > 40 && !q.trim() && rows.length > 40 && <ShowLess onLess={() => setLimit(40)} />}</div>
           )}
         </>
       )}
