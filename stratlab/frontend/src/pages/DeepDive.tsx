@@ -13,6 +13,7 @@ import { Panel, TrendBars } from "../components/Research";
 import { BizUpdatesPanel } from "../components/BizUpdates";
 import { Badge, Card, CardHead, CsvButton, DataTable, ErrorState, Meter, PageHeader, PlanNote, Select, Signed, Skeleton, Stat, StatRow, type Column } from "../components/kit";
 import { AlertButton } from "../components/AlertForm";
+import { SaveButton } from "../components/SavedSearches";
 import { ShareCompanyButton } from "../components/ShareCompany";
 import { track } from "../lib/analytics";
 import { CHECK_BADGE, checkCountsLine } from "../lib/checklistText";
@@ -265,6 +266,7 @@ export function DeepDivePage() {
         actions={<>
           {v?.price_at && <Badge>Last close as of {asOf(v.price_at, { tz: marketTz(region) })}</Badge>}
           <Link className="btn quiet sm" to={`/research/${region}/${encodeURIComponent(sym)}`}>← {v?.name ?? sym}</Link>
+          {v && <SaveButton kind="deep_dive" label="Save deep dive" name={`${v.name ?? sym} deep dive`} params={{ region, symbol: sym }} />}
         </>} />
       <div className="k-row">
         {v && <>

@@ -1,6 +1,10 @@
 import { worldDate, expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { CARDS } from "../src/lib/mineLayout";
 
+// R19: the saved searches and reads card is in the layout (and in Customise) but takes its place only once something is saved, so an account
+// with nothing saved shows the other six
+const SHOWN = CARDS.filter((c) => c.id !== "saved").map((c) => c.id);
+
 // "My space" (/mine, was "All"): a greeting with the date and one line on what is coming up, hero tiles (net worth, today's
 // P&L, paper sessions), a strip of six markets, the dates ahead and the watchlist's movers. Every figure is from data the
 // app already has; a card with nothing says so and offers the next step. Cards can be hidden and reordered. Desktop and phone.
@@ -55,7 +59,7 @@ test("my space: opens from / for 'all of it', with a greeting, six cards and a f
   const ist = (o: Intl.DateTimeFormatOptions) => worldDate().toLocaleDateString("en-GB", { ...o, timeZone: "Asia/Kolkata" });
   await expect(home.locator(".k-eyebrow")).toContainText(new RegExp(`^${ist({ weekday: "long" })}, ${ist({ day: "numeric" })} ${ist({ month: "long" })}( in India)?$`));     // "in India" when the reader's clock is elsewhere (DI-011)
   await expect(home.locator(".k-lede")).not.toBeEmpty();
-  expect(await order(page)).toEqual(CARDS.map((c) => c.id));
+  expect(await order(page)).toEqual(SHOWN);
 
   // a new account has no net worth, holdings or paper sessions: each card says so and offers the next step; nothing is invented
   for (const [id, name, link] of [["mine-networth", "Add what you own", "/money/net-worth"], ["mine-pnl", "Add your holdings", "/holdings"], ["mine-paper", "Start paper trading", "/paper"]] as const) {
@@ -115,7 +119,7 @@ test("my space: Customise hides, shows and reorders the cards, and remembers it"
   await expect(page.getByTestId("mine-home")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Customise" }).click();
   const panel = page.locator("#mine-customise");
-  await expect(panel.getByRole("checkbox")).toHaveCount(6);
+  await expect(panel.getByRole("checkbox")).toHaveCount(CARDS.length);       // R19: seven, the saved card's included
   // hide Markets and move Coming up to the top
   await panel.getByRole("checkbox", { name: "Markets" }).uncheck();
   await expect(page.getByTestId("mine-markets")).toHaveCount(0);
@@ -132,12 +136,12 @@ test("my space: Customise hides, shows and reorders the cards, and remembers it"
   // reset puts everything back
   await page.getByRole("button", { name: "Customise" }).click();
   await page.locator("#mine-customise").getByRole("button", { name: "Reset" }).click();
-  expect(await order(page)).toEqual(CARDS.map((c) => c.id));
+  expect(await order(page)).toEqual(SHOWN);
   // hiding every card leaves one calm message and a way back
   for (const c of CARDS) await page.locator("#mine-customise").getByRole("checkbox", { name: c.label }).uncheck();
   await expect(page.getByText("Every card is hidden")).toBeVisible();
   await page.getByRole("button", { name: "Show the cards" }).click();
-  expect(await order(page)).toEqual(CARDS.map((c) => c.id));
+  expect(await order(page)).toEqual(SHOWN);
   // the panel is still open: Escape closes it too, and focus goes back to its button (R86-010)
   await expect(page.locator("#mine-customise")).toBeVisible();
   await page.keyboard.press("Escape");

@@ -29,6 +29,8 @@ import { MoreMenu } from "../components/MoreMenu";
 import { suggestions, type Suggestion } from "../components/CompanyCombobox";
 import { rememberName, useDocTitle } from "../lib/title";
 import { DealsPanel } from "../components/Deals";
+import { SaveButton } from "../components/SavedSearches";
+import { readSnap } from "../lib/savedSnap";
 import { BizUpdatesPanel } from "../components/BizUpdates";
 import { NamedHoldersPanel } from "../components/NamedHolders";
 import { SurvBadges } from "../components/Surveillance";
@@ -742,6 +744,8 @@ export function ComparePage() {
               <>
                 <p className="inv-summary">{res.ai.verdict}</p>
                 {res.ai.differences.length > 0 && <ul className="k-list">{res.ai.differences.map((d) => <li key={d}>{d}</li>)}</ul>}
+                {/* R19: the comparison kept on the account, opened again from the saved list */}
+                <div className="k-row"><SaveButton kind="compare" label="Save comparison" name={`${res.a.symbol} vs ${res.b.symbol}`} params={{ region, a: res.a.symbol, b: res.b.symbol }} snap={() => readSnap(res.ai.generated_at ?? null)} /></div>
               </>
             ) : (
               // no comparison is one calm line and one button, like the company page's AI read
