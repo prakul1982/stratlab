@@ -63,21 +63,24 @@ def test_the_theme_deck_has_the_cover_chain_layers_members_claims_and_notes():
     # core, every company's own words in the appendix; the cover counts the companies the figures are for instead of the AI's additions
     # R17 (owner, 7 Nov): changed on purpose; data confidence carries the table of counts each total is of (under the checks, or on a page of
     # its own when it doesn't fit), and the Industry economics part follows the value chain
-    assert titles == ["Test theme", "The theme at a glance", "Findings", "Key findings", "Data confidence", "Worth a watch",
-                      "The value chain", "The value chain by layer", "Layer 1 · Mining", "Layer 2 · Cells",
-                      "Sub-themes and the companies that do them", "Industry economics", "Layers side by side", "What moved the aggregate margin",
-                      "The companies", "Every company's figures",
-                      "Tailwinds, risks and news", "Tailwinds and risks", "The theme in numbers", "Size and shape", "Growth and profitability",
-                      "Margins over time", "Valuation", "Balance sheet and cash", "Price", "Appendix", "Every company in this theme", "How to read this deck"]
+    # R18 (owner, 7 Nov: the core ran 41 pages): changed on purpose; one contents page in place of a divider before each part, each layer on one
+    # page, every company's figures in the appendix
+    assert titles == ["Test theme", "The theme at a glance", "Contents", "Key findings", "Data confidence", "Worth a watch",
+                      "The value chain by layer", "Layer 1 · Mining", "Layer 2 · Cells",
+                      "Sub-themes and the companies that do them", "Layers side by side", "What moved the aggregate margin",
+                      "Tailwinds and risks", "Size and shape", "Growth and profitability",
+                      "Margins over time", "Valuation", "Balance sheet and cash", "Price", "Appendix", "Every company's figures",
+                      "Every company in this theme", "How to read this deck"]
     assert slides[0].kind == "cover" and slides[0].subtitle == "India (NSE and BSE) · Theme deep dive" and "Theme deep dive" in footer
-    assert [s.part for s in slides if s.kind == "section"] == ["01", "02", "03", "04", "05", "06", "07"]
-    assert slides[6].contents[:2] == [("The value chain by layer", 8), ("Layer 1 · Mining", 9)]          # a section lists its slides with their pages
+    assert [s.part for s in slides if s.kind == "section"] == ["A"]
+    contents = table_of(slides, "Contents")["rows"]
+    assert [(r[0], r[2]) for r in contents[:2]] == [("Findings", "4"), ("The value chain", "7")]          # each part with its first page
     cover = dict((t[0], t[1]) for t in next(b for b in slides[0].blocks if b["kind"] == "stats")["items"])
     assert cover["Companies"] == "6" and cover["Layers"] == "2" and cover["With figures"] == "5 of 6 (100% of value)"
     members = table_of(slides, "Every company in this theme")
     assert members["head"] == deck.MEMBER_HEAD and members["rows"][0] == {"group": "Mining"}      # grouped by layer, as the page lists them
     assert plain(members["rows"])[0] == ["Mine A (MINEA)", "–", "₹1,000 cr", "“mines ore”", "Official industry"]
-    assert table_of(slides, "Layer 1 · Mining")["rows"][0] == ["Mine A", "₹1,500 cr", "50%", "24.0%", "15.0%", "Mar 2026"]   # R16: whole points as filed
+    assert table_of(slides, "Layer 1 · Mining")["rows"][0] == ["Mine A", "₹1,500 cr", "50%", "24%", "15%", "Mar 2026"]   # R16: whole points as filed; R18: every whole figure
     claims = next(b for s in slides if s.title == "Tailwinds and risks" for b in s.blocks if b["kind"] == "flow")["items"]
     assert claims[0]["text"] == "A battery subsidy" and [t[0] for t in claims[0]["tags"]] == ["Tailwind", "Recent headline"]   # R16: "Checked" meant only that a headline exists
     assert claims[0]["sub"] == "Subsidy scheme extended · 01 Sep 2026 · A daily" and claims[0]["url"] == "https://example.com/news/subsidy"

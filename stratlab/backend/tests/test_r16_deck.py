@@ -188,9 +188,11 @@ def test_valuation_is_set_beside_listed_companies_of_similar_market_value_with_g
     # changed on purpose (R17-010): one P/E basis, the companies with similar-size peers against their peers' median, in the headline and the table
     sub = next(s.subtitle for s in slides if s.title == "Valuation")
     pp = peers["pe"]
-    assert sub == f"Median P/E {pp['theme']:.1f}x for the {pp['n']} companies with listed peers of similar market value, {pp['premium']:.1f}% above their peers' median of 10.0x"
+    # changed on purpose (R18): one formatter, whole figures print whole (21x, 110%, 10x)
+    w = deck.whole_figures
+    assert sub == w(f"Median P/E {pp['theme']:.1f}x for the {pp['n']} companies with listed peers of similar market value, {pp['premium']:.1f}% above their peers' median of 10.0x")
     row = next(r for r in val["rows"] if r[0] == "P/E, companies with similar-size peers")
-    assert row[1] == f"{pp['theme']:.1f}x" and row[4] == "10.0x" and row[2] == f"{pp['premium']:.1f}% above peers"
+    assert row[1] == w(f"{pp['theme']:.1f}x") and row[4] == "10x" and row[2] == w(f"{pp['premium']:.1f}% above peers")
     assert pp["premium"] == round((pp["theme"] / pp["peers"] - 1) * 100, 1)        # the ratio of the two medians the table shows
 
 
@@ -217,11 +219,13 @@ def test_the_findings_come_first_with_page_references_that_point_at_their_slides
     titles = [s.title for s in slides]
     assert titles.index("Key findings") < titles.index("The value chain by layer")
     cards = next(b for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards")["items"]
-    assert [c["title"] for c in cards] == ["Where the margin sits", "Growth beside margin", "Price beside growth and returns", "What changed",
+    # changed on purpose (R18): with no layer comparison the figures support (fewer than two layers of two companies with a margin), no
+    # "Where the margin sits" card that says it can't be done
+    assert [c["title"] for c in cards] == ["Growth beside margin", "Price beside growth and returns", "What changed",
                                            "How far the figures go", "Worth a watch"]
     page = {re.sub(r" \(\d+ of \d+\)$", "", s.title): i for i, s in reversed(list(enumerate(slides, 1)))}
     refs = {c["title"]: c["note"] for c in cards}                                     # the page reference, as the card's note: never cut
-    assert refs["Where the margin sits"] == f"p. {page['The value chain by layer']}" and refs["Price beside growth and returns"] == f"p. {page['Valuation']}"
+    assert refs["Price beside growth and returns"] == f"p. {page['Valuation']}"
     assert refs["How far the figures go"] == f"p. {page['Data confidence']}"
     t = texts(slides)
     assert "⟦" not in t and "⟧" not in t
@@ -268,7 +272,7 @@ def test_ownership_lists_the_changes_only_with_quarters_as_months_and_no_signed_
         {"symbol": "B", "name": "B Co", "quarter": "2026-09-30", "promoter": 40.0, "institutions": 20.0, "promoter_change": 0.8, "institutions_change": 0.1},
         {"symbol": "C", "name": "C Co", "quarter": "2026-09-30", "promoter": 30.0, "institutions": 20.0, "promoter_change": -0.02, "institutions_change": 1.7}]
     t = table_of(slides_of(v), "Ownership")
-    assert [r[0] for r in t["rows"]] == ["B Co", "C Co"] and t["rows"][0][5] == "Sep 2026" and t["rows"][1][2] == "0.0 pts"
+    assert [r[0] for r in t["rows"]] == ["B Co", "C Co"] and t["rows"][0][5] == "Sep 2026" and t["rows"][1][2] == "0 pts"      # R18: whole figures print whole
     assert deck._pts(-0.04) == "0.0 pts" and deck._pts(0.04) == "0.0 pts" and deck._pts(-1.25) == "−1.2 pts"
 
 
@@ -355,8 +359,10 @@ def test_the_contents_list_every_slide_of_a_long_part_and_layers_are_numbered_wi
     v["layers"] = many[:4] + [{"layer": "Financing", "description": "Lends.", "companies": [], "n": 0, "stats": {}, "company_wide": []}] + many[4:]
     v["business"] = None
     slides = slides_of(v)
-    chain = next(s for s in slides if s.kind == "section" and s.title == "The value chain")
-    assert len(chain.contents) >= 16 and any(t.startswith("Layer 14 ·") for t, _ in chain.contents)
+    # changed on purpose (R18): one contents page lists every part with its first page (no divider before each part); a layer is one page
+    contents = {r[0]: int(r[2]) for r in table_of(slides, "Contents")["rows"]}
+    assert slides[contents["The value chain"] - 1].title in ("The value chain by layer", "Layer 1 · Layer name 0")
+    assert [s.title for s in slides].count("Layer 14 · Layer name 13") == 1
     nums = [int(re.match(r"Layer (\d+) ·", s.title).group(1)) for s in slides if re.match(r"Layer \d+ ·", s.title)]
     assert sorted(set(nums)) == list(range(1, 15))                                            # Layer 4, then Layer 5: no gap for an empty layer
 

@@ -51,7 +51,7 @@ def test_the_theme_deck_carries_every_part_of_the_page():
     page = ["The theme at a glance",                    # the map's card: the overview, the core, the funds
             "The value chain by layer",                 # ChainCard
             *[f"Layer {i + 1} · {x['layer']}" for i, x in enumerate(v["layers"])],      # LayerCard, every layer with companies
-            "Layer 1 · Mining: operating figures",      # the layer's business updates
+            "Operating figures",                        # the layers' business updates, one table (R18)
             "Sub-themes and the companies that do them",   # SubThemesCard
             "Every company in this theme",              # MembersCard
             "Every company's figures",                  # LeadersCard
