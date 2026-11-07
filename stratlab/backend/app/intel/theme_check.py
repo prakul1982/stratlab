@@ -299,6 +299,119 @@ def model_family(model) -> str:
     return MODELS[model][0] if model in MODELS else ""
 
 
+# ---------- a model is kept only when the company's own evidence shows it (R26) ----------
+# The live R25 Cybersecurity deck had "commissions, listing fees or advertising on platforms" for two firms that sell security subscriptions over
+# their own networks: nothing in their words spoke of a marketplace. A model that is easy to give wrongly needs words of its kind in the company's
+# evidence (its official industry, its description, its segments' names, its filings' titles); a model not listed here needs none.
+MODEL_NEEDS = {
+    "platform": r"marketplace|commission|advertis|take[- ]rate|listing fee|listings|classified|aggregator|gross merchandise|gmv|booking platform|"
+                r"connects (?:buyers|sellers|users|customers)|two-sided|e-?commerce platform|online travel|food delivery|ride-hailing",
+    "hardware_resale": r"resell|resale|reseller|distribut|system integrat|systems integrat|value[- ]added|channel partner|authori[sz]ed partner|"
+                       r"install|trading|dealer|partner of (?:leading|global)|brands? such as",
+    "distribution": r"distribut|wholesal|trading|trader|dealer|stockist|import|export|supply chain services",
+    "retail": r"retail|store|outlet|showroom|e-?commerce|online shop|consumer brand|direct[- ]to[- ]consumer|supermarket|hypermarket",
+    "royalties": r"royalt|licens|patent|intellectual property|\bip\b",
+    "contract_manufacturing": r"contract manufactur|\bems\b|electronics manufacturing services|\bcdmo\b|\bcmo\b|\bcrams\b|\bodm\b|on behalf of|"
+                              r"to (?:the|their|customers'?) (?:designs|specifications)|job work|for (?:global )?(?:brands|oems)",
+    "lending": r"\bloan|lend|credit|financ|bank|nbfc|microfinance|mortgage|deposit",
+    "underwriting": r"insur|underwrit|premium|reinsur|assurance",
+    "broking": r"brok|intermediar|distribut|commission|agent|advis|wealth|insurance web|aggregator",
+    "asset_management": r"asset manag|fund|mutual|\bamc\b|wealth|portfolio manag|investment manag",
+    "market_infrastructure": r"exchange|depositor|clearing|rating|registr|custod|settlement",
+}
+
+
+def model_supported(model, evidence) -> bool:
+    """Whether a company's evidence (its industry, description, segments, filings: one text) shows words of the kind its model needs (MODEL_NEEDS);
+    a model with no such need is supported by any evidence, an unknown model by none."""
+    if model not in MODELS:
+        return False
+    need = MODEL_NEEDS.get(model)
+    return not need or bool(re.search(need, str(evidence or ""), re.I))
+
+
+def model_evidence(industry="", about="", segments=(), filings="", limit: int = 420) -> str:
+    """One company's evidence of how it earns, from what the app already keeps (R26: the IT services layer of 50 had 8 models known when only the
+    stored descriptions were sent): its official industry (with its sub-industries), the names of the segments its documents report, its
+    own description and the titles of its filings. "" when nothing is kept."""
+    parts = []
+    if str(industry or "").strip():
+        parts.append(f"Industry: {' '.join(str(industry).split())}.")
+    segs = [" ".join(str(s).split()) for s in segments or [] if str(s or "").strip()][:6]
+    if segs:
+        parts.append(f"Segments: {', '.join(segs)}.")
+    if str(about or "").strip():
+        parts.append(clean_description(about, 600))
+    if str(filings or "").strip() and str(filings) not in str(about or ""):
+        parts.append(clean_description(filings, 200))
+    return clean_description(" ".join(parts), limit)
+
+
+MODEL_SYSTEM = """You say how listed companies earn most of their revenue, using ONLY the EVIDENCE given for each (its official industry, the
+segments it reports, its own description, its filings' titles); no other knowledge and no figure. An earlier answer for each was not shown by its
+evidence ("was"). For each company give the ONE model from this list: """ + ", ".join(MODELS) + """; "unknown" when the evidence doesn't show it.
+A model needs words of its kind in the evidence: platform needs a marketplace, commissions, listing fees, advertising or a take rate; hardware_resale
+needs reselling, distributing or installing others' hardware; distribution needs trading or wholesale; a company that sells subscriptions to a
+service it runs on its own network or software is software or capacity, not platform.
+Reply with ONLY this JSON: {"models": {"<symbol>": "<model>"}}"""
+
+
+def recheck_models(rejected: list[dict], ask, theme: str) -> dict:
+    """{symbol: model} for companies whose first model their evidence didn't show ([{symbol, name, was, evidence}]), asked once more with the
+    evidence; a model is kept only when it is on the list and the evidence shows it (model_supported). An AI that can't answer raises."""
+    import json
+    if not rejected:
+        return {}
+    payload = {"theme": theme, "companies": [{"symbol": c["symbol"], "name": c.get("name") or c["symbol"], "was": c.get("was") or "",
+                                              "evidence": clean_description(c.get("evidence") or "", 420)} for c in rejected]}
+    got = ask(MODEL_SYSTEM, "EVIDENCE:\n" + json.dumps(payload, ensure_ascii=False))
+    raw = got.get("models") if isinstance(got, dict) else None
+    pairs = raw.items() if isinstance(raw, dict) else [(x.get("symbol"), x.get("model")) for x in raw or [] if isinstance(x, dict)] if isinstance(raw, list) else []
+    ev = {c["symbol"]: c.get("evidence") or "" for c in rejected}
+    return {s: str(m) for s, m in pairs if s in ev and str(m) in MODELS and model_supported(str(m), ev[s])}
+
+
+# ---------- a layer's name fits how its companies earn once each holds one model (R26) ----------
+# The live R25 IT services deck: "Cloud, hardware and IT infrastructure" held only hardware resellers once the layers were split by model
+# ("In common: selling and installing hardware that others make"). The split's layers go to the same name check as the placement's (RENAME).
+NAMES_SYSTEM = """You check the names of the layers of a map of an industry theme. Each LAYER's companies now earn the same way ("how_they_earn",
+from their own descriptions). For a layer whose name or description speaks of a different kind of business or way of earning than what its
+MEMBERS do and how they earn (for example a name about cloud or infrastructure for companies that resell hardware others make), give a name (at
+most 6 words) and a description (2 sentences: what these companies do and how they earn, and what sets this layer apart) that fit them. Leave out
+a layer that fits. Never a catch-all name ("mid-tier", "other", "diversified players"). Use only what is given, no other knowledge, and no figure.
+Reply with ONLY this JSON: {"rename": [{"layer": "<layer id>", "name": "", "description": ""}]}"""
+NAMES_MEMBERS = 12
+
+
+def _renames(got, ids: dict) -> dict:
+    """{layer name: {"name", "description"}} from an answer's "rename" list: a layer id that is the map's, a name with no figure that isn't a stand-in."""
+    from .ai import stand_in, theme_text
+    rename = {}
+    for x in (got.get("rename") if isinstance(got, dict) else None) or []:
+        if isinstance(x, dict) and str(x.get("layer")) in ids:
+            name = " ".join(str(x.get("name") or "").split())[:60]
+            desc = theme_text(x.get("description"), 400)
+            if name and not re.search(r"\d", name) and not stand_in(name):
+                rename[ids[str(x["layer"])]] = {"name": name, "description": desc or ""}
+    return rename
+
+
+def names_for_models(layers: list[dict], ask, theme: str) -> dict:
+    """{layer name: {"name", "description"}} for the layers (each with its `model` line, theme_base.by_model) whose name no longer fits how their
+    companies earn. One AI answer; an AI that can't answer raises."""
+    import json
+    if not layers:
+        return {}
+    ids = {f"L{i}": v.get("layer") or "" for i, v in enumerate(layers)}
+    payload = {"theme": theme, "layers": {k: {"name": ids[k], "what_it_is": str(layers[i].get("description") or "")[:240],
+                                              "how_they_earn": str((layers[i].get("model") or {}).get("line") or ""),
+                                              "members": [f"{c.get('ticker') or ''} · " + (c.get("name") or c.get("ticker") or "")
+                                                          + (f": {str(c.get('what'))[:120]}" if c.get("what") else "")
+                                                          for c in (layers[i].get("companies") or [])[:NAMES_MEMBERS]]}
+                                          for i, k in enumerate(ids)}}
+    return _renames(ask(NAMES_SYSTEM, "LAYERS:\n" + json.dumps(payload, ensure_ascii=False)), ids)
+
+
 # ---------- the companies the map didn't place, each in the best of its layers (R21) ----------
 PLACE_SYSTEM2 = """You sort listed companies into the layers of a map of an industry theme. Every company given is in the theme already (the
 stock exchange files it under the theme's industry). Use only the companies' descriptions and industries given, no other knowledge, and no figure.
@@ -313,9 +426,14 @@ stock exchange files it under the theme's industry). Use only the companies' des
    own description shows it, from this list: """ + ", ".join(MODELS) + """; "unknown" when the description doesn't show it.
    A company that resells or installs hardware others make is hardware_resale, one that makes its own is manufacturing; one that sells
    licences or subscriptions to software it owns is software, one paid for projects or people's time is project_services.
+   Read each one's "evidence" too (its official industry and sub-industry, the segments it reports, its filings' titles). platform only with a
+   marketplace, commissions, listing fees, advertising or a take rate in its evidence; a service sold by subscription over its own network is
+   software or capacity.
 Reply with ONLY this JSON: {"place": [{"symbol": "", "layer": "<layer id or none>"}], "rename": [{"layer": "<layer id>", "name": "", "description": ""}],
 "extra": [{"name": "", "description": "", "symbols": [""]}], "models": {"<symbol>": "<model>"}}"""
-MODEL_MEMBERS = 40            # a layer's members sent with their symbols for step 4 (the largest first, as the layer lists them)
+MODEL_MEMBERS = 60            # a layer's members sent with their symbols for step 4 (the largest first, as the layer lists them; R26: 40 left
+                              # the tail of a 50-company layer without a model)
+MEMBER_EVIDENCE = 160         # ...each with this much of its evidence (model_evidence) beside its own words
 
 
 def place_in_layers(layers: list[dict], companies: list[dict], ask, theme: str) -> dict:
@@ -329,10 +447,12 @@ def place_in_layers(layers: list[dict], companies: list[dict], ask, theme: str) 
     payload = {"theme": theme, "layers": {k: {"name": ids[k], "what_it_is": str(layers[i].get("description") or "")[:240],
                                               "members": [f"{c.get('ticker') or ''} · " + (c.get("name") or c.get("ticker") or "")
                                                           + (f": {str(c.get('what'))[:120]}" if c.get("what") else "")
+                                                          + (f" [evidence: {clean_description(c.get('evidence'), MEMBER_EVIDENCE)}]" if c.get("evidence") else "")
                                                           for c in (layers[i].get("companies") or [])[:MODEL_MEMBERS]]}
                                           for i, k in enumerate(ids)},
                "companies": [{"symbol": c["symbol"], "name": c["name"], "industry": c.get("industry") or "",
-                              "description": clean_description(c.get("about") or "", 220)} for c in companies]}
+                              "description": clean_description(c.get("about") or "", 220),
+                              **({"evidence": clean_description(c.get("evidence"), 260)} if c.get("evidence") else {})} for c in companies]}
     got = ask(PLACE_SYSTEM2, "COMPANIES:\n" + json.dumps(payload, ensure_ascii=False)) if companies or layers else {}
     got = got if isinstance(got, dict) else {}
     asked = {c["symbol"] for c in companies}
@@ -344,13 +464,7 @@ def place_in_layers(layers: list[dict], companies: list[dict], ask, theme: str) 
                 place[x["symbol"]] = ids[lid]
             elif lid.lower() == "none":
                 place[x["symbol"]] = ""
-    rename = {}
-    for x in got.get("rename") or []:
-        if isinstance(x, dict) and str(x.get("layer")) in ids:
-            name = " ".join(str(x.get("name") or "").split())[:60]
-            desc = theme_text(x.get("description"), 400)
-            if name and not re.search(r"\d", name) and not stand_in(name):
-                rename[ids[str(x["layer"])]] = {"name": name, "description": desc or ""}
+    rename = _renames(got, ids)
     extra = []
     for x in (got.get("extra") or [])[:2]:
         if isinstance(x, dict):

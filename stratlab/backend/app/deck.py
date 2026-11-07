@@ -1584,7 +1584,10 @@ def membership_words(v: dict, total: int) -> str:
 def layer_common(layer: dict) -> str:
     """The one line a layer's page shows of what its companies have in common: how they earn (theme_base.by_model, R25: the owner's review,
     "avoid grouping businesses with fundamentally different revenue models"), from their own descriptions; "" when none is known."""
-    line = str((layer.get("model") or {}).get("line") or "").strip()
+    model = layer.get("model") or {}
+    line = str(model.get("line") or "").strip()
+    if line and model.get("sparse"):           # R26: under half the layer's companies with a known model: said plainly, no "In common"
+        return line
     return f"In common: {line[:1].lower()}{line[1:]}" if line else ""
 
 
