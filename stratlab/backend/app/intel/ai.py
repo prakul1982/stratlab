@@ -349,6 +349,16 @@ def clean_company(read: dict) -> dict:
 _CALL_OPENING = re.compile(r"^\W*(buy|sell|accumulate|avoid|add|pick|hold|load|go long)\b(?![-\w])", re.I)
 
 
+def layer_name(v: dict) -> str:
+    """A value-chain layer's name. The model is asked for "layer" but sometimes writes it under another key (R20: the live Cybersecurity
+    map had four layers with an empty "layer", drawn as "Layer 2 ·" and "lowest in (6.6%)"); a layer with no name at all is dropped."""
+    for k in ("layer", "name", "title", "stage", "segment"):
+        s = " ".join(str(v.get(k) or "").split())
+        if s:
+            return s
+    return ""
+
+
 def theme_text(text, length: int) -> str:
     """A theme read's sentence as it goes out: none that advises or forecasts (the model has no source to forecast from),
     and none with a figure (DE-013: "defence budget to Rs 5.5 lakh crore (+12%)" while the year's allocation was about
@@ -464,8 +474,8 @@ policies that exist; leave out anything you aren't sure of.
         "screen": [{"name": str(s.get("name") or "")[:60], "ticker": str(s.get("ticker") or "").upper()[:20],
                     "layer": str(s.get("layer") or "")[:40], "composite": None, "one_line": theme_text(s.get("one_line"), 300)}
                    for s in (r.get("screen") or []) if isinstance(s, dict) and s.get("name")][:8],
-        "value_chain": [{"layer": str(v.get("layer") or "")[:60], "description": theme_text(v.get("description"), 600),
-                         "companies": cos(v.get("companies"))} for v in (r.get("value_chain") or []) if isinstance(v, dict)][:6],
+        "value_chain": [{"layer": layer_name(v)[:60], "description": theme_text(v.get("description"), 600),
+                         "companies": cos(v.get("companies"))} for v in (r.get("value_chain") or []) if isinstance(v, dict) and layer_name(v)][:6],
         "tailwinds": claim_items(r.get("tailwinds"), 5), "risks": claim_items(r.get("risks"), 5),
     }
 

@@ -265,6 +265,22 @@ def test_a_lender_theme_keeps_the_maps_layers_when_the_check_empties_them():
     assert [s.title for s in slides if s.title.startswith("Layer ")] == ["Layer 1 · Deposit gathering", "Layer 2 · Retail and SME lending"]
 
 
+def test_a_map_layer_without_a_name_is_never_drawn():
+    # R20 live: the Cybersecurity map came back with four of five layers named "" ("Layer 2 ·", "lowest in (6.6%)")
+    from app.intel import ai as A
+    assert A.layer_name({"layer": "", "name": "Identity and access"}) == "Identity and access"
+    assert A.layer_name({"layer": "  ", "title": " Endpoint  security "}) == "Endpoint security" and A.layer_name({"layer": ""}) == ""
+    rows = [{"symbol": f"S{i}", "name": f"Sec {i}", "industry": "Software", "market_cap": 100 - i} for i in range(6)]
+    ai = {"value_chain": [{"layer": "Network security", "companies": [{"ticker": "S0"}, {"ticker": "S1"}, {"ticker": "S2"}]},
+                          {"layer": "", "companies": [{"ticker": "S3"}, {"ticker": "S4"}]}], "sub_themes": []}
+    checked = {"value_chain": [{**x, "companies": [{**c, "verified": True} for c in x["companies"]]} for x in ai["value_chain"]], "sub_themes": []}
+    out = B.with_base(ai, checked, rows, ["Software"])                  # a map kept in the store from before the reader's fix
+    names = [x["layer"] for x in out["value_chain"]]
+    assert "" not in names and all(n.strip() for n in names)
+    placed = {c["ticker"] for x in out["value_chain"] for c in x["companies"]}
+    assert {"S3", "S4"} <= placed                                       # its companies are still in the deck, under their industry
+
+
 def test_a_deck_waits_briefly_for_the_map_and_its_check_that_are_being_written(monkeypatch):
     calls = {"n": 0}
     done = threading.Event()

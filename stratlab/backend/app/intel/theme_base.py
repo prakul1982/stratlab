@@ -421,6 +421,10 @@ def with_base(m_before: dict, out: dict, rows: list[dict], industries: list[str]
     another theme's (solar-cell makers filed as semiconductors), out of the base unless the AI names them. `drop`: the industries a theme's
     name leaves out (subset_pick: the public-sector banks of "Private banks") and `sized`: the companies of the size it names (in_band), so
     a company the AI names from them is out too (R18)."""
+    # a layer the AI left without a name (R20: four of the live Cybersecurity map's five, kept in the store from before ai.layer_name) is
+    # dropped here too, so a stored map never draws "Layer 2 ·": its companies are then placed as any company the AI didn't name
+    m_before = {**m_before, "value_chain": [v for v in m_before.get("value_chain") or [] if v.get("official") or str(v.get("layer") or "").strip()]}
+    out = {**out, "value_chain": [v for v in out.get("value_chain") or [] if v.get("official") or str(v.get("layer") or "").strip()]}
     idx = {r["symbol"]: r for r in rows or [] if r.get("symbol")}
     inset = {key(i) for i in industries}
     skip = set(exclude)
