@@ -178,7 +178,7 @@ def test_every_rule_holds_on_every_synthetic_theme(name, v, slides):
         for b in s.blocks:
             if b["kind"] == "hbars" and str(b.get("title", "")).startswith("Median"):
                 for cat in b["cats"]:
-                    assert int(re.search(r"\((\d+)\)$", cat).group(1)) >= 3, cat
+                    assert int(re.search(r"\((\d+)(?: of \d+)?\)$", cat).group(1)) >= 3, cat        # R25: "(5 of 6)" when the layer has more
     # no card line cut with an ellipsis
     for s in slides:
         for b in s.blocks:

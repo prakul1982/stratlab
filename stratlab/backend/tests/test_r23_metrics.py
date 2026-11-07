@@ -210,7 +210,10 @@ def test_a_bank_theme_shows_its_filed_figures_in_the_layer_tables_findings_econo
     assert sector["head"][0] == "Company" and "CET1 ratio" in sector["head"] and "Credit cost" in sector["head"] and sector["head"][-1] == "Period"
     assert plain(sector["rows"])[0][-1] == "Sep 2026" and plain(sector["rows"])[-1][0] == "Median (companies)"
     assert "From the quarterly results filed with the exchange (banking format)" in t
-    how = {r[0]: r[1] for r in plain(table_of(slides, "Sector operating figures: how each is worked out")["rows"])}
+    # changed on purpose (R25): how each filed figure is worked out is on the one page of how the figures are built, with its period, source and limits
+    notes = table_of(slides, deck.NOTES_TITLE)
+    assert notes["head"] == ["Figure", "What it measures, how it is worked out", "Period and source", "Limitation"]
+    how = {r[0]: r[1] for x in slides if x.title.startswith(deck.NOTES_TITLE) for b in x.blocks if b["kind"] == "table" for r in plain(b["rows"])}
     assert how["Credit cost"].startswith("Provisions other than tax for the year to date, annualised") and "CET1 ratio" in how
     assert "NIM and CASA aren't elements of the banking results format" in t
     # one number per metric: the filed gross NPA replaces the page tables' own, in the layer tables too

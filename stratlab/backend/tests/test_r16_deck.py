@@ -142,7 +142,8 @@ def test_the_valuation_says_its_bases_the_loss_makers_left_out_and_each_medians_
     layer = table_of(slides, "Layer 1 · Mining")
     # changed on purpose (R20): a median of fewer than 3 companies isn't shown as one: "–" with its count, the companies' own values above it
     med = next(r for r in plain(layer["rows"]) if r[0].startswith("Median"))
-    assert med[0] == "Median (companies)" and "– (2)" in med and "– (1)" in med
+    # changed on purpose (R25): a count beside the layer's own reads "N of M" ("– (1 of 2)"), the layer's full count alone ("– (2)")
+    assert med[0] == "Median (companies)" and "– (2)" in med and "– (1 of 2)" in med
     assert "P/E, the 4 companies with one (67% of 6; 2 loss-makers with none)" in [r[0] for r in table_of(slides, "Valuation")["rows"]]
 
 
@@ -337,7 +338,11 @@ def test_the_deck_is_shorter_every_companys_own_words_in_the_appendix():
     titles = [s.title for s in slides]
     # changed on purpose (R19): every company's own words are on the theme's page; the appendix is one table of every confirmed company's figures
     assert "Every company in this theme" not in titles and titles.index("How to read this deck") < titles.index("Every company's figures")
-    assert all(s.title.startswith("Every company's figures") for s in slides[titles.index("How to read this deck") + 1:])
+    # changed on purpose (R25): the page on how the figures are built follows the notes, before the appendix
+    at = titles.index("How to read this deck") + 1
+    while titles[at].startswith(deck.NOTES_TITLE):
+        at += 1
+    assert at > titles.index("How to read this deck") + 1 and all(s.title.startswith("Every company's figures") for s in slides[at:])
 
 
 # ---------- part 5: layout ----------

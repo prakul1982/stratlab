@@ -614,7 +614,7 @@ THEME_SRC = {"v": 1, "theme": "cybersecurity", "region": "US", "sector": "Cybers
                  {"layer": "Network security", "n": 3, "revenue": 21632, "ebitda": 13.5, "net": 2.7, "roce": 93.3, "ebitda_n": 3, "official": False,
                   "companies": [{"symbol": "PANW", "name": "Palo Alto Networks"}, {"symbol": "FTNT", "name": "Fortinet"}, {"symbol": "CHKP", "name": "Check Point <b>Software</b>"}]},
                  {"layer": "Identity", "n": 1, "revenue": 2919, "ebitda": 5.5, "net": 8.1, "roce": None, "ebitda_n": 1, "official": False, "companies": [{"symbol": "OKTA", "name": "Okta"}]},
-                 {"layer": "Data security", "n": 2, "revenue": 1623, "ebitda": -9.1, "net": -12.2, "roce": -24.5, "ebitda_n": 2, "official": False, "companies": []},
+                 {"layer": "Data security", "n": 3, "revenue": 1623, "ebitda": -9.1, "net": -12.2, "roce": -24.5, "ebitda_n": 3, "official": False, "companies": []},
                  {"layer": "Named in the theme's list", "n": 3, "revenue": 9254, "ebitda": 33.4, "net": 24.6, "roce": 28.8, "ebitda_n": 3, "official": True, "basis": "list",
                   "companies": [{"symbol": "CRWD", "name": "CrowdStrike"}]}]}
 
@@ -660,8 +660,8 @@ LEGACY_THEME = {"slug": "theme-cybersecurity-margins-us", "kind": "research", "m
     {"t": "h2", "text": "The whole chain in one table"},
     {"t": "table", "caption": "Median figures by layer (revenue in $ million, combined)", "head": ["Layer", "Companies", "Revenue", "EBITDA margin", "Net margin", "ROCE"],
      "align": "lrrrrr", "rows": [["Network and perimeter security", "3", "21,632", "+13.5%", "+2.7%", "+93.3%"], ["Endpoint and detection", "2", "5,813", "–", "−3.4%", "−22.4%"],
-                                 ["Identity and access", "1", "2,919", "+5.5%", "+8.1%", "–"], ["Vulnerability and data security", "2", "1,623", "−9.1%", "−12.2%", "−24.5%"],
-                                 ["Edge delivery and application protection", "2", "6,376", "+14.8%", "+3.0%", "–"], ["Named in the theme's list", "4", "9,254", "+33.4%", "+24.6%", "+28.8%"]]},
+                                 ["Identity and access", "1", "2,919", "+5.5%", "+8.1%", "–"], ["Vulnerability and data security", "3", "1,623", "−9.1%", "−12.2%", "−24.5%"],
+                                 ["Edge delivery and application protection", "3", "6,376", "+14.8%", "+3.0%", "–"], ["Named in the theme's list", "4", "9,254", "+33.4%", "+24.6%", "+28.8%"]]},
     {"t": "details", "title": "How these figures were worked out", "items": ["Each company's latest full latest fiscal year, in $ million. Consolidated accounts where the company files them."]}]}
 
 
@@ -730,3 +730,12 @@ def test_a_note_in_markdown_becomes_a_research_post_of_clean_blocks():
     assert t["head"] == ["Segment", "Issues"] and t["align"] == "lr" and t["rows"] == [["Main board", "235"], ["SME", "203"]]
     clean = blog.clean_blocks(blocks)
     assert len(clean) == 6 and not any("example.com" in str(b) for b in clean)
+
+
+def test_the_theme_post_compares_only_layers_of_three_companies_or_more():
+    """The same floor as the decks (R25): a layer whose median is of fewer than three companies is never the high or low end."""
+    from app import blog_research as br
+    rows = [{"layer": "A", "ebitda": 30.0, "ebitda_n": 2}, {"layer": "B", "ebitda": 20.0, "ebitda_n": 3},
+            {"layer": "C", "ebitda": 5.0, "ebitda_n": 4}, {"layer": "D", "ebitda": -10.0, "ebitda_n": 1}]
+    assert br._theme_gap(rows) == {"high": "B", "high_value": 20.0, "low": "C", "low_value": 5.0, "gap": 15.0}
+    assert br._theme_gap([dict(r, ebitda_n=2) for r in rows]) is None

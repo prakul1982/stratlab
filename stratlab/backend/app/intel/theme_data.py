@@ -31,6 +31,10 @@ NOTABLE_GAP = 10.0            # points between the highest and lowest layer medi
 NOTABLE_MOVE = 5.0            # points a layer's EBITDA margin moved over three years
 MIN_BASE = 3                  # companies a median needs to be shown as one, and a layer to be called highest or lowest (R20: no finding on a base under 3)
 FEW_BASE = 4                  # a highest or lowest median on this many companies or fewer says its count
+# R25 (owner's outside review): one floor for every comparison of layers in a deck (a highest or lowest median, a fastest or slowest, green
+# and red marks): a layer with fewer companies than this behind its median is shown, never ranked; with fewer than two layers over
+# it, no comparison is said at all
+COMPARE_MIN = MIN_BASE
 MIN_LAYER = 2                 # companies a layer needs for its median to be called a layer's figure (a post, the chain's highest and lowest)
 ROUNDING = 1.0                # points: EBITDA margins are filed in whole points, so two medians this close may be the same figure rounded
 FINANCIAL_KEYS = ("ebitda", "roce", "debt_equity")
@@ -38,6 +42,11 @@ FINANCIAL_KEYS = ("ebitda", "roce", "debt_equity")
 # and profit over assets, gross and net NPA and price to book, each where the company's stored figures have it
 LENDER_KEYS = ("roe", "nii_assets", "roa", "gnpa", "nnpa", "nii_growth", "deposit_growth", "pb")
 STAT_KEYS = ("ebitda", "net", "roce") + LENDER_KEYS
+# R25 (the live R24 Insurance deck showed "NII / assets" for insurers): a bank's and a lender's own measures, never an insurer's, so a layer of
+# insurers has no median of them and its tables no column for them
+BANK_ONLY = ("nii_assets", "roa", "gnpa", "nnpa", "nii_growth", "deposit_growth")
+# each family's filed figures a value-chain row carries (its layers' medians), shown only where a layer of that family has them
+FAMILY_CHAIN = ("cet1", "solvency", "combined_ratio", "sbc_share", "fcf_margin")
 
 # the metric profile of a company's industry family, in one place (R21: an insurer's EBITDA margin and ROCE showed as medians of 1 company):
 # banks, other lenders and insurers are read on lenders' measures (ROE, P/B, net margin; their own ratios where stored), never on EBITDA
@@ -260,7 +269,8 @@ def layer_block(name: str, rows: list[dict], wide: set[str]) -> dict:
     sure = [r for r in rows if r.get("status") != "unverified"]
     own = [r for r in sure if r["symbol"] not in wide]
     pool = own or sure
-    stats = {k: stat(r.get(k) for r in pool if not (k == "net" and r.get("one_off")) and not (k == "pb" and (r.get(k) or 0) <= 0)) for k in STAT_KEYS}
+    stats = {k: stat(r.get(k) for r in pool if not (k == "net" and r.get("one_off")) and not (k == "pb" and (r.get(k) or 0) <= 0)
+                     and not (k in BANK_ONLY and r.get("profile") == "insurer")) for k in STAT_KEYS}
     stats.update({k: stat(r.get(k) for r in pool) for k in sector_metrics.KEYS if any(r.get(k) is not None for r in pool)})    # R23: filed sector figures
     return {"layer": name, "companies": rows, "stats": stats, "n": len(sure), "listed": len(rows),
             "net_all": stat(r.get("net") for r in pool), "one_off": sorted(r["symbol"] for r in pool if r.get("one_off")),
@@ -276,7 +286,7 @@ def margin_line(block: dict, chain_median: float | None, several: bool = True, w
     e = block["stats"].get("ebitda")
     parts = []
     if e and chain_median is not None and several and e.get("n", MIN_BASE) >= MIN_BASE:
-        d = e["median"] - chain_median
+        d = float(f1(e["median"])) - float(f1(chain_median))          # the gap of the two figures as printed (R25: 26.6% and 24.9% are 1.7 apart)
         if abs(d) > ROUNDING:
             # whole points print whole: 9% and 15% are 6 points apart, not "6.0 points" (R17-007); a median's half stays
             gap = f1(abs(d))
@@ -300,42 +310,43 @@ def chain_table(blocks: list[dict]) -> dict:
         rows.append({"layer": b["layer"], "n": b["n"], "revenue": b["revenue"], "ebitda": e["median"] if e else None, "net": n["median"] if n else None,
                      "roce": c["median"] if c else None, "ebitda_n": e["n"] if e else 0, "official": bool(b.get("official")), "rest": b.get("basis") == "rest",
                      **{k: (b["stats"].get(k) or {}).get("median") for k in LENDER_KEYS}, "roe_n": (b["stats"].get("roe") or {}).get("n", 0),
-                     **{f"{k}_n": (b["stats"].get(k) or {}).get("n", 0) for k in STAT_KEYS if k not in ("ebitda", "roe")}})
+                     **{f"{k}_n": (b["stats"].get(k) or {}).get("n", 0) for k in STAT_KEYS if k not in ("ebitda", "roe")},
+                     **{k: (b["stats"].get(k) or {}).get("median") for k in FAMILY_CHAIN}, **{f"{k}_n": (b["stats"].get(k) or {}).get("n", 0) for k in FAMILY_CHAIN}})
     # only the map's own layers (an official industry's leftover companies overlap them: "Vehicle assembly" and "Commercial Vehicles"), each
     # with MIN_BASE companies in its median, and only a gap wider than the rounding of whole-point margins, name a highest and a lowest
     # the "Other ..." group (companies that fit none of the map's layers) is never compared (R22)
-    have = [r for r in rows if r["ebitda"] is not None and r["ebitda_n"] >= MIN_BASE and not r["official"]]
+    have = [r for r in rows if r["ebitda"] is not None and r["ebitda_n"] >= COMPARE_MIN and not r["official"]]
     if len(have) < 2:          # a map whose layers are the official industries themselves: they are its layers (R17-011)
-        have = [r for r in rows if r["ebitda"] is not None and r["ebitda_n"] >= MIN_BASE and not r["rest"]]
+        have = [r for r in rows if r["ebitda"] is not None and r["ebitda_n"] >= COMPARE_MIN and not r["rest"]]
     line, hi, lo = None, None, None
     if len(have) >= 2:
         hi, lo = max(have, key=lambda r: r["ebitda"]), min(have, key=lambda r: r["ebitda"])
         if hi["layer"] == lo["layer"] or hi["ebitda"] - lo["ebitda"] <= ROUNDING:
-            gap = max(r["ebitda"] for r in have) - min(r["ebitda"] for r in have)
+            gap = gap_of(max(r["ebitda"] for r in have), min(r["ebitda"] for r in have))         # as printed (R25)
             hi = lo = None
-            line = (f"The median EBITDA margins of the {len(have)} layers with at least {MIN_BASE} companies are within {f1(gap)} "
+            line = (f"The median EBITDA margins of the {len(have)} layers with at least {COMPARE_MIN} companies are within {gap} "
                     "points of each other, the rounding of whole points.")
         else:
             whole = whole_points([c for b in blocks for c in b["companies"]])
-            line = (f"Median EBITDA margin is highest in {hi['layer']} ({pts(hi['ebitda'], whole)}{few(hi['ebitda_n'])}) and lowest in {lo['layer']} "
-                    f"({pts(lo['ebitda'], whole)}{few(lo['ebitda_n'])}), "
-                    f"a gap of {f1(hi['ebitda'] - lo['ebitda'])} points.")
+            line = (f"Median EBITDA margin is highest in {hi['layer']} ({pts(hi['ebitda'], whole)}{few(hi['ebitda_n'], hi['n'])}) and lowest in {lo['layer']} "
+                    f"({pts(lo['ebitda'], whole)}{few(lo['ebitda_n'], lo['n'])}), "
+                    f"a gap of {gap_of(hi['ebitda'], lo['ebitda'])} points.")
     measure = "ebitda"
     if len(have) < 2:
         # lenders have no EBITDA margin: their layers are set side by side on return on equity (R18)
-        lend = [r for r in rows if r["roe"] is not None and r["roe_n"] >= MIN_BASE and not r["official"]]
+        lend = [r for r in rows if r["roe"] is not None and r["roe_n"] >= COMPARE_MIN and not r["official"]]
         if len(lend) < 2:
-            lend = [r for r in rows if r["roe"] is not None and r["roe_n"] >= MIN_BASE and not r["rest"]]
+            lend = [r for r in rows if r["roe"] is not None and r["roe_n"] >= COMPARE_MIN and not r["rest"]]
         if len(lend) >= 2:
             measure, have = "roe", lend
             hi, lo = max(lend, key=lambda r: r["roe"]), min(lend, key=lambda r: r["roe"])
             if hi["layer"] == lo["layer"] or hi["roe"] - lo["roe"] < 0.05:
                 hi = lo = None
-                line = f"The median return on equity of the {len(lend)} layers with at least {MIN_BASE} companies is the same."
+                line = f"The median return on equity of the {len(lend)} layers with at least {COMPARE_MIN} companies is the same."
             else:
-                line = (f"Median return on equity is highest in {hi['layer']} ({pts(hi['roe'], True)}{few(hi['roe_n'])}) and lowest in {lo['layer']} "
-                        f"({pts(lo['roe'], True)}{few(lo['roe_n'])}), "
-                        f"a gap of {f1(hi['roe'] - lo['roe'])} points.").replace(".0 points", " points")
+                line = (f"Median return on equity is highest in {hi['layer']} ({pts(hi['roe'], True)}{few(hi['roe_n'], hi['n'])}) and lowest in {lo['layer']} "
+                        f"({pts(lo['roe'], True)}{few(lo['roe_n'], lo['n'])}), "
+                        f"a gap of {gap_of(hi['roe'], lo['roe'])} points.").replace(".0 points", " points")
         else:
             line = None             # nothing to set side by side: no line at all (R18: the deck said it couldn't be done)
     if line and hi and any(r["rest"] for r in rows):
@@ -344,9 +355,33 @@ def chain_table(blocks: list[dict]) -> dict:
             "compared": [r["layer"] for r in have], "gap": round(hi[measure] - lo[measure], 1) if hi else None}
 
 
-def few(n: int) -> str:
-    """", 3 companies" after a layer's median when it rests on FEW_BASE companies or fewer (R22: a 50% median of 3 called highest)."""
+def gap_of(a: float, b: float) -> str:
+    """The gap between two figures as they are printed, to one decimal (R25: a gap said beside its two figures is their difference)."""
+    return f1(float(f1(a)) - float(f1(b)))
+
+
+def few(n: int, of: int | None = None) -> str:
+    """", 3 companies" after a layer's median when it rests on FEW_BASE companies or fewer (R22: a 50% median of 3 called highest); ", 3 of 5
+    companies" when the layer has more companies than its median is of (R25: one way of counting in tables, charts and headlines)."""
+    if of and n and n < of:
+        return f", {n} of {of} companies"
     return f", {n} companies" if n and n <= FEW_BASE else ""
+
+
+def of_words(n: int, of: int | None, one: str = "company", many: str = "companies") -> str:
+    """"3 companies", or "3 of 5 companies" when the figure is of fewer companies than the group has (R25)."""
+    if of and n < of:
+        return f"{n} of {of} {many}"
+    return f"{n} {one if n == 1 else many}"
+
+
+def rank_pair(rows: list, value, count, floor: int = COMPARE_MIN):
+    """(highest, lowest) of `rows` by `value(row)` among those whose figure is of at least `floor` companies (`count(row)`) (R25: one floor for
+    every comparison of layers); None when fewer than two qualify, or when the highest or the lowest is tied (no layer is named for a tie)."""
+    have = sorted((r for r in rows if value(r) is not None and (count(r) or 0) >= floor), key=value)
+    if len(have) < 2 or value(have[-1]) == value(have[-2]) or value(have[0]) == value(have[1]):
+        return None
+    return have[-1], have[0]
 
 
 def layer_history(rows: list[dict]) -> dict | None:
@@ -735,10 +770,11 @@ def notable_items(blocks: list[dict], chain: dict, histories: dict) -> list[dict
     and a layer whose aggregate EBITDA margin moved a lot over three years. Empty when nothing is. A group of the theme's companies that no
     layer took (an official industry's, or "Named in the theme's list": "official" in theme_base.with_base) isn't a layer of the chain, so it
     is never the high or the low end of a gap and its margin's move isn't a layer's (R11: the cybersecurity post set "Named in the theme's
-    list" against a layer)."""
+    list" against a layer). The decks' floors hold (R25): a gap is between layers of COMPARE_MIN companies with the figure or more, and a move
+    is of an aggregate of MIN_BASE companies or more."""
     out = []
     apart = {b.get("layer") for b in blocks if b.get("official")} | {r["layer"] for r in chain["rows"] if r.get("official")}
-    have = [r for r in chain["rows"] if r["ebitda"] is not None and r["ebitda_n"] >= MIN_LAYER and r["layer"] not in apart]
+    have = [r for r in chain["rows"] if r["ebitda"] is not None and r["ebitda_n"] >= COMPARE_MIN and r["layer"] not in apart]
     if len(have) >= 2:
         hi, lo = max(have, key=lambda r: r["ebitda"]), min(have, key=lambda r: r["ebitda"])
         if hi["ebitda"] - lo["ebitda"] >= NOTABLE_GAP:
@@ -747,7 +783,7 @@ def notable_items(blocks: list[dict], chain: dict, histories: dict) -> list[dict
     for layer, h in histories.items():
         if layer in apart:
             continue
-        if h and len(h["years"]) >= 4 and h["ebitda"][-1] is not None and h["ebitda"][-4] is not None:
+        if h and (h.get("n") or 0) >= MIN_BASE and len(h["years"]) >= 4 and h["ebitda"][-1] is not None and h["ebitda"][-4] is not None:
             move = h["ebitda"][-1] - h["ebitda"][-4]
             if abs(move) >= NOTABLE_MOVE:
                 out.append({"kind": "move", "layer": layer, "from_year": h["years"][-4], "to_year": h["years"][-1], "from": h["ebitda"][-4], "to": h["ebitda"][-1],
@@ -940,6 +976,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         b["policy"] = v.get("policy")
         b["official"], b["basis"] = bool(v.get("official")), v.get("basis")     # a layer that is one official industry's companies the AI didn't place (theme_base.py)
         b["by_industry"] = bool(v.get("by_industry"))
+        b["model"] = v.get("model") or None                 # what the layer's companies have in common: how they earn (theme_base.by_model, R25)
         blocks.append(b)
         sure = [r for r in mine if r.get("status") != "unverified"]
         histories[b["layer"]] = layer_history([r for r in sure if r["symbol"] not in wide] or sure)
@@ -1164,3 +1201,87 @@ def business_section(blocks: list[dict], subs: list[dict], names: dict, read) ->
     total = len({c["symbol"] for b in blocks for c in b["companies"]} | {c["symbol"] for s in subs for c in s["companies"]})
     return {"layers": [{"layer": b["layer"], "rows": b["business"]} for b in blocks], "subs": [{"name": s["name"], "rows": s["business"]} for s in subs],
             "companies": len(every), "of": total, "held": [{"symbol": r["symbol"], "name": r["name"], "why": r["held"]} for r in checked.values() if r.get("held")]}
+
+
+# ---------- R25: every number a sentence states is one the tables show ----------
+# a deck's headlines and findings are written from the same rows as its tables; before a deck is stored each of their percentages, multiples,
+# gaps in points and counts is looked for again among the figures its tables, charts and tiles show, and a sentence with one that isn't there
+# is dropped, never shipped wrong (the owner's outside review, 7 Nov)
+_C_PCT = re.compile(r"(?<![\w.,])([+−-]?)(\d[\d,]*(?:\.\d+)?)%")
+_C_X = re.compile(r"(?<![\w.,])(\d[\d,]*(?:\.\d+)?)x\b")
+_C_PTS = re.compile(r"(?<![\w.,])([+−-]?)(\d+(?:\.\d+)?) (?:pts|points?)\b")
+_C_OF = re.compile(r"(?<![\w.,])(\d[\d,]*) of (?:the |all )?(\d[\d,]*)\b(?! ?%)")
+_C_N = re.compile(r"(?<![\w.,])(\d[\d,]*) (?:more )?(?:compan(?:y|ies)|banks?|insurers?|general insurers|layers?|loss-makers?)\b|\((\d[\d,]*)\)")
+_C_ANY = re.compile(r"(?<![\w.])([+−-]?)(\d[\d,]*(?:\.\d+)?)")
+_C_MONEY = re.compile(r"(?<![\w.])(?:[₹$]\d[\d,]*(?:\.\d+)?(?: lakh)?(?: cr| bn| m| million| billion)?|[A-Z]{3} \d[\d,]*(?:\.\d+)? (?:bn|m|million|billion)\b)")
+
+
+def _cnum(sign: str, digits: str) -> float:
+    return float(digits.replace(",", "")) * (-1 if sign in ("−", "-") else 1)
+
+
+def shown_numbers(texts) -> dict:
+    """The figures a deck's tables, charts and tiles show, from their cells as printed (`texts`: strings and numbers): {"pct", "x", "pts",
+    "n", "money", "gaps"}, each a set (money as printed: "₹8,855 cr"; "gaps" is filled by the caller: the differences within a column). A chart's plotted values come as numbers and count as percentages and multiples."""
+    out = {"pct": set(), "x": set(), "pts": set(), "n": set(), "money": set(), "gaps": set()}
+    for t in texts:
+        if t is None or isinstance(t, bool):
+            continue
+        if isinstance(t, (int, float)):
+            out["pct"].add(round(float(t), 2))
+            out["x"].add(round(float(t), 2))
+            if float(t).is_integer():
+                out["n"].add(int(t))
+            continue
+        t = str(t)
+        for sign, d in _C_PCT.findall(t):
+            out["pct"].add(_cnum(sign, d))
+        for d in _C_X.findall(t):
+            out["x"].add(_cnum("", d))
+        for sign, d in _C_PTS.findall(t):
+            out["pts"].add(_cnum(sign, d))
+        out["money"].update(_C_MONEY.findall(t))
+        for sign, d in _C_ANY.findall(t):
+            v = _cnum("", d)
+            if v.is_integer():
+                out["n"].add(int(v))
+    return out
+
+
+def _near(value: float, digits: str, pool) -> bool:
+    """Whether a figure printed with `digits` is one of `pool` at that precision (a whole 19% is 19.0 to 19.4 and 18.5 shown whole)."""
+    dp = len(digits.split(".")[1]) if "." in digits else 0
+    tol = 0.5 if dp == 0 else 0.5 * 10 ** -dp + 1e-9
+    return any(abs(p - value) <= tol + 1e-9 for p in pool)
+
+
+def claim_mismatches(text: str, shown: dict, floor: int = COMPARE_MIN) -> list[str]:
+    """The figures a headline or finding states that the deck's tables don't show (`shown`: shown_numbers): a percentage or multiple not among
+    the table figures; a gap in points that is neither the difference of two percentages the sentence states, nor of two in one table column,
+    nor a figure shown; a count of
+    companies not among the shown counts; a money figure not printed in a table. Empty when every figure is there. Rules' own constants (5% of a high, 25% or more) are not figures."""
+    bad = []
+    pcts = []
+    for sign, d in _C_PCT.findall(text):
+        v = _cnum(sign, d)
+        pcts.append(v)
+        if not _near(v, d, shown["pct"]):
+            bad.append(f"{sign}{d}%")
+    for d in _C_X.findall(text):
+        if not _near(_cnum("", d), d, shown["x"]):
+            bad.append(f"{d}x")
+    for sign, d in _C_PTS.findall(text):
+        v = abs(_cnum(sign, d))
+        gaps = {round(abs(a - b), 2) for a in pcts for b in pcts} | set(shown.get("gaps", ()))
+        if not (_near(v, d, gaps) or _near(_cnum(sign, d), d, shown["pts"])):
+            bad.append(f"{sign}{d} points")
+    counts = [int(a.replace(",", "")) for pair in _C_OF.findall(text) for a in pair] + \
+        [int((a or b).replace(",", "")) for a, b in _C_N.findall(text)]
+    for n in counts:
+        if n not in shown["n"] and n != floor:
+            bad.append(str(n))
+    for a, b in _C_OF.findall(text):
+        if int(a.replace(",", "")) > int(b.replace(",", "")):
+            bad.append(f"{a} of {b}")
+    bad += [m for m in _C_MONEY.findall(text) if m not in shown.get("money", ())]
+    return bad
