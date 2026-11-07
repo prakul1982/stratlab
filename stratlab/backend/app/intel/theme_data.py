@@ -20,6 +20,7 @@ from statistics import median
 
 from .. import stock_pages
 from .. import screens
+from . import sector_metrics
 
 # a company that runs several businesses: its figures are the whole company's, not those of one layer's work
 DIVERSIFIED = {"RELIANCE", "ADANIENT", "M&M", "LT", "ITC", "GRASIM", "SIEMENS", "TATASONS", "BAJAJHLDNG", "JSWHL", "AEGISLOG", "GODREJIND",
@@ -182,7 +183,7 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
     shown_e = None if wild or ebitda is None or abs(ebitda) > stock_pages.EXTREME else r1(ebitda)
     shown_n = None if wild or net is None or abs(net) > stock_pages.EXTREME else r1(net)
     return {
-        "symbol": symbol, "name": base["name"], "year": last["year"] if last else None, "bank": lender, "profile": profile,
+        "symbol": symbol, "name": base["name"], "year": last["year"] if last else None, "bank": lender, "profile": profile, "sector": base.get("sector"),
         "unit": THEME_CURRENCY.get(region, ("", f.get("unit")))[1] if cur != THEME_CURRENCY.get(region, ("USD",))[0] else f.get("unit"),
         "currency": cur, "fx": {"rate": k, "at": fx_at} if cur != THEME_CURRENCY.get(region, ("USD",))[0] else None,
         "revenue": sales if sales and sales > 0 else None, "profit": profit,
@@ -260,6 +261,7 @@ def layer_block(name: str, rows: list[dict], wide: set[str]) -> dict:
     own = [r for r in sure if r["symbol"] not in wide]
     pool = own or sure
     stats = {k: stat(r.get(k) for r in pool if not (k == "net" and r.get("one_off")) and not (k == "pb" and (r.get(k) or 0) <= 0)) for k in STAT_KEYS}
+    stats.update({k: stat(r.get(k) for r in pool) for k in sector_metrics.KEYS if any(r.get(k) is not None for r in pool)})    # R23: filed sector figures
     return {"layer": name, "companies": rows, "stats": stats, "n": len(sure), "listed": len(rows),
             "net_all": stat(r.get("net") for r in pool), "one_off": sorted(r["symbol"] for r in pool if r.get("one_off")),
             "revenue": sum(r["revenue"] for r in sure if r.get("revenue")) or None,
@@ -462,40 +464,57 @@ def margin_drivers(hist: dict | None, rows: dict, layer_of: dict) -> dict | None
 
 
 PEER_BAND = 2.0               # companies of similar market value: between half and twice a company's own
+PEER_MIN = 10                 # peers of a company's own sector it needs for that set; with fewer, the whole market's (R23)
+MARKET_MIN = 3                # peers the whole market's set needs
 
 
-def _peer_median(cap, market: list[dict], key: str, ok, theme: set) -> float | None:
+def _peer_median(cap, market: list[dict], key: str, ok, theme: set, sector: str | None = None, me: str | None = None) -> tuple[float | None, str | None]:
+    """(the median of `key` over a company's peers, which set they are): companies of similar market value (half to twice its own) in its own
+    sector outside the theme ("sector"); with fewer than PEER_MIN of those, the theme's other companies of that sector counted too
+    ("sector_theme"); with fewer still, every listed company of similar value outside the theme ("market", MARKET_MIN at least). (R23, the
+    owner's reviews: "listed peers of similar market value" are not economically comparable.)"""
     if not cap:
-        return None
-    xs = [num(m.get(key)) for m in market if m.get("symbol") not in theme and num(m.get("market_cap")) and cap / PEER_BAND <= num(m.get("market_cap")) <= cap * PEER_BAND]
-    xs = [x for x in xs if x is not None and ok(x)]
-    return median(xs) if len(xs) >= 3 else None
+        return None, None
+    band = [m for m in market if num(m.get("market_cap")) and cap / PEER_BAND <= num(m.get("market_cap")) <= cap * PEER_BAND and m.get("symbol") != me]
+    vals = lambda ms: [x for x in (num(m.get(key)) for m in ms) if x is not None and ok(x)]      # noqa: E731
+    if sector:
+        same = [m for m in band if m.get("sector") == sector]
+        out_ = vals([m for m in same if m.get("symbol") not in theme])
+        if len(out_) >= PEER_MIN:
+            return median(out_), "sector"
+        all_ = vals(same)
+        if len(all_) >= PEER_MIN:
+            return median(all_), "sector_theme"
+    xs = vals([m for m in band if m.get("symbol") not in theme])
+    return (median(xs), "market") if len(xs) >= MARKET_MIN else (None, None)
 
 
 def peers_section(rows: list[dict], market: list[dict]) -> dict:
-    """Each company against listed companies outside the theme of similar market value (between half and twice its own): its P/E, its revenue
-    growth over three years and its ROCE beside their medians, and the theme's median company of each (the owner, 7 Nov: "valuation premium vs
-    same-size peers beside growth and ROCE", not against every listed company). Facts: a comparison, never a view of what is cheap."""
+    """Each company against listed companies of similar market value (between half and twice its own) in its own sector, outside the theme
+    where there are enough, else the whole market (_peer_median, R23): its P/E, its revenue growth over three years and its ROCE beside their
+    medians, and the theme's median company of each (the owner, 7 Nov: "valuation premium vs same-size peers beside growth and ROCE").
+    `sets` counts the companies compared with each set. Facts: a comparison, never a view of what is cheap."""
     theme = {r["symbol"] for r in rows}
     out = {}
     for key, mkey, ok in (("pe", "pe", lambda x: 0 < x <= stock_pages.PE_MAX), ("sales_3y", "sales_cagr_3y", lambda x: True), ("roce", "roce", lambda x: True)):
-        own, peer, prem = [], [], []
+        own, peer, prem, sets = [], [], [], {}
         for r in rows:
             v = num(r.get(key))
             if v is None or not ok(v):
                 continue
-            pm = _peer_median(r.get("cap"), market, mkey, ok, theme)
+            pm, basis = _peer_median(r.get("cap"), market, mkey, ok, theme, r.get("sector"), r["symbol"])
             if pm is None:
                 continue
             own.append(v)
             peer.append(pm)
+            sets[basis] = sets.get(basis, 0) + 1
             if key == "pe" and pm > 0:
                 prem.append((v / pm - 1) * 100)
         if own:
             # the P/E gap is the ratio of the two medians over the same companies, the two numbers a table shows (R17-010: the median of each
             # company's own gap, 8.2%, sat beside medians 3.4% apart)
             mo, mp = median(own), median(peer)
-            out[key] = {"n": len(own), "theme": round(mo, 1), "peers": round(mp, 1),
+            out[key] = {"n": len(own), "theme": round(mo, 1), "peers": round(mp, 1), "sets": sets,
                         "premium": round((round(mo, 1) / round(mp, 1) - 1) * 100, 1) if prem and round(mp, 1) > 0 else None}
     return out
 
@@ -745,14 +764,15 @@ class Sources:
     card(symbol, row) -> the management report card checked against the reported years ({met, missed}) or None;
     history(key, point) -> the theme's kept points after adding `point` (a day's median P/E and the like), oldest first;
     segments(symbol) -> the business segments the company's documents report ([{name, share_pct}]) or None (is_diversified);
-    corp_history(symbol) -> the company's stored corporate actions (every kind, each with "kind" and "ex_date"), never read from a source."""
+    corp_history(symbol) -> the company's stored corporate actions (every kind, each with "kind" and "ex_date"), never read from a source;
+    metrics(symbol, family) -> the company's filed sector figures (sector_metrics: a stored piece, read now or queued) or None (R23)."""
 
     def __init__(self, today: date, facts, index_rows=lambda: [], shareholding=lambda s: None, insider_buys=lambda: {},
                  results=lambda a, b, s: [], actions=lambda a, b, s: [], red_flags=lambda s, a, b: [], card=lambda s, r: None,
-                 history=lambda k, p: [p], segments=lambda s: None, corp_history=lambda s: []):
+                 history=lambda k, p: [p], segments=lambda s: None, corp_history=lambda s: [], metrics=lambda s, fam: None):
         self.today, self.facts, self.index_rows, self.shareholding, self.insider_buys = today, facts, index_rows, shareholding, insider_buys
         self.results, self.actions, self.red_flags, self.card, self.history, self.segments = results, actions, red_flags, card, history, segments
-        self.corp_history = corp_history
+        self.corp_history, self.metrics = corp_history, metrics
 
 
 _STOP = {"company", "companies", "limited", "india", "indian", "sector", "theme", "other", "others", "product", "products", "service", "services",
@@ -892,6 +912,19 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         except Exception as e:
             print("theme data: segments not read:", sym, type(e).__name__, str(e)[:100])
             return None
+    pending = []
+    for s, r in rows.items():               # each company's filed sector figures (R23): a bank's, an insurer's, a US company's
+        fam = sector_metrics.family_of(region, r)
+        if not fam:
+            continue
+        try:
+            piece = src.metrics(s, fam)
+        except Exception as e:
+            print("theme data: sector figures not read:", s, type(e).__name__, str(e)[:100])
+            piece = None
+        if piece is None:
+            pending.append(s)
+        sector_metrics.apply(r, piece)
     wide = {s for s, r in rows.items() if is_diversified(r, segs(s))}
     names = {s: r["name"] for s, r in rows.items()}
     market = [m for m in (src.index_rows() or []) if isinstance(m, dict)]
@@ -970,6 +1003,8 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     layer_of = {c["symbol"]: b["layer"] for b in blocks for c in b["companies"]}
     out["sections"]["margin_drivers"] = margin_drivers(out["sections"]["margins"], rows, layer_of)
     out["sections"]["quarter"] = quarter_section(members, out["sections"]["events"].get("results_filed"))
+    out["sections"]["sector"] = sector_metrics.section([r for r in own if r.get("status") != "unverified"], region, layer_of, pending, stat)
+    out["metrics_pending"] = sorted(pending)
     out["checks"] = data_checks(listed, blocks, out)
     out["notable"] = notable_items(blocks, chain, histories)
     return out

@@ -194,7 +194,9 @@ def test_valuation_is_set_beside_listed_companies_of_similar_market_value_with_g
     pp = peers["pe"]
     # changed on purpose (R18): one formatter, whole figures print whole (21x, 110%, 10x)
     w = deck.whole_figures
-    assert sub == w(f"Median P/E {pp['theme']:.1f}x for the {pp['n']} companies with listed peers of similar market value, {pp['premium']:.1f}% above their peers' median of 10.0x")
+    # changed on purpose (R23): the peer set is said; these peers have no sector, so the whole market's companies of similar value are the set
+    assert sub == w(f"Median P/E {pp['theme']:.1f}x for the {pp['n']} companies with peers of similar market value in the whole market (fewer than 10 "
+                    f"in their own sector), {pp['premium']:.1f}% above their peers' median of 10.0x")
     row = next(r for r in val["rows"] if r[0] == "P/E, companies with similar-size peers")
     assert row[1] == w(f"{pp['theme']:.1f}x") and row[4] == "10x" and row[2] == w(f"{pp['premium']:.1f}% above peers")
     assert pp["premium"] == round((pp["theme"] / pp["peers"] - 1) * 100, 1)        # the ratio of the two medians the table shows
