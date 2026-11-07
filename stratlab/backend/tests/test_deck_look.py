@@ -44,37 +44,32 @@ def full_view() -> dict:
 
 
 def test_the_theme_deck_carries_every_part_of_the_page():
-    """Each card of the theme page (pages/ThemesPage.tsx, components/ThemeDive.tsx) has its slide, with its figures and words."""
+    """Each card of the theme page that carries something important has its slide (R19, the owner: "just keep the important ones not
+    everything"): the per-company lists (members in their own words, headlines, listings, ownership, events, management) stay on the page."""
     v = full_view()
     slides, _ = deck.theme_plan(v)
     titles = [s.title for s in slides]
-    page = ["The theme at a glance",                    # the map's card: the overview, the core, the funds
+    page = ["Contents", "Key findings", "Data confidence", "Worth a watch",
             "The value chain by layer",                 # ChainCard
             *[f"Layer {i + 1} · {x['layer']}" for i, x in enumerate(v["layers"])],      # LayerCard, every layer with companies
-            "Operating figures",                        # the layers' business updates, one table (R18)
-            "Sub-themes and the companies that do them",   # SubThemesCard
-            "Every company in this theme",              # MembersCard
-            "Every company's figures",                  # LeadersCard
+            "Operating figures",                        # the layers' business updates, one table
             "Tailwinds and risks",                      # ClaimsCard
-            "Latest on this theme",                     # NewsCard
-            "New listings in the theme",                # ListingsCard
-            "Size and shape", "Growth and profitability", "Margins over time", "Valuation", "The latest quarter against a year earlier",
-            "Balance sheet and cash", "Price", "Ownership", "Events", "Management report cards",       # NumbersCards
-            "How to read this deck"]                    # the page's notes
+            "Size and shape", "Growth and profitability", "Valuation", "The latest quarter against a year earlier",       # NumbersCards
+            "How to read this deck",                    # the page's notes
+            "Every company's figures"]                  # LeadersCard: the appendix
     for t in page:
         assert t in titles, t
+    for gone in ("The theme at a glance", "Every company in this theme", "Latest on this theme", "New listings in the theme", "Margins over time",
+                 "Ownership", "Events", "Management report cards"):
+        assert gone not in titles, gone
     words = texts(slides)
-    for must in ("ore turned into cells", "BATT", "A battery fund", "Digs it out.", "Makes cells.", *[x["name"] for x in v["subs"]], "Subsidy scheme extended",
-                 "Mine A ships record ore", "New Cells Ltd", "Ore dispatched", "1,23,456 tonnes", "Auditor resigned", "Quarterly results", "₹5 a share",
-                 "Nifty 50", "Written by AI from general knowledge"):
+    for must in ("ore turned into cells", "BATT", "Digs it out.", "Makes cells.", "Subsidy scheme extended", "Ore dispatched", "1,23,456 tonnes",
+                 "Auditor resigned", "Quarterly results", "Written by AI from general knowledge"):
         assert must in words, must
-    members = [r for s in slides if s.title.startswith("Every company in this theme") for b in s.blocks if b["kind"] == "table" for r in plain(b["rows"])]
-    assert sorted(r[0] for r in members) == sorted(f"{m['name']} ({m['symbol']})" for m in v["members"])        # every company, once
-    lead = [r[0].removesuffix(" (whole company)").removesuffix(" (not confirmed)") for s in slides if s.title.startswith("Every company's figures") for b in s.blocks if b["kind"] == "table" for r in b["rows"]]
-    assert sorted(lead) == sorted(x["name"] for x in v["sections"]["leaders"])
-    assert table_of(slides, "Every company's figures")["head"][-1] == "Price, 1 year"         # the page's price column, once prices are read
+    lead = [r[0].removesuffix(" (whole company)") for s in slides if s.title.startswith("Every company's figures") for b in s.blocks if b["kind"] == "table" for r in b["rows"]]
+    assert sorted(lead) == sorted(x["name"] for x in v["sections"]["leaders"] if v["status"].get(x["symbol"]) != "unverified")      # confirmed, once each
     notes = texts([s for s in slides if s.title == "How to read this deck"])
-    assert "Not read when this deck was made" not in notes and "Nothing to show" not in notes        # every part is in this deck
+    assert "Not read when this deck was made" not in notes and "On the theme's page: the latest headlines and new listings" in notes
 
 
 def test_a_part_the_page_has_nothing_for_is_said_once_never_drawn_empty():
@@ -88,8 +83,7 @@ def test_a_part_the_page_has_nothing_for_is_said_once_never_drawn_empty():
     assert words.count("No listed company is shown for Recycling") == 1
     assert "Recycling" not in [r[0] for r in table_of(slides, "The value chain by layer")["rows"]]
     notes = texts([s for s in slides if s.title == "How to read this deck"])
-    assert "On the theme's page only: the latest headlines, new listings." in notes       # R16: no internal wording ("when this deck was made")
-    assert "Nothing to show for this theme's companies yet:" in notes and "management report cards" in notes
+    assert "On the theme's page: the latest headlines and new listings" in notes       # R16: no internal wording ("when this deck was made")
 
 
 def boxes_overlap(a, b):
@@ -102,6 +96,8 @@ def decks():
     long = copy.deepcopy(view())
     long["members"] = [{**long["members"][0], "symbol": f"S{i}", "name": f"A company with a long registered name number {i}", "layer": f"Layer {i // 9}",
                         "what": "makes a long list of things for a long list of customers in many countries"} for i in range(61)]
+    lead = long["sections"]["leaders"][0]
+    long["sections"] = {**long["sections"], "leaders": [{**lead, "symbol": f"S{i}", "name": f"A company with a long registered name number {i}"} for i in range(61)]}
     sparse = {"region": "US", "sector": "Nothing here", "members": [], "layers": [], "chain": {}, "sections": {}}
     yield "theme", deck.theme_plan(full_view())[0]
     yield "theme, bare", deck.theme_plan(view())[0]
@@ -135,14 +131,12 @@ def test_every_slide_of_every_deck_fits_its_slide_with_body_text_from_11_pt():
 
 
 def test_long_tables_run_on_with_their_page_count_and_never_end_on_a_crumb():
+    # R19: the long table is the appendix's one table of every company's figures
     _, slides = next(d for d in decks() if d[0] == "theme, long")
-    pages = [s.title for s in slides if s.title.startswith("Every company in this theme")]
+    pages = [s.title for s in slides if s.title.startswith("Every company's figures")]
     assert len(pages) > 2 and pages[0].endswith(f"(1 of {len(pages)})") and pages[-1].endswith(f"({len(pages)} of {len(pages)})")
-    sizes = [len(plain(b["rows"])) for s in slides if s.title.startswith("Every company in this theme") for b in s.blocks if b["kind"] == "table"]
+    sizes = [len(plain(b["rows"])) for s in slides if s.title.startswith("Every company's figures") for b in s.blocks if b["kind"] == "table"]
     assert sum(sizes) == 61 and min(sizes) >= 3
-    heads = [b["rows"][0] for s in slides if s.title.startswith("Every company in this theme") for b in s.blocks if b["kind"] == "table"]
-    assert all(isinstance(h, dict) for h in heads)                      # each page starts with its layer's heading, "(continued)" where it runs on
-    assert any(h["group"].endswith("(continued)") for h in heads[1:])
 
 
 def test_text_is_cut_to_its_box_with_an_ellipsis_and_long_words_break():
