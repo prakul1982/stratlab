@@ -133,13 +133,18 @@ def test_the_models_come_with_the_one_placement_answer_and_are_kept_with_it():
                                                            "description": "", "companies": todo}]}
     asked = []
 
+    named = []
+
     def ask(system, text):
+        if system == C.NAMES_SYSTEM:              # R26: the layers the split reshaped get the name check once (changed on purpose: a second call)
+            named.append(text)
+            return {"rename": []}
         asked.append(text)
         assert "4. MODEL" in system and "hardware_resale" in system and "HW1 · Boxline Ltd" in text
         return {"place": [{"symbol": "PJX", "layer": "L1"}, {"symbol": "SV1", "layer": "none"}, {"symbol": "NOD", "layer": "none"}], "rename": [], "extra": [],
                 "models": {**models, "ZZZ": "software", "SP0": "made-up"}}                      # a symbol not asked and a model off the list: dropped
     out, got = B.place_rest(mapped, "IT services", lambda s: None, ask=ask)
-    assert len(asked) == 1 and "ZZZ" not in got["models"] and "SP0" not in got["models"] and got["models"]["HW1"] == "hardware_resale"
+    assert len(asked) == 1 and len(named) == 1 and "ZZZ" not in got["models"] and "SP0" not in got["models"] and got["models"]["HW1"] == "hardware_resale"
     names = [v["layer"] for v in out["value_chain"]]
     assert "Hardware resale and integration" in names and names[-1] == "Other IT service companies"
     again, got2 = B.place_rest(mapped, "IT services", lambda s: None, ask=lambda s, t: pytest.fail("asked again"), kept=got)
@@ -154,7 +159,8 @@ def test_a_placement_kept_from_before_the_models_asks_once_for_them():
     first, got = B.place_rest(m, "IT services", lambda s: None, ask=lambda s, t: calls.append(t) or {"place": [], "rename": [], "extra": []})
     old = {k: v for k, v in got.items() if k != "models"}                                       # an answer kept before R25
     out, got2 = B.place_rest(m, "IT services", lambda s: None, ask=lambda s, t: calls.append(t) or {"models": models}, kept=old)
-    assert len(calls) == 2 and got2["models"] and "Hardware resale and integration" in [v["layer"] for v in out["value_chain"]]
+    # changed on purpose (R26): the models' ask, then the name check of the layers the split reshaped (each kept with the map)
+    assert len(calls) == 3 and got2["models"] and got2["model_names"]["rename"] == {} and "Hardware resale and integration" in [v["layer"] for v in out["value_chain"]]
 
 
 def test_place_in_layers_reads_models_as_a_list_too():

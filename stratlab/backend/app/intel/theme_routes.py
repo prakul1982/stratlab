@@ -301,13 +301,36 @@ def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
         kept = {}
     names = {c["ticker"]: c.get("name") for v in out.get("value_chain") or [] for c in v.get("companies") or []}
     about = _about_reader(region, names, 0)                           # stored descriptions only: nothing is read from a page here
-    new, got = theme_base.place_rest(out, theme, lambda s_: about(s_), ask=ask, kept=kept)
+    new, got = theme_base.place_rest(out, theme, lambda s_: about(s_), ask=ask, kept=kept, facts_of=_facts_reader(region))
     if ask is not None and got and got != kept and (got.get("names_for") or any(x.get("by") == "ai" for x in (got.get("assign") or {}).values())):
         try:
             computed.put("theme:place", key, got, label=m.get("sector") or theme, region=region)
         except Exception as e:
             print("theme: placements not kept:", type(e).__name__, str(e)[:100])
     return new
+
+
+def _facts_reader(region: str):
+    """symbol -> {"industry", "segments", "filings"}: what the app already keeps of how a company earns, beside its description (R26): the official
+    industry path its page gave (kept with its description), the names of the segments its documents report (the company page's business read)
+    and its filings' titles (own_filings). Nothing is read from a source here."""
+    def facts_of(sym):
+        k = f"theme:evidence:{region}:{sym}"
+        hit = EVIDENCE_CACHE.get(k)
+        if hit is None:
+            try:
+                hit = db.json_value(db.get_setting(k), {}) or {}
+            except Exception:
+                hit = {}
+        segs = []
+        try:
+            from .. import deepdive
+            segs = [str(x.get("name")) for x in (((deepdive.stored(sym) or {}).get("business") or {}).get("segments") or [])
+                    if isinstance(x, dict) and x.get("name")]
+        except Exception as e:
+            print("theme: segments not read:", sym, type(e).__name__, str(e)[:100])
+        return {"industry": (hit or {}).get("industry") or "", "segments": segs, "filings": own_filings(region, sym)}
+    return facts_of
 
 
 def _no_ai(system: str, text: str) -> dict:
@@ -757,11 +780,17 @@ def map_for_deck(R, profile, region: str, q: str, wait: float = DECK_MAP_WAIT, p
     gets True and the route answers "preparing" instead of making a file without the map. A map or check that failed isn't waited for."""
     t0 = time.time()
     r, theme, m, _ = R.theme_map(profile, region, q)     # R19: the theme library's stored read when there is one (kept across deploys)
-    if not float(m.get("generated_at") or 0):
+    # R26: a kept map due to be written again under a newer prompt (ai.map_due) is waited for as a missing one is: the live R25 decks of four
+    # themes were made on the old map while the new one was being written, and the next pull differed. sector_map has started the rewrite.
+    due = lambda m_: not m_.get("_library") and A.map_due(m_)          # noqa: E731
+    if not float(m.get("generated_at") or 0) or due(m):
         j = job_of(("map", r, theme.lower()))
         if j and j["state"] == "running":
             j["done"].wait(max(0.0, wait - (time.time() - t0)))
             r, theme, m, _ = R.sector_map(profile, region, q, False)
+    if pending is not None and due(m):
+        pending.append(True)                           # R26: never a file on a map that is being replaced, whatever its rewrite's state;
+        return r, theme, m                             # nor a check of it worked out for nothing
     c = checked(r, theme, m)
     if not (c.get("placements") or {}).get("checked"):
         j = job_of(("check",) + check_key(r, theme, m))
