@@ -140,4 +140,17 @@ def test_a_split_half_with_no_shown_company_is_undone():
     assert "Residential developers" in lays and not any("(larger)" in x or "(smaller)" in x for x in lays)
     text = " ".join(str(x) for s in slides for b in s.blocks for x in (b.get("paras") or []) + [s.title or ""])
     assert "(smaller)" not in text and "(larger)" not in text
-    assert deck.THEME_DECK_VERSION == 32 and B.RULES == 32
+    assert deck.THEME_DECK_VERSION == 33 and B.RULES == 33
+
+
+def test_a_company_with_no_model_takes_the_one_its_map_layers_name_states():
+    """Live R31.1 semis: Qualcomm, Broadcom, AMD... had only "From its own filings: Quarterly report" as evidence and sat unknown in the map's
+    "Fabless chip design"; the layer's own name states the model, so they take it at medium confidence. An official group, a name that states
+    no single model, and a company whose model is known are left alone."""
+    from app.intel.theme_base import models_from_layer
+    vc = [{"layer": "Fabless chip design", "companies": [{"ticker": "QCOM"}, {"ticker": "NVDA"}, {"ticker": "AVGO"}]},
+          {"layer": "Other semiconductor companies", "companies": [{"ticker": "XYZ"}]},
+          {"layer": "Semiconductors", "official": True, "companies": [{"ticker": "OFF"}]}]
+    models, conf = models_from_layer(vc, {"NVDA": "fabless", "AVGO": "unknown", "XYZ": ""}, {"NVDA": "high"})
+    assert models["QCOM"] == "fabless" and models["AVGO"] == "fabless" and conf["QCOM"] == conf["AVGO"] == "medium"
+    assert conf["NVDA"] == "high" and models.get("XYZ", "") == "" and "OFF" not in models
