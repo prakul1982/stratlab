@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 
 # the version of the membership rules (who is in a theme, which industries, which layers): part of every cached read's key, so a read kept
 # from before a deploy never keeps the old rules' companies or figures (R18: "Private banks" kept the public banks after the fix)
-RULES = 29                       # R29: kinds of utility and of metals business as their own models (theme_check.refine_model); R21: every confirmed company in one of the map's layers (place_rest); R22: layer names fit, currencies, extra layers; R25: one revenue model a layer; R26: models from more evidence and checked by it, names after the split; R27: primary model, tags and confidence, comparable segments, no one-company layer; R28: the companies to place carry their own descriptions (theme_routes.describe_unplaced)
+RULES = 30                       # R30: a kept placement's unknown models asked again once the companies' descriptions are kept (reask_unknown); R29: kinds of utility and of metals business as their own models (theme_check.refine_model); R21: every confirmed company in one of the map's layers (place_rest); R22: layer names fit, currencies, extra layers; R25: one revenue model a layer; R26: models from more evidence and checked by it, names after the split; R27: primary model, tags and confidence, comparable segments, no one-company layer; R28: the companies to place carry their own descriptions (theme_routes.describe_unplaced)
 INDUSTRIES_DAYS = 30            # the AI's pick of a free-text theme's industries is made again after this long (at most monthly)
 FIGURES_MAX = 60                # companies the dive works figures out for: every one the AI named, then the largest of the base
 DESCRIBE_MAX = 120              # base companies whose own one-line description is looked up for the page, largest first
@@ -691,6 +691,11 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
             models, tags, conf = checked_models(ans, [c.get("ticker") for v in sent for c in v["companies"]])
         except Exception as e:
             print("theme base: layer names not checked:", theme[:40], type(e).__name__, str(e)[:100])
+    reasked = list(kept.get("reasked") or []) if isinstance(kept.get("reasked"), list) else []
+    # a kept placement whose models were read (an answer that gave none is not asked again for them)
+    if models and ask is not None and not asked and isinstance(kept.get("models"), dict) and kept["models"]:
+        models, tags, conf, reasked = reask_unknown(models, tags, conf, reasked, [c.get("ticker") for c in todo] + [c.get("ticker") for v in own for c in v.get("companies") or []],
+                                                    about_of, by_sym, evidence, ask, theme)
     out_vc = []
     for v in vc:
         if v in rest:
@@ -725,7 +730,41 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
     return {**m, "value_chain": out_vc}, {"assign": got, "rename": rename, "extra": extra, **({"names_for": names_for} if names_for else {}),
                                           **({"models": models} if models is not None else {}), **({"model_names": model_names} if model_names else {}),
                                           **({"model_tags": tags} if models is not None and tags else {}),
-                                          **({"model_confidence": conf} if models is not None and conf is not None else {})}
+                                          **({"model_confidence": conf} if models is not None and conf is not None else {}),
+                                          **({"reasked": reasked} if reasked else {})}
+
+
+REASK_MAX = 40                   # R30: companies of a kept placement whose unknown model is asked again, one answer (the largest first as listed)
+
+
+def reask_unknown(models: dict, tags: dict, conf, reasked: list, syms: list, about_of, by_sym: dict, evidence, ask, theme: str):
+    """R30 (the owner's review of the live R28 Telecom deck: three tower companies left out of "Tower infrastructure" with unknown models): a
+    placement kept from before R28 holds "unknown" for companies whose own descriptions are kept now. Those with a description and no model,
+    not asked before (`reasked`), are asked once in one answer of at most REASK_MAX (theme_check.recheck_models: a model is kept only when the
+    evidence shows it), and every symbol asked is kept in `reasked`, so none is asked twice. Background only (`ask` given). (models, tags,
+    confidence, reasked)."""
+    from .theme_check import model_confidence, recheck_models, refine_model
+    done = set(reasked)
+    want = []
+    for s_ in dict.fromkeys(x for x in syms if x):
+        if s_ in done or (models.get(s_) or "unknown") != "unknown" or not (about_of(s_) or "").strip():
+            continue
+        want.append(s_)
+        if len(want) >= REASK_MAX:
+            break
+    if not want:
+        return models, tags, conf, reasked
+    try:
+        got = recheck_models([{"symbol": s_, "name": (by_sym.get(s_) or {}).get("name") or s_, "was": "unknown", "evidence": evidence(s_)} for s_ in want],
+                             ask, theme)
+    except Exception as e:                   # the AI busy: asked on a later check
+        print("theme base: unknown models not asked again:", theme[:40], type(e).__name__, str(e)[:100])
+        return models, tags, conf, reasked
+    models, conf = dict(models), dict(conf or {})
+    for s_, md in got.items():
+        models[s_] = refine_model(md, evidence(s_))
+        conf[s_] = model_confidence(models[s_], evidence(s_), "medium")
+    return models, tags, conf, sorted(done | set(want))
 
 
 def model_names_signature(layers: list[dict]) -> str:
