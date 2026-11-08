@@ -716,7 +716,7 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
     if models:
         # R32: a company whose own stored words say nothing of how it earns takes the model its map layer's name states (live R31 semis:
         # Qualcomm, Broadcom, AMD... with only "From its own filings: Quarterly report" as evidence sat unknown in "Fabless chip design")
-        models, conf = models_from_layer(out_vc, models, conf)
+        models, conf = models_from_layer(out_vc, models, conf, evidence)
     if models:
         # R31: a kept placement's models made exact by the R31 boundaries (lenders, landlords and developers; fabless and fab owners) from the
         # companies' evidence, with nothing asked again
@@ -809,11 +809,19 @@ SPLIT_PART = 3                  # each part of such a split holds at least this 
 R31_REFINE = ("property_development", "property", "construction", "manufacturing", "fabless", "unknown")      # models the R31 boundaries can make exact
 
 
-def models_from_layer(vc: list[dict], models: dict, conf) -> tuple[dict, dict | None]:
+LAYER_MODEL_NOT = (r"\bmaterials?\b|chemicals?|\bgases\b|\bwafers? (?:supplier|maker)|substrates?|"
+                   r"(?:semiconductor|wafer fab\w*|capital|process) equipment|electronic design automation|\beda\b")
+
+
+def models_from_layer(vc: list[dict], models: dict, conf, evidence=None) -> tuple[dict, dict | None]:
     """(models, confidence) with each company of a map layer (not an official group, not "Other") that has no known model given the one
     model its layer's own name states in so many words (theme_check.model_from_words on the name), at "medium" confidence: the map placed it
-    there and its own words don't contradict it. Unchanged when the name states no single model (R32)."""
+    there and its own words don't contradict it. Unchanged when the name states no single model (R32). R34: never when the company's own
+    evidence states another model, or names materials, chemicals, gases, substrates, equipment or design software (live: a materials maker
+    in a fabless layer)."""
+    import re
     from .theme_check import MODELS, model_from_words
+    evidence = evidence if isinstance(evidence, dict) else {}
     models, out_conf = dict(models), (dict(conf) if isinstance(conf, dict) else {})
     for v in vc:
         if v.get("official") or v.get("by_model"):
@@ -824,6 +832,9 @@ def models_from_layer(vc: list[dict], models: dict, conf) -> tuple[dict, dict | 
         for c in v.get("companies") or []:
             s_ = c.get("ticker")
             if s_ and models.get(s_, "") in ("", "unknown"):
+                ev = str(evidence.get(s_) or "")
+                if model_from_words(ev) not in ("", m_) or re.search(LAYER_MODEL_NOT, ev, re.I):
+                    continue
                 models[s_] = m_
                 out_conf[s_] = "medium"
     return models, (out_conf or conf)

@@ -154,3 +154,13 @@ def test_a_company_with_no_model_takes_the_one_its_map_layers_name_states():
     models, conf = models_from_layer(vc, {"NVDA": "fabless", "AVGO": "unknown", "XYZ": ""}, {"NVDA": "high"})
     assert models["QCOM"] == "fabless" and models["AVGO"] == "fabless" and conf["QCOM"] == conf["AVGO"] == "medium"
     assert conf["NVDA"] == "high" and models.get("XYZ", "") == "" and "OFF" not in models
+
+
+def test_a_layer_name_never_gives_its_model_against_the_companys_own_words():
+    """Live R31.1 semis: a materials maker sat in "Fabless chip design"; its own evidence names materials, so the layer's model is not given."""
+    from app.intel.theme_base import models_from_layer
+    vc = [{"layer": "Fabless chip design", "companies": [{"ticker": "Q"}, {"ticker": "E"}, {"ticker": "D"}]}]
+    ev = {"Q": "Industry: Specialty Chemicals. Supplies electronic materials for chip making.",
+          "E": "Makes semiconductor equipment for wafer fabs.", "D": "From its own filings: Quarterly report"}
+    models, _ = models_from_layer(vc, {}, None, ev)
+    assert "Q" not in models and "E" not in models and models["D"] == "fabless"
