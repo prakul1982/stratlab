@@ -288,13 +288,15 @@ def test_the_gate_result_is_kept_with_the_deck_and_admin_library_lists_it_per_de
 
 def test_a_deck_made_through_the_route_carries_its_gate_into_admin_library(lib):  # noqa: F811
     from app import admin, main
-    from app.intel import routes
+    from app.intel import routes, theme_routes
     real = routes.public_facts
     routes.public_facts = lambda region, sym: None
+    theme_routes.DECK_CACHE._d.clear()            # the process's kept files: never another test's deck (nor ours left for the next)
     try:
         r = lib.get("/research/theme-dive/deck?q=AI%20data%20centers&region=US&format=pdf")
     finally:
         routes.public_facts = real
+        theme_routes.DECK_CACHE._d.clear()
     assert r.status_code == 200 and r.content[:5] == b"%PDF-"
     main.app.dependency_overrides[admin.admin_profile] = lambda: {"id": "ad", "_plan": "pro", "plan": "pro", "email": "owner@example.com"}
     try:
