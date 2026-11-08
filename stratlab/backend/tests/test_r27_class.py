@@ -346,7 +346,7 @@ def test_a_lone_company_joins_the_largest_layer_of_its_family_when_there_is_one(
 
 # ---------- RULES, prompts ----------
 def test_rules_bumped_map_prompt_unchanged_and_new_segments_have_needs():
-    assert B.RULES == 28 and A.MAP_V == 23          # R28 bumped RULES: the companies to place carry their descriptions (updated on purpose)
+    assert B.RULES == 29 and A.MAP_V == 23          # R29 bumped RULES: kinds of utility and metals business as models (updated on purpose)
     for new in ("bpo", "components", "fabless", "life_insurance", "general_insurance", "reinsurance", "property_development"):
         assert new in C.MODELS and new in C.MODEL_NEEDS and new in C.PLACE_SYSTEM2
     assert C.model_family("contract_manufacturing") != C.model_family("manufacturing") == C.model_family("fabless")

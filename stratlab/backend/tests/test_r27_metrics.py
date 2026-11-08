@@ -135,7 +135,7 @@ def test_insurers_are_summarised_by_type_never_one_median_across_types_and_reins
     life = next(r for r in rows if r[0] == "Life Cover 0 Ltd")
     assert life[head.index("Combined ratio")] == "n/a" and life[head.index("13th-month persistency")] == "85%"
     reins = next(r for r in rows if r[0] == "Median, reinsurers (companies)")
-    assert reins[head.index("Combined ratio")] == "– (1)"                              # one reinsurer: its own figure, no median
+    assert reins[head.index("Combined ratio")] == "– (1 of 1)"     # one reinsurer: its own figure, no median (R29: "N of M" in every sector median cell)
     lines = deck.sector_lines({"sector": v["sections"]["sector"]})
     assert any(x.startswith("Median of the 3 health insurers with filed figures:") for x in lines)
     assert not any("reinsurer" in x for x in lines)
@@ -238,7 +238,7 @@ def test_every_deck_rule_holds_on_the_new_structures(name):
 
 
 def test_the_deck_version_is_27():
-    assert deck.THEME_DECK_VERSION == 28 and S.VERSION == 2          # R28 bumped the deck version (updated on purpose)
+    assert deck.THEME_DECK_VERSION == 29 and S.VERSION == 2          # R29 bumped the deck version (updated on purpose)
 
 
 def test_a_software_companys_unusual_rpo_growth_is_listed_with_its_base_and_kept_out_of_the_headline_when_it_dominates():

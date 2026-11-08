@@ -269,7 +269,7 @@ MODELS = {
     "platform": ("platform", "Platforms and marketplaces", "commissions, listing fees or advertising on platforms they run"),
     "hardware_resale": ("resale", "Hardware resale and integration", "selling and installing hardware that others make"),
     "distribution": ("resale", "Distribution and trading", "the margin on goods bought from makers and sold on to businesses"),
-    "retail": ("resale", "Retail", "the margin on goods sold to consumers in their own stores or online"),
+    "retail": ("resale", "Retail", "the margin on goods bought, held in stock and sold to consumers in their own stores or online"),
     "manufacturing": ("making", "Makers of their own products", "making and selling finished products of their own"),
     "fabless": ("making", "Product designers that outsource making", "selling products of their own design that contract makers produce"),
     "components": ("components", "Parts, component and ingredient makers", "making parts, components or ingredients that other manufacturers "
@@ -288,6 +288,16 @@ MODELS = {
     "market_infrastructure": ("financial_fees", "Exchanges, depositories and ratings", "fees for trading, settling, holding or rating securities"),
     "resources": ("resources", "Mining, oil, gas and farming", "selling what they mine, drill or grow"),
     "utility": ("utility", "Power, gas and water supply", "selling power, gas or water, much of it at regulated tariffs"),
+    # R29 (the owner's review of the live R27 Utilities and Metals decks: regulated networks beside generators and traders, miners beside
+    # fabricators): the kinds of utility and of metals business are families of their own, so a layer never mixes them
+    "regulated_utility": ("regulated_utility", "Regulated transmission and distribution", "tariffs a regulator sets for carrying or distributing "
+                                                                                         "power or gas over networks they own"),
+    "power_generation": ("generation", "Power generation", "selling the power their own plants generate, under long-term contracts or in the market"),
+    "power_trading": ("power_trading", "Power trading and renewable project developers", "the margin on power they trade, and developing, selling or "
+                                                                                         "running renewable projects"),
+    "commodity_mining": ("mining", "Miners and primary metal producers", "selling ore, coal and primary metal they mine, smelt or make from ore"),
+    "metal_processing": ("metal_processing", "Metal processors and fabricators", "turning metal they buy into pipes, wires, sheets, castings and "
+                                                                                "fabricated parts"),
     "property": ("property", "Property and leasing", "rent and leases on property or equipment they own"),
     "property_development": ("development", "Property developers", "selling homes, offices and plots they build"),
     "care": ("care", "Hospitals, clinics and diagnostics", "fees for care, treatment and tests"),
@@ -347,6 +357,18 @@ MODEL_NEEDS = {
     "reinsurance": r"reinsur",
     "property_development": r"develop|residential projects|housing projects|township|plotted|apartments|homes|villas|real estate projects|"
                             r"sold (?:units|homes)|bookings|pre-?sales",
+    # R29: each kind of utility and of metals business needs words of its kind
+    "regulated_utility": r"transmission|distribution of (?:power|electricity|gas)|power distribution|electricity distribution|discoms?\b|"
+                         r"distribution licen|regulated (?:tariffs?|returns?|assets?|business)|city gas distribution|\bcgd\b|substations?|grid",
+    "power_generation": r"generat|power (?:plants?|stations?|projects)|thermal|hydro|nuclear|coal-fired|gas-fired|\bmw\b|megawatt|\bgw\b|gigawatt|"
+                        r"installed capacity",
+    "power_trading": r"power trading|trading (?:of |in )?(?:power|electricity)|electricity trading|power exchange|renewable|solar|wind|green energy|"
+                     r"\bppas?\b|power purchase agreements?|hybrid (?:power|projects)",
+    "commodity_mining": r"\bmin(?:e|es|ing|er|ers)\b|\bores?\b|\bcoal\b|bauxite|smelt|primary (?:alumini?um|metal|zinc|copper|lead)|integrated steel|"
+                        r"blast furnace|steel ?making|pig iron|sponge iron|ferro ?alloys?|lignite",
+    "metal_processing": r"\bpipes?\b|\btubes?\b|\bwires?\b|re-?rolling|cold[- ]rolled|galvani[sz]|extru|fabricat|\bcastings?\b|\bforgings?\b|"
+                        r"conductors|\bstrips?\b|processing of (?:steel|metals?|alumini?um|copper)|value[- ]added (?:steel|metal)|foils?\b|"
+                        r"(?:steel|metal|alumini?um|copper) products",
     "consumer_services": r"hotel|resort|hospitality|\btours?\b|travel (?:agen|services|booking|packages)|holiday|restaurant|quick[- ]service|"
                          r"food service|dining|cafe|educat|school|coaching|courses|tuition|amusement|theme park|wellness|salon|fitness|gym|"
                          r"cinema|multiplex|entertainment cent",
@@ -502,6 +524,44 @@ def model_evidence(industry="", about="", segments=(), filings="", limit: int = 
     return clean_description(" ".join(parts), limit)
 
 
+# R29: the kinds of business the broad themes hold, kept apart in every model question
+KEEP_APART = ("regulated_utility (a regulator sets its tariffs for transmission or distribution networks) apart from power_generation (sells the "
+              "power its plants generate) and power_trading (trades power, or develops renewable projects); utility only when the kind isn't shown. "
+              "commodity_mining (mines, smelts or makes primary metal from ore) apart from metal_processing (turns metal it buys into pipes, wires, "
+              "sheets, castings or parts); resources for oil, gas and farming. retail (holds and sells its own stock) apart from platform (a "
+              "marketplace earning commissions on others' goods).")
+
+
+def refine_model(model, evidence) -> str:
+    """A broad model made exact where the company's evidence shows one kind only (R29, generic for every theme): "utility" as regulated
+    networks, generation or trading and renewables by its official industry or else its own words; "resources" as commodity_mining by mining
+    words (never oil, gas or farming); a maker in a metals industry as commodity_mining or metal_processing by its industry or else its own
+    words. The model as given when the evidence shows none or more than one."""
+    industry, own = _split_evidence(evidence)
+    text = f"{industry} {own}"
+
+    def one(cands, hints=None):
+        if hints:
+            hit = [c for c in cands if re.search(hints[c], industry, re.I)]
+            if len(hit) == 1:
+                return hit[0]
+        hit = [c for c in cands if re.search(MODEL_NEEDS[c], own, re.I)]
+        return hit[0] if len(hit) == 1 else ""
+    if model == "utility":
+        return one(("regulated_utility", "power_generation", "power_trading"), REFINE_HINTS) or model
+    if model == "resources" and not re.search(r"\boil\b|\bgas\b|petroleum|crude|crops?\b|plantation|farm|\btea\b|coffee|sugar", text, re.I):
+        return "commodity_mining" if re.search(MODEL_NEEDS["commodity_mining"], text, re.I) else model
+    if model in ("manufacturing", "components") and re.search(METALS_INDUSTRY, industry, re.I):
+        return one(("commodity_mining", "metal_processing"), REFINE_HINTS) or model
+    return model
+
+
+REFINE_HINTS = {"regulated_utility": r"transmission|distribution|electric utilit", "power_generation": r"power generation|electric services",
+                "power_trading": r"power trading|renewable", "commodity_mining": r"\bcoal\b|minerals|mining|pig iron|sponge iron|ferro ?alloys|"
+                r"diversified metals|precious metals", "metal_processing": r"products|pipes|tubes|castings|forgings|wires|fabricat"}
+METALS_INDUSTRY = r"iron (?:&|and) steel|steel|alumini?um|copper|zinc|non[- ]ferrous|metals?\b|ferro|mining|minerals"
+
+
 MODEL_SYSTEM = """You say how listed companies earn most of their revenue, using ONLY the EVIDENCE given for each (its official industry, the
 segments it reports, its own description, its filings' titles); no other knowledge and no figure. An earlier answer for each was not shown by its
 evidence ("was"). For each company give the ONE model from this list: """ + ", ".join(MODELS) + """; "unknown" when the evidence doesn't show it.
@@ -509,6 +569,7 @@ A model needs words of its kind in the evidence: platform needs a marketplace, c
 needs reselling, distributing or installing others' hardware; distribution needs trading or wholesale; a company that sells subscriptions to a
 service it runs on its own network or software is software or capacity, not platform; consumer_services needs hotels, travel, meals, courses or
 other services paid for by consumers (services run for governments or companies are bpo or managed_services).
+""" + KEEP_APART + """
 Reply with ONLY this JSON: {"models": {"<symbol>": "<model>"}}"""
 
 
@@ -588,7 +649,7 @@ stock exchange files it under the theme's industry). Use only the companies' des
    manufacturing (its own finished products and brands, an IDM) and fabless (its own designs made by contract makers); components (parts,
    components or ingredients such as APIs sold to other manufacturers) from manufacturing (finished goods, such as vehicles); life_insurance,
    general_insurance (non-life and health) and reinsurance (underwriting only when the type isn't shown); property_development (sells what it
-   builds) from property (rents and leases).
+   builds) from property (rents and leases). """ + KEEP_APART + """
    "also": other models from the list that its evidence shows it earns a real part of its revenue from (a vehicle maker's financing arm is
    lending; a drug maker that also makes for others is contract_manufacturing), at most 3, [] when none. "confidence": "high" when its evidence
    says how it earns in so many words, "medium" when it follows from its industry or products, "low" when it is a guess.

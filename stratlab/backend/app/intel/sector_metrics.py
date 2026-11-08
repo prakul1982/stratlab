@@ -535,15 +535,18 @@ TYPE_NAMES = {"life": ("life insurer", "life insurers"), "general": ("general in
               "health": ("health insurer", "health insurers"), "reinsurance": ("reinsurer", "reinsurers")}
 
 
-def _summary(rows: list[dict], keys: list[str], region: str, tagsets: list[set], stat) -> dict:
+def _summary(rows: list[dict], keys: list[str], region: str, tagsets: list[set], stat, rest: list[set] | None = None) -> dict:
     """One group's figures: each company's state per figure, each figure's median over its "value" rows with the count it applies to, the
-    unusual growth figures with their bases, and the figures that may headline (metric_registry.headline_ok)."""
+    unusual growth figures with their bases, and the figures that may headline (metric_registry.headline_ok). `rest`: the tags of the group's
+    companies with no filed figure yet (none filed, or still being read: R29): each counts in the M of "N of M" of every figure that applies
+    to it, so a median of 7 banks read is "7 of 19", never "7"."""
     sts = {k: registry.states(k, region, rows, tagsets) for k in keys}
     main = registry.main_family(tagsets)
     meds, extreme, head = {}, [], []
     for k in keys:
         vals = [r.get(k) for r in rows]
         meds[k] = registry.coverage(vals, sts[k], stat)
+        meds[k]["of"] += sum(1 for t in rest or () if registry.applies(k, region, t))
         n_ext = 0
         if BY_KEY[k][3] == "chg":
             bases = [((r.get("src") or {}).get(k) or {}).get("base") for r in rows]
@@ -566,11 +569,16 @@ def section(rows: list[dict], region: str, layer_of: dict, pending: list, stat, 
     isn't filed; insurers summarised by type (life, general, health, reinsurance), never one median across types. Empty when no company has one.
     `model_of`: symbol -> its layer's revenue model family (theme_base.by_model), for which figures apply."""
     model_of = model_of or {}
+    waiting = set(pending or ())
     fams = {}
     for fam in FAMILIES:
         cos = [r for r in rows if family_of(region, r) == fam]
         have = [k for k in KEYS if BY_KEY[k][2] == fam and any(r.get(k) is not None for r in cos)]
         if not have:
+            late = sum(1 for r in cos if r["symbol"] in waiting)
+            if late:                # none read yet: said as such (R29), never a family that silently isn't there
+                fams[fam] = {"keys": [], "n": 0, "of": len(cos), "pending": late, "read": len(cos) - late, "rows": [], "medians": {},
+                             "headline": [], "states": {}, "extreme": [], "periods": [], "checked": CHECKED[fam], "not_filed": NOT_FILED[fam]}
             continue
         with_ = [r for r in cos if any(r.get(k) is not None for k in have)]
         out_rows = [{"symbol": r["symbol"], "name": r["name"], "layer": layer_of.get(r["symbol"]), "as_of": r.get("sector_as_of"),
@@ -581,8 +589,13 @@ def section(rows: list[dict], region: str, layer_of: dict, pending: list, stat, 
         keys = [k for k in have if any(registry.applies(k, region, t) and r.get(k) is not None for r, t in zip(with_, tagsets))]
         if not keys:
             continue
-        summ = _summary(out_rows, keys, region, tagsets, stat)
-        f = {"keys": keys, "n": len(with_), "of": len(cos), **summ,
+        rest = [r for r in cos if not any(r.get(k) is not None for k in have)]
+        rest_tags = [registry.tags(region, r, model_of.get(r["symbol"])) for r in rest]
+        summ = _summary(out_rows, keys, region, tagsets, stat, rest_tags)
+        # R29 (the live R27 Banks deck: "Median of the 7 banks with filed figures" while 12 were still being read after VERSION 2): how many of
+        # the family's companies are still being read, so the deck says "read for 7 of 19 so far" instead of a silently smaller sample
+        late = sum(1 for r in rest if r["symbol"] in waiting)
+        f = {"keys": keys, "n": len(with_), "of": len(cos), "pending": late, "read": len(cos) - late, **summ,
              "rows": out_rows,
              "periods": sorted({(r.get("sector_src") or {}).get(k, {}).get("period") or "" for r in with_ for k in keys} - {""}),
              "checked": CHECKED[fam], "not_filed": NOT_FILED[fam]}
@@ -594,7 +607,8 @@ def section(rows: list[dict], region: str, layer_of: dict, pending: list, stat, 
                     continue
                 sub = [out_rows[i] for i in idx]
                 tk = [k for k in keys if any(registry.applies(k, region, tagsets[i]) for i in idx)]
-                types[t] = {"n": len(sub), "keys": tk, **_summary(sub, tk, region, [tagsets[i] for i in idx], stat)}
+                rt = [x for r, x in zip(rest, rest_tags) if registry.insurer_type(r, r.get("sector_kind") or "") == t]
+                types[t] = {"n": len(sub), "keys": tk, **_summary(sub, tk, region, [tagsets[i] for i in idx], stat, rt)}
             f["types"] = types
             if len(types) > 1:      # one median a type: the family's own medians are only of figures with one meaning across types
                 f["medians"] = {k: f["medians"][k] for k in keys if k in ("solvency", "premium_growth")}

@@ -226,8 +226,12 @@ def test_the_deck_labels_each_peer_figure_with_its_set_and_counts_the_companies_
     t = texts(slides)
     assert "2 with no comparable peer set (left out)" in t and "whole market" not in t.lower()
     v["sections"]["valuation"]["peers"] = {"pe": {"n": 0, "theme": None, "peers": None, "premium": None, "sets": {"none": 5}, "none": 5}}
-    t = texts(deck.theme_plan(v)[0])
-    assert "5 companies with a P/E and no comparable peer set: no relative P/E is shown." in t
+    slides = deck.theme_plan(v)[0]
+    t = texts(slides)
+    # R29 (updated on purpose): no company with a peer set makes the valuation descriptive: the theme's own medians, no relative claim
+    pe_n = v["sections"]["valuation"]["pe"]["n"]
+    assert f"comparable peers for 0 of {pe_n}, so no relative figure" in t
+    assert table_of(slides, "Valuation")["head"] == ["Measure", "Theme median", "Range", "Companies"]
 
 
 @pytest.mark.parametrize("name,v,slides", ALL27, ids=IDS27)
