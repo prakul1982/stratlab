@@ -1540,6 +1540,15 @@ def _what(text: str) -> str:
     return one_line(text) if text else ""
 
 
+def shown_label(cos: list, k: int) -> str:
+    """What the first k companies of a layer table are (R34): "the largest k of n by market value" only when they are the k largest; when
+    companies in the layer's figures are listed first (live IT: three larger ones left out of figures sat below), it says so."""
+    caps = [c.get("cap") or 0 for c in cos]
+    if sorted(caps[:k], reverse=True) == sorted(caps, reverse=True)[:k]:
+        return f"The largest {k} of {len(cos)} by market value"
+    return f"The first {k} of {len(cos)}: companies in the layer's figures first, each group by market value"
+
+
 def layer_head(layer: dict, cos: list, amt) -> str:
     """A layer page's header (R30, the owner's review: "1 company, revenue ₹32,493 cr together" over 4 listed): the companies listed and, when
     fewer are in the figures, how many; the revenue is of those in the figures."""
@@ -3212,7 +3221,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             c = dict(chart)
             s.add(c.pop("kind"), (M + tw + 0.4, below, CW - tw - 0.4, room), **c)
         if k_fit < len(body):
-            s.add("text", (M, below + th + 0.04, CW, REST_H - 0.04), paras=[f"The largest {k_fit} of {len(body)} by market value; every one: appendix, ⟦Every company's figures⟧."],
+            s.add("text", (M, below + th + 0.04, CW, REST_H - 0.04), paras=[f"{shown_label(cos, k_fit)}; every one: appendix, ⟦Every company's figures⟧."],
                   size=BODY_MIN, floor=BODY_MIN, color=MUTED)
         if fnote:
             s.add("text", (M, BOT - fh + 0.08, CW, fh - 0.08), paras=[fnote], size=BODY_MIN, floor=BODY_MIN, color=MUTED)

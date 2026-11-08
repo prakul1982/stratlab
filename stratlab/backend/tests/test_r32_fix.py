@@ -164,3 +164,12 @@ def test_a_layer_name_never_gives_its_model_against_the_companys_own_words():
           "E": "Makes semiconductor equipment for wafer fabs.", "D": "From its own filings: Quarterly report"}
     models, _ = models_from_layer(vc, {}, None, ev)
     assert "Q" not in models and "E" not in models and models["D"] == "fabless"
+
+
+def test_the_shown_companies_label_matches_who_was_ranked():
+    """Live R31.1 IT: "The largest 3 of 6 by market value" listed three while three larger ones (left out of figures) sat below."""
+    from app.deck import shown_label
+    big_first = [{"cap": 9}, {"cap": 7}, {"cap": 5}, {"cap": 1}]
+    assert shown_label(big_first, 2) == "The largest 2 of 4 by market value"
+    in_figs_first = [{"cap": 5}, {"cap": 3}, {"cap": 9, "model_out": True}, {"cap": 8, "model_out": True}]
+    assert shown_label(in_figs_first, 2).startswith("The first 2 of 4: companies in the layer's figures first")
