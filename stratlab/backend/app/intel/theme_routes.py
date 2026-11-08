@@ -311,9 +311,10 @@ def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
 
 
 def _facts_reader(region: str):
-    """symbol -> {"industry", "segments", "filings"}: what the app already keeps of how a company earns, beside its description (R26): the official
+    """symbol -> {"industry", "segments", "filings", "business"}: what the app already keeps of how a company earns, beside its description (R26): the official
     industry path its page gave (kept with its description), the names of the segments its documents report (the company page's business read)
-    and its filings' titles (own_filings). Nothing is read from a source here."""
+    and its filings' titles (own_filings); R27: the business read's summary, segment lines and customers (theme_check.business_text). Nothing is
+    read from a source here."""
     def facts_of(sym):
         k = f"theme:evidence:{region}:{sym}"
         hit = EVIDENCE_CACHE.get(k)
@@ -322,14 +323,15 @@ def _facts_reader(region: str):
                 hit = db.json_value(db.get_setting(k), {}) or {}
             except Exception:
                 hit = {}
-        segs = []
+        segs, business = [], ""
         try:
             from .. import deepdive
-            segs = [str(x.get("name")) for x in (((deepdive.stored(sym) or {}).get("business") or {}).get("segments") or [])
-                    if isinstance(x, dict) and x.get("name")]
+            b = (deepdive.stored(sym) or {}).get("business") or {}
+            segs = [str(x.get("name")) for x in (b.get("segments") or []) if isinstance(x, dict) and x.get("name")]
+            business = theme_check.business_text(b)          # R27: the business read's own lines (what it sells, to whom, how it earns)
         except Exception as e:
             print("theme: segments not read:", sym, type(e).__name__, str(e)[:100])
-        return {"industry": (hit or {}).get("industry") or "", "segments": segs, "filings": own_filings(region, sym)}
+        return {"industry": (hit or {}).get("industry") or "", "segments": segs, "filings": own_filings(region, sym), "business": business}
     return facts_of
 
 

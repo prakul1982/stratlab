@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 
 # the version of the membership rules (who is in a theme, which industries, which layers): part of every cached read's key, so a read kept
 # from before a deploy never keeps the old rules' companies or figures (R18: "Private banks" kept the public banks after the fix)
-RULES = 26                       # R21: every confirmed company in one of the map's layers (place_rest); R22: layer names fit, currencies, extra layers; R25: one revenue model a layer; R26: models from more evidence and checked by it, names after the split
+RULES = 27                       # R21: every confirmed company in one of the map's layers (place_rest); R22: layer names fit, currencies, extra layers; R25: one revenue model a layer; R26: models from more evidence and checked by it, names after the split; R27: primary model, tags and confidence, comparable segments, no one-company layer
 INDUSTRIES_DAYS = 30            # the AI's pick of a free-text theme's industries is made again after this long (at most monthly)
 FIGURES_MAX = 60                # companies the dive works figures out for: every one the AI named, then the largest of the base
 DESCRIBE_MAX = 120              # base companies whose own one-line description is looked up for the page, largest first
@@ -555,8 +555,13 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
     R26: each company's model rests on more of what the app keeps (`facts_of(symbol)` -> {"industry": its official industry path, "segments":
     [names], "filings": its filings' titles}, stored only), is kept only when that evidence shows it (theme_check.model_supported; else asked
     once more with the evidence, else unknown), and a layer the split reshaped whose name no longer fits how its companies earn is renamed
-    (theme_check.names_for_models): every answer kept with the map, so asked once."""
-    from .theme_check import MODEL_MEMBERS, model_evidence, model_supported, names_for_models, recheck_models
+    (theme_check.names_for_models): every answer kept with the map, so asked once.
+    R27: the same answer gives each company's secondary ways of earning ("model_tags") and how directly its evidence states its model
+    ("model_confidence": high, medium, low; theme_check.model_confidence), kept with the rest; a company the AI left unknown whose own words
+    state a model in so many words gets it ("medium"); the evidence also carries the company page's stored business read (`facts_of` ->
+    "business") and the sentences of its description that speak of how it earns."""
+    from .theme_check import (MODEL_MEMBERS, earning_lines, model_confidence, model_evidence, model_from_words, model_supported, model_tags,
+                              names_for_models, recheck_models)
     vc = list(m.get("value_chain") or [])
     own = [v for v in vc if not v.get("official") and v.get("layer")]
     rest = [v for v in vc if v.get("official") and v.get("basis") in ("industry", "list") and not v.get("by_industry")]
@@ -568,7 +573,7 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
     got = {s: x for s, x in (kept.get("assign") or {}).items() if isinstance(x, dict) and (x.get("layer") in names or x.get("layer") == "")}
     rename, extra = dict(kept.get("rename") or {}), list(kept.get("extra") or [])
     need = [c for c in sorted(todo, key=lambda c: -(c.get("cap") or 0)) if c["ticker"] not in got]
-    asked, placed_models = False, None
+    asked, placed_models, placed_tags, placed_conf = False, None, {}, {}
     by_sym = {c.get("ticker"): c for v in vc for c in v.get("companies") or [] if c.get("ticker")}
     facts: dict[str, dict] = {}
 
@@ -586,24 +591,45 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
     def evidence(sym, words: bool = True) -> str:
         """A company's evidence of how it earns (theme_check.model_evidence); `words` False leaves out its description (sent beside it)."""
         c, f = by_sym.get(sym) or {}, facts_for(sym)
-        about = (about_of(sym) or c.get("what") or "") if words else ""
-        return model_evidence(f.get("industry") or c.get("industry") or "", about, f.get("segments") or (), f.get("filings") or "")
+        own_words = about_of(sym) or c.get("what") or ""
+        about = own_words if words else ""
+        earns = None
+        if not words:        # sent beside its description (its first 220 characters, or its one line): only what those leave out
+            earns = earning_lines(own_words, limit=240)
+            earns = "" if earns[:60] in str(own_words)[:200] else earns
+        return model_evidence(f.get("industry") or c.get("industry") or "", about, f.get("segments") or (), f.get("filings") or "",
+                              business=f.get("business") or "", earns=earns)
 
-    def checked_models(fresh: dict) -> dict:
-        """The models the AI gave, each kept only when the company's evidence shows it; the rest asked once more with it, else unknown."""
-        keep, rejected = {}, []
-        for s_, md in fresh.items():
+    def checked_models(ans: dict, syms) -> tuple[dict, dict, dict]:
+        """(models, tags, confidence): the models the AI gave, each kept only when the company's evidence shows it; the rest asked once more
+        with it, else unknown; one of `syms` still unknown whose own words state a model in so many words gets that one (R27, "medium").
+        Each kept model's confidence is how directly its evidence states it (at most "medium" for one asked again), its tags those its
+        evidence shows."""
+        keep, rejected, tags, conf = {}, [], {}, {}
+        for s_, md in (ans.get("models") or {}).items():
             ev = evidence(s_)
             if model_supported(md, ev):
                 keep[s_] = md
+                conf[s_] = model_confidence(md, ev, (ans.get("confidence") or {}).get(s_, ""))
+                t = model_tags((ans.get("tags") or {}).get(s_), md, ev)
+                if t:
+                    tags[s_] = t
             else:
                 rejected.append({"symbol": s_, "name": (by_sym.get(s_) or {}).get("name") or s_, "was": md, "evidence": ev})
         if rejected and ask is not None:
             try:
-                keep.update(recheck_models(rejected, ask, theme))
+                for s_, md in recheck_models(rejected, ask, theme).items():
+                    keep[s_] = md
+                    conf[s_] = model_confidence(md, evidence(s_), "medium")
             except Exception as e:           # the AI busy: those companies' models stay unknown
                 print("theme base: models not asked again:", theme[:40], type(e).__name__, str(e)[:100])
-        return keep
+        for s_ in dict.fromkeys(syms):
+            if s_ and s_ not in keep:
+                ev = evidence(s_)
+                md = model_from_words(ev)
+                if md and model_supported(md, ev):
+                    keep[s_], conf[s_] = md, "medium"
+        return keep, tags, conf
     if need and ask is not None:
         asked = True
         from .theme_check import place_in_layers
@@ -615,7 +641,9 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
                                   ask, theme)
             got.update({s: {"layer": x if x in names else "", "by": "ai"} for s, x in ans["place"].items()})
             rename = {k: v for k, v in ans["rename"].items() if k in names}
-            extra, placed_models = ans["extra"], checked_models(ans["models"])
+            extra = ans["extra"]
+            placed_models, placed_tags, placed_conf = checked_models(ans, [c["ticker"] for c in need[:PLACE_MAX]]
+                                                                     + [c.get("ticker") for v in with_ev for c in v["companies"]])
         except Exception as e:               # the AI busy: the words place them now, the AI is asked again on the next check
             print("theme base: companies not placed by the AI:", theme[:40], type(e).__name__, str(e)[:100])
     for c in need:
@@ -642,18 +670,21 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
     names_for = kept.get("names_for") if kept.get("names_for") == sig else None
     # how each company earns (R25): asked with the placements or the names' check, once a map; kept with them, never asked again for that map
     models = kept.get("models") if isinstance(kept.get("models"), dict) else None
+    tags = dict(kept.get("model_tags") or {}) if isinstance(kept.get("model_tags"), dict) else {}
+    conf = dict(kept.get("model_confidence")) if isinstance(kept.get("model_confidence"), dict) else None
     if asked:
         names_for = sig
-        models = models if placed_models is None else {**(models or {}), **placed_models}
+        if placed_models is not None:
+            models, tags, conf = {**(models or {}), **placed_models}, {**tags, **placed_tags}, {**(conf or {}), **placed_conf}
     elif ask is not None and (names_for is None or models is None):
         from .theme_check import place_in_layers
         try:
             said = lambda c: {**c, "what": c.get("what") or one_line(about_of(c.get("ticker")) or ""),           # noqa: E731 (its own words, for its model)
                               "evidence": evidence(c.get("ticker"), not c.get("what"))}
-            ans = place_in_layers([{**v, "companies": [said(c) for c in (list(v.get("companies") or []) + by_layer.get(v["layer"], []))[:MODEL_MEMBERS]]}
-                                   for v in own],
-                                  [], ask, theme)
-            rename, names_for, models = {k: x for k, x in ans["rename"].items() if k in names}, sig, checked_models(ans["models"])
+            sent = [{**v, "companies": [said(c) for c in (list(v.get("companies") or []) + by_layer.get(v["layer"], []))[:MODEL_MEMBERS]]} for v in own]
+            ans = place_in_layers(sent, [], ask, theme)
+            rename, names_for = {k: x for k, x in ans["rename"].items() if k in names}, sig
+            models, tags, conf = checked_models(ans, [c.get("ticker") for v in sent for c in v["companies"]])
         except Exception as e:
             print("theme base: layer names not checked:", theme[:40], type(e).__name__, str(e)[:100])
     out_vc = []
@@ -673,7 +704,7 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
     model_names = None
     if models:
         before = {v["layer"]: {c.get("ticker") for c in v["companies"]} for v in out_vc if not v.get("official")}
-        out_vc = by_model(out_vc, models, theme)
+        out_vc = by_model(out_vc, models, theme, tags=tags, confidence=conf)
         # R26: a layer of the map the split reshaped (companies moved in or out) whose name no longer fits how its companies earn is renamed by
         # the same check as the placement's; asked once a map and its split, kept with the rest
         reshaped = [v for v in out_vc if v["layer"] in before and not v.get("official") and not v.get("scale") and (v.get("model") or {}).get("line")
@@ -688,7 +719,9 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
         if model_names and model_names.get("rename"):
             out_vc = renamed_after_split(out_vc, {v["layer"] for v in reshaped}, model_names["rename"])
     return {**m, "value_chain": out_vc}, {"assign": got, "rename": rename, "extra": extra, **({"names_for": names_for} if names_for else {}),
-                                          **({"models": models} if models is not None else {}), **({"model_names": model_names} if model_names else {})}
+                                          **({"models": models} if models is not None else {}), **({"model_names": model_names} if model_names else {}),
+                                          **({"model_tags": tags} if models is not None and tags else {}),
+                                          **({"model_confidence": conf} if models is not None and conf is not None else {})}
 
 
 def model_names_signature(layers: list[dict]) -> str:
@@ -724,25 +757,35 @@ def _model_layer(name: str, cos: list[dict], **kw) -> dict:
     return {"layer": name, "description": "", "by_model": True, "companies": cos, **kw}
 
 
-def by_model(vc: list[dict], models: dict, theme: str = "") -> list[dict]:
+def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = None, confidence: dict | None = None) -> list[dict]:
     """The placed map's layers with one revenue model family each, from `models` ({symbol: model id}, theme_check.MODELS):
     1. a layer of the map whose companies earn in different ways keeps its main family (the most of its companies; a tie, the family of the first
        of them, the map's own pick); each other company moves to the layer whose main family is its own (the largest), else to a new layer named
        by that model ("Hardware resale and integration"). A company of the "Other" group whose model is known goes the same way, so "Other" keeps
-       only companies the evidence can't place. A company with no known model stays where it is.
+       only companies the evidence can't place. A company with no known model stays where it is; so does one whose model is of "low"
+       confidence (R27, `confidence`: {symbol: high/medium/low}), which counts as unknown.
     2. a layer above SPLIT_SHARE of the placed companies (and SPLIT_MIN or more) is split by its models when two or more hold SPLIT_PART
        companies each, else into its larger and smaller halves by market value.
-    3. every layer of the map carries `model`: {"id", "family", "line", "known", "of"}, the one line the deck shows of what its companies have in
-       common. Facts only: the models are the companies' own descriptions as the AI read them."""
+    3. (R27) a split never leaves a layer of one company: a layer the split made or reshaped that holds one company gives it to the largest layer
+       of its family, else to the theme's "Other" group, and is not a layer of its own.
+    4. every layer of the map carries `model`: {"id", "family", "line", "known", "of", "out", "also"}, the one line the deck shows of what its
+       companies have in common; R27: the companies whose model is unknown or of low confidence are listed but marked `model_out` (left out of
+       the layer's figures and rankings; the line says how many and why), and the line names the commonest secondary way of earning of its
+       companies ("3 of the 9 also earn from ..."; `tags`: {symbol: [model ids]}), so no company is shown as earning one way only.
+    Every company carries "model", "model_tags" and "model_confidence" (R27, for the deck's checks). Facts only: the models are the companies'
+    own evidence as the AI read it."""
     from collections import Counter
 
     from .theme_check import FAMILIES, MODELS, model_family
-    models = {s: m_ for s, m_ in (models or {}).items() if m_ in MODELS}
+    tags, conf = tags or {}, confidence or {}
+    every = {s: m_ for s, m_ in (models or {}).items() if m_ in MODELS}
+    models = {s: m_ for s, m_ in every.items() if conf.get(s) != "low"}
     out = [dict(v, companies=list(v.get("companies") or [])) for v in vc]
     own = [v for v in out if not v.get("official")]
-    if not own or not models:
+    if not own or not every:
         return vc
     fam = lambda c: model_family(models.get(c.get("ticker")))       # noqa: E731
+    before = {id(v): {c.get("ticker") for c in v["companies"]} for v in own}
 
     def main(cos):
         counts = Counter(fam(c) for c in cos if fam(c))
@@ -819,8 +862,14 @@ def by_model(vc: list[dict], models: dict, theme: str = "") -> list[dict]:
         out[at] = {**big, "layer": f"{name} (larger)", "companies": ranked[:half], "scale": "larger", "sibling": small["layer"]}
         out.insert(at + 1, small)
 
-    # 3. what each layer's companies have in common
+    # 3. no layer of one company made by the split (R27: the live R26 IT deck had a visa and e-governance firm alone, a full page, as
+    # "Hotels, travel and consumer services")
+    out = _no_single_layers(out, before, main, fam, theme)
+
+    # 4. what each layer's companies have in common, and who is left out of its figures
     for v in out:
+        v["companies"] = [{**c, "model": every.get(c.get("ticker"), ""), "model_tags": list(tags.get(c.get("ticker")) or []),
+                           "model_confidence": conf.get(c.get("ticker"), "") if c.get("ticker") in every else ""} for c in v["companies"]]
         if v.get("official"):
             continue
         cos = v["companies"]
@@ -837,21 +886,80 @@ def by_model(vc: list[dict], models: dict, theme: str = "") -> list[dict]:
         fines = {models[c["ticker"]] for c in known}
         mid = next(iter(fines)) if len(fines) == 1 else f
         what = MODELS[mid][2] if mid in MODELS else FAMILIES.get(f, ("", MODELS[sorted(fines)[0]][2]))[1]
+        rest = [c for c in cos if fam(c) != f]
+        known_ids = {c.get("ticker") for c in known}
+        v["companies"] = [c if c.get("ticker") in known_ids else {**c, "model_out": True} for c in cos]
         sparse = len(known) * 2 < len(cos)
         if sparse:
             # R26: a line resting on a few of a layer's companies isn't what they have in common: said plainly instead (the live R25 IT services
-            # deck, "8 of 50; the others' descriptions don't show how they earn")
-            line = (f"How they earn is shown for only {len(known)} of these {len(cos)} companies; the others' descriptions don't show it, so no "
-                    "common way of earning is given for this group.")
+            # deck, "8 of 50; the others' descriptions don't show how they earn"); R27: the others are left out of its figures
+            line = f"How they earn is shown for only {len(known)} of these {len(cos)} companies, mainly {what}; {out_line(rest, 'the other')}"
         else:
-            line = f"They earn mainly from {what}"
-            if len(known) < len(cos):
-                line += f" ({len(known)} of {len(cos)}; the others' descriptions don't show how they earn)"
-            line += "."
+            line = f"They earn mainly from {what}."
+            if rest:
+                line += " " + out_line(rest, f"of {len(cos)}")
+        also = also_earn(known, f)
+        if also:
+            n_, t_ = also
+            line += f" {n_} of the {len(known)} also earn from {MODELS[t_][2]}."
         if v.get("scale"):
             line += f" The {v['scale']} half of one group by market value; the other half is “{v['sibling']}”."
-        v["model"] = {"id": mid, "family": f, "line": line, "known": len(known), "of": len(cos), **({"sparse": True} if sparse else {})}
+        v["model"] = {"id": mid, "family": f, "line": line, "known": len(known), "of": len(cos), "out": len(rest),
+                      "also": [{"id": also[1], "n": also[0]}] if also else [], **({"sparse": True} if sparse else {})}
     return out
+
+
+def out_line(rest: list[dict], of: str) -> str:
+    """How many of a layer's companies are left out of its figures and rankings, and why (R27): their model unknown, or of low confidence."""
+    n = len(rest)
+    low = sum(1 for c in rest if c.get("model_confidence") == "low")
+    why = ("doesn't show how it earns" if n == 1 else "doesn't show how they earn") if not low else \
+          ("shows how it earns only weakly" if n == 1 else "shows how they earn only weakly") if low == n else \
+          "doesn't show, or only weakly shows, how they earn"
+    if of.startswith("the other"):
+        return f"the other {n} {'is' if n == 1 else 'are'} listed but left out of this layer's figures and rankings, as {'its' if n == 1 else 'their'} evidence {why}."
+    return f"{n} {of} {'is' if n == 1 else 'are'} listed but left out of this layer's figures and rankings, as {'its' if n == 1 else 'their'} evidence {why}."
+
+
+def also_earn(known: list[dict], family: str) -> tuple[int, str] | None:
+    """(how many, model) the commonest secondary way of earning of a layer's companies outside the layer's own family (R27), or None."""
+    from collections import Counter
+
+    from .theme_check import model_family
+    counts, first = Counter(), {}
+    for i, c in enumerate(known):
+        for t in c.get("model_tags") or []:
+            if model_family(t) and model_family(t) != family:
+                counts[t] += 1
+                first.setdefault(t, i)
+    if not counts:
+        return None
+    t = min(counts, key=lambda t: (-counts[t], first[t]))
+    return counts[t], t
+
+
+def _no_single_layers(out: list[dict], before: dict, main, fam, theme: str) -> list[dict]:
+    """The layers with none of one company that the split made or reshaped (R27): its company joins the largest other layer of its own family,
+    else the theme's "Other" group (made when there is none), marked "single"."""
+    singles = [v for v in out if not v.get("official") and len(v["companies"]) == 1
+               and (v.get("by_model") or id(v) not in before or {c.get("ticker") for c in v["companies"]} != before[id(v)])]
+    if not singles:
+        return out
+    for v in singles:
+        c = v["companies"][0]
+        f = fam(c)
+        same = [x for x in out if x is not v and x not in singles and not x.get("official") and x["companies"] and f and main(x["companies"]) == f]
+        if same:
+            target = max(same, key=lambda x: len(x["companies"]))
+            target["companies"].append({**c, "moved": True, "single": True})
+        else:
+            other = next((x for x in out if x.get("official") and x.get("basis") == "rest"), None)
+            if other is None:
+                other = {"layer": other_label(theme), "description": "", "official": True, "basis": "rest", "companies": []}
+                out.append(other)
+            other["companies"].append({**c, "moved": True, "single": True, "fit": True})
+        v["companies"] = []
+    return [v for v in out if not (v in singles and v.get("by_model"))]
 
 
 def names_signature(own: list[dict], by_layer: dict) -> str:

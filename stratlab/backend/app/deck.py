@@ -1825,7 +1825,7 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
     # 2. growth beside margin (a lender's: beside its return on equity)
     gm = []
     for x in own if chained else []:
-        cos = [c for c in x["companies"] if c.get("status") != "unverified" and not c.get("company_wide")]
+        cos = [c for c in x["companies"] if c.get("status") != "unverified" and not c.get("company_wide") and not c.get("model_out")]
         g = [c["sales_1y"] for c in cos if c.get("sales_1y") is not None]
         e = (x.get("stats") or {}).get(measure)
         if g and e and e["n"] >= COMPARE_MIN:            # no finding on a base under 3 (R20), one floor for every comparison (R25)
@@ -2557,17 +2557,19 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     # layer's median and range, its margins by year or by company; the full table is in the appendix, said with its page
     biz = v.get("business") or {}
     for i, layer in enumerate(shown if chained else []):     # numbered as shown: a layer with no company leaves no gap (Layer 4, then Layer 6)
-        cos = sorted(layer.get("companies") or [], key=lambda c: (c.get("status") == "unverified", -(c.get("cap") or 0), c.get("name") or ""))
+        cos = sorted(layer.get("companies") or [], key=lambda c: (c.get("status") == "unverified", bool(c.get("model_out")), -(c.get("cap") or 0), c.get("name") or ""))
         st = layer.get("stats") or {}
         title = f"Layer {i + 1} · {layer['layer']}"
         lwide = set(layer.get("company_wide") or []) | {c["symbol"] for c in cos if c.get("company_wide")}
         lwhole = whole or (bool([c for c in cos if c.get("ebitda") is not None]) and all(c.get("ebitda_dp") == 0 for c in cos if c.get("ebitda") is not None))
         unsure = {c["symbol"] for c in cos if c.get("status") == "unverified"}
+        unmodelled = {c["symbol"] for c in cos if c.get("model_out")} - unsure       # R27: how it earns not shown clearly: out of the layer's figures
         lend = is_lender_set(cos)
         cols = co_cols(cos)
         if not layer.get("official") and len({c.get("official_industry") for c in cos if c.get("official_industry")}) >= 2:
             cols = [("official_industry", "Industry", 1.7)] + cols        # an AI layer: the exchange's industry is a column, not a layer (R20)
-        body = [[(f"{c['name']} (whole company)" if c["symbol"] in lwide else f"{c['name']} (not confirmed)" if c["symbol"] in unsure else c["name"])]
+        body = [[(f"{c['name']} (whole company)" if c["symbol"] in lwide else f"{c['name']} (not confirmed)" if c["symbol"] in unsure
+                  else f"{c['name']} (left out)" if c["symbol"] in unmodelled else c["name"])]
                 + [co_cell(c, k, amt) for k, _, _ in cols] + [c.get("year") or "–"] for c in cos]
         ns = [(st.get(k) or {}).get("n") or 0 for k, _, _ in cols if k not in ("revenue", "official_industry")]
         n_st = max(ns or [0])
@@ -2597,7 +2599,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             {"title": "Who is here", "lines": [x for x in (common, official) if x]} if official or common else None
         hist = layer.get("history") or {}
         mkey, mname = ("roe", "ROE") if lend else ("ebitda", "EBITDA margin")
-        bars = [c for c in cos if c.get(mkey) is not None and c["symbol"] not in unsure]
+        bars = [c for c in cos if c.get(mkey) is not None and c["symbol"] not in unsure | unmodelled]
         chart = None
         if len(hist.get("years") or []) >= 2 and not lend and (hist.get("n") or 0) >= MIN_BASE:       # an aggregate of 3 or more (R21)
             chart = {"kind": "lines", "title": f"Margins by year, the same {_n(hist.get('n') or 0, 'company', 'companies')}",
@@ -2611,6 +2613,9 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             fparts.append("(whole company): it runs other businesses too, so its figures are the whole company's and left out of the medians.")
         if unsure:
             fparts.append("(not confirmed): its own words don't show this work, so it is left out of the medians and the revenue total.")
+        lo_note = "(left out): its evidence doesn't show clearly how it earns, so it is left out of this layer's figures and rankings."
+        if unmodelled:
+            fparts.append(lo_note)
         if any(c.get("one_off") for c in cos):
             fparts.append(f"{ONE_OFF}: net margin above the EBITDA margin, so a one-off gain is in it; left out of the net margin's median.")
         chh = min(1.75, card_height(card, CW)) if card else 0.0
@@ -2631,6 +2636,10 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         k_fit = fits(tw)
         if chart and k_fit < len(body) and fits(CW) > k_fit:      # the companies before the chart: a table that shows more of them goes full width
             chart, tw, k_fit = None, CW, fits(CW)
+        if unmodelled and not any(c["symbol"] in unmodelled for c in cos[:k_fit]):       # no "(left out)" row shown: its note isn't either
+            fparts.remove(lo_note)
+            fnote = " ".join(fparts)
+            fh = (note_h(fnote) + 0.12) if fnote else 0
         s = Slide(title, msg, eyebrow=eb("The value chain"))
         if card:
             s.add("cards", (M, TOP, CW, chh), cols=1, fill=True, items=[card])
@@ -2896,7 +2905,7 @@ def economics_questions(v: dict, shown: list, sec: dict, ebm) -> list[str]:
                    "What do the prices take into account that past growth doesn't show?")
     gm = []
     for x in shown:
-        cos = [c for c in x.get("companies") or [] if c.get("status") != "unverified" and not c.get("company_wide")]
+        cos = [c for c in x.get("companies") or [] if c.get("status") != "unverified" and not c.get("company_wide") and not c.get("model_out")]
         g = sorted(c["sales_1y"] for c in cos if c.get("sales_1y") is not None)
         if g and x.get("basis") != "rest":           # the "Other" group is never compared (R22)
             from statistics import median as _m
@@ -2916,8 +2925,8 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
     from statistics import median as _m
     lay = []
     for x in shown:
-        cos = [c for c in x.get("companies") or [] if c.get("status") != "unverified" and not c.get("company_wide")] or \
-              [c for c in x.get("companies") or [] if c.get("status") != "unverified"]
+        cos = [c for c in x.get("companies") or [] if c.get("status") != "unverified" and not c.get("company_wide") and not c.get("model_out")] or \
+              [c for c in x.get("companies") or [] if c.get("status") != "unverified" and not c.get("model_out")]
         st = x.get("stats") or {}
         g = [c["sales_1y"] for c in cos if c.get("sales_1y") is not None]
         pe = [c["pe"] for c in cos if c.get("pe") and c["pe"] > 0]

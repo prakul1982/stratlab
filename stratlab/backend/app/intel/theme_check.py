@@ -256,27 +256,40 @@ def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None
 # models just because they belong to the same broad theme": hardware resellers beside IT services, an 18-company "mid-tier" catch-all) ----------
 # id: (family, the name a layer of such companies gets, what they have in common). Companies of one family earn the same way; a layer never
 # mixes families (theme_base.by_model). The list is the same for every theme and both markets; "unknown" when the evidence doesn't show it.
+# R27 (comparable segments, generic by sector): business process outsourcing apart from IT services; contract makers (CDMO, EMS, foundry,
+# OSAT) apart from product companies (own brands, IDM, fabless); parts and ingredient makers apart from makers of finished goods (auto OEM vs
+# components); insurers by type; developers who sell what they build apart from landlords. Each of these is its own family.
 MODELS = {
     "project_services": ("services", "Project and consulting services", "fees for projects and time worked for clients"),
-    "managed_services": ("services", "Managed and outsourced services", "multi-year contracts to run systems or business processes for clients"),
+    "managed_services": ("services", "Managed and outsourced IT services", "multi-year contracts to run and maintain clients' IT systems"),
+    "bpo": ("bpo", "Business process outsourcing", "multi-year contracts to run business processes such as customer service, back offices "
+                                                   "and claims for clients"),
     "software": ("software", "Software products and subscriptions", "licences and subscriptions for software they own"),
     "royalties": ("royalties", "Designs licensed for royalties", "licence fees and royalties on designs and patents they own"),
     "platform": ("platform", "Platforms and marketplaces", "commissions, listing fees or advertising on platforms they run"),
     "hardware_resale": ("resale", "Hardware resale and integration", "selling and installing hardware that others make"),
     "distribution": ("resale", "Distribution and trading", "the margin on goods bought from makers and sold on to businesses"),
     "retail": ("resale", "Retail", "the margin on goods sold to consumers in their own stores or online"),
-    "manufacturing": ("making", "Makers of their own products", "making and selling products of their own"),
-    "contract_manufacturing": ("making", "Contract manufacturing", "making products to other companies' designs and orders"),
+    "manufacturing": ("making", "Makers of their own products", "making and selling finished products of their own"),
+    "fabless": ("making", "Product designers that outsource making", "selling products of their own design that contract makers produce"),
+    "components": ("components", "Parts, component and ingredient makers", "making parts, components or ingredients that other manufacturers "
+                                                                          "build into their own products"),
+    "contract_manufacturing": ("contract_making", "Contract manufacturing", "making products to other companies' designs and orders"),
     "capacity": ("capacity", "Data centres, hosting and networks", "renting out computing, data-centre or network capacity, and connectivity subscriptions"),
     "construction": ("construction", "Engineering and construction contracts", "contracts to design and build projects for clients"),
     "lending": ("lending", "Lenders", "interest on loans they make"),
     "underwriting": ("underwriting", "Insurers", "premiums for the risks they insure, and returns on the premiums they invest"),
+    "life_insurance": ("life_insurance", "Life insurers", "premiums for life, pension and savings policies, and returns on the money they invest"),
+    "general_insurance": ("general_insurance", "General and health insurers", "premiums for motor, health, property and other non-life risks, "
+                                                                             "and returns on the premiums they invest"),
+    "reinsurance": ("reinsurance", "Reinsurers", "premiums from other insurers for the risks they pass on"),
     "broking": ("financial_fees", "Brokers and distributors of financial products", "commissions and fees for selling or arranging others' financial and insurance products"),
     "asset_management": ("financial_fees", "Fund and asset managers", "fees on the money they manage"),
     "market_infrastructure": ("financial_fees", "Exchanges, depositories and ratings", "fees for trading, settling, holding or rating securities"),
     "resources": ("resources", "Mining, oil, gas and farming", "selling what they mine, drill or grow"),
     "utility": ("utility", "Power, gas and water supply", "selling power, gas or water, much of it at regulated tariffs"),
-    "property": ("property", "Property and leasing", "rent, leases and sales of property or equipment they own"),
+    "property": ("property", "Property and leasing", "rent and leases on property or equipment they own"),
+    "property_development": ("development", "Property developers", "selling homes, offices and plots they build"),
     "care": ("care", "Hospitals, clinics and diagnostics", "fees for care, treatment and tests"),
     "media": ("media", "Media and content", "advertising, subscriptions and licences for content they own"),
     "transport": ("transport", "Transport and logistics", "fees for moving and storing goods or people"),
@@ -287,11 +300,13 @@ MODELS = {
 
 # a layer holding more than one model of a family: its name and what its companies have in common (one model: the model's own)
 FAMILIES = {
-    "services": ("Services for clients", "fees from clients for projects, time worked or multi-year service contracts"),
+    "services": ("IT services for clients", "fees from clients for IT projects, time worked or multi-year contracts to run their systems"),
     "resale": ("Resale and distribution", "the margin on goods that others make"),
-    "making": ("Manufacturers", "making and selling products, their own or to other companies' designs"),
+    "making": ("Makers of their own products", "selling products of their own, made in their own plants or by contract makers"),
     "financial_fees": ("Financial fees and commissions", "fees and commissions on financial products, money managed or securities"),
 }
+CONFIDENCE = ("high", "medium", "low")       # R27: how directly a company's evidence states its model; "low" counts as unknown in a layer's figures
+TAGS_MAX = 3                                 # secondary ways of earning kept a company
 
 
 def model_family(model) -> str:
@@ -318,7 +333,138 @@ MODEL_NEEDS = {
     "broking": r"brok|intermediar|distribut|commission|agent|advis|wealth|insurance web|aggregator",
     "asset_management": r"asset manag|fund|mutual|\bamc\b|wealth|portfolio manag|investment manag",
     "market_infrastructure": r"exchange|depositor|clearing|rating|registr|custod|settlement",
+    # R27: the new segments, and a consumer-services label only with consumer words (the live R26 IT deck put a visa and e-governance
+    # services firm alone under "Hotels, travel and consumer services")
+    "bpo": r"\bbpo\b|\bbpm\b|business process|customer (?:service|experience|support|care)|contact cent|call cent|back[- ]office|"
+           r"claims (?:processing|management)|transaction processing|\bkpo\b|knowledge process",
+    "components": r"component|\bparts\b|ingredient|\bapis?\b|active pharmaceutical|intermediates|castings|forgings|bearings|tier[- ]?(?:1|i|one)\b|"
+                  r"supplier to|suppl(?:y|ies) to (?:oems|automakers|vehicle makers|manufacturers)|for (?:oems|automakers|vehicle makers)",
+    "fabless": r"fabless|design(?:s|ing)? (?:of )?(?:chips|semiconductors|integrated circuits|socs?)|without (?:its own )?fab|"
+               r"outsourc(?:es|ed|ing) (?:its |the )?(?:manufactur|fabrication|production)|made by (?:foundr|contract)",
+    "life_insurance": r"life insur|life assur|annuit|pension|endowment|term (?:plan|insurance)|ulip",
+    "general_insurance": r"general insur|non[- ]life|health insur|motor insur|property (?:and|&) casualty|\bp&c\b|casualty|crop insur|"
+                         r"fire insur|marine insur|standalone health",
+    "reinsurance": r"reinsur",
+    "property_development": r"develop|residential projects|housing projects|township|plotted|apartments|homes|villas|real estate projects|"
+                            r"sold (?:units|homes)|bookings|pre-?sales",
+    "consumer_services": r"hotel|resort|hospitality|\btours?\b|travel (?:agen|services|booking|packages)|holiday|restaurant|quick[- ]service|"
+                         r"food service|dining|cafe|educat|school|coaching|courses|tuition|amusement|theme park|wellness|salon|fitness|gym|"
+                         r"cinema|multiplex|entertainment cent",
 }
+
+
+# R27: words that state a model in so many words, for its confidence: "high" when the company's own words (description, business read,
+# segments, filings) have them, "medium" when only its official industry does, "low" when nothing does. A model with needs uses them too.
+MODEL_WORDS = {
+    "project_services": r"project|consult|time[- ](?:and|&)[- ]material|fixed[- ]price|professional services|implementation|engineering services|"
+                        r"digital (?:transformation|engineering)|staffing|talent|\bit services\b",
+    "managed_services": r"managed (?:services|infrastructure)|outsourc|multi-year|annuity|application (?:maintenance|management|support)|"
+                        r"infrastructure management|remote infrastructure|run (?:and|&) maintain|\bams\b",
+    "software": r"software|\bsaas\b|subscription|licen[cs]|cloud-based|products? suite|own (?:platform|product)",
+    "manufacturing": r"manufactur|\bmakes?\b|\bmaker\b|produc|plants?\b|factor(?:y|ies)|\bbrands?\b|\bidm\b|fabs?\b|integrated device",
+    "capacity": r"data cent|hosting|colocation|cloud infrastructure|bandwidth|network|telecom|towers?\b|fib(?:re|er)|connectivity|broadband|"
+                r"mobile (?:services|operator)|subscribers|spectrum|\bgpu",
+    "construction": r"construct|\bepc\b|engineering, procurement|contractor|infrastructure projects|order (?:book|backlog)|turnkey",
+    "resources": r"\bmin(?:e|es|ing)\b|\bores?\b|\boil\b|\bgas\b|explor|\bcoal\b|crops?\b|plantation|drill|quarr|bauxite|iron ore|copper|zinc|gold",
+    "utility": r"\bpower\b|electricity|generation|transmission|distribution of (?:power|electricity|gas)|tariff|water supply|city gas|utility|"
+               r"megawatt|\bmw\b|\bgw\b",
+    "property": r"\brent|lease|leasing|\breit|commercial (?:space|property|real estate)|office (?:space|parks?)|malls?\b|warehous|annuity assets",
+    "care": r"hospital|clinic|diagnostic|patients|healthcare services|pathology|\blabs?\b|beds\b",
+    "media": r"media|broadcast|channels?\b|\bfilms?\b|content|publish|advertis|streaming|newspaper|music",
+    "transport": r"logistic|transport|freight|shipping|courier|airline|cargo|\bports?\b|warehous|\brail|fleet",
+    "holding": r"conglomerate|diversified|group companies|subsidiaries|holding company|several businesses",
+}
+
+
+def _words_of(model) -> str:
+    return "|".join(x for x in (MODEL_NEEDS.get(model), MODEL_WORDS.get(model)) if x)
+
+
+def _split_evidence(evidence) -> tuple[str, str]:
+    """(its official industry line, the rest: its own words) of a company's evidence (model_evidence puts "Industry: …." first)."""
+    t = str(evidence or "")
+    m = re.match(r"\s*Industry:\s*([^.]*)\.\s*", t)
+    return (m.group(1), t[m.end():]) if m else ("", t)
+
+
+def model_confidence(model, evidence, said="") -> str:
+    """How directly a company's evidence states its model (R27): "high" when its own words have words of the model's kind, "medium" when
+    only its official industry does, "low" when nothing does; never above what the AI said of it (`said`, one of CONFIDENCE). "" for unknown."""
+    if model not in MODELS:
+        return ""
+    words = _words_of(model)
+    industry, own = _split_evidence(evidence)
+    level = "high" if words and re.search(words, own, re.I) else "medium" if words and re.search(words, industry, re.I) else "low"
+    if said in CONFIDENCE and CONFIDENCE.index(said) > CONFIDENCE.index(level):
+        level = said
+    return level
+
+
+def model_tags(tags, model, evidence) -> list[str]:
+    """A company's secondary ways of earning (R27: a vehicle maker's financing arm, a drug maker's contract making beside its own brands): each on
+    the list, not its primary model, and stated by its evidence (words of the tag's kind); at most TAGS_MAX, in the AI's order."""
+    out = []
+    for t in tags if isinstance(tags, (list, tuple)) else []:
+        t = str(t or "")
+        words = _words_of(t)
+        if t in MODELS and t != model and t not in out and words and re.search(words, str(evidence or ""), re.I):
+            out.append(t)
+    return out[:TAGS_MAX]
+
+
+# R27: a company's own words that state how it earns in so many words; one that the AI left unknown is given the model these show when
+# exactly one model's do ("medium": stated, but not read by the AI), so a small company with a telling sentence isn't left out
+MODEL_SAYS = {
+    "software": r"subscription revenue|licen[cs]e (?:fees|revenue|income)|software[- ]as[- ]a[- ]service|\bsaas\b|sells? (?:its own )?software (?:products|licen)",
+    "project_services": r"time[- ](?:and|&)[- ]material|fixed[- ]price (?:projects|contracts)|consulting fees|staff augmentation",
+    "managed_services": r"managed services contracts|infrastructure management services|application maintenance (?:and support|contracts)",
+    "bpo": r"business process (?:outsourcing|management)|\bbpo\b|contact cent(?:re|er) services|call cent(?:re|er) services",
+    "contract_manufacturing": r"contract manufactur|\bcdmo\b|\bcrams\b|electronics manufacturing services|\bems provider|\bosat\b|pure-play foundry",
+    "fabless": r"fabless",
+    "platform": r"commission income|take rate|online marketplace|gross merchandise value",
+    "lending": r"interest income (?:on|from) loans|loan book|\bnbfc\b|non-banking financ",
+    "life_insurance": r"life insurance company|life insurer",
+    "general_insurance": r"general insurance company|general insurer|health insurer|non-life insurer",
+    "reinsurance": r"reinsurer|reinsurance company",
+    "hardware_resale": r"(?:authori[sz]ed|channel) (?:partner|reseller|distributor) (?:of|for)|value[- ]added reseller|system integrator for",
+    "property_development": r"real estate develop|residential (?:real estate )?develop",
+}
+
+
+def model_from_words(evidence) -> str:
+    """The one model a company's own words state in so many words (MODEL_SAYS), or "" when none or more than one does."""
+    _, own = _split_evidence(evidence)
+    hits = [m_ for m_, rx in MODEL_SAYS.items() if re.search(rx, own, re.I)]
+    return hits[0] if len(hits) == 1 else ""
+
+
+def business_text(b) -> str:
+    """The stored business read of a company's page (deepdive: "summary" of what it sells, to whom and how it earns, each segment's line, its
+    customers) as one text for its model's evidence (R27); "" when none is stored."""
+    if not isinstance(b, dict):
+        return ""
+    parts = [str(b.get("summary") or "")]
+    parts += [f"{x.get('name')}: {x.get('what')}" for x in (b.get("segments") or [])[:6] if isinstance(x, dict) and x.get("name") and x.get("what")]
+    if b.get("customers"):
+        parts.append(f"Customers: {b['customers']}")
+    return clean_description(" ".join(" ".join(p.split()).rstrip(" .") + "." for p in parts if str(p).strip()), 600)
+
+
+_EARNS = re.compile(r"revenue|earn|income|fees?\b|subscription|licen[cs]|contracts?\b|clients?\b|customers?\b|outsourc|commission|"
+                    r"premium|interest|rent|tariff|sells?\b|supplies|manufactur|makes|distribut|resell", re.I)
+
+
+def earning_lines(*texts, limit: int = 300) -> str:
+    """The sentences of a company's stored texts that speak of how it earns (revenue, fees, contracts, clients, subscriptions...), first ones
+    first, so a telling sentence deep in a long description reaches the model's question (R27: IT services showed how 14 of 51 earn)."""
+    out, seen = [], set()
+    for t in texts:
+        for x in re.split(r"(?<=[.;!?])\s+", " ".join(str(t or "").split())):
+            k = x.lower()[:80]
+            if len(x) >= 25 and _EARNS.search(x) and k not in seen:
+                seen.add(k)
+                out.append(x.rstrip())
+    return clean_description(" ".join(out), limit)
 
 
 def model_supported(model, evidence) -> bool:
@@ -330,18 +476,27 @@ def model_supported(model, evidence) -> bool:
     return not need or bool(re.search(need, str(evidence or ""), re.I))
 
 
-def model_evidence(industry="", about="", segments=(), filings="", limit: int = 420) -> str:
+def model_evidence(industry="", about="", segments=(), filings="", limit: int = 420, business="", earns=None) -> str:
     """One company's evidence of how it earns, from what the app already keeps (R26: the IT services layer of 50 had 8 models known when only the
     stored descriptions were sent): its official industry (with its sub-industries), the names of the segments its documents report, its
-    own description and the titles of its filings. "" when nothing is kept."""
+    own description and the titles of its filings. R27: also its company page's business read when stored (`business`: what it sells, to whom
+    and how it earns, its segments' lines and customers), and the sentences of its texts that speak of how it earns put first, so a telling
+    sentence past the start of a long description is in (`earns` given: those sentences, for evidence sent beside the description). "" when
+    nothing is kept."""
     parts = []
     if str(industry or "").strip():
         parts.append(f"Industry: {' '.join(str(industry).split())}.")
     segs = [" ".join(str(s).split()) for s in segments or [] if str(s or "").strip()][:6]
     if segs:
         parts.append(f"Segments: {', '.join(segs)}.")
-    if str(about or "").strip():
-        parts.append(clean_description(about, 600))
+    if str(business or "").strip():
+        parts.append("Business: " + clean_description(business, 300))
+    lead = clean_description(about, 600) if str(about or "").strip() else ""
+    earns = (earning_lines(about, limit=240) if lead else "") if earns is None else clean_description(earns, 240)
+    if earns and earns[:60] not in lead[:200]:
+        parts.append(earns)
+    if lead:
+        parts.append(lead)
     if str(filings or "").strip() and str(filings) not in str(about or ""):
         parts.append(clean_description(filings, 200))
     return clean_description(" ".join(parts), limit)
@@ -352,7 +507,8 @@ segments it reports, its own description, its filings' titles); no other knowled
 evidence ("was"). For each company give the ONE model from this list: """ + ", ".join(MODELS) + """; "unknown" when the evidence doesn't show it.
 A model needs words of its kind in the evidence: platform needs a marketplace, commissions, listing fees, advertising or a take rate; hardware_resale
 needs reselling, distributing or installing others' hardware; distribution needs trading or wholesale; a company that sells subscriptions to a
-service it runs on its own network or software is software or capacity, not platform.
+service it runs on its own network or software is software or capacity, not platform; consumer_services needs hotels, travel, meals, courses or
+other services paid for by consumers (services run for governments or companies are bpo or managed_services).
 Reply with ONLY this JSON: {"models": {"<symbol>": "<model>"}}"""
 
 
@@ -365,8 +521,7 @@ def recheck_models(rejected: list[dict], ask, theme: str) -> dict:
     payload = {"theme": theme, "companies": [{"symbol": c["symbol"], "name": c.get("name") or c["symbol"], "was": c.get("was") or "",
                                               "evidence": clean_description(c.get("evidence") or "", 420)} for c in rejected]}
     got = ask(MODEL_SYSTEM, "EVIDENCE:\n" + json.dumps(payload, ensure_ascii=False))
-    raw = got.get("models") if isinstance(got, dict) else None
-    pairs = raw.items() if isinstance(raw, dict) else [(x.get("symbol"), x.get("model")) for x in raw or [] if isinstance(x, dict)] if isinstance(raw, list) else []
+    pairs = [(s, x.get("model") if isinstance(x, dict) else x) for s, x in model_items(got.get("models") if isinstance(got, dict) else None)]
     ev = {c["symbol"]: c.get("evidence") or "" for c in rejected}
     return {s: str(m) for s, m in pairs if s in ev and str(m) in MODELS and model_supported(str(m), ev[s])}
 
@@ -426,11 +581,19 @@ stock exchange files it under the theme's industry). Use only the companies' des
    own description shows it, from this list: """ + ", ".join(MODELS) + """; "unknown" when the description doesn't show it.
    A company that resells or installs hardware others make is hardware_resale, one that makes its own is manufacturing; one that sells
    licences or subscriptions to software it owns is software, one paid for projects or people's time is project_services.
-   Read each one's "evidence" too (its official industry and sub-industry, the segments it reports, its filings' titles). platform only with a
-   marketplace, commissions, listing fees, advertising or a take rate in its evidence; a service sold by subscription over its own network is
-   software or capacity.
+   Read each one's "evidence" too (its official industry and sub-industry, the segments it reports, its business read, its filings' titles).
+   platform only with a marketplace, commissions, listing fees, advertising or a take rate in its evidence; a service sold by subscription over
+   its own network is software or capacity. Keep apart: bpo (customer service, back offices, claims run for clients) from managed_services
+   (running clients' IT systems) and project_services; contract_manufacturing (CDMO, CRAMS, EMS, foundry, OSAT: made to others' designs) from
+   manufacturing (its own finished products and brands, an IDM) and fabless (its own designs made by contract makers); components (parts,
+   components or ingredients such as APIs sold to other manufacturers) from manufacturing (finished goods, such as vehicles); life_insurance,
+   general_insurance (non-life and health) and reinsurance (underwriting only when the type isn't shown); property_development (sells what it
+   builds) from property (rents and leases).
+   "also": other models from the list that its evidence shows it earns a real part of its revenue from (a vehicle maker's financing arm is
+   lending; a drug maker that also makes for others is contract_manufacturing), at most 3, [] when none. "confidence": "high" when its evidence
+   says how it earns in so many words, "medium" when it follows from its industry or products, "low" when it is a guess.
 Reply with ONLY this JSON: {"place": [{"symbol": "", "layer": "<layer id or none>"}], "rename": [{"layer": "<layer id>", "name": "", "description": ""}],
-"extra": [{"name": "", "description": "", "symbols": [""]}], "models": {"<symbol>": "<model>"}}"""
+"extra": [{"name": "", "description": "", "symbols": [""]}], "models": {"<symbol>": {"model": "<model>", "also": ["<model>"], "confidence": "high"}}}"""
 MODEL_MEMBERS = 60            # a layer's members sent with their symbols for step 4 (the largest first, as the layer lists them; R26: 40 left
                               # the tail of a 50-company layer without a model)
 MEMBER_EVIDENCE = 160         # ...each with this much of its evidence (model_evidence) beside its own words
@@ -473,11 +636,29 @@ def place_in_layers(layers: list[dict], companies: list[dict], ask, theme: str) 
             if name and not re.search(r"\d", name) and not stand_in(name) and len(syms) >= 2:
                 extra.append({"name": name, "description": theme_text(x.get("description"), 400) or "", "symbols": syms})
     members = {c.get("ticker") for v in layers for c in (v.get("companies") or [])[:MODEL_MEMBERS] if c.get("ticker")}
-    raw = got.get("models")
-    pairs = raw.items() if isinstance(raw, dict) else [(x.get("symbol"), x.get("model")) for x in raw or [] if isinstance(x, dict)] if isinstance(raw, list) else []
-    # how each company earns (R25): only a symbol asked about and a model on the list; "unknown" and anything else is left out (it stays put)
-    models = {s_: str(md) for s_, md in pairs if (s_ in asked or s_ in members) and str(md) in MODELS}
-    return {"place": place, "rename": rename, "extra": extra, "models": models}
+    # how each company earns (R25): only a symbol asked about and a model on the list; "unknown" and anything else is left out (it stays put).
+    # R27: with its secondary models ("also") and how sure the answer is ("confidence"), each as given (theme_base checks them on the evidence)
+    models, tags, said = {}, {}, {}
+    for s_, x in model_items(got.get("models")):
+        md = x.get("model") if isinstance(x, dict) else x
+        if (s_ in asked or s_ in members) and str(md) in MODELS:
+            models[s_] = str(md)
+            if isinstance(x, dict):
+                also = [str(t) for t in (x.get("also") or x.get("tags") or []) if str(t) in MODELS and str(t) != str(md)] if isinstance(x.get("also") or x.get("tags"), list) else []
+                if also:
+                    tags[s_] = also[:TAGS_MAX]
+                if str(x.get("confidence") or "").lower() in CONFIDENCE:
+                    said[s_] = str(x["confidence"]).lower()
+    return {"place": place, "rename": rename, "extra": extra, "models": models, "tags": tags, "confidence": said}
+
+
+def model_items(raw) -> list[tuple]:
+    """[(symbol, model or {"model", "also", "confidence"})] from an answer's "models": a mapping, or a list of {"symbol", "model", ...}."""
+    if isinstance(raw, dict):
+        return list(raw.items())
+    if isinstance(raw, list):
+        return [(x.get("symbol"), x if ("also" in x or "confidence" in x) else x.get("model")) for x in raw if isinstance(x, dict)]
+    return []
 
 
 # ---------- claims: tailwinds, risks and a layer's policy line ----------

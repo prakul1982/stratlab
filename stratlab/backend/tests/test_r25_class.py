@@ -71,11 +71,12 @@ def test_it_services_mixed_layers_are_split_by_how_they_earn():
     assert after["Hardware resale and integration"] == ["HW1", "HW2", "HW3"]
     assert after["Cloud, AI infrastructure and hardware"] == ["DC1", "DC2"]
     assert after["Software products and platforms"] == ["SP0", "SP1", "SP2", "SW1"]
-    # "Other" keeps only the company the evidence can't place; the server maker gets a layer named by its model, the project firm joins services
-    assert after["Other IT service companies"] == ["NOD"] and after["Makers of their own products"] == ["SV1"]
+    # "Other" keeps the company the evidence can't place; R27 (changed on purpose): the server maker, alone in its model, joins "Other" instead
+    # of a one-company layer; the project firm joins services
+    assert after["Other IT service companies"] == ["NOD", "SV1"] and "Makers of their own products" not in after
     # the 18-company catch-all (over 40% of the theme) is split by model: project firms and managed-service firms apart
     assert after["Mid-tier digital and cloud specialists"] == sorted([f"PJ{i:02d}" for i in range(10)] + ["PJX"])
-    assert after["Managed and outsourced services"] == sorted(f"MG{i}" for i in range(6))
+    assert after["Managed and outsourced IT services"] == sorted(f"MG{i}" for i in range(6))
     total = sum(len(x) for x in after.values())
     assert total == sum(len(x) for x in before.values())                                 # nobody lost or doubled
     assert all(len(x) <= 0.4 * total for k, x in after.items())
@@ -98,9 +99,9 @@ def test_before_and_after_layer_list_for_the_report():
         ("Large diversified outsourcers", 5), ("Mid-tier digital and cloud specialists", 18), ("Cloud, AI infrastructure and hardware", 4),
         ("Software products and platforms", 3), ("Other IT service companies", 3)]
     assert [(v["layer"], len(v["companies"])) for v in vc] == [
-        ("Large diversified outsourcers", 5), ("Mid-tier digital and cloud specialists", 11), ("Managed and outsourced services", 6),
+        ("Large diversified outsourcers", 5), ("Mid-tier digital and cloud specialists", 11), ("Managed and outsourced IT services", 6),
         ("Cloud, AI infrastructure and hardware", 2), ("Software products and platforms", 4), ("Hardware resale and integration", 3),
-        ("Makers of their own products", 1), ("Other IT service companies", 1)]
+        ("Other IT service companies", 2)]          # R27: no one-company layer, the server maker is in "Other"
 
 
 def test_a_catch_all_of_one_model_is_split_by_market_value():
@@ -234,7 +235,12 @@ def test_on_every_synthetic_theme_an_outlier_moves_out_and_every_rule_still_hold
         assert vc == m["value_chain"]                    # the exchange's industries only (no map of its own): nothing to split by model
     else:
         home = next(v for v in vc if "ODD1" in [c["ticker"] for c in v["companies"]])
-        assert home["layer"] != big["layer"] and C.model_family(models["ODD1"]) == home["model"]["family"]
+        assert home["layer"] != big["layer"]
+        if home.get("official"):        # R27 (changed on purpose): alone in its family, the outlier joins "Other", never a one-company layer
+            assert home.get("basis") == "rest" and next(c for c in home["companies"] if c["ticker"] == "ODD1")["single"]
+        else:
+            assert C.model_family(models["ODD1"]) == home["model"]["family"]
+        assert not any(len(v["companies"]) == 1 and v.get("by_model") for v in vc)
         total = sum(len(v["companies"]) for v in vc)
         for v in vc:
             fams = {C.model_family(models.get(c["ticker"])) for c in v["companies"]} - {""}

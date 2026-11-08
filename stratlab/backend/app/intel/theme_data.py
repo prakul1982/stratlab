@@ -261,12 +261,25 @@ def basis_text(rows: list[dict], region: str) -> str:
 
 
 # ---------- layers and sub-themes ----------
+def model_fields(layer: dict, sym: str) -> dict:
+    """A company's revenue model as its layer holds it (R27, theme_base.by_model): "model" (a theme_check.MODELS id, "" unknown), "model_tags"
+    (its secondary ways of earning), "model_confidence" (high, medium, low; "" unknown), and "model_out" when it is left out of the layer's
+    figures and rankings. {} for a map whose layers carry no models."""
+    c = next((c for c in layer.get("companies") or [] if c.get("ticker") == sym), None) or {}
+    if "model" not in c:
+        return {}
+    return {"model": c.get("model") or "", "model_tags": list(c.get("model_tags") or []), "model_confidence": c.get("model_confidence") or "",
+            **({"model_out": True} if c.get("model_out") else {})}
+
+
 def layer_block(name: str, rows: list[dict], wide: set[str]) -> dict:
     """A layer's table and its median and range for each figure. A company-wide figure (a group that runs other businesses too) is
     marked and left out of the median when the layer has any company that is its own; the layer says how many were left out. A company
     whose membership isn't confirmed (status "unverified") is listed but left out of the medians and the revenue total; a net margin with a
-    one-off gain in it is left out of the net margin's median (`net_all` keeps the median with it)."""
-    sure = [r for r in rows if r.get("status") != "unverified"]
+    one-off gain in it is left out of the net margin's median (`net_all` keeps the median with it). R27: a company whose revenue model is
+    unknown or of low confidence in a layer that has models (`model_out`, theme_base.by_model) is listed but left out of the layer's figures
+    the same way (`model_out`: their symbols)."""
+    sure = [r for r in rows if r.get("status") != "unverified" and not r.get("model_out")]
     own = [r for r in sure if r["symbol"] not in wide]
     pool = own or sure
     stats = {k: stat(r.get(k) for r in pool if not (k == "net" and r.get("one_off")) and not (k == "pb" and (r.get(k) or 0) <= 0)
@@ -277,6 +290,7 @@ def layer_block(name: str, rows: list[dict], wide: set[str]) -> dict:
             "revenue": sum(r["revenue"] for r in sure if r.get("revenue")) or None,
             "company_wide": sorted(r["symbol"] for r in sure if r["symbol"] in wide),
             "unverified": sorted(r["symbol"] for r in rows if r.get("status") == "unverified"),
+            "model_out": sorted(r["symbol"] for r in rows if r.get("model_out") and r.get("status") != "unverified"),
             "stats_over": "all" if not own and sure else "own", "left_out": len(sure) - len(pool)}
 
 
@@ -970,15 +984,16 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         mine = [rows[c["ticker"]] for c in v.get("companies") or [] if c["ticker"] in rows]
         what = {c["ticker"]: c.get("what") for c in v.get("companies") or []}
         ind = {c["ticker"]: c.get("industry") for c in v.get("companies") or []}          # the exchange's industry, a column of an AI layer (R20)
-        b = layer_block(v.get("layer") or "", [{**r, "what": what.get(r["symbol"]), "company_wide": r["symbol"] in wide, "official_industry": ind.get(r["symbol"]) or ""}
-                                               for r in mine], wide)
+        b = layer_block(v.get("layer") or "", [{**r, "what": what.get(r["symbol"]), "company_wide": r["symbol"] in wide, "official_industry": ind.get(r["symbol"]) or "",
+                                                **model_fields(v, r["symbol"])} for r in mine], wide)
         b["description"] = v.get("description") or ""
         b["policy"] = v.get("policy")
         b["official"], b["basis"] = bool(v.get("official")), v.get("basis")     # a layer that is one official industry's companies the AI didn't place (theme_base.py)
         b["by_industry"] = bool(v.get("by_industry"))
         b["model"] = v.get("model") or None                 # what the layer's companies have in common: how they earn (theme_base.by_model, R25)
         blocks.append(b)
-        sure = [r for r in mine if r.get("status") != "unverified"]
+        out_ = set(b.get("model_out") or [])            # R27: left out of the layer's figures (model unknown or of low confidence)
+        sure = [r for r in mine if r.get("status") != "unverified" and r["symbol"] not in out_]
         histories[b["layer"]] = layer_history([r for r in sure if r["symbol"] not in wide] or sure)
     chain = chain_table(blocks)
     counted = [r for b in blocks for r in b["companies"] if r.get("status") != "unverified"]
