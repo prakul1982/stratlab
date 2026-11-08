@@ -352,6 +352,7 @@ def chain_table(blocks: list[dict]) -> dict:
         have = [r for r in rows if ok(r, "ebitda") and not r["rest"]]
     if not same_basis([r["basis"] for r in have]):
         have = []
+    have = one_family(have, lambda r: model_family_of(r["model"]))          # R29: layers of one business-model family only
     line, hi, lo = None, None, None
     if len(have) >= 2:
         hi, lo = max(have, key=lambda r: r["ebitda"]), min(have, key=lambda r: r["ebitda"])
@@ -374,6 +375,7 @@ def chain_table(blocks: list[dict]) -> dict:
             lend = [r for r in rows if ok(r, "roe") and not r["rest"]]
         if not same_basis([r["basis"] for r in lend]):
             lend = []
+        lend = one_family(lend, lambda r: model_family_of(r["model"]))
         if len(lend) >= 2:
             measure, have = "roe", lend
             hi, lo = max(lend, key=lambda r: r["roe"]), min(lend, key=lambda r: r["roe"])
@@ -435,12 +437,32 @@ def same_basis(groups: list) -> bool:
     return len(kinds) <= 1 and "mixed" not in kinds
 
 
+def one_family(rows: list, family) -> list:
+    """The rows that may be set side by side in a headline (R29, the owner's review: no headline compares layers of different business-model
+    families, a regulated network beside a generator or a miner beside a fabricator): those of the family most of them have (`family(row)`,
+    theme_base.by_model's), a row of no family left out; every row when none has a family; [] when the most common family is tied."""
+    from collections import Counter
+    fams = [family(r) or "" for r in rows]
+    c = Counter(f for f in fams if f).most_common()
+    if not c:
+        return list(rows)
+    if len(c) > 1 and c[0][1] == c[1][1]:
+        return []
+    return [r for r, f in zip(rows, fams) if f == c[0][0]]
+
+
+def model_family_of(model) -> str:
+    return (model or {}).get("family") or "" if isinstance(model, dict) else ""
+
+
 def rank_pair(rows: list, value, count, floor: int = COMPARE_MIN, of=None, model=None, basis=None):
     """(highest, lowest) of `rows` by `value(row)` among those whose figure is of at least `floor` companies (`count(row)`) (R25: one floor for
     every comparison of layers) and, given `of`, `model` and `basis` (each a function of the row), passes headline_ok and shares one period
     basis (R27); None when fewer than two qualify, or when the highest or the lowest is tied (no layer is named for a tie)."""
     have = sorted((r for r in rows if value(r) is not None and headline_ok(count(r) or 0, of(r) if of else None, model(r) if model else None, floor)),
                   key=value)
+    if model:                       # R29: one business-model family only
+        have = one_family(have, lambda r: model_family_of(model(r)))
     if basis and not same_basis([basis(r) for r in have]):
         return None
     if len(have) < 2 or value(have[-1]) == value(have[-2]) or value(have[0]) == value(have[1]):
@@ -638,6 +660,29 @@ def valuation_section(rows: list[dict], market: list[dict]) -> dict:
     return {"pe": pe, "market_pe": mkt, "market_n": mkt["n"] if mkt else 0, "pb": pb, "market_pb": mpb, "ev_ebitda": ev,
             "ev_missing": sum(1 for r in rows if r.get("ev_ebitda") is None and not r.get("bank")), "losses": losses, "peers": peers_section(rows, market),
             "n": len(rows)}                 # the population every count here is of (R22: 11 with a P/E and 6 loss-makers of 15)
+
+
+def relative_ok(val: dict) -> bool:
+    """Whether a theme's valuation may be relative (R29, the owner's review of the live R27 Telecom deck: 24 companies with a P/E, none with a
+    comparable peer set): comparable peers cover at least half of the companies with a P/E. Otherwise the valuation is descriptive (the
+    theme's own medians and spread, by layer and over time), never set against peers or the whole market."""
+    pe_n = (val.get("pe") or {}).get("n") or 0
+    with_peers = (((val.get("peers") or {}).get("pe") or {}).get("n")) or 0
+    return bool(pe_n) and with_peers * 2 >= pe_n
+
+
+def layer_valuation(blocks: list[dict], counted: set) -> list[dict]:
+    """Each layer's own median P/E, P/B and EV/EBITDA with their counts and ranges (R29: the descriptive valuation), over its confirmed
+    companies with figures that are in its figures (never one whose model is left out, `model_out`); a layer with none of the three is left out."""
+    out = []
+    for b in blocks:
+        out_ = set(b.get("model_out") or [])
+        cos = [c for c in b.get("companies") or [] if c.get("symbol") in counted and c["symbol"] not in out_]
+        st = {"pe": stat(c.get("pe") for c in cos if c.get("pe")), "pb": stat(c.get("pb") for c in cos if c.get("pb") is not None and c["pb"] > 0),
+              "ev_ebitda": stat(c.get("ev_ebitda") for c in cos)}
+        if any(st.values()):
+            out.append({"layer": b.get("layer") or "", "n": len(cos), "official": bool(b.get("official")), **st})
+    return out
 
 
 def balance_section(rows: list[dict]) -> dict:
@@ -1022,7 +1067,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         except Exception as e:
             print("theme data: segments not read:", sym, type(e).__name__, str(e)[:100])
             return None
-    pending = []
+    pending, pending_fam = [], {}
     for s, r in rows.items():               # each company's filed sector figures (R23): a bank's, an insurer's, a US company's
         fam = sector_metrics.family_of(region, r)
         if not fam:
@@ -1034,6 +1079,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
             piece = None
         if piece is None:
             pending.append(s)
+            pending_fam[s] = fam
         sector_metrics.apply(r, piece)
     wide = {s for s, r in rows.items() if is_diversified(r, segs(s))}
     names = {s: r["name"] for s, r in rows.items()}
@@ -1086,6 +1132,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     members = [r for r in listed if r.get("status") != "unverified" and has_figures(r)]
     own = [r for r in members if r["symbol"] not in wide] or members
     val = valuation_section(members, market)
+    val["by_layer"] = layer_valuation(blocks, {r["symbol"] for r in members})
     point = {"d": src.today.isoformat(), "pe": val["pe"]["median"] if val["pe"] else None, "n": len(members)}
     try:
         val["history"] = [p for p in src.history(slug(theme), point) if p.get("pe") is not None]
@@ -1124,6 +1171,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
                 if (b.get("model") or {}).get("family") and not b["model"].get("sparse")}
     out["sections"]["sector"] = sector_metrics.section([r for r in own if r.get("status") != "unverified"], region, layer_of, pending, stat, model_of)
     out["metrics_pending"] = sorted(pending)
+    out["metrics_families"] = pending_fam           # R29: each one's family, so a kept dive can queue a read the worker dropped again
     out["checks"] = data_checks(listed, blocks, out)
     out["notable"] = notable_items(blocks, chain, histories)
     return out

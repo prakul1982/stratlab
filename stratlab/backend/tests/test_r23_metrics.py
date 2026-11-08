@@ -304,8 +304,12 @@ def test_figures_not_read_yet_are_pending_and_the_dive_says_which():
     region, m, f = bank_theme()[:3]
     v, slides = deck_of(region, m, f, metrics=lambda s, fam: None)
     placed = {c["symbol"] for x in v["layers"] for c in x["companies"]}
-    assert v["sections"]["sector"]["families"] == {} and set(v["sections"]["sector"]["pending"]) == placed and len(placed) >= 8
+    # R29: a family with none read yet is stated with its count ("read for 0 of 8 so far"), never silently absent; it has no page of figures
+    fam = v["sections"]["sector"]["families"]["bank"]
+    assert fam["keys"] == [] and fam["n"] == 0 and fam["pending"] == len(placed) and set(v["sections"]["sector"]["pending"]) == placed and len(placed) >= 8
     assert not any(s.title.startswith("Sector operating figures") for s in slides)
+    lines = [ln for s in slides for b in s.blocks if b["kind"] == "cards" for it in b["items"] for ln in it.get("lines") or []]
+    assert any(ln.startswith(f"Filed figures read for 0 of {len(placed)} banks so far; {len(placed)} still being read") for ln in lines)
 
 
 def test_the_reader_serves_a_kept_piece_reads_within_its_budget_and_queues_the_rest(monkeypatch):

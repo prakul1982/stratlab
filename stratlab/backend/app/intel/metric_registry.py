@@ -51,8 +51,10 @@ LENDING = ("bank", "lender")
 INSURERS = ("life", "general", "health", "reinsurance")
 NON_LIFE = ("general", "health", "reinsurance")
 CONTRACTED = ("software", "royalties", "services")          # models paid ahead or under multi-year contracts (RPO, deferred revenue)
-ASSETS_HEAVY = ("making", "capacity", "resources", "utility", "transport", "semis", "hardware")
-STOCK_HOLDERS = ("making", "resale", "semis", "hardware")    # companies that hold goods for sale
+# R29: the kinds of utility and of metals business (theme_check.MODELS) are families of their own; a marketplace ("platform") holds no stock
+ASSETS_HEAVY = ("making", "capacity", "resources", "utility", "transport", "semis", "hardware", "regulated_utility", "generation", "mining",
+                "metal_processing")
+STOCK_HOLDERS = ("making", "resale", "semis", "hardware", "mining", "metal_processing")    # companies that hold goods for sale
 RESEARCH = ("making", "semis", "hardware", "software", "royalties", "pharma")
 ORDERS = ("defence", "capital_goods", "construction")
 _BQ, _IQ, _US = "Latest quarter; exchange filing", "Latest period; exchange filing", "Latest fiscal year; SEC filing"
@@ -290,7 +292,8 @@ def main_family(tagsets: list[set]) -> str | None:
     """The main model of a group: the family most of its companies have (theme_check.MODELS' families and the financial kinds)."""
     from collections import Counter
     fams = ("making", "software", "royalties", "services", "platform", "resale", "capacity", "construction", "lending", "underwriting",
-            "financial_fees", "resources", "utility", "property", "care", "media", "transport", "consumer_services", "holding")
+            "financial_fees", "resources", "utility", "property", "care", "media", "transport", "consumer_services", "holding",
+            "regulated_utility", "generation", "power_trading", "mining", "metal_processing")
     c = Counter(f for t in tagsets for f in t if f in fams)
     return c.most_common(1)[0][0] if c else None
 
