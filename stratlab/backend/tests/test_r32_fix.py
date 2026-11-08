@@ -140,7 +140,7 @@ def test_a_split_half_with_no_shown_company_is_undone():
     assert "Residential developers" in lays and not any("(larger)" in x or "(smaller)" in x for x in lays)
     text = " ".join(str(x) for s in slides for b in s.blocks for x in (b.get("paras") or []) + [s.title or ""])
     assert "(smaller)" not in text and "(larger)" not in text
-    assert deck.THEME_DECK_VERSION == 35 and B.RULES == 33
+    assert deck.THEME_DECK_VERSION == 36 and B.RULES == 33
 
 
 def test_a_company_with_no_model_takes_the_one_its_map_layers_name_states():
@@ -173,3 +173,10 @@ def test_the_shown_companies_label_matches_who_was_ranked():
     assert shown_label(big_first, 2) == "The largest 2 of 4 by market value"
     in_figs_first = [{"cap": 5}, {"cap": 3}, {"cap": 9, "model_out": True}, {"cap": 8, "model_out": True}]
     assert shown_label(in_figs_first, 2).startswith("The first 2 of 4: companies in the layer's figures first")
+
+
+def test_a_stored_dive_is_made_again_when_its_sentences_change():
+    """Live R31.4: the ranking line's new wording never reached the deck: the stored dive's key held only the rules' and metrics' versions."""
+    from app.intel import theme_data, theme_routes
+    m = {"generated_at": 1, "value_chain": [], "placements": {"placed": 3}}
+    assert theme_routes.dive_key("IN", "x", m)[-1] == f"td{theme_data.DIVE_TEXT}"
