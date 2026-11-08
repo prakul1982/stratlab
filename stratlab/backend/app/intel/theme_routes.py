@@ -640,6 +640,22 @@ def dive_key(r: str, theme: str, m: dict) -> list:
             (m.get("placements") or {}).get("placed"), said, theme_base.RULES, f"sm{sector_metrics.VERSION}"]
 
 
+def requeue(r: str, dive: dict) -> None:
+    """R29: a kept dive still waiting for filed figures queues them again (the worker drops a read that fails, e.g. the exchange busy, and a
+    kept dive is only worked out again once one of them is stored, so a dropped read left the dive short until a Refresh: the live R27 Banks
+    deck's 7 of 19). The queue skips one already queued or stored; nothing is queued with no source set up."""
+    fams = dive.get("metrics_families") or {}
+    for s_ in dive.get("metrics_pending") or []:
+        if fams.get(s_):
+            sector_metrics.queue(r, s_, fams[s_])
+
+
+def figures_waiting(dive: dict) -> int:
+    """How many companies' filed sector figures a dive is still waiting for (R29: part of a kept deck's key, so a deck made while they are
+    being read is made again once they are in, never kept for the day with a smaller sample)."""
+    return len(dive.get("metrics_pending") or [])
+
+
 def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None = None) -> dict:
     """The dive for a checked map with its descriptions (the page's tables and sections): kept once for everyone in the shared store
     (kind "theme:dive") and served from there, however old, until a Refresh (owner, 7 Nov); worked out again from the stored company
@@ -650,6 +666,7 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
         kept = computed.get(theme_library.DIVE, key)
         if kept is not None and isinstance((kept.get("value") or {}).get("dive"), dict) and not pieces_moved(r, kept["value"].get("pieces") or {}) \
                 and not sector_metrics.any_stored(r, kept["value"]["dive"].get("metrics_pending") or []):
+            requeue(r, kept["value"]["dive"])
             return kept["value"]["dive"]
     src = sources(r, theme, fresh=True) if refresh else sources(r, theme)
     hit = theme_data.build(r, theme, fm, src)
@@ -878,7 +895,11 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
     stamp = int(float(m.get("generated_at") or 0))
     seen = (NEWS_CACHE.get((r, theme.lower(), int(float(theme_base.for_figures(m)[0].get("generated_at") or 0)))) is not None,
             bool((IPO_CACHE.get((r, theme.lower(), stamp)) or {}).get("checked")))     # a part read since is in a new file
-    key = (r, theme.lower(), format, today.isoformat(), stamp, biz, seen, theme_base.RULES, deck.THEME_DECK_VERSION)
+    # R29 (P0, the live R27 Banks deck: 7 of 19 banks' filed figures): the dive first, so the key says how many companies' filed figures it
+    # still waits for; a deck made while they are read is kept under that count and made again from the fuller dive once they are in
+    dive = dive_of(r, theme, m)
+    waiting = figures_waiting(dive)
+    key = (r, theme.lower(), format, today.isoformat(), stamp, biz, seen, theme_base.RULES, deck.THEME_DECK_VERSION, waiting)
     body = DECK_CACHE.get(key)
     if body is None:                           # R20: the file is kept in the shared store too, so a restart or a deploy doesn't rebuild it
         import base64
@@ -890,11 +911,13 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
             except ValueError:
                 body = None
         if body is None:
-            view = deck_view(r, m, dive_of(r, theme, m), deck_extras(r, theme, m, profile))
+            view = deck_view(r, m, dive, deck_extras(r, theme, m, profile))
             body, gate = deck.build_theme_gated(view, pdf=format == "pdf")
-            # R27: the publication gate's result (pass or fail per item, what was dropped) is kept with the deck, for Admin -> Library
-            computed.put("deck:theme", list(key), base64.b64encode(body).decode(), label=f"{theme} ({format.upper()}, {today.isoformat()})", region=r,
-                         meta={"gate": gate})
+            # R27: the publication gate's result (pass or fail per item, what was dropped) is kept with the deck, for Admin -> Library;
+            # R29: a deck still waiting for filed figures isn't kept in the shared store (it is made again once they are in)
+            if not waiting:
+                computed.put("deck:theme", list(key), base64.b64encode(body).decode(), label=f"{theme} ({format.upper()}, {today.isoformat()})", region=r,
+                             meta={"gate": gate})
         DECK_CACHE.set(key, body, DECK_TTL, size=len(body))
     if mark:                                   # counted once the file is made: a deck that failed to build uses nothing
         db.add_usage(profile["id"], "deck")
