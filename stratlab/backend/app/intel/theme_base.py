@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 
 # the version of the membership rules (who is in a theme, which industries, which layers): part of every cached read's key, so a read kept
 # from before a deploy never keeps the old rules' companies or figures (R18: "Private banks" kept the public banks after the fix)
-RULES = 32                       # R32: chip designers without fabs as fabless (theme_check.chip_designer), a layer named by how it earns joins the map's layer of its primary model, a market-value half with no shown company undone (unsplit_unshown); R31: lenders apart from developers and landlords, fabless vs IDM by owned fabs (theme_check.refine_model), a metals family's commodity as its sub-basis, a split-made layer of one primary model joins the map's (by_model 3b); R30: a kept placement's unknown models asked again once the companies' descriptions are kept (reask_unknown); R29: kinds of utility and of metals business as their own models (theme_check.refine_model); R21: every confirmed company in one of the map's layers (place_rest); R22: layer names fit, currencies, extra layers; R25: one revenue model a layer; R26: models from more evidence and checked by it, names after the split; R27: primary model, tags and confidence, comparable segments, no one-company layer; R28: the companies to place carry their own descriptions (theme_routes.describe_unplaced)
+RULES = 33                       # R33: a company with no model takes the one its map layer's name states (models_from_layer); R32: chip designers without fabs as fabless (theme_check.chip_designer), a layer named by how it earns joins the map's layer of its primary model, a market-value half with no shown company undone (unsplit_unshown); R31: lenders apart from developers and landlords, fabless vs IDM by owned fabs (theme_check.refine_model), a metals family's commodity as its sub-basis, a split-made layer of one primary model joins the map's (by_model 3b); R30: a kept placement's unknown models asked again once the companies' descriptions are kept (reask_unknown); R29: kinds of utility and of metals business as their own models (theme_check.refine_model); R21: every confirmed company in one of the map's layers (place_rest); R22: layer names fit, currencies, extra layers; R25: one revenue model a layer; R26: models from more evidence and checked by it, names after the split; R27: primary model, tags and confidence, comparable segments, no one-company layer; R28: the companies to place carry their own descriptions (theme_routes.describe_unplaced)
 INDUSTRIES_DAYS = 30            # the AI's pick of a free-text theme's industries is made again after this long (at most monthly)
 FIGURES_MAX = 100               # companies the dive works figures out for: every one the AI named, then the largest of the base (R31: 60 -> 100; stored reads only, the deck built in under a second for 100 synthetic companies, the sector-figure worker bounded by its queue)
 DESCRIBE_MAX = 120              # base companies whose own one-line description is looked up for the page, largest first
@@ -714,6 +714,10 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
                        "companies": sorted(other, key=lambda c: (-(c.get("cap") or 0), c["ticker"]))})
     model_names = None
     if models:
+        # R32: a company whose own stored words say nothing of how it earns takes the model its map layer's name states (live R31 semis:
+        # Qualcomm, Broadcom, AMD... with only "From its own filings: Quarterly report" as evidence sat unknown in "Fabless chip design")
+        models, conf = models_from_layer(out_vc, models, conf, evidence)
+    if models:
         # R31: a kept placement's models made exact by the R31 boundaries (lenders, landlords and developers; fabless and fab owners) from the
         # companies' evidence, with nothing asked again
         models, conf = refine_kept(models, conf, evidence)
@@ -803,6 +807,37 @@ SPLIT_PART = 3                  # each part of such a split holds at least this 
 
 
 R31_REFINE = ("property_development", "property", "construction", "manufacturing", "fabless", "unknown")      # models the R31 boundaries can make exact
+
+
+LAYER_MODEL_NOT = (r"\bmaterials?\b|chemicals?|\bgases\b|\bwafers? (?:supplier|maker)|substrates?|"
+                   r"(?:semiconductor|wafer fab\w*|capital|process) equipment|electronic design automation|\beda\b")
+
+
+def models_from_layer(vc: list[dict], models: dict, conf, evidence=None) -> tuple[dict, dict | None]:
+    """(models, confidence) with each company of a map layer (not an official group, not "Other") that has no known model given the one
+    model its layer's own name states in so many words (theme_check.model_from_words on the name), at "medium" confidence: the map placed it
+    there and its own words don't contradict it. Unchanged when the name states no single model (R32). R34: never when the company's own
+    evidence states another model, or names materials, chemicals, gases, substrates, equipment or design software (live: a materials maker
+    in a fabless layer)."""
+    import re
+    from .theme_check import MODELS, model_from_words
+    evidence = evidence if isinstance(evidence, dict) else {}
+    models, out_conf = dict(models), (dict(conf) if isinstance(conf, dict) else {})
+    for v in vc:
+        if v.get("official") or v.get("by_model"):
+            continue
+        m_ = model_from_words(str(v.get("layer") or ""))
+        if not m_ or m_ not in MODELS:
+            continue
+        for c in v.get("companies") or []:
+            s_ = c.get("ticker")
+            if s_ and models.get(s_, "") in ("", "unknown"):
+                ev = str(evidence.get(s_) or "")
+                if model_from_words(ev) not in ("", m_) or re.search(LAYER_MODEL_NOT, ev, re.I):
+                    continue
+                models[s_] = m_
+                out_conf[s_] = "medium"
+    return models, (out_conf or conf)
 
 
 def refine_kept(models: dict, conf, evidence) -> tuple[dict, dict | None]:

@@ -465,6 +465,15 @@ def chain_table(blocks: list[dict]) -> dict:
             line = (f"Median EBITDA margin is highest in {hi['layer']} ({pts(hi['ebitda'], whole)}{few(hi['ebitda_n'], hi['n'])}) and lowest in {lo['layer']} "
                     f"({pts(lo['ebitda'], whole)}{few(lo['ebitda_n'], lo['n'])}), "
                     f"a gap of {gap_of(hi['ebitda'], lo['ebitda'])} points.")
+            # R34 (live R31.1 pharma and semis: a layer with a higher or lower median than those named was left out without a word): the
+            # line states its own scope: how many layers with a median were compared and on what condition (never naming the others beside
+            # the ranking: R29), the rest are in the table
+            names = {r["layer"] for r in have}
+            out = [r for r in rows if r["ebitda"] is not None and not r["rest"] and r["layer"] not in names and (not r["official"] or not
+                   any(not x["official"] for x in have))]
+            if out:
+                line += (f" Compared: {len(have)} of the {len(have) + len(out)} layers with a median, those with at least {HEADLINE_MIN} "
+                         "companies with the figure and one kind of business; the others are in the table, not ranked.")
     measure = "ebitda"
     if len(have) < 2:
         # lenders have no EBITDA margin: their layers are set side by side on return on equity (R18)

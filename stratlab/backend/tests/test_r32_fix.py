@@ -140,4 +140,36 @@ def test_a_split_half_with_no_shown_company_is_undone():
     assert "Residential developers" in lays and not any("(larger)" in x or "(smaller)" in x for x in lays)
     text = " ".join(str(x) for s in slides for b in s.blocks for x in (b.get("paras") or []) + [s.title or ""])
     assert "(smaller)" not in text and "(larger)" not in text
-    assert deck.THEME_DECK_VERSION == 32 and B.RULES == 32
+    assert deck.THEME_DECK_VERSION == 33 and B.RULES == 33
+
+
+def test_a_company_with_no_model_takes_the_one_its_map_layers_name_states():
+    """Live R31.1 semis: Qualcomm, Broadcom, AMD... had only "From its own filings: Quarterly report" as evidence and sat unknown in the map's
+    "Fabless chip design"; the layer's own name states the model, so they take it at medium confidence. An official group, a name that states
+    no single model, and a company whose model is known are left alone."""
+    from app.intel.theme_base import models_from_layer
+    vc = [{"layer": "Fabless chip design", "companies": [{"ticker": "QCOM"}, {"ticker": "NVDA"}, {"ticker": "AVGO"}]},
+          {"layer": "Other semiconductor companies", "companies": [{"ticker": "XYZ"}]},
+          {"layer": "Semiconductors", "official": True, "companies": [{"ticker": "OFF"}]}]
+    models, conf = models_from_layer(vc, {"NVDA": "fabless", "AVGO": "unknown", "XYZ": ""}, {"NVDA": "high"})
+    assert models["QCOM"] == "fabless" and models["AVGO"] == "fabless" and conf["QCOM"] == conf["AVGO"] == "medium"
+    assert conf["NVDA"] == "high" and models.get("XYZ", "") == "" and "OFF" not in models
+
+
+def test_a_layer_name_never_gives_its_model_against_the_companys_own_words():
+    """Live R31.1 semis: a materials maker sat in "Fabless chip design"; its own evidence names materials, so the layer's model is not given."""
+    from app.intel.theme_base import models_from_layer
+    vc = [{"layer": "Fabless chip design", "companies": [{"ticker": "Q"}, {"ticker": "E"}, {"ticker": "D"}]}]
+    ev = {"Q": "Industry: Specialty Chemicals. Supplies electronic materials for chip making.",
+          "E": "Makes semiconductor equipment for wafer fabs.", "D": "From its own filings: Quarterly report"}
+    models, _ = models_from_layer(vc, {}, None, ev)
+    assert "Q" not in models and "E" not in models and models["D"] == "fabless"
+
+
+def test_the_shown_companies_label_matches_who_was_ranked():
+    """Live R31.1 IT: "The largest 3 of 6 by market value" listed three while three larger ones (left out of figures) sat below."""
+    from app.deck import shown_label
+    big_first = [{"cap": 9}, {"cap": 7}, {"cap": 5}, {"cap": 1}]
+    assert shown_label(big_first, 2) == "The largest 2 of 4 by market value"
+    in_figs_first = [{"cap": 5}, {"cap": 3}, {"cap": 9, "model_out": True}, {"cap": 8, "model_out": True}]
+    assert shown_label(in_figs_first, 2).startswith("The first 2 of 4: companies in the layer's figures first")

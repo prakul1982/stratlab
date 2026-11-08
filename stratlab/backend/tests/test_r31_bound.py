@@ -299,3 +299,14 @@ def test_a_figure_missing_because_its_years_were_read_in_part_says_so():
 def test_the_versions_are_bumped_so_kept_maps_and_decks_are_made_again():
     from app.intel import theme_routes as T
     assert B.RULES >= 31 and deck.THEME_DECK_VERSION >= 31 and T.PLACE_CARRY[31] == 30 and T.PLACE_CARRY[32] == 31   # R32 bumped both (updated on purpose)
+
+
+def test_a_ranking_line_states_how_many_layers_it_compared():
+    """Live R31.1 pharma/semis: a layer with a higher or lower median than those named was left out without a word (R34)."""
+    t = metals_layers([("Integrated steel", "IST", 5, "makes steel from iron ore in blast furnaces", "Iron & Steel", "commodity_mining", 22),
+                       ("Mini mills", "MML", 5, "makes steel in electric arc furnaces from sponge iron", "Iron & Steel", "commodity_mining", 12),
+                       ("Aluminium smelting", "ALS", 5, "smelts aluminium from bauxite", "Aluminium", "commodity_mining", 41)])
+    t, vc, m = split(t)
+    view, _ = deck_of(t["region"], m, t["facts"])
+    line = view["chain"]["line"]
+    assert "Compared: 2 of the 3 layers with a median" in line and "Aluminium" not in line

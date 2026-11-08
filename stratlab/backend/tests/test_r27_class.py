@@ -348,7 +348,7 @@ def test_a_lone_company_joins_the_largest_layer_of_its_family_when_there_is_one(
 
 # ---------- RULES, prompts ----------
 def test_rules_bumped_map_prompt_unchanged_and_new_segments_have_needs():
-    assert B.RULES == 32 and A.MAP_V == 23          # R32 bumped RULES (updated on purpose); R31 bumped RULES: models made exact by the R31 boundaries, layers merged (updated on purpose)
+    assert B.RULES == 33 and A.MAP_V == 23          # R33 bumped RULES (updated on purpose); R31 bumped RULES: models made exact by the R31 boundaries, layers merged (updated on purpose)
     for new in ("bpo", "components", "fabless", "life_insurance", "general_insurance", "reinsurance", "property_development"):
         assert new in C.MODELS and new in C.MODEL_NEEDS and new in C.PLACE_SYSTEM2
     assert C.model_family("contract_manufacturing") != C.model_family("manufacturing") == C.model_family("fabless")
