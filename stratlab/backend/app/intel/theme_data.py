@@ -269,6 +269,7 @@ def layer_block(name: str, rows: list[dict], wide: set[str]) -> dict:
     sure = [r for r in rows if r.get("status") != "unverified"]
     own = [r for r in sure if r["symbol"] not in wide]
     pool = own or sure
+    mark_bases(pool)
     stats = {k: stat(r.get(k) for r in pool if not (k == "net" and r.get("one_off")) and not (k == "pb" and (r.get(k) or 0) <= 0)
                      and not (k in BANK_ONLY and r.get("profile") == "insurer")) for k in STAT_KEYS}
     stats.update({k: stat(r.get(k) for r in pool) for k in sector_metrics.KEYS if any(r.get(k) is not None for r in pool)})    # R23: filed sector figures
@@ -278,6 +279,23 @@ def layer_block(name: str, rows: list[dict], wide: set[str]) -> dict:
             "company_wide": sorted(r["symbol"] for r in sure if r["symbol"] in wide),
             "unverified": sorted(r["symbol"] for r in rows if r.get("status") == "unverified"),
             "stats_over": "all" if not own and sure else "own", "left_out": len(sure) - len(pool)}
+
+
+# R27: a figure whose filed value (sector_metrics.REPLACES) is on another basis than the stored pages' own (NII / assets: the filed half year
+# annualised against the latest full year's accounts): where a layer has filed values, a company with only the page's own is "not comparable"
+SPLIT_BASIS = ("nii_assets",)
+
+
+def mark_bases(pool: list[dict]) -> None:
+    """Mark each company's figure that is on another basis than its layer's (SPLIT_BASIS): moved to `nc_values`, named in `nc`, out of the median."""
+    for k in SPLIT_BASIS:
+        if not any(k in (r.get("filed_basis") or ()) and r.get(k) is not None for r in pool):
+            continue
+        for r in pool:
+            if r.get(k) is not None and k not in (r.get("filed_basis") or ()):
+                r.setdefault("nc_values", {})[k] = r[k]
+                r[k] = None
+                r["nc"] = sorted(set(r.get("nc") or ()) | {k})
 
 
 def margin_line(block: dict, chain_median: float | None, several: bool = True, whole: bool = False) -> str | None:
@@ -941,6 +959,8 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         if s in rows:
             rows[s]["name"] = c.get("name") or rows[s]["name"]
             rows[s]["status"] = membership(c, words)
+            rows[s]["map_industry"] = c.get("industry") or ""          # the exchange's (or the SEC's) industry the map gives (R27: metric_registry)
+            rows[s]["map_what"] = c.get("what") or ""                  # what the map says the company does (an insurer's type: metric_registry)
 
     def segs(sym):
         try:
@@ -1040,7 +1060,10 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     layer_of = {c["symbol"]: b["layer"] for b in blocks for c in b["companies"]}
     out["sections"]["margin_drivers"] = margin_drivers(out["sections"]["margins"], rows, layer_of)
     out["sections"]["quarter"] = quarter_section(members, out["sections"]["events"].get("results_filed"))
-    out["sections"]["sector"] = sector_metrics.section([r for r in own if r.get("status") != "unverified"], region, layer_of, pending, stat)
+    # each company's revenue model family: its layer's (theme_base.by_model), unless the layer's model rests on too few of its companies
+    model_of = {c["symbol"]: b["model"]["family"] for b in blocks for c in b["companies"]
+                if (b.get("model") or {}).get("family") and not b["model"].get("sparse")}
+    out["sections"]["sector"] = sector_metrics.section([r for r in own if r.get("status") != "unverified"], region, layer_of, pending, stat, model_of)
     out["metrics_pending"] = sorted(pending)
     out["checks"] = data_checks(listed, blocks, out)
     out["notable"] = notable_items(blocks, chain, histories)
