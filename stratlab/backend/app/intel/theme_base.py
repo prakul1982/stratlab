@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 
 # the version of the membership rules (who is in a theme, which industries, which layers): part of every cached read's key, so a read kept
 # from before a deploy never keeps the old rules' companies or figures (R18: "Private banks" kept the public banks after the fix)
-RULES = 27                       # R21: every confirmed company in one of the map's layers (place_rest); R22: layer names fit, currencies, extra layers; R25: one revenue model a layer; R26: models from more evidence and checked by it, names after the split; R27: primary model, tags and confidence, comparable segments, no one-company layer
+RULES = 28                       # R21: every confirmed company in one of the map's layers (place_rest); R22: layer names fit, currencies, extra layers; R25: one revenue model a layer; R26: models from more evidence and checked by it, names after the split; R27: primary model, tags and confidence, comparable segments, no one-company layer; R28: the companies to place carry their own descriptions (theme_routes.describe_unplaced)
 INDUSTRIES_DAYS = 30            # the AI's pick of a free-text theme's industries is made again after this long (at most monthly)
 FIGURES_MAX = 60                # companies the dive works figures out for: every one the AI named, then the largest of the base
 DESCRIBE_MAX = 120              # base companies whose own one-line description is looked up for the page, largest first
@@ -936,6 +936,42 @@ def also_earn(known: list[dict], family: str) -> tuple[int, str] | None:
         return None
     t = min(counts, key=lambda t: (-counts[t], first[t]))
     return counts[t], t
+
+
+def shown_model(model: dict | None, rows: list[dict]) -> dict | None:
+    """The layer's "how they earn" line counted over the companies its page shows (R28: the live R27 IT deck said "shown for only 6 of these
+    46 companies" on a page of 6: the 46 were every company the map put in the layer, most with no figures worked out). `rows`: the layer's
+    confirmed companies with figures, carrying model, model_tags, model_confidence and model_out (theme_data.model_fields). Unchanged when
+    the counts already agree or the layer carries no model."""
+    if not model or not rows or not any("model" in r for r in rows):
+        return model
+    from .theme_check import FAMILIES, MODELS
+    if len(rows) == model.get("of"):
+        return model
+    f, mid = model.get("family") or "", model.get("id") or ""
+    known = [r for r in rows if r.get("model") and not r.get("model_out")] if f else []
+    rest = [r for r in rows if r not in known]
+    n = len(rows)
+    if not known:
+        line = (f"None of these {n} companies' descriptions shows how it earns, so no common way of earning is given for this group."
+                if n > 1 else "Its description doesn't show how it earns.")
+        half = re.search(r" The (?:larger|smaller) half of one group by market value; .*$", str(model.get("line") or ""))
+        return {**model, "line": line + (half.group(0) if half else ""), "known": 0, "of": n, "out": len(rest), "sparse": True, "also": []}
+    what = MODELS[mid][2] if mid in MODELS else FAMILIES.get(f, ("", ""))[1]
+    sparse = len(known) * 2 < n
+    if sparse:
+        line = f"How they earn is shown for only {len(known)} of these {n} companies, mainly {what}; {out_line(rest, 'the other')}"
+    else:
+        line = f"They earn mainly from {what}." + (" " + out_line(rest, f"of {n}") if rest else "")
+    also = also_earn(known, f)
+    if also:
+        line += f" {also[0]} of the {len(known)} also earn from {MODELS[also[1]][2]}."
+    half = re.search(r" The (?:larger|smaller) half of one group by market value; .*$", str(model.get("line") or ""))
+    if half:                                   # the split's own words stay (by_model step 2)
+        line += half.group(0)
+    out = {**model, "line": line, "known": len(known), "of": n, "out": len(rest), "also": [{"id": also[1], "n": also[0]}] if also else []}
+    out.pop("sparse", None)
+    return {**out, "sparse": True} if sparse else out
 
 
 def _no_single_layers(out: list[dict], before: dict, main, fam, theme: str) -> list[dict]:

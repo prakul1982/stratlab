@@ -1547,10 +1547,12 @@ def coverage(v: dict) -> dict:
     members = v.get("members") or []
     p = v.get("placements") or {}
     total = p.get("total") or len({m["symbol"] for m in members})
-    n = v.get("with_figures")
-    if n is None:
-        n = (v.get("figures") or {}).get("shown") or v.get("members_with_figures") or 0
-    with_f = {m["symbol"] for m in members if m.get("revenue") is not None or m.get("net") is not None or m.get("ebitda") is not None}
+    # R28: "with figures" is of the confirmed companies only (an unconfirmed one is listed, never in the figures); a dive kept from before
+    # counted every listed company, so the smaller of its two counts (the confirmed ones with figures) is the one said
+    known = [x for x in (v.get("with_figures"), v.get("members_with_figures")) if x is not None]
+    n = min(known) if known else (v.get("figures") or {}).get("shown") or 0
+    unsure = {s_ for s_, st in (v.get("status") or {}).items() if st == "unverified"}
+    with_f = {m["symbol"] for m in members if m["symbol"] not in unsure and (m.get("revenue") is not None or m.get("net") is not None or m.get("ebitda") is not None)}
     caps = {m["symbol"]: m.get("cap") or 0 for m in members}
     every = sum(caps.values())
     share = round(sum(caps[s_] for s_ in with_f) / every * 100) if every and with_f else None
@@ -2000,7 +2002,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 27                  # part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 28                  # part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -2472,6 +2474,22 @@ def reconcile_flag(text: str, counts: dict, periods: set) -> str | None:
     return f"period {miss[0]} is in no table" if miss else None
 
 
+def counts_flags(counts: dict) -> list[str]:
+    """What breaks the order of the deck's four counts (R28, the owner's review: "confirmed 59 (of 60 checked) · with figures 60"): each is a
+    subset of the one before, so with figures <= confirmed <= considered, and every calculation's count <= with figures. [] when they hold."""
+    out = []
+    considered, wf = counts.get("considered") or 0, counts.get("with_figures") or 0
+    confirmed = counts.get("confirmed") if counts.get("confirmed") is not None else counts.get("counted")
+    if confirmed is not None and confirmed > considered:
+        out.append(f"confirmed {confirmed:,} above considered {considered:,}")
+    if confirmed is not None and wf > confirmed:
+        out.append(f"with figures {wf:,} above confirmed {confirmed:,}")
+    elif wf > considered:
+        out.append(f"with figures {wf:,} above considered {considered:,}")
+    out += [f"{label} {k:,} above with figures {wf:,}" for label, k in counts.get("each") or [] if k > wf]
+    return out
+
+
 def headline_flag(text: str) -> str | None:
     """Why a ranking sentence can't headline (R27): a highest, lowest, fastest or slowest on a figure of fewer than COMPARE_MIN companies or
     under COVERAGE_MIN of its group ("N of M companies")."""
@@ -2590,6 +2608,10 @@ def publication_gate(slides: list, v: dict, reproduced: list | None = None) -> d
     dropped["sourced"] = _unsourced(slides)
     dropped["reproduce"] = [{**d, "why": "figures no table shows: " + ", ".join(d.get("figures") or []), "rule": "reproduce"} for d in reproduced or []]
     dropped["reconcile"] = _sweep(slides, lambda t: reconcile_flag(t, fixed, periods), "reconcile", claims_only=True)
+    # R28: the four counts nest (with figures within confirmed within considered; each calculation within with figures): a count that
+    # doesn't fails the item, whatever the sentences say
+    dropped["reconcile"] += [{"slide": "", "text": f"the four counts: {x}", "why": "a count above the one it is part of", "rule": "reconcile"}
+                             for x in counts_flags(counts)]
     dropped["headline"] = _sweep(slides, headline_flag, "headline", claims_only=True)
     dropped["prose"] = _sweep(slides, prose_flag, "prose", text=True)
     dropped["marks"] = _marks(slides)
@@ -2842,7 +2864,11 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     # 4. each layer on ONE page (R18, the owner: the value chain alone ran 15 pages): what it does, its largest companies by market value with the
     # layer's median and range, its margins by year or by company; the full table is in the appendix, said with its page
     biz = v.get("business") or {}
-    for i, layer in enumerate(shown if chained else []):     # numbered as shown: a layer with no company leaves no gap (Layer 4, then Layer 6)
+    # R28 (the owner's review: "only important pages"): a layer with one confirmed company has no page of its own; it stays in the value
+    # chain's table, and every such layer is one row of the "Smaller layers" page after the layer pages
+    paged = [x for x in shown if confirmed_n(x) >= 2] if chained else []
+    small = [x for x in shown if x not in paged] if chained else []
+    for i, layer in enumerate(paged):     # numbered as shown: a layer with no company leaves no gap (Layer 4, then Layer 6)
         cos = sorted(layer.get("companies") or [], key=lambda c: (c.get("status") == "unverified", bool(c.get("model_out")), -(c.get("cap") or 0), c.get("name") or ""))
         st = layer.get("stats") or {}
         title = f"Layer {i + 1} · {layer['layer']}"
@@ -2943,6 +2969,9 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         if fnote:
             s.add("text", (M, BOT - fh + 0.08, CW, fh - 0.08), paras=[fnote], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
         slides.append(s)
+
+    if small:
+        _smaller_layers(slides, small, amt, eb("The value chain"))
 
     # the operating figures of every layer and sub-theme on one or two pages, each company once, grouped by layer (R18: a page for each layer,
     # and HDFC Bank's figures on two layers' pages); the rest of a long list is in the appendix
@@ -3166,6 +3195,47 @@ def base_quarter(label: str | None) -> str | None:
     """The quarter a year before one named like "Sep 2026": "Sep 2025"."""
     m = re.match(r"\s*([A-Za-z]{3})\w*\s+(\d{4})", str(label or ""))
     return f"{m.group(1).title()} {int(m.group(2)) - 1}" if m else None
+
+
+def confirmed_n(layer: dict) -> int:
+    """How many of a layer's companies are confirmed members (an unconfirmed one is listed, never in the figures)."""
+    return sum(1 for c in layer.get("companies") or [] if c.get("status") != "unverified")
+
+
+SMALL_TITLE = "Smaller layers"
+
+
+def _smaller_layers(slides: list, small: list, amt, eyebrow: str) -> None:
+    """Every layer with one confirmed company on one compact page (R28): one row each, in the value chain's order (never ranked): the layer,
+    its company, what it does in its own words, and its key figures. A table that runs over a page goes on to the next."""
+    rows_, cos = [], []
+    for x in small:
+        c = next(c for c in x.get("companies") or [] if c.get("status") != "unverified")
+        others = [o.get("name") or o.get("symbol") for o in x.get("companies") or [] if o is not c]
+        name = (f"{c['name']} (whole company)" if c.get("company_wide") or c["symbol"] in (x.get("company_wide") or []) else c["name"]) \
+            + (f"; also listed, not confirmed: {', '.join(others)}" if others else "")
+        rows_.append((x, c, name))
+        cos.append(c)
+    lend = is_lender_set(cos)
+    keys = ("revenue", "roe", "net") if lend else ("revenue", "ebitda", "net", "roce")
+    cols = [col for col in co_cols(cos) if col[0] in keys]
+    head = ["Layer", "Company", "What it does"] + [col[1] for col in cols] + ["Year"]
+    widths = [2.3, 2.3, 3.6] + [col[2] for col in cols] + [1.0]
+    body = [[x["layer"], name, sentences(_what(c.get("what") or "") or x.get("description") or "", 110) or "–"]
+            + [co_cell(c, k, amt) for k, _, _ in cols] + [c.get("year") or "–"] for x, c, name in rows_]
+    head, body, widths, numeric = drop_empty(head, body, widths, [False, False, False] + [True] * len(cols) + [False], keep=(0, 1, 2))
+    note = ("Each of these layers has one confirmed company, so it has no median and no page of its own; it is in the value chain's table. "
+            "Rows in the value chain's order; each company's latest full year; how each figure is built: ⟦" + NOTES_TITLE + "⟧.")
+    nh = note_h(note)
+    th = BOT - TOP - nh - 0.1
+    pages = table_pages(head, body, widths, CW, th)
+    for k, chunk in enumerate(pages):
+        s = Slide(SMALL_TITLE + (f" ({k + 1} of {len(pages)})" if len(pages) > 1 else ""),
+                  f"{_n(len(small), 'layer')} with one confirmed company each: the company, what it does and its key figures, one row each",
+                  eyebrow=eyebrow)
+        s.add("table", (M, TOP, CW, th), head=head, rows=chunk, widths=widths, numeric=numeric)
+        s.add("text", (M, BOT - nh, CW, nh), paras=[note], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
+        slides.append(s)
 
 
 def economics_questions(v: dict, shown: list, sec: dict, ebm) -> list[str]:

@@ -232,8 +232,10 @@ def test_every_rule_holds_on_every_synthetic_theme(name, v, slides):
             assert f"({_count(q['sales']['n'])})" in said
             if (q.get("profit") or {}).get("n", 0) >= 3:
                 assert f"({_count(q['profit']['n'])})" in said
-    # "with figures" counts companies whose key figures exist
-    with_f = sum(1 for x in (v.get("sections") or {}).get("leaders") or [] if x.get("revenue") is not None or x.get("profit") is not None)
+    # "with figures" counts companies whose key figures exist; changed on purpose (R28): only confirmed ones (an unconfirmed company is listed,
+    # never in the figures)
+    with_f = sum(1 for x in (v.get("sections") or {}).get("leaders") or [] if (x.get("revenue") is not None or x.get("profit") is not None)
+                 and (v.get("status") or {}).get(x["symbol"]) != "unverified")
     assert v.get("with_figures") in (None, with_f) or name == "every part (fixture)"
 
 
@@ -374,6 +376,9 @@ def test_an_ai_layer_shows_each_companys_industry_as_a_column_not_as_layers():
     assert [x["layer"] for x in v["layers"]] == ["Endpoint security", "Network security", "Identity", "Cloud security", "Security services"]
     t = table_of(slides, "Layer 1 · Endpoint security")
     assert t["head"][1] == "Industry" and {r[1] for r in plain(t["rows"]) if not r[0].startswith(("Median", "Range"))} == {"Software", "Networking equipment", "IT services"}
-    assert "Layer 5 · Security services" in [s.title for s in slides]                 # one company: a page, its median shown as "–"
+    # changed on purpose (R28, the owner: "only important pages"): a one-company layer has no page of its own, it is a row of "Smaller layers"
+    assert not any(s.title.startswith("Layer 5") for s in slides)
+    small = table_of(slides, "Smaller layers")
+    assert [r[0] for r in plain(small["rows"])] == ["Security services"] and "Security services" in [r[0] for r in table_of(slides, "The value chain by layer")["rows"]]
     cloud = table_of(slides, "Layer 4 · Cloud security")
     assert all(r[cloud["head"].index("EBITDA margin")].startswith("−") for r in plain(cloud["rows"])[:3])          # all loss-makers, shown as they are

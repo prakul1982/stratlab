@@ -1051,6 +1051,9 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         b["official"], b["basis"] = bool(v.get("official")), v.get("basis")     # a layer that is one official industry's companies the AI didn't place (theme_base.py)
         b["by_industry"] = bool(v.get("by_industry"))
         b["model"] = v.get("model") or None                 # what the layer's companies have in common: how they earn (theme_base.by_model, R25)
+        if b["model"]:                                       # R28: counted over the companies the page shows, not every company the map placed
+            from .theme_base import shown_model
+            b["model"] = shown_model(b["model"], [r for r in b["companies"] if r.get("status") != "unverified"])
         blocks.append(b)
         out_ = set(b.get("model_out") or [])            # R27: left out of the layer's figures (model unknown or of low confidence)
         sure = [r for r in mine if r.get("status") != "unverified" and r["symbol"] not in out_]
@@ -1105,10 +1108,11 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
             "ownership": ownership_section(syms, names, src), "events": events_section(syms, names, src),
             "management": management_section(syms, names, rows, src), "leaders": leaders(listed)},
         "growth_basis_n": len(own_set),
-        # the theme's companies by how sure the theme is of each (R17-012), every placed company, with figures or not
+        # the theme's companies by how sure the theme is of each (R17-012), every placed company, with figures or not; "with_figures" is of the
+        # confirmed ones only (R28: an unconfirmed company is listed but never in the figures, so "with figures 15" beside "confirmed 14" was wrong)
         "membership": {"placed": len(every_status), "confirmed": sum(1 for x in every_status.values() if x != "unverified"),
                        "not_confirmed": sum(1 for x in every_status.values() if x == "unverified")},
-        "status": {r["symbol"]: r.get("status") or "core" for r in listed}, "with_figures": sum(1 for r in listed if has_figures(r)),
+        "status": {r["symbol"]: r.get("status") or "core" for r in listed}, "with_figures": sum(1 for r in listed if has_figures(r) and r.get("status") != "unverified"),
         "without_figures": [{"symbol": r["symbol"], "name": r["name"]} for r in listed if not has_figures(r) and r.get("status") != "unverified"],
     }
     out["sections"]["medians"]["net_all"] = stat(r.get("net") for r in own)
