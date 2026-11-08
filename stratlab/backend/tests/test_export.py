@@ -151,20 +151,20 @@ def test_the_deck_route_downloads_both_formats_as_one_deck_and_stops_at_the_plan
         # R15: the name people see in Downloads, as the page names it (lib/deckName.ts), not "stratlab-theme-ai-data-centers-us.pdf"
         assert r.headers["content-disposition"] == f'attachment; filename="StratLab - AI data centers theme (US) - {day.day} {day:%b %Y}.pdf"'
         built = []
-        real_build = deck.build_theme
-        deck.build_theme = lambda v, pdf=False: built.append(pdf) or real_build(v, pdf)
+        real_build = deck.build_theme_gated               # R27: the route builds through the gate (the deck and its check's result)
+        deck.build_theme_gated = lambda v, pdf=False: built.append(pdf) or real_build(v, pdf)
         try:                                                                           # the same file again today: sent from the kept copy
             again = api.get("/research/theme-dive/deck?q=AI%20data%20centers&region=US&format=pdf")
         finally:
-            deck.build_theme = real_build
+            deck.build_theme_gated = real_build
         assert again.status_code == 200 and again.content == r.content and built == [] and len(theme_routes.DECK_CACHE._d) >= 1
         # R20: the file is in the shared store too: after a restart (the process's copy gone) it is sent again without a rebuild
         theme_routes.DECK_CACHE._d.clear()
-        deck.build_theme = lambda v, pdf=False: built.append(pdf) or real_build(v, pdf)
+        deck.build_theme_gated = lambda v, pdf=False: built.append(pdf) or real_build(v, pdf)
         try:
             restarted = api.get("/research/theme-dive/deck?q=AI%20data%20centers&region=US&format=pdf")
         finally:
-            deck.build_theme = real_build
+            deck.build_theme_gated = real_build
         assert restarted.status_code == 200 and restarted.content == r.content and built == []
         assert api.usage.count("deck") == 1 and "deck:theme:US:ai-data-centers" in api.usage
         r = api.get("/research/theme-dive/deck?q=AI%20data%20centers&region=US&format=pptx")      # the same theme's other format: free

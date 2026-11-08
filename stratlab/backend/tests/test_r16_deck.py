@@ -40,7 +40,9 @@ def test_a_net_margin_above_the_ebitda_margin_is_a_one_off_left_out_of_the_net_m
     v = view()
     v["checks"] = {**v.get("checks", {}), "one_off": ch["one_off"], "net_with": 9.9, "net_without": 7.7}
     t = texts(slides_of(v))
-    assert "One-off earnings" in t and "the median net margin is 7.7% without them, 9.9% with them" in t
+    # changed on purpose (R27): the anomaly is flagged, no cause guessed ("a one-off gain"); the filing would show why
+    assert "Net above EBITDA margin" in t and "the median net margin is 7.7% without them, 9.9% with them" in t
+    assert "one-off" not in t.lower() and "the filing would show why" in t
     assert not D.one_off(10, 9) and not D.one_off(-5, -1) and D.one_off(6, 24.6)
 
 
@@ -114,7 +116,7 @@ def test_whole_point_margins_print_without_false_precision_and_a_gap_within_roun
     assert D.pts(13.0, True) == "13%" and D.pts(-11.0, True) == "−11%"
     block = {"stats": {"ebitda": {"median": 13.0, "n": 3}}, "left_out": 0, "stats_over": "own", "companies": [1]}
     assert D.margin_line(block, 14.0) is None                                           # 1.0 point below: within the rounding of whole points
-    assert "points below" in D.margin_line(block, 15.5)
+    assert D.margin_line(block, 15.5) is None          # changed on purpose (R27): the whole map's median is in no table, so never quoted
     r = D.company_row("IN", "MINEA", FACTS["MINEA"])
     assert r["ebitda_dp"] == 0 and D.company_row("IN", "MINEA", {**FACTS["MINEA"], "years": [{**y, "opm": y["opm"] + 0.4} for y in FACTS["MINEA"]["years"]]})["ebitda_dp"] == 1
 
@@ -138,7 +140,9 @@ def test_the_valuation_says_its_bases_the_loss_makers_left_out_and_each_medians_
     v["layers"][0]["stats"]["roce"] = {**(v["layers"][0]["stats"]["roce"] or {}), "n": 1, "median": 15.0, "min": 15.0, "max": 15.0}
     slides = slides_of(v)
     t = texts(slides)
-    assert "so the two are on different periods" in t and "A loss-maker has no P/E: 2 companies left out of the P/E median." in t
+    # changed on purpose (R27, P2): how each is worked out lives on the notes page; the valuation page points there once
+    assert "A loss-maker has no P/E: 2 companies left out of the P/E median." in t and "How each is worked out, and who the comparable peers are: p. " in t
+    assert "Market value over net profit of the last four quarters" in t and "P/E: the price over the last four" not in t
     layer = table_of(slides, "Layer 1 · Mining")
     # changed on purpose (R20): a median of fewer than 3 companies isn't shown as one: "–" with its count, the companies' own values above it
     med = next(r for r in plain(layer["rows"]) if r[0].startswith("Median"))
@@ -180,8 +184,10 @@ def test_a_company_runs_several_businesses_when_its_own_segments_say_so_not_by_a
 
 
 def test_valuation_is_set_beside_listed_companies_of_similar_market_value_with_growth_and_roce():
-    market = [{"symbol": f"P{i}", "market_cap": 20000 + i * 1000, "pe": 10.0, "sales_cagr_3y": 5.0, "roce": 10.0} for i in range(5)]
-    market += [{"symbol": "HUGE", "market_cap": 5_000_000, "pe": 90.0, "sales_cagr_3y": 50.0, "roce": 50.0}]
+    # changed on purpose (R27): ten peers of the companies' own sector (the minimum), of similar value; another sector's never count
+    market = [{"symbol": f"P{i}", "market_cap": 20000 + i * 1000, "pe": 10.0, "sales_cagr_3y": 5.0, "roce": 10.0, "sector": "Metals"} for i in range(10)]
+    market += [{"symbol": "HUGE", "market_cap": 5_000_000, "pe": 90.0, "sales_cagr_3y": 50.0, "roce": 50.0, "sector": "Metals"},
+               {"symbol": "OTHER", "market_cap": 20000, "pe": 90.0, "sales_cagr_3y": 50.0, "roce": 50.0, "sector": "Chemicals"}]
     out = build(index_rows=lambda: market)
     peers = out["sections"]["valuation"]["peers"]
     assert peers["pe"]["peers"] == 10.0 and peers["pe"]["premium"] > 0 and peers["roce"]["peers"] == 10.0 and peers["sales_3y"]["peers"] == 5.0
@@ -189,18 +195,22 @@ def test_valuation_is_set_beside_listed_companies_of_similar_market_value_with_g
     v["sections"]["valuation"]["peers"] = peers
     slides = slides_of(v)
     val = table_of(slides, "Valuation")
-    assert "Similar market value" in val["head"] and any(r[0] == "ROCE, companies with similar-size peers" for r in val["rows"])     # R22: the population said
-    # changed on purpose (R17-010): one P/E basis, the companies with similar-size peers against their peers' median, in the headline and the table
+    # R22: the population said (R27: the column is the comparable peers, sector first, then size)
+    assert "Comparable peers" in val["head"] and any(r[0].startswith("ROCE, companies with comparable peers") for r in val["rows"])
+    # changed on purpose (R17-010): one P/E basis, the companies with comparable peers against their peers' median, in the headline and the table
     sub = next(s.subtitle for s in slides if s.title == "Valuation")
     pp = peers["pe"]
     # changed on purpose (R18): one formatter, whole figures print whole (21x, 110%, 10x)
     w = deck.whole_figures
-    # changed on purpose (R23): the peer set is said; these peers have no sector, so the whole market's companies of similar value are the set
-    assert sub == w(f"Median P/E {pp['theme']:.1f}x for the {pp['n']} companies with peers of similar market value in the whole market (fewer than 10 "
-                    f"in their own sector), {pp['premium']:.1f}% above their peers' median of 10.0x")
-    row = next(r for r in val["rows"] if r[0] == "P/E, companies with similar-size peers")
+    # changed on purpose (R27): the peer set is said and is the companies' own sector of similar value; never the whole market
+    assert sub == w(f"Median P/E {pp['theme']:.1f}x for the {pp['n']} companies with comparable peers (own sector, similar market value, outside the "
+                    f"theme), {pp['premium']:.1f}% above their peers' median of 10.0x; 1 with no comparable peer set (left out)")
+    row = next(r for r in val["rows"] if r[0].startswith("P/E, companies with comparable peers"))
     assert row[1] == w(f"{pp['theme']:.1f}x") and row[4] == "10x" and row[2] == w(f"{pp['premium']:.1f}% above peers")
     assert pp["premium"] == round((pp["theme"] / pp["peers"] - 1) * 100, 1)        # the ratio of the two medians the table shows
+    # R27: the same companies against peers with no sector (no comparable set): counted, never compared with the whole market
+    bare = build(index_rows=lambda: [{k: x for k, x in m.items() if k != "sector"} for m in market])["sections"]["valuation"]["peers"]
+    assert bare["pe"]["n"] == 0 and bare["pe"]["none"] >= 1 and "market" not in bare["pe"]["sets"]
 
 
 def test_the_cover_and_the_next_slide_say_how_many_companies_the_figures_are_for_and_their_share_of_value():
@@ -208,11 +218,13 @@ def test_the_cover_and_the_next_slide_say_how_many_companies_the_figures_are_for
     v["members"] = v["members"] + [{"symbol": f"Z{i}", "name": f"Z {i}", "layer": "Cells", "cap": 100.0, "by": "Official industry"} for i in range(4)]
     v["placements"] = {**v["placements"], "total": 10}
     cov = deck.coverage(v)
-    assert cov["text"] == f"10 in the theme · 5 with figures ({cov['share']}% of value)" and cov["share"] < 100     # R20: one wording
+    # changed on purpose (R27): the share names its denominator, whose market value it is a share of
+    assert cov["text"] == f"10 in the theme · 5 with figures ({cov['share']}% of the combined market value of the 9 of 10 with one)" and cov["share"] < 100
     slides = slides_of(v)
     cover = dict((t[0], t[1]) for t in next(b for b in slides[0].blocks if b["kind"] == "stats")["items"])
     assert cover["With figures"] == str(cov["n"]) and "Their market value" in cover               # R20: the count, its share beneath
-    assert f"{cov['line']}." in texts([s for s in slides if s.title == "Key findings"])      # R19: no overview page; the findings say it
+    # R19: no overview page; the findings say it (R27: as the four reconciled counts)
+    assert f"{deck.counts_words(deck.reconciled_counts(v, cov))}." in texts([s for s in slides if s.title == "Key findings"])
 
 
 # ---------- part 3: findings ----------

@@ -83,3 +83,7 @@
 /* Exchange holidays (LIVE1C-018): the paste box shows its placeholder, and the source and holiday names keep a readable width */
 .adm-main textarea.k-input { height: auto; min-height: 112px; padding: 12px 14px; line-height: 1.55; resize: vertical; }
 .adm-holidays .k-table td.k-wrap { min-width: 170px; }
+/* Admin → Library, a theme deck's publication check (R27): one short line an item, failed ones first and in the warning colour */
+.adm-gate { list-style: none; margin: var(--s1) 0 0; padding: 0; display: grid; gap: 2px; font-size: var(--t-small); line-height: 1.35; }
+.adm-gate .fail { color: var(--orange-ink); font-weight: 600; }
+.adm-gate .k-note { display: block; }

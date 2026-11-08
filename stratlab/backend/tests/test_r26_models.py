@@ -139,8 +139,10 @@ def test_a_layer_resting_on_under_half_its_companies_says_so_plainly_in_the_deck
     vc = B.by_model(m["value_chain"], sparse, "IT services")
     mid = next(v for v in vc if v["layer"].startswith("Cloud"))
     assert mid["model"]["sparse"] and mid["model"]["known"] * 2 < mid["model"]["of"]
-    assert mid["model"]["line"] == (f"How they earn is shown for only {mid['model']['known']} of these {mid['model']['of']} companies; the others' "
-                                    "descriptions don't show it, so no common way of earning is given for this group.")
+    # R27 (changed on purpose): the others are listed but left out of the layer's figures and rankings, said with how many and why
+    assert mid["model"]["line"] == (f"How they earn is shown for only {mid['model']['known']} of these {mid['model']['of']} companies, mainly renting "
+                                    "out computing, data-centre or network capacity, and connectivity subscriptions; the other 3 are listed but left out "
+                                    "of this layer's figures and rankings, as their evidence doesn't show how they earn.")
     from app import deck
     assert deck.layer_common(mid) == mid["model"]["line"]
     assert deck.layer_common({"model": {"line": "They earn mainly from x.", "known": 3, "of": 4}}) == "In common: they earn mainly from x."
@@ -212,7 +214,10 @@ def test_a_model_the_evidence_does_not_show_is_asked_again_once_then_left_unknow
     assert ms["MK2"] == "manufacturing" and ms["MKT1"] == "platform" and ms["RS1"] == "hardware_resale"
     lines = {v["layer"]: (v.get("model") or {}).get("line") for v in out["value_chain"]}
     assert not any("commissions, listing fees or advertising" in str(x) for k, x in lines.items() if k.startswith("Cloud-delivered")), lines
-    assert any(v.get("model", {}).get("id") == "platform" and [c["ticker"] for c in v["companies"]] == ["MKT1"] for v in out["value_chain"])
+    # R27 (changed on purpose): the marketplace firm, alone in its model, is in "Other" with its model, not a one-company layer
+    other = next(v for v in out["value_chain"] if v.get("basis") == "rest")
+    assert {c["ticker"]: c["model"] for c in other["companies"] if c["ticker"] == "MKT1"} == {"MKT1": "platform"}
+    assert not any(len(v["companies"]) == 1 and v.get("by_model") for v in out["value_chain"])
 
 
 def test_when_the_ai_is_busy_on_the_second_ask_the_unshown_models_stay_unknown():
@@ -380,7 +385,7 @@ def test_before_and_after_for_the_report(capsys, monkeypatch):
 
 
 def test_rules_bumped_and_map_prompt_unchanged():
-    assert B.RULES == 26 and A.MAP_V == 23
+    assert B.RULES >= 26 and A.MAP_V == 23          # R27 bumps RULES again (tests/test_r27_class.py)
     assert "evidence" in C.PLACE_SYSTEM2 and "platform only with" in C.PLACE_SYSTEM2
     assert C.MODEL_MEMBERS >= 50 and set(C.MODEL_NEEDS) <= set(C.MODELS)
 

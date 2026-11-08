@@ -207,7 +207,8 @@ def test_the_deck_says_one_count_of_companies_not_confirmed_and_no_line_that_con
     v, slides = deck_of(region, m, f)
     t = texts(slides)
     assert "Still being checked" not in t and "still being checked" not in t            # the AI's pending checks aren't a membership count
-    assert "8 in the exchange's industries · 8 with figures (100% of value)" in t          # R20: one wording of the universe and the figures
+    # R20: one wording of the universe and the figures (R27: the share names whose market value it is of)
+    assert "8 in the exchange's industries · 8 with figures (100% of the market value of all 8)" in t
     region, m, f = us_list_theme()
     v, slides = deck_of(region, m, f)
     how = next(it for s in slides if s.title == "How to read this deck" for b in s.blocks if b["kind"] == "cards" for it in b["items"])["lines"]
@@ -216,7 +217,7 @@ def test_the_deck_says_one_count_of_companies_not_confirmed_and_no_line_that_con
     v["checks"]["one_off"] = [{"symbol": "SEC0", "name": "Secure 0 Inc", "net": 30.0, "ebitda": 25.0}]
     v["checks"]["net_with"], v["checks"]["net_without"] = 10.02, 9.98                       # the same to one decimal
     rows = deck.confidence_rows(v, deck.coverage(v), TODAY)
-    one = next(r for r in rows if r[0] == "One-off earnings")
+    one = next(r for r in rows if r[0] == "Net above EBITDA margin")              # R27: the anomaly named, no cause guessed
     assert one[2] == "Marked † and left out of net-margin medians."
 
 
