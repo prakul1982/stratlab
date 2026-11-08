@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 
 # the version of the membership rules (who is in a theme, which industries, which layers): part of every cached read's key, so a read kept
 # from before a deploy never keeps the old rules' companies or figures (R18: "Private banks" kept the public banks after the fix)
-RULES = 31                       # R31: lenders apart from developers and landlords, fabless vs IDM by owned fabs (theme_check.refine_model), a metals family's commodity as its sub-basis, a split-made layer of one primary model joins the map's (by_model 3b); R30: a kept placement's unknown models asked again once the companies' descriptions are kept (reask_unknown); R29: kinds of utility and of metals business as their own models (theme_check.refine_model); R21: every confirmed company in one of the map's layers (place_rest); R22: layer names fit, currencies, extra layers; R25: one revenue model a layer; R26: models from more evidence and checked by it, names after the split; R27: primary model, tags and confidence, comparable segments, no one-company layer; R28: the companies to place carry their own descriptions (theme_routes.describe_unplaced)
+RULES = 32                       # R32: chip designers without fabs as fabless (theme_check.chip_designer), a layer named by how it earns joins the map's layer of its primary model, a market-value half with no shown company undone (unsplit_unshown); R31: lenders apart from developers and landlords, fabless vs IDM by owned fabs (theme_check.refine_model), a metals family's commodity as its sub-basis, a split-made layer of one primary model joins the map's (by_model 3b); R30: a kept placement's unknown models asked again once the companies' descriptions are kept (reask_unknown); R29: kinds of utility and of metals business as their own models (theme_check.refine_model); R21: every confirmed company in one of the map's layers (place_rest); R22: layer names fit, currencies, extra layers; R25: one revenue model a layer; R26: models from more evidence and checked by it, names after the split; R27: primary model, tags and confidence, comparable segments, no one-company layer; R28: the companies to place carry their own descriptions (theme_routes.describe_unplaced)
 INDUSTRIES_DAYS = 30            # the AI's pick of a free-text theme's industries is made again after this long (at most monthly)
 FIGURES_MAX = 100               # companies the dive works figures out for: every one the AI named, then the largest of the base (R31: 60 -> 100; stored reads only, the deck built in under a second for 100 synthetic companies, the sector-figure worker bounded by its queue)
 DESCRIBE_MAX = 120              # base companies whose own one-line description is looked up for the page, largest first
@@ -633,6 +633,8 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
         # regulated networks, generators and traders, or miners and fabricators, are never one layer
         for s_, md in list(keep.items()):
             keep[s_] = refine_model(md, evidence(s_))
+            if keep[s_] != md:
+                conf[s_] = model_confidence(keep[s_], evidence(s_), conf.get(s_, ""))
         return keep, tags, conf
     if need and ask is not None:
         asked = True
@@ -714,7 +716,7 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
     if models:
         # R31: a kept placement's models made exact by the R31 boundaries (lenders, landlords and developers; fabless and fab owners) from the
         # companies' evidence, with nothing asked again
-        models = {s_: (refine_model(md, evidence(s_)) if md in R31_REFINE else md) for s_, md in models.items()}
+        models, conf = refine_kept(models, conf, evidence)
     if models:
         before = {v["layer"]: {c.get("ticker") for c in v["companies"]} for v in out_vc if not v.get("official")}
         out_vc = by_model(out_vc, models, theme, tags=tags, confidence=conf, evidence_of=evidence)
@@ -800,7 +802,24 @@ SPLIT_MIN = 8                   # ...when it has at least this many, by revenue 
 SPLIT_PART = 3                  # each part of such a split holds at least this many companies
 
 
-R31_REFINE = ("property_development", "property", "construction", "manufacturing", "fabless")      # models the R31 boundaries can make exact
+R31_REFINE = ("property_development", "property", "construction", "manufacturing", "fabless", "unknown")      # models the R31 boundaries can make exact
+
+
+def refine_kept(models: dict, conf, evidence) -> tuple[dict, dict | None]:
+    """(models, confidence) with the R31/R32 boundaries applied to the models in R31_REFINE (theme_check.refine_model); a company whose model
+    changes, or a fabless one of low confidence, has its confidence read again from its evidence, never below what it was (R32: a kept
+    placement left 29 of the 37 chip designers out with low confidence)."""
+    from .theme_check import model_confidence, refine_model
+    models, out_conf = dict(models), (dict(conf) if isinstance(conf, dict) else None)
+    for s_, md in list(models.items()):
+        new = refine_model(md, evidence(s_)) if md in R31_REFINE else md
+        old = (out_conf or {}).get(s_, "")
+        if new != md or (new == "fabless" and old == "low"):
+            models[s_] = new
+            if new and new != "unknown":
+                out_conf = out_conf if out_conf is not None else {}
+                out_conf[s_] = model_confidence(new, evidence(s_), old)
+    return models, out_conf
 
 
 def _model_layer(name: str, cos: list[dict], **kw) -> dict:
@@ -820,8 +839,10 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
     3. (R27) a split never leaves a layer of one company: a layer the split made or reshaped that holds one company gives it to the largest layer
        of its family, else to the theme's "Other" group, and is not a layer of its own.
     3b. (R31) one primary model a layer: a layer the split made whose primary model, family and sub-basis (theme_check.sub_basis: a metals
-       family's commodity) are those of one of the map's own layers joins it; two of the map's own layers that share them both stay, and
-       each one's line says so (`same_as`).
+       family's commodity) are those of one of the map's own layers joins it. R32: so does any layer named by how it earns (a model's or a
+       family's own name, "Product designers that outsource making"), and two such layers become one; it joins the largest layer of the same
+       key named by what it makes or serves, else the largest of them. Two of the map's own layers named by what they make or serve that share
+       them both stay (two-wheelers and cars both make their own products), and each one's line says so (`same_as`).
     4. every layer of the map carries `model`: {"id", "family", "line", "known", "of", "out", "also"}, the one line the deck shows of what its
        companies have in common; R27: the companies whose model is unknown or of low confidence are listed but marked `model_out` (left out of
        the layer's figures and rankings; the line says how many and why), and the line names the commonest secondary way of earning of its
@@ -944,16 +965,26 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
         fines = {models[c["ticker"]] for c in known}
         return (next(iter(fines)) if len(fines) == 1 else f, f, sub_basis(f, [ev(c) for c in known]))
     keys = {id(v): primary(v["companies"]) for v in out if not v.get("official") and v["companies"]}
-    for v in [x for x in out if x.get("by_model") and not x.get("scale") and keys.get(id(x))]:      # a half of a split by size stays
-        k = keys[id(v)]
-        if k[2] == "mixed":
+    model_names = {x[1] for x in MODELS.values()} | {x[0] for x in FAMILIES.values()}
+    by_how = lambda x: x.get("by_model") or x["layer"] in model_names or x["layer"].removesuffix(", by revenue model") in model_names     # noqa: E731
+    groups: dict = {}
+    for v in out:          # a half of a split by size stays
+        k = keys.get(id(v))
+        if k and k[2] != "mixed" and not v.get("official") and not v.get("scale"):
+            groups.setdefault(k, []).append(v)
+    gone = set()
+    for grp in groups.values():
+        named = [x for x in grp if by_how(x)]
+        if len(grp) < 2 or not named:
             continue
-        same = [x for x in out if x is not v and not x.get("by_model") and not x.get("official") and keys.get(id(x)) == k]
-        if same:
-            target = max(same, key=lambda x: len(x["companies"]))
-            target["companies"] += [{**c, "moved": True} for c in v["companies"]]
-            v["companies"] = []
-    out = [v for v in out if v["companies"] or not v.get("by_model")]
+        plain = [x for x in grp if not by_how(x)]
+        target = max(plain or named, key=lambda x: len(x["companies"]))
+        for v in named:
+            if v is not target:
+                target["companies"] += [{**c, "moved": True} for c in v["companies"]]
+                v["companies"] = []
+                gone.add(id(v))
+    out = [v for v in out if (v["companies"] or not v.get("by_model")) and id(v) not in gone]
 
     # 4. what each layer's companies have in common, and who is left out of its figures
     for v in out:
@@ -1006,6 +1037,34 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
             v["model"]["same_as"] = same
             v["model"]["line"] += (" Its companies earn the same way as those of " + ", ".join(f"“{x}”" for x in same)
                                    + "; the map keeps them as separate layers.")
+    return out
+
+
+def unsplit_unshown(vc: list[dict], shown: set) -> list[dict]:
+    """The layers with a split by market value undone where one of its halves has no company the deck shows (R32: the live R31 Real estate
+    deck had "Residential developers (larger)" and "No listed company is shown for Residential developers (smaller)"): one layer of both
+    halves' companies, the map's name, no "(larger)"/"(smaller)", its line counted again over them without the halves' words. `shown`: the
+    symbols the deck shows (confirmed, with figures)."""
+    out = list(vc)
+    for v in vc:
+        if v.get("scale") != "larger":
+            continue
+        sib = next((x for x in out if x.get("scale") == "smaller" and x.get("layer") == v.get("sibling")), None)
+        if sib is None or all(any(c.get("ticker") in shown for c in x.get("companies") or []) for x in (v, sib)):
+            continue
+        cos = list(v.get("companies") or []) + list(sib.get("companies") or [])
+        merged = {k: x for k, x in v.items() if k not in ("scale", "sibling")}
+        merged.update(layer=re.sub(r" \(larger\)$", "", v["layer"]), companies=cos)
+        md = next((x["model"] for x in (v, sib) if (x.get("model") or {}).get("id")), None) or v.get("model")
+        if md:
+            line = re.sub(r" The (?:larger|smaller) half of one group by market value; .*$", "", str(md.get("line") or ""))
+            md = {**md, "line": line, "of": None}
+            md = shown_model(md, [{**c, "model": c.get("model", "")} for c in cos])
+            if md.get("of") is None:
+                md["of"] = len(cos)
+            merged["model"] = md
+        out[out.index(v)] = merged
+        out.remove(sib)
     return out
 
 
