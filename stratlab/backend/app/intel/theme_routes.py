@@ -642,7 +642,7 @@ def dive_key(r: str, theme: str, m: dict) -> list:
     fm = theme_base.for_figures(m)[0]
     said = sum(1 for v in fm["value_chain"] if v.get("official") for c in v["companies"] if c.get("what"))
     return [r, m.get("_library") or theme_library.normalise(theme, r), int(float(m.get("generated_at") or 0)),
-            (m.get("placements") or {}).get("placed"), said, theme_base.RULES, f"sm{sector_metrics.VERSION}"]
+            (m.get("placements") or {}).get("placed"), said, theme_base.RULES, f"sm{sector_metrics.VERSION}", f"td{theme_data.DIVE_TEXT}"]
 
 
 def requeue(r: str, dive: dict) -> None:
