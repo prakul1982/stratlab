@@ -1336,7 +1336,8 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
     what the market value is checked against (see cap_problem): "sales_usd" (a year's revenue, $ million),
     "cap_unverified" (depositary shares whose ratio couldn't be read) and "not_company" (what the symbol is instead)."""
     # (cash from operations too, for a theme's cash-against-profit line: THEME-1; a page stored before has none, and the line says how many it counts)
-    years = [{k: y.get(k) for k in ("year", "sales", "profit", "opm", "debt", "cfo")} for y in (nums.get("years") or [])[-5:]]
+    # R30: and income outside operations and capex over revenue, for a theme's checks of a figure before it is used (theme_data.validate_row)
+    years = [{k: y.get(k) for k in ("year", "sales", "profit", "opm", "debt", "cfo", "other_income", "capex_pct_sales")} for y in (nums.get("years") or [])[-5:]]
     prices = dict(prices or {})
     checks = checks or {}
     if _num(prices.get("price")) is None and _num(snap.get("price")) is not None:

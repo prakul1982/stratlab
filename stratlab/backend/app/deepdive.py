@@ -166,6 +166,7 @@ def numbers(p: dict) -> dict:
     profit = _series(pl, "Net Profit")[:n]
     opm = _series(pl, "OPM", "Financing Margin")[:n]
     dep = _series(pl, "Depreciation")[:n]
+    other = _series(pl, "Other Income")[:n]      # R30: income outside operations, for a theme's check of a net profit lifted by it
     bcols = _years(bal)
     fa = _align(bcols, _series(bal, "Fixed Assets", "Net Block"), ycols)
     cwip = _align(bcols, _series(bal, "CWIP", "Capital Work"), ycols)
@@ -206,7 +207,7 @@ def numbers(p: dict) -> dict:
                       "capex_na": capex is None and not cut,            # no balance sheet for the year yet (a half-yearly reporter)
                       "cfo": c, "cfi": cfi[i] if cfi else None,
                       "fcf": round(c - capex, 1) if c is not None and capex is not None else None,
-                      "debt": debt[i] if debt else None})
+                      "debt": debt[i] if debt else None, "other_income": other[i] if i < len(other) else None})
     qcols = _years(q)
     qs, qp, qo = _series(q, "Sales", "Revenue"), _series(q, "Net Profit"), _series(q, "OPM", "Financing Margin")
     quarters = []

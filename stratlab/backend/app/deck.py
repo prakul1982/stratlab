@@ -1540,6 +1540,16 @@ def _what(text: str) -> str:
     return one_line(text) if text else ""
 
 
+def layer_head(layer: dict, cos: list, amt) -> str:
+    """A layer page's header (R30, the owner's review: "1 company, revenue ₹32,493 cr together" over 4 listed): the companies listed and, when
+    fewer are in the figures, how many; the revenue is of those in the figures."""
+    listed, n = len(cos), layer.get("n", len(cos))
+    figs = sum(1 for c in cos if c.get("status") != "unverified" and not c.get("model_out") and c.get("revenue") is not None)
+    if listed > figs:
+        return f"{_n(listed, 'company', 'companies')} ({figs} in figures), revenue of those in figures {amt(layer.get('revenue'))}"
+    return f"{_n(n, 'company', 'companies')}, revenue {amt(layer.get('revenue'))} together"
+
+
 def coverage(v: dict) -> dict:
     """How many companies are in the theme and how many have their key figures, with those figures' share of the theme's market value, in ONE
     wording used everywhere (R20, the owner: the universe against the figures, prominent and the same on every page): "182 in the exchange's
@@ -1860,6 +1870,12 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> li
         moved = with_ is not None and without is not None and _pc(with_) != _pc(without)      # said only when leaving them out changes it (R18)
         rows.append(["Net above EBITDA margin", f"Net margin above the EBITDA margin at {_n(len(ch['one_off']), 'company', 'companies')}: {oo}.",
                      "Marked † and left out of net-margin medians" + (f": the median net margin is {_pc(without)} without them, {_pc(with_)} with them." if moved else ".")])
+    if ch.get("held"):             # R30: a figure that failed a check: named with the check, never a cause
+        hd = ch["held"]
+        said = "; ".join(f"{x['name']}, {HELD_WORDS.get(x['key'], x['key'])} {_pc(x['value']) if x['key'] != 'pb' else str(x['value']) + 'x'} "
+                         f"({', '.join(x['checks'])})" for x in hd[:4]) + (f"; and {len(hd) - 4} more" if len(hd) > 4 else "")
+        rows.append(["Figure checks", f"{_n(len(hd), 'figure')} failed a check: {said}.",
+                     f"Shown as –; left out of every median and ranking ({ANOMALY_WHY})."])
     if ch.get("series"):
         rows.append(["Broken series", f"{_n(len(ch['series']), 'company', 'companies')} whose years don't make one series (a merger, demerger or new listing): {names(ch['series'])}.",
                      "Growth figures not worked out for them; left out of growth totals."])
@@ -1905,6 +1921,59 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> li
                  + (f" Medians are of: {counts} companies." if counts else "") + (f" {_n(val['losses'], 'loss-maker')} with no P/E." if val.get("losses") else ""),
                  "Each slide says its period and count."])
     return rows
+
+
+HELD_WORDS = {"net": "net margin", "ebitda": "EBITDA margin", "roe": "return on equity", "pb": "price to book"}
+COVERAGE_HEAD = ["Coverage", "Covered", "Of what"]
+COVERAGE_KINDS = ("Companies, by count", "Market value", "Each figure", "Each layer")
+
+
+def coverage_table(v: dict, cov: dict) -> list[list[str]]:
+    """R30 (the owner's review: "97% of market value" read as companies): coverage in one compact table on the data-confidence page, each
+    kind on its own row: (a) companies by count, (b) market value (a share of value, never of companies), (c) each figure's count, (d) each
+    layer's companies with figures against those it lists."""
+    total, n = cov.get("total") or 0, v.get("members_with_figures") if v.get("members_with_figures") is not None else cov.get("n") or 0
+    rows = [[COVERAGE_KINDS[0], f"{n:,} of {total:,}", "companies: confirmed, with figures, of every company the deck lists"]]
+    if cov.get("share") is not None:
+        rows.append([COVERAGE_KINDS[1], f"{cov['share']}%", f"of {cov['of_what']}, held by the companies with figures (a share of value, not of companies)"])
+    each = next((r[2] for r in coverage_rows(v, cov) if r[0] == "In each median and total"), "")
+    if each:
+        rows.append([COVERAGE_KINDS[2], "", each])
+    lay = []
+    for b in v.get("layers") or []:
+        cos = [c for c in b.get("companies") or [] if c.get("status") != "unverified"]
+        if cos:
+            lay.append(f"{b.get('layer')} {sum(1 for c in cos if c.get('revenue') is not None or c.get('profit') is not None)} of {len(cos)}")
+    if lay:
+        rows.append([COVERAGE_KINDS[3], "", "companies with figures: " + " · ".join(lay)])
+    return rows
+
+
+_COV_OF = re.compile(r"(\d[\d,]*) of (\d[\d,]*)")
+
+
+def coverage_table_flags(rows: list, v: dict, cov: dict) -> list[str]:
+    """What breaks the coverage table (R30): a kind missing, a count above what it is of, a share of value that isn't the members' value share or
+    is said of companies, a figure's count above the companies with figures. [] when it holds."""
+    out, got = [], {r[0]: r for r in rows}
+    for k in COVERAGE_KINDS[:1] + ((COVERAGE_KINDS[1],) if cov.get("share") is not None else ()):
+        if k not in got:
+            out.append(f"no row: {k}")
+    for r in rows:
+        for a, b in _COV_OF.findall(" ".join(r[1:])):
+            if int(a.replace(",", "")) > int(b.replace(",", "")):
+                out.append(f"{r[0]}: {a} above {b}")
+    mv = got.get(COVERAGE_KINDS[1])
+    if mv:
+        if mv[1] != f"{value_share(v)['share']}%":
+            out.append(f"market value {mv[1]} is not the members' share")
+        if "compan" in mv[1]:
+            out.append("market value said in companies")
+    wf = v.get("members_with_figures") if v.get("members_with_figures") is not None else cov.get("n") or 0
+    for lab, k in re.findall(r"([A-Za-z/ ]+?) (\d[\d,]*)(?: ·|$)", (got.get(COVERAGE_KINDS[2]) or ["", "", ""])[2]):
+        if int(k.replace(",", "")) > wf:
+            out.append(f"{lab.strip()} {k} above with figures {wf}")
+    return out
 
 
 def coverage_rows(v: dict, cov: dict) -> list[list[str]]:
@@ -1977,9 +2046,10 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
         e = (x.get("stats") or {}).get(measure)
         # no finding on a base under 3 (R20), one floor (R25), coverage and model (R27); none whose growth is mostly unusual figures (R27)
         if g and e and headline_ok(e["n"], len(cos), x.get("model")) and not dominated(g):
-            gm.append((x["layer"], _median(g), e["median"], len(g), len(cos), x.get("model"), period_basis(cos)))
+            gm.append((x["layer"], _median(g), e["median"], len(g), len(cos), x.get("model"), period_basis(cos), x.get("intensity")))
     f_ = _pc if lender else ebm
-    pair = rank_pair(gm, lambda t: t[1], lambda t: t[3], of=lambda t: t[4], model=lambda t: t[5], basis=lambda t: t[6]) if chained else None
+    pair = rank_pair(gm, lambda t: t[1], lambda t: t[3], of=lambda t: t[4], model=lambda t: t[5], basis=lambda t: t[6],
+                     intensity=lambda t: t[7]) if chained else None
     if pair:
         fast, slow = pair
         lines = [f"Fastest revenue growth in the latest year: {fast[0]}, median {_chg(fast[1])} at a median {mword} of {f_(fast[2])} ({of_words(fast[3], fast[4])}).",
@@ -2042,7 +2112,9 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
     head, widths = ["Check", "What it found", "What the deck does"], [1.8, 6.6, 3.7]
     counts = coverage_line(v, cov)
     nh = note_h(counts)
-    room = BOT - TOP - nh - 0.15
+    cov_rows, cov_w = coverage_table(v, cov), [1.8, 1.4, 8.9]
+    ch_ = table_height(COVERAGE_HEAD, cov_rows, cov_w, CW) + 0.15 if cov_rows else 0
+    room = BOT - TOP - nh - 0.15 - ch_
     rows = list(conf)
     for name in CONF_GIVE_WAY:
         if len(table_pages(head, rows, widths, CW, room)) <= 1:
@@ -2052,6 +2124,9 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
     s = Slide("Data confidence", "The checks every figure went through, what each found and what the deck does with it", eyebrow=eyebrow)
     th = min(room, table_height(head, rows, widths, CW))
     s.add("table", (M, TOP, CW, th), head=head, rows=rows, widths=widths, numeric=[False] * 3, tight=True)
+    if cov_rows:                   # R30: coverage by count, market value, figure and layer, each on its own row
+        s.add("table", (M, TOP + th + 0.15, CW, ch_ - 0.15), head=COVERAGE_HEAD, rows=cov_rows, widths=cov_w, numeric=[False] * 3, tight=True)
+        th += ch_
     s.add("text", (M, TOP + th + 0.15, CW, nh), paras=[counts], size=BODY_MIN, floor=BODY_MIN, color=INK2)
     slides.append(s)
 
@@ -2091,7 +2166,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 29                  # part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 30                  # part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -2701,6 +2776,12 @@ def publication_gate(slides: list, v: dict, reproduced: list | None = None) -> d
     # doesn't fails the item, whatever the sentences say
     dropped["reconcile"] += [{"slide": "", "text": f"the four counts: {x}", "why": "a count above the one it is part of", "rule": "reconcile"}
                              for x in counts_flags(counts)]
+    # R30: the coverage table (count, market value, each figure, each layer) reconciles, on the page and with the members
+    for s_ in slides:
+        for b in s_.blocks:
+            if b["kind"] == "table" and b.get("head") == COVERAGE_HEAD:
+                dropped["reconcile"] += [{"slide": s_.title, "text": f"coverage: {x}", "why": "coverage does not reconcile", "rule": "reconcile"}
+                                         for x in coverage_table_flags(b.get("rows") or [], v, cov)]
     # R29 (P0): every stated share of market value is reproduced from the members (value_share); one that isn't is dropped, the cover's too
     dropped["reconcile"] += _sweep(slides, lambda t: share_flag(t, v), "reconcile", text=True)
     for b in (slides[0].blocks if slides else []):
@@ -3004,7 +3085,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         meds_ = [(nm_, _medn(st.get(k_), n_lay, f_)) for k_, nm_, f_ in ((("roe", "ROE", _pc),) if lend else (("ebitda", "EBITDA margin", lambda x: _pcw(x, lwhole)),))
                  + (("net", "net margin", _pc),)]
         meds_ = [f"median {nm_} {t_}" for nm_, t_ in meds_ if not t_.startswith("–")]           # a median under 3 companies isn't said (R20)
-        msg = layer.get("line") or (f"{_n(layer.get('n', len(cos)), 'company', 'companies')}, revenue {amt(layer.get('revenue'))} together"
+        msg = layer.get("line") or (layer_head(layer, cos, amt)
                                     + (f"; {', '.join(meds_)}" if meds_ else ""))
         desc = layer.get("description") or ""
         official = ("Companies of the theme's industries whose own words fit none of the map's layers." if layer.get("basis") == "rest" else
@@ -3380,8 +3461,8 @@ def economics_questions(v: dict, shown: list, sec: dict, ebm) -> list[str]:
         g = sorted(c["sales_1y"] for c in cos if c.get("sales_1y") is not None)
         if g and x.get("basis") != "rest":           # the "Other" group is never compared (R22)
             from statistics import median as _m
-            gm.append((x["layer"], _m(g), len(g), len(cos), x.get("model"), period_basis(cos)))
-    pair = rank_pair(gm, lambda t: t[1], lambda t: t[2], of=lambda t: t[3], model=lambda t: t[4], basis=lambda t: t[5])
+            gm.append((x["layer"], _m(g), len(g), len(cos), x.get("model"), period_basis(cos), x.get("intensity")))
+    pair = rank_pair(gm, lambda t: t[1], lambda t: t[2], of=lambda t: t[3], model=lambda t: t[4], basis=lambda t: t[5], intensity=lambda t: t[6])
     if pair:
         f_, s_ = pair
         out.append(f"Median revenue growth in the latest year: {_chg(f_[1])} in {f_[0]} ({ow(f_[2], f_[3])}), {_chg(s_[1])} in {s_[0]} ({ow(s_[2], s_[3])}). "

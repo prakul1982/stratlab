@@ -194,7 +194,7 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
     opms = [num(y.get("opm")) for y in years if num(y.get("opm")) is not None]
     shown_e = None if wild or ebitda is None or abs(ebitda) > stock_pages.EXTREME else r1(ebitda)
     shown_n = None if wild or net is None or abs(net) > stock_pages.EXTREME else r1(net)
-    return {
+    return validate_row({
         "symbol": symbol, "name": base["name"], "year": last["year"] if last else None, "bank": lender, "profile": profile, "sector": base.get("sector"),
         "unit": THEME_CURRENCY.get(region, ("", f.get("unit")))[1] if cur != THEME_CURRENCY.get(region, ("USD",))[0] else f.get("unit"),
         "currency": cur, "fx": {"rate": k, "at": fx_at} if cur != THEME_CURRENCY.get(region, ("USD",))[0] else None,
@@ -224,7 +224,82 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
         "red_flags": base.get("red_flags"), "basis": f.get("basis"), "industry": f.get("industry") or [],
         "years": [{"year": y["year"], "sales": money(num(y.get("sales"))), "profit": money(num(y.get("profit"))), "opm": None if lender else num(y.get("opm"))}
                   for y in years],
-    }
+        # R30: capital (book equity and debt) for each unit of revenue, how asset-heavy the business is (a layer-vs-layer headline needs it comparable)
+        "capital_rev": None if lender else capital_per_revenue(cap, num(f.get("pb")), debt, base.get("debt_equity"), sales),
+    }, f, last)
+
+
+def capital_per_revenue(cap, pb, debt, de, sales) -> float | None:
+    """Capital (book equity plus debt) over the year's revenue: book equity is the market value over the price-to-book (else debt over debt to
+    equity); None when neither gives a positive equity or there is no revenue (R30)."""
+    debt = num(debt)
+    eq = cap / pb if cap and pb and pb > 0 else (debt / de if debt and num(de) and de > 0 else None)
+    if not eq or eq <= 0 or not sales or sales <= 0:
+        return None
+    return round((eq + (debt or 0)) / sales, 2)
+
+
+# ---------- R30: each figure checked before it is used (the owner's review of the live R28 Telecom deck: "77% net, 42% EBITDA") ----------
+# A figure that fails a check is shown as "–", kept with its check in `held`, and left out of every median and ranking; the data-confidence page
+# names the company, the figure and the check, never a cause.
+NET_UNUSUAL = 60.0            # a net margin beyond ±60% of revenue
+EBITDA_UNUSUAL = 90.0         # an EBITDA margin above 90%, outside the models that earn fees or royalties with few costs (EBITDA_FREE)
+EBITDA_FREE = {"royalties", "financial_fees", "lending", "underwriting", "life_insurance", "general_insurance", "reinsurance", "property"}
+OTHER_INCOME_SHARE = 0.5      # income outside operations above half the year's net profit, where the source carries it
+CHECKS = {"sign": "net profit positive, return on capital negative", "sign_page": "net margin and net profit of opposite signs",
+          "other_income": "income outside operations above half the net profit", "net_unusual": f"net margin beyond ±{NET_UNUSUAL:.0f}%",
+          "ebitda_unusual": f"EBITDA margin above {EBITDA_UNUSUAL:.0f}%", "neg_equity": "return on equity with negative equity",
+          "neg_book": "price to book with negative equity"}
+
+
+def hold(r: dict, key: str, check: str) -> None:
+    """Take a figure out of the row (shown "–", out of every median and ranking), kept with the check(s) it failed."""
+    h = r.setdefault("held", {})
+    if key in h:
+        h[key]["checks"].append(CHECKS[check])
+        return
+    if r.get(key) is None:
+        return
+    h[key] = {"value": r[key], "checks": [CHECKS[check]]}
+    r[key] = None
+    if key == "net":
+        r["one_off"] = False
+
+
+def validate_row(r: dict, f: dict, last: dict | None) -> dict:
+    """The checks a company's figures pass before they are used (R30): sign consistency (a positive net profit beside a negative return on
+    capital; the net margin's sign against the page's own), income outside operations above half the net profit when the source carries it,
+    a return on equity or price to book on negative equity, and a net margin beyond ±NET_UNUSUAL%. (An EBITDA margin above EBITDA_UNUSUAL% is
+    checked with the company's model: validate_model.)"""
+    prof, net = r.get("profit"), r.get("net")
+    if net is not None and prof is not None and prof > 0 and (r.get("roce") or 0) < 0:
+        hold(r, "net", "sign")
+    page = num(f.get("net_margin"))
+    if net is not None and page is not None and page * net < 0:
+        hold(r, "net", "sign_page")
+    oi, p_ = num((last or {}).get("other_income")), num((last or {}).get("profit"))
+    if oi is not None and p_ is not None and p_ > 0 and oi > p_ * OTHER_INCOME_SHARE:
+        hold(r, "net", "other_income")
+    if net is not None and abs(net) > NET_UNUSUAL:
+        hold(r, "net", "net_unusual")
+    bv = num(f.get("book_value"))
+    if bv is not None and bv < 0 or f.get("net_worth_negative"):
+        hold(r, "roe", "neg_equity")
+        hold(r, "pb", "neg_book")
+    return r
+
+
+def validate_model(r: dict, family: str) -> None:
+    """An EBITDA margin above EBITDA_UNUSUAL% outside the models whose costs are few (EBITDA_FREE) is held (R30)."""
+    if r.get("ebitda") is not None and r["ebitda"] > EBITDA_UNUSUAL and family not in EBITDA_FREE:
+        hold(r, "ebitda", "ebitda_unusual")
+        r["one_off"] = False
+
+
+def held_rows(rows: list[dict]) -> list[dict]:
+    """Every figure held by a check, for the data-confidence page: company, figure, value and the checks it failed."""
+    return [{"symbol": r["symbol"], "name": r["name"], "key": k, "value": h["value"], "checks": h["checks"]}
+            for r in rows if r.get("status") != "unverified" for k, h in (r.get("held") or {}).items()]
 
 
 def has_figures(r: dict) -> bool:
@@ -295,7 +370,9 @@ def layer_block(name: str, rows: list[dict], wide: set[str]) -> dict:
             "company_wide": sorted(r["symbol"] for r in sure if r["symbol"] in wide),
             "unverified": sorted(r["symbol"] for r in rows if r.get("status") == "unverified"),
             "model_out": sorted(r["symbol"] for r in rows if r.get("model_out") and r.get("status") != "unverified"),
-            "stats_over": "all" if not own and sure else "own", "left_out": len(sure) - len(pool)}
+            "stats_over": "all" if not own and sure else "own", "left_out": len(sure) - len(pool),
+            # R30: the median company's capital for each unit of revenue (capital_per_revenue), for headline comparability
+            "intensity": (stat(r.get("capital_rev") for r in pool) or {}).get("median")}
 
 
 # R27: a figure whose filed value (sector_metrics.REPLACES) is on another basis than the stored pages' own (NII / assets: the filed half year
@@ -340,7 +417,7 @@ def chain_table(blocks: list[dict]) -> dict:
                      **{k: (b["stats"].get(k) or {}).get("median") for k in LENDER_KEYS}, "roe_n": (b["stats"].get("roe") or {}).get("n", 0),
                      **{f"{k}_n": (b["stats"].get(k) or {}).get("n", 0) for k in STAT_KEYS if k not in ("ebitda", "roe")},
                      **{k: (b["stats"].get(k) or {}).get("median") for k in FAMILY_CHAIN}, **{f"{k}_n": (b["stats"].get(k) or {}).get("n", 0) for k in FAMILY_CHAIN},
-                     "model": b.get("model"), "basis": period_basis([c for c in b.get("companies") or [] if c.get("status") != "unverified"])})
+                     "model": b.get("model"), "intensity": b.get("intensity"), "basis": period_basis([c for c in b.get("companies") or [] if c.get("status") != "unverified"])})
     # only the map's own layers (an official industry's leftover companies overlap them: "Vehicle assembly" and "Commercial Vehicles"), each
     # with MIN_BASE companies in its median, and only a gap wider than the rounding of whole-point margins, name a highest and a lowest
     # the "Other ..." group (companies that fit none of the map's layers) is never compared (R22)
@@ -354,6 +431,16 @@ def chain_table(blocks: list[dict]) -> dict:
         have = []
     have = one_family(have, lambda r: model_family_of(r["model"]))          # R29: layers of one business-model family only
     line, hi, lo = None, None, None
+    apart = have if len(have) >= 2 and not comparable_intensity(have, lambda r: r["intensity"]) else []
+    if apart:
+        # R30 (the owner's review of the live R28 Utilities deck: "renewable producers 83% vs cables 10%"): layers that need very different
+        # capital for each unit of revenue are described, each with its own figure, never ranked
+        whole = whole_points([c for b in blocks for c in b["companies"]])
+        each = [f"{r['layer']} {pts(r['ebitda'], whole)}" + (f" ({w[2:]})" if (w := few(r["ebitda_n"], r["n"])) else "") for r in apart]
+        line = ("Median EBITDA margin by layer: " + "; ".join(each)
+                + f". Capital for each unit of revenue differs more than {INTENSITY_WORD} between these layers, so they are not ranked.")
+        return {"rows": rows, "line": line, "highest": None, "lowest": None, "measure": "ebitda", "compared": [], "gap": None,
+                "not_ranked": [r["layer"] for r in apart]}
     if len(have) >= 2:
         hi, lo = max(have, key=lambda r: r["ebitda"]), min(have, key=lambda r: r["ebitda"])
         if hi["layer"] == lo["layer"] or hi["ebitda"] - lo["ebitda"] <= ROUNDING:
@@ -376,6 +463,8 @@ def chain_table(blocks: list[dict]) -> dict:
         if not same_basis([r["basis"] for r in lend]):
             lend = []
         lend = one_family(lend, lambda r: model_family_of(r["model"]))
+        if not comparable_intensity(lend, lambda r: r["intensity"]):
+            lend = []
         if len(lend) >= 2:
             measure, have = "roe", lend
             hi, lo = max(lend, key=lambda r: r["roe"]), min(lend, key=lambda r: r["roe"])
@@ -451,19 +540,33 @@ def one_family(rows: list, family) -> list:
     return [r for r, f in zip(rows, fams) if f == c[0][0]]
 
 
+INTENSITY_FACTOR = 3.0        # R30: two layers whose median capital for each unit of revenue differs more than threefold are not ranked
+INTENSITY_WORD = "threefold"
+
+
+def comparable_intensity(rows: list, intensity) -> bool:
+    """Whether the rows a headline would rank are alike in asset intensity (R30): the highest median capital for each unit of revenue
+    (`intensity(row)`, capital_per_revenue's) at most INTENSITY_FACTOR times the lowest. Rows with no figure say nothing either way; True when
+    fewer than two have one."""
+    xs = [x for x in (intensity(r) for r in rows) if x is not None and x > 0]
+    return len(xs) < 2 or max(xs) <= min(xs) * INTENSITY_FACTOR
+
+
 def model_family_of(model) -> str:
     return (model or {}).get("family") or "" if isinstance(model, dict) else ""
 
 
-def rank_pair(rows: list, value, count, floor: int = COMPARE_MIN, of=None, model=None, basis=None):
+def rank_pair(rows: list, value, count, floor: int = COMPARE_MIN, of=None, model=None, basis=None, intensity=None):
     """(highest, lowest) of `rows` by `value(row)` among those whose figure is of at least `floor` companies (`count(row)`) (R25: one floor for
     every comparison of layers) and, given `of`, `model` and `basis` (each a function of the row), passes headline_ok and shares one period
-    basis (R27); None when fewer than two qualify, or when the highest or the lowest is tied (no layer is named for a tie)."""
+    basis (R27), and given `intensity`, are alike in asset intensity (R30); None when fewer than two qualify, or when the highest or the lowest is tied (no layer is named for a tie)."""
     have = sorted((r for r in rows if value(r) is not None and headline_ok(count(r) or 0, of(r) if of else None, model(r) if model else None, floor)),
                   key=value)
     if model:                       # R29: one business-model family only
         have = one_family(have, lambda r: model_family_of(model(r)))
     if basis and not same_basis([basis(r) for r in have]):
+        return None
+    if intensity and not comparable_intensity(have, intensity):         # R30: alike in asset intensity
         return None
     if len(have) < 2 or value(have[-1]) == value(have[-2]) or value(have[0]) == value(have[1]):
         return None
@@ -1090,6 +1193,9 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         mine = [rows[c["ticker"]] for c in v.get("companies") or [] if c["ticker"] in rows]
         what = {c["ticker"]: c.get("what") for c in v.get("companies") or []}
         ind = {c["ticker"]: c.get("industry") for c in v.get("companies") or []}          # the exchange's industry, a column of an AI layer (R20)
+        from .theme_check import model_family
+        for r in mine:                     # R30: an EBITDA margin checked against how the company earns
+            validate_model(r, model_family(model_fields(v, r["symbol"]).get("model") or "") or ((v.get("model") or {}).get("family") or ""))
         b = layer_block(v.get("layer") or "", [{**r, "what": what.get(r["symbol"]), "company_wide": r["symbol"] in wide, "official_industry": ind.get(r["symbol"]) or "",
                                                 **model_fields(v, r["symbol"])} for r in mine], wide)
         b["description"] = v.get("description") or ""
@@ -1244,6 +1350,7 @@ def data_checks(rows: list[dict], blocks: list[dict], dive: dict) -> dict:
     meds = sec.get("medians") or {}
     return {
         "one_off": [{"symbol": r["symbol"], "name": r["name"], "ebitda": r["ebitda"], "net": r["net"]} for r in rows if r.get("one_off") and r.get("status") != "unverified"],
+        "held": held_rows(rows),            # R30: figures a check held back (validate_row, validate_model)
         "net_with": (meds.get("net_all") or {}).get("median"), "net_without": (meds.get("net") or {}).get("median"),
         "series": [{"symbol": r["symbol"], "name": r["name"], **({"demerger": r["demerger"]} if r.get("demerger") else {})} for r in rows if r.get("series_break") or series_break(r)],
         "unverified": [{"symbol": r["symbol"], "name": r["name"]} for r in rows if r.get("status") == "unverified"],

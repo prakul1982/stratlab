@@ -291,6 +291,9 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
+PLACE_CARRY = {30: 29}          # rules versions whose change only adds to a kept placement (R30: unknown models asked again): the one before carries
+
+
 def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
     """The checked map with every company of the theme's industries in one of the map's own layers (theme_base.place_rest, R21): the AI's
     answer is asked once a map and kept in the shared store with it (app/computed.py), so it is never asked again for that map."""
@@ -298,6 +301,8 @@ def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
     key = ["place", region, theme.lower(), int(float(m.get("generated_at") or 0)), theme_base.RULES]
     try:
         kept = (computed.get("theme:place", key) or {}).get("value") or {}
+        if not kept and theme_base.RULES in PLACE_CARRY:       # R30: the placement kept under the rules before, whose answers still hold
+            kept = (computed.get("theme:place", key[:-1] + [PLACE_CARRY[theme_base.RULES]]) or {}).get("value") or {}
     except Exception:
         kept = {}
     names = {c["ticker"]: c.get("name") for v in out.get("value_chain") or [] for c in v.get("companies") or []}
