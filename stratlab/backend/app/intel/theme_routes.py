@@ -843,8 +843,10 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
                 body = None
         if body is None:
             view = deck_view(r, m, dive_of(r, theme, m), deck_extras(r, theme, m, profile))
-            body = deck.build_theme(view, pdf=format == "pdf")
-            computed.put("deck:theme", list(key), base64.b64encode(body).decode(), label=f"{theme} ({format.upper()}, {today.isoformat()})", region=r)
+            body, gate = deck.build_theme_gated(view, pdf=format == "pdf")
+            # R27: the publication gate's result (pass or fail per item, what was dropped) is kept with the deck, for Admin -> Library
+            computed.put("deck:theme", list(key), base64.b64encode(body).decode(), label=f"{theme} ({format.upper()}, {today.isoformat()})", region=r,
+                         meta={"gate": gate})
         DECK_CACHE.set(key, body, DECK_TTL, size=len(body))
     if mark:                                   # counted once the file is made: a deck that failed to build uses nothing
         db.add_usage(profile["id"], "deck")

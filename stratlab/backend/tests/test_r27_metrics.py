@@ -218,6 +218,9 @@ def test_the_notes_page_rows_are_the_registrys_own(name):
     for m in R.METRICS:
         by_label.setdefault(m.label, []).append(m)
     for r in rows:
+        if r[0] == deck.PEERS_ROW[0]:          # the peer rule is the deck's own method row (lane r27-quality), not a figure of the registry
+            assert r == deck.PEERS_ROW, (name, r)
+            continue
         assert any([m.label, m.definition, m.source] == r[:3] for m in by_label[r[0]]), (name, r)
 
 

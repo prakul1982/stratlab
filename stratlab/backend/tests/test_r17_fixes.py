@@ -156,10 +156,10 @@ def test_whole_points_print_whole_and_a_layers_half_stays():
     for s in (film, conv):
         assert not _re.search(r"\b\d+\.0%", s.subtitle or ""), s.subtitle
         assert not _re.search(r"\b\d+\.0 points", s.subtitle or ""), s.subtitle
+    # changed on purpose (R27): the whole map's median is in no table, so no layer sentence quotes it (the deck check dropped it)
     line = D.margin_line({"stats": {"ebitda": {"median": 9.0}}, "left_out": 0, "stats_over": "own", "companies": [1]}, 15.0, whole=True)
-    assert line == "The median EBITDA margin (9%) is 6 points below the median of the whole map (15%)."
-    half = D.margin_line({"stats": {"ebitda": {"median": 16.5}}, "left_out": 0, "stats_over": "own", "companies": [1]}, 13.0, whole=True)
-    assert "(16.5%) is 3.5 points above" in half
+    assert line is None
+    assert "whole map" not in texts(slides)
 
 
 def test_the_highest_and_lowest_layer_are_named_when_every_layer_is_an_official_industry():
@@ -201,8 +201,9 @@ def test_no_divider_without_anything_after_it_and_every_total_says_its_count():
         # changed on purpose (R19): data confidence is one page, its counts one line under the checks
         assert [s.title for s in slides if s.title.startswith("Data confidence")] == ["Data confidence"]
         line = next(p for s in slides if s.title == "Data confidence" for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))
-        assert line.startswith(f"Counts: {deck.coverage(v)['line']};") and "with a market value (the theme's total market value)" in line   # R20: one wording
-        assert _re.search(r"in each median: EBITDA margin \d+ · net margin \d+", line)
+        # R27: the four reconciled counts lead the line, then the universe against the figures in the one wording
+        assert line.startswith(f"Counts: {deck.counts_words(deck.reconciled_counts(v, deck.coverage(v)))}. {deck.coverage(v)['line']};") and "with a market value (the theme's total market value)" in line   # R20: one wording
+        assert _re.search(r"in each calculation: EBITDA margin \d+, net margin \d+", line)       # R27: one list of each calculation's count
 
 
 def test_industry_economics_is_computed_and_traceable():

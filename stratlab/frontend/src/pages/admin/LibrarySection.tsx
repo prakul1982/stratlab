@@ -4,7 +4,7 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { fmtDate, fmtDateTime, IST } from "../../lib/format";
 import { bytesText, hoursText } from "../../lib/usageText";
-import { Card, CardHead, ConfirmDialog, DataTable, EmptyState, Field, Select, Skeleton, Working, type Column } from "../../components/kit";
+import { Badge, Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, Field, Select, Skeleton, Working, type Column } from "../../components/kit";
 
 /* Admin → Library (R19, owner 7 Nov: "make a tab in admin too where i can see all the data"): everything kept once for every user.
  * The shared store's kinds with their counts, sizes, hits, refreshes and the work the hits saved; the theme library row by row with
@@ -15,7 +15,11 @@ type Store = { kind: string; label: string; entries: number; bytes: number; hits
 type Theme = { id: string; label: string; q: string; region: string; aliases: string[]; members: number | null; size: number; hits: number;
   searched: number; refreshes: number; at: string | null; last: string | null; refreshing: boolean };
 type Stored = { prefix: string; label: string; entries: number | null; bytes: number | null; oldest: string | null; newest: string | null };
-type View = { stores: Store[]; themes: Theme[]; stored: Stored[]; saved: { kind: string; count: number }[] | null };
+/* R27: each kept theme deck's publication check (backend deck.publication_gate): pass or fail per item and what was dropped before it shipped */
+type GateItem = { id: string; label: string; ok: boolean; dropped: number; note: string };
+type Gate = { passed: number; of: number; items: GateItem[]; dropped: { rule: string; slide: string; text: string; why: string }[]; dropped_n: number };
+type Deck = { id: string; label: string; region: string; at: string | null; size: number; hits: number; gate: Gate | null };
+type View = { stores: Store[]; themes: Theme[]; decks?: Deck[]; stored: Stored[]; saved: { kind: string; count: number }[] | null };
 
 const REGION_WORD: Record<string, string> = { IN: "India", US: "US" };
 
@@ -37,7 +41,7 @@ export function LibrarySection() {
     let live = true;
     const t = setTimeout(() => {
       api<View>(`/admin/stored?${new URLSearchParams({ q, region })}`).then((v) => live && setView(v))
-        .catch((e) => { if (live) { setView({ stores: [], themes: [], stored: [], saved: null }); fail(e); } });
+        .catch((e) => { if (live) { setView({ stores: [], themes: [], decks: [], stored: [], saved: null }); fail(e); } });
     }, 200);
     return () => { live = false; clearTimeout(t); };
   }, [q, region, again, fail]);
@@ -79,6 +83,30 @@ export function LibrarySection() {
         <button type="button" className="btn quiet sm" disabled={busy === t.id} onClick={() => setRemoving(t)}>Remove</button>
       </span>) },
   ];
+  const itemLabel = (g: Gate, id: string) => g.items.find((i) => i.id === id)?.label ?? id;
+  const deckCols: Column<Deck>[] = [
+    { key: "n", header: "Deck", rowHeader: true, wrap: true, lead: true, cell: (d) => (
+      <span className="k-stack k-tight"><b>{d.label}</b><span className="k-note">{REGION_WORD[d.region] ?? d.region} · made {when(d.at)}</span></span>) },
+    { key: "c", header: "Check", cell: (d) => (!d.gate ? <span className="k-note">Kept before the check</span>
+      : <Badge tone={d.gate.passed === d.gate.of ? "ok" : "warn"}>{`${d.gate.passed} of ${d.gate.of} passed`}</Badge>) },
+    { key: "i", header: "Each item", wrap: true, cell: (d) => {
+      if (!d.gate) return "–";
+      const failed = d.gate.items.filter((i) => !i.ok);
+      return (
+        <Disclosure summary={failed.length ? `Failed: ${failed.map((i) => i.label).join("; ")}` : "Every item passed"}>
+          <ul className="adm-gate" data-testid="deck-gate-items">
+            {[...failed, ...d.gate.items.filter((i) => i.ok)].map((i) => (
+              <li key={i.id}><span className={i.ok ? undefined : "fail"}>{i.ok ? "Pass" : "Fail"} · {i.label}{i.dropped ? ` (${i.dropped} dropped)` : ""}</span>
+                {i.note ? <span className="k-note">{i.note}</span> : null}</li>))}
+          </ul>
+        </Disclosure>);
+    } },
+    { key: "d", header: "Dropped before it shipped", wrap: true, cell: (d) => (!d.gate || !d.gate.dropped_n ? "Nothing" : (
+      <span className="k-stack k-tight">
+        {d.gate.dropped.slice(0, 3).map((x, k) => <span key={k} className="k-note">{itemLabel(d.gate as Gate, x.rule)}{x.slide ? ` (${x.slide})` : ""}: {x.text}</span>)}
+        {d.gate.dropped_n > 3 && <span className="k-note">and {d.gate.dropped_n - 3} more</span>}
+      </span>)) },
+  ];
   const prefixCols: Column<Stored>[] = [
     { key: "l", header: "What", rowHeader: true, wrap: true, cell: (s) => s.label },
     { key: "n", header: "Kept", numeric: true, cell: (s) => (s.entries == null ? "–" : s.entries.toLocaleString("en-IN")) },
@@ -105,6 +133,12 @@ export function LibrarySection() {
         {!view ? <Skeleton label="Reading the themes" lines={3} />
           : !view.themes.length ? <EmptyState title={q || region ? "No theme matches" : "No theme kept yet"}>A theme is kept here once its read is finished: its map written and every company checked.</EmptyState>
             : <DataTable label="Themes in the library" rows={view.themes} rowKey={(t) => t.id} columns={themeCols} stack />}
+      </Card>
+      <Card label="Theme decks">
+        <CardHead title={`Theme decks${view?.decks ? ` (${view.decks.length})` : ""}`} info="Every kept theme deck with its publication check: figures sourced, headlines that reproduce, counts that reconcile, comparable peers, headline samples, clear marks and plain facts. A sentence or figure that fails is dropped before the deck is kept; this shows what was." />
+        {!view ? <Skeleton label="Reading the decks" lines={3} />
+          : !view.decks?.length ? <EmptyState title={q || region ? "No deck matches" : "No deck kept yet"}>A theme's deck is kept here once someone downloads it.</EmptyState>
+            : <DataTable label="Theme decks and their publication check" rows={view.decks} rowKey={(d) => d.id} columns={deckCols} stack />}
       </Card>
       <Card label="Other shared data">
         <CardHead title="Other shared data" info="What the app already keeps in the database for every user: company pages, deep dives, results and the rest, worked out by its own jobs." />
