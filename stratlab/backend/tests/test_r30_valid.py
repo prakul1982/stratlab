@@ -202,7 +202,7 @@ def test_a_placement_kept_under_the_rules_before_carries_over(monkeypatch):
 def test_a_layer_header_says_how_many_are_in_the_figures():
     amt = lambda x: deck.money(x, "₹ crore")             # noqa: E731
     cos = [{"symbol": "A", "revenue": 32493.0}] + [{"symbol": s, "revenue": 900.0, "model_out": True} for s in "BCD"]
-    assert deck.layer_head({"n": 1, "revenue": 32493.0}, cos, amt) == "4 companies (1 in figures), revenue of those in figures ₹32,493 cr"
+    assert deck.layer_head({"n": 1, "revenue": 32493.0}, cos, amt) == "4 companies (1 in the layer's calculations), revenue of those ₹32,493 cr"
     assert deck.layer_head({"n": 2, "revenue": 1800.0}, [{"symbol": "B", "revenue": 900.0}, {"symbol": "C", "revenue": 900.0}], amt) == "2 companies, revenue ₹1,800 cr together"
 
 

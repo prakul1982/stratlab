@@ -278,4 +278,4 @@ def test_no_headline_compares_layers_of_different_families(monkeypatch):
 
 
 def test_the_versions_are_bumped_so_kept_maps_and_decks_are_made_again():
-    assert B.RULES == 33 and deck.THEME_DECK_VERSION == 34          # R33 bumped both (updated on purpose)
+    assert B.RULES == 33 and deck.THEME_DECK_VERSION == 35          # R33 bumped both (updated on purpose)

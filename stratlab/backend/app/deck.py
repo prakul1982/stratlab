@@ -1555,7 +1555,7 @@ def layer_head(layer: dict, cos: list, amt) -> str:
     listed, n = len(cos), layer.get("n", len(cos))
     figs = sum(1 for c in cos if c.get("status") != "unverified" and not c.get("model_out") and c.get("revenue") is not None)
     if listed > figs:
-        return f"{_n(listed, 'company', 'companies')} ({figs} in figures), revenue of those in figures {amt(layer.get('revenue'))}"
+        return f"{_n(listed, 'company', 'companies')} ({figs} in the layer's calculations), revenue of those {amt(layer.get('revenue'))}"
     return f"{_n(n, 'company', 'companies')}, revenue {amt(layer.get('revenue'))} together"
 
 
@@ -2236,7 +2236,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 34                  # R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 35                  # R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
