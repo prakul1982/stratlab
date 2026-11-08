@@ -162,7 +162,10 @@ def test_whole_points_print_whole_and_a_layers_half_stays():
     assert "whole map" not in texts(slides)
 
 
-def test_the_highest_and_lowest_layer_are_named_when_every_layer_is_an_official_industry():
+def test_the_highest_and_lowest_layer_are_named_when_every_layer_is_an_official_industry(monkeypatch):
+    # R31: a test of the ranking rules on fixtures of 3 or 4 companies a layer, run at the marks' floor (COMPARE_MIN); the headline floor
+    # of 5 (HEADLINE_MIN) on the same fixtures is tested in tests/test_r31_bound.py
+    monkeypatch.setattr("app.intel.theme_data.HEADLINE_MIN", 3)
     v, slides = deck_of(*theme_a())
     chain = v["chain"]
     assert (chain["highest"], chain["lowest"]) == ("Film", "Converters") and chain["gap"] == 7.0
@@ -206,7 +209,10 @@ def test_no_divider_without_anything_after_it_and_every_total_says_its_count():
         assert _re.search(r"in each calculation: EBITDA margin \d+, net margin \d+", line)       # R27: one list of each calculation's count
 
 
-def test_industry_economics_is_computed_and_traceable():
+def test_industry_economics_is_computed_and_traceable(monkeypatch):
+    # R31: a test of the ranking rules on fixtures of 3 or 4 companies a layer, run at the marks' floor (COMPARE_MIN); the headline floor
+    # of 5 (HEADLINE_MIN) on the same fixtures is tested in tests/test_r31_bound.py
+    monkeypatch.setattr("app.intel.theme_data.HEADLINE_MIN", 3)
     v, slides = deck_of(*theme_a())
     md = v["sections"]["margin_drivers"]
     assert md and abs(sum(x["part"] for x in md["layers"]) - md["change"]) < 0.1             # the parts add up to the change

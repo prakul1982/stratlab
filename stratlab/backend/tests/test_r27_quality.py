@@ -152,7 +152,10 @@ def test_a_cause_or_advice_sentence_never_ships_from_a_card_a_headline_or_a_note
 
 
 # ---------- 3. headline eligibility ----------
-def test_a_comparison_headlines_only_on_sample_coverage_one_model_and_one_period_basis():
+def test_a_comparison_headlines_only_on_sample_coverage_one_model_and_one_period_basis(monkeypatch):
+    # R31: a test of the ranking rules on fixtures of 3 or 4 companies a layer, run at the marks' floor (COMPARE_MIN); the headline floor
+    # of 5 (HEADLINE_MIN) on the same fixtures is tested in tests/test_r31_bound.py
+    monkeypatch.setattr("app.intel.theme_data.HEADLINE_MIN", 3)
     assert D.COVERAGE_MIN == 0.5
     assert D.headline_ok(3, 6) and not D.headline_ok(2, 3) and not D.headline_ok(3, 7) and D.headline_ok(4, 7)
     assert not D.headline_ok(21, 53) and D.headline_ok(27, 53)                      # the live Semis deck's "RPO growth -3.9% (21 of 53)"
@@ -171,7 +174,10 @@ def block(name, n, k, med, model=None, year="Mar 2026"):
             "companies": [{"symbol": f"{name}{i}", "year": year} for i in range(n)]}
 
 
-def test_the_value_chain_names_no_layer_whose_figure_covers_under_half_or_mixes_models_or_periods():
+def test_the_value_chain_names_no_layer_whose_figure_covers_under_half_or_mixes_models_or_periods(monkeypatch):
+    # R31: a test of the ranking rules on fixtures of 3 or 4 companies a layer, run at the marks' floor (COMPARE_MIN); the headline floor
+    # of 5 (HEADLINE_MIN) on the same fixtures is tested in tests/test_r31_bound.py
+    monkeypatch.setattr("app.intel.theme_data.HEADLINE_MIN", 3)
     c = D.chain_table([block("A", 4, 4, 40.0), block("B", 10, 4, 5.0), block("C", 6, 6, 20.0)])
     assert (c["highest"], c["lowest"]) == ("A", "C") and "B" not in c["compared"]                 # B: 4 of 10
     c = D.chain_table([block("A", 4, 4, 40.0, {"sparse": True}), block("B", 5, 5, 5.0), block("C", 6, 6, 20.0)])
@@ -332,7 +338,10 @@ def test_how_the_valuation_is_worked_out_lives_on_the_notes_page_with_one_pointe
 
 
 # ---------- the R25 check's drops on new structures, fixed at their source (lane r27-metrics' report) ----------
-def test_layers_that_tie_get_no_comparison_sentence_and_no_line_quotes_the_whole_maps_median():
+def test_layers_that_tie_get_no_comparison_sentence_and_no_line_quotes_the_whole_maps_median(monkeypatch):
+    # R31: a test of the ranking rules on fixtures of 3 or 4 companies a layer, run at the marks' floor (COMPARE_MIN); the headline floor
+    # of 5 (HEADLINE_MIN) on the same fixtures is tested in tests/test_r31_bound.py
+    monkeypatch.setattr("app.intel.theme_data.HEADLINE_MIN", 3)
     tie = D.chain_table([block("A", 4, 4, 20.0), block("B", 5, 5, 20.0)])
     assert tie["line"] is None and tie["highest"] is None                                       # never "within 0.0 points"
     near = D.chain_table([block("A", 4, 4, 20.0), block("B", 5, 5, 19.5)])
