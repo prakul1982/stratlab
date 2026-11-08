@@ -322,22 +322,25 @@ def test_the_reader_serves_a_kept_piece_reads_within_its_budget_and_queues_the_r
 
 
 # ---------- 5. valuation peers in the same sector ----------
-def test_peers_are_of_similar_value_in_the_same_sector_outside_the_theme_else_with_the_theme_else_the_whole_market_and_said():
+def test_peers_are_of_similar_value_in_the_same_sector_outside_the_theme_else_with_the_theme_else_none_and_said():
+    # changed on purpose (R27): sector first, then size; with too few comparable peers a company has none (never the whole market)
     rows = [{"symbol": "A", "cap": 10000, "pe": 30.0, "sales_3y": 10.0, "roce": 20.0, "sector": "Financial Services"},
             {"symbol": "B", "cap": 10000, "pe": 20.0, "sales_3y": 10.0, "roce": 20.0, "sector": "Metals"}]
     fin = [{"symbol": f"F{i}", "market_cap": 8000 + i * 100, "pe": 15.0, "sales_cagr_3y": 8.0, "roce": 12.0, "sector": "Financial Services"} for i in range(10)]
     other = [{"symbol": f"O{i}", "market_cap": 9000, "pe": 40.0, "sales_cagr_3y": 2.0, "roce": 5.0, "sector": "Chemicals"} for i in range(5)]
     huge = [{"symbol": "H", "market_cap": 900000, "pe": 99.0, "sector": "Financial Services"}]
     got = D.peers_section(rows, fin + other + huge)
-    # A: ten financial companies of similar value outside the theme; B: too few metal companies, so every company of similar value
-    assert got["pe"]["sets"] == {"sector": 1, "market": 1} and got["pe"]["peers"] == round((15.0 + 15.0) / 2, 1)
-    assert deck.peer_set_words(got["pe"]) == "in their own sector for 1 and the whole market for 1 (fewer than 10 in their sector)"
-    only = D.peers_section(rows[:1], fin + other)
-    assert only["pe"]["sets"] == {"sector": 1} and deck.peer_set_words(only["pe"]) == "in their own sector outside the theme"
-    assert "with peers of similar market value in their own sector outside the theme" in deck.pe_peer_line(only["pe"])
+    # A: ten financial companies of similar value outside the theme; B: too few metal companies: no comparable peer set, left out
+    assert got["pe"]["sets"] == {"sector": 1, "none": 1} and got["pe"]["peers"] == 15.0 and got["pe"]["n"] == 1 and got["pe"]["none"] == 1
+    assert deck.peer_set_words(got["pe"]) == "(own sector, similar market value, outside the theme)"
+    assert "with comparable peers (own sector, similar market value, outside the theme)" in deck.pe_peer_line(got["pe"])
+    assert deck.pe_peer_line(got["pe"]).endswith("; 1 with no comparable peer set (left out)")
     # nine outside the theme and one of the theme's own of the same sector: the theme's other companies are counted
     theme_mate = {"symbol": "T", "cap": 9000, "pe": 15.0, "sector": "Financial Services"}
     with_mate = D.peers_section([rows[0], theme_mate], fin[:9] + [{**theme_mate, "market_cap": 9000}] + other)
     assert with_mate["pe"]["sets"].get("sector_theme") == 1
     mk = D.peers_section(rows[1:], other)
-    assert mk["pe"]["sets"] == {"market": 1} and deck.peer_set_words(mk["pe"]) == "in the whole market (fewer than 10 in their own sector)"
+    assert mk["pe"]["sets"] == {"none": 1} and mk["pe"]["n"] == 0 and deck.peer_set_words(mk["pe"]) == "(no comparable peer set)"
+    # a lender is never a non-lender's peer (the same kind of accounts)
+    banks = [{**m, "bank": True} for m in fin]
+    assert D.peers_section(rows[:1], banks)["pe"]["sets"] == {"none": 1}

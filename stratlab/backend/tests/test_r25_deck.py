@@ -170,7 +170,7 @@ def test_the_check_reads_percentages_gaps_counts_multiples_and_money_against_the
 
 def test_a_gap_said_beside_two_figures_is_the_difference_of_the_figures_as_printed():
     b = {"layer": "X", "stats": {"ebitda": {"median": 26.55, "n": 3}}, "left_out": 0, "stats_over": "own", "companies": []}
-    assert "(26.6%) is 1.7 points above the median of the whole map (24.9%)" in D.margin_line(b, 24.94)
+    assert D.margin_line(b, 24.94) is None                  # changed on purpose (R27): the whole map's median is in no table, so never quoted
     c = D.chain_table([block("A", 3, 26.55), block("B", 5, 24.94)])
     assert c["line"].endswith("a gap of 1.7 points.")
 
@@ -222,8 +222,8 @@ def test_the_contents_lists_the_notes_page_and_references_point_at_it():
 
 
 # ---------- 5. the version ----------
-def test_the_deck_version_is_25_so_kept_deck_files_are_made_again_once():
-    assert deck.THEME_DECK_VERSION == 25
+def test_the_deck_version_is_27_so_kept_deck_files_are_made_again_once():
+    assert deck.THEME_DECK_VERSION == 27                     # R27 bumped it (R25's test, updated: a new release makes kept files again)
 
 
 # ---------- 6. the live R24 decks: a layer's columns follow its family; notes name only the families shown ----------

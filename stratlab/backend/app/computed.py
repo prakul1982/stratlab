@@ -165,7 +165,7 @@ def put(kind: str, key, value, label: str = "", region: str = "", meta: dict | N
         old = ix["entries"].get(hk) or {}
         entry = {"label": str(label)[:120], "region": region, "size": len(text), "at": at, "first": old.get("first") or at,
                  "hits": old.get("hits", 0), "last": old.get("last") or at, "refreshes": old.get("refreshes", 0) + (1 if by else 0),
-                 "meta": {k: v for k, v in (meta or {}).items() if k in ("aliases", "members", "q", "searched", "rules")}}
+                 "meta": {k: v for k, v in (meta or {}).items() if k in ("aliases", "members", "q", "searched", "rules", "gate")}}
         ix["entries"][hk] = entry
         if by:
             ix["refreshes"] += 1

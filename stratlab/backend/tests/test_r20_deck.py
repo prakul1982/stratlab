@@ -218,7 +218,9 @@ def test_every_rule_holds_on_every_synthetic_theme(name, v, slides):
     cov = deck.coverage(v)
     cover = {it[0]: it for b in slides[0].blocks if b["kind"] == "stats" for it in b["items"]}
     assert cover["With figures"][1] == f"{cov['n']:,}" and cov["line"] in t
-    assert next(p for s in slides if s.title == "Data confidence" for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:")).startswith(f"Counts: {cov['line']}")
+    counts = next(p for s in slides if s.title == "Data confidence" for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))
+    # R27: the four reconciled counts lead the line, then the universe against the figures in the one wording
+    assert counts.startswith(f"Counts: {deck.counts_words(deck.reconciled_counts(v, cov))}.") and cov["line"] in counts
     q = (v.get("sections") or {}).get("quarter") or {}
     if "The latest quarter against a year earlier" in titles:
         tiles = {it[0]: it for s in slides if s.title == "The latest quarter against a year earlier" for b in s.blocks if b["kind"] == "stats" for it in b["items"]}

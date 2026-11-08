@@ -78,10 +78,25 @@ def _themes(q: str = "", region: str = "") -> list[dict]:
     return rows
 
 
+DECKS_SHOWN = 60                 # the newest kept theme decks listed with their publication check
+
+
+def _decks(q: str = "", region: str = "") -> list[dict]:
+    """The kept theme decks, newest first, each with its publication gate's result (R27: pass or fail per item, what was dropped); a deck
+    kept before the gate existed says so (no result)."""
+    rows = []
+    for r in computed.entries("deck:theme", q, region)[:DECKS_SHOWN]:
+        g = (r.get("meta") or {}).get("gate") or None
+        rows.append({"id": r["id"], "label": r.get("label"), "region": r.get("region"), "at": r.get("at"), "size": r.get("size"), "hits": r.get("hits") or 0,
+                     "gate": g if isinstance(g, dict) and g.get("items") else None})
+    return rows
+
+
 @router.get("")
 def library_view(q: str = "", region: str = "", _=Depends(admin.admin_profile)):
     stored = [{"prefix": p, "label": label, **_prefix_stats(p)} for p, label in STORED]
-    return {"stores": computed.stats(), "themes": _themes(q[:80], region if region in ("IN", "US") else ""), "stored": stored,
+    reg = region if region in ("IN", "US") else ""
+    return {"stores": computed.stats(), "themes": _themes(q[:80], reg), "decks": _decks(q[:80], reg), "stored": stored,
             "saved": saved_counts()}
 
 

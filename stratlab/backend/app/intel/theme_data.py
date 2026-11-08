@@ -35,6 +35,9 @@ FEW_BASE = 4                  # a highest or lowest median on this many companie
 # and red marks): a layer with fewer companies than this behind its median is shown, never ranked; with fewer than two layers over
 # it, no comparison is said at all
 COMPARE_MIN = MIN_BASE
+# R27 (headline eligibility): a comparison is said as a headline only on a figure for at least this share of the companies of each group it
+# compares (a layer, a family); one with less is shown as data, never ranked (the live R26 Semis deck: "RPO growth -3.9%" of 21 of 53)
+COVERAGE_MIN = 0.5
 MIN_LAYER = 2                 # companies a layer needs for its median to be called a layer's figure (a post, the chain's highest and lowest)
 ROUNDING = 1.0                # points: EBITDA margins are filed in whole points, so two medians this close may be the same figure rounded
 FINANCIAL_KEYS = ("ebitda", "roce", "debt_equity")
@@ -281,21 +284,14 @@ def layer_block(name: str, rows: list[dict], wide: set[str]) -> dict:
 
 
 def margin_line(block: dict, chain_median: float | None, several: bool = True, whole: bool = False) -> str | None:
-    """What a layer's table doesn't say by itself: how its median EBITDA margin stands against the whole map's, and which figures are the whole
-    company's. (The median and range are rows of the table, not said again.) None when there is nothing more to say."""
-    e = block["stats"].get("ebitda")
+    """What a layer's table doesn't say by itself: which figures are the whole company's. (The median and range are rows of the table, not said
+    again.) None when there is nothing more to say. R27: no sentence quotes the whole map's median EBITDA margin, a figure no table shows (the
+    deck check dropped it on every new structure); the value chain's table sets the layers side by side. `chain_median`, `several` and `whole`
+    are kept for the callers."""
     parts = []
-    if e and chain_median is not None and several and e.get("n", MIN_BASE) >= MIN_BASE:
-        d = float(f1(e["median"])) - float(f1(chain_median))          # the gap of the two figures as printed (R25: 26.6% and 24.9% are 1.7 apart)
-        if abs(d) > ROUNDING:
-            # whole points print whole: 9% and 15% are 6 points apart, not "6.0 points" (R17-007); a median's half stays
-            gap = f1(abs(d))
-            if float(e["median"]).is_integer() and float(chain_median).is_integer():
-                gap = gap.replace(".0", "")
-            parts.append(f"The median EBITDA margin ({pts(e['median'], whole)}) is {gap} points {'above' if d > 0 else 'below'} the median of the whole map ({pts(chain_median, whole)}).")
     if block["left_out"]:
-        parts.append(f"{block['left_out']} figure{'s are' if block['left_out'] > 1 else ' is'} the whole company's and left out of the medians"
-                     " because the company runs other businesses too.")
+        parts.append(f"{block['left_out']} figure{'s are' if block['left_out'] > 1 else ' is'} the whole company's (it runs other businesses too) "
+                     "and left out of the medians.")
     elif block["stats_over"] == "all" and block["companies"]:
         parts.append("Every figure here is the whole company's, since each runs other businesses too.")
     return " ".join(parts) or None
@@ -311,21 +307,28 @@ def chain_table(blocks: list[dict]) -> dict:
                      "roce": c["median"] if c else None, "ebitda_n": e["n"] if e else 0, "official": bool(b.get("official")), "rest": b.get("basis") == "rest",
                      **{k: (b["stats"].get(k) or {}).get("median") for k in LENDER_KEYS}, "roe_n": (b["stats"].get("roe") or {}).get("n", 0),
                      **{f"{k}_n": (b["stats"].get(k) or {}).get("n", 0) for k in STAT_KEYS if k not in ("ebitda", "roe")},
-                     **{k: (b["stats"].get(k) or {}).get("median") for k in FAMILY_CHAIN}, **{f"{k}_n": (b["stats"].get(k) or {}).get("n", 0) for k in FAMILY_CHAIN}})
+                     **{k: (b["stats"].get(k) or {}).get("median") for k in FAMILY_CHAIN}, **{f"{k}_n": (b["stats"].get(k) or {}).get("n", 0) for k in FAMILY_CHAIN},
+                     "model": b.get("model"), "basis": period_basis([c for c in b.get("companies") or [] if c.get("status") != "unverified"])})
     # only the map's own layers (an official industry's leftover companies overlap them: "Vehicle assembly" and "Commercial Vehicles"), each
     # with MIN_BASE companies in its median, and only a gap wider than the rounding of whole-point margins, name a highest and a lowest
     # the "Other ..." group (companies that fit none of the map's layers) is never compared (R22)
-    have = [r for r in rows if r["ebitda"] is not None and r["ebitda_n"] >= COMPARE_MIN and not r["official"]]
+    # R27: and each a headline figure (headline_ok: the sample, a figure for at least half the layer's companies, one business model), all on one
+    # period basis; a layer that fails is shown in the table, never named
+    ok = lambda r, k: r[k] is not None and headline_ok(r[f"{k}_n"], r["n"], r["model"])      # noqa: E731
+    have = [r for r in rows if ok(r, "ebitda") and not r["official"]]
     if len(have) < 2:          # a map whose layers are the official industries themselves: they are its layers (R17-011)
-        have = [r for r in rows if r["ebitda"] is not None and r["ebitda_n"] >= COMPARE_MIN and not r["rest"]]
+        have = [r for r in rows if ok(r, "ebitda") and not r["rest"]]
+    if not same_basis([r["basis"] for r in have]):
+        have = []
     line, hi, lo = None, None, None
     if len(have) >= 2:
         hi, lo = max(have, key=lambda r: r["ebitda"]), min(have, key=lambda r: r["ebitda"])
         if hi["layer"] == lo["layer"] or hi["ebitda"] - lo["ebitda"] <= ROUNDING:
             gap = gap_of(max(r["ebitda"] for r in have), min(r["ebitda"] for r in have))         # as printed (R25)
             hi = lo = None
+            # R27: a tie (no gap as printed) is no comparison: no sentence, never "within 0.0 points"
             line = (f"The median EBITDA margins of the {len(have)} layers with at least {COMPARE_MIN} companies are within {gap} "
-                    "points of each other, the rounding of whole points.")
+                    "points of each other, the rounding of whole points.") if float(gap) > 0 else None
         else:
             whole = whole_points([c for b in blocks for c in b["companies"]])
             line = (f"Median EBITDA margin is highest in {hi['layer']} ({pts(hi['ebitda'], whole)}{few(hi['ebitda_n'], hi['n'])}) and lowest in {lo['layer']} "
@@ -334,9 +337,11 @@ def chain_table(blocks: list[dict]) -> dict:
     measure = "ebitda"
     if len(have) < 2:
         # lenders have no EBITDA margin: their layers are set side by side on return on equity (R18)
-        lend = [r for r in rows if r["roe"] is not None and r["roe_n"] >= COMPARE_MIN and not r["official"]]
+        lend = [r for r in rows if ok(r, "roe") and not r["official"]]
         if len(lend) < 2:
-            lend = [r for r in rows if r["roe"] is not None and r["roe_n"] >= COMPARE_MIN and not r["rest"]]
+            lend = [r for r in rows if ok(r, "roe") and not r["rest"]]
+        if not same_basis([r["basis"] for r in lend]):
+            lend = []
         if len(lend) >= 2:
             measure, have = "roe", lend
             hi, lo = max(lend, key=lambda r: r["roe"]), min(lend, key=lambda r: r["roe"])
@@ -375,10 +380,37 @@ def of_words(n: int, of: int | None, one: str = "company", many: str = "companie
     return f"{n} {one if n == 1 else many}"
 
 
-def rank_pair(rows: list, value, count, floor: int = COMPARE_MIN):
+def headline_ok(n: int, of: int | None = None, model: dict | None = None, floor: int | None = None) -> bool:
+    """Whether one group's figure may be ranked in a headline (R27): its sample is at least `floor` companies (COMPARE_MIN), it covers at least
+    COVERAGE_MIN of the group's `of` companies, and the group is of one business model (theme_base.by_model's `model`: a layer whose companies'
+    models are mostly unknown, "sparse", is not; no model read at all says nothing either way). A failing group is shown, never ranked."""
+    if (n or 0) < (COMPARE_MIN if floor is None else floor):
+        return False
+    if of and n < of * COVERAGE_MIN:
+        return False
+    return not (isinstance(model, dict) and model.get("sparse"))
+
+
+def period_basis(rows: list[dict]) -> str:
+    """The period basis of a group's annual figures: "full" (full years), "part" (a part year, "Mar 2026 9m"), "mixed" or "" (none)."""
+    kinds = {"part" if _PART_YEAR.search(str(r.get("year"))) else "full" for r in rows if r.get("year")}
+    return "" if not kinds else kinds.pop() if len(kinds) == 1 else "mixed"
+
+
+def same_basis(groups: list) -> bool:
+    """Whether the groups a comparison sets side by side are on one period basis (R27): each "full" or each "part", never a mix."""
+    kinds = {g for g in groups if g}
+    return len(kinds) <= 1 and "mixed" not in kinds
+
+
+def rank_pair(rows: list, value, count, floor: int = COMPARE_MIN, of=None, model=None, basis=None):
     """(highest, lowest) of `rows` by `value(row)` among those whose figure is of at least `floor` companies (`count(row)`) (R25: one floor for
-    every comparison of layers); None when fewer than two qualify, or when the highest or the lowest is tied (no layer is named for a tie)."""
-    have = sorted((r for r in rows if value(r) is not None and (count(r) or 0) >= floor), key=value)
+    every comparison of layers) and, given `of`, `model` and `basis` (each a function of the row), passes headline_ok and shares one period
+    basis (R27); None when fewer than two qualify, or when the highest or the lowest is tied (no layer is named for a tie)."""
+    have = sorted((r for r in rows if value(r) is not None and headline_ok(count(r) or 0, of(r) if of else None, model(r) if model else None, floor)),
+                  key=value)
+    if basis and not same_basis([basis(r) for r in have]):
+        return None
     if len(have) < 2 or value(have[-1]) == value(have[-2]) or value(have[0]) == value(have[1]):
         return None
     return have[-1], have[0]
@@ -499,36 +531,42 @@ def margin_drivers(hist: dict | None, rows: dict, layer_of: dict) -> dict | None
 
 
 PEER_BAND = 2.0               # companies of similar market value: between half and twice a company's own
-PEER_MIN = 10                 # peers of a company's own sector it needs for that set; with fewer, the whole market's (R23)
-MARKET_MIN = 3                # peers the whole market's set needs
+PEER_MIN = 10                 # comparable peers a company needs for its relative comparison; with fewer it has none (R27: no whole-market set)
+PEER_SETS = {"sector": "own sector, similar market value, outside the theme", "sector_theme": "own sector, similar market value, the theme's other companies counted",
+             "none": "no comparable peer set"}
 
 
-def _peer_median(cap, market: list[dict], key: str, ok, theme: set, sector: str | None = None, me: str | None = None) -> tuple[float | None, str | None]:
-    """(the median of `key` over a company's peers, which set they are): companies of similar market value (half to twice its own) in its own
-    sector outside the theme ("sector"); with fewer than PEER_MIN of those, the theme's other companies of that sector counted too
-    ("sector_theme"); with fewer still, every listed company of similar value outside the theme ("market", MARKET_MIN at least). (R23, the
-    owner's reviews: "listed peers of similar market value" are not economically comparable.)"""
-    if not cap:
-        return None, None
-    band = [m for m in market if num(m.get("market_cap")) and cap / PEER_BAND <= num(m.get("market_cap")) <= cap * PEER_BAND and m.get("symbol") != me]
-    vals = lambda ms: [x for x in (num(m.get(key)) for m in ms) if x is not None and ok(x)]      # noqa: E731
-    if sector:
-        same = [m for m in band if m.get("sector") == sector]
-        out_ = vals([m for m in same if m.get("symbol") not in theme])
-        if len(out_) >= PEER_MIN:
-            return median(out_), "sector"
-        all_ = vals(same)
-        if len(all_) >= PEER_MIN:
-            return median(all_), "sector_theme"
-    xs = vals([m for m in band if m.get("symbol") not in theme])
-    return (median(xs), "market") if len(xs) >= MARKET_MIN else (None, None)
+def comparable_peers(r: dict, market: list[dict], theme: set) -> tuple[list[dict], str]:
+    """(a company's comparable peers, which set they are), in the order comparability is judged (R27, the owner's outside review): the business
+    first (its own sector, the same kind of accounts: a lender beside lenders), then size (half to twice its market value), then geography and
+    accounting basis (the same market and currency of filing, the market list being the theme's own market). Outside the theme where PEER_MIN
+    are, else the theme's other companies of that sector counted ("sector_theme"). Never the whole market: with fewer than PEER_MIN the
+    company has "none", and its relative comparison is left out."""
+    cap, sector = num(r.get("cap")), r.get("sector")
+    if not cap or not sector:
+        return [], "none"
+    same = [m for m in market if m.get("sector") == sector and m.get("symbol") != r.get("symbol")
+            and ("bank" not in m or bool(m["bank"]) == bool(r.get("bank"))) and (not m.get("region") or not r.get("region") or m.get("region") == r.get("region"))]
+    band = [m for m in same if num(m.get("market_cap")) and cap / PEER_BAND <= num(m.get("market_cap")) <= cap * PEER_BAND]
+    out_ = [m for m in band if m.get("symbol") not in theme]
+    if len(out_) >= PEER_MIN:
+        return out_, "sector"
+    return (band, "sector_theme") if len(band) >= PEER_MIN else ([], "none")
+
+
+def _peer_median(r: dict, market: list[dict], key: str, ok, theme: set) -> tuple[float | None, str]:
+    """(the median of `key` over a company's comparable peers that have it, the set's name); (None, "none") with fewer than PEER_MIN."""
+    peers, basis = comparable_peers(r, market, theme)
+    xs = [x for x in (num(m.get(key)) for m in peers) if x is not None and ok(x)]
+    return (median(xs), basis) if basis != "none" and len(xs) >= PEER_MIN else (None, "none")
 
 
 def peers_section(rows: list[dict], market: list[dict]) -> dict:
-    """Each company against listed companies of similar market value (between half and twice its own) in its own sector, outside the theme
-    where there are enough, else the whole market (_peer_median, R23): its P/E, its revenue growth over three years and its ROCE beside their
-    medians, and the theme's median company of each (the owner, 7 Nov: "valuation premium vs same-size peers beside growth and ROCE").
-    `sets` counts the companies compared with each set. Facts: a comparison, never a view of what is cheap."""
+    """Each company against its comparable peers (comparable_peers: its own sector first, then similar market value, the same market and
+    accounts): its P/E, its revenue growth over three years and its ROCE beside their medians, and the theme's median company of each (the
+    owner, 7 Nov: "valuation premium vs same-size peers beside growth and ROCE"). `sets` counts the companies compared with each set, and
+    "none" those with the figure but no comparable peer set (R27: left out, never set against the whole market). Facts: a comparison, never
+    a view of what is cheap."""
     theme = {r["symbol"] for r in rows}
     out = {}
     for key, mkey, ok in (("pe", "pe", lambda x: 0 < x <= stock_pages.PE_MAX), ("sales_3y", "sales_cagr_3y", lambda x: True), ("roce", "roce", lambda x: True)):
@@ -537,20 +575,22 @@ def peers_section(rows: list[dict], market: list[dict]) -> dict:
             v = num(r.get(key))
             if v is None or not ok(v):
                 continue
-            pm, basis = _peer_median(r.get("cap"), market, mkey, ok, theme, r.get("sector"), r["symbol"])
+            pm, basis = _peer_median(r, market, mkey, ok, theme)
+            sets[basis] = sets.get(basis, 0) + 1
             if pm is None:
                 continue
             own.append(v)
             peer.append(pm)
-            sets[basis] = sets.get(basis, 0) + 1
             if key == "pe" and pm > 0:
                 prem.append((v / pm - 1) * 100)
         if own:
             # the P/E gap is the ratio of the two medians over the same companies, the two numbers a table shows (R17-010: the median of each
             # company's own gap, 8.2%, sat beside medians 3.4% apart)
             mo, mp = median(own), median(peer)
-            out[key] = {"n": len(own), "theme": round(mo, 1), "peers": round(mp, 1), "sets": sets,
+            out[key] = {"n": len(own), "theme": round(mo, 1), "peers": round(mp, 1), "sets": sets, "none": sets.get("none", 0),
                         "premium": round((round(mo, 1) / round(mp, 1) - 1) * 100, 1) if prem and round(mp, 1) > 0 else None}
+        elif sets.get("none"):
+            out[key] = {"n": 0, "theme": None, "peers": None, "sets": sets, "none": sets["none"], "premium": None}
     return out
 
 
@@ -774,7 +814,7 @@ def notable_items(blocks: list[dict], chain: dict, histories: dict) -> list[dict
     is of an aggregate of MIN_BASE companies or more."""
     out = []
     apart = {b.get("layer") for b in blocks if b.get("official")} | {r["layer"] for r in chain["rows"] if r.get("official")}
-    have = [r for r in chain["rows"] if r["ebitda"] is not None and r["ebitda_n"] >= COMPARE_MIN and r["layer"] not in apart]
+    have = [r for r in chain["rows"] if r["ebitda"] is not None and headline_ok(r["ebitda_n"], r["n"], r.get("model")) and r["layer"] not in apart]
     if len(have) >= 2:
         hi, lo = max(have, key=lambda r: r["ebitda"]), min(have, key=lambda r: r["ebitda"])
         if hi["ebitda"] - lo["ebitda"] >= NOTABLE_GAP:
