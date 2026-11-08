@@ -174,3 +174,19 @@ def test_a_request_never_reads_descriptions_to_place_only_the_background_check_d
     assert calls == []
     TR.placed("IN", "IT services", m, _place_map(), ask=lambda *a: {})
     assert len(calls) == 1
+
+
+def test_the_how_they_earn_line_counts_the_companies_the_page_shows():
+    """R28: the live R27 IT deck said "shown for only 6 of these 46 companies" on a page of 6 companies; the line now counts what is shown."""
+    from app.intel.theme_base import shown_model
+    model = {"id": "project_services", "family": "services", "known": 6, "of": 46, "out": 40, "sparse": True,
+             "line": "How they earn is shown for only 6 of these 46 companies, mainly fees; the other 40 are listed but left out."}
+    rows = [{"symbol": f"S{i}", "model": "project_services", "model_tags": [], "model_confidence": "high"} for i in range(4)] + \
+           [{"symbol": "U1", "model": "", "model_tags": [], "model_confidence": "", "model_out": True}]
+    got = shown_model(model, rows)
+    assert got["of"] == 5 and got["known"] == 4 and got["out"] == 1 and not got.get("sparse")
+    assert "46" not in got["line"] and got["line"].startswith("They earn mainly from ") and "1 of 5 is listed but left out" in got["line"]
+    same = shown_model({**model, "of": 5}, rows)
+    assert same["line"] == model["line"]                  # counts already agree: unchanged
+    none = shown_model(model, [{"symbol": "U", "model": "", "model_out": True}] * 3)
+    assert none["sparse"] and none["line"].startswith("None of these 3 companies")

@@ -938,6 +938,42 @@ def also_earn(known: list[dict], family: str) -> tuple[int, str] | None:
     return counts[t], t
 
 
+def shown_model(model: dict | None, rows: list[dict]) -> dict | None:
+    """The layer's "how they earn" line counted over the companies its page shows (R28: the live R27 IT deck said "shown for only 6 of these
+    46 companies" on a page of 6: the 46 were every company the map put in the layer, most with no figures worked out). `rows`: the layer's
+    confirmed companies with figures, carrying model, model_tags, model_confidence and model_out (theme_data.model_fields). Unchanged when
+    the counts already agree or the layer carries no model."""
+    if not model or not rows or not any("model" in r for r in rows):
+        return model
+    from .theme_check import FAMILIES, MODELS
+    if len(rows) == model.get("of"):
+        return model
+    f, mid = model.get("family") or "", model.get("id") or ""
+    known = [r for r in rows if r.get("model") and not r.get("model_out")] if f else []
+    rest = [r for r in rows if r not in known]
+    n = len(rows)
+    if not known:
+        line = (f"None of these {n} companies' descriptions shows how it earns, so no common way of earning is given for this group."
+                if n > 1 else "Its description doesn't show how it earns.")
+        half = re.search(r" The (?:larger|smaller) half of one group by market value; .*$", str(model.get("line") or ""))
+        return {**model, "line": line + (half.group(0) if half else ""), "known": 0, "of": n, "out": len(rest), "sparse": True, "also": []}
+    what = MODELS[mid][2] if mid in MODELS else FAMILIES.get(f, ("", ""))[1]
+    sparse = len(known) * 2 < n
+    if sparse:
+        line = f"How they earn is shown for only {len(known)} of these {n} companies, mainly {what}; {out_line(rest, 'the other')}"
+    else:
+        line = f"They earn mainly from {what}." + (" " + out_line(rest, f"of {n}") if rest else "")
+    also = also_earn(known, f)
+    if also:
+        line += f" {also[0]} of the {len(known)} also earn from {MODELS[also[1]][2]}."
+    half = re.search(r" The (?:larger|smaller) half of one group by market value; .*$", str(model.get("line") or ""))
+    if half:                                   # the split's own words stay (by_model step 2)
+        line += half.group(0)
+    out = {**model, "line": line, "known": len(known), "of": n, "out": len(rest), "also": [{"id": also[1], "n": also[0]}] if also else []}
+    out.pop("sparse", None)
+    return {**out, "sparse": True} if sparse else out
+
+
 def _no_single_layers(out: list[dict], before: dict, main, fam, theme: str) -> list[dict]:
     """The layers with none of one company that the split made or reshaped (R27): its company joins the largest other layer of its own family,
     else the theme's "Other" group (made when there is none), marked "single"."""

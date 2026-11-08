@@ -1051,6 +1051,9 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         b["official"], b["basis"] = bool(v.get("official")), v.get("basis")     # a layer that is one official industry's companies the AI didn't place (theme_base.py)
         b["by_industry"] = bool(v.get("by_industry"))
         b["model"] = v.get("model") or None                 # what the layer's companies have in common: how they earn (theme_base.by_model, R25)
+        if b["model"]:                                       # R28: counted over the companies the page shows, not every company the map placed
+            from .theme_base import shown_model
+            b["model"] = shown_model(b["model"], [r for r in b["companies"] if r.get("status") != "unverified"])
         blocks.append(b)
         out_ = set(b.get("model_out") or [])            # R27: left out of the layer's figures (model unknown or of low confidence)
         sure = [r for r in mine if r.get("status") != "unverified" and r["symbol"] not in out_]
