@@ -166,7 +166,8 @@ def test_us_company_facts_give_sbc_share_rpo_cover_and_growth_deferred_revenue_g
     got = S.us_figures(companyfacts())
     assert got.pop("_end") == "2026-01-31"
     v = {k: x["v"] for k, x in got.items()}
-    assert v == {"sbc_share": 23.0, "fcf_margin": 27.0, "rpo_cover": 2.0, "rpo_growth": 50.0, "deferred_growth": 25.0}
+    # changed on purpose (R27): capital spending as a share of revenue and in dollars too (a maker's own figures, metric_registry)
+    assert v == {"sbc_share": 23.0, "fcf_margin": 27.0, "rpo_cover": 2.0, "rpo_growth": 50.0, "deferred_growth": 25.0, "capex_share": 8.0, "capex": 80.0}
     assert got["sbc_share"]["period"] == "Fiscal year to Jan 2026" and got["rpo_growth"]["period"] == "Jul 2026 on Jul 2025"
     assert got["rpo_cover"]["period"] == "Jan 2026, over the fiscal year to Jan 2026"
     assert "SEC" in got["fcf_margin"]["source"]
@@ -256,7 +257,9 @@ def test_an_insurer_theme_shows_solvency_and_the_general_insurers_ratios_never_a
     region, m, f, pieces = insurer_theme()
     v, slides = deck_of(region, m, f, metrics=reader_of(pieces))
     fam = v["sections"]["sector"]["families"]["insurer"]
-    assert fam["n"] == 6 and fam["medians"]["solvency"]["n"] == 6 and fam["medians"]["combined_ratio"]["n"] == 3
+    # changed on purpose (R27): each type of insurer has its own medians; the family's own only of figures with one meaning across types
+    assert fam["n"] == 6 and fam["medians"]["solvency"]["n"] == 6 and "combined_ratio" not in fam["medians"]
+    assert fam["types"]["general"]["medians"]["combined_ratio"]["n"] == 3 and fam["types"]["life"]["medians"]["persistency_13"]["n"] == 3
     sector = table_of(slides, "Sector operating figures: insurers")
     assert {"Solvency ratio", "Claims ratio", "Combined ratio", "13th-month persistency"} <= set(sector["head"])
     rows = {r[0]: r for r in plain(sector["rows"])}

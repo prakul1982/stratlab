@@ -223,7 +223,7 @@ def test_the_contents_lists_the_notes_page_and_references_point_at_it():
 
 # ---------- 5. the version ----------
 def test_the_deck_version_is_25_so_kept_deck_files_are_made_again_once():
-    assert deck.THEME_DECK_VERSION == 25
+    assert deck.THEME_DECK_VERSION >= 25          # changed on purpose (R27): bumped again, to 27 (tests/test_r27_metrics.py)
 
 
 # ---------- 6. the live R24 decks: a layer's columns follow its family; notes name only the families shown ----------

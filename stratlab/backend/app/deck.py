@@ -265,7 +265,8 @@ def _month(iso) -> str:
 
 
 def _numeric(s) -> bool:
-    return isinstance(s, str) and bool(re.match(r"^[+\-–−₹$]?\s?[\d.,]+", s.strip())) or s == "–"
+    """A figure cell, or one of the states that stand in a figure's place (R27, metric_registry: "–", "n/a", "n.c."), so its column aligns right."""
+    return isinstance(s, str) and bool(re.match(r"^[+\-–−₹$]?\s?[\d.,]+", s.strip())) or s in ("–", "n/a", "n.c.")
 
 
 def _short_link(url: str) -> str:
@@ -1802,6 +1803,27 @@ def coverage_rows(v: dict, cov: dict) -> list[list[str]]:
     return rows
 
 
+def dominated(values) -> bool:
+    from .intel.metric_registry import dominated as d
+    return d(values)
+
+
+def growth_base_line(rows: list, amt, limit: int = 5) -> str:
+    """The companies whose revenue growth is unusual (metric_registry.is_extreme), each with its base as filed: "X +240% (from ₹50 cr to
+    ₹170 cr)"; no cause given (R27)."""
+    from .intel.metric_registry import GROWTH_EXTREME, SMALL_BASE, is_extreme, year_bases
+    based = [(r, year_bases(r)) for r in rows if r.get("sales_1y") is not None]
+    froms = sorted(b[0] for _, b in based if b and b[0] is not None)
+    mid = froms[len(froms) // 2] if froms else None
+    xs = [(r, b) for r, b in based if b and is_extreme(r["sales_1y"], b[0], mid)]
+    if not xs:
+        return ""
+    parts = [f"{r['name']} {_chg(r['sales_1y'])}, from {amt(b[0])} to {amt(b[1])}" for r, b in xs[:limit]]
+    return (f"Revenue growth above {GROWTH_EXTREME:.0f}% either way, or from a base under {SMALL_BASE * 100:.0f}% of the median company's, "
+            "with its base: " + "; ".join(parts)
+            + (f"; {len(xs) - limit} more" if len(xs) > limit else "") + ".")
+
+
 def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: date, chained: bool = True, lender: bool = False) -> None:
     """The findings up front: what the figures show (with page references), the data-confidence page and "Worth a watch". Every sentence is a
     computed fact from the view; no AI writes a figure here, and nothing says what to buy or what is cheap."""
@@ -1828,7 +1850,8 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
         cos = [c for c in x["companies"] if c.get("status") != "unverified" and not c.get("company_wide") and not c.get("model_out")]
         g = [c["sales_1y"] for c in cos if c.get("sales_1y") is not None]
         e = (x.get("stats") or {}).get(measure)
-        if g and e and e["n"] >= COMPARE_MIN:            # no finding on a base under 3 (R20), one floor for every comparison (R25)
+        # no finding on a base under 3 (R20), one floor for every comparison (R25); none whose growth is mostly unusual figures (R27)
+        if g and e and e["n"] >= COMPARE_MIN and not dominated(g):
             gm.append((x["layer"], _median(g), e["median"], len(g), len(cos)))
     f_ = _pc if lender else ebm
     pair = rank_pair(gm, lambda t: t[1], lambda t: t[3]) if chained else None
@@ -1934,7 +1957,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 25                  # part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 27                  # part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -2055,6 +2078,8 @@ def col_fmt(key: str, rng: bool = False):
 
 
 def co_cell(c: dict, key: str, amt) -> str:
+    if key in (c.get("nc") or ()):            # R27: on another basis than its table's (metric_registry: not comparable)
+        return "n.c."
     if key == "revenue":
         return amt(c.get("revenue"))
     if key == "ebitda":
@@ -2153,35 +2178,18 @@ def top_of(rows: list, value, count):
 NOTES_TITLE = "How the figures are built"
 # each figure a theme deck can show: (its name, what it measures and how it is worked out, its period and source, its limitation); facts about
 # the figure only, nothing on what a level of it means for a company (R25). Short, so a deck's figures fit one page.
-_YEAR_SRC = "Latest full year; annual accounts"
-_LAST_SRC = "Latest reported; annual accounts"
-METRIC_NOTES = {
-    "revenue": ("Revenue", "Sales of the year; a layer's is its companies' added together", _YEAR_SRC, "Consolidated where filed, else standalone"),
-    "sales_1y": ("Revenue growth", "Revenue over the year before's, less one; two consecutive full years only", _YEAR_SRC, "One year; deals and demergers move it"),
-    "ebitda": ("EBITDA margin", "Operating profit before depreciation, interest and tax, over revenue", _YEAR_SRC,
-               "None for banks, lenders, insurers; some file whole points"),
-    "net": ("Net margin", "Net profit over revenue; one above the EBITDA margin (†) is out of the median", _YEAR_SRC, "Moves with one-off items and tax"),
-    "roce": ("ROCE", "Operating profit before interest and tax over equity plus debt", _LAST_SRC, "None for banks, lenders, insurers"),
-    "roe": ("ROE", "Net profit over shareholders' equity", _LAST_SRC, "Debt raises it; lenders' and others' differ"),
-    "nii_assets": ("NII / assets", "Interest earned less interest paid, over average total assets", _YEAR_SRC, "Not the bank's own net interest margin"),
-    "gnpa": ("Gross NPA", "Gross non-performing assets over gross advances", "Latest quarter given; results", "One quarter's end"),
-    "nnpa": ("Net NPA", "Net non-performing assets over net advances", "Latest quarter given; results", "One quarter's end; after provisions"),
-    "deposit_growth": ("Deposit growth", "Deposits against a year before", "Reported balance sheets", "Two balance-sheet dates only"),
-    "pe": ("P/E", "Market value over net profit of the last four quarters", "Last close; last four quarters", "None for a loss-maker"),
-    "pb": ("P/B", "Market value over shareholders' equity", "Last close; latest balance sheet", "Book value at the balance-sheet date"),
-    "ev_ebitda": ("EV/EBITDA", "Market value plus debt less cash, over the year's EBITDA", "Last close; latest full year", "None for banks, lenders, insurers"),
-    "cap": ("Market value", "Price times shares in issue", "Last close", "Moves with the price every day"),
-}
-_FILED = {"bank": "Latest quarter; exchange filing", "insurer": "Latest period; exchange filing", "us": "Latest fiscal year; SEC filing"}
-_FILED_LIMIT = {"bank": "As filed; standalone", "insurer": "As filed; life and general differ", "us": "One fiscal year; US filers only"}
-_SECTOR_LIMIT = {"cet1": "Core capital only; no total capital ratio filed", "roa_f": "Annualised from the year to date",
-                 "credit_cost": "Annualised from the year to date", "sbc_share": "No cash cost in the year", "fcf_margin": "One fiscal year",
-                 "rpo_cover": "Contracts can be cancelled", "claims_ratio": "General insurers only", "combined_ratio": "General insurers; no investment income",
-                 "persistency_13": "Life insurers only"}
+# R27: read from the one registry of figures (intel/metric_registry.py: definition, period and source, limitation), never written twice
+def _registry_notes() -> dict:
+    from .intel.metric_registry import METRICS
+    return {m.id: (m.label, m.definition, m.source, m.limit) for m in METRICS if not m.group}
+
+
+METRIC_NOTES = _registry_notes()
 _NOTE_LABELS = {"Revenue": "revenue", "Growth": "sales_1y", "Revenue growth, 1 year": "sales_1y", "EBITDA margin": "ebitda", "EBITDA": "ebitda",
                 "Net margin": "net", "Net": "net", "ROCE": "roce", "ROE": "roe", "NII / assets": "nii_assets", "Gross NPA": "gnpa", "GNPA": "gnpa",
                 "Net NPA": "nnpa", "Deposit growth": "deposit_growth", "P/E": "pe", "P/B": "pb", "EV/EBITDA": "ev_ebitda", "Market value": "cap",
-                "Solvency": "solvency", "Combined ratio": "combined_ratio", "SBC / revenue": "sbc_share", "FCF margin": "fcf_margin"}
+                "Solvency": "solvency", "Combined ratio": "combined_ratio", "SBC / revenue": "sbc_share", "FCF margin": "fcf_margin",
+                "Capex / revenue": "capex_share", "Inventory days": "inventory_days", "R&D / revenue": "rd_share"}
 _NOTE_ORDER = ("revenue", "sales_1y", "ebitda", "net", "roce", "roe", "nii_assets", "gnpa", "nnpa", "deposit_growth", "pe", "pb", "ev_ebitda", "cap")
 
 
@@ -2189,7 +2197,8 @@ def shown_metrics(slides: list) -> list[str]:
     """The figures a deck shows, by key, in one order: from its tables' headings and first column (a measure's row), its charts' titles and its
     tiles (R25: the notes page explains only these). A sector page's columns are its family's filed figures; a filed figure takes the place of the
     page's own of the same name (one number per metric)."""
-    from .intel.sector_metrics import BY_KEY
+    from .intel.metric_registry import METRICS
+    BY_KEY = {m.id: (m.id, m.label) for m in METRICS if m.group}
     by_label = {m[1]: k for k, m in BY_KEY.items()}
     got = []
 
@@ -2231,20 +2240,11 @@ _NO_FINANCIALS = {"ebitda": "Some companies file whole points", "roce": "Latest 
 
 
 def metric_note_rows(keys: list[str], financials: bool = True) -> list[list[str]]:
-    """The notes page's rows for these figures: name, what it measures and how it is worked out, its period and source, its limitation (R25);
-    `financials`: whether the deck has a bank, lender or insurer (else no limitation names them)."""
-    from .intel.sector_metrics import BY_KEY
-    rows = []
-    for k in keys:
-        if k in METRIC_NOTES:
-            row = list(METRIC_NOTES[k])
-            if not financials and k in _NO_FINANCIALS:
-                row[3] = _NO_FINANCIALS[k]
-            rows.append(row)
-        elif k in BY_KEY:
-            _, name, fam, _, how = BY_KEY[k]
-            rows.append([name, how.rstrip("."), _FILED.get(fam, "As filed"), _SECTOR_LIMIT.get(k, _FILED_LIMIT.get(fam, "As filed"))])
-    return rows
+    """The notes page's rows for these figures: name, what it measures and how it is worked out, its period and source, its limitation (R25),
+    each read from the registry of figures (R27: metric_registry, one source of truth); `financials`: whether the deck has a bank, lender or
+    insurer (else no limitation names them)."""
+    from .intel.metric_registry import BY_ID, note_row
+    return [note_row(k, financials, _NO_FINANCIALS) for k in keys if k in BY_ID]
 
 
 def notes_slides(slides: list, eyebrow: str, financials: bool = True) -> list[Slide]:
@@ -2618,6 +2618,9 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             fparts.append(lo_note)
         if any(c.get("one_off") for c in cos):
             fparts.append(f"{ONE_OFF}: net margin above the EBITDA margin, so a one-off gain is in it; left out of the net margin's median.")
+        if any(c.get("nc") for c in cos):
+            fparts.append("n.c.: not comparable, the figure is on another basis than the rest of its column (latest full year against filed "
+                          "results annualised), so it is left out of the median.")
         chh = min(1.75, card_height(card, CW)) if card else 0.0
         below = TOP + (chh + 0.2 if card else 0)
         rest_h = REST_H if len(body) > 1 else 0
@@ -2731,6 +2734,10 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
                 + (" (whole company): whole-company figures." if wide else "")
                 + (f" {ONE_OFF} a one-off gain in the net margin." if any(x.get("one_off") for x in lead) else "")
                 + (f" No reported figures yet: {names5(bare)}." if bare else ""))
+        full = {c["symbol"]: c for x in layers for c in x.get("companies") or []}          # the layers' rows carry each company's years
+        gb = growth_base_line([{**full.get(x["symbol"], {}), **x} for x in lead], amt)
+        if gb:
+            note += " " + gb
         nh = note_h(note)
         th = BOT - TOP - nh - 0.07
         cbase = {"compact": True}
@@ -3019,48 +3026,80 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
             slides.append(s)
 
 
-# ---------- R23: each sector's own operating figures, as filed ----------
+# ---------- R23: each sector's own operating figures, as filed; R27: whom each applies to (metric_registry) ----------
 SECTOR_TITLE = "Sector operating figures"
 SECTOR_LEAD = {"bank": ("gnpa_f", "cet1", "advances_growth", "credit_cost"), "insurer": ("solvency", "combined_ratio", "claims_ratio", "persistency_13"),
-               "us": ("sbc_share", "fcf_margin", "rpo_growth", "deferred_growth")}
-SECTOR_PAGE = {"bank": "banks", "insurer": "insurers", "us": "US companies"}
-SECTOR_WHO = {"bank": ("bank", "banks"), "insurer": ("insurer", "insurers"), "us": ("company", "companies")}
+               "us": ("sbc_share", "fcf_margin", "capex_share", "rd_share", "inventory_days", "rpo_growth", "deferred_growth")}
+SECTOR_PAGE = {"bank": "banks", "insurer": "insurers", "us": "US companies", "orders": "order books"}
+SECTOR_WHO = {"bank": ("bank", "banks"), "insurer": ("insurer", "insurers"), "us": ("company", "companies"), "orders": ("company", "companies")}
+_SHORT = {"npa": "NPA", "cet1": "CET1", "sbc": "SBC", "rpo": "RPO", "fcf": "FCF", "r&d": "R&D", "nii": "NII", "vnb": "VNB"}
 
 
 def sector_fmt(key: str, amt=None):
-    """How one filed sector figure prints: a share in %, a change signed, a ratio in times, an amount in the theme's money."""
-    from .intel.sector_metrics import BY_KEY
-    kind = BY_KEY[key][3]
+    """How one filed sector figure prints: a share in %, a change signed, a ratio in times, days whole, an amount in the theme's money."""
+    from .intel.metric_registry import BY_ID
+    kind = BY_ID[key].unit
     if kind == "chg":
         return _chg
     if kind == "x":
         return lambda x: _times(x, 2)
+    if kind == "days":
+        return lambda x: f"{x:,.0f} days"
     if kind == "amt":
         return amt or (lambda x: f"{x:,.0f}")
     return _pc
 
 
+def _low(label: str) -> str:
+    return " ".join(_SHORT.get(w.lower(), w.lower()) for w in label.split())
+
+
+def _med_of(st: dict, fmt) -> str:
+    """A headline median with its base: "4.6% (52 of 53)" when fewer than the companies it applies to have it (R27: M is those it applies to)."""
+    return fmt(st["median"]) + (f" ({st['n']} of {st['of']})" if st.get("of") and st["n"] < st["of"] else "")
+
+
+def _lead_keys(fam: str, f: dict) -> list[str]:
+    """The figures a family's findings line may state: those the registry lets headline (metric_registry.headline_ok), lead figures first;
+    a family summary made before R27 (no "headline") its lead figures."""
+    if "headline" not in f:
+        return list(SECTOR_LEAD.get(fam, ()))
+    ok = set(f.get("headline") or ())
+    return [k for k in SECTOR_LEAD.get(fam, ()) if k in ok] + [k for k in f.get("keys") or () if k in ok and k not in SECTOR_LEAD.get(fam, ())]
+
+
 def sector_lines(sec: dict) -> list[str]:
-    """The findings' lines for the sector figures: for each family, the medians of its lead figures over at least MIN_BASE companies (R20)."""
-    from .intel.sector_metrics import BY_KEY
+    """The findings' lines for the sector figures: for each family, the medians of its headline figures over at least MIN_BASE companies (R20),
+    each "N of M" of the companies it applies to (R27); insurers by type, never one median across types."""
+    from .intel.metric_registry import BY_ID
+    from .intel.sector_metrics import TYPE_NAMES
     out = []
     for fam, f in ((sec.get("sector") or {}).get("families") or {}).items():
-        parts = []
-        for k in SECTOR_LEAD.get(fam, ()):
-            st = (f.get("medians") or {}).get(k)
-            if st and st.get("n", 0) >= MIN_BASE:
-                parts.append(f"{BY_KEY[k][1].lower().replace('npa', 'NPA').replace('cet1', 'CET1').replace('sbc', 'SBC').replace('rpo', 'RPO').replace('fcf', 'FCF')} "
-                             f"{sector_fmt(k)(st['median'])}" + (f" ({st['n']} of {f['n']})" if st["n"] < f["n"] else ""))
-        if parts:
-            one, many = SECTOR_WHO[fam]
-            out.append(f"Median of the {_n(f['n'], one, many)} with filed figures: {', '.join(parts[:4])}.")
+        groups = [(fam, f, SECTOR_WHO[fam])]
+        if fam == "insurer" and len(f.get("types") or {}) > 1:
+            groups = [(fam, t, TYPE_NAMES[k]) for k, t in f["types"].items()]
+        for fam_, g, (one, many) in groups:
+            parts = []
+            for k in _lead_keys(fam_, g):
+                st = (g.get("medians") or {}).get(k)
+                if st and st.get("n", 0) >= MIN_BASE and st.get("median") is not None:
+                    st = {**st, "of": st.get("of") or g.get("n")}
+                    parts.append(f"{_low(BY_ID[k].label)} {_med_of(st, sector_fmt(k))}")
+            if parts:
+                out.append(f"Median of the {_n(g['n'], one, many)} with filed figures: {', '.join(parts[:4])}.")
     return out
 
 
 def sector_questions(sec: dict) -> list[str]:
-    """Questions the filed sector figures raise, each with its computed medians (facts and questions only; asked only when the figures exist)."""
+    """Questions the filed sector figures raise, each with its computed medians (facts and questions only; asked only when the figures exist
+    and may headline: R27, never RPO for chip makers)."""
     fams = (sec.get("sector") or {}).get("families") or {}
-    med = lambda f, k: (f.get("medians") or {}).get(k) if ((f.get("medians") or {}).get(k) or {}).get("n", 0) >= MIN_BASE else None    # noqa: E731
+
+    def med(f, k):
+        st = (f.get("medians") or {}).get(k) or {}
+        if st.get("n", 0) < MIN_BASE or ("headline" in f and k not in (f.get("headline") or ())):
+            return None
+        return st
     out = []
     b = fams.get("bank") or {}
     a, d = med(b, "advances_growth"), med(b, "deposit_growth_f")
@@ -3068,6 +3107,7 @@ def sector_questions(sec: dict) -> list[str]:
         out.append(f"Median advances growth {_chg(a['median'])} ({a['n']} banks) against median deposit growth {_chg(d['median'])} ({d['n']}), each on a "
                    "year before. Where does the rest of the lending's funding come from, or go? The figures show the two rates, not the funding mix.")
     i = fams.get("insurer") or {}
+    i = ((i.get("types") or {}).get("general") or i) if len(i.get("types") or {}) > 1 else i
     c, cl = med(i, "combined_ratio"), med(i, "claims_ratio")
     if c and cl:
         out.append(f"Median combined ratio {_pc(c['median'])} and claims ratio {_pc(cl['median'])} ({c['n']} general insurers). How much of the "
@@ -3080,42 +3120,141 @@ def sector_questions(sec: dict) -> list[str]:
     return out
 
 
+def _state_cell(r: dict, k: str, state: str | None, fmt) -> str:
+    """A company's cell for one figure in its state (metric_registry): the value, "–" unavailable, "n/a" not applicable, "n.c." not comparable."""
+    from .intel.metric_registry import MARK, VALUE
+    if state is None:
+        return fmt(r[k]) if r.get(k) is not None else "–"
+    return fmt(r[k]) if state == VALUE else MARK[state]
+
+
+def _amount(v, unit) -> str:
+    """A base amount as filed, in its unit: "₹1,234 cr", "USD 5,600 million"."""
+    if v is None:
+        return "–"
+    if unit == "₹ crore":
+        return f"₹{v:,.0f} cr"
+    if str(unit or "").endswith(" million"):
+        cur = unit.split()[0]
+        return f"{'$' if cur == 'USD' else cur + ' '}{v:,.0f} m"
+    return f"{v:,.0f}" + (f" {unit}" if unit else "")
+
+
+def extreme_line(f: dict, limit: int = 4) -> str:
+    """The unusual growth figures of a family, each with its base said as filed ("from ₹X cr to ₹Y cr"); no cause given (R27)."""
+    from .intel.metric_registry import GROWTH_EXTREME
+    from .intel.metric_registry import BY_ID
+    xs = f.get("extreme") or []
+    if not xs:
+        return ""
+    parts = [f"{x['name']}, {_low(BY_ID[x['key']].label)} {_chg(x['v'])}" + (f", from {_amount(x['base'][0], x.get('unit'))} to {_amount(x['base'][1], x.get('unit'))}"
+                                                                           if x.get("base") else "") for x in xs[:limit]]
+    more = f"; {len(xs) - limit} more in the table" if len(xs) > limit else ""
+    return (f"Unusual growth (above {GROWTH_EXTREME:.0f}% either way, or from a small base), with its base: " + "; ".join(parts) + more
+            + ". Kept out of the headline when it makes up a third of a figure's values.")
+
+
+def order_family(v: dict) -> dict | None:
+    """India defence and capital goods: the order book and order inflow, only where a company's own business update the app read states them
+    (metric_registry.orders_from_business), with their periods; never a forecast from them. None when no company's update states one."""
+    from .intel import metric_registry as R
+    from .intel.theme_data import stat
+    if v.get("region") != "IN":
+        return None
+    got = R.orders_from_business(v.get("business"))
+    cos = {c["symbol"]: c for x in v.get("layers") or [] for c in x.get("companies") or [] if c.get("status") != "unverified"}
+    rows, tagsets = [], []
+    for sym, figs in got.items():
+        c = cos.get(sym)
+        if c is None:
+            continue
+        t = R.tags("IN", c, ((next((x for x in v["layers"] if any(y["symbol"] == sym for y in x.get("companies") or [])), {}).get("model") or {}).get("family")))
+        if not any(R.applies(k, "IN", t) for k in figs):
+            continue
+        rows.append({"symbol": sym, "name": c.get("name") or sym, "as_of": next(iter(figs.values()))["period"], **{k: x["v"] for k, x in figs.items()},
+                     "src": {k: {"period": x["period"], "source": x["source"]} for k, x in figs.items()}})
+        tagsets.append(t)
+    keys = [k for k in ("order_book", "order_inflow") if any(r.get(k) is not None for r in rows)]
+    if not rows or not keys:
+        return None
+    sts = {k: R.states(k, "IN", rows, tagsets) for k in keys}
+    return {"keys": keys, "rows": rows, "n": len(rows), "of": len(rows), "states": sts, "headline": [],
+            "medians": {k: R.coverage([r.get(k) for r in rows], sts[k], stat) for k in keys},
+            "checked": "the business updates the companies file with the exchange, as the app read them",
+            "not_filed": "a company whose update doesn't state its order book or inflow has none here; no figure is worked out from another"}
+
+
 def _sector_slides(slides: list, v: dict, amt, eyebrow: str) -> None:
-    """A page for each family's filed operating figures (R23): every company's figures with the period they are for, the median of each over
-    the companies that have it (none under MIN_BASE), and how each is worked out, where it is from and what the filings don't state."""
-    from .intel.sector_metrics import BY_KEY
+    """A page for each family's filed operating figures (R23): every company's figures in their state (R27: value, "–", "n/a", "n.c.", one
+    legend line), the median of each over the companies that have it with "N of M" the companies it applies to (none under MIN_BASE), insurers'
+    medians by type, unusual growth with its base, and how each is worked out, where it is from and what the filings don't state."""
+    from .intel.metric_registry import LEGEND
+    from .intel.metric_registry import BY_ID
+    from .intel.sector_metrics import TYPE_NAMES
     sec = (v.get("sections") or {}).get("sector") or {}
-    for fam, f in (sec.get("families") or {}).items():
+    fams = dict(sec.get("families") or {})
+    orders = order_family(v)
+    if orders:
+        fams["orders"] = orders
+    for fam, f in fams.items():
         keys = list(f.get("keys") or [])
         if not keys or not f.get("rows"):
             continue
         fmts = {k: sector_fmt(k, amt) for k in keys}
-        head = ["Company"] + [BY_KEY[k][1] for k in keys] + ["Period"]
-        widths = [2.6] + [1.05] * len(keys) + [1.15]
-        body = [[r["name"]] + [fmts[k](r[k]) if r.get(k) is not None else "–" for k in keys] + [r.get("as_of") or "–"]
-                for r in sorted(f["rows"], key=lambda r: r.get("name") or "")]
-        meds = f.get("medians") or {}
-        med_row = ["Median (companies)"] + [_medn(meds.get(k), f["n"], fmts[k]) for k in keys] + [""]
-        head, every, widths, _ = drop_empty(head, body + [med_row], widths)
-        body, tail = every[:-1], every[-1:]
+        sts = f.get("states") or {}
+        order = sorted(range(len(f["rows"])), key=lambda i: (f["rows"][i].get("type") or "", f["rows"][i].get("name") or ""))
+        typed = fam == "insurer" and len(f.get("types") or {}) > 1
+        head = ["Company"] + (["Type"] if typed else []) + [BY_ID[k].label for k in keys] + ["Period"]
+        widths = [2.6 if len(keys) < 8 else 2.3] + ([1.1] if typed else []) + [1.05 if len(keys) < 8 else 0.95] * len(keys) + [1.15 if len(keys) < 8 else 1.35]
+        body = [[f["rows"][i]["name"]] + ([f["rows"][i].get("type", "").capitalize()] if typed else [])
+                + [_state_cell(f["rows"][i], k, (sts.get(k) or [None] * len(f["rows"]))[i], fmts[k]) for k in keys] + [f["rows"][i].get("as_of") or "–"]
+                for i in order]
+
+        def med_row(label, g, gkeys):
+            meds = g.get("medians") or {}
+            cells = [_medn(meds.get(k), (meds.get(k) or {}).get("of") or g.get("n"), fmts[k]) if k in gkeys and meds.get(k) else "" for k in keys]
+            return [label] + ([""] if typed else []) + cells + [""]
+        if typed:
+            tail = [med_row(f"Median, {TYPE_NAMES[t][1]} (companies)", g, g.get("keys") or ()) for t, g in f["types"].items()]
+        elif fam == "orders":       # each company's own stated amount: no median across companies of different sizes
+            tail = []
+        else:
+            tail = [med_row("Median (companies)", f, keys)]
+        head, every, widths, _ = drop_empty(head, body + tail, widths)
+        body, tail = every[:len(body)], every[len(body):]
         one, many = SECTOR_WHO[fam]
         lead = sector_lines({"sector": {"families": {fam: f}}})
-        msg = (lead[0].rstrip(".") if lead else f"{_n(f['n'], one, many)} with filed figures") + (f"; {f['of'] - f['n']} more without" if f.get("of", 0) > f["n"] else "")
+        if fam == "orders":
+            msg = f"{_n(f['n'], one, many)} whose own business update states an order figure, each with its period"
+        else:
+            msg = ((lead[0].rstrip(".") if len(lead) == 1 else f"{_n(f['n'], one, many)} with filed figures, each type's medians apart") if lead
+                   else f"{_n(f['n'], one, many)} with filed figures") + (f"; {f['of'] - f['n']} more without" if f.get("of", 0) > f["n"] else "")
+        shown = {c for r in body for c in r[1:] if isinstance(c, str)}
+        legend = LEGEND if shown & {"n/a", "n.c."} else ""
+        ext = extreme_line(f)
         note = (f"From {f['checked']}, each company's latest; the period is the latest it covers; how each figure is worked out: ⟦{NOTES_TITLE}⟧."
                 + (f" Not shown: {f['not_filed']}." if f.get("not_filed") else "")
-                + f" Medians: the companies that have the figure, the count in brackets when fewer than the {f['n']}; none under {MIN_BASE}.")
+                + ((" Medians: the companies that have the figure, the count in brackets when fewer than those it applies to"
+                    + (", each type of insurer on its own" if typed else "") + f"; none under {MIN_BASE}.") if tail else "")
+                + (f" {legend}" if legend else "") + (f" {ext}" if ext else ""))
         nh = note_h(note)
         room = BOT - TOP - nh - 0.15
         compact = len(body) > 10    # a long family: one line a company, so a page holds them (no half-empty second page)
         pages = table_pages(head, body + tail, widths, CW, room, most=26, compact=compact)
-        if len(pages) > 1:          # the median row stays at the foot of the last page
-            pages = table_pages(head, body, widths, CW, room - 0.45, most=26, compact=compact)
-            pages[-1] = pages[-1] + tail
+        if len(pages) > 1:          # the median rows stay together at the foot of the last page, every other page full
+            fits = lambda rows_: sum(table_layout({"head": head, "rows": rows_, "widths": widths, "tight": True, "compact": compact}, CW, 99)["heights"]) <= room  # noqa: E731
+            pages = table_pages(head, body, widths, CW, room, most=26, compact=compact)
+            last = pages[-1]
+            if fits(last + tail):
+                pages[-1] = last + tail
+            else:                   # the fewest rows carried over with the medians, so the page before stays full
+                m_ = next((m_ for m_ in range(1, len(last)) if fits(last[-m_:] + tail)), max(1, len(last) - 1))
+                pages[-1:] = [last[:-m_], last[-m_:] + tail]
         for k_, chunk in enumerate(pages):
             s = Slide(f"{SECTOR_TITLE}: {SECTOR_PAGE[fam]}" + (f" ({k_ + 1} of {len(pages)})" if len(pages) > 1 else ""), msg, eyebrow=eyebrow)
             th = min(room, sum(table_layout({"head": head, "rows": chunk, "widths": widths, "tight": True, "compact": compact}, CW, 99)["heights"]))
             s.add("table", (M, TOP, CW, th), head=head, rows=chunk, widths=widths, tight=True, compact=compact,
-                  strong=[i for i, r in enumerate(chunk) if r is tail[0]])
+                  strong=[i for i, r in enumerate(chunk) if any(r is t for t in tail)])
             s.add("text", (M, BOT - nh, CW, nh), paras=[note], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
             slides.append(s)
 

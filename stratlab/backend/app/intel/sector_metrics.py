@@ -14,6 +14,9 @@ Three families, each from filings the app can read cheaply, each figure with its
 - US companies outside finance: the SEC's company facts the app already reads: stock-based compensation as a share of revenue, remaining
   performance obligations (RPO) over the year's revenue and their growth on a year before, deferred revenue on the year before, and free cash
   flow (cash from operations less capital spending) as a share of revenue, each for the latest fiscal year (RPO: the latest date filed).
+R27: whom each figure applies to, its four states and the headline rule are metric_registry's; banks' net interest income over average assets
+from the same half-year filings (never called NIM); US makers' capital spending (and its share of revenue), inventory days and R&D over revenue;
+a growth figure keeps its base (from, to) so an unusual one can say it; insurers are summarised by type (life, general, health, reinsurance).
 Indian IT services companies' headcount and attrition aren't in any filing the app reads, so that family has none.
 
 Each company's figures are read once and kept in the shared store (computed.py, kind "sector:metrics"), served until a theme's Refresh. A
@@ -26,9 +29,11 @@ from datetime import date, datetime
 from xml.etree import ElementTree
 
 from .. import computed
+from . import metric_registry as registry
 
 KIND = "sector:metrics"
-VERSION = 1                     # part of a stored piece's key and of a dive's: figures read under older rules are read again
+VERSION = 2                     # part of a stored piece's key and of a dive's: figures read under older rules are read again (R27: NII / assets,
+                                # capex, inventory days, R&D, the bases of growth figures)
 BUDGET = 20.0                   # seconds of reading a theme's build may spend on filings before the rest go to the worker
 MAX_QUEUE = 200
 PAUSE = 1.0                     # seconds between documents from the exchange's archive (shareholders.py's pace)
@@ -37,37 +42,13 @@ REFERER = "https://www.nseindia.com/companies-listing/corporate-integrated-filin
 CRORE = 1e7
 FAMILIES = ("bank", "insurer", "us")
 FAMILY_NAMES = {"bank": "Banks", "insurer": "Insurers", "us": "US companies"}
-# every figure: (key, label, family, format, how it is worked out). Formats: pct (a share, %), chg (a change, %), x (times)
-METRICS = (
-    ("gnpa_f", "Gross NPA", "bank", "pct", "Gross non-performing assets as a share of gross advances, as filed for the quarter's end."),
-    ("nnpa_f", "Net NPA", "bank", "pct", "Net non-performing assets as a share of net advances, as filed for the quarter's end."),
-    ("cet1", "CET1 ratio", "bank", "pct", "Common equity tier 1 capital over risk-weighted assets, as filed (the filing has no total capital adequacy ratio)."),
-    ("roa_f", "ROA", "bank", "pct", "Net profit for the year to date, annualised, over the average of total assets at the period's end and a year earlier "
-                                    "(banks file their own ROA on different bases, some annualised and some not)."),
-    ("nii_q", "NII, quarter", "bank", "amt", "Net interest income: interest earned less interest expended in the quarter."),
-    ("nii_growth_f", "NII growth", "bank", "chg", "Net interest income against the same quarter a year before."),
-    ("advances_growth", "Advances growth", "bank", "chg", "Advances against a year before, from the half-year balance sheets."),
-    ("deposit_growth_f", "Deposit growth", "bank", "chg", "Deposits against a year before, from the half-year balance sheets."),
-    ("credit_cost", "Credit cost", "bank", "pct", "Provisions other than tax for the year to date, annualised, over the average of advances at the "
-                                                  "period's end and a year earlier."),
-    ("nim", "NIM", "bank", "pct", "Net interest margin, as the filing states it."),
-    ("casa", "CASA", "bank", "pct", "Current and savings deposits as a share of deposits, as the filing states it."),
-    ("solvency", "Solvency ratio", "insurer", "x", "Available over required solvency margin, as filed for the quarter's end."),
-    ("claims_ratio", "Claims ratio", "insurer", "pct", "Incurred claims over net premium earned, as filed for the year to date (general insurers)."),
-    ("combined_ratio", "Combined ratio", "insurer", "pct", "Claims, commission and expenses over premium, as filed for the year to date (general insurers)."),
-    ("persistency_13", "13th-month persistency", "insurer", "pct", "Policies still paying premium in their 13th month, as filed for the year to date (life insurers)."),
-    ("premium_growth", "Premium growth", "insurer", "chg", "Gross premium against the same quarter a year before."),
-    ("vnb_margin", "VNB margin", "insurer", "pct", "Value of new business over annualised premium equivalent, as the filing states it."),
-    ("sbc_share", "SBC / revenue", "us", "pct", "Stock-based compensation over revenue, the latest fiscal year."),
-    ("rpo_cover", "RPO / revenue", "us", "x", "Remaining performance obligations at the latest date filed, over the latest fiscal year's revenue."),
-    ("rpo_growth", "RPO growth", "us", "chg", "Remaining performance obligations against a year before."),
-    ("deferred_growth", "Deferred revenue growth", "us", "chg", "Deferred revenue (contract liabilities) at the fiscal year's end against a year before."),
-    ("fcf_margin", "FCF margin", "us", "pct", "Free cash flow (cash from operations less capital spending) over revenue, the latest fiscal year."),
-)
+# every figure: (key, label, family, format, how it is worked out), from the one registry of figures (R27: metric_registry, which also says
+# whom each applies to, its period, source and limitation). Formats: pct (a share, %), chg (a change, %), x (times), amt (money), days
+METRICS = tuple((m.id, m.label, m.group, m.unit, m.definition + ".") for m in registry.METRICS if m.group in FAMILIES)
 KEYS = tuple(m[0] for m in METRICS)
 BY_KEY = {m[0]: m for m in METRICS}
 # the filed figure that replaces the page tables' own when a filing gives it (R22: one number per metric wherever it is shown)
-REPLACES = {"gnpa_f": "gnpa", "nnpa_f": "nnpa", "nii_growth_f": "nii_growth", "deposit_growth_f": "deposit_growth"}
+REPLACES = {"gnpa_f": "gnpa", "nnpa_f": "nnpa", "nii_growth_f": "nii_growth", "deposit_growth_f": "deposit_growth", "nii_assets_f": "nii_assets"}
 # what each family's figures were looked for in, for the notes and the report (the sources checked)
 CHECKED = {"bank": "the quarterly results filed with the exchange (banking format)",
            "insurer": "the quarterly results filed with the exchange (life and general insurance formats)",
@@ -197,8 +178,19 @@ def _find(p: dict, part: str, pat: str):
     return next((v for k, v in (p.get(part) or {}).items() if rx.search(k)), None)
 
 
-def _fig(v, period: str, source: str) -> dict | None:
-    return None if v is None else {"v": v, "period": period, "source": source}
+def _fig(v, period: str, source: str, base: tuple | None = None, unit: str = "") -> dict | None:
+    """One figure with its period and source; a growth figure with its `base` (from, to) in `unit` (R27: an unusual growth says its base)."""
+    if v is None:
+        return None
+    out = {"v": v, "period": period, "source": source}
+    if base and None not in base:
+        out["base"] = [round(base[0], 1), round(base[1], 1)]
+        out["unit"] = unit
+    return out
+
+
+def _cr(v):
+    return None if v is None else v / CRORE
 
 
 def bank_figures(cur: dict, ago: dict | None = None, half: dict | None = None, half_ago: dict | None = None, filed: str = "") -> dict:
@@ -215,12 +207,14 @@ def bank_figures(cur: dict, ago: dict | None = None, half: dict | None = None, h
     if ago and nii is not None:
         a = ago["q"]
         before = (a["InterestEarned"] - a["InterestExpended"]) if a.get("InterestEarned") is not None and a.get("InterestExpended") is not None else None
-        out["nii_growth_f"] = _fig(_growth(nii, before), f"Quarter to {end} on {_label(ago['end'])}", src)
+        out["nii_growth_f"] = _fig(_growth(nii, before), f"Quarter to {end} on {_label(ago['end'])}", src, (_cr(before), _cr(nii)), "₹ crore")
     h, h0 = (cur, ago) if cur.get("at", {}).get("Advances") else (half, half_ago)
     if h and h0 and h.get("at") and h0.get("at"):
         hl = f"{_label(h['end'])} on {_label(h0['end'])}"
-        out["advances_growth"] = _fig(_growth(h["at"].get("Advances"), h0["at"].get("Advances")), hl, src)
-        out["deposit_growth_f"] = _fig(_growth(h["at"].get("Deposits"), h0["at"].get("Deposits")), hl, src)
+        out["advances_growth"] = _fig(_growth(h["at"].get("Advances"), h0["at"].get("Advances")), hl, src,
+                                      (_cr(h0["at"].get("Advances")), _cr(h["at"].get("Advances"))), "₹ crore")
+        out["deposit_growth_f"] = _fig(_growth(h["at"].get("Deposits"), h0["at"].get("Deposits")), hl, src,
+                                       (_cr(h0["at"].get("Deposits")), _cr(h["at"].get("Deposits"))), "₹ crore")
         adv = [x for x in (h["at"].get("Advances"), h0["at"].get("Advances")) if x]
         prov = h["ytd"].get("ProvisionsOtherThanTaxAndContingencies")
         assets = [x for x in (h["at"].get("Assets"), h0["at"].get("Assets")) if x]
@@ -228,6 +222,12 @@ def bank_figures(cur: dict, ago: dict | None = None, half: dict | None = None, h
         if len(assets) == 2 and profit is not None:
             hm = _months(h)
             out["roa_f"] = _fig(_within(round(profit * 12 / hm / (sum(assets) / 2) * 100, 2), -10, 10), f"{hm} months to {_label(h['end'])}, annualised", src)
+        # R27: net interest income over average assets from the same filings (the live R26 Banks deck had "–" for most banks' NII / assets: the
+        # stored pages' annual tables often lack it, the filings read here carry it); never called a net interest margin
+        ie, ix = h["ytd"].get("InterestEarned"), h["ytd"].get("InterestExpended")
+        if len(assets) == 2 and ie is not None and ix is not None:
+            hm = _months(h)
+            out["nii_assets_f"] = _fig(_within(round((ie - ix) * 12 / hm / (sum(assets) / 2) * 100, 2), 0, 15), f"{hm} months to {_label(h['end'])}, annualised", src)
         if len(adv) == 2 and prov is not None:
             hm = _months(h)
             out["credit_cost"] = _fig(_within(round(prov * 12 / hm / (sum(adv) / 2) * 100, 2), -5, 20), f"{hm} months to {_label(h['end'])}, annualised", src)
@@ -255,7 +255,7 @@ def insurer_figures(cur: dict, ago: dict | None = None, kind: str = "", filed: s
            "persistency_13": _fig(_within(_ratio(ytd.get("PersistencyRatio13ThMonth")), 0, 100), ytd_l, src)}
     gross = lambda p: p["q"].get("GrossPremiumIncome", p["q"].get("GrossPremiumsWritten"))     # noqa: E731
     if ago:
-        out["premium_growth"] = _fig(_growth(gross(cur), gross(ago)), f"Quarter to {end} on {_label(ago['end'])}", src)
+        out["premium_growth"] = _fig(_growth(gross(cur), gross(ago)), f"Quarter to {end} on {_label(ago['end'])}", src, (_cr(gross(ago)), _cr(gross(cur))), "₹ crore")
     vnb = _find(cur, "ytd", r"valueofnewbusiness(?!.*amount)")
     ape = _find(cur, "ytd", r"annuali[sz]edpremiumequivalent")
     margin = _find(cur, "ytd", r"vnbmargin|newbusinessmargin")
@@ -350,6 +350,9 @@ CAPEX = ("PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProduct
 RPO = ("RevenueRemainingPerformanceObligation",)
 DEFERRED = ("ContractWithCustomerLiability", "DeferredRevenue")
 DEFERRED_PARTS = (("ContractWithCustomerLiabilityCurrent", "ContractWithCustomerLiabilityNoncurrent"), ("DeferredRevenueCurrent", "DeferredRevenueNoncurrent"))
+INVENTORY = ("InventoryNet", "InventoryGross")
+RD = ("ResearchAndDevelopmentExpense", "ResearchAndDevelopmentExpenseExcludingAcquiredInProcessCost")
+MILLION = 1e6
 
 
 def us_figures(facts: dict) -> dict:
@@ -371,6 +374,17 @@ def us_figures(facts: dict) -> dict:
     out["sbc_share"] = _fig(_within(share(sbc), 0, 200), fy, src)
     cfo, capex = sec.flows(facts, CFO, "annual", unit).get(end), sec.flows(facts, CAPEX, "annual", unit).get(end)
     out["fcf_margin"] = _fig(_within(share(cfo - abs(capex)) if cfo is not None and capex is not None else None, -500, 200), fy, src)
+    # R27: a maker's own figures (semiconductors and hardware): capital spending, inventory days, R&D; each only where filed
+    if capex is not None:
+        out["capex_share"] = _fig(_within(share(abs(capex)), 0, 300), fy, src)
+        if unit == "USD":                   # an amount only in the theme's currency (a share needs none)
+            out["capex"] = _fig(round(abs(capex) / MILLION, 1), fy, src)
+    cost = sec.flows(facts, sec.COST_OF_SALES, "annual", unit).get(end)
+    inv = sec.instants(facts, INVENTORY, unit).get(end)
+    if cost and cost > 0 and inv is not None and inv >= 0:
+        out["inventory_days"] = _fig(_within(round(inv / cost * 365), 0, 2000), f"{_label(end)}, over the fiscal year to {_label(end)}", src)
+    rd = sec.flows(facts, RD, "annual", unit).get(end)
+    out["rd_share"] = _fig(_within(share(rd), 0, 300), fy, src)
     rpo = sec.instants(facts, RPO, unit)
     if rpo:
         last = max(rpo)
@@ -379,7 +393,8 @@ def us_figures(facts: dict) -> dict:
                                 f"{_label(at)}, over the fiscal year to {_label(end)}", "Filed with the SEC")
         prior = next((d for d in sorted(rpo, reverse=True) if 350 <= (_day(last) - _day(d)).days <= 380), None)
         if prior:
-            out["rpo_growth"] = _fig(_growth(rpo[last], rpo[prior]), f"{_label(last)} on {_label(prior)}", "Filed with the SEC")
+            out["rpo_growth"] = _fig(_growth(rpo[last], rpo[prior]), f"{_label(last)} on {_label(prior)}", "Filed with the SEC",
+                                     (rpo[prior] / MILLION, rpo[last] / MILLION), f"{unit} million")
     years = sorted(rev)
     prev = years[-2] if len(years) > 1 and 350 <= (_day(end) - _day(years[-2])).days <= 380 else None
     if prev:
@@ -391,7 +406,8 @@ def us_figures(facts: dict) -> dict:
                     dr = {d: ca[d] + cb.get(d, 0.0) for d in (end, prev)}
                     break
         if end in dr and prev in dr:
-            out["deferred_growth"] = _fig(_growth(dr[end], dr[prev]), f"{_label(end)} on {_label(prev)}", src)
+            out["deferred_growth"] = _fig(_growth(dr[end], dr[prev]), f"{_label(end)} on {_label(prev)}", src, (dr[prev] / MILLION, dr[end] / MILLION),
+                                          f"{unit} million")
     out = {k: v for k, v in out.items() if v}
     return {**out, "_end": end} if out else out
 
@@ -496,23 +512,60 @@ def any_stored(region: str, symbols: list) -> bool:
 
 # ---------- a theme's figures ----------
 def apply(row: dict, piece: dict | None) -> None:
-    """A company's line takes its filed figures (each under its key, `sector_src` keeping period and source), and a filed gross or net NPA,
-    NII growth or deposit growth replaces the page tables' own figure (one number per metric)."""
+    """A company's line takes its filed figures (each under its key, `sector_src` keeping period, source and a growth figure's base), and a filed
+    gross or net NPA, NII growth, deposit growth or NII / assets replaces the page tables' own figure (one number per metric). An insurer's
+    filing format (LI, GI) is kept as `sector_kind` (its type: metric_registry.insurer_type)."""
     got = (piece or {}).get("metrics") or {}
     row["sector_src"] = {}
     end = (piece or {}).get("end")
     row["sector_as_of"] = (("FY " if (piece or {}).get("family") == "us" else "") + _label(end)) if end and got else None
+    if (piece or {}).get("kind"):
+        row["sector_kind"] = piece["kind"]
     for k, fig in got.items():
         if k in BY_KEY and isinstance(fig, dict) and fig.get("v") is not None:
             row[k] = fig["v"]
-            row["sector_src"][k] = {"period": fig.get("period"), "source": fig.get("source")}
+            row["sector_src"][k] = {x: fig[x] for x in ("period", "source", "base", "unit") if fig.get(x) is not None}
             if k in REPLACES:
                 row[REPLACES[k]] = fig["v"]
+                row.setdefault("filed_basis", []).append(REPLACES[k])
 
 
-def section(rows: list[dict], region: str, layer_of: dict, pending: list, stat) -> dict:
-    """The theme's sector figures by family: each company's figures with their periods and sources, the median of each over the companies that
-    have it (`stat`: theme_data.stat), the figures each family has, what was checked and what isn't filed; empty when no company has one."""
+INSURER_TYPES = ("life", "general", "health", "reinsurance")
+TYPE_NAMES = {"life": ("life insurer", "life insurers"), "general": ("general insurer", "general insurers"),
+              "health": ("health insurer", "health insurers"), "reinsurance": ("reinsurer", "reinsurers")}
+
+
+def _summary(rows: list[dict], keys: list[str], region: str, tagsets: list[set], stat) -> dict:
+    """One group's figures: each company's state per figure, each figure's median over its "value" rows with the count it applies to, the
+    unusual growth figures with their bases, and the figures that may headline (metric_registry.headline_ok)."""
+    sts = {k: registry.states(k, region, rows, tagsets) for k in keys}
+    main = registry.main_family(tagsets)
+    meds, extreme, head = {}, [], []
+    for k in keys:
+        vals = [r.get(k) for r in rows]
+        meds[k] = registry.coverage(vals, sts[k], stat)
+        n_ext = 0
+        if BY_KEY[k][3] == "chg":
+            bases = [((r.get("src") or {}).get(k) or {}).get("base") for r in rows]
+            froms = [b[0] for b, s_ in zip(bases, sts[k]) if b and s_ == registry.VALUE]
+            mid = sorted(froms)[len(froms) // 2] if froms else None
+            for r, b, s_ in zip(rows, bases, sts[k]):
+                if s_ == registry.VALUE and registry.is_extreme(r.get(k), b[0] if b else None, mid):
+                    n_ext += 1
+                    extreme.append({"symbol": r["symbol"], "name": r["name"], "key": k, "v": r.get(k), "base": b,
+                                    "unit": ((r.get("src") or {}).get(k) or {}).get("unit")})
+        if registry.headline_ok(k, meds[k], registry.fits_main(k, region, tagsets, main), n_ext):
+            head.append(k)
+    return {"states": sts, "medians": meds, "extreme": extreme, "headline": head, "main": main}
+
+
+def section(rows: list[dict], region: str, layer_of: dict, pending: list, stat, model_of: dict | None = None) -> dict:
+    """The theme's sector figures by family (R23; R27: metric_registry): each company's figures with their periods and sources and its state for
+    each figure (value, unavailable, not applicable, not comparable), the median of each over its "value" rows with "N of M" the companies it
+    applies to (`stat`: theme_data.stat), the figures that may headline, the unusual growth figures with their bases, what was checked and what
+    isn't filed; insurers summarised by type (life, general, health, reinsurance), never one median across types. Empty when no company has one.
+    `model_of`: symbol -> its layer's revenue model family (theme_base.by_model), for which figures apply."""
+    model_of = model_of or {}
     fams = {}
     for fam in FAMILIES:
         cos = [r for r in rows if family_of(region, r) == fam]
@@ -520,9 +573,31 @@ def section(rows: list[dict], region: str, layer_of: dict, pending: list, stat) 
         if not have:
             continue
         with_ = [r for r in cos if any(r.get(k) is not None for k in have)]
-        fams[fam] = {"keys": have, "n": len(with_), "of": len(cos), "medians": {k: stat(r.get(k) for r in with_) for k in have},
-                     "rows": [{"symbol": r["symbol"], "name": r["name"], "layer": layer_of.get(r["symbol"]), "as_of": r.get("sector_as_of"),
-                               **{k: r.get(k) for k in have}, "src": r.get("sector_src") or {}} for r in with_],
-                     "periods": sorted({(r.get("sector_src") or {}).get(k, {}).get("period") or "" for r in with_ for k in have} - {""}),
-                     "checked": CHECKED[fam], "not_filed": NOT_FILED[fam]}
+        out_rows = [{"symbol": r["symbol"], "name": r["name"], "layer": layer_of.get(r["symbol"]), "as_of": r.get("sector_as_of"),
+                     **{k: r.get(k) for k in have}, "src": r.get("sector_src") or {},
+                     **({"type": registry.insurer_type(r, r.get("sector_kind") or "")} if fam == "insurer" else {})} for r in with_]
+        tagsets = [registry.tags(region, r, model_of.get(r["symbol"])) for r in with_]
+        # a figure is a column only where it applies to one of the companies (R27: no column of "n/a")
+        keys = [k for k in have if any(registry.applies(k, region, t) and r.get(k) is not None for r, t in zip(with_, tagsets))]
+        if not keys:
+            continue
+        summ = _summary(out_rows, keys, region, tagsets, stat)
+        f = {"keys": keys, "n": len(with_), "of": len(cos), **summ,
+             "rows": out_rows,
+             "periods": sorted({(r.get("sector_src") or {}).get(k, {}).get("period") or "" for r in with_ for k in keys} - {""}),
+             "checked": CHECKED[fam], "not_filed": NOT_FILED[fam]}
+        if fam == "insurer":
+            types = {}
+            for t in INSURER_TYPES:
+                idx = [i for i, r in enumerate(out_rows) if r["type"] == t]
+                if not idx:
+                    continue
+                sub = [out_rows[i] for i in idx]
+                tk = [k for k in keys if any(registry.applies(k, region, tagsets[i]) for i in idx)]
+                types[t] = {"n": len(sub), "keys": tk, **_summary(sub, tk, region, [tagsets[i] for i in idx], stat)}
+            f["types"] = types
+            if len(types) > 1:      # one median a type: the family's own medians are only of figures with one meaning across types
+                f["medians"] = {k: f["medians"][k] for k in keys if k in ("solvency", "premium_growth")}
+                f["headline"] = []
+        fams[fam] = f
     return {"families": fams, "pending": sorted(set(pending))} if fams or pending else {}
