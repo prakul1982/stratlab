@@ -274,7 +274,9 @@ def test_a_failing_item_drops_what_failed_and_the_result_lists_it():
 def test_a_figure_with_no_period_source_or_formula_is_never_shipped_bare(monkeypatch):
     v = full_view()
     slides = deck.theme_plan(v)[0]
-    monkeypatch.setitem(deck.METRIC_NOTES, "roce", ("ROCE", "", "", "x"))
+    # merged with lane r27-metrics: the notes are read from the registry, so the registry's ROCE loses its formula and source
+    from app.intel import metric_registry as MR
+    monkeypatch.setitem(MR.BY_ID, "roce", MR.BY_ID["roce"]._replace(definition="", source=""))
     assert "ROCE" in table_of(slides, "Every company's figures")["head"]
     g = deck.publication_gate(slides, v)
     src = next(x for x in g["items"] if x["id"] == "sourced")
