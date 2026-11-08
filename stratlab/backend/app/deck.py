@@ -1555,7 +1555,7 @@ def layer_head(layer: dict, cos: list, amt) -> str:
     listed, n = len(cos), layer.get("n", len(cos))
     figs = sum(1 for c in cos if c.get("status") != "unverified" and not c.get("model_out") and c.get("revenue") is not None)
     if listed > figs:
-        return f"{_n(listed, 'company', 'companies')} ({figs} in figures), revenue of those in figures {amt(layer.get('revenue'))}"
+        return f"{_n(listed, 'company', 'companies')} ({figs} in the layer's calculations), revenue of those {amt(layer.get('revenue'))}"
     return f"{_n(n, 'company', 'companies')}, revenue {amt(layer.get('revenue'))} together"
 
 

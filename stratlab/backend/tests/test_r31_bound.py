@@ -309,4 +309,4 @@ def test_a_ranking_line_states_how_many_layers_it_compared():
     t, vc, m = split(t)
     view, _ = deck_of(t["region"], m, t["facts"])
     line = view["chain"]["line"]
-    assert "Compared: 2 of 3 layers" in line and "Aluminium" not in line
+    assert line.startswith("Among the 2 of 3 layers that can be compared") and "Aluminium" not in line
