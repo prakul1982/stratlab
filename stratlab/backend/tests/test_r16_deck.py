@@ -218,8 +218,9 @@ def test_the_cover_and_the_next_slide_say_how_many_companies_the_figures_are_for
     v["members"] = v["members"] + [{"symbol": f"Z{i}", "name": f"Z {i}", "layer": "Cells", "cap": 100.0, "by": "Official industry"} for i in range(4)]
     v["placements"] = {**v["placements"], "total": 10}
     cov = deck.coverage(v)
-    # changed on purpose (R27): the share names its denominator, whose market value it is a share of
-    assert cov["text"] == f"10 in the theme · 5 with figures ({cov['share']}% of the combined market value of the 9 of 10 with one)" and cov["share"] < 100
+    # changed on purpose (R27): the share names its denominator, whose market value it is a share of; (R28) "with figures" is of the
+    # confirmed companies only: the unconfirmed one with figures is listed, never counted
+    assert cov["text"] == f"10 in the theme · 4 with figures ({cov['share']}% of the combined market value of the 9 of 10 with one)" and cov["share"] < 100
     slides = slides_of(v)
     cover = dict((t[0], t[1]) for t in next(b for b in slides[0].blocks if b["kind"] == "stats")["items"])
     assert cover["With figures"] == str(cov["n"]) and "Their market value" in cover               # R20: the count, its share beneath

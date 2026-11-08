@@ -40,6 +40,7 @@ NO_DESCRIPTION_DAYS = 3                                                   # ...a
 VERDICTS: dict = {}                                                       # placement answers (a few hundred bytes each), cleared past VERDICT_KEEP
 VERDICT_KEEP = 3000
 DESCRIBE_READS = 6                                                        # descriptions read from the companies' own pages a request
+PLACE_READS = 60                                                          # R28: descriptions read for a theme's companies to place, in its check, at most
 PRICE_READS_PER_MINUTE = 20                                               # companies' candles read from the sources a minute, across every theme
 PRICE_BUDGET = 45.0                                                       # seconds a request may spend reading candles
 price_reads = Window()
@@ -300,6 +301,8 @@ def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
     except Exception:
         kept = {}
     names = {c["ticker"]: c.get("name") for v in out.get("value_chain") or [] for c in v.get("companies") or []}
+    if ask is not None:                       # the background check, about to ask the AI: the companies it places carry their own words
+        describe_unplaced(region, out, names, kept)
     about = _about_reader(region, names, 0)                           # stored descriptions only: nothing is read from a page here
     new, got = theme_base.place_rest(out, theme, lambda s_: about(s_), ask=ask, kept=kept, facts_of=_facts_reader(region))
     if ask is not None and got and got != kept and (got.get("names_for") or any(x.get("by") == "ai" for x in (got.get("assign") or {}).values())):
@@ -308,6 +311,51 @@ def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
         except Exception as e:
             print("theme: placements not kept:", type(e).__name__, str(e)[:100])
     return new
+
+
+def _has_description(region: str, sym: str) -> bool:
+    """Whether a company's own description is kept (the shared store's theme:evidence entry), or was looked for lately and none found."""
+    k = f"theme:evidence:{region}:{sym}"
+    hit = EVIDENCE_CACHE.get(k)
+    if hit is None:
+        try:
+            hit = db.json_value(db.get_setting(k), {}) or {}
+        except Exception:
+            hit = {}
+    if not hit.get("at"):
+        return False
+    if hit.get("about"):
+        return True
+    try:                     # none on its page: asked again after NO_DESCRIPTION_DAYS (evidence_reader)
+        return (datetime.now(timezone.utc) - datetime.fromisoformat(hit["at"])).days < NO_DESCRIPTION_DAYS
+    except Exception:
+        return False
+
+
+def describe_unplaced(region: str, out: dict, names: dict, kept: dict | None) -> list[str]:
+    """R28 (the owner's review: IT services "How they earn is shown for only 6 of these 46 companies"): a description is kept only for the
+    companies the AI added (their check reads it) and the largest DESCRIBE_MAX on the page, a few a view, so a small company the placement
+    sends to the AI had no words of its own and no revenue model. Before the placement asks, the companies of the theme's industries it
+    hasn't placed yet (largest first) with no kept description have their own page's description read once and kept in the shared store
+    (evidence_reader): at most PLACE_READS a theme check, never for a placement already kept, no job of its own. The symbols read."""
+    kept = kept if isinstance(kept, dict) else {}
+    done = set((kept.get("assign") or {}) if isinstance(kept.get("assign"), dict) else ())
+    rest = [c for v in out.get("value_chain") or [] if v.get("official") and v.get("basis") in ("industry", "list") and not v.get("by_industry")
+            for c in v.get("companies") or [] if c.get("ticker") and c["ticker"] not in done]
+    if not any(not v.get("official") and v.get("layer") for v in out.get("value_chain") or []):
+        return []                               # no layers of the map's own to place them in (theme_base.place_rest)
+    want = []
+    for c in sorted(rest, key=lambda c: (-(c.get("cap") or 0), c["ticker"]))[:theme_base.PLACE_MAX]:
+        if len(want) >= PLACE_READS:
+            break
+        if not _has_description(region, c["ticker"]):
+            want.append(c["ticker"])
+    if want:
+        try:
+            evidence_reader(region, names)(want)
+        except Exception as e:                  # a source busy: placed by the words it has, read on a later check
+            print("theme: descriptions to place not read:", type(e).__name__, str(e)[:100])
+    return want
 
 
 def _facts_reader(region: str):

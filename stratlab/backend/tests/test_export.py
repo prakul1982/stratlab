@@ -79,7 +79,8 @@ def test_the_theme_deck_has_the_cover_chain_layers_members_claims_and_notes():
     assert contents[-1][0] == "Appendix" and contents[-1][2] == "17"            # R25: one page later (the figures' notes)
     assert contents[-2][0] == "How the figures are built" and contents[-2][2] == "16"
     cover = dict((t[0], t[1]) for t in next(b for b in slides[0].blocks if b["kind"] == "stats")["items"])
-    assert cover["Companies"] == "6" and cover["Layers"] == "2" and cover["With figures"] == "5"          # R20: its share and the universe beneath
+    # R28: changed on purpose, "with figures" is of the confirmed companies (CELLB, not confirmed, has figures but is never in them)
+    assert cover["Companies"] == "6" and cover["Layers"] == "2" and cover["With figures"] == "4"          # R20: its share and the universe beneath
     figs = table_of(slides, "Every company's figures")
     assert figs["head"][:3] == ["Company", "Layer", "Market value"] and figs["rows"][1][:3] == ["Mine A", "Mining", "₹40,000 cr"]
     assert table_of(slides, "Layer 1 · Mining")["rows"][0] == ["Mine A", "₹1,500 cr", "50%", "24%", "15%", "Mar 2026"]   # R16: whole points as filed; R18: every whole figure
