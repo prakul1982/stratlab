@@ -472,8 +472,7 @@ def chain_table(blocks: list[dict]) -> dict:
             out = [r for r in rows if r["ebitda"] is not None and not r["rest"] and r["layer"] not in names and (not r["official"] or not
                    any(not x["official"] for x in have))]
             if out:
-                line += (f" Compared: {len(have)} of the {len(have) + len(out)} layers with a median, those with at least {HEADLINE_MIN} "
-                         "companies with the figure and one kind of business; the others are in the table, not ranked.")
+                line += f" Compared: {len(have)} of {len(have) + len(out)} layers (≥{HEADLINE_MIN} with the figure, one kind of business)."
     measure = "ebitda"
     if len(have) < 2:
         # lenders have no EBITDA margin: their layers are set side by side on return on equity (R18)
