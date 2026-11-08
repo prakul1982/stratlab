@@ -1226,7 +1226,9 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     market = [m for m in (src.index_rows() or []) if isinstance(m, dict)]
 
     blocks, histories = [], {}
-    for v in checked.get("value_chain") or []:
+    # R32: a split by market value one of whose halves shows no company is undone (theme_base.unsplit_unshown)
+    from .theme_base import unsplit_unshown
+    for v in unsplit_unshown(checked.get("value_chain") or [], {s for s, r in rows.items() if r.get("status") != "unverified"}):
         mine = [rows[c["ticker"]] for c in v.get("companies") or [] if c["ticker"] in rows]
         what = {c["ticker"]: c.get("what") for c in v.get("companies") or []}
         ind = {c["ticker"]: c.get("industry") for c in v.get("companies") or []}          # the exchange's industry, a column of an AI layer (R20)

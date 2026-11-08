@@ -298,4 +298,4 @@ def test_a_figure_missing_because_its_years_were_read_in_part_says_so():
 
 def test_the_versions_are_bumped_so_kept_maps_and_decks_are_made_again():
     from app.intel import theme_routes as T
-    assert B.RULES == 31 and deck.THEME_DECK_VERSION == 31 and T.PLACE_CARRY[31] == 30
+    assert B.RULES >= 31 and deck.THEME_DECK_VERSION >= 31 and T.PLACE_CARRY[31] == 30 and T.PLACE_CARRY[32] == 31   # R32 bumped both (updated on purpose)

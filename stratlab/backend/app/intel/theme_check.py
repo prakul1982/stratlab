@@ -411,7 +411,8 @@ def _split_evidence(evidence) -> tuple[str, str]:
 
 def model_confidence(model, evidence, said="") -> str:
     """How directly a company's evidence states its model (R27): "high" when its own words have words of the model's kind, "medium" when
-    only its official industry does, "low" when nothing does; never above what the AI said of it (`said`, one of CONFIDENCE). "" for unknown."""
+    only its official industry does, "low" when nothing does; never above what the AI said of it (`said`, one of CONFIDENCE), except that a chip designer without fabs
+    is a fabless one of "medium" at least (R32). "" for unknown."""
     if model not in MODELS:
         return ""
     words = _words_of(model)
@@ -419,6 +420,8 @@ def model_confidence(model, evidence, said="") -> str:
     level = "high" if words and re.search(words, own, re.I) else "medium" if words and re.search(words, industry, re.I) else "low"
     if said in CONFIDENCE and CONFIDENCE.index(said) > CONFIDENCE.index(level):
         level = said
+    if level == "low" and model == "fabless" and chip_designer(evidence):
+        level = "medium"           # R32: a semiconductor industry and the company's design words are enough (the live R31 deck left 29 of 37 out)
     return level
 
 
@@ -457,6 +460,8 @@ def model_from_words(evidence) -> str:
     """The one model a company's own words state in so many words (MODEL_SAYS), or "" when none or more than one does."""
     _, own = _split_evidence(evidence)
     hits = [m_ for m_, rx in MODEL_SAYS.items() if re.search(rx, own, re.I)]
+    if not hits and chip_designer(evidence):          # R32: a chip designer that owns no fabs says it in its own way ("designs GPUs and SoCs")
+        return "fabless"
     return hits[0] if len(hits) == 1 else ""
 
 
@@ -566,12 +571,14 @@ def refine_model(model, evidence) -> str:
         return hit[0] if len(hit) == 1 else model
     # R31 (the live R30 Semiconductors deck: "Fabless chip design" beside "Product designers that outsource making"): one boundary, a company
     # that designs and has others make is fabless; one that also owns its fabs (an IDM) is a maker
-    if model in ("manufacturing", "fabless") and re.search(SEMI_INDUSTRY, text, re.I):
+    # R32 (the live R31 deck: "How they earn is shown for only 8 of these 37 companies"): a designer whose evidence says it designs or develops
+    # chips, GPUs or SoCs and owns no fabs is fabless, whether the AI called it a maker or left it unknown; own fabs make it an IDM (a maker)
+    if model in ("manufacturing", "fabless", "unknown", "") and re.search(SEMI_INDUSTRY, text, re.I):
         fab, out = re.search(FAB_OWN, own, re.I), re.search(OUTSOURCED, own, re.I)
-        if out and not fab:
-            return "fabless"
         if fab and not out:
             return "manufacturing"
+        if (out and not fab) or chip_designer(evidence):
+            return "fabless"
         return model
     if model in ("manufacturing", "components") and re.search(METALS_INDUSTRY, industry, re.I):
         return one(("commodity_mining", "metal_processing"), REFINE_HINTS) or model
@@ -590,7 +597,35 @@ SEMI_INDUSTRY = r"semiconductor|\bchips?\b|integrated circuits?"
 FAB_OWN = (r"own (?:wafer )?fabs?\b|its fabs\b|own fabrication|wafer fab(?:s|rication)? (?:plants?|facilit|lines?)|fabrication (?:plants?|facilit)|"
            r"\bidm\b|integrated device manufactur")
 OUTSOURCED = (r"fabless|without (?:its own )?fab|outsourc(?:es|ed|ing) (?:its |the |all )?(?:chip |wafer )?(?:manufactur|fabrication|production)|"
-              r"made by (?:third-party )?(?:foundr|contract)|(?:to|through|by|at|from) (?:third-party |external )?foundr")
+              r"made by (?:third-party )?(?:foundr|contract)|(?:to|through|by|at|from) (?:third-party |external )?foundr|"
+              r"foundr\w* (?:make|manufactur|produc|fabricat)")
+# R32: a chip designer's own words, and what is never one (design software and IP licensors, equipment makers)
+CHIP_NOUNS = (r"semiconductors?|\bchips?\b|chipsets?|\bgpus?\b|graphics processors?|\bcpus?\b|\bsocs?\b|systems?[- ]on[- ](?:a[- ])?chips?|"
+              r"(?:micro)?processors?|microcontrollers?|integrated circuits?|\bics\b|\basics?\b|\bfpgas?\b")
+DESIGN_VERB = r"\b(?:designs?|develops?|designing|developing|designers?|developers?)\b"
+DESIGN_CHIP = DESIGN_VERB + r"[^.;]{0,60}?(?:" + CHIP_NOUNS + ")"
+CHIP_ONLY = r"\bgpus?\b|\bsocs?\b|\basics?\b|\bfpgas?\b|microcontrollers?|microprocessors?"
+NOT_DESIGNER = (r"electronic design automation|\beda\b|(?:software|tools)\b[^.]{0,30}\b(?:to|for) (?:the )?design|"
+                r"licens\w*\b[^.]{0,30}(?:\bip\b|intellectual property|architectures?|\bcores?\b)|(?:semiconductor|wafer fab\w*|capital) equipment")
+MAKES_OWN = r"manufactur|\bproduc(?:es|tion)\b|\bmakes\b"
+MODEL_NEEDS["fabless"] += "|" + DESIGN_CHIP
+
+
+def chip_designer(evidence) -> bool:
+    """Whether a company's evidence shows a chip designer that owns no fabs (R32): a semiconductor industry or chip words, its own words that
+    it designs or develops chips, GPUs or SoCs (or, in a semiconductor industry, that it designs or develops at all) or has foundries make
+    them; never with own-fab words, design software or IP licensing, equipment, or making words without foundries."""
+    industry, own = _split_evidence(evidence)
+    text = f"{industry} {own}"
+    if not (re.search(SEMI_INDUSTRY, text, re.I) or re.search(CHIP_ONLY, text, re.I)):
+        return False
+    if re.search(FAB_OWN, own, re.I) or re.search(NOT_DESIGNER, own, re.I):
+        return False
+    if re.search(OUTSOURCED, own, re.I):
+        return True
+    if re.search(MAKES_OWN, own, re.I):
+        return False
+    return bool(re.search(DESIGN_CHIP, own, re.I) or (re.search(SEMI_INDUSTRY, industry, re.I) and re.search(DESIGN_VERB, own, re.I)))
 
 
 # ---------- R31: a sub-basis within a family (the owner's review of the live R30 Metals deck: "highest in Aluminium and copper smelting (41%)

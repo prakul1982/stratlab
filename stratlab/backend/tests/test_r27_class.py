@@ -290,7 +290,9 @@ def test_evidence_carries_the_business_read_and_the_earning_sentence():
     assert C.business_text(None) == "" and C.business_text({}) == ""
     assert C.model_evidence("x", "", earns="Its revenue comes from rent on its malls.") == "Industry: x. Its revenue comes from rent on its malls."
     assert C.model_from_words("Industry: IT. A CDMO serving innovators.") == "contract_manufacturing"
-    assert C.model_from_words("Industry: Fabless chips. Designs chips.") == ""                      # the industry alone is not its own words
+    assert C.model_from_words("Industry: Fabless chips. Sells products.") == ""                     # the industry alone is not its own words
+    # R32 (updated on purpose): own words that it designs chips, with no fab of its own, now state fabless (theme_check.chip_designer)
+    assert C.model_from_words("Industry: Fabless chips. Designs chips.") == "fabless"
     assert C.model_from_words("A fabless company and a CDMO.") == ""                               # two models: none
 
 
@@ -346,7 +348,7 @@ def test_a_lone_company_joins_the_largest_layer_of_its_family_when_there_is_one(
 
 # ---------- RULES, prompts ----------
 def test_rules_bumped_map_prompt_unchanged_and_new_segments_have_needs():
-    assert B.RULES == 31 and A.MAP_V == 23          # R31 bumped RULES: models made exact by the R31 boundaries, layers merged (updated on purpose)
+    assert B.RULES == 32 and A.MAP_V == 23          # R32 bumped RULES (updated on purpose); R31 bumped RULES: models made exact by the R31 boundaries, layers merged (updated on purpose)
     for new in ("bpo", "components", "fabless", "life_insurance", "general_insurance", "reinsurance", "property_development"):
         assert new in C.MODELS and new in C.MODEL_NEEDS and new in C.PLACE_SYSTEM2
     assert C.model_family("contract_manufacturing") != C.model_family("manufacturing") == C.model_family("fabless")
