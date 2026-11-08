@@ -35,6 +35,9 @@ FEW_BASE = 4                  # a highest or lowest median on this many companie
 # and red marks): a layer with fewer companies than this behind its median is shown, never ranked; with fewer than two layers over
 # it, no comparison is said at all
 COMPARE_MIN = MIN_BASE
+# R31 (the owner's review of the live R30 decks): a layer-vs-layer headline (the value chain's line, findings, questions) needs at least this
+# many companies with the figure in each layer it compares; tables still show every layer and mark (green, red) those of COMPARE_MIN or more
+HEADLINE_MIN = 5
 # R27 (headline eligibility): a comparison is said as a headline only on a figure for at least this share of the companies of each group it
 # compares (a layer, a family); one with less is shown as data, never ranked (the live R26 Semis deck: "RPO growth -3.9%" of 21 of 53)
 COVERAGE_MIN = 0.5
@@ -431,6 +434,14 @@ def chain_table(blocks: list[dict]) -> dict:
         have = []
     have = one_family(have, lambda r: model_family_of(r["model"]))          # R29: layers of one business-model family only
     line, hi, lo = None, None, None
+    if len(have) >= 2 and len(one_sub(have, lambda r: r["model"])) < 2:
+        # R31: layers of one family that sell different commodities (its sub-basis) are described, each with its own figure, never ranked
+        whole = whole_points([c for b in blocks for c in b["companies"]])
+        each = [f"{r['layer']} {pts(r['ebitda'], whole)}" + (f" ({w[2:]})" if (w := few(r["ebitda_n"], r["n"])) else "") for r in have]
+        line = "Median EBITDA margin by layer: " + "; ".join(each) + ". Their commodities differ, so these layers are not ranked."
+        return {"rows": rows, "line": line, "highest": None, "lowest": None, "measure": "ebitda", "compared": [], "gap": None,
+                "not_ranked": [r["layer"] for r in have]}
+    have = one_sub(have, lambda r: r["model"])
     apart = have if len(have) >= 2 and not comparable_intensity(have, lambda r: r["intensity"]) else []
     if apart:
         # R30 (the owner's review of the live R28 Utilities deck: "renewable producers 83% vs cables 10%"): layers that need very different
@@ -447,7 +458,7 @@ def chain_table(blocks: list[dict]) -> dict:
             gap = gap_of(max(r["ebitda"] for r in have), min(r["ebitda"] for r in have))         # as printed (R25)
             hi = lo = None
             # R27: a tie (no gap as printed) is no comparison: no sentence, never "within 0.0 points"
-            line = (f"The median EBITDA margins of the {len(have)} layers with at least {COMPARE_MIN} companies are within {gap} "
+            line = (f"The median EBITDA margins of the {len(have)} layers with at least {HEADLINE_MIN} companies are within {gap} "
                     "points of each other, the rounding of whole points.") if float(gap) > 0 else None
         else:
             whole = whole_points([c for b in blocks for c in b["companies"]])
@@ -462,7 +473,7 @@ def chain_table(blocks: list[dict]) -> dict:
             lend = [r for r in rows if ok(r, "roe") and not r["rest"]]
         if not same_basis([r["basis"] for r in lend]):
             lend = []
-        lend = one_family(lend, lambda r: model_family_of(r["model"]))
+        lend = one_basis(lend, lambda r: r["model"])
         if not comparable_intensity(lend, lambda r: r["intensity"]):
             lend = []
         if len(lend) >= 2:
@@ -470,7 +481,7 @@ def chain_table(blocks: list[dict]) -> dict:
             hi, lo = max(lend, key=lambda r: r["roe"]), min(lend, key=lambda r: r["roe"])
             if hi["layer"] == lo["layer"] or hi["roe"] - lo["roe"] < 0.05:
                 hi = lo = None
-                line = f"The median return on equity of the {len(lend)} layers with at least {COMPARE_MIN} companies is the same."
+                line = f"The median return on equity of the {len(lend)} layers with at least {HEADLINE_MIN} companies is the same."
             else:
                 line = (f"Median return on equity is highest in {hi['layer']} ({pts(hi['roe'], True)}{few(hi['roe_n'], hi['n'])}) and lowest in {lo['layer']} "
                         f"({pts(lo['roe'], True)}{few(lo['roe_n'], lo['n'])}), "
@@ -504,10 +515,10 @@ def of_words(n: int, of: int | None, one: str = "company", many: str = "companie
 
 
 def headline_ok(n: int, of: int | None = None, model: dict | None = None, floor: int | None = None) -> bool:
-    """Whether one group's figure may be ranked in a headline (R27): its sample is at least `floor` companies (COMPARE_MIN), it covers at least
+    """Whether one group's figure may be ranked in a headline (R27): its sample is at least `floor` companies (HEADLINE_MIN, R31), it covers at least
     COVERAGE_MIN of the group's `of` companies, and the group is of one business model (theme_base.by_model's `model`: a layer whose companies'
     models are mostly unknown, "sparse", is not; no model read at all says nothing either way). A failing group is shown, never ranked."""
-    if (n or 0) < (COMPARE_MIN if floor is None else floor):
+    if (n or 0) < (HEADLINE_MIN if floor is None else floor):
         return False
     if of and n < of * COVERAGE_MIN:
         return False
@@ -556,14 +567,38 @@ def model_family_of(model) -> str:
     return (model or {}).get("family") or "" if isinstance(model, dict) else ""
 
 
-def rank_pair(rows: list, value, count, floor: int = COMPARE_MIN, of=None, model=None, basis=None, intensity=None):
+def sub_of(model) -> str:
+    """A layer's sub-basis within its family (R31, theme_check.sub_basis: a metals family's commodity), or ""."""
+    return (model.get("sub") or "") if isinstance(model, dict) else ""
+
+
+def one_sub(rows: list, model) -> list:
+    """The rows of one family that may be set side by side in a headline (R31, the owner's review of the live R30 Metals deck: aluminium
+    smelters ranked against ferro-alloy makers): where their family declares a sub-basis (`model(row)`'s "sub"), only those of the sub-basis
+    most of them share; a "mixed" or "other" one left out; [] on a tie. Every row when none carries one."""
+    subs = [sub_of(model(r)) for r in rows]
+    if not any(subs):
+        return list(rows)
+    keep = [(r, x) for r, x in zip(rows, subs) if x and x not in ("mixed", "other")]
+    c = Counter(x for _, x in keep).most_common()
+    if not c or (len(c) > 1 and c[0][1] == c[1][1]):
+        return []
+    return [r for r, x in keep if x == c[0][0]]
+
+
+def one_basis(rows: list, model) -> list:
+    """one_family, then one_sub: the rows of one family and, where it declares one, one sub-basis (R29, R31)."""
+    return one_sub(one_family(rows, lambda r: model_family_of(model(r))), model)
+
+
+def rank_pair(rows: list, value, count, floor: int | None = None, of=None, model=None, basis=None, intensity=None):
     """(highest, lowest) of `rows` by `value(row)` among those whose figure is of at least `floor` companies (`count(row)`) (R25: one floor for
     every comparison of layers) and, given `of`, `model` and `basis` (each a function of the row), passes headline_ok and shares one period
     basis (R27), and given `intensity`, are alike in asset intensity (R30); None when fewer than two qualify, or when the highest or the lowest is tied (no layer is named for a tie)."""
     have = sorted((r for r in rows if value(r) is not None and headline_ok(count(r) or 0, of(r) if of else None, model(r) if model else None, floor)),
                   key=value)
-    if model:                       # R29: one business-model family only
-        have = one_family(have, lambda r: model_family_of(model(r)))
+    if model:                       # R29: one business-model family only; R31: and one sub-basis (a commodity) where the family has one
+        have = one_basis(have, model)
     if basis and not same_basis([basis(r) for r in have]):
         return None
     if intensity and not comparable_intensity(have, intensity):         # R30: alike in asset intensity
@@ -994,7 +1029,9 @@ def notable_items(blocks: list[dict], chain: dict, histories: dict) -> list[dict
     is of an aggregate of MIN_BASE companies or more."""
     out = []
     apart = {b.get("layer") for b in blocks if b.get("official")} | {r["layer"] for r in chain["rows"] if r.get("official")}
-    have = [r for r in chain["rows"] if r["ebitda"] is not None and headline_ok(r["ebitda_n"], r["n"], r.get("model")) and r["layer"] not in apart]
+    # the posts keep the marks' floor (COMPARE_MIN), as blog_research._theme_gap does: R31's headline floor is the decks'
+    have = [r for r in chain["rows"] if r["ebitda"] is not None and headline_ok(r["ebitda_n"], r["n"], r.get("model"), floor=COMPARE_MIN)
+            and r["layer"] not in apart]
     if len(have) >= 2:
         hi, lo = max(have, key=lambda r: r["ebitda"]), min(have, key=lambda r: r["ebitda"])
         if hi["ebitda"] - lo["ebitda"] >= NOTABLE_GAP:

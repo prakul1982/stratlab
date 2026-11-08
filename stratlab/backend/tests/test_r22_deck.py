@@ -154,7 +154,10 @@ def test_extra_layers_only_when_the_other_group_is_broad_and_the_word_reads_as_a
 
 
 # ---------- 6, 10: the "Other" group never compared; a small base said ----------
-def test_the_other_group_is_never_called_highest_and_a_small_base_says_its_count():
+def test_the_other_group_is_never_called_highest_and_a_small_base_says_its_count(monkeypatch):
+    # R31: a test of the ranking rules on fixtures of 3 or 4 companies a layer, run at the marks' floor (COMPARE_MIN); the headline floor
+    # of 5 (HEADLINE_MIN) on the same fixtures is tested in tests/test_r31_bound.py
+    monkeypatch.setattr("app.intel.theme_data.HEADLINE_MIN", 3)
     blocks = [{"layer": "A", "n": 3, "revenue": 1, "official": False, "stats": {"ebitda": {"median": 22.0, "n": 3}}, "companies": []},
               {"layer": "B", "n": 6, "revenue": 1, "official": False, "stats": {"ebitda": {"median": 12.0, "n": 6}}, "companies": []},
               {"layer": "Other defence companies", "n": 9, "revenue": 1, "official": True, "basis": "rest", "stats": {"ebitda": {"median": 24.5, "n": 9}}, "companies": []}]

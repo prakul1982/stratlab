@@ -529,7 +529,9 @@ KEEP_APART = ("regulated_utility (a regulator sets its tariffs for transmission 
               "power its plants generate) and power_trading (trades power, or develops renewable projects); utility only when the kind isn't shown. "
               "commodity_mining (mines, smelts or makes primary metal from ore) apart from metal_processing (turns metal it buys into pipes, wires, "
               "sheets, castings or parts); resources for oil, gas and farming. retail (holds and sells its own stock) apart from platform (a "
-              "marketplace earning commissions on others' goods).")
+              "marketplace earning commissions on others' goods). lending for a housing finance or home-loan company, never property_development "
+              "(sells what it builds) or property (rents and leases, REITs). fabless for a company that designs chips or products and has them "
+              "made by foundries or contract makers; manufacturing only when it also owns its fabs or plants (IDM).")
 
 
 def refine_model(model, evidence) -> str:
@@ -551,6 +553,26 @@ def refine_model(model, evidence) -> str:
         return one(("regulated_utility", "power_generation", "power_trading"), REFINE_HINTS) or model
     if model == "resources" and not re.search(r"\boil\b|\bgas\b|petroleum|crude|crops?\b|plantation|farm|\btea\b|coffee|sugar", text, re.I):
         return "commodity_mining" if re.search(MODEL_NEEDS["commodity_mining"], text, re.I) else model
+    # R31 (the owner's review of the live R30 Real estate deck): a lender is never a developer or a landlord, and a developer who sells what it
+    # builds is never a landlord who leases what it owns (REITs, annuity assets)
+    if model in ("property_development", "property", "construction") and (
+            re.search(LENDING_INDUSTRY, industry, re.I) or (re.search(HOME_LOAN_WORDS, own, re.I) and not re.search(MODEL_NEEDS["property_development"], own, re.I)
+                                                            and not re.search(MODEL_WORDS["property"], own, re.I))):
+        return "lending"
+    if model in ("property_development", "property"):
+        hit = [c for c in ("property_development", "property") if re.search(REFINE_HINTS[c], industry, re.I)]
+        if len(hit) != 1:
+            hit = [c for c in ("property_development", "property") if re.search(_words_of(c), own, re.I)]
+        return hit[0] if len(hit) == 1 else model
+    # R31 (the live R30 Semiconductors deck: "Fabless chip design" beside "Product designers that outsource making"): one boundary, a company
+    # that designs and has others make is fabless; one that also owns its fabs (an IDM) is a maker
+    if model in ("manufacturing", "fabless") and re.search(SEMI_INDUSTRY, text, re.I):
+        fab, out = re.search(FAB_OWN, own, re.I), re.search(OUTSOURCED, own, re.I)
+        if out and not fab:
+            return "fabless"
+        if fab and not out:
+            return "manufacturing"
+        return model
     if model in ("manufacturing", "components") and re.search(METALS_INDUSTRY, industry, re.I):
         return one(("commodity_mining", "metal_processing"), REFINE_HINTS) or model
     return model
@@ -558,7 +580,67 @@ def refine_model(model, evidence) -> str:
 
 REFINE_HINTS = {"regulated_utility": r"transmission|distribution|electric utilit", "power_generation": r"power generation|electric services",
                 "power_trading": r"power trading|renewable", "commodity_mining": r"\bcoal\b|minerals|mining|pig iron|sponge iron|ferro ?alloys|"
-                r"diversified metals|precious metals", "metal_processing": r"products|pipes|tubes|castings|forgings|wires|fabricat"}
+                r"diversified metals|precious metals", "metal_processing": r"products|pipes|tubes|castings|forgings|wires|fabricat",
+                "property": r"\breits?\b|real estate investment trust|leasing|rental|renting|annuity", "property_development": r"residential|developers?|"
+                r"housing projects|commercial projects"}
+LENDING_INDUSTRY = (r"housing finance|home finance|mortgage|non[- ]?banking financ|\bnbfc|consumer finance|microfinance|\blending\b|"
+                    r"finance compan|credit institution")
+HOME_LOAN_WORDS = r"home loans?|housing loans?|housing finance|mortgage loans?|loans? (?:against|for) (?:property|homes|housing)"
+SEMI_INDUSTRY = r"semiconductor|\bchips?\b|integrated circuits?"
+FAB_OWN = (r"own (?:wafer )?fabs?\b|its fabs\b|own fabrication|wafer fab(?:s|rication)? (?:plants?|facilit|lines?)|fabrication (?:plants?|facilit)|"
+           r"\bidm\b|integrated device manufactur")
+OUTSOURCED = (r"fabless|without (?:its own )?fab|outsourc(?:es|ed|ing) (?:its |the |all )?(?:chip |wafer )?(?:manufactur|fabrication|production)|"
+              r"made by (?:third-party )?(?:foundr|contract)|(?:to|through|by|at|from) (?:third-party |external )?foundr")
+
+
+# ---------- R31: a sub-basis within a family (the owner's review of the live R30 Metals deck: "highest in Aluminium and copper smelting (41%)
+# and lowest in Ferro alloy producers (13%)", one family, different commodities). A family may declare a key its layers must share, beside
+# the family, before a figure ranks them; each company's value is read from its evidence (official industry first, then its own words) ----------
+COMMODITIES = (("steel", r"\bsteel|sponge iron|pig iron|stainless"), ("aluminium", r"alumini?um|bauxite|alumina"),
+               ("zinc_lead", r"\bzinc\b|\blead (?:and|&) zinc|\blead (?:ingots?|metal|smelt|ores?|concentrates?)"), ("copper", r"\bcopper\b"),
+               ("iron_ore", r"iron ore|\bpellets?\b"), ("coal", r"\bcoal\b|lignite|\bcoke\b"),
+               ("precious", r"\bgold\b|\bsilver\b|platinum|precious metal"),
+               ("ferro_alloys", r"ferro ?alloys?|ferro[- ]?(?:chrome|manganese|silicon)|silico[- ]?manganese|\bmanganese ore"),
+               ("oil_gas", r"\boil\b|\bgas\b|petroleum|crude"))
+SUB_BASIS = {"mining": "commodity", "metal_processing": "commodity", "resources": "commodity"}
+SUB_WORDS = {"commodity": "commodity"}
+_MAKES_STEEL = re.compile(r"(?:makes?|produces?|manufactur\w*|integrated)\b[^.]{0,40}\bsteel|steel ?making|blast furnace", re.I)
+
+
+def commodity_of(evidence) -> str:
+    """The commodity a metals or resources company's evidence shows (R31): one of COMMODITIES' keys by its official industry, else by its own
+    words; "mixed" when they show more than one (iron ore and coal mined, zinc and aluminium), "other" when none."""
+    industry, own = _split_evidence(evidence)
+
+    def hits(text):
+        h = [k for k, rx in COMMODITIES if re.search(rx, text, re.I)]
+        if "steel" in h and _MAKES_STEEL.search(text):           # ore and coal bought to make steel: a steel maker
+            h = [k for k in h if k not in ("iron_ore", "coal")]
+        if "ferro_alloys" in h:                                  # "ferro alloys for steel": the alloy is what it sells
+            h = [k for k in h if k != "steel"]
+        return h
+    for text in (industry, own):
+        h = hits(text)
+        if len(h) == 1:
+            return h[0]
+        if len(h) > 1:
+            return "mixed"
+    return "other"
+
+
+SUB_OF = {"commodity": commodity_of}
+
+
+def sub_basis(family: str, evidences: list) -> str:
+    """The sub-basis of a group of one family's companies (R31): "" when the family declares none (SUB_BASIS); else the value most of them
+    (more than half) share, or "mixed"."""
+    key = SUB_BASIS.get(family or "")
+    if not key or not evidences:
+        return ""
+    from collections import Counter
+    vals = [SUB_OF[key](e) for e in evidences]
+    top, n = Counter(vals).most_common(1)[0]
+    return top if n * 2 > len(vals) and top not in ("mixed", "other") else "mixed"
 METALS_INDUSTRY = r"iron (?:&|and) steel|steel|alumini?um|copper|zinc|non[- ]ferrous|metals?\b|ferro|mining|minerals"
 
 

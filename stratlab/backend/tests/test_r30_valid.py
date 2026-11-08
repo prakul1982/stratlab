@@ -41,7 +41,10 @@ HEAVY_LIGHT = {"utilities": (S.utilities_in, {"PG": 3.0, "PT": 0.1, "PD": 1.0}),
                "metals": (S.metals_mining_in, {"ST": 0.2, "AL": 0.3, "MN": 3.0, "VEDL": 1.0})}
 
 
-def test_layers_of_very_different_capital_needs_are_described_never_ranked():
+def test_layers_of_very_different_capital_needs_are_described_never_ranked(monkeypatch):
+    # R31: a test of the ranking rules on fixtures of 3 or 4 companies a layer, run at the marks' floor (COMPARE_MIN); the headline floor
+    # of 5 (HEADLINE_MIN) on the same fixtures is tested in tests/test_r31_bound.py
+    monkeypatch.setattr("app.intel.theme_data.HEADLINE_MIN", 3)
     for name, (fn, pbs) in HEAVY_LIGHT.items():
         region, m, f, market = _with_debt(fn, pbs)
         v, slides = deck_of(region, m, f, index_rows=lambda mk=market: mk)
@@ -52,7 +55,10 @@ def test_layers_of_very_different_capital_needs_are_described_never_ranked():
         assert "Median EBITDA margin is highest" not in found and "Fastest revenue growth" not in found, name
 
 
-def test_layers_alike_in_capital_needs_are_still_ranked():
+def test_layers_alike_in_capital_needs_are_still_ranked(monkeypatch):
+    # R31: a test of the ranking rules on fixtures of 3 or 4 companies a layer, run at the marks' floor (COMPARE_MIN); the headline floor
+    # of 5 (HEADLINE_MIN) on the same fixtures is tested in tests/test_r31_bound.py
+    monkeypatch.setattr("app.intel.theme_data.HEADLINE_MIN", 3)
     for name, (fn, pbs) in HEAVY_LIGHT.items():
         region, m, f, market = _with_debt(fn, {k: 1.0 for k in pbs})
         v, _ = deck_of(region, m, f, index_rows=lambda mk=market: mk)
@@ -62,7 +68,10 @@ def test_layers_alike_in_capital_needs_are_still_ranked():
     assert deck_of(region, m, f)[0]["chain"]["highest"]
 
 
-def test_capital_per_revenue_and_the_threefold_rule():
+def test_capital_per_revenue_and_the_threefold_rule(monkeypatch):
+    # R31: a test of the ranking rules on fixtures of 3 or 4 companies a layer, run at the marks' floor (COMPARE_MIN); the headline floor
+    # of 5 (HEADLINE_MIN) on the same fixtures is tested in tests/test_r31_bound.py
+    monkeypatch.setattr("app.intel.theme_data.HEADLINE_MIN", 3)
     assert D.capital_per_revenue(1000, 2.0, 500, None, 1000) == 1.0         # equity 500 + debt 500 over revenue 1,000
     assert D.capital_per_revenue(None, None, 600, 2.0, 300) == 3.0          # equity from debt over debt to equity
     assert D.capital_per_revenue(1000, -1.0, None, None, 1000) is None and D.capital_per_revenue(1000, 2.0, 0, None, 0) is None

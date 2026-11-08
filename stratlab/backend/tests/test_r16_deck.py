@@ -121,7 +121,10 @@ def test_whole_point_margins_print_without_false_precision_and_a_gap_within_roun
     assert r["ebitda_dp"] == 0 and D.company_row("IN", "MINEA", {**FACTS["MINEA"], "years": [{**y, "opm": y["opm"] + 0.4} for y in FACTS["MINEA"]["years"]]})["ebitda_dp"] == 1
 
 
-def test_the_chain_names_a_highest_and_lowest_only_among_its_own_layers_of_two_or_more():
+def test_the_chain_names_a_highest_and_lowest_only_among_its_own_layers_of_two_or_more(monkeypatch):
+    # R31: a test of the ranking rules on fixtures of 3 or 4 companies a layer, run at the marks' floor (COMPARE_MIN); the headline floor
+    # of 5 (HEADLINE_MIN) on the same fixtures is tested in tests/test_r31_bound.py
+    monkeypatch.setattr("app.intel.theme_data.HEADLINE_MIN", 3)
     blocks = [{"layer": "A", "n": 3, "revenue": 1, "official": False, "stats": {"ebitda": {"median": 17.0, "n": 3}}, "companies": []},
               {"layer": "B", "n": 3, "revenue": 1, "official": False, "stats": {"ebitda": {"median": 13.0, "n": 3}}, "companies": []},
               {"layer": "Official CV", "n": 2, "revenue": 1, "official": True, "stats": {"ebitda": {"median": 9.5, "n": 2}}, "companies": []},

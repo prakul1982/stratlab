@@ -60,7 +60,10 @@ def test_a_layer_under_the_minimum_base_is_shown_but_never_ranked_and_fewer_than
     assert deck.top_of([{"v": 4.0, "n": 3}, {"v": 4.0, "n": 5}], lambda r: r["v"], lambda r: r["n"]) is None
 
 
-def test_the_value_chain_footnote_says_the_base_and_marks_only_layers_over_it():
+def test_the_value_chain_footnote_says_the_base_and_marks_only_layers_over_it(monkeypatch):
+    # R31: a test of the ranking rules on fixtures of 3 or 4 companies a layer, run at the marks' floor (COMPARE_MIN); the headline floor
+    # of 5 (HEADLINE_MIN) on the same fixtures is tested in tests/test_r31_bound.py
+    monkeypatch.setattr("app.intel.theme_data.HEADLINE_MIN", 3)
     v = full_view()
     blocks = [block("Mining", 6, 30.0, 5), block("Cells", 4, 12.0, 3)]
     v["chain"] = D.chain_table(blocks)
@@ -91,7 +94,10 @@ def test_no_layer_is_called_highest_fastest_or_slowest_on_a_base_under_three_or_
 
 
 # ---------- 2. counts that read "N of M" ----------
-def test_a_median_of_fewer_companies_than_its_group_reads_n_of_m_in_tables_charts_and_headlines():
+def test_a_median_of_fewer_companies_than_its_group_reads_n_of_m_in_tables_charts_and_headlines(monkeypatch):
+    # R31: a test of the ranking rules on fixtures of 3 or 4 companies a layer, run at the marks' floor (COMPARE_MIN); the headline floor
+    # of 5 (HEADLINE_MIN) on the same fixtures is tested in tests/test_r31_bound.py
+    monkeypatch.setattr("app.intel.theme_data.HEADLINE_MIN", 3)
     assert deck._medn({"n": 5, "median": 15.0}, 6) == "15.0% (5 of 6)" and deck._medn({"n": 6, "median": 15.0}, 6) == "15.0%"
     assert deck._medn({"n": 2, "median": 15.0}, 6) == "– (2 of 6)" and deck._medn({"n": 2, "median": 15.0}) == "– (2)"
     assert D.few(3, 5) == ", 3 of 5 companies" and D.few(3, 3) == ", 3 companies" and D.few(9, 9) == ""
@@ -135,7 +141,10 @@ def test_every_headline_and_finding_figure_is_one_the_tables_show_on_every_synth
     assert deck.check_deck(slides) == []                       # and it finds nothing on the finished deck either
 
 
-def test_a_figure_no_table_shows_is_dropped_and_logged_never_shipped(caplog):
+def test_a_figure_no_table_shows_is_dropped_and_logged_never_shipped(caplog, monkeypatch):
+    # R31: a test of the ranking rules on fixtures of 3 or 4 companies a layer, run at the marks' floor (COMPARE_MIN); the headline floor
+    # of 5 (HEADLINE_MIN) on the same fixtures is tested in tests/test_r31_bound.py
+    monkeypatch.setattr("app.intel.theme_data.HEADLINE_MIN", 3)
     v = full_view()
     v["chain"] = chain_of(v, ("Mining", 6, 30.0, 5), ("Cells", 4, 12.0, 3))
     assert deck.theme_plan(v)[0][0].checked == []                                          # the same rows: nothing dropped
@@ -168,7 +177,10 @@ def test_the_check_reads_percentages_gaps_counts_multiples_and_money_against_the
     assert s.subtitle == "" and k.blocks[0]["items"][0]["lines"] == ["Median ROCE 15.0%."]       # a headline that loses its lead says nothing
 
 
-def test_a_gap_said_beside_two_figures_is_the_difference_of_the_figures_as_printed():
+def test_a_gap_said_beside_two_figures_is_the_difference_of_the_figures_as_printed(monkeypatch):
+    # R31: a test of the ranking rules on fixtures of 3 or 4 companies a layer, run at the marks' floor (COMPARE_MIN); the headline floor
+    # of 5 (HEADLINE_MIN) on the same fixtures is tested in tests/test_r31_bound.py
+    monkeypatch.setattr("app.intel.theme_data.HEADLINE_MIN", 3)
     b = {"layer": "X", "stats": {"ebitda": {"median": 26.55, "n": 3}}, "left_out": 0, "stats_over": "own", "companies": []}
     assert D.margin_line(b, 24.94) is None                  # changed on purpose (R27): the whole map's median is in no table, so never quoted
     c = D.chain_table([block("A", 3, 26.55), block("B", 5, 24.94)])
@@ -223,7 +235,7 @@ def test_the_contents_lists_the_notes_page_and_references_point_at_it():
 
 # ---------- 5. the version ----------
 def test_the_deck_version_is_27_so_kept_deck_files_are_made_again_once():
-    assert deck.THEME_DECK_VERSION == 30                     # R30 bumped it (R25's test, updated: a new release makes kept files again)
+    assert deck.THEME_DECK_VERSION == 31                     # R31 bumped it (R25's test, updated: a new release makes kept files again)
 
 
 # ---------- 6. the live R24 decks: a layer's columns follow its family; notes name only the families shown ----------

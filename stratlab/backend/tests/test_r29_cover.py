@@ -259,7 +259,10 @@ def test_metrics_apply_per_model_inventory_days_never_for_a_marketplace():
     assert Reg.main_family([{"mining"}, {"mining"}, {"metal_processing"}]) == "mining"
 
 
-def test_no_headline_compares_layers_of_different_families():
+def test_no_headline_compares_layers_of_different_families(monkeypatch):
+    # R31: a test of the ranking rules on fixtures of 3 or 4 companies a layer, run at the marks' floor (COMPARE_MIN); the headline floor
+    # of 5 (HEADLINE_MIN) on the same fixtures is tested in tests/test_r31_bound.py
+    monkeypatch.setattr("app.intel.theme_data.HEADLINE_MIN", 3)
     def blk(name, fam, e):
         cos = [{"symbol": f"{name}{i}", "status": "core", "year": "Mar 2026"} for i in range(4)]
         return {"layer": name, "n": 4, "revenue": 100.0, "companies": cos, "model": {"id": fam, "family": fam, "line": ""},
@@ -275,4 +278,4 @@ def test_no_headline_compares_layers_of_different_families():
 
 
 def test_the_versions_are_bumped_so_kept_maps_and_decks_are_made_again():
-    assert B.RULES == 30 and deck.THEME_DECK_VERSION == 30          # R30 bumped both (updated on purpose)
+    assert B.RULES == 31 and deck.THEME_DECK_VERSION == 31          # R31 bumped both (updated on purpose)

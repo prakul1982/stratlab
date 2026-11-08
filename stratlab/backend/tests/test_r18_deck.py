@@ -107,7 +107,10 @@ def maker_theme():
 
 
 # ---------- 1. lenders get lenders' measures ----------
-def test_a_lender_theme_shows_lenders_measures_and_never_a_column_that_is_empty_everywhere():
+def test_a_lender_theme_shows_lenders_measures_and_never_a_column_that_is_empty_everywhere(monkeypatch):
+    # R31: a test of the ranking rules on fixtures of 3 or 4 companies a layer, run at the marks' floor (COMPARE_MIN); the headline floor
+    # of 5 (HEADLINE_MIN) on the same fixtures is tested in tests/test_r31_bound.py
+    monkeypatch.setattr("app.intel.theme_data.HEADLINE_MIN", 3)
     region, m, f, _, _ = bank_theme()
     v, slides = deck_of(region, m, f)
     chain = table_of(slides, "The value chain by layer")

@@ -1925,7 +1925,62 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> li
 
 HELD_WORDS = {"net": "net margin", "ebitda": "EBITDA margin", "roe": "return on equity", "pb": "price to book"}
 COVERAGE_HEAD = ["Coverage", "Covered", "Of what"]
-COVERAGE_KINDS = ("Companies, by count", "Market value", "Each figure", "Each layer")
+COVERAGE_KINDS = ("Companies, by count", "Market value", "Each figure", "Each layer", "Partly read", "Not in the sources")
+# R31 (the owner's review of the live R30 Insurance and Real estate decks): the model-specific figures the app's sources don't hold, and why,
+# by business-model family (theme_check.MODELS); said once, on the coverage table (an insurer's, when the sector table doesn't say it)
+NOT_IN_SOURCES = {
+    "development": ("Property developers", "pre-sales (bookings), collections and land bank aren't elements of the annual or quarterly results "
+                                           "formats the app reads"),
+    "property": ("Property and leasing", "occupancy, leased area and rent per square foot aren't elements of the annual or quarterly results "
+                                         "formats the app reads"),
+    "insurer": ("Insurers", "VNB, APE and embedded value aren't elements of the insurance results formats"),
+}
+INSURER_FAMILIES = ("underwriting", "life_insurance", "general_insurance", "reinsurance")
+# R31: the figures whose reads the coverage table counts as partial: (label, the company row's key)
+PARTIAL_FIGURES = (("EBITDA margin", "ebitda"), ("net margin", "net"), ("revenue growth", "sales_1y"), ("latest quarter", "quarter"))
+
+
+def _partial(row: dict) -> bool:
+    """Whether a company's stored years were read only in part (R31): a year with no revenue, a non-lender's year with no margin, a gap
+    between years, or a part year as its latest."""
+    from .intel.theme_data import _next_year
+    ys = [y for y in row.get("years") or [] if isinstance(y, dict)]
+    if not ys:
+        return False
+    if any(y.get("sales") is None or (not row.get("bank") and y.get("opm") is None) for y in ys):
+        return True
+    if any(not _next_year(str(a.get("year")), str(b.get("year"))) for a, b in zip(ys, ys[1:])):
+        return True
+    return bool(re.search(r"\s\d+m$", str(row.get("year") or "")))
+
+
+def partial_line(v: dict) -> str:
+    """Each figure read for N of M confirmed companies with figures, and K of the missing whose stored years were read only in part (R31:
+    a figure missing because the reading was partial is said so); "" when no figure is missing for that reason."""
+    cos = {c.get("symbol"): c for b in v.get("layers") or [] for c in b.get("companies") or []
+           if c.get("status") != "unverified" and (c.get("revenue") is not None or c.get("profit") is not None)}
+    m = len(cos)
+    out = []
+    for label, k in PARTIAL_FIGURES:
+        have = sum(1 for c in cos.values() if c.get(k) is not None)
+        part = sum(1 for c in cos.values() if c.get(k) is None and _partial(c))
+        if part:
+            out.append(f"{label} read for {have:,} of {m:,}; {part:,} partial")
+    return " · ".join(out)
+
+
+def not_in_sources(v: dict) -> str:
+    """The model-specific figures the app's sources don't hold for the deck's business models, and why (R31), once each; an insurer's only when
+    no sector table says it already."""
+    fams = {(b.get("model") or {}).get("family") for b in v.get("layers") or [] if isinstance(b.get("model"), dict)}
+    fams |= {"insurer" for b in v.get("layers") or [] for c in b.get("companies") or [] if c.get("profile") == "insurer"}
+    fams |= {"insurer" for f_ in fams & set(INSURER_FAMILIES)}
+    said = ((v.get("sections") or {}).get("sector") or {}).get("families") or {}
+    out = []
+    for k, (who, why) in NOT_IN_SOURCES.items():
+        if k in fams and not (k == "insurer" and (said.get("insurer") or {}).get("not_filed")):
+            out.append(f"{who}: {why}")
+    return "; ".join(out) + "." if out else ""
 
 
 def coverage_table(v: dict, cov: dict) -> list[list[str]]:
@@ -1946,6 +2001,12 @@ def coverage_table(v: dict, cov: dict) -> list[list[str]]:
             lay.append(f"{b.get('layer')} {sum(1 for c in cos if c.get('revenue') is not None or c.get('profit') is not None)} of {len(cos)}")
     if lay:
         rows.append([COVERAGE_KINDS[3], "", "companies with figures: " + " · ".join(lay)])
+    part = partial_line(v)
+    if part:                       # R31: a figure missing because its years or quarters were read only in part
+        rows.append([COVERAGE_KINDS[4], "", part])
+    gone = not_in_sources(v)
+    if gone:                       # R31: model-specific figures the sources don't hold, and why
+        rows.append([COVERAGE_KINDS[5], "", gone])
     return rows
 
 
@@ -2166,7 +2227,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 30                  # part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 31                  # R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -2368,12 +2429,13 @@ def chain_family_cols(rows: list) -> list[tuple]:
 
 def compare_note(chain: dict, key: str) -> str:
     """The value chain's footnote on how layers are compared: the one floor (theme_data.COMPARE_MIN), said whatever is marked (R25)."""
-    from .intel.theme_data import COMPARE_MIN
+    from .intel.theme_data import COMPARE_MIN, HEADLINE_MIN
     what = "return on equity" if key == "roe" else "EBITDA margin"
+    said = f" A sentence that compares layers needs at least {HEADLINE_MIN} companies with the figure in each."      # R31
     if chain.get("highest"):
         return (f"Highest median {what} in green, lowest in red, among the layers whose median is of at least {COMPARE_MIN} companies; "
-                "a layer with fewer is shown but not ranked.")
-    return f"A layer is ranked only on a median of at least {COMPARE_MIN} companies; a layer with fewer is shown but not ranked."
+                "a layer with fewer is shown but not ranked." + said)
+    return f"A layer is ranked only on a median of at least {COMPARE_MIN} companies; a layer with fewer is shown but not ranked." + said
 
 
 def top_of(rows: list, value, count):
@@ -2657,12 +2719,12 @@ def counts_flags(counts: dict) -> list[str]:
 def headline_flag(text: str) -> str | None:
     """Why a ranking sentence can't headline (R27): a highest, lowest, fastest or slowest on a figure of fewer than COMPARE_MIN companies or
     under COVERAGE_MIN of its group ("N of M companies")."""
-    from .intel.theme_data import COMPARE_MIN, COVERAGE_MIN
+    from .intel.theme_data import COVERAGE_MIN, HEADLINE_MIN
     if not _RANKING.search(text):
         return None
     for a, b in _OF_COS.findall(text):
         n, of = int(a.replace(",", "")), int(b.replace(",", ""))
-        if n < COMPARE_MIN or n < of * COVERAGE_MIN:
+        if n < HEADLINE_MIN or n < of * COVERAGE_MIN:           # R31: one headline floor
             return f"ranked on {n} of {of}"
     return None
 

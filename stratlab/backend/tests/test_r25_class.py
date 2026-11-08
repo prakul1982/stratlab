@@ -76,7 +76,10 @@ def test_it_services_mixed_layers_are_split_by_how_they_earn():
     assert after["Other IT service companies"] == ["NOD", "SV1"] and "Makers of their own products" not in after
     # the 18-company catch-all (over 40% of the theme) is split by model: project firms and managed-service firms apart
     assert after["Mid-tier digital and cloud specialists"] == sorted([f"PJ{i:02d}" for i in range(10)] + ["PJX"])
-    assert after["Managed and outsourced IT services"] == sorted(f"MG{i}" for i in range(6))
+    # R31 (changed on purpose: no two layers of one primary model): the managed-service firms split out of the catch-all join the map's own
+    # layer of managed services instead of a second "Managed and outsourced IT services" layer
+    assert "Managed and outsourced IT services" not in after
+    assert after["Large diversified outsourcers"] == sorted([f"MG{i}" for i in range(6)] + [f"OS{i}" for i in range(5)])
     total = sum(len(x) for x in after.values())
     assert total == sum(len(x) for x in before.values())                                 # nobody lost or doubled
     assert all(len(x) <= 0.4 * total for k, x in after.items())
@@ -99,9 +102,10 @@ def test_before_and_after_layer_list_for_the_report():
         ("Large diversified outsourcers", 5), ("Mid-tier digital and cloud specialists", 18), ("Cloud, AI infrastructure and hardware", 4),
         ("Software products and platforms", 3), ("Other IT service companies", 3)]
     assert [(v["layer"], len(v["companies"])) for v in vc] == [
-        ("Large diversified outsourcers", 5), ("Mid-tier digital and cloud specialists", 11), ("Managed and outsourced IT services", 6),
+        ("Large diversified outsourcers", 11), ("Mid-tier digital and cloud specialists", 11),
         ("Cloud, AI infrastructure and hardware", 2), ("Software products and platforms", 4), ("Hardware resale and integration", 3),
-        ("Other IT service companies", 2)]          # R27: no one-company layer, the server maker is in "Other"
+        ("Other IT service companies", 2)]          # R27: no one-company layer, the server maker is in "Other"; R31 (on purpose): the managed-
+    #                                                 service firms join the map's own managed-services layer
 
 
 def test_a_catch_all_of_one_model_is_split_by_market_value():
