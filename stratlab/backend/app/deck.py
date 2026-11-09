@@ -2262,7 +2262,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 42                  # R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 43                  # R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -2615,6 +2615,9 @@ def _deck_figures(slides: list) -> dict:
     return out
 
 
+PLACEHOLDER = re.compile(r"\{[a-z_]+\}|(?<![A-Za-z] )\bNone\b(?! of| is| has| shows| was| were| are)|\bnan\b|\bundefined\b|\bshown for [a-z]{1,2}\.")
+
+
 def check_deck(slides: list) -> list[dict]:
     """The consistency check before a deck is stored (R25): every percentage, multiple, gap in points and count that a headline (a slide's
     subtitle), a finding or a question states is looked for among the figures the deck's own tables, charts and tiles show, the rows they all
@@ -2650,6 +2653,17 @@ def check_deck(slides: list) -> list[dict]:
                         lines.append(ln)
                 it["lines"] = lines
             b["items"] = [it for it in b["items"] if it.get("lines")]
+    # R34 (GPT review of R31.7: "No listed company is shown for x."): a sentence that still holds a placeholder (a one-letter name, an
+    # unfilled {field}, None, nan) is dropped, never shipped
+    for s in slides[1:]:
+        if s.subtitle and PLACEHOLDER.search(s.subtitle):
+            dropped.append({"slide": s.title, "text": s.subtitle, "figures": ["placeholder"]})
+            s.subtitle = ""
+        for b in s.blocks:
+            if b["kind"] == "text" and b.get("paras"):
+                keep = [p for p in b["paras"] if not (isinstance(p, str) and PLACEHOLDER.search(p))]
+                dropped += [{"slide": s.title, "text": p, "figures": ["placeholder"]} for p in b["paras"] if p not in keep]
+                b["paras"] = keep
     gone = {d["text"] for d in dropped}
     for s in slides:                         # the contents repeat a part's headline: a dropped one goes there too
         for b in s.blocks:
