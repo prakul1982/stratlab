@@ -266,3 +266,11 @@ def test_a_thin_stored_description_is_read_again_once_and_names_lose_their_legal
     assert not thin_about({"at": "2026-11-01", "about": " ".join(["word"] * 40)})                 # full enough: kept
     assert plain_name("Qnity Electronics, Inc.") == "Qnity Electronics" and plain_name("Bharti Airtel Ltd") == "Bharti Airtel"
     assert plain_name("Apple") == "Apple"
+
+
+def test_the_peer_pe_line_names_its_price_date():
+    """GPT review of R31.9: the retail peer median moved from 19.2x to 18.4x between runs a day apart; the line says which close."""
+    from app.deck import pe_peer_line
+    pp = {"theme": 18.8, "peers": 18.4, "premium": 2.2, "n": 37, "sets": {"sector": 37}, "as_of": "2026-11-09"}
+    assert "(prices at the 2026-11-09 close)" in pe_peer_line(pp)
+    assert "prices at" not in pe_peer_line({k: v for k, v in pp.items() if k != "as_of"})
