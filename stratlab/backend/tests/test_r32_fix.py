@@ -189,3 +189,12 @@ def test_clipped_text_ends_on_a_whole_sentence_when_one_fits():
     out = clip(text, 10, 3.0, 2)
     assert out == "These firms design chips." or (out.endswith(".") and not out.endswith("…"))
     assert clip("One very long sentence " * 40, 10, 3.0, 2).endswith("…")     # no whole sentence fits: the ellipsis stays
+
+
+def test_a_chip_materials_supplier_is_an_ingredient_maker_not_an_equipment_maker():
+    """GPT review of R31.5: Qnity, a supplier of semiconductor and electronics materials, sat among equipment makers."""
+    from app.intel import theme_check as C
+    ev = C.model_evidence
+    assert C.refine_model("manufacturing", ev("Semiconductors", "supplies advanced semiconductor and electronics materials and interconnect solutions")) == "components"
+    assert C.refine_model("manufacturing", ev("Semiconductor Equipment", "makes wafer fab equipment and process tools")) == "manufacturing"
+    assert C.refine_model("manufacturing", ev("Specialty Chemicals", "makes dyes and pigments for textiles")) == "manufacturing"

@@ -573,6 +573,10 @@ def refine_model(model, evidence) -> str:
     # that designs and has others make is fabless; one that also owns its fabs (an IDM) is a maker
     # R32 (the live R31 deck: "How they earn is shown for only 8 of these 37 companies"): a designer whose evidence says it designs or develops
     # chips, GPUs or SoCs and owns no fabs is fabless, whether the AI called it a maker or left it unknown; own fabs make it an IDM (a maker)
+    # R34 (GPT review of R31.5: a semiconductor materials supplier shown among equipment makers): a company whose own words say it supplies
+    # materials, chemicals, gases or substrates for chips or electronics, and not machines, is an ingredient maker (components)
+    if model in ("manufacturing", "unknown", "") and re.search(CHIP_MATERIALS, own, re.I) and not re.search(r"\bequipment|machines|tools\b", own, re.I):
+        return "components"
     if model in ("manufacturing", "fabless", "unknown", "") and re.search(SEMI_INDUSTRY, text, re.I):
         fab, out = re.search(FAB_OWN, own, re.I), re.search(OUTSOURCED, own, re.I)
         if fab and not out:
@@ -585,6 +589,8 @@ def refine_model(model, evidence) -> str:
     return model
 
 
+CHIP_MATERIALS = (r"(?:semiconductor|electronic|electronics|chip|wafer)s?\b[^.]{0,40}\b(?:materials|chemicals|gases|substrates|slurr\w+|photoresists?)|"
+                  r"(?:materials|chemicals|gases|substrates)\b[^.]{0,30}\b(?:for|used in)\b[^.]{0,20}\b(?:semiconductors?|chips?|electronics|wafers?)")
 REFINE_HINTS = {"regulated_utility": r"transmission|distribution|electric utilit", "power_generation": r"power generation|electric services",
                 "power_trading": r"power trading|renewable", "commodity_mining": r"\bcoal\b|minerals|mining|pig iron|sponge iron|ferro ?alloys|"
                 r"diversified metals|precious metals", "metal_processing": r"products|pipes|tubes|castings|forgings|wires|fabricat",
