@@ -2245,7 +2245,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 37                  # R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 38                  # R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -3096,7 +3096,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         key = chain.get("measure") or "ebitda"
         # a chart follows the table's rule (R21): a layer is plotted only on a median of MIN_BASE companies or more, its count in its label
         charted = [r for r in rows_c if r.get(key) is not None and (r.get(f"{key}_n") or 0) >= MIN_BASE]
-        chart = 2 <= len(charted) <= 14 and len(head) <= 7         # a wide table keeps the full width (R25: no words broken)
+        chart = 2 <= len(charted) <= 14 and len(head) <= 5         # a wide table keeps the full width (R25; R34, GPT review of R31.5: label columns pressed to a few letters)
         tw = 7.3 if chart else CW
         foot = [f"Each company's latest full year, in {unit}; how each figure is built: ⟦{NOTES_TITLE}⟧.",
                 "Layer revenue: its companies added together; margins and returns: its median company."]
@@ -3147,6 +3147,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         if not layer.get("official") and len({c.get("official_industry") for c in cos if c.get("official_industry")}) >= 2:
             cols = [("official_industry", "Industry", 1.7)] + cols        # an AI layer: the exchange's industry is a column, not a layer (R20)
         body = [[(f"{c['name']} (whole company)" if c["symbol"] in lwide else f"{c['name']} (not confirmed)" if c["symbol"] in unsure
+                  else f"{c['name']} (other business)" if c["symbol"] in unmodelled and c.get("model_out") == "other"
                   else f"{c['name']} (left out)" if c["symbol"] in unmodelled else c["name"])]
                 + [co_cell(c, k, amt) for k, _, _ in cols] + [c.get("year") or "–"] for c in cos]
         ns = [(st.get(k) or {}).get("n") or 0 for k, _, _ in cols if k not in ("revenue", "official_industry")]
@@ -3192,8 +3193,12 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         if unsure:
             fparts.append("(not confirmed): its own words don't show this work, so it is left out of the medians and the revenue total.")
         lo_note = "(left out): its evidence doesn't show clearly how it earns, so it is left out of this layer's figures and rankings."
-        if unmodelled:
+        other = {c["symbol"] for c in cos if c["symbol"] in unmodelled and c.get("model_out") == "other"}
+        if unmodelled - other:
             fparts.append(lo_note)
+        if other:      # R34 (GPT review of R31.5, IT: 13 with records, 4 in the layer's calculations, no reason given for the other 9)
+            fparts.append("(other business): it earns another way than most of this layer's companies, so it is left out of this layer's "
+                          "figures and rankings.")
         if any(c.get("one_off") for c in cos):
             fparts.append(f"{ONE_OFF}: net margin above the EBITDA margin ({ANOMALY_WHY}); left out of the net margin's median.")
         if any(c.get("nc") for c in cos):
@@ -3217,8 +3222,10 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         k_fit = fits(tw)
         if chart and k_fit < len(body) and fits(CW) > k_fit:      # the companies before the chart: a table that shows more of them goes full width
             chart, tw, k_fit = None, CW, fits(CW)
-        if unmodelled and not any(c["symbol"] in unmodelled for c in cos[:k_fit]):       # no "(left out)" row shown: its note isn't either
-            fparts.remove(lo_note)
+        on_page = {c["symbol"] for c in cos[:k_fit]}
+        drop = ([lo_note] if not (unmodelled - other) & on_page else []) + [p for p in fparts if p.startswith("(other business)") and not other & on_page]
+        if unmodelled and any(p in fparts for p in drop):       # no "(left out)" / "(other business)" row shown: its note isn't either
+            fparts = [p for p in fparts if p not in drop]
             fnote = " ".join(fparts)
             fh = (note_h(fnote) + 0.12) if fnote else 0
         s = Slide(title, msg, eyebrow=eb("The value chain"))

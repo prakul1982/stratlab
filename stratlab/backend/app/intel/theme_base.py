@@ -1043,7 +1043,7 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
         what = MODELS[mid][2] if mid in MODELS else FAMILIES.get(f, ("", MODELS[sorted(fines)[0]][2]))[1]
         rest = [c for c in cos if fam(c) != f]
         known_ids = {c.get("ticker") for c in known}
-        v["companies"] = [c if c.get("ticker") in known_ids else {**c, "model_out": True} for c in cos]
+        v["companies"] = [c if c.get("ticker") in known_ids else {**c, "model_out": "other" if fam(c) else "unknown"} for c in cos]      # R34: why, named
         sparse = len(known) * 2 < len(cos)
         if sparse:
             # R26: a line resting on a few of a layer's companies isn't what they have in common: said plainly instead (the live R25 IT services
