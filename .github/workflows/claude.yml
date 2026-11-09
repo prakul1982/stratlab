@@ -43,6 +43,7 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_args: >-
+            --model claude-sonnet-5-5
             --max-turns 120
             --append-system-prompt "Repository rules: facts only in any user-facing text, no advice wording. Fix things generically for every
             sector, India and US. Never skip, disable or weaken a test. Before pushing, run the backend tests:
