@@ -238,7 +238,7 @@ def test_every_deck_rule_holds_on_the_new_structures(name):
 
 
 def test_the_deck_version_is_27():
-    assert deck.THEME_DECK_VERSION == 38 and S.VERSION == 2          # R33 bumped the deck version (updated on purpose)
+    assert deck.THEME_DECK_VERSION == 39 and S.VERSION == 2          # R33 bumped the deck version (updated on purpose)
 
 
 def test_a_software_companys_unusual_rpo_growth_is_listed_with_its_base_and_kept_out_of_the_headline_when_it_dominates():

@@ -140,7 +140,7 @@ def test_a_split_half_with_no_shown_company_is_undone():
     assert "Residential developers" in lays and not any("(larger)" in x or "(smaller)" in x for x in lays)
     text = " ".join(str(x) for s in slides for b in s.blocks for x in (b.get("paras") or []) + [s.title or ""])
     assert "(smaller)" not in text and "(larger)" not in text
-    assert deck.THEME_DECK_VERSION == 38 and B.RULES == 33
+    assert deck.THEME_DECK_VERSION == 39 and B.RULES == 33
 
 
 def test_a_company_with_no_model_takes_the_one_its_map_layers_name_states():
@@ -222,3 +222,13 @@ def test_a_company_out_of_a_layers_figures_says_why():
     out = {c["ticker"]: c.get("model_out") for v in got for c in v["companies"]}
     it = next(v for v in got if v["layer"] == "IT services")
     assert out["U"] == "unknown" and not out["A"] and "P" not in {c["ticker"] for c in it["companies"]}     # another way: its own group
+
+
+def test_a_cut_table_cell_ends_on_a_whole_word():
+    """GPT review of R31.5: table cells read "Semiconductor equipm…" and "Defence syst…"."""
+    from app.deck import fit_chars, _width
+    out = fit_chars("Semiconductor equipment makers", 9, _width("Semiconductor equipm…", 9))
+    assert out == "Semiconductor…"
+    assert fit_chars("Short", 9, 5.0) == "Short"
+    one = fit_chars("Supercalifragilistic", 9, _width("Supercal…", 9))
+    assert one.endswith("…") and len(one) > 1                     # one long word: cut, still an ellipsis
