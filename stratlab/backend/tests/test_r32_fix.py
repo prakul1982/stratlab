@@ -198,3 +198,15 @@ def test_a_chip_materials_supplier_is_an_ingredient_maker_not_an_equipment_maker
     assert C.refine_model("manufacturing", ev("Semiconductors", "supplies advanced semiconductor and electronics materials and interconnect solutions")) == "components"
     assert C.refine_model("manufacturing", ev("Semiconductor Equipment", "makes wafer fab equipment and process tools")) == "manufacturing"
     assert C.refine_model("manufacturing", ev("Specialty Chemicals", "makes dyes and pigments for textiles")) == "manufacturing"
+
+
+def test_a_sub_theme_takes_its_layers_companies_whose_own_words_name_it():
+    """GPT review of R31.5: Bharti Airtel left out of "Mobile network operators" though in the "Mobile and broadband operators" layer."""
+    from app.intel.theme_data import sub_members
+    layers = [{"layer": "Mobile and broadband operators", "companies": [
+        {"ticker": "BHARTIARTL", "what": "Mobile, home broadband and enterprise services"}, {"ticker": "IDEA", "what": "Mobile services"},
+        {"ticker": "QUADRANT", "what": "Cable and broadband internet"}]}]
+    got = [c["ticker"] for c in sub_members({"name": "Mobile network operators", "companies": [{"ticker": "IDEA"}]}, layers)]
+    assert got == ["IDEA", "BHARTIARTL"]
+    wide = {"name": "Tower and passive infrastructure sharing", "companies": [{"ticker": "IDEA"}]}
+    assert [c["ticker"] for c in sub_members(wide, layers)] == ["IDEA"]          # three words that set it apart: left as the map has it

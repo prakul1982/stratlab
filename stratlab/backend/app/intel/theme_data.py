@@ -1270,7 +1270,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     subs = []
     for s in checked.get("sub_themes") or []:
         cos = []
-        for c in s.get("companies") or []:
+        for c in sub_members(s, checked.get("value_chain") or []):
             r = rows.get(c["ticker"])
             if r:
                 cos.append({"symbol": r["symbol"], "name": r["name"], "what": c.get("what"), "cap": r["cap"], "sales_1y": r["sales_1y"], "ebitda": r["ebitda"],
@@ -1572,3 +1572,26 @@ def claim_mismatches(text: str, shown: dict, floor: int = COMPARE_MIN) -> list[s
             bad.append(f"{a} of {b}")
     bad += [m for m in _C_MONEY.findall(text) if m not in shown.get("money", ())]
     return bad
+
+SUB_GENERIC = {"and", "of", "the", "for", "in", "with", "operators", "operator", "companies", "company", "makers", "maker", "providers", "provider",
+               "services", "service", "network", "networks", "players", "firms", "suppliers", "supplier", "other", "related", "solutions"}
+
+
+def sub_members(sub: dict, layers: list) -> list:
+    """A sub-theme's companies, completed from the map (R34, GPT review of R31.5: Bharti Airtel left out of "Mobile network operators" while
+    in the "Mobile and broadband operators" layer): a company of a map layer that holds one of the sub-theme's own companies joins it when its
+    own description names every word that sets the sub-theme apart (at most two: "mobile"); a name of more such words is left as the map has it."""
+    own = list(sub.get("companies") or [])
+    have = {c.get("ticker") for c in own}
+    words = [w for w in re.findall(r"[a-z]+", str(sub.get("name") or "").lower()) if w not in SUB_GENERIC and len(w) > 2]
+    if not have or not 1 <= len(words) <= 2:
+        return own
+    for v in layers:
+        if v.get("official") or not have & {c.get("ticker") for c in v.get("companies") or []}:
+            continue
+        for c in v.get("companies") or []:
+            what = str(c.get("what") or "").lower()
+            if c.get("ticker") not in have and what and all(re.search(rf"\b{w}", what) for w in words):
+                own.append(c)
+                have.add(c.get("ticker"))
+    return own
