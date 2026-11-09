@@ -3105,8 +3105,9 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         foot = [f"Each company's latest full year, in {unit}; how each figure is built: ⟦{NOTES_TITLE}⟧.",
                 "Layer revenue: its companies added together; margins and returns: its median company."]
         foot.append(compare_note(chain, key))
-        none_ = [x["layer"] for x in layers if not x.get("companies") and x.get("layer")]
-        unsure_ = [x for x in empty if x not in none_]
+        # R34 (GPT review of R31.7, Defence: "No listed company is shown for x."): a layer name with no word in it is no layer to name
+        none_ = [x["layer"] for x in layers if not x.get("companies") and re.search(r"[A-Za-z]{3,}", str(x.get("layer") or ""))]
+        unsure_ = [x for x in empty if x not in none_ and re.search(r"[A-Za-z]{3,}", str(x or ""))]
         if none_:
             foot.append(f"No listed company is shown for {', '.join(none_)}: none of the companies the map named has a description that shows it does the work.")
         if unsure_:

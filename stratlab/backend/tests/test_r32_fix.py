@@ -232,3 +232,12 @@ def test_a_cut_table_cell_ends_on_a_whole_word():
     assert fit_chars("Short", 9, 5.0) == "Short"
     one = fit_chars("Supercalifragilistic", 9, _width("Supercal…", 9))
     assert one.endswith("…") and len(one) > 1                     # one long word: cut, still an ellipsis
+
+
+def test_a_layer_name_with_no_word_is_never_named_in_a_note():
+    """GPT review of R31.7, Defence p.6: "No listed company is shown for x." """
+    import re as _re
+    from app import deck
+    src = open(deck.__file__).read()
+    assert 'not x.get("companies") and re.search(r"[A-Za-z]{3,}"' in src and 'x not in none_ and re.search(r"[A-Za-z]{3,}"' in src
+    assert not _re.search(r"[A-Za-z]{3,}", "x") and _re.search(r"[A-Za-z]{3,}", "Missile systems")
