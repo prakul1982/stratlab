@@ -351,7 +351,7 @@ def model_fields(layer: dict, sym: str) -> dict:
     if "model" not in c:
         return {}
     return {"model": c.get("model") or "", "model_tags": list(c.get("model_tags") or []), "model_confidence": c.get("model_confidence") or "",
-            **({"model_out": True} if c.get("model_out") else {})}
+            **({"model_out": c.get("model_out")} if c.get("model_out") else {})}
 
 
 def layer_block(name: str, rows: list[dict], wide: set[str]) -> dict:

@@ -210,3 +210,15 @@ def test_a_sub_theme_takes_its_layers_companies_whose_own_words_name_it():
     assert got == ["IDEA", "BHARTIARTL"]
     wide = {"name": "Tower and passive infrastructure sharing", "companies": [{"ticker": "IDEA"}]}
     assert [c["ticker"] for c in sub_members(wide, layers)] == ["IDEA"]          # three words that set it apart: left as the map has it
+
+
+def test_a_company_out_of_a_layers_figures_says_why():
+    """GPT review of R31.5 (IT: 13 with records, 4 in the layer's calculations, no reason for the other 9): a company of another way of
+    earning is marked "other", one whose way of earning isn't shown "unknown"."""
+    from app.intel.theme_base import by_model
+    vc = [{"layer": "IT services", "companies": [{"ticker": t} for t in ("A", "B", "C", "P", "U")]}]
+    models = {"A": "managed_services", "B": "managed_services", "C": "managed_services", "P": "software", "U": ""}
+    got = by_model(vc, models)
+    out = {c["ticker"]: c.get("model_out") for v in got for c in v["companies"]}
+    it = next(v for v in got if v["layer"] == "IT services")
+    assert out["U"] == "unknown" and not out["A"] and "P" not in {c["ticker"] for c in it["companies"]}     # another way: its own group
