@@ -140,7 +140,7 @@ def test_a_split_half_with_no_shown_company_is_undone():
     assert "Residential developers" in lays and not any("(larger)" in x or "(smaller)" in x for x in lays)
     text = " ".join(str(x) for s in slides for b in s.blocks for x in (b.get("paras") or []) + [s.title or ""])
     assert "(smaller)" not in text and "(larger)" not in text
-    assert deck.THEME_DECK_VERSION == 36 and B.RULES == 33
+    assert deck.THEME_DECK_VERSION == 37 and B.RULES == 33
 
 
 def test_a_company_with_no_model_takes_the_one_its_map_layers_name_states():
@@ -180,3 +180,12 @@ def test_a_stored_dive_is_made_again_when_its_sentences_change():
     from app.intel import theme_data, theme_routes
     m = {"generated_at": 1, "value_chain": [], "placements": {"placed": 3}}
     assert theme_routes.dive_key("IN", "x", m)[-1] == f"td{theme_data.DIVE_TEXT}"
+
+
+def test_clipped_text_ends_on_a_whole_sentence_when_one_fits():
+    """GPT review of R31.5: layer descriptions ended mid-thought with an ellipsis though a whole first sentence fitted."""
+    from app.deck import clip
+    text = "These firms design chips. " + "They earn from a long catalogue sold over many years to industrial buyers. " * 6
+    out = clip(text, 10, 3.0, 2)
+    assert out == "These firms design chips." or (out.endswith(".") and not out.endswith("…"))
+    assert clip("One very long sentence " * 40, 10, 3.0, 2).endswith("…")     # no whole sentence fits: the ellipsis stays

@@ -166,6 +166,15 @@ def clip(text: str, size: float, width: float, lines: int, bold=False, head=Fals
     got = wrap(text, size, width, bold, head)
     if len(got) <= lines:
         return str(text)
+    # R34 (GPT review of R31.5: descriptions ending mid-thought): the whole sentences that fit, when at least one does; an ellipsis only then
+    parts, kept = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9\"'(])", str(text).strip()), ""
+    for p in parts:
+        nxt = f"{kept} {p}".strip()
+        if len(wrap(nxt, size, width, bold, head)) > lines:
+            break
+        kept = nxt
+    if kept and kept[-1:] in ".!?":
+        return kept
     return (fit_paras([str(text)], size, width, lines * _lh(size), bold, head) or [""])[0]
 
 
@@ -2236,7 +2245,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 36                  # R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 37                  # R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
