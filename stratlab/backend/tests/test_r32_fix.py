@@ -140,7 +140,7 @@ def test_a_split_half_with_no_shown_company_is_undone():
     assert "Residential developers" in lays and not any("(larger)" in x or "(smaller)" in x for x in lays)
     text = " ".join(str(x) for s in slides for b in s.blocks for x in (b.get("paras") or []) + [s.title or ""])
     assert "(smaller)" not in text and "(larger)" not in text
-    assert deck.THEME_DECK_VERSION == 39 and B.RULES == 33
+    assert deck.THEME_DECK_VERSION == 40 and B.RULES == 33
 
 
 def test_a_company_with_no_model_takes_the_one_its_map_layers_name_states():
@@ -232,3 +232,12 @@ def test_a_cut_table_cell_ends_on_a_whole_word():
     assert fit_chars("Short", 9, 5.0) == "Short"
     one = fit_chars("Supercalifragilistic", 9, _width("Supercal…", 9))
     assert one.endswith("…") and len(one) > 1                     # one long word: cut, still an ellipsis
+
+
+def test_a_layer_name_with_no_word_is_never_named_in_a_note():
+    """GPT review of R31.7, Defence p.6: "No listed company is shown for x." """
+    import re as _re
+    from app import deck
+    src = open(deck.__file__).read()
+    assert 'not x.get("companies") and re.search(r"[A-Za-z]{3,}"' in src and 'x not in none_ and re.search(r"[A-Za-z]{3,}"' in src
+    assert not _re.search(r"[A-Za-z]{3,}", "x") and _re.search(r"[A-Za-z]{3,}", "Missile systems")
