@@ -140,7 +140,7 @@ def test_a_split_half_with_no_shown_company_is_undone():
     assert "Residential developers" in lays and not any("(larger)" in x or "(smaller)" in x for x in lays)
     text = " ".join(str(x) for s in slides for b in s.blocks for x in (b.get("paras") or []) + [s.title or ""])
     assert "(smaller)" not in text and "(larger)" not in text
-    assert deck.THEME_DECK_VERSION == 42 and B.RULES == 33
+    assert deck.THEME_DECK_VERSION == 43 and B.RULES == 33
 
 
 def test_a_company_with_no_model_takes_the_one_its_map_layers_name_states():
@@ -274,3 +274,11 @@ def test_the_peer_pe_line_names_its_price_date():
     pp = {"theme": 18.8, "peers": 18.4, "premium": 2.2, "n": 37, "sets": {"sector": 37}, "as_of": "2026-11-09"}
     assert "(prices at the 2026-11-09 close)" in pe_peer_line(pp)
     assert "prices at" not in pe_peer_line({k: v for k, v in pp.items() if k != "as_of"})
+
+
+def test_a_placeholder_sentence_never_ships():
+    """GPT review of R31.7: "No listed company is shown for x." reached a published deck; the publication check now drops such a sentence."""
+    from app.deck import PLACEHOLDER
+    assert PLACEHOLDER.search("No listed company is shown for x.") and PLACEHOLDER.search("Revenue of {layer} rose") and PLACEHOLDER.search("Median nan")
+    assert not PLACEHOLDER.search("No listed company is shown for Missile systems.") and not PLACEHOLDER.search("Nonetheless, margins rose.")
+    assert not PLACEHOLDER.search("None of these 3 companies' descriptions shows how it earns.")
