@@ -140,7 +140,7 @@ def test_a_split_half_with_no_shown_company_is_undone():
     assert "Residential developers" in lays and not any("(larger)" in x or "(smaller)" in x for x in lays)
     text = " ".join(str(x) for s in slides for b in s.blocks for x in (b.get("paras") or []) + [s.title or ""])
     assert "(smaller)" not in text and "(larger)" not in text
-    assert deck.THEME_DECK_VERSION == 41 and B.RULES == 33
+    assert deck.THEME_DECK_VERSION == 42 and B.RULES == 33
 
 
 def test_a_company_with_no_model_takes_the_one_its_map_layers_name_states():
@@ -255,3 +255,14 @@ def test_a_fitted_paragraph_ends_on_a_whole_sentence_when_one_fits():
             "Comparable: at least 5 companies with the figure and one kind of business.")
     out = fit_paras([text], 10, 3.2, 0.62)
     assert out and out[0].endswith(".") and not out[0].endswith("…")
+
+
+def test_a_thin_stored_description_is_read_again_once_and_names_lose_their_legal_form():
+    """GPT reviews of R31.5-R31.9: Bharti Airtel's stored line named no mobile service and Qnity's held only its name, so no rule could
+    place them; a thin description kept before R34 is read once more, with the encyclopedia summary beside it."""
+    from app.intel.theme_routes import thin_about, plain_name, ABOUT_V
+    assert thin_about({"at": "2026-11-01", "about": "Qnity Electronics, Inc"})
+    assert not thin_about({"at": "2026-11-01", "about": "x", "v": ABOUT_V})                         # read again already: kept
+    assert not thin_about({"at": "2026-11-01", "about": " ".join(["word"] * 40)})                 # full enough: kept
+    assert plain_name("Qnity Electronics, Inc.") == "Qnity Electronics" and plain_name("Bharti Airtel Ltd") == "Bharti Airtel"
+    assert plain_name("Apple") == "Apple"

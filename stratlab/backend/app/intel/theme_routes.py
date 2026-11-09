@@ -10,6 +10,7 @@
 No job of its own: everything is read when a page asks, through the caches the app already keeps. Memory: see DIVE_CACHE, PRICE_CACHE,
 EVIDENCE_CACHE and VERDICTS below."""
 import json
+import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -88,6 +89,22 @@ def own_filings(region: str, sym: str) -> str:
     return ("From its own filings: " + ". ".join(keep[:FILING_LINES]) + ".")[:FILING_CHARS] if keep else ""
 
 
+ABOUT_WORDS, ABOUT_V = 30, 2          # R34: a stored description under 30 words, kept before v2, is read again once (in the same bounded batches)
+
+
+def thin_about(got: dict) -> bool:
+    """Whether a stored description is too thin to show the business and was kept before R34 (GPT review of R31.5: Bharti Airtel's
+    profile line names no mobile service; Qnity's held only its name), so it is read once more."""
+    return got.get("v") != ABOUT_V and len(str(got.get("about") or "").split()) < ABOUT_WORDS
+
+
+def plain_name(name: str) -> str:
+    """A company name without its legal form, for an encyclopedia lookup ("Qnity Electronics, Inc." -> "Qnity Electronics")."""
+    out = re.sub(r"[,.]?\s+(?:inc|incorporated|corp|corporation|co|company|ltd|limited|plc|llc|lp|n\.?v|s\.?a|ag|holdings?)\.?$", "",
+                 str(name or "").strip(), flags=re.I)
+    return out.strip(" ,.") or str(name or "")
+
+
 def evidence_reader(region: str, names: dict):
     """A function symbol-list -> ({symbol: {about, industry}}, pending) that reads each company's own description once (the company
     page's profile), keeps it for EVIDENCE_DAYS, and reads no more than the request's budget allows."""
@@ -101,7 +118,7 @@ def evidence_reader(region: str, names: dict):
                 got = db.json_value(db.get_setting(key), {})
             except Exception:
                 got = {}
-            if got.get("at"):
+            if got.get("at") and not thin_about(got):
                 age = (datetime.now(timezone.utc) - datetime.fromisoformat(got["at"])).days
                 if age < (EVIDENCE_DAYS if got.get("about") else NO_DESCRIPTION_DAYS):
                     hit = got
@@ -110,10 +127,14 @@ def evidence_reader(region: str, names: dict):
             if region == "IN":
                 p = R.hub.screener.company(sym)
                 about, industry = p.get("about") or "", " > ".join(p.get("industry_path") or [])
-            if not about:
-                w = R.hub.wiki.company(names.get(sym) or sym)
-                about = (w or {}).get("extract") or ""
-            hit = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "about": theme_check.clean_description(about), "industry": industry}
+            if len(about.split()) < ABOUT_WORDS:          # R34: none, or a line too thin to show the business: its encyclopedia summary too
+                try:
+                    w = R.hub.wiki.company(plain_name(names.get(sym) or sym)) or {}
+                except Exception:
+                    w = {}
+                about = " ".join(x for x in (about, w.get("extract") or "") if x)
+            hit = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "about": theme_check.clean_description(about), "industry": industry,
+                   "v": ABOUT_V}
             try:
                 db.set_setting(key, json.dumps(hit, ensure_ascii=False))
             except Exception as e:
@@ -505,7 +526,7 @@ def _about_reader(region: str, names: dict, limit: int = DESCRIBE_READS):
                 got = db.json_value(db.get_setting(k), {})
             except Exception:
                 got = {}
-            if got.get("at"):
+            if got.get("at") and not thin_about(got):
                 hit = got
                 EVIDENCE_CACHE.set(k, hit, 6 * 3600)
         if hit is None:

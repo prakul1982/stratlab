@@ -262,7 +262,8 @@ def test_a_companys_own_filings_back_a_description_that_doesnt_name_the_work(mon
 def test_the_evidence_reader_adds_the_filings_and_reads_a_company_with_only_filings(monkeypatch):
     from app.intel import theme_routes
     monkeypatch.setattr(theme_routes, "own_filings", lambda region, sym: "From its own filings: Electric bus orders from state transport units.")
-    store = {f"theme:evidence:IN:OLECTRA": json.dumps({"at": datetime.now(timezone.utc).isoformat(), "about": "", "industry": ""})}
+    store = {f"theme:evidence:IN:OLECTRA": json.dumps({"at": datetime.now(timezone.utc).isoformat(), "about": "", "industry": "",
+                                                       "v": theme_routes.ABOUT_V})}         # R34: a record read in the current format
     monkeypatch.setattr(theme_routes.db, "get_setting", lambda k: store.get(k))
     theme_routes.EVIDENCE_CACHE.clear()
     got, pending = theme_routes.evidence_reader("IN", {})(["OLECTRA"])
