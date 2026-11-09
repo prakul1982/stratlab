@@ -589,6 +589,9 @@ def fit_chars(text: str, size: float, width: float) -> str:
     # R34 (GPT review of R31.5: "Semiconductor equipm…", "Defence syst…"): cut at the last whole word when one fits, never mid-word
     if text and len(text) < len(full) and full[len(text)].isalnum() and " " in text.strip():
         text = text[:text.rstrip().rfind(" ")]
+        # never end on a joining word ("Pharma and…"): drop it while a word is left before it
+        while re.search(r"\s(?:and|or|of|the|for|in|to|with|&)\s*$", text, re.I) and " " in text.strip():
+            text = re.sub(r"\s+\S+\s*$", "", text)
     return text.rstrip(" ,;:-–(") + "…"
 
 
@@ -2249,7 +2252,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 40                  # R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 41                  # R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
