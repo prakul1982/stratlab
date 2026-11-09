@@ -246,3 +246,12 @@ def test_a_layer_name_with_no_word_is_never_named_in_a_note():
 def test_a_cut_table_cell_never_ends_on_a_joining_word():
     from app.deck import fit_chars, _width
     assert fit_chars("Grid and power equipment makers", 9, _width("Grid and powe…", 9)) == "Grid…"
+
+
+def test_a_fitted_paragraph_ends_on_a_whole_sentence_when_one_fits():
+    """GPT review of R31.9: the summary page's ranking line ended "…companies with the figure and one kind of…"."""
+    from app.deck import fit_paras
+    text = ("Among the 3 of 7 comparable layers, median EBITDA margin is highest in A and lowest in B. "
+            "Comparable: at least 5 companies with the figure and one kind of business.")
+    out = fit_paras([text], 10, 3.2, 0.62)
+    assert out and out[0].endswith(".") and not out[0].endswith("…")

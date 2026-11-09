@@ -125,6 +125,15 @@ def fit_paras(paras: list[str], size: float, width: float, height: float, bold=F
     out, used, count, room = [], 0.0, 0, height + 0.02
 
     def ending(text: str, n: int) -> str:            # the text cut to `n` lines with an ellipsis that still fits in them
+        # R34 (GPT review of R31.9: summary-page qualifications ending "…one kind of…"): the whole sentences that fit, when one does
+        kept = ""
+        for part in re.split(r"(?<=[.!?])\s+(?=[A-Z0-9\"'(])", str(text).strip()):
+            nxt = f"{kept} {part}".strip()
+            if len(wrap(nxt, size, width, bold, head)) > n:
+                break
+            kept = nxt
+        if kept and kept[-1:] in ".!?":
+            return kept
         got = wrap(text, size, width, bold, head)[:n]
         last = got[-1]
         while last and _width(last + "…", size, bold, head) > width:
