@@ -1788,7 +1788,8 @@ def pe_peer_line(pp: dict) -> str:
     of the companies that have comparable peers against the median of their peers' medians, both over the same companies, and the gap is
     the ratio of those two medians, the two numbers the valuation table shows. Which peer set it is, and how many have none, said (R27)."""
     return (f"Median P/E {_times(pp['theme'])} for the {_n(pp['n'], 'company', 'companies')} with comparable peers {peer_set_words(pp)}, "
-            f"{premium_words(pp['premium'])} their peers' median of {_times(pp['peers'])}" + no_peer_words(pp))
+            f"{premium_words(pp['premium'])} their peers' median of {_times(pp['peers'])}"
+            + (f" (prices at the {pp['as_of']} close)" if pp.get("as_of") else "") + no_peer_words(pp))
 
 
 def no_peer_words(pp: dict) -> str:
@@ -2261,7 +2262,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 41                  # R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 42                  # R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -2917,6 +2918,8 @@ def publication_gate(slides: list, v: dict, reproduced: list | None = None) -> d
     else:
         notes["applicable"] = "No sector figures in this deck"
     peers = ((v.get("sections") or {}).get("valuation") or {}).get("peers") or {}
+    if isinstance(peers.get("pe"), dict) and v.get("as_of"):       # R34 (GPT review of R31.9: a peer median moved between runs a day apart)
+        peers["pe"].setdefault("as_of", v["as_of"])
     wide = sum((x.get("sets") or {}).get("market", 0) for x in peers.values() if isinstance(x, dict))
     if wide:
         dropped["peers"] = [{"slide": "Valuation", "text": f"{wide} figures set against the whole market", "why": "not comparable", "rule": "peers"}]
