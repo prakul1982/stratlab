@@ -3096,7 +3096,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         key = chain.get("measure") or "ebitda"
         # a chart follows the table's rule (R21): a layer is plotted only on a median of MIN_BASE companies or more, its count in its label
         charted = [r for r in rows_c if r.get(key) is not None and (r.get(f"{key}_n") or 0) >= MIN_BASE]
-        chart = 2 <= len(charted) <= 14 and len(head) <= 7         # a wide table keeps the full width (R25: no words broken)
+        chart = 2 <= len(charted) <= 14 and len(head) <= 5         # a wide table keeps the full width (R25; R34, GPT review of R31.5: label columns pressed to a few letters)
         tw = 7.3 if chart else CW
         foot = [f"Each company's latest full year, in {unit}; how each figure is built: ⟦{NOTES_TITLE}⟧.",
                 "Layer revenue: its companies added together; margins and returns: its median company."]
