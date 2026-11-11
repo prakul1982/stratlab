@@ -105,7 +105,10 @@ def test_live_semis_contract_layer_holds_the_foundries_and_not_stmicro():
     assert layer_of(vc, "AMAT")["layer"] == "Semiconductor equipment"
     assert layer_of(vc, "NVDA")["layer"] == "Fabless chip design"
     assert row_of(vc, "Q")["model"] == "components" and layer_of(vc, "Q") is layer_of(vc, "ENTG")
-    assert row_of(vc, "AMKR")["model_out"] == "unknown"                     # its weak model as before (no other layer reshaped)
+    # R37 lane r2 (updated on purpose): Amkor's "packaging and test services" are contract making in so many words, so it is counted, with the
+    # foundries; the materials makers keep a layer of their own
+    assert row_of(vc, "AMKR")["model"] == "contract_manufacturing" and not row_of(vc, "AMKR").get("model_out")
+    assert "TSM" in {c["ticker"] for c in layer_of(vc, "AMKR")["companies"]} and "Q" not in {c["ticker"] for c in layer_of(vc, "AMKR")["companies"]}
 
 
 # ---------- 3: solar makers filed as semiconductors ----------
@@ -164,5 +167,6 @@ def test_live_retail_amazon_joins_the_online_retailers_and_the_marketplace_line_
     assert mk["layer"] == "Online marketplaces and e-commerce sellers" and "AMZN" not in {c["ticker"] for c in mk["companies"]}
     assert mk["model"]["id"] == "platform" and mk["model"]["line"].startswith("They earn mainly from commissions, listing fees or advertising")
     assert {c["model"] for c in mk["companies"]} == {"platform"}
-    # companies the split moved out of the "Other" group go where they went before (the largest layer of their family)
-    assert layer_of(vc, "CPNG")["layer"] == "Apparel and fashion retail chains"
+    # R37 lane r2 (updated on purpose): an online seller the split moved out of the "Other" group goes to the online retailers, the layer of its
+    # own official industry, not to the largest layer of its family ("Apparel and fashion retail chains")
+    assert layer_of(vc, "CPNG")["layer"] == "Online direct-to-consumer retailers"

@@ -328,6 +328,11 @@ def model_family(model) -> str:
     return MODELS[model][0] if model in MODELS else ""
 
 
+# outsourced assembly and test (OSAT): packaging and testing others' chips (R27: contract making); R37: "manufacturing services in assembly and
+# testing" (ASE) too
+OSAT_WORDS = r"\bosat\b|(?:assembly|packaging) and test(?:ing)? services|manufacturing services in (?:assembly|packaging)"
+
+
 # ---------- a model is kept only when the company's own evidence shows it (R26) ----------
 # The live R25 Cybersecurity deck had "commissions, listing fees or advertising on platforms" for two firms that sell security subscriptions over
 # their own networks: nothing in their words spoke of a marketplace. A model that is easy to give wrongly needs words of its kind in the company's
@@ -349,7 +354,10 @@ MODEL_NEEDS = {
                               # R36: chips made "using specialty process technologies" (Tower) and wafers to customers' specifications
                               r"manufactur\w*\s+(?:integrated circuits|semiconductors|chips|wafers)\s+(?:using|with|on)\s+(?:its\s+|their\s+)?(?:own\s+)?"
                               r"(?:specialty|advanced|mature|analog|differentiated)?\s*process(?:es)? technolog|"
-                              r"(?:to|according to|based on) (?:its |our |their )?customers?'? (?:own |proprietary )?(?:\w+ )?(?:designs|specifications)",
+                              r"(?:to|according to|based on) (?:its |our |their )?customers?'? (?:own |proprietary )?(?:\w+ )?(?:designs|specifications)|"
+                              # R37 (lane r2, the live R35 Semiconductors deck: Amkor and ChipMOS, "packaging and test services", left out as "way
+                              # of earning not shown"): packaging and testing others' chips (OSAT) is contract making in so many words
+                              + OSAT_WORDS + r"|electronics system design and manufactur|\besdm\b|contract-led manufactur|custom synthesis",
     "lending": r"\bloan|lend|credit|financ|bank|nbfc|microfinance|mortgage|deposit",
     "underwriting": r"insur|underwrit|premium|reinsur|assurance",
     "broking": r"brok|intermediar|distribut|commission|agent|advis|wealth|insurance web|aggregator",
@@ -511,6 +519,81 @@ def model_from_words(evidence) -> str:
     return hits[0] if len(hits) == 1 else ""
 
 
+# ---------- R37 (lane r2): the words that state how a company earns, for a company no answer gave a model ----------
+# The live R35 maps left 255 of 1,334 companies with no model, 217 of them with no words read at all (IT "Engineering R&D services" 39 of 57,
+# Auto "Component and systems suppliers (smaller)" 39 of 66, Chemicals "Specialty and performance chemicals (smaller)" 93 of 93): a kept
+# placement never read their own descriptions, and once read ("Sintercom India Ltd manufactures sintered metal components and auto components")
+# no rule took the model they state. These are each family's words in so many words, beside MODEL_SAYS; a company whose words name two ways
+# of earning, or none, or a business that has stopped, stays unknown (never a guess).
+OWN_SAYS = {
+    "contract_manufacturing": r"contract manufactur|contract-led manufactur|custom synthesis|custom manufactur|\bcdmo\b|\bcrams\b|\bems\b(?! certifi)|"
+                              r"electronics manufacturing services|electronics system design and manufactur|\besdm\b|on behalf of (?:its |their )?(?:customers|clients)",
+    "components": r"\b(?:auto(?:motive)?|automobile|vehicle|tractor|engine) (?:[\w-]+ ){0,2}(?:components?|parts|ancillar\w*)\b|\bcomponents? manufacturers?\b|"
+                  r"\bmanufactur\w* (?:and \w+ )?(?:of )?(?:[\w&/,-]+ ){0,4}?components\b|\btier[- ]?(?:1|i|one) supplier",
+    "project_services": r"software (?:development|consultancy|consulting|outsourcing) services|\bsoftware development\b|\bit (?:consult\w*|services)\b|"
+                        r"information technology services|(?:technical|technology|it) consult(?:ing|ancy)(?: services)?|\bsoftware services\b|"
+                        r"customi[sz]ed software (?:solutions|development)",
+    "software": r"\b(?:develops?|sells?|licen[cs]es?)(?: and \w+)? (?:its |our )?own (?:software )?products|\bsoftware products? (?:company|developer)",
+    "lending": r"\b(?:commercial|private sector|public sector|scheduled) bank\b|\bbanking (?:and financial services )?company",
+}
+# making or trading in so many words: a maker of its own products ("manufactures", "is engaged in the manufacturing of", "a manufacturer of",
+# "produces"), or a trader of others' goods; a parts maker when its official industry is one of parts or components
+MAKER_SAYS = (r"\bmanufactures\b|\bmanufacturers? (?:and \w+ )?of\b|\b(?:engaged in|in the business of|business of|does|involved in) (?:the )?"
+              r"(?:business of )?(?:the )?(?:manufactur\w*|production)\b|\bmanufacturing (?:and|&) (?:sell|sale|market|suppl|export)\w*|\bproduces\b|"
+              r"\bproducers? (?:and \w+ )?of\b|\bmakes\b|\bmanufacturing company\b")
+TRADER_SAYS = (r"\btrad(?:ing|es|er|ers)\b(?! (?:name|mark)s?\b)|\bdistribut(?:es|or|ors|ion)\b|\bwholesal\w*|\bdeals? in\b(?! (?:the )?manufactur)|"
+               r"\bdealers?\b|\bstockists?\b|\bimports?\b")
+# trading as the business itself ("engaged in trading of chemicals", "a distributor of"), not shares or securities traded beside another business
+DISTRIBUTOR_SAYS = (r"\b(?:engaged in|in the business of|business of|deals? in|primarily) (?:the )?(?:business of )?(?:trading|distribution|wholesale)\b"
+                    r"(?! (?:in|of) (?:shares|securities|derivatives|stocks))|\btraders? (?:of|in) (?!shares|securities)|\bdistributors? (?:of|for)\b|\bwholesalers?\b")
+# making of any kind, which a distributor's words never name; its being a distributor in so many words
+MAKING_ANY = r"manufactur|\bproduc(?:es|ing|tion|ers?)\b|\bmakes\b"
+IS_DISTRIBUTOR = r"\b(?:is|as) an? (?:[\w-]+ ){0,4}distributor"
+# the customers it sells to ("sells its products to auto parts manufacturing companies") are not its own business
+_SOLD_TO = re.compile(r"\b(?:sells?|supplies|supplying|caters?|catering|serves?|serving)\s+(?:its |their )?(?:products |goods )?to\s+[^.;]{0,100}", re.I)
+# a reseller's words beside its services: its IT services are not shown as its own model
+RESELLER = r"multi-brand|\bresell|value[- ]added reseller|authori[sz]ed (?:partner|distributor|reseller)|channel partner"
+PARTS_INDUSTRY = r"\bcomponents?\b|\bparts\b|ancillar"
+# a business that has stopped earning: no model is stated, whatever it made before
+NOT_OPERATING = (r"not (?:generated|carried on|had) any (?:revenue|business)|\bnil (?:operating )?revenue|non-operating|operations are (?:currently )?"
+                 r"(?:closed|suspended)|stopped manufactur|used to manufacture|historically manufactured|suspension of work|"
+                 r"under (?:corporate )?insolvency|\bcirp\b")
+
+
+def stated_model(evidence) -> str:
+    """The one model a company's own words state (R37), for a company no answer gave one: the words of MODEL_SAYS and OWN_SAYS (a contract
+    maker's over a parts maker's when both are named: it makes parts to others' orders), else making words without trading words (a maker of
+    its own products; a parts maker in a parts industry) or trading as its business without making words (a distributor). "" when its words
+    name more than one way of earning (its own products made beside contract work, a parts distributor, IT services beside reselling), none,
+    or a business that has stopped; the customers it names are not its own model."""
+    industry, own = _split_evidence(evidence)
+    own = _SOLD_TO.sub(" ", not_customers(own))
+    if not own.strip() or re.search(NOT_OPERATING, own, re.I):
+        return ""
+    hits = {m_ for m_, rx in list(MODEL_SAYS.items()) + list(OWN_SAYS.items()) if re.search(rx, own, re.I)}
+    if not hits and chip_designer(evidence):          # R32: a chip designer that owns no fabs says it in its own way
+        return "fabless"
+    if {"contract_manufacturing", "components"} <= hits:
+        hits.discard("components")
+    if len(hits) > 1:
+        return ""
+    makes = re.search(MAKER_SAYS, re.sub(OWN_SAYS["contract_manufacturing"], " ", own, flags=re.I), re.I)
+    if hits:
+        md = next(iter(hits))
+        if model_family(md) == "services" and re.search(RESELLER, own, re.I):
+            return ""
+        if md == "contract_manufacturing" and makes:
+            return ""
+        if md in ("contract_manufacturing", "components") and re.search(IS_DISTRIBUTOR, own, re.I):
+            return ""
+        return md
+    if makes and not re.search(TRADER_SAYS, own, re.I):
+        return "components" if re.search(PARTS_INDUSTRY, industry, re.I) else "manufacturing"
+    if not re.search(MAKING_ANY, own, re.I) and re.search(DISTRIBUTOR_SAYS, own, re.I):
+        return "distribution"
+    return ""
+
+
 # ---------- q1: a network operator's subscriptions are for a service it runs, not software (the GPT review of the live R34 Telecom deck) ----------
 # Its customers named are never what it is: a tower company leases "to wireless telecom operators", a messaging platform caters "to mobile network
 # operators (MNOs)"
@@ -647,6 +730,10 @@ def refine_model(model, evidence) -> str:
     # q1 (the live R34 Telecom deck: every operator "software", 5 of 8 left out): a network operator's subscriptions are telecom services
     if model in ("software", "capacity", "unknown", "") and telecom_operator(evidence):
         return "telecom_services"
+    # R37 (lane r2, the live R35 Real estate deck: HDFC Bank in "Home loan lenders" with no model): a company the answer gave no model whose
+    # official industry is a bank's or a lender's earns interest on its loans, whatever theme it sits in (banks with home loans are lenders)
+    if model in ("unknown", "") and re.search(LENDING_INDUSTRY + "|" + BANK_INDUSTRY, industry, re.I) and not re.search(NOT_LENDER, text, re.I):
+        return "lending"
     if model == "resources" and not re.search(r"\boil\b|\bgas\b|petroleum|crude|crops?\b|plantation|farm|\btea\b|coffee|sugar", text, re.I):
         return "commodity_mining" if re.search(MODEL_NEEDS["commodity_mining"], text, re.I) else model
     # R31 (the owner's review of the live R30 Real estate deck): a lender is never a developer or a landlord, and a developer who sells what it
@@ -655,6 +742,11 @@ def refine_model(model, evidence) -> str:
             re.search(LENDING_INDUSTRY, industry, re.I) or (re.search(HOME_LOAN_WORDS, own, re.I) and not re.search(MODEL_NEEDS["property_development"], own, re.I)
                                                             and not re.search(MODEL_WORDS["property"], own, re.I))):
         return "lending"
+    # R37 (lane r2, the live R35 Real estate deck: "Mall and retail property owners" held two developers and a landlord): a company whose own
+    # words say it operates malls or offices it owns, lets space on licence or lease, or earns rent, and say nothing of building to sell, is a
+    # landlord whatever its official industry ("Residential, Commercial Projects" files every Indian real estate company)
+    if model in ("property_development", "property") and re.search(LANDLORD_SAYS, own, re.I) and not re.search(DEVELOPER_SAYS, own, re.I):
+        return "property"
     if model in ("property_development", "property"):
         hit = [c for c in ("property_development", "property") if re.search(REFINE_HINTS[c], industry, re.I)]
         if len(hit) != 1:
@@ -671,6 +763,11 @@ def refine_model(model, evidence) -> str:
     # q1 (the GPT review of the live R34 Semiconductors deck: GlobalFoundries in "Other semiconductor companies", TSMC and UMC called makers
     # of their own products, so the foundry layer held makers and the one contract maker had no layer): a foundry is a contract maker
     if model in ("manufacturing", "unknown", "") and foundry(evidence):
+        return "contract_manufacturing"
+    # R37 (lane r2, the live R35 Semiconductors deck: ASE, "a leading provider of semiconductor manufacturing services in assembly and testing",
+    # among the materials makers): a chip company given parts or ingredients whose own words show packaging and test services (OSAT) or a
+    # foundry's, and name no materials it supplies, is a contract maker
+    if model == "components" and re.search(SEMI_INDUSTRY, text, re.I) and foundry(evidence) and not chip_materials(own):
         return "contract_manufacturing"
     # R36 (GPT review of the live R35 deck: STMicroelectronics among the contract makers): a chip maker that names products of its own and no
     # customers' designs is a maker of its own products (an IDM), whatever "contract manufacturing" its encyclopedia line says
@@ -719,7 +816,7 @@ FOUNDRY_STRONG = (r"\bas a foundry\b|designs provided by (?:them|its customers|o
                   # R36: what it makes is its customers' (wafers to customer specifications, chips to customers' designs)
                   r"(?:to|according to|based on) (?:its |our |their )?customers?'? (?:own |proprietary )?(?:\w+ )?(?:designs|specifications)|"
                   # outsourced assembly and test (OSAT): packaging and testing others' chips is contract making too (R27)
-                  r"\bosat\b|(?:assembly|packaging) and test(?:ing)? services")
+                  + OSAT_WORDS)
 # R36 (GPT review of the live R35 Semiconductors deck: STMicroelectronics, "a semiconductor contract manufacturing and design company" that
 # makes "a wide range of microelectronics, including the widely used STM8 and STM32 microcontrollers", among the contract makers): contract
 # manufacturing of chips said in so many words is a foundry's only when the company names no products of its own (OWN_PRODUCTS); so is a maker
@@ -803,10 +900,26 @@ REFINE_HINTS = {"regulated_utility": r"transmission|distribution|electric utilit
                 r"housing projects|commercial projects"}
 LENDING_INDUSTRY = (r"housing finance|home finance|mortgage|non[- ]?banking financ|\bnbfc|consumer finance|microfinance|\blending\b|"
                     r"finance compan|credit institution")
+# R37: a bank's official industry ("Private Sector Bank", the SEC's "National Commercial Banks"); an investment bank earns fees, not interest
+BANK_INDUSTRY = r"\bbanks?\b|\bbanking\b|savings institution"
+NOT_LENDER = r"investment bank|banking software|core banking|banking (?:technology|solutions)"
+# R37: a landlord's own words (operates malls or offices, lets space on licence or lease, earns rent), and a developer's who builds to sell
+LANDLORD_SAYS = (r"\bmalls? operator|\boperat\w* (?:(?:&|and) manag\w* )?(?:of )?(?:retail |shopping )?malls\b|"
+                 r"\b(?:offers?|leases?|lets?|rents?|licen[cs]es?)\b[^.;]{0,60}\bon (?:a )?(?:licen[cs]e|leave and licen[cs]e|lease|rental) basis|"
+                 r"\brental income|\blease rentals?\b|\bannuity (?:income|assets|portfolio)|\breal estate investment trust|\breits?\b")
+DEVELOPER_SAYS = (r"\bdevelop(?:s|ing|er|ers)\b|build (?:&|and) sell|\bsale of (?:residential )?(?:units|flats|apartments|plots|homes|villas)|\bsells? (?:the )?(?:homes|apartments|"
+                  r"flats|plots|units|villas)\b|residential (?:real estate )?develop|housing projects")
+OWN_SAYS["property"] = LANDLORD_SAYS             # a landlord's words state its model too (stated_model)
 HOME_LOAN_WORDS = r"home loans?|housing loans?|housing finance|mortgage loans?|loans? (?:against|for) (?:property|homes|housing)"
 SEMI_INDUSTRY = r"semiconductor|\bchips?\b|integrated circuits?"
 FAB_OWN = (r"own (?:wafer )?fabs?\b|its fabs\b|own fabrication|wafer fab(?:s|rication)? (?:plants?|facilit|lines?)|fabrication (?:plants?|facilit)|"
-           r"\bidm\b|integrated device manufactur")
+           r"\bidm\b|integrated device manufactur|"
+           # R37 (lane r2, the live R35 deck: Texas Instruments "fabless"): a chip maker's own words that it designs, makes and sells its chips, or
+           # runs its own manufacturing sites, as an annual report says them (theme_routes reads one for a chip company whose words say neither)
+           r"\bdesigns?,? (?:develops?,? )?(?:and )?(?:manufactures?|makes),? (?:tests?,? )?(?:and )?(?:sells?|markets?)\b|"
+           r"\bdesigns? and (?:makes?|manufactures?) (?:[\w-]+ ){0,3}(?:semiconductors|chips)\b|"
+           r"\b(?:own|owns|operates?) (?:and operates? )?(?:\w+ )?(?:semiconductor |wafer )?(?:manufacturing|fabrication) (?:sites|facilities|plants|fabs)\b|"
+           r"\binternal (?:wafer )?(?:manufacturing|fabrication) capacity|\b(?:300|200)[- ]?(?:mm|millimeter) (?:wafer )?fabs?\b")
 OUTSOURCED = (r"fabless|without (?:its own )?fab|outsourc(?:es|ed|ing) (?:its |the |all )?(?:chip |wafer )?(?:manufactur|fabrication|production)|"
               r"made by (?:third-party )?(?:foundr|contract)|(?:to|through|by|at|from) (?:third-party |external )?foundr|"
               r"foundr\w* (?:make|manufactur|produc|fabricat)")
