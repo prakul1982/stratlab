@@ -27,7 +27,6 @@ FRESH_OPEN, FRESH_SHUT = 60.0, 900.0      # seconds a finished payload is served
 KEEP_KEY = "mood:last:"                   # the last finished payload per region, in the database: a new server answers with it at once
 KEEP_EVERY = 600.0                        # seconds between two writes of it (each read is a minute apart in market hours)
 KEEP_FOR = 3 * 86400.0                    # a stored payload older than this is not answered with
-MISMATCH_WAIT = 6.0                       # seconds a copy from the other side of the open or close waits for the fresh read
 CLOSES_FRESH = 4 * 3600.0                 # daily closes change once a day
 TOP = 5                                   # stocks in each of "adding" and "taking" points
 CHUNK = 24                                # hub.quotes reads at most this many symbols at once
@@ -764,15 +763,11 @@ class Mood:
         hit = self.payloads.kept(region)
         if hit and bool((hit[1] or {}).get("is_open")) != open_now:
             # a copy from the other side of the open or the close (the first visit after a quiet spell got a market-hours copy
-            # saying "live" at 17:13 IST): the fresh read is waited for a few seconds, and the old copy is the answer only if it
-            # can't come (the page shows it with its read time and says it is being read again)
-            f = self.payloads._start(region, lambda: self._build_kept(region))
-            try:
-                value = f.result(timeout=max(0.0, min(wait, MISMATCH_WAIT)))
-                got = self.payloads.kept(region)
-                return value, (got[0] if got else None)
-            except Exception:
-                return {**hit[1], "refreshing": True}, hit[0]
+            # saying "live" at 17:13 IST): answered at once, never as live once the market has shut (its `is_open` is the market's
+            # now) and marked as being read again; the page shows its read time with the small bar and asks again for the fresh
+            # read, started here (LIVE6-015: India's Mood waited six seconds for it and showed "Reading the tape…" for 10.6 s)
+            self.payloads._start(region, lambda: self._build_kept(region))
+            return {**hit[1], "is_open": open_now, "refreshing": True}, hit[0]
         return self.payloads.get(region, lambda: self._build_kept(region), wait)
 
 

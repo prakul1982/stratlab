@@ -408,10 +408,16 @@ def test_a_copy_from_before_the_close_is_not_served_as_live_after_it(monkeypatch
     first, _ = m.get("IN", 5.0)
     assert first["is_open"] is True and builds == ["IN"]
     monkeypatch.setattr(company, "market_open", lambda region, now=None: False)                  # the market has closed since
+    # LIVE6-015: the kept copy at once, not as live and marked as being read again; the fresh read starts behind it
     after, _ = m.get("IN", 5.0)
-    assert after["is_open"] is False and builds == ["IN", "IN"]
+    assert after["is_open"] is False and after["refreshing"] is True and after["n"] == 1
+    import time
+    for _ in range(50):
+        if len(builds) == 2 and m.payloads.kept("IN")[1]["n"] == 2:
+            break
+        time.sleep(0.05)
     again, _ = m.get("IN", 5.0)                                    # and that fresh copy is kept as usual
-    assert again["n"] == 2 and len(builds) == 2
+    assert again["n"] == 2 and again["is_open"] is False and not again.get("refreshing") and len(builds) == 2
 
 
 def test_us_names_read_as_names_and_one_point_is_a_point():

@@ -1028,6 +1028,8 @@ def setup(history=None, options=None, options_many=None):
     """Where the daily prices (region, symbol, days) and a stock's option chain (symbol, expiry) come from: main.py's readers, or a test's.
     `options_many` (symbols, day) -> {symbol: implied move or None} reads several stocks at once, where given."""
     _hist["fn"], _hist["options"], _hist["options_many"] = history, options, options_many
+    if _implied is not None:
+        _implied.clear()                     # the implied moves kept were read from the sources set before
 
 
 def load_past(region: str) -> dict:
@@ -1196,11 +1198,88 @@ def moves_for(region: str, symbols: list[str], today: date | None = None, pendin
     return out
 
 
+IMPLIED_FRESH = 300.0                # seconds an implied move is served as it is; older, it is served at once and read again behind it
+IMPLIED_KEEP = 12 * 3600.0           # seconds one is kept at all (the next session's options price it afresh)
+_implied = None                      # (symbol, day) -> the last read (a dict, or None for "no option prices"), bounded
+_implied_busy: set = set()           # keys being read again behind the page
+_implied_lock = threading.Lock()
+_implied_pool = None
+
+
+def _implied_store():
+    global _implied
+    if _implied is None:
+        from .intel.net import TTLCache
+        _implied = TTLCache(max_items=1500, max_bytes=1024 * 1024)
+    return _implied
+
+
+def _implied_again(keys: list[tuple], day: str | None) -> None:
+    """Read these stocks' implied moves again behind the page, one batch at a time, each key once while it is being read."""
+    global _implied_pool
+    with _implied_lock:
+        keys = [k for k in keys if k not in _implied_busy]
+        if not keys:
+            return
+        _implied_busy.update(keys)
+        if _implied_pool is None:
+            from concurrent.futures import ThreadPoolExecutor
+            _implied_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="results-implied")
+
+    def go():
+        try:
+            _implied_read([k[0] for k in keys], day, None, None)
+        except Exception as e:
+            print("results implied: read behind the page:", str(e)[:100])
+        finally:
+            with _implied_lock:
+                _implied_busy.difference_update(keys)
+    _implied_pool.submit(go)
+
+
 def implied_for(symbols: list[str], day: str | None = None, pending: list[str] | None = None, budget: float | None = None) -> dict[str, dict | None]:
     """For stocks with futures and options: the at-the-money straddle of the first expiry on or after the results day, as a share
     of the price (the move the options price in to that expiry). From the option prices the app already reads; None for a stock
     without them now (the broker is not connected, no quote for the strike, no expiry that late). At most 8 stocks, read for at most
-    IMPLIED_BUDGET seconds: `pending` (a list) is given the ones not reached or whose source was busy, to be asked again."""
+    IMPLIED_BUDGET seconds: `pending` (a list) is given the ones not reached or whose source was busy, to be asked again.
+    LIVE6-015 (the column took 4.5 to 22.5 s to fill): the last read of each stock is served at once, read again behind the page once it
+    is IMPLIED_FRESH seconds old; only a stock never read waits for its read."""
+    store = _implied_store()
+    asked = list(dict.fromkeys(symbols))[:8]
+    out: dict[str, dict | None] = {}
+    old: list[tuple] = []
+    todo: list[str] = []
+    for s in asked:
+        key = (s, day)
+        at = store.stored_at(key)
+        hit = store.get(key) if at is not None else None
+        if hit is None:
+            todo.append(s)
+            continue
+        out[s] = hit.get("v")
+        if time.time() - at >= IMPLIED_FRESH:
+            old.append(key)
+    if old:
+        _implied_again(old, day)
+    if todo:
+        out.update(_implied_read(todo, day, pending, budget))
+    return {s: out.get(s) for s in asked}
+
+
+def _implied_read(symbols: list[str], day: str | None, pending: list[str] | None, budget: float | None) -> dict[str, dict | None]:
+    """The implied moves read now, each kept (a busy read is never kept, so it is asked again)."""
+    mine: list[str] = []
+    got = _implied_now(symbols, day, mine, budget)
+    if pending is not None:
+        pending.extend(mine)
+    store = _implied_store()
+    for s, v in got.items():
+        if s not in mine:
+            store.set((s, day), {"v": v}, IMPLIED_KEEP)
+    return got
+
+
+def _implied_now(symbols: list[str], day: str | None = None, pending: list[str] | None = None, budget: float | None = None) -> dict[str, dict | None]:
     fn, many = _hist.get("options"), _hist.get("options_many")
     out: dict[str, dict | None] = {}
     fos = fo_symbols()

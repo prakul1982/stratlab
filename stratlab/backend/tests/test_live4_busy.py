@@ -154,11 +154,11 @@ def test_a_copy_from_before_the_close_waits_a_few_seconds_then_is_shown_marked_a
     monkeypatch.setattr(Co, "market_open", lambda region, now=None: False)
     gate = threading.Event()
     monkeypatch.setattr(M.Mood, "build", lambda self, region: gate.wait(5) and {"region": region, "is_open": False, "headline": "after", "lines": []})
-    monkeypatch.setattr(M, "MISMATCH_WAIT", 0.2)
     m = M.Mood(object())
     m._seeded.add("IN")
     m.payloads.put("IN", {"region": "IN", "is_open": True, "headline": "live", "lines": []})
     t0 = time.monotonic()
     got, _ = m.get("IN", wait=20.0)
-    assert time.monotonic() - t0 < 1.5 and got["headline"] == "live" and got["refreshing"] is True
+    # LIVE6-015: answered at once (it waited six seconds), never as live with the market shut
+    assert time.monotonic() - t0 < 0.5 and got["headline"] == "live" and got["refreshing"] is True and got["is_open"] is False
     gate.set()

@@ -179,6 +179,52 @@ def is_trading_day(market: str, day: date) -> bool:
         return True
 
 
+# ---------- special sessions (LIVE6-011) ----------
+# A session on a day the calendar has as shut: Diwali's Muhurat trading on a weekend or a holiday. The exchange's circular or
+# its holiday list ("*") names it (market_events.special_sessions); a session read off the exchange's own candles is noted
+# too. is_trading_day keeps the usual hours' meaning (nothing trades at 10:00 on that Sunday); a series of sessions (a
+# day's change, the session before a day) counts these days with had_session.
+_special: dict[str, tuple[float, set]] = {}
+_noted: dict[str, set] = {}
+SESSION_MARKETS = ("IN", "MCX", "CDS")
+
+
+def special_days(market: str) -> set:
+    """ISO days of the market's special sessions in the last year and the next few weeks, cached for ten minutes."""
+    import time
+    key = "IN" if market in SESSION_MARKETS else market
+    if key != "IN":
+        return set()
+    hit = _special.get(key)
+    if hit and time.time() - hit[0] < 600:
+        return hit[1] | _noted.get(key, set())
+    days: set = set()
+    try:
+        from .. import market_events
+        today = date.today()
+        days = {e["date"] for e in market_events.special_sessions(today, today - timedelta(days=400), today + timedelta(days=40))}
+    except Exception:                 # no database (tests, an outage): only the sessions noted in this process
+        days = hit[1] if hit else set()
+    _special[key] = (time.time(), days)
+    return days | _noted.get(key, set())
+
+
+def note_session(market: str, day: date | str) -> None:
+    """Record a special session seen on the exchange's own candles (kept for the process; a handful a year)."""
+    key = "IN" if market in SESSION_MARKETS else market
+    got = _noted.setdefault(key, set())
+    if len(got) > 50:
+        got.clear()
+    got.add(str(day)[:10])
+
+
+def had_session(market: str, day: date) -> bool:
+    """Whether the market held a session on `day`: a trading day, or a special session on a day the calendar has as shut."""
+    if is_trading_day(market, day):
+        return True
+    return market in SESSION_MARKETS and day.isoformat() in special_days(market)
+
+
 # Markets that don't trade at weekends, whose candles come from a feed that can still carry a weekend row (a stray
 # Sunday print, a placeholder). Crypto trades every day. India's own exchange feed is taken as it comes: a special
 # weekend session (Diwali's Muhurat trading) is a real one.

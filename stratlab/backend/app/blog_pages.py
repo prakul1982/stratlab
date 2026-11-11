@@ -237,8 +237,11 @@ def list_page(kind: str | None, page: int) -> HTMLResponse:
 # ---------- one post ----------
 def post_page(slug: str) -> HTMLResponse:
     post = blog.get(slug)
-    if not post or not post.get("published"):
+    if not post or not post.get("published") or not blog.shown(post):
         return _not_found()
+    src = (post.get("body") or {}).get("src")
+    if slug.startswith(blog_research.THEME_PREFIX) and isinstance(src, dict) and blog_research.theme_problem(src):
+        return _not_found()                 # a theme post with no layers to chart, or a headline for a name: nothing is there (LIVE6-003)
     site = _site()
     canonical = f"{site}/blog/{post['slug']}"
     indexable = bool(post.get("indexable"))
