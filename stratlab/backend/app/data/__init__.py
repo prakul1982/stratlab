@@ -2,7 +2,7 @@
 
 Instrument ids are "<MARKET>:<key>": "IN:256265" (a Kite token), "CRYPTO:BTC-USD".
 A bare number is treated as a Kite token, for older saved strategies."""
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from .. import name_search
@@ -141,9 +141,13 @@ class Registry:
                 status = "live" if prov.ready() else "offline"
             local = datetime.now(ZoneInfo(m["tz"])).date()
             public = {k: v for k, v in m.items() if k != "provider"}     # which data provider is internal
+            # the holidays from ten days back as well as ahead: a page that says "last close <day>" names the last day the exchange
+            # traded, which is behind today (Market Watch said "last close Sun", the day it was read; owner, 9 Nov)
             out.append({**public, "hours": _hours(m, local), "status": status, "max_days": getattr(prov, "max_days", None),
-                        "holidays": calendar.holidays(m["id"], local)})
+                        "holidays": calendar.holidays(m["id"], local - timedelta(days=HOLIDAYS_BACK), 60 + HOLIDAYS_BACK)})
         return out
 
+
+HOLIDAYS_BACK = 10            # days behind today whose exchange holidays /markets sends with the coming ones
 
 __all__ = ["Registry", "DataError", "BY_ID", "MARKETS", "split_id"]

@@ -73,12 +73,23 @@ export function dragged(l: PanelLayout, dx: number, dy: number, vw: number, vh: 
   return { ...l, x: Math.max(0, Math.min(vw - l.w, Math.round(x0 + dx))), y: Math.max(0, Math.min(vh - l.h, Math.round(y0 + dy))) };
 }
 
-/** A panel resized from its left (docked) or top-left (floating) edge by `dx`, `dy`: dragging left or up makes it bigger. */
-export function resized(l: PanelLayout, dx: number, dy: number, vw: number, vh: number): PanelLayout {
+/** The edges and corners a floating panel is resized from (owner, 9 Nov: "why is this only extendable from one top corner"). */
+export type Edge = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+export const EDGES: Edge[] = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
+
+const within = (v: number, lo: number, hi: number): number => Math.round(Math.max(lo, Math.min(hi, v)));
+
+/** A panel resized by `dx`, `dy` from one of its edges or corners: that edge follows the pointer and the opposite one stays where it
+ * is. Never smaller than MIN_W by MIN_H, never wider than MAX_W or the window, and never past the window's edge. A docked panel has
+ * only its left edge (dragging left makes it wider); a floating one is sized from its top-left corner unless told which edge. */
+export function resized(l: PanelLayout, dx: number, dy: number, vw: number, vh: number, edge: Edge = "nw"): PanelLayout {
   const maxW = Math.max(MIN_W, Math.min(MAX_W, vw - 80)), maxH = Math.max(MIN_H, vh - 32);
-  const w = Math.max(MIN_W, Math.min(maxW, Math.round(l.w - dx)));
-  if (l.mode === "dock") return { ...l, w };
-  const h = Math.max(MIN_H, Math.min(maxH, Math.round(l.h - dy)));
+  if (l.mode === "dock") return { ...l, w: within(l.w - dx, MIN_W, maxW) };
   const x0 = l.x ?? vw - l.w - 16, y0 = l.y ?? vh - l.h - 16;
-  return { ...l, w, h, x: Math.max(0, x0 + (l.w - w)), y: Math.max(0, y0 + (l.h - h)) };
+  let left = x0, top = y0, right = x0 + l.w, bottom = y0 + l.h;
+  if (edge.includes("w")) left = within(left + dx, Math.max(0, right - maxW), right - MIN_W);
+  if (edge.includes("e")) right = within(right + dx, left + MIN_W, Math.max(left + MIN_W, Math.min(vw, left + maxW)));
+  if (edge.includes("n")) top = within(top + dy, Math.max(0, bottom - maxH), bottom - MIN_H);
+  if (edge.includes("s")) bottom = within(bottom + dy, top + MIN_H, Math.max(top + MIN_H, Math.min(vh, top + maxH)));
+  return { ...l, w: Math.round(right - left), h: Math.round(bottom - top), x: Math.max(0, Math.round(left)), y: Math.max(0, Math.round(top)) };
 }

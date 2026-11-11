@@ -118,11 +118,10 @@ test("the list tabs are reached with the arrow keys and keep their row when the 
   await expect(tabs.nth(1)).toBeFocused();
   await page.keyboard.press("Home");
   await expect(tabs.nth(0)).toBeFocused();
-  // the add box takes room but never the tab row's: it stays as tall as it was
+  // the search's results take the list's place but never the tab row's: it stays as tall as it was (MW-2: the results are in the list area)
   const before = (await mw.locator(".mw-tabs").boundingBox())!;
-  await mw.getByRole("button", { name: "+ Add symbol" }).click();
   await mw.getByRole("combobox", { name: /^Search/ }).fill("REL");
-  await expect(mw.locator(".mw-add [role=option]").first()).toBeVisible({ timeout: 10_000 });
+  await expect(mw.getByTestId("mw-results").getByRole("option").first()).toBeVisible({ timeout: 10_000 });
   const after = (await mw.locator(".mw-tabs").boundingBox())!;
   expect(Math.round(after.height)).toBe(Math.round(before.height));
   expect(after.height).toBeGreaterThan(30);
@@ -146,21 +145,17 @@ test("a stock starred on a company page and one added in the panel are both on t
   const rows = mw.getByRole("list", { name: "Watchlist" }).getByRole("listitem");
   await expect(rows).toHaveCount(1, { timeout: 10_000 });                                  // the panel read the lists again
   // then a symbol from another market is added in the panel: the stock starred a moment ago must still be there
-  await mw.getByRole("button", { name: "+ Add symbol" }).click();
-  await mw.getByLabel("Market", { exact: true }).selectOption({ label: "Crypto" });
+  // (MW-2: one field over every market: no market to pick first)
   await mw.getByRole("combobox", { name: /^Search/ }).fill("BTC");
-  await mw.locator(".mw-add [role=option]").first().click();
+  await mw.getByTestId("mw-results").getByRole("option").filter({ hasText: "BTC/USD" }).first().click();
   await expect(rows).toHaveCount(2);
   await expect.poll(async () => (await (await request.get(`${API}/watch/lists`, { headers: auth })).json()).lists[0].items.map((i: { id: string }) => i.id).sort(), { timeout: 8000 })
     .toEqual(["CRYPTO:BTC-USD", "IN:INFY"]);
   const research = await (await request.get(`${API}/research/watchlist`, { headers: auth })).json();
   expect(research.items.map((i: { symbol: string }) => i.symbol)).toEqual(["INFY"]);
   // and the other way: a stock added in the panel is known to the company page (its star is on), and another starred there keeps both
-  await mw.getByRole("button", { name: "Done" }).click();
-  await mw.getByRole("button", { name: "+ Add symbol" }).click();
-  await mw.getByLabel("Market", { exact: true }).selectOption({ label: "India" });
   await mw.getByRole("combobox", { name: /^Search/ }).fill("TCS");
-  await mw.locator(".mw-add [role=option]").first().click();
+  await mw.getByTestId("mw-results").getByRole("option").filter({ hasText: "NSE" }).filter({ hasText: "TCS" }).first().click();
   await expect(rows).toHaveCount(3);
   await page.evaluate(() => { history.pushState({}, "", "/research/IN/TCS"); window.dispatchEvent(new PopStateEvent("popstate")); });
   await expect(page.getByRole("button", { name: /^Watching\b/ }).first()).toBeVisible({ timeout: 10_000 });
