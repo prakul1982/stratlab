@@ -646,6 +646,47 @@ def _cell_text(v) -> str:
     return v["text"] if isinstance(v, dict) and "text" in v else ("" if v is None else str(v))
 
 
+_COUNTED = re.compile(r"\S \(\d[\d,]*(?: of \d[\d,]*)?\)$")
+
+
+def counted_cell(text: str) -> bool:
+    """Whether a cell is a figure with its count in brackets ("74 days (59 of 90)", "19.5% (4)"): a median row's cell, never cut (R35, GPT
+    reviews of R31.5-R31.9: Retail's sector table read "74 days (59…")."""
+    return bool(_COUNTED.search(str(text or "")))
+
+
+def _room_for_counts(b: dict, widths: list[float]) -> list[float]:
+    """A compact table's column widths with room where the other columns can give it: for each figure-with-its-count on one line, and for
+    the whole text of the columns the table names in `full` (the appendix's layer names). A column with a counted cell is given up to a
+    quarter of each other column's width, and never so much that a cell of theirs that fits now would be cut; a `full` column is given
+    only room the others don't use (at most 60% of it, so the figures keep their air). What still doesn't fit wraps onto a second line (a
+    counted cell) or is cut with an ellipsis (a name: short_names says it in full)."""
+    cols = range(len(widths))
+    plain = [r for r in b["rows"] if not isinstance(r, dict)]
+    own = [max([_width(str(b["head"][c]), BODY_MIN, True)] + [_width(_cell_text(r[c]), BODY_MIN) for r in plain]) + 0.22 for c in cols]
+    counted = [max([0.0] + [_width(_cell_text(r[c]), BODY_MIN, True) + 0.22 for r in plain if counted_cell(_cell_text(r[c]))]) for c in cols]
+    full = set(b.get("full") or ())
+    out = list(widths)
+    for need, givers in (({c: counted[c] for c in cols if counted[c]}, "quarter"), ({c: own[c] for c in full if c < len(widths)}, "slack")):
+        short = {c: need[c] - out[c] for c in need if need[c] > out[c] + 1e-6}
+        if not short:
+            continue
+        spare = {}
+        for c in cols:
+            if counted[c] or c in full:
+                continue
+            slack = out[c] - own[c]
+            spare[c] = max(0.0, slack) * 0.6 if givers == "slack" else (out[c] * 0.25 if slack < 0 else min(out[c] * 0.25, slack))
+        have, want = sum(spare.values()), sum(short.values())
+        if have <= 1e-6:
+            continue
+        for c, x in short.items():
+            out[c] += x * min(1.0, have / want)
+        for c, x in spare.items():
+            out[c] -= x * min(1.0, want / have)
+    return out
+
+
 def table_layout(b: dict, w: float, h: float) -> dict:
     """Column widths, the font size (13 down to 11 pt, never smaller) and each row's height so the table fits its box; rows that still
     don't fit are left out (callers page their rows with table_pages, so none is). A row {"group": text} is a full-width heading row."""
@@ -659,9 +700,12 @@ def table_layout(b: dict, w: float, h: float) -> dict:
     compact = bool(b.get("compact"))
     if compact:
         # a reference table (R20: the appendix ran 8 rows a page): every cell on one line at the smallest body size, cut with an ellipsis,
-        # and rows only as tall as their line
-        b = {**b, "rows": [r if isinstance(r, dict) else [({**v, "text": fit_chars(_cell_text(v), BODY_MIN, cw - 0.2)} if isinstance(v, dict)
-                                                          else fit_chars(_cell_text(v), BODY_MIN, cw - 0.2)) for v, cw in zip(r, widths)] for r in b["rows"]]}
+        # and rows only as tall as their line. R35: a figure with its count in brackets (a median row's cell) is never cut: its column is
+        # widened where the others have room, and it wraps where they don't
+        widths = _room_for_counts(b, widths)
+        one = lambda t, cw: t if counted_cell(t) else fit_chars(t, BODY_MIN, cw - 0.2)       # noqa: E731
+        b = {**b, "rows": [r if isinstance(r, dict) else [({**v, "text": one(_cell_text(v), cw)} if isinstance(v, dict)
+                                                          else one(_cell_text(v), cw)) for v, cw in zip(r, widths)] for r in b["rows"]]}
     pad, floor_h = (0.022, 0.22) if compact else (0.12, 0.32)
 
     def heights_at(size):
@@ -671,7 +715,9 @@ def table_layout(b: dict, w: float, h: float) -> dict:
             if isinstance(r, dict):
                 hs.append(len(wrap(r["group"], size, w - 0.2, True)) * line + pad + 0.04)
             else:
-                hs.append(max(len(wrap(_cell_text(v), size, cw - 0.2, i in strong)) for v, cw in zip(r, widths)) * line + pad)
+                # a compact table's counted cell is measured bold (a median row is drawn bold, and its page was chosen without `strong`)
+                hs.append(max(len(wrap(_cell_text(v), size, cw - 0.2, i in strong or (compact and counted_cell(_cell_text(v)))))
+                              for v, cw in zip(r, widths)) * line + pad)
         return [max(floor_h, x) for x in hs]
 
     def lines_at(size):
@@ -1553,6 +1599,21 @@ def _sections(title: str, slides: list[Slide]) -> None:
         s.contents = seen
 
 
+def short_names(head: list, rows: list, widths: list, col: int | None, what: str = "Layer", w: float = CW) -> str:
+    """The key to a compact table's cut labels (R35): "Layer names in full: Large-scale… = Large-scale outsourcing and managed services;
+    Digital… = Digital engineering and consulting or Digital marketing." for the names of column `col` that these rows show cut, in the
+    order they appear; "" when none is cut. Two names cut to the same label are both said."""
+    if col is None or not rows:
+        return ""
+    lay = table_layout({"head": head, "rows": rows, "widths": widths, "compact": True, "tight": True, "full": [col]}, w, 99)
+    cut: dict = {}
+    for full, shown in zip((r for r in rows if not isinstance(r, dict)), (r for r in lay["rows"] if not isinstance(r, dict))):
+        a, b = _cell_text(full[col]), _cell_text(shown[col])
+        if a != b and a not in cut.setdefault(b, []):
+            cut[b].append(a)
+    return (f"{what} names in full: " + "; ".join(f"{k} = {' or '.join(v)}" for k, v in cut.items()) + ".") if cut else ""
+
+
 def note_h(text: str, w: float = CW) -> float:
     """The height a muted note under a table needs at 11 pt, so it is never cut (the owner, 7 Nov: the closing disclaimer was clipped)."""
     return len(wrap(text, BODY_MIN, w)) * _lh(BODY_MIN) + 0.04
@@ -1574,11 +1635,73 @@ def shown_label(cos: list, k: int) -> str:
     return f"The first {k} of {len(cos)}: companies in the layer's figures first, each group by market value"
 
 
+ROLL_TITLE = "Who is in each layer's calculations"
+ROLL_LINES = 2                    # a layer page names every company in and left out when that takes no more lines than this
+ROLL_NAMES = 6                    # else this many names of each group; the rest are counted there and named in the appendix
+ROLL_FULL = 40                    # the names of one group in the appendix's table (a row taller than a page would be left off it)
+ROLL_WHY = ("other business", "way of earning not shown", "not confirmed", "no revenue figure")       # why a listed company is left out, in this order
+_LEGAL = re.compile(r"[,.]?\s+(?:inc|incorporated|corp|corporation|co|company|ltd|limited|plc|llc|lp|n\.?v|s\.?a|ag)\.?$", re.I)
+
+
+def layer_roll(layer: dict, cos: list, keys: tuple = ("ebitda", "net")) -> tuple[list, list]:
+    """Who of a layer's listed companies is in its calculations and why each of the others is not (R35, GPT reviews of R31.5-R31.9: live IT
+    said "13 companies (4 in the layer's calculations)" and named neither): ([(name, note)] in, [(name, why)] left out), in the page's order.
+    In: confirmed, how it earns shown and of the layer's kind, with a revenue figure; its note says a whole company (in the revenue total,
+    out of the medians where the layer has a company of its own) or figures in part (one of `keys` missing or left out of its median).
+    Left out: one of ROLL_WHY."""
+    wide = set(layer.get("company_wide") or []) | {c["symbol"] for c in cos if c.get("company_wide")}
+    apart = layer.get("stats_over") != "all"
+    ins, outs = [], []
+    for c in cos:
+        nm = _LEGAL.sub("", str(c.get("name") or c.get("symbol") or "")).strip(" ,.") or str(c.get("symbol") or "")
+        if c.get("status") == "unverified":
+            outs.append((nm, "not confirmed"))
+        elif c.get("model_out"):
+            outs.append((nm, "other business" if c["model_out"] == "other" else "way of earning not shown"))
+        elif c.get("revenue") is None:
+            outs.append((nm, "no revenue figure"))
+        elif c["symbol"] in wide and apart:
+            ins.append((nm, "whole company: revenue only"))
+        else:
+            ins.append((nm, "figures in part" if c.get("one_off") or c.get("nc") or any(c.get(k) is None for k in keys) else ""))
+    return ins, outs
+
+
+def roll_words(ins: list, outs: list, limit: int = ROLL_NAMES) -> tuple[str, str, bool]:
+    """(who is in, who is left out with why, whether a name was left off): "A, B, C (figures in part)", "D, E (other business); F (not
+    confirmed)", each group at most `limit` names and then "and 5 more"."""
+    cut = False
+
+    def some(names: list) -> str:
+        nonlocal cut
+        cut = cut or len(names) > limit
+        return ", ".join(names[:limit]) + (f" and {len(names) - limit} more" if len(names) > limit else "")
+    plain = [n for n, note in ins if not note]
+    noted = [f"{n} ({note})" for n, note in ins if note]
+    in_ = "; ".join(x for x in (some(plain), some(noted)) if x)
+    out_ = "; ".join(f"{some([n for n, w in outs if w == why])} ({why})" for why in ROLL_WHY if any(w == why for _, w in outs))
+    return in_, out_, cut
+
+
+def roll_line(ins: list, outs: list) -> tuple[str, bool]:
+    """A layer page's note of who is in its calculations and who is left out with why, and whether it leaves a name off: every one named
+    when that takes no more than ROLL_LINES lines, else ROLL_NAMES of each group (half as many when that is still too long) and where the
+    rest are."""
+    total = len(ins) + len(outs)
+    for limit in (ROLL_FULL, ROLL_NAMES, ROLL_NAMES // 2):
+        in_, out_, cut = roll_words(ins, outs, limit)
+        line = (f"In the layer's calculations ({len(ins)} of {total}): {in_ or 'none'}. Left out ({len(outs)}): {out_}."
+                + (f" Every one: appendix, ⟦{ROLL_TITLE}⟧." if cut else ""))
+        if len(wrap(line.replace(f"⟦{ROLL_TITLE}⟧", "p. 00"), BODY_MIN, CW)) <= ROLL_LINES:
+            break
+    return line, cut
+
+
 def layer_head(layer: dict, cos: list, amt) -> str:
     """A layer page's header (R30, the owner's review: "1 company, revenue ₹32,493 cr together" over 4 listed): the companies listed and, when
     fewer are in the figures, how many; the revenue is of those in the figures."""
     listed, n = len(cos), layer.get("n", len(cos))
-    figs = sum(1 for c in cos if c.get("status") != "unverified" and not c.get("model_out") and c.get("revenue") is not None)
+    figs = len(layer_roll(layer, cos)[0])
     if listed > figs:
         return f"{_n(listed, 'company', 'companies')} ({figs} in the layer's calculations), revenue of those {amt(layer.get('revenue'))}"
     return f"{_n(n, 'company', 'companies')}, revenue {amt(layer.get('revenue'))} together"
@@ -1790,6 +1913,34 @@ def pe_peer_line(pp: dict) -> str:
     return (f"Median P/E {_times(pp['theme'])} for the {_n(pp['n'], 'company', 'companies')} with comparable peers {peer_set_words(pp)}, "
             f"{premium_words(pp['premium'])} their peers' median of {_times(pp['peers'])}"
             + (f" (prices at the {pp['as_of']} close)" if pp.get("as_of") else "") + no_peer_words(pp))
+
+
+def dated_peers(v: dict) -> dict:
+    """The theme's comparisons with its peers as every slide reads them (R35, GPT reviews of R31.5-R31.9: the live Retail deck's P/E line
+    named no price date): the P/E one carries the close its prices are of, the dive's own or, for a dive kept from before, the deck's
+    "as of" day. publication_gate set it after the slides were written, so no line had it."""
+    peers = (((v.get("sections") or {}).get("valuation") or {}).get("peers")) or {}
+    if isinstance(peers.get("pe"), dict) and not peers["pe"].get("as_of") and v.get("as_of"):
+        peers["pe"]["as_of"] = str(v["as_of"])[:10]
+    return peers
+
+
+def peer_moved_line(pp: dict) -> str:
+    """"Their peers' median P/E was 19.2x at the 2026-11-08 close and is 18.4x at the 2026-11-09 close: prices moved between the two closes."
+    (R35: the stored run before this one, said only when the two are more than theme_data.PEER_MOVE % apart; "" otherwise). Neutral: the
+    two figures, their days and what differs between the runs, never a cause guessed beyond that."""
+    mv = pp.get("moved") or {}
+    if not mv.get("from") or not mv.get("to"):
+        return ""
+    same_day = mv.get("on") and mv.get("on") == mv.get("at")
+    k0, k1, n0, n1 = mv.get("peers_from"), mv.get("peers_to"), mv.get("n_from"), mv.get("n_to")
+    count = (f"; {n0:,} of the theme's companies compared then, {n1:,} now" if n0 and n1 and n0 != n1 else "") + \
+        (f"; {k0:,} peers behind it then, {k1:,} now" if k0 and k1 and k0 != k1 else "")
+    if same_day:
+        return (f"Their peers' median P/E was {_times(mv['from'])} at an earlier run on the {mv['on']} close and is {_times(mv['to'])} now: "
+                f"the peers or their reported figures changed{count}.")
+    return (f"Their peers' median P/E was {_times(mv['from'])} at the {mv.get('on') or 'earlier'} close and is {_times(mv['to'])} "
+            f"at the {mv.get('at') or 'latest'} close: prices moved between the two closes{count}.")
 
 
 def no_peer_words(pp: dict) -> str:
@@ -2156,7 +2307,7 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
         lines = [f"Median company's revenue growth in the latest year: {_med(g.get('revenue_1y'), _chg)}" + (f"; median {mword} {f_(m_)}." if m_ is not None else ".")]
     cards.append({"title": "Growth beside return" if lender else "Growth beside margin", "lines": lines, "note": "⟦Every company's figures⟧"})
     # 3. valuation against companies of similar size, beside growth and ROCE
-    peers = (sec.get("valuation") or {}).get("peers") or {}
+    peers = dated_peers(v)
     lines = []
     from .intel.theme_data import relative_ok
     val_ = sec.get("valuation") or {}
@@ -2262,7 +2413,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 43                  # R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 44                  # R35: the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -2931,9 +3082,7 @@ def publication_gate(slides: list, v: dict, reproduced: list | None = None) -> d
         dropped["applicable"] = [{"slide": "", "text": "sector figures without applicability states", "why": "no states", "rule": "applicable"}]
     else:
         notes["applicable"] = "No sector figures in this deck"
-    peers = ((v.get("sections") or {}).get("valuation") or {}).get("peers") or {}
-    if isinstance(peers.get("pe"), dict) and v.get("as_of"):       # R34 (GPT review of R31.9: a peer median moved between runs a day apart)
-        peers["pe"].setdefault("as_of", v["as_of"])
+    peers = dated_peers(v)       # R34 (GPT review of R31.9: a peer median moved between runs a day apart); R35: set before the slides are written
     wide = sum((x.get("sets") or {}).get("market", 0) for x in peers.values() if isinstance(x, dict))
     if wide:
         dropped["peers"] = [{"slide": "Valuation", "text": f"{wide} figures set against the whole market", "why": "not comparable", "rule": "peers"}]
@@ -2970,6 +3119,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     sector = v.get("sector") or "Theme"
     footer = f"{sector} · Theme deep dive · {today}"
     asof = v.get("as_of")
+    dated_peers(v)              # R35: the peers' P/E knows its price date before the first slide that states it
     asof_text = _day(asof) if asof else "–"
     amt = lambda x: "–" if x is None else money(x, unit)      # noqa: E731
     cap = lambda x: "–" if x is None else (money(x, "$ million") if us else cap_inr(x))      # noqa: E731
@@ -3168,6 +3318,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     # chain's table, and every such layer is one row of the "Smaller layers" page after the layer pages
     paged = [x for x in shown if confirmed_n(x) >= 2] if chained else []
     small = [x for x in shown if x not in paged] if chained else []
+    rolls: list[tuple] = []             # R35: (layer, in, left out, whether its page left a name off) of each layer with a company left out
     for i, layer in enumerate(paged):     # numbered as shown: a layer with no company leaves no gap (Layer 4, then Layer 6)
         cos = sorted(layer.get("companies") or [], key=lambda c: (c.get("status") == "unverified", bool(c.get("model_out")), -(c.get("cap") or 0), c.get("name") or ""))
         st = layer.get("stats") or {}
@@ -3222,6 +3373,8 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             chart = {"kind": "hbars", "title": f"{mname} by company", "cats": [c["name"] for c in top], "vals": [c[mkey] for c in top],
                      "fmt": "pctw" if whole and mkey == "ebitda" else "pct", "colors": [DOWN if c[mkey] < 0 else BLUE for c in top]}
         fparts = []
+        r_in, r_out = layer_roll(layer, cos, ("roe", "net") if lend else ("ebitda", "net"))
+        rline = ""             # R35: who the "(4 in the layer's calculations)" are and why each other is not, where the rows can't say it (below)
         if any(c["symbol"] in lwide for c in cos):
             fparts.append("(whole company): it runs other businesses too, so its figures are the whole company's and left out of the medians.")
         if unsure:
@@ -3241,8 +3394,10 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         chh = min(1.75, card_height(card, CW)) if card else 0.0
         below = TOP + (chh + 0.2 if card else 0)
         rest_h = REST_H if len(body) > 1 else 0
-        fnote = " ".join(fparts)
-        fh = (note_h(fnote) + 0.12) if fnote else 0
+        def foot(parts):            # the page's notes and the room they need: who is in the calculations, then what the marks mean
+            ps = [x for x in (rline, " ".join(parts)) if x]
+            return ps, (sum(note_h(x) for x in ps) + 0.06 * (len(ps) - 1) + 0.12) if ps else 0
+        fnote, fh = foot(fparts)
         room = BOT - fh - below
 
         def fits(tw_):
@@ -3256,12 +3411,32 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         k_fit = fits(tw)
         if chart and k_fit < len(body) and fits(CW) > k_fit:      # the companies before the chart: a table that shows more of them goes full width
             chart, tw, k_fit = None, CW, fits(CW)
+        if r_out and k_fit < len(body):
+            # R35 (GPT reviews of R31.5-R31.9, live IT: "13 companies (4 in the layer's calculations)", three rows shown, nobody named): the
+            # page doesn't show every company, so a line of its own names who is in and why each other is not. A page that shows them all
+            # says it on their rows ("(left out)", "(other business)", "(not confirmed)") and keeps its room for them.
+            rline, rcut = roll_line(r_in, r_out)
+            rolls.append((layer["layer"], r_in, r_out, rcut))
+            fnote, fh = foot(fparts)
+            room = BOT - fh - below
+            k_fit = fits(tw)
+            if chart and fits(CW) > k_fit:
+                chart, tw, k_fit = None, CW, fits(CW)
         on_page = {c["symbol"] for c in cos[:k_fit]}
         drop = ([lo_note] if not (unmodelled - other) & on_page else []) + [p for p in fparts if p.startswith("(other business)") and not other & on_page]
-        if unmodelled and any(p in fparts for p in drop):       # no "(left out)" / "(other business)" row shown: its note isn't either
+        if rline and not unsure & on_page:          # R35: the roll's line says who isn't confirmed, so the mark's own note goes with its rows
+            drop += [p for p in fparts if p.startswith("(not confirmed)")]
+        if (unmodelled or rline) and any(p in fparts for p in drop):       # no "(left out)" / "(other business)" row shown: its note isn't either
             fparts = [p for p in fparts if p not in drop]
-            fnote = " ".join(fparts)
-            fh = (note_h(fnote) + 0.12) if fnote else 0
+            fnote, fh2 = foot(fparts)
+            if rline and fh2 < fh:          # R35: the roll's line took room from the table: the room the dropped notes leave goes back to its rows,
+                room_was, room = room, BOT - fh2 - below        # unless a row that comes back carries a mark whose note was just dropped
+                k2 = fits(tw)
+                if k2 > k_fit and not {c["symbol"] for c in cos[k_fit:k2]} & (unmodelled | unsure):
+                    k_fit = k2
+                else:
+                    room = room_was
+            fh = fh2
         s = Slide(title, msg, eyebrow=eb("The value chain"))
         if card:
             s.add("cards", (M, TOP, CW, chh), cols=1, fill=True, items=[card])
@@ -3274,7 +3449,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             s.add("text", (M, below + th + 0.04, CW, REST_H - 0.04), paras=[f"{shown_label(cos, k_fit)}; every one: appendix, ⟦Every company's figures⟧."],
                   size=BODY_MIN, floor=BODY_MIN, color=MUTED)
         if fnote:
-            s.add("text", (M, BOT - fh + 0.08, CW, fh - 0.08), paras=[fnote], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
+            s.add("text", (M, BOT - fh + 0.08, CW, fh - 0.08), paras=fnote, size=BODY_MIN, floor=BODY_MIN, color=MUTED)
         slides.append(s)
 
     if small:
@@ -3360,16 +3535,47 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         gb = growth_base_line([{**full.get(x["symbol"], {}), **x} for x in lead], amt)
         if gb:
             note += " " + gb
-        nh = note_h(note)
-        th = BOT - TOP - nh - 0.07
-        cbase = {"compact": True}
-        pages = table_pages(head, rows, widths, CW, th, most=26, compact=True)
+        cbase = {"compact": True, "full": [head.index("Layer")] if "Layer" in head else []}
+        # R35 (GPT reviews of R31.5-R31.9: "Large-scale…", "Digital engineering and…" with the full names nowhere on the page): a page that
+        # shows a layer's name cut says each such name in full under its table; every page keeps the room the longest such line needs
+        lcol = head.index("Layer") if "Layer" in head else None           # its names get the room the figure columns don't use (table_layout)
+        with_key = lambda rows_: note + (" " + short_names(head, rows_, widths, lcol) if short_names(head, rows_, widths, lcol) else "")      # noqa: E731
+        nh = note_h(with_key(rows))
+        for _ in range(3):              # a page's own columns can cut a name the whole table's don't: paged again with the room its key needs
+            th = BOT - TOP - nh - 0.07
+            pages = table_pages(head, rows, widths, CW, th, most=26, compact=True)
+            tallest = max(note_h(with_key(chunk)) for chunk in pages)
+            if tallest <= nh + 1e-6:
+                break
+            nh = tallest
         for k, chunk in enumerate(pages):
             s = Slide("Every company's figures" + (f" ({k + 1} of {len(pages)})" if len(pages) > 1 else ""),
                       f"{_n(len(lead), 'confirmed company', 'confirmed companies')} with figures, one row each; {lead[0]['name']} is the largest at {cap(lead[0].get('cap'))}",
                       eyebrow=eb("Appendix"))
             s.add("table", (M, TOP, CW, th), head=head, rows=chunk, widths=widths, **cbase)
-            s.add("text", (M, BOT - nh, CW, nh), paras=[note], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
+            s.add("text", (M, BOT - nh, CW, nh), paras=[with_key(chunk)], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
+            later_slides.append(s)
+    fig_pages = len(later_slides)
+    if any(cut for _, _, _, cut in rolls):       # R35: a layer's page left names off: every layer's full roll, one row each, in the appendix
+        rhead, rwidths = ["Layer", "In its calculations", "Left out, and why"], [2.6, 4.7, 5.0]
+        rrows = []
+        for name, r_in, r_out, _ in rolls:
+            in_, out_, _ = roll_words(r_in, r_out, ROLL_FULL)
+            rrows.append([name, f"{len(r_in)} of {len(r_in) + len(r_out)}: {in_}" if in_ else f"0 of {len(r_out)}", f"{len(r_out)}: {out_}"])
+        rnote = ("In a layer's calculations: confirmed by its own description, how it earns shown and of the layer's kind, with a revenue figure. "
+                 "(whole company: revenue only): in the layer's revenue total, not its medians. (figures in part): a margin is missing or left out "
+                 "of its median. Left out: (other business) it earns another way than most of the layer; (way of earning not shown) its evidence "
+                 "doesn't show clearly how it earns; (not confirmed) its own words don't show this work; (no revenue figure) none is stored.")
+        rnh = note_h(rnote)
+        rth = BOT - TOP - rnh - 0.1
+        rpages = table_pages(rhead, rrows, rwidths, CW, rth)
+        for k, chunk in enumerate(rpages):
+            s = Slide(ROLL_TITLE + (f" ({k + 1} of {len(rpages)})" if len(rpages) > 1 else ""),
+                      f"{_n(len(rolls), 'layer')} with a listed company left out of the calculations: who is in, and why each of the others is not",
+                      eyebrow=eb("Appendix"))
+            s.add("table", (M, TOP, CW, min(rth, table_height(rhead, chunk, rwidths, CW))), head=rhead, rows=chunk, widths=rwidths,
+                  numeric=[False, False, False], tight=True)
+            s.add("text", (M, BOT - rnh, CW, rnh), paras=[rnote], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
             later_slides.append(s)
 
     # 7. tailwinds and risks, on one page (R19); the headlines and new listings stay on the theme's page
@@ -3483,7 +3689,10 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     if built:
         crow.append([NOTES_TITLE, "What each figure shown measures, how it is worked out, its period and source, and its limits.", str(slides.index(built[0]) + 1)])
     if later_slides:
-        crow.append(["Appendix", f"Every confirmed company's key figures, one row each ({_n(len(later_slides), 'page')}).", str(slides.index(later_slides[0]) + 1)])
+        crow.append(["Appendix", "; ".join(x for x in (
+            f"Every confirmed company's key figures, one row each ({_n(fig_pages, 'page')})" if fig_pages else "",
+            ("who is in each layer's calculations" if fig_pages else "Who is in each layer's calculations") if len(later_slides) > fig_pages else "")
+            if x) + ".", str(slides.index(later_slides[0]) + 1)])
     contents.add("table", (M, TOP, CW, min(BOT - TOP, table_height(["Part", "What it holds", "Page"], crow, [2.6, 8.4, 0.9], CW))),
                  head=["Part", "What it holds", "Page"], rows=crow, widths=[2.6, 8.4, 0.9], numeric=[False, False, True], tight=True)
     slides[0].checked = check_deck(slides)          # R25: every headline and finding figure found again in the tables, else dropped
@@ -3571,7 +3780,7 @@ def economics_questions(v: dict, shown: list, sec: dict, ebm) -> list[str]:
         out.append(f"The aggregate EBITDA margin went from {_pc(md['start'])} in {md['from']} to {_pc(md['end'])} in {md['to']} ({_n(md['n'], 'company', 'companies')}). "
                    f"{t['name']} accounts for {_pts(t['part'])} of the move: its own margin went from {_pc(t['margin_from'])} to {_pc(t['margin_to'])} and its "
                    f"share of the group's revenue from {_pc(t['share_from'])} to {_pc(t['share_to'])}. Was it the margin or the weight?")
-    peers = (sec.get("valuation") or {}).get("peers") or {}
+    peers = dated_peers(v)
     if (peers.get("pe") or {}).get("premium") is not None and (peers.get("sales_3y") or {}).get("n"):
         g = peers["sales_3y"]
         out.append(f"{pe_peer_line(peers['pe'])}; their revenue grew {_chg(g['theme'])} a year over 3 years against {_chg(g['peers'])} for their peers. "
@@ -4167,7 +4376,7 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
     # margins over time: the findings and "What moved the aggregate margin" carry the change, so no page of its own (R19)
     val = sec.get("valuation") or {}
     if val.get("pe") or val.get("pb") or val.get("ev_ebitda"):
-        peers = val.get("peers") or {}
+        peers = dated_peers(v)
         pp = peers.get("pe") or {}
         # who the P/E is of (R20): the profitable companies, with how many loss-makers have none and the profitable share
         pe_n, losses = (val.get("pe") or {}).get("n", 0), val.get("losses") or 0
@@ -4223,6 +4432,8 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
             notes.append("The theme's own P/E history builds forward from its page: it keeps the median once a week.")
         if descriptive:
             notes.append(peer_cover_words(val) + " Each figure is the theme's own: no peer or market comparison is made.")
+        elif peer_moved_line(pp):          # R35: the stored run before this one, when the peers' median is more than 5% away from it
+            notes.insert(0, peer_moved_line(pp))
         notes.append(f"How each is worked out, and who the comparable peers are: {NOTES_POINTER}.")
         if descriptive:
             vhead, rows, vw, _ = drop_empty(["Measure", "Theme median", "Range", "Companies"], rows, [2.6, 1.3, 1.8, 1.2], keep=(0, 1))
