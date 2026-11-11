@@ -2870,25 +2870,15 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
     cards.append({"title": UPDATES_TITLE, "lines": [f"{_n(len(watch), 'dated update')} at {_n(len({x['name'] for x in watch}), 'company', 'companies')}, "
                                                     "picked by fixed rules, each with its date, status and source." if watch
                                                     else "No company meets the rules today."], "note": f"⟦{UPDATES_TITLE}⟧" if watch else ""})
-    apart = ""
-    if len(cards) > 6 and not watch:
-        # q1 (the live R34 Private Banks deck: the card titled for data coverage and dated events said only "No company meets the rules
-        # today", its coverage line given way): no dated update is one line of its own under the cards, the coverage card keeps its lines
-        apart = "Dated company updates: no company meets the rules today."
-        cards.pop()
     if len(cards) > 6:            # two short cards share one so the page keeps two rows of three
         a_, b_ = cards[-2], cards.pop()
         # n1 (the live R33 Private Banks deck: the merged card's updates line gave way to fit, so the deck said nothing of dated updates):
         # one line of each first, so a line that gives way is never the only one of its card
-        first = (a_, b_)
+        first = (b_, a_) if b_["title"] == UPDATES_TITLE and not watch else (a_, b_)      # "no dated update" is the shorter: it goes first
         cards[-1] = {"title": f"{a_['title']}; {b_['title'].lower()}", "lines": first[0]["lines"][:1] + first[1]["lines"][:1] + first[0]["lines"][1:] + first[1]["lines"][1:], "note": ", ".join(x for x in (a_["note"], b_["note"]) if x)}
     s = Slide("Key findings", "What the reported figures show, each with the slide it comes from; findings, not advice", eyebrow=eyebrow)
     ccols = 3 if len(cards) != 4 else 2
-    ah = note_h(apart) if apart else 0.0
-    cbox = (M, TOP, CW, BOT - TOP - (ah + 0.12 if apart else 0.0))
-    s.add("cards", cbox, cols=ccols, items=whole_lines(cards, cbox, ccols), fill=True, size=13)
-    if apart:
-        s.add("text", (M, BOT - ah, CW, ah), paras=[apart], size=BODY_MIN, floor=BODY_MIN, color=INK2)
+    s.add("cards", (M, TOP, CW, BOT - TOP), cols=ccols, items=whole_lines(cards, (M, TOP, CW, BOT - TOP), ccols), fill=True, size=13)
     slides.append(s)
 
     # data confidence on ONE page (R19, the owner: "just keep the important ones"): the checks, then every count in one line under them; a
