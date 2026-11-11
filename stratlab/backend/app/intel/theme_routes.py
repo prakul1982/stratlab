@@ -364,7 +364,7 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged): the one before carries
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged): the one before carries
 
 
 def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
@@ -382,6 +382,7 @@ def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
     if ask is not None:                       # the background check, about to ask the AI: the companies it places carry their own words
         describe_unplaced(region, out, names, kept)
         reread_weak(region, out, names, kept)
+        read_chip_making(region, out, kept)
     about = _about_reader(region, names, 0)                           # stored descriptions only: nothing is read from a page here
     new, got = theme_base.place_rest(out, theme, lambda s_: about(s_), ask=ask, kept=kept, facts_of=_facts_reader(region))
     if ask is not None and got and got != kept and (got.get("names_for") or any(x.get("by") == "ai" for x in (got.get("assign") or {}).values())):
@@ -462,7 +463,9 @@ def reread_weak(region: str, out: dict, names: dict, kept: dict | None) -> list[
         if (models.get(s_) or "unknown") != "unknown" and conf.get(s_) != "low":
             continue
         got = _stored_evidence(region, s_)
-        if got.get("at") and thin_about(got, region):
+        # R37 (lane r2: 217 of the 255 companies of the 14 live maps with no model had no words read at all, the smaller ones a kept placement
+        # never read): one never read is read too
+        if not got.get("at") or thin_about(got, region):
             want.append(s_)
     if want:
         for s_ in want:
@@ -472,6 +475,54 @@ def reread_weak(region: str, out: dict, names: dict, kept: dict | None) -> list[
         except Exception as e:                  # a source busy: read on a later check
             print("theme: weak descriptions not read again:", type(e).__name__, str(e)[:100])
     return want
+
+
+def chip_unsettled(about) -> bool:
+    """R37: a chip company's stored words that say neither that it makes its chips in fabs of its own nor that others make them (fabless,
+    foundries, outsourced): an encyclopedia line such as Texas Instruments' ("focus is on developing analog chips and embedded processors")
+    reads as a designer's. Equipment, materials and design software makers are not asked."""
+    t = str(about or "")
+    return (bool(re.search(theme_check.SEMI_INDUSTRY, t, re.I)) and not re.search(f"{theme_check.FAB_OWN}|{theme_check.OUTSOURCED}|foundr", t, re.I)
+            and not re.search(theme_check.NOT_DESIGNER, t, re.I) and not theme_check.chip_materials(t))
+
+
+def read_chip_making(region: str, out: dict, kept: dict | None) -> list[str]:
+    """R37 (lane r2, the live R35 Semiconductors deck: Texas Instruments "fabless", its encyclopedia words naming no fabs): before the
+    background check works the models out, a US map company kept as a maker, a fabless designer or unknown whose stored words leave whether
+    it owns fabs unsaid (chip_unsettled) has the opening of its latest annual report put first in its stored words (filed_business, the same
+    few reads a minute; one still owed waits for a later check), once ("filed"), largest first. The symbols read."""
+    if region != "US":
+        return []
+    kept = kept if isinstance(kept, dict) else {}
+    models = kept.get("models") if isinstance(kept.get("models"), dict) else {}
+    cos = sorted({c["ticker"]: c for v in out.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}.values(),
+                 key=lambda c: (-(c.get("cap") or 0), c["ticker"]))
+    done = []
+    for c in cos:
+        s_ = c["ticker"]
+        if len(done) >= PLACE_READS:
+            break
+        got = _stored_evidence(region, s_)
+        if (models.get(s_) or "unknown") not in ("fabless", "manufacturing", "unknown") or not got.get("about") or got.get("filed") \
+                or not chip_unsettled(got["about"]):
+            continue
+        try:
+            filed, owed = filed_business(region, s_)
+        except Exception as e:                  # the SEC busy: read on a later check
+            print("theme: annual report not read for a chip maker:", s_, type(e).__name__, str(e)[:100])
+            break
+        if owed:
+            break
+        key_ = f"theme:evidence:{region}:{s_}"
+        new = {**got, "about": theme_check.clean_description(" ".join(x for x in (filed, got["about"]) if x)), "filed": True}
+        try:
+            db.set_setting(key_, json.dumps(new, ensure_ascii=False))
+        except Exception as e:
+            print("theme: chip maker's words not kept:", s_, str(e)[:100])
+            break
+        EVIDENCE_CACHE.pop(key_)
+        done.append(s_)
+    return done
 
 
 def _facts_reader(region: str):

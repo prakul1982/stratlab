@@ -29,6 +29,125 @@ APPROVED = {
     "semis:ASTI": ("manufacturing", "other"),
     # R36 fix 4: Amazon sells goods it owns ("products to be sold by us and by third parties"): a retailer with a marketplace beside it
     "retail:AMZN": ("retail", ""),
+    # ---- R37 lane r2 (the owner: the remaining misclassifications across all themes) ----
+    # fix 1: a bank's or lender's official industry is lending (refine_model); a landlord's own words (mall operator, space let on licence)
+    # make it one whatever its official industry
+    "realty:HDFCBANK": ('lending', ''),  # official industry 'Private Sector Bank': a bank earns interest on its loans
+    "realty:PHOENIXLTD": ('property', ''),          # "…India's largest retail mall operator and offers retail malls and…"
+    # fix 3: packaging and test services (OSAT) are contract making in so many words, so counted in the layer's figures
+    "semis:AMKR": ('contract_manufacturing', ''),   # "…semiconductor product packaging and test services provider.…"
+    "semis:IMOS": ('contract_manufacturing', ''),   # "…of semiconductor assembly and testing services…"
+    "semis:ASX": ('contract_manufacturing', ''),    # "…of semiconductor manufacturing services in assembly and testing…"
+    # fix 4: a company no answer gave a model takes the one its own words state in so many words (theme_check.stated_model), once its stored
+    # description is read (the fixture's "p": its company page's words; theme_routes.reread_weak now reads one never read); each with its words
+    "auto:EMMFORCE": ('components', ''),            # "…of different types of Automotive Parts Business Overview: EAL is…"
+    "auto:SINTERCOM": ('components', ''),           # "…Sintercom India Ltd manufactures sintered metal components and auto components…"
+    "auto:SETCO": ('components', ''),               # "…The company is a Tier I supplier clutches for commercial…"
+    "auto:PAVNAIND": ('components', ''),            # "…Locks, Auto Locks and Auto Parts Business Overview: PIL is a…"
+    "auto:SNL": ('components', ''),                 # "…1983, SNL Bearings Ltd manufactures and markets antifriction…"
+    "auto:IPRINGLTD": ('components', ''),           # "…makes piston rings, precision forgings and differential gears…" (auto components)
+    "auto:BGWTATO": ('components', ''),             # "…Autocast Ltd (BAL) manufactures specialised grey /cast iron…"
+    "auto:MACPLASQ": ('components', ''),            # "…Machino Plastics Ltd manufactures injection moulding plastic components and moulds/dies Busine
+    "auto:BHARATGEAR": ('components', ''),          # "…It manufactures a wide range of Ring Gears…"
+    "auto:HINDHARD": ('components', ''),  # "…manufacturer of propeller shafts…" in an auto components industry (ISO "EMS certified" is no contract maker)
+    "auto:LAPL": ('components', ''),                # "…a wide range of automotive components and accessories. Business…"
+    "auto:GALLARD": ('components', ''),             # "…machining company that manufactures components, assemblies and…"
+    "auto:LGBFORGE": ('components', ''),            # "…in 2006, LGB Forge Ltd manufactures Forged and Machined Components Business Overview: LGBFL is
+    "auto:URAVIDEF": ('components', ''),            # "…and Technology Ltd manufactures and supplies automotive components and defence equipment…"
+    "auto:AUTOPINS": ('components', ''),            # "…Parabolic Springs and Automotive Components under the brand name of…"
+    "auto:SALAUTO": ('components', ''),             # "…Overview: SALAL is a manufacturer of automotive components and agricultural…"
+    "auto:SAMKRG": ('components', ''),              # "…and Rings Ltd does manufacturing of automobile components Business Overview: SPRL is…"
+    "auto:PORWAL": ('components', ''),              # "…Porwal Auto Components Ltd is a Pithampur-based…"
+    "auto:AAIL": ('components', ''),                # "…Ltd manufactures automobile parts for heavy commercial…"
+    "auto:GSAUTO": ('components', ''),              # "…Ltd deals in the manufacturing of auto components for commercial vehicles.…"
+    "auto:SWANAGRO": ('components', ''),            # "…implements and Auto Parts. It is specialized in…"
+    "auto:UNIAUTO": ('components', ''),             # "…Autofoundry Ltd does manufacturing and sales of C.I. Castings…"
+    "auto:KRANTI": ('components', ''),              # "…Industries Ltd is a manufacturer of precision-machined…"
+    "auto:ELFORGE": ('components', ''),             # "…1934, EL Forge Ltd is in the business of manufacture and sale of Steel Forgings.…"
+    "auto:JAINEX": ('components', ''),              # "…Jainex Aamcol Ltd is engaged in the manufacturing of Gear Hobs and Cutting…"
+    "auto:JAGANLAM": ('components', ''),            # "…Jagan Lamps Ltd manufactures automotive bulbs and…"
+    "auto:SIBARAUT": ('components', ''),            # "…in 1983, Sibar Auto Parts Ltd manufactures and sells…"
+    "auto:LAKPRE": ('components', ''),              # "…Jain Family. It is a manufacturer and supplier of High Tensile Fasteners…"
+    "auto:PRITIKAUTO": ('components', ''),          # "…Auto Industries Ltd manufactures tractor and automobile components Business Overview: Pritika…
+    "auto:DOLFIN": ('manufacturing', ''),           # "…Dolfin Rubbers Ltd is engaged in the manufacturing and selling of Auto Tube &…"
+    "auto:VAMSHIRU": ('manufacturing', ''),         # "…Vamshi Rubber Ltd is in the business of manufacturing of Tyre Retreading…"
+    "auto:EASTRED": ('components', ''),             # "…is in the business of manufacture and sale of tyre treads and associated components. Business 
+    "auto:SEVL": ('manufacturing', ''),             # "…2022, Supertech EV Ltd manufactures and sells 2-wheeler EV…"
+    "semis:DQ": ('manufacturing', 'other'),         # "…is a Chinese company engaged in the manufacture of monocrystalline silicon…"
+    "it:ACESOFT": ('project_services', ''),         # "…data conversion, and technology consulting, serving clients in the…"
+    "it:XELPMOC": ('project_services', ''),         # "…Professional and Technical consultancy services Business Overview: XELP…"
+    "it:OMEGAIN": ('project_services', ''),         # "…business of providing Information Technology services. Business Overview: {#…"
+    "it:AEIM": ('project_services', ''),            # "…developing & providing Software consultancy services and software development.…"
+    "it:ODYSSEY": ('project_services', ''),         # "…is in the business of Software development with primary focus on…"
+    "it:B2BSOFT": ('software', ''),                 # "…Technology Ltd develops and launches own products (certified by Microsoft)…"
+    "it:COSYN": ('project_services', ''),           # "…offers a full range of software outsourcing services from end to end development…"
+    "it:INDOCITY": ('lending', ''),                 # "…non-deposit-taking non-banking financial company. It focuses on…"
+    "it:SVAMSOF": ('project_services', ''),         # "…is in the business of software development. Business Overview: SSL is…"
+    "it:CLIOINFO": ('project_services', ''),        # "…Infotech Ltd offers software development and IT-enabled services…"
+    "it:TSPIRITUAL": ('distribution', ''),          # "…Spiritual World Ltd is engaged in the business of trading. Business Overview: TSWL…"
+    "it:PFLINFOTC": ('distribution', ''),           # "…PFL Infotech Ltd is in the business of trading Business Overview : PFLIL…"
+    "it:VIRGOGLOB": ('telecom_services', ''),  # "…It operates as an Internet Service Provider in India…" (a network service it runs: refine_model, no R37 rule)
+    "it:ATISHAY": ('project_services', ''),         # "…1989, Atishay Ltd is a IT Consultancy and Services company which…"
+    "it:INTEGHIT": ('project_services', ''),        # "…Hitech Ltd provides Software Development Services Business Overview: IHT is…"
+    "it:OMNIAX": ('project_services', ''),          # "…It provides software development training through…"
+    "it:PANACHE": ('contract_manufacturing', ''),   # "…is a Bhiwandi-based electronics system design and manufacturing company providing…"
+    "defence:CYIENTDLM": ('contract_manufacturing', ''),# "…Cyient DLM is a leading electronics system design and manufacturing player, which provides
+    "defence:CENTUM": ('contract_manufacturing', ''),# "…is one of the largest Electronics System Design and Manufacturing (ESDM) companies in India…"
+    "defence:CFF": ('manufacturing', ''),           # "…Fluid Control Ltd is in the business of manufacturing, overhaul, repairs, and…"
+    "chem:INDIANACRY": ('manufacturing', ''),       # "…Indian Acrylics Ltd is in the business of manufacturing both acrylic fiber and…"
+    "chem:POLYLINK": ('manufacturing', ''),         # "…Polymers Ltd is engaged in the manufacture and sale of polymeric…"
+    "chem:NOL": ('manufacturing', ''),              # "…National Oxygen Ltd is engaged in the manufacturing of Industrial Gases.…"
+    "chem:BHAGGAS": ('manufacturing', ''),          # "…Bhagwati Group. It is in the business of production and supply of liquid…"
+    "chem:IGCL": ('manufacturing', ''),             # "…Limited is engaged in manufacturing crop protection products,…"
+    "chem:AIMCOPEST": ('manufacturing', ''),        # "…Aimco Pesticides Ltd manufactures technical grade pesticides,…"
+    "chem:ADARSHPL": ('manufacturing', ''),         # "…Plant Protect Ltd manufactures agricultural and industrial…"
+    "chem:MANORG": ('manufacturing', ''),           # "…Organics Ltd is a manufacturer of Camphor, Resin and Sodium…"
+    "chem:LORDSCHLO": ('manufacturing', ''),        # "…Chloro Alkali Ltd manufactures caustic soda and other…"
+    "chem:PATELCHEM": ('manufacturing', ''),        # "…Limited (PCSL) is engaged in the manufacturing and exporting of…"
+    "chem:ANDHRAPET": ('manufacturing', ''),        # "…Petrochemicals Ltd manufactures and sells Oxo Alcohols…"
+    "chem:AGASTYAEN": ('manufacturing', ''),        # "…Chemicals Ltd is in the business of manufacturing of chemicals Business…"
+    "chem:NPL": ('manufacturing', ''),              # "…Peroxide Ltd is a manufacturer of Hydrogen Peroxide Business…"
+    "chem:PODDARMENT": ('manufacturing', ''),       # "…Poddar Pigments is a manufacturer of Color & Additive Master…"
+    "chem:DYNPRO": ('manufacturing', ''),           # "…Dynemic Products is in the business of manufacturing and selling of Dyes & Dye…"
+    "chem:CHEMBOND": ('manufacturing', ''),         # "…Chembond Chemicals Ltd manufactures and sells specialty…"
+    "chem:INDGELA": ('manufacturing', ''),          # "…& Chemicals Ltd is engaged in manufacturing and export of Ossein,…"
+    "chem:ARVEE": ('manufacturing', ''),            # "…Laboratories India Ltd manufactures specialized chemicals…"
+    "chem:INDTONER": ('manufacturing', ''),         # "…& Developers Ltd manufactures Compatible Toners Business…"
+    "chem:DIAMINESQ": ('manufacturing', ''),        # "…and Chemicals Ltd is in the business of manufacturing and marketing of organic…"
+    "chem:DSFCL": ('manufacturing', ''),            # "…DCM Shriram Ltd is a producer of Pharmaceutical…"
+    "chem:DAICHI": ('manufacturing', ''),           # "…Karkaria Ltd is in the business of manufacture and sale of Specialty…"
+    "chem:ZR2": ('manufacturing', ''),              # "…economy, and produces biofuels, hydrogen and…"
+    "chem:VIKASECO": ('manufacturing', ''),         # "…solutions company that manufactures eco-friendly rubber-plastic…"
+    "chem:GENUSPRIME": ('property_development', ''),# "…is in the business of real estate development.…"
+    "chem:KESARPE": ('manufacturing', ''),          # "…Petroproducts Ltd manufactures and markets Organic…"
+    "chem:CHEMCRUX": ('manufacturing', ''),         # "…Enterprises Ltd manufactures and processes bulk drug…"
+    "chem:DEEP": ('manufacturing', ''),             # "…Deep Polymers Ltd manufactures Masterbatch and Polymer…"
+    "chem:SHLOKKA": ('manufacturing', ''),          # "…Dyes Limited is engaged in the manufacturing of reactive dyes and…"
+    "chem:ALKALI": ('manufacturing', ''),           # "…Alkali Metals Ltd is a manufacturer of Sodium Derivatives,…"
+    "chem:RITESHIN": ('manufacturing', ''),         # "…International Ltd is engaged in the manufacturing and selling of stearic…"
+    "chem:EIKO": ('manufacturing', ''),             # "…Eiko LifeSciences Ltd manufacturing & sells Specialty Chemical and Fine…"
+    "chem:ADVPETR-B": ('manufacturing', ''),        # "…Petrochemicals Ltd is in the business of manufacturing and supplier of petroleum…"
+    "chem:GAYATRIBI": ('manufacturing', ''),        # "…Bio-Organics Ltd manufactures Starch, its derivatives and…"
+    "chem:SHREYASI": ('manufacturing', ''),         # "…Intermediates Ltd is a manufacturer of Phthalocyanine Blue Crude…"
+    "chem:CHEMIESYNT": ('manufacturing', ''),       # "…(Vapi) Ltd is in the business of manufacturing Dye Intermediates and…"
+    "chem:MEHUL": ('manufacturing', ''),            # "…Mehul Colours Ltd manufactures Colour Masterbatches and…"
+    "chem:MIDPOLY": ('manufacturing', ''),          # "…Midland Polymers is engaged in manufactures monaxially oriented…"
+    "chem:VIKRAMAR": ('manufacturing', ''),         # "…2021, Vikram Aroma Ltd manufactures chemicals and chemical…"
+    "chem:HARLETH": ('manufacturing', ''),          # "…Chemicals Ltd is in the business of manufacturing specialty chemical…"
+    "chem:DECOMIC": ('manufacturing', ''),          # "…Dico Mica Ltd is a manufacturer and exporter of laminates Business Overview…"
+    "chem:SONALAD": ('manufacturing', ''),          # "…Sonal Adhesives Ltd manufactures adhesive tapes, specialty…"
+    "chem:VINYOFL": ('manufacturing', ''),          # "…in 1996, Vinyoflex Ltd manufactures PVC films and sheets…"
+    "chem:CAPRO": ('contract_manufacturing', ''),   # "…to use facilities for Contract Manufactur…"
+    "chem:PNTKYOR": ('distribution', ''),           # "…Overview: POIL is in the business of trading pharmaceutical products.…"
+    "chem:VIVIDIND": ('manufacturing', ''),         # "…Global Industries Ltd manufactures dye intermediates and dye.…"
+    "chem:CJGEL": ('manufacturing', ''),            # "…Gleatine Products Ltd manufactures Gelatine and related by…"
+    "chem:SRECR": ('manufacturing', ''),            # "…Sreechem Resins Ltd is engaged in production of Resins Business Overview…"
+    "chem:KOBO": ('manufacturing', ''),             # "…Business Overview: KBL manufactures Active Pharmaceutical…"
+    "chem:PADMAIND": ('distribution', ''),          # "…Overview : PIL is engaged in trading agri goods, commodities,…"
+    "chem:IGLFXPL-B": ('manufacturing', ''),        # "…Gulf Industries Ltd manufactures explosives, ammunition, and…"
+    "chem:ZSOUTGAS": ('manufacturing', ''),         # "…Overview: TSGL is in the business of production and supply of: a) Medical…"
+    "chem:SUDARSHAN": ('manufacturing', ''),        # "…Pharma Industries Ltd manufactures API and Pharmaceutical Items…"
+    "metals:VISACHROME": ('commodity_mining', ''),  # "…VISA Steel Ltd does manufacturing of High Carbon Ferro Chrome…"
 }
 # Where the fixture's one-line description gives less than the words the live read had (its stored description, segments and filings), the
 # same path gives these from the one line; kept apart from APPROVED so neither hides the other
@@ -42,8 +161,9 @@ ONE_LINE = {
 
 def evidence(c) -> str:
     """A fixture company's evidence as the dive builds it (theme_check.model_evidence): its official industry, then its own words (the
-    encyclopedia summary where the fixture keeps it, and its stored one-line description)."""
-    return C.model_evidence(c["i"], " ".join(x for x in (c.get("a"), c["w"]) if x))
+    encyclopedia summary where the fixture keeps it, the description its company page showed where the live map had no words for it (R37
+    lane r2: what the never-read companies' stored words become once read), and its stored one-line description)."""
+    return C.model_evidence(c["i"], " ".join(x for x in (c.get("a"), c.get("p"), c["w"]) if x))
 
 
 def classify(c) -> tuple[str, str]:
