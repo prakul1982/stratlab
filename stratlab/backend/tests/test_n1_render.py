@@ -238,8 +238,10 @@ def test_with_no_dated_update_the_findings_say_so_in_a_line_that_stays(monkeypat
     v, slides = deck_of(region, m, f)
     cards = next(b for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards")["items"]
     card = cards[-1]
-    assert len(cards) == 6 and card["title"] == "How far the figures go; dated company updates"
-    assert card["lines"][0] == "No company meets the rules today." and card["lines"][1].startswith("Considered 8 · confirmed 8")
+    # q1 (changed on purpose; the live R34 Private Banks card kept only the updates line, its coverage line given way): no dated update is
+    # said in the title, the card's lines are the coverage summary
+    assert len(cards) == 6 and card["title"] == "How far the figures go; no dated company update today"
+    assert card["lines"][0].startswith("Considered 8 · confirmed 8") and not any("rules today" in ln for ln in card["lines"])
 
 
 def test_one_company_listed_under_two_symbols_is_one_row_in_every_companys_figures():

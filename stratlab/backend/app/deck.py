@@ -2568,6 +2568,9 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> li
                          f"({', '.join(x['checks'])})" for x in hd[:4]) + (f"; and {len(hd) - 4} more" if len(hd) > 4 else "")
         rows.append(["Figure checks", f"{_n(len(hd), 'figure')} failed a check: {said}.",
                      f"Shown as –; left out of every median and ranking ({ANOMALY_WHY})."])
+    for x in cohort_words(ch.get("cohort")):          # q1: a layer's count in its calculations fell against the run before
+        rows.append(["Since the run before", x, "The layer's figures are of the companies in its calculations now; each one that left is named with "
+                     "its reason."])
     if ch.get("series"):
         rows.append(["Broken series", f"{_n(len(ch['series']), 'company', 'companies')} whose years don't make one series (a merger, demerger or new listing): {names(ch['series'])}.",
                      "Growth figures not worked out for them; left out of growth totals."])
@@ -2613,6 +2616,21 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> li
                  + (f" Medians are of: {counts} companies." if counts else "") + (f" {_n(val['losses'], 'loss-maker')} with no P/E." if val.get("losses") else ""),
                  "Each slide says its period and count."])
     return rows
+
+
+def cohort_words(drops) -> list[str]:
+    """Each layer whose count in its calculations fell against the run before (theme_data.cohort_drops, q1), in one sentence: the two counts,
+    the run's day, and every company that left with its reason."""
+    out = []
+    for x in drops or []:
+        if not isinstance(x, dict) or not x.get("layer"):
+            continue
+        left = x.get("left") or []
+        named = "; ".join(f"{clean_name(str(c.get('name') or c.get('symbol')))} ({c.get('why') or 'reason not kept'})" for c in left[:8])
+        more = f"; and {len(left) - 8} more" if len(left) > 8 else ""
+        on = f" at the run of {_day(x['on'])}" if x.get("on") else " at the run before"
+        out.append(f"{x['layer']}: {x['from']} in its calculations{on}, {x['to']} now" + (f"; left: {named}{more}." if left else "."))
+    return out
 
 
 HELD_WORDS = {"net": "net margin", "ebitda": "EBITDA margin", "roe": "return on equity", "pb": "price to book"}
@@ -2860,8 +2878,12 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
         a_, b_ = cards[-2], cards.pop()
         # n1 (the live R33 Private Banks deck: the merged card's updates line gave way to fit, so the deck said nothing of dated updates):
         # one line of each first, so a line that gives way is never the only one of its card
-        first = (b_, a_) if b_["title"] == UPDATES_TITLE and not watch else (a_, b_)      # "no dated update" is the shorter: it goes first
+        first = (a_, b_)
         cards[-1] = {"title": f"{a_['title']}; {b_['title'].lower()}", "lines": first[0]["lines"][:1] + first[1]["lines"][:1] + first[0]["lines"][1:] + first[1]["lines"][1:], "note": ", ".join(x for x in (a_["note"], b_["note"]) if x)}
+        if b_["title"] == UPDATES_TITLE and not watch:
+            # q1 (the live R34 Private Banks deck: the merged card kept only "No company meets the rules today", its coverage line given way):
+            # no dated update is said in the card's title, so the card's lines are the coverage summary and none of it gives way for it
+            cards[-1] = {**a_, "title": f"{a_['title']}; no dated company update today"}
     s = Slide("Key findings", "What the reported figures show, each with the slide it comes from; findings, not advice", eyebrow=eyebrow)
     ccols = 3 if len(cards) != 4 else 2
     s.add("cards", (M, TOP, CW, BOT - TOP), cols=ccols, items=whole_lines(cards, (M, TOP, CW, BOT - TOP), ccols), fill=True, size=13)
@@ -2928,7 +2950,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 47                  # LIVE6: calendar price periods to one close with years on the axis, headlines with a source and no quote pages, own words only, one market value per company, charts of 4 points or more, one-row tables joined; n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 48                  # LIVE6: calendar price periods, own words only, one market value per company, short charts and empty tables dropped; q1: the appendix counts "with figures" by the dive's rule, a layer's cohort that fell against the run before on the data-confidence page; n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -4272,7 +4294,10 @@ def publication_gate(slides: list, v: dict, reproduced: list | None = None) -> d
     for d in every:
         if d["rule"] != "reproduce":         # check_deck logged its own
             log.warning("deck gate: %s: dropped on %r (%s): %s", d["rule"], d["slide"], d["why"], d["text"])
-    return {"passed": sum(1 for x in items if x["ok"]), "of": len(items), "items": items,
+    cohort = cohort_words((v.get("checks") or {}).get("cohort"))
+    for line in cohort:                      # q1: a layer's cohort that fell against the run before, logged with who left and why
+        log.warning("deck gate: cohort: %s", line)
+    return {"passed": sum(1 for x in items if x["ok"]), "of": len(items), "items": items, **({"cohort": cohort} if cohort else {}),
             "dropped": [{"rule": d["rule"], "slide": d["slide"], "text": str(d["text"])[:200], "why": str(d.get("why") or "")[:120]} for d in every[:GATE_KEEP]],
             "dropped_n": len(every)}
 
@@ -4709,7 +4734,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     # 6. the appendix: ONE compact table of every confirmed company's key figures, one row each, so any figure can be checked (R19)
     layer_of = {c["symbol"]: x["layer"] for x in layers for c in x.get("companies") or []}
     prof_of = {c["symbol"]: c.get("profile") for x in layers for c in x.get("companies") or []}          # R25: an insurer has no GNPA column
-    figs_of = lambda x: x.get("revenue") is not None or x.get("profit") is not None or x.get("net") is not None      # noqa: E731
+    from .intel.theme_data import has_figures as figs_of        # q1: the dive's own rule for "with figures", so the appendix counts as page 4 does
     confirmed_ = [x for x in sec.get("leaders") or [] if status.get(x["symbol"]) != "unverified"]
     bare = [x for x in confirmed_ if not figs_of(x)]           # a stored page with no key figure isn't "with figures" (R20)
     lead = sorted((x for x in confirmed_ if figs_of(x)), key=lambda x: -(x.get("cap") or 0))

@@ -364,7 +364,7 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged): the one before carries
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged): the one before carries
 
 
 def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
@@ -729,6 +729,24 @@ def sources(region: str, theme: str, fresh: bool = False):
                 print("theme: peer medians not kept:", str(e)[:100])
         return pts
 
+    cohort_key = f"theme:cohort:{region}:{theme_data.slug(theme)}"
+
+    def cohort_history(_, point):
+        """q1: the theme's layer cohorts (who was in each layer's calculations) of each run whose cohorts differ from the one before, the last
+        theme_data.COHORT_RUNS of them, this run last: what theme_data.cohort_drops sets this run against."""
+        try:
+            pts = db.json_value(db.get_setting(cohort_key), [])
+        except Exception:
+            pts = []
+        pts = [p for p in pts if isinstance(p, dict) and p.get("d") and isinstance(p.get("layers"), dict)]
+        if not pts or pts[-1].get("layers") != point.get("layers"):
+            pts = (pts + [point])[-theme_data.COHORT_RUNS:]
+            try:
+                db.set_setting(cohort_key, json.dumps(pts, separators=(",", ":")))
+            except Exception as e:
+                print("theme: layer cohorts not kept:", str(e)[:100])
+        return pts
+
     def card(sym, row):
         stored = report_card.stored(sym) if region == "IN" else None
         if not stored or not row:
@@ -755,7 +773,7 @@ def sources(region: str, theme: str, fresh: bool = False):
         shareholding=(lambda s: shareholders.company(s)) if region == "IN" else (lambda s: None),
         insider_buys=(lambda: deals.buys().get("buys") or {}) if region == "IN" else (lambda: {}),
         results=lambda a, b, s: results.between(region, a, b, s), actions=lambda a, b, s: corp_actions.between(region, a, b, s),
-        red_flags=red, card=card, history=history, segments=segments, peer_history=peer_history,
+        red_flags=red, card=card, history=history, segments=segments, peer_history=peer_history, cohort_history=cohort_history,
         corp_history=lambda s: corp_actions.history(region, s, None, fetch=False),
         metrics=sector_metrics.reader(region, fresh),           # R23: filed sector figures, read once and kept for everyone
         about=kept_about(region))                               # R35: the stored descriptions only (nothing is read from a page)

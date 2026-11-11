@@ -363,4 +363,4 @@ def test_layer_names_take_the_room_the_figure_columns_dont_use_and_one_still_cut
     assert key.startswith("Layer names in full: ") and key.endswith(" = Digital engineering and consulting projects for governments.")
     assert "Other IT service companies" not in key
     assert deck.short_names(head, rows[:1], widths, 1) == "" and deck.short_names(head, rows, widths, None) == ""
-    assert deck.THEME_DECK_VERSION == 47
+    assert deck.THEME_DECK_VERSION == 48
