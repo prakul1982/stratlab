@@ -124,3 +124,16 @@ test("a size with a part in rupees and a part in shares shows both parts, then t
   assert.equal(ipo.sizeText({ size: 600, currency: "INR", market: "IN", size_parts: parts }), "₹600 cr");
   assert.match(read("src/pages/IpoPage.tsx"), /partsText\(r\.size_parts\)\}, \$\{r\.size_basis\}/);
 });
+
+test("an issue listed in the last few days stays in the Recently listed table without prices; older ones go in the fold (LIVE6-010)", () => {
+  const rows = [
+    { id: "a", market: "IN", listing: "2026-11-11", perf: undefined },
+    { id: "b", market: "IN", listing: "2026-11-02", perf: undefined },
+    { id: "c", market: "IN", listing: "2026-11-02", perf: { listing_price: 52.8 } },
+    { id: "d", market: "IN", listing: "2026-11-08" },
+  ];
+  assert.deepEqual(ipo.unpricedRows(rows, "IN", "2026-11-11").map((r) => r.id), ["b"]);
+  assert.deepEqual(ipo.unpricedRows([{ id: "u", market: "US", priced: "2026-11-01" }], "US", "2026-11-11").map((r) => r.id), ["u"]);
+  const page = read("src/pages/IposPage.tsx");
+  assert.match(page, /unpricedRows\(all, market, d\.today\)/);
+});

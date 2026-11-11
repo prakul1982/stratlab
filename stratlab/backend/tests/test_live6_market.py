@@ -94,3 +94,29 @@ def test_the_brief_measures_monday_from_the_muhurat_close(monkeypatch):
     # the broker offline: the session before is missing, so no change is given (never one from 6 Nov)
     monkeypatch.setattr(main.research_hub, "chart", lambda *a, **k: {"source": "Yahoo Finance", "candles": list(yahoo)})
     assert content.index_close("^NSEI", date(2026, 11, 9), prev="2026-11-08") == {"price": 25043.85, "change_pct": None}
+
+
+# ---------- LIVE6-010: an issue listing today shows its listing price from the open ----------
+def test_an_issue_on_its_listing_day_has_its_listing_price_before_the_close():
+    from datetime import date, datetime
+    from zoneinfo import ZoneInfo
+    from app import ipo as I
+    bars = [{"t": "2026-11-11T00:00:00+05:30", "o": 52.80, "h": 53.0, "l": 50.0, "c": 50.16, "v": 1.0}]
+    asked = []
+
+    class Y:
+        def chart(self, sym, tf, days):
+            asked.append(sym)
+            return {"candles": list(bars)}
+    row = {"market": "IN", "symbol": None, "bse_code": "123", "bse_scrip": None, "listed_as": "ANTALA", "segment": "sme",
+           "listing": "2026-11-11", "price": 66.0}
+    noon = datetime(2026, 11, 11, 13, 40, tzinfo=ZoneInfo("Asia/Kolkata"))
+    p = I.performance(row, Y(), date(2026, 11, 11), noon)
+    assert asked == ["ANTALA.BO"]
+    assert (p["listing_price"], p["listing_change_pct"], p["latest"], p["day_close"]) == (52.80, -20.0, None, None)
+    # after the close the day's close is in
+    eve = datetime(2026, 11, 11, 20, 10, tzinfo=ZoneInfo("Asia/Kolkata"))
+    p = I.performance(row, Y(), date(2026, 11, 11), eve)
+    assert (p["listing_price"], p["day_close"], p["latest"]) == (52.80, 50.16, 50.16)
+    # the BSE scrip code, when kept, is the symbol as before
+    assert I.yahoo_symbol({**row, "bse_scrip": "544700"}) == "544700.BO"
