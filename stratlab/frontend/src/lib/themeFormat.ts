@@ -18,14 +18,38 @@ export const points = (v: number | null | undefined) => (v == null || !Number.is
 /** "48.0% to 50.0%" for a range; one value when they are the same. */
 export const span = (s: Stat | null | undefined, f: (v: number) => string = (v) => pc(v)) => (!s ? "–" : s.min === s.max ? f(s.min) : `${f(s.min)} to ${f(s.max)}`);
 
-/** The table of one layer: its companies, then the layer's median and range as the last two rows. */
-export interface LayerLine { kind: "company" | "median" | "range"; key: string; row?: DiveRow; label?: string; stats?: Layer["stats"] }
+/** A median is shown only on MIN_BASE companies or more (the deck's rule, R20: "median of 2" is two values, shown as they are on their rows). */
+export const MIN_BASE = 3;
+/** Why a listed company is left out of its layer's calculations, in words (the deck's notes; theme_data.CALC_WHY). */
+export const CALC_WORDS: Record<string, string> = {
+  "other business": "it earns another way than most of this layer's companies",
+  "way of earning not shown": "its evidence doesn't show clearly how it earns",
+  "not confirmed": "its own words don't show this work",
+  "no revenue figure": "no revenue figure is stored for it",
+};
+/** A company row's place in its layer's calculations, as the server kept it (theme_data.calc_record); a row kept without one is in. */
+export const calcOf = (row: DiveRow): { in: boolean; why: string } => (row.calc && typeof row.calc.in === "boolean" ? row.calc : { in: true, why: "" });
+
+/** A median cell as the deck writes it (deck._medn): "–" when no company has the figure; "–" with "(2 of 6)" when fewer than MIN_BASE
+ *  do; the median, with "(5 of 6)" when it is of fewer companies than the `of` in the layer's calculations. */
+export function medCell(s: Stat | null | undefined, of: number, f: (v: number) => string = (v) => pc(v)): { text: string; base: string } {
+  if (!s || !s.n) return { text: "–", base: "" };
+  const base = of && s.n < of ? `${s.n} of ${of}` : "";
+  if (s.n < MIN_BASE) return { text: "–", base: base || `${s.n}` };
+  return { text: f(s.median), base };
+}
+
+/** The table of one layer: its companies, each left-out one marked with why (LIVE6-001), then the layer's median of the companies in its
+ *  calculations and the range, as the last two rows; a range only where a median is shown. */
+export interface LayerLine { kind: "company" | "median" | "range"; key: string; row?: DiveRow; label?: string; stats?: Layer["stats"]; of?: number }
 export function layerLines(l: Layer): LayerLine[] {
   const out: LayerLine[] = l.companies.map((row) => ({ kind: "company", key: row.symbol, row }));
   if (l.companies.length > 0) {
-    const n = l.stats.ebitda?.n ?? l.stats.net?.n ?? 0;
-    out.push({ kind: "median", key: "~median", stats: l.stats, label: `Median of ${n} compan${n === 1 ? "y" : "ies"}${l.stats_over === "all" ? " (company-wide figures)" : ""}` });
-    if (n > 1) out.push({ kind: "range", key: "~range", stats: l.stats, label: "Range" });
+    const n = l.n ?? l.companies.filter((c) => calcOf(c).in).length;
+    out.push({ kind: "median", key: "~median", stats: l.stats, of: n,
+      label: `Median of the ${n} in the layer's calculations${l.stats_over === "all" ? " (company-wide figures)" : ""}` });
+    const shown = (["ebitda", "net", "roce"] as const).some((k) => (l.stats[k]?.n ?? 0) >= MIN_BASE);
+    if (shown) out.push({ kind: "range", key: "~range", stats: l.stats, label: "Range", of: n });
   }
   return out;
 }

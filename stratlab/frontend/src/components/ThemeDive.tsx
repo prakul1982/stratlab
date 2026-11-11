@@ -13,7 +13,7 @@ import { filedOn } from "./BizUpdates";
 import { fmtDate, pct, ratio, safeHref } from "../lib/format";
 import type { Co, Region, SectorAI } from "../lib/research";
 import {
-  amount, layerLines, pc, points, span, times,
+  amount, calcOf, CALC_WORDS, layerLines, medCell, MIN_BASE, pc, points, span, times,
   themeApi,
   type BizRow, type Business, type Dive, type DiveRow, type Layer, type LayerLine, type Listing, type NewsRow, type Prices, type Stat,
 } from "../lib/theme";
@@ -27,25 +27,28 @@ const Name = ({ r, sym, name, wide }: { r: Region; sym: string; name: string; wi
   <><Link className="link" to={co(r, sym)}><b>{name}</b></Link>{wide && <span className="k-sub-line">Whole-company figures</span>}</>
 );
 const dash = <span className="k-muted">–</span>;
+/** LIVE6-007: a company with no description in its own words says so in one way everywhere */
+const NO_WORDS = "No description in its own words yet";
 const chg = (v: number | null | undefined) => (v == null ? dash : <Signed value={v} fmt={(x) => pct(x, 1)} />);
 
 /** The whole chain in one table, and the one comparison across layers: where the margin sits. */
 export function ChainCard({ dive }: { dive: Dive }) {
   const r = dive.region;
-  const top = Math.max(0, ...dive.chain.rows.map((x) => x.ebitda ?? 0));
+  const top = Math.max(0, ...dive.chain.rows.map((x) => (x.ebitda_n >= MIN_BASE ? x.ebitda ?? 0 : 0)));
   const cols: Column<(typeof dive.chain.rows)[number]>[] = [
     { key: "l", header: "Layer", rowHeader: true, wrap: true, cell: (x) => <>{x.layer}{x.layer === dive.chain.highest && <> <Badge tone="plain" dot={false}>Highest</Badge></>}{x.layer === dive.chain.lowest && <> <Badge tone="plain" dot={false}>Lowest</Badge></>}</> },
-    { key: "n", header: "Companies", numeric: true, cell: (x) => x.n },
+    { key: "n", header: "Companies", numeric: true, info: "In the layer's calculations, of the companies it lists.", cell: (x) => (x.listed && x.listed > x.n ? `${x.n} of ${x.listed}` : x.n) },
     { key: "rev", header: "Revenue", numeric: true, info: "The layer's companies' revenue added together, latest full year.", cell: (x) => amount(x.revenue, r) },
-    { key: "e", header: "EBITDA margin", numeric: true, info: "Median of the layer's companies. Operating profit before depreciation as a share of revenue. The bar compares the layers.", cell: (x) => <>{pc(x.ebitda)}{x.ebitda != null && top > 0 && <Meter pct={(x.ebitda / top) * 100} />}</> },
-    { key: "nm", header: "Net margin", numeric: true, cell: (x) => pc(x.net) },
-    { key: "c", header: "ROCE", numeric: true, info: "Return on capital employed, median of the layer's companies.", cell: (x) => pc(x.roce) },
+    { key: "e", header: "EBITDA margin", numeric: true, info: "Median of the layer's companies. Operating profit before depreciation as a share of revenue. The bar compares the layers.", cell: (x) => (x.ebitda_n < MIN_BASE ? dash : <>{pc(x.ebitda)}{x.ebitda != null && top > 0 && <Meter pct={(x.ebitda / top) * 100} />}</>) },
+    { key: "nm", header: "Net margin", numeric: true, cell: (x) => ((x.net_n ?? MIN_BASE) < MIN_BASE ? dash : pc(x.net)) },
+    { key: "c", header: "ROCE", numeric: true, info: "Return on capital employed, median of the layer's companies.", cell: (x) => ((x.roce_n ?? MIN_BASE) < MIN_BASE ? dash : pc(x.roce)) },
   ];
   return (
     <Card id="theme-chain" label="The whole chain in one table">
       <CardHead title="The whole chain in one table" info={dive.basis} />
       <DataTable label="The value chain by layer: companies, revenue and median margins" columns={cols} rows={dive.chain.rows} rowKey={(x) => x.layer} />
       {dive.chain.line && <p className="k-small">{dive.chain.line}</p>}
+      {dive.chain.rows.some((x) => x.ebitda_n > 0 && x.ebitda_n < MIN_BASE) && <p className="k-note">A median is shown on {MIN_BASE} companies or more in a layer's calculations; each company's own figures are on its layer's table.</p>}
       <p className="k-note">{dive.basis}</p>
     </Card>
   );
@@ -73,7 +76,7 @@ export function MembersCard({ r, region }: { r: SectorAI; region: Region }) {
     { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (c) => <><Name r={region} sym={c.ticker} name={c.name} /><span className="k-sub-line k-muted">{c.ticker}</span></> },
     { key: "i", header: "Industry", wrap: true, cell: (c) => c.industry || dash },
     { key: "m", header: "Market value", numeric: true, cell: (c) => amount(c.cap ?? null, region) },
-    { key: "w", header: "What it does, in its own words", wrap: true, cell: (c) => (c.what ? <>“{c.what}”</> : <span className="k-muted">Not yet confirmed from its own description</span>) },
+    { key: "w", header: "What it does, in its own words", wrap: true, cell: (c) => (c.what ? <>“{c.what}”</> : <span className="k-muted">{NO_WORDS}</span>) },
     { key: "f", header: "In the theme by", cell: (c) => (c.base ? (c.basis === "list" ? "Named in the theme's list" : "Official industry")
       : <><Badge tone="plain" dot={false}>Added</Badge><span className="k-sub-line">{c.verified ? "Confirmed by its own words" : "Not yet confirmed"}</span></>) },
   ];
@@ -187,11 +190,24 @@ export function BusinessTable({ rows, label }: { rows: BizRow[]; label: string }
   return <DataTable label={label} columns={cols} rows={rows} rowKey={(x) => x.symbol} />;
 }
 
-function layerColumns(r: Region, wide: Set<string>): Column<LayerLine>[] {
-  const f = (k: "ebitda" | "net" | "roce") => (x: LayerLine) => x.kind === "company" ? pc(x.row![k]) : x.kind === "median" ? <b>{pc(x.stats?.[k]?.median)}</b> : span(x.stats?.[k]);
+const MedianCell = ({ c }: { c: { text: string; base: string } }) => <><b>{c.text}</b>{c.base && <span className="k-sub-line k-muted">{c.base}</span>}</>;
+
+function layerColumns(r: Region, wide: Set<string>, wideOut: boolean): Column<LayerLine>[] {
+  const f = (k: "ebitda" | "net" | "roce") => (x: LayerLine) => {
+    if (x.kind === "company") return <>{pc(x.row![k])}{k === "net" && x.row!.one_off && x.row![k] != null ? " †" : ""}</>;
+    if (x.kind === "median") return <MedianCell c={medCell(x.stats?.[k], x.of ?? 0)} />;
+    return (x.stats?.[k]?.n ?? 0) >= MIN_BASE ? span(x.stats?.[k]) : "";
+  };
+  // LIVE6-001: a company left out of the layer's calculations says so on its row, with why, as the deck's rows do
+  const mark = (row: DiveRow) => {
+    const c = calcOf(row);
+    if (!c.in) return <span className="k-sub-line" data-testid="calc-out">Left out of the layer's calculations: {CALC_WORDS[c.why] ?? c.why}</span>;
+    if (wideOut && wide.has(row.symbol)) return <span className="k-sub-line" data-testid="calc-out">Left out of the medians: its figures are the whole company's</span>;
+    return null;
+  };
   return [
     { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (x) => x.kind !== "company" ? <b>{x.label}</b>
-      : <><Name r={r} sym={x.row!.symbol} name={x.row!.name} wide={wide.has(x.row!.symbol)} />{x.row!.what ? <span className="k-sub-line">In its own words: “{x.row!.what}”</span> : <span className="k-sub-line k-muted">Not yet confirmed from its own description</span>}</> },
+      : <><Name r={r} sym={x.row!.symbol} name={x.row!.name} wide={wide.has(x.row!.symbol)} />{mark(x.row!)}{x.row!.what ? <span className="k-sub-line">In its own words: “{x.row!.what}”</span> : <span className="k-sub-line k-muted">{NO_WORDS}</span>}</> },
     { key: "rev", header: "Revenue", numeric: true, cell: (x) => x.kind === "company" ? amount(x.row!.revenue, r) : "" },
     { key: "e", header: "EBITDA margin", numeric: true, cell: f("ebitda") },
     { key: "n", header: "Net margin", numeric: true, cell: f("net") },
@@ -205,6 +221,7 @@ export function LayerCard({ layer, i, region, business }: { layer: Layer; i: num
   const wide = useMemo(() => new Set(layer.company_wide), [layer]);
   const lines = layerLines(layer);
   const hist = layer.history;
+  const listed = layer.listed ?? layer.companies.length, inCalc = layer.n ?? layer.companies.filter((c) => calcOf(c).in).length;
   return (
     <Card id={`layer-${i}`} label={`Layer ${i + 1}: ${layer.layer}`}>
       <CardHead title={<><span className="k-muted">Layer {i + 1} · </span>{layer.layer}</>} />
@@ -213,16 +230,21 @@ export function LayerCard({ layer, i, region, business }: { layer: Layer; i: num
       {lines.length === 0
         ? <p className="k-small">No listed company is shown for this layer: none of the companies the map named has a description that shows it does this work.</p>
         : <>
-          <DataTable label={`${layer.layer}: companies, revenue and margins`} columns={layerColumns(region, wide)} rows={lines} rowKey={(x) => x.key} rowAttrs={(x) => ({ "data-kind": x.kind })} />
+          <p className="k-small k-muted" data-testid="layer-count">{listed} compan{listed === 1 ? "y" : "ies"} listed, {inCalc} in the layer's calculations{inCalc < MIN_BASE ? `: a median needs ${MIN_BASE}, so each company's own figures are shown` : ""}.</p>
+          <DataTable label={`${layer.layer}: companies, revenue and margins`} columns={layerColumns(region, wide, layer.left_out > 0)} rows={lines} rowKey={(x) => x.key} rowAttrs={(x) => ({ "data-kind": x.kind })} />
           {layer.line && <p className="k-small">{layer.line}</p>}
           {wide.size > 0 && <p className="k-note">"Whole-company figures": the company runs other businesses too, so its figures are the whole company's, not this layer's own.</p>}
+          {layer.companies.some((c) => c.one_off && c.net != null) && <p className="k-note">†: net margin above the EBITDA margin (a one-off gain in the year), left out of the net margin's median.</p>}
         </>}
-      {hist && hist.years.length >= 2 && (
+      {hist && hist.years.length >= 2 && hist.n >= MIN_BASE && (
+        <>
+        <h3 className="k-sub">Margins by year, the same {hist.n} companies added together</h3>
         <DataTable label={`${layer.layer}: margin by year`} columns={[
           { key: "y", header: "Year", rowHeader: true, cell: (h: { y: string; e: number | null; n: number | null }) => h.y },
           { key: "e", header: "EBITDA margin", numeric: true, info: `The ${hist.n} companies that report every year here, added together.`, cell: (h) => pc(h.e) },
           { key: "n", header: "Net margin", numeric: true, cell: (h) => pc(h.n) },
         ]} rows={hist.years.map((y, k) => ({ y, e: hist.ebitda[k], n: hist.net[k] }))} rowKey={(h) => h.y} />
+        </>
       )}
       {business && business.length > 0 && (
         <>
@@ -240,7 +262,7 @@ export function SubThemesCard({ dive, business }: { dive: Dive; business?: Busin
   if (dive.subs.length === 0) return null;
   const cols: Column<(typeof dive.subs)[number]["companies"][number]>[] = [
     { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (x) => <Name r={r} sym={x.symbol} name={x.name} wide={x.company_wide} /> },
-    { key: "w", header: "What it does here, in its own words", wrap: true, cell: (x) => (x.what ? <>“{x.what}”</> : <span className="k-muted">Not yet confirmed from its own description</span>) },
+    { key: "w", header: "What it does here, in its own words", wrap: true, cell: (x) => (x.what ? <>“{x.what}”</> : <span className="k-muted">{NO_WORDS}</span>) },
     { key: "m", header: "Market value", numeric: true, cell: (x) => amount(x.cap, r) },
     { key: "g", header: "Revenue growth", numeric: true, info: "Latest full year against the year before.", cell: (x) => chg(x.sales_1y) },
     { key: "e", header: "EBITDA margin", numeric: true, cell: (x) => pc(x.ebitda) },

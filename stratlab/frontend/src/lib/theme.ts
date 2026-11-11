@@ -12,6 +12,8 @@ export interface DiveRow {
   sales_1y: number | null; sales_3y: number | null; profit_1y: number | null; stage: number | null; from_high: number | null;
   pb: number | null; interest_cover: number | null; ev_ebitda: number | null; quarter: { of: string; sales: number | null; profit: number | null } | null;
   what?: string | null; company_wide?: boolean; years?: YearRow[];
+  /** its place in its layer's calculations, kept by the server (theme_data.calc_record; LIVE6-001: the page says what the deck says) */
+  calc?: { in: boolean; why: string } | null; one_off?: boolean;
 }
 export interface BizRow {
   symbol: string; name: string; metric: string; unit: string | null; span: "month" | "quarter"; period: string; value: number; prev: number | null; year_ago: number | null;
@@ -22,10 +24,12 @@ export interface History { years: string[]; ebitda: (number | null)[]; net: (num
 export interface Layer {
   layer: string; description: string; companies: DiveRow[]; n: number; revenue: number | null; line: string | null; history: History | null;
   stats: { ebitda: Stat | null; net: Stat | null; roce: Stat | null }; company_wide: string[]; left_out: number; stats_over: "own" | "all";
+  /** every company the layer lists; `n` of them are in its calculations */
+  listed?: number;
   /** one official industry's companies the AI didn't place in a layer (THEMES) */
   official?: boolean; basis?: "industry" | "list";
 }
-export interface ChainRow { layer: string; n: number; revenue: number | null; ebitda: number | null; net: number | null; roce: number | null; ebitda_n: number }
+export interface ChainRow { layer: string; n: number; listed?: number; revenue: number | null; ebitda: number | null; net: number | null; roce: number | null; ebitda_n: number; net_n?: number; roce_n?: number }
 export interface SubCompany { symbol: string; name: string; what: string | null; cap: number | null; sales_1y: number | null; ebitda: number | null; company_wide: boolean; year: string | null }
 export interface Holding { symbol: string; name: string; quarter: string; promoter: number | null; institutions: number | null; promoter_change: number | null; institutions_change: number | null }
 export interface Flag { symbol: string; name: string; at: string; label: string; severity?: string; subject?: string; url?: string | null }
@@ -87,4 +91,4 @@ export const themeApi = {
 /** The theme's words in a file name, as the server writes them (theme_data.slug): "India defence" is "india-defence". */
 export const themeSlug = (theme: string) => theme.split(/\s+/).filter(Boolean).join(" ").slice(0, 80).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
 
-export { amount, pc, times, points, span, layerLines, type LayerLine } from "./themeFormat";
+export { amount, pc, times, points, span, layerLines, medCell, calcOf, CALC_WORDS, MIN_BASE, type LayerLine } from "./themeFormat";
