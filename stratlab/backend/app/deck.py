@@ -2604,7 +2604,7 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
     sec = v.get("sections") or {}
     layers = [x for x in v.get("layers") or [] if any(c.get("status") != "unverified" for c in x.get("companies") or [])]
     from statistics import median as _median
-    from .intel.theme_data import headline_ok, of_words, period_basis, rank_pair
+    from .intel.theme_data import HEADLINE_MIN, headline_ok, of_words, period_basis, rank_pair
     cards = []
     # 1. value-chain economics: only when there are layers to set side by side (R18: no card that says it can't be done)
     own = [x for x in layers if not x.get("official") and x.get("revenue")]
@@ -2631,8 +2631,10 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
                      intensity=lambda t: t[7]) if chained else None
     if pair:
         fast, slow = pair
-        lines = [f"Fastest revenue growth in the latest year: {fast[0]}, median {_chg(fast[1])} at a median {mword} of {f_(fast[2])} ({of_words(fast[3], fast[4])}).",
-                 f"Slowest: {slow[0]}, median {_chg(slow[1])} at {f_(slow[2])} ({of_words(slow[3], slow[4])})."]
+        # m2: one sentence that says which layers it ranks (the headline floor), the fastest and the slowest in it
+        lines = [f"Among layers of at least {HEADLINE_MIN} companies with the figure, revenue grew fastest in the latest year in {fast[0]} "
+                 f"(median {_chg(fast[1])}, median {mword} {f_(fast[2])}, {of_words(fast[3], fast[4])}) and slowest in {slow[0]} "
+                 f"(median {_chg(slow[1])}, {f_(slow[2])}, {of_words(slow[3], slow[4])})."]
     else:
         g = (sec.get("growth") or {}).get("median") or {}
         m_ = ((sec.get("medians") or {}).get(measure) or {}).get("median")
@@ -2945,22 +2947,45 @@ def chain_family_cols(rows: list) -> list[tuple]:
     return [c for c in CHAIN_FAMILY_COLS if any(r.get(c[0]) is not None for r in rows)]
 
 
+def unranked_words(chain: dict) -> str:
+    """"Shown, not ranked: A, a different kind of business; B and C, fewer than 5 companies with the figure." (m2: each layer a table or
+    chart shows a median of beside a ranking that leaves it out, with why, theme_data.unranked_rows); "" when every shown layer is ranked."""
+    by: dict = {}
+    for r in chain.get("unranked") or []:
+        by.setdefault(r["why"], []).append(r["layer"])
+    join = lambda xs: xs[0] if len(xs) == 1 else ", ".join(xs[:-1]) + " and " + xs[-1]      # noqa: E731
+    return ("Shown, not ranked: " + "; ".join(f"{join(xs)}, {why}" for why, xs in by.items()) + ".") if by else ""
+
+
 def compare_note(chain: dict, key: str) -> str:
-    """The value chain's footnote on how layers are compared: the one floor (theme_data.COMPARE_MIN), said whatever is marked (R25)."""
+    """The value chain's footnote on how layers are compared: the one floor of a ranking (theme_data.HEADLINE_MIN: the headline's and the
+    marks', m2: the footnote said 3 while the headline ranked on 5), each shown layer that is not ranked with why, and the floor a median
+    is shown on (theme_data.COMPARE_MIN)."""
     from .intel.theme_data import COMPARE_MIN, HEADLINE_MIN
     what = "return on equity" if key == "roe" else "EBITDA margin"
-    said = f" A sentence that compares layers needs at least {HEADLINE_MIN} companies with the figure in each."      # R31
+    shown = f" A median is shown for {COMPARE_MIN} companies or more."
+    un = unranked_words(chain)
     if chain.get("highest"):
-        return (f"Highest median {what} in green, lowest in red, among the layers whose median is of at least {COMPARE_MIN} companies; "
-                "a layer with fewer is shown but not ranked." + said)
-    return f"A layer is ranked only on a median of at least {COMPARE_MIN} companies; a layer with fewer is shown but not ranked." + said
+        return (f"Highest median {what} in green, lowest in red, among the layers ranked: those with at least {HEADLINE_MIN} companies with the figure"
+                + (" and one kind of business" if "one kind of business" in str(chain.get("line") or "") else "") + "; any other layer is shown, not ranked."
+                + (" " + un if un else "") + shown)
+    return f"A layer is ranked only on a median of at least {HEADLINE_MIN} companies with the figure; a layer with fewer is shown, not ranked." + shown
+
+
+def bar_marks(chain: dict, charted: list, key: str) -> tuple[list, list]:
+    """(labels, colours) of the value chain's bars (m2: the chart marks what the headline does not rank): each layer with its count, an
+    unranked one with "not ranked" in its label and a grey bar; the highest green, the lowest red, the other ranked layers blue."""
+    mark = {chain.get("highest"): UP, chain.get("lowest"): DOWN}
+    out = {r["layer"] for r in chain.get("unranked") or []} if chain.get("highest") else set()
+    cats = [f"{r['layer']} ({_of_n(r.get(key + '_n') or 0, r.get('n'))}{', not ranked' if r['layer'] in out else ''})" for r in charted]
+    return cats, [MUTED if r["layer"] in out else mark.get(r["layer"], BLUE) for r in charted]
 
 
 def top_of(rows: list, value, count):
-    """The one row with the highest `value(row)` among those whose figure is of at least COMPARE_MIN companies, when two or more qualify and no
-    other ties it; else None (R25: a highest is said only against another layer on the same floor)."""
-    from .intel.theme_data import COMPARE_MIN
-    have = sorted((r for r in rows if value(r) is not None and (count(r) or 0) >= COMPARE_MIN), key=value)
+    """The one row with the highest `value(row)` among those whose figure is of at least HEADLINE_MIN companies, when two or more qualify and no
+    other ties it; else None (R25: a highest is said only against another layer on the same floor; m2: the one floor of every ranking)."""
+    from .intel.theme_data import HEADLINE_MIN
+    have = sorted((r for r in rows if value(r) is not None and (count(r) or 0) >= HEADLINE_MIN), key=value)
     return have[-1] if len(have) >= 2 and value(have[-1]) != value(have[-2]) else None
 
 
@@ -3796,21 +3821,24 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             s.add("table", (M, TOP, tw, th), head=head, rows=chunk, widths=widths,
                   colors={(i, 0): mark[r[0]] for i, r in enumerate(chunk) if r[0] in mark and r[0]})
             if chart and k == 0:
-                s.add("hbars", (M + tw + 0.35, TOP, CW - tw - 0.35, th), title=f"Median {'ROE' if key == 'roe' else 'EBITDA margin'} by layer", cats=[f"{r['layer']} ({_of_n(r.get(key + '_n') or 0, r.get('n'))})" for r in charted],
-                      vals=[r[key] for r in charted], colors=[mark.get(r["layer"], BLUE) for r in charted], fmt="pctw" if whole and key == "ebitda" else "pct")
+                bcats, bcols = bar_marks(chain, charted, key)
+                s.add("hbars", (M + tw + 0.35, TOP, CW - tw - 0.35, th), title=f"Median {'ROE' if key == 'roe' else 'EBITDA margin'} by layer", cats=bcats,
+                      vals=[r[key] for r in charted], colors=bcols, fmt="pctw" if whole and key == "ebitda" else "pct")
             s.add("text", (M, BOT - fh, CW, fh), paras=[" ".join(foot)], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
             slides.append(s)
         if not chart and len(head) > 5 and 2 <= len(charted) <= 14:
             # R35: a table of more than four figure columns keeps the full width, so its chart (R34 left it out) has a page of its own
             # after it: the layers' medians side by side, each name whole, only with two layers or more on a median of MIN_BASE companies
             mname = "ROE" if key == "roe" else "EBITDA margin"
+            un_ = unranked_words(chain) if chain.get("highest") else ""
             cnote = (f"Each bar: the layer's median company, latest full year; its count of companies in its label. A layer is drawn on a median of "
-                     f"{MIN_BASE} companies or more; every layer is in the table before this page. How the figure is built: ⟦{NOTES_TITLE}⟧.")
+                     f"{MIN_BASE} companies or more; every layer is in the table before this page."
+                     + (f" Grey bars are not ranked. {un_}" if un_ else "") + f" How the figure is built: ⟦{NOTES_TITLE}⟧.")
             ch_ = note_h(cnote)
             s = Slide(f"Median {mname} by layer", chain.get("line") or f"Each layer's median company's {mname}, the layers side by side", eyebrow=eb("The value chain"))
+            bcats, bcols = bar_marks(chain, charted, key)
             s.add("hbars", (M, TOP, CW, min(BOT - TOP - ch_ - 0.2, 1.2 * len(charted) + 0.3)),
-                  cats=[f"{r['layer']} ({_of_n(r.get(key + '_n') or 0, r.get('n'))})" for r in charted], vals=[r[key] for r in charted],
-                  colors=[mark.get(r["layer"], BLUE) for r in charted], fmt="pctw" if whole and key == "ebitda" else "pct")
+                  cats=bcats, vals=[r[key] for r in charted], colors=bcols, fmt="pctw" if whole and key == "ebitda" else "pct")
             s.add("text", (M, BOT - ch_, CW, ch_), paras=[cnote], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
             slides.append(s)
     elif v.get("members_with_figures") == 0 or not shown:
@@ -4267,12 +4295,14 @@ def economics_questions(v: dict, shown: list, sec: dict, ebm) -> list[str]:
     chain = v.get("chain") or {}
     rows = {r["layer"]: r for r in chain.get("rows") or []}
     hi, lo = rows.get(chain.get("highest")), rows.get(chain.get("lowest"))
-    from .intel.theme_data import of_words as ow, period_basis, rank_pair
+    from .intel.theme_data import HEADLINE_MIN, of_words as ow, period_basis, rank_pair
+    # m2: the question says which layers its highest and lowest are of, as the headline it repeats does
+    scope_ = f"Among the {len(chain.get('compared') or [])} layers with at least {HEADLINE_MIN} companies with the figure, " if len(chain.get("compared") or []) >= 2 else ""
     if hi and lo and chain.get("measure") == "roe":
-        out.append(f"{hi['layer']} has the highest median return on equity ({_pc(hi['roe'])}, {ow(hi['roe_n'], hi.get('n'))}) and {lo['layer']} the lowest "
+        out.append(f"{scope_}{hi['layer']} has the highest median return on equity ({_pc(hi['roe'])}, {ow(hi['roe_n'], hi.get('n'))}) and {lo['layer']} the lowest "
                    f"({_pc(lo['roe'])}, {ow(lo['roe_n'], lo.get('n'))}). What in each layer's business makes that gap? The figures show the gap, not its cause.")
     elif hi and lo:
-        out.append(f"{hi['layer']} has the highest median EBITDA margin ({ebm(hi['ebitda'])}, {ow(hi['ebitda_n'], hi.get('n'))}) and {lo['layer']} the lowest "
+        out.append(f"{scope_}{hi['layer']} has the highest median EBITDA margin ({ebm(hi['ebitda'])}, {ow(hi['ebitda_n'], hi.get('n'))}) and {lo['layer']} the lowest "
                    f"({ebm(lo['ebitda'])}, {ow(lo['ebitda_n'], lo.get('n'))}). What in each layer's business makes that gap? The figures show the gap, not its cause.")
     q = sec.get("quarter") or {}
     if q.get("quarter") and (q.get("sales") or {}).get("n", 0) >= MIN_BASE:
@@ -4361,7 +4391,9 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
             bits.append(f"highest median {rname} in {best_r['layer']} ({_pc(best_r[rk])})")
         if fast:
             bits.append(f"fastest median revenue growth in {fast['layer']} ({_chg(fast['growth'])})")
-        msg = ("Medians by layer: " + "; ".join(bits) + ("; the \"Other\" group left out" if len(cmp_) < len(lay) else "")) if bits else \
+        from .intel.theme_data import HEADLINE_MIN
+        msg = (f"Medians by layer, among the layers with at least {HEADLINE_MIN} companies with the figure: " + "; ".join(bits)
+               + ("; the \"Other\" group left out" if len(cmp_) < len(lay) else "")) if bits else \
             f"{_n(len(lay), 'layer')}: its median company's margins, returns, growth and P/E"
         note = ("Medians of each layer's confirmed companies (whole-company figures left out where the layer has its own); a median of fewer companies "
                 f"than the layer has shows its count, as N of M. Periods: ⟦{NOTES_TITLE}⟧.")

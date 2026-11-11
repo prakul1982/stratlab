@@ -37,7 +37,7 @@ FEW_BASE = 4                  # a highest or lowest median on this many companie
 COMPARE_MIN = MIN_BASE
 # R31 (the owner's review of the live R30 decks): a layer-vs-layer headline (the value chain's line, findings, questions) needs at least this
 # many companies with the figure in each layer it compares; tables still show every layer and mark (green, red) those of COMPARE_MIN or more
-DIVE_TEXT = 6          # R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
+DIVE_TEXT = 7          # m2: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
 HEADLINE_MIN = 5
 # R27 (headline eligibility): a comparison is said as a headline only on a figure for at least this share of the companies of each group it
 # compares (a layer, a family); one with less is shown as data, never ranked (the live R26 Semis deck: "RPO growth -3.9%" of 21 of 53)
@@ -434,7 +434,7 @@ def chain_table(blocks: list[dict]) -> dict:
     if not same_basis([r["basis"] for r in have]):
         have = []
     have = one_family(have, lambda r: model_family_of(r["model"]))          # R29: layers of one business-model family only
-    line, hi, lo = None, None, None
+    line, hi, lo, out, beyond = None, None, None, [], ""
     if len(have) >= 2 and len(one_sub(have, lambda r: r["model"])) < 2:
         # R31: layers of one family that sell different commodities (its sub-basis) are described, each with its own figure, never ranked
         whole = whole_points([c for b in blocks for c in b["companies"]])
@@ -463,22 +463,14 @@ def chain_table(blocks: list[dict]) -> dict:
                     "points of each other, the rounding of whole points.") if float(gap) > 0 else None
         else:
             whole = whole_points([c for b in blocks for c in b["companies"]])
-            line = (f"Median EBITDA margin is highest in {hi['layer']} ({pts(hi['ebitda'], whole)}{few(hi['ebitda_n'], hi['n'])}) and lowest in {lo['layer']} "
-                    f"({pts(lo['ebitda'], whole)}{few(lo['ebitda_n'], lo['n'])}), "
+            # m2 (outside review of the live R32 decks): every highest/lowest headline says, in its own sentence, which layers it ranks
+            # (rank_scope: at least HEADLINE_MIN companies with the figure), and names each shown layer whose median is above the highest
+            # or below the lowest with why it is not ranked (unranked_rows), so the headline and the table or chart beside it agree
+            out = unranked_rows(rows, have, "ebitda")
+            line = (f"{rank_scope(len(have), out)}, median EBITDA margin is highest in {hi['layer']} ({pts(hi['ebitda'], whole)}{few(hi['ebitda_n'], hi['n'])}) "
+                    f"and lowest in {lo['layer']} ({pts(lo['ebitda'], whole)}{few(lo['ebitda_n'], lo['n'])}), "
                     f"a gap of {gap_of(hi['ebitda'], lo['ebitda'])} points.")
-            # R34 (live R31.1 pharma and semis: a layer with a higher or lower median than those named was left out without a word): the
-            # line states its own scope: how many layers with a median were compared and on what condition (never naming the others beside
-            # the ranking: R29), the rest are in the table
-            names = {r["layer"] for r in have}
-            out = [r for r in rows if r["ebitda"] is not None and not r["rest"] and r["layer"] not in names and (not r["official"] or not
-                   any(not x["official"] for x in have))]
-            if out:
-                # the qualification first, so a slide that shortens the line never drops it (GPT review of R31.2)
-                # R34 (GPT review of R31.7: the qualification still cut on the slides): the scope first and short, the test as its own sentence,
-                # so a box that keeps whole sentences drops the test cleanly, never mid-way
-                line = line.replace("Median EBITDA margin is highest in", f"Among the {len(have)} of {len(have) + len(out)} comparable layers, "
-                                    "median EBITDA margin is highest in", 1)
-                line += f" Comparable: at least {HEADLINE_MIN} companies with the figure and one kind of business."
+            beyond = beyond_words(out, "ebitda", hi["ebitda"], lo["ebitda"], lambda x: pts(x, whole))
     measure = "ebitda"
     if len(have) < 2:
         # lenders have no EBITDA margin: their layers are set side by side on return on equity (R18)
@@ -497,15 +489,82 @@ def chain_table(blocks: list[dict]) -> dict:
                 hi = lo = None
                 line = f"The median return on equity of the {len(lend)} layers with at least {HEADLINE_MIN} companies is the same."
             else:
-                line = (f"Median return on equity is highest in {hi['layer']} ({pts(hi['roe'], True)}{few(hi['roe_n'], hi['n'])}) and lowest in {lo['layer']} "
-                        f"({pts(lo['roe'], True)}{few(lo['roe_n'], lo['n'])}), "
+                out = unranked_rows(rows, lend, "roe")
+                line = (f"{rank_scope(len(lend), out)}, median return on equity is highest in {hi['layer']} ({pts(hi['roe'], True)}{few(hi['roe_n'], hi['n'])}) "
+                        f"and lowest in {lo['layer']} ({pts(lo['roe'], True)}{few(lo['roe_n'], lo['n'])}), "
                         f"a gap of {gap_of(hi['roe'], lo['roe'])} points.").replace(".0 points", " points")
+                beyond = beyond_words(out, "roe", hi["roe"], lo["roe"], lambda x: pts(x, True))
         else:
             line = None             # nothing to set side by side: no line at all (R18: the deck said it couldn't be done)
     if line and hi and any(r["rest"] for r in rows):
         line = line.rstrip(".") + "; among the map's layers, the \"Other\" group left out."
+    if line and hi and beyond:
+        line += " " + beyond
     return {"rows": rows, "line": line, "highest": hi["layer"] if hi else None, "lowest": lo["layer"] if lo else None, "measure": measure,
-            "compared": [r["layer"] for r in have], "gap": round(hi[measure] - lo[measure], 1) if hi else None}
+            "compared": [r["layer"] for r in have], "gap": round(hi[measure] - lo[measure], 1) if hi else None,
+            "unranked": [{"layer": r["layer"], "why": r["why"]} for r in out] if hi else []}
+
+
+RANK_WHY = {"few": "fewer companies with the figure than a ranking needs", "cover": "the figure for under half its companies",
+            "sparse": "how most of its companies earn is not shown", "family": "a different kind of business", "sub": "a different commodity",
+            "official": "an exchange industry, not one of the map's layers", "rest": "companies outside the map's layers",
+            "other": "not comparable with the ranked layers"}
+
+
+def rank_scope(n: int, out: list | None = None) -> str:
+    """How a ranking headline opens (m2): "Among the 4 layers with at least 5 companies with the figure", and " and one kind of business"
+    when a layer shown beside them is left out for how it earns. Said in the headline's own sentence, wherever the headline is shown."""
+    kind = any(r.get("why") in (RANK_WHY["family"], RANK_WHY["sub"], RANK_WHY["sparse"]) for r in out or [])
+    return f"Among the {n} layers with at least {HEADLINE_MIN} companies with the figure" + (" and one kind of business" if kind else "")
+
+
+def unranked_rows(rows: list, have: list, key: str) -> list[dict]:
+    """The layers a table or chart shows a median of (COMPARE_MIN companies or more) that the headline beside it does not rank, each with
+    why in one short clause (`why`, RANK_WHY), in the table's order (m2: Pharma's 26% layer beside a headline that called 21% the highest)."""
+    names = {r["layer"] for r in have}
+    fam = Counter(f for f in (model_family_of(r["model"]) for r in have) if f).most_common(1)
+    sub = Counter(x for x in (sub_of(r["model"]) for r in have) if x).most_common(1)
+    own = any(not r["official"] for r in have)
+    out = []
+    for r in rows:
+        n = r.get(f"{key}_n") or 0
+        if r["layer"] in names or r.get(key) is None or n < COMPARE_MIN:
+            continue
+        m = r.get("model")
+        if r.get("rest"):
+            why = "rest"
+        elif r.get("official") and own:
+            why = "official"
+        elif n < HEADLINE_MIN:
+            why = "few"
+        elif r.get("n") and n < r["n"] * COVERAGE_MIN:
+            why = "cover"
+        elif isinstance(m, dict) and m.get("sparse"):
+            why = "sparse"
+        elif fam and model_family_of(m) != fam[0][0]:
+            why = "family"
+        elif sub and sub_of(m) != sub[0][0]:
+            why = "sub"
+        else:
+            why = "other"
+        out.append({**r, "why": f"fewer than {HEADLINE_MIN} companies with the figure" if why == "few" else RANK_WHY[why]})
+    return out
+
+
+def beyond_words(out: list, key: str, hi: float, lo: float, fmt) -> str:
+    """"Shown, not ranked: A (26%), a different kind of business; B (4.9%) and C (3%), fewer than 5 companies with the figure." for the
+    unranked layers (unranked_rows) whose median is above the headline's highest or below its lowest; "" when none is. The "Other" group
+    has its own clause in the headline."""
+    by: dict = {}
+    for r in out:
+        v = r.get(key)
+        if v is None or lo <= v <= hi or r["why"] == RANK_WHY["rest"]:
+            continue
+        by.setdefault(r["why"], []).append(f"{r['layer']} ({fmt(v)})")
+    if not by:
+        return ""
+    join = lambda xs: xs[0] if len(xs) == 1 else ", ".join(xs[:-1]) + " and " + xs[-1]      # noqa: E731
+    return "Shown, not ranked: " + "; ".join(f"{join(xs)}, {why}" for why, xs in by.items()) + "."
 
 
 def gap_of(a: float, b: float) -> str:
