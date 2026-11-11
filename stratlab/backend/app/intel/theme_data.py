@@ -1066,7 +1066,8 @@ def flagged_rows(items: list[dict], names: dict) -> list[dict]:
             continue
         seen.add(key)
         out.append({"symbol": i["symbol"], "name": names.get(i["symbol"]) or i.get("company") or i["symbol"], "at": i["at"], "label": label,
-                    "severity": i.get("severity"), "subject": i.get("subject") or i.get("title") or "", "url": i.get("url")})
+                    "severity": i.get("severity"), "subject": i.get("subject") or i.get("title") or "", "url": i.get("url"),
+                    "text": str(i.get("text") or "")[:240]})        # m2: the filing's own words, for the context a dated update states
     return out[:15]
 
 

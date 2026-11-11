@@ -2225,7 +2225,9 @@ def descriptive_line(val: dict) -> str:
     pe_n = (val.get("pe") or {}).get("n") or 0
     k = (((val.get("peers") or {}).get("pe") or {}).get("n")) or 0
     head = "The theme's own median " + ", ".join(parts) if parts else "The theme's own valuation"
-    return f"{head}; comparable peers for {k} of {pe_n}, so no relative figure"
+    # m2 (live R32 Telecom: the one deck of 14 whose P/E line named no price date): the theme's own multiples are on prices too
+    priced = f", prices at the {val['price_at']} close" if parts and val.get("price_at") else ""
+    return f"{head}{priced}; comparable peers for {k} of {pe_n}, so no relative figure"
 
 
 def layer_valuation_rows(val: dict):
@@ -2251,9 +2253,14 @@ def dated_peers(v: dict) -> dict:
     """The theme's comparisons with its peers as every slide reads them (R35, GPT reviews of R31.5-R31.9: the live Retail deck's P/E line
     named no price date): the P/E one carries the close its prices are of, the dive's own or, for a dive kept from before, the deck's
     "as of" day. publication_gate set it after the slides were written, so no line had it."""
-    peers = (((v.get("sections") or {}).get("valuation") or {}).get("peers")) or {}
+    val = (v.get("sections") or {}).get("valuation") or {}
+    peers = val.get("peers") or {}
     if isinstance(peers.get("pe"), dict) and not peers["pe"].get("as_of") and v.get("as_of"):
         peers["pe"]["as_of"] = str(v["as_of"])[:10]
+    # m2: the valuation's own price day (descriptive_line: a theme with no comparable peers states its own P/E, on the same close)
+    day = (peers.get("pe") or {}).get("as_of") if isinstance(peers.get("pe"), dict) else None
+    if val and not val.get("price_at") and (day or v.get("as_of")):
+        val["price_at"] = str(day or v["as_of"])[:10]
     return peers
 
 
@@ -2322,47 +2329,88 @@ def _refs(slides: list) -> None:
                                "note": fix(it.get("note"))} for it in b["items"]]
 
 
+UPDATES_TITLE = "Dated company updates"
+_AUDITOR_KIND = re.compile(r"\b(statutory|secretarial|internal|cost|joint)\s+auditors?\b", re.I)
+_AUDITOR_NEW = re.compile(r"\bappoint\w*\b.{0,120}\bauditors?\b|\bauditors?\b.{0,80}\b(?:appointed|appointment)\b|\bin place of\b|"
+                          r"casual vacancy.{0,80}\b(?:fill|appoint)", re.I | re.S)
+_AUDITOR_CLEAR = re.compile(r"\bno (?:other )?(?:material )?(?:concerns?|issues?|reasons?)\b|\b(?:has|have|had) not raised any\b|"
+                            r"\bnot raised any (?:concerns?|issues?)\b|\bno concerns? (?:or issues? )?(?:was|were|has been|have been) raised\b", re.I)
+
+
+def auditor_update(x: dict) -> tuple[str, str]:
+    """(the event, its context) of an auditor's resignation as its filing states it (m2): which auditor when the filing's subject or text
+    names the kind, and, only where those words say so, that a new auditor was appointed and that no concerns were raised. Fixed patterns
+    over the stored filing; nothing is said that the filing doesn't."""
+    words = f"{x.get('subject') or ''} {x.get('text') or ''}"
+    kind = _AUDITOR_KIND.search(words)
+    fact = f"Resignation of the {kind.group(1).lower()} auditor" if kind else "Resignation of an auditor"
+    ctx = []
+    if _AUDITOR_NEW.search(words):
+        ctx.append("a new auditor was appointed")
+    if _AUDITOR_CLEAR.search(words):
+        ctx.append("the auditor raised no concerns")
+    return fact, ("The filing says " + " and that ".join(ctx) + ".") if ctx else ""
+
+
 def watch_list(v: dict, today: date) -> list[dict]:
-    """"Worth a watch" (the owner, 7 Nov: a list only, rule-based, each company with its factual trigger; no view of what to do): results filed but
-    not yet in the figures, an auditor's resignation, a promoter stake move of a point or more, results due in the next week, a net margin above
-    the EBITDA margin (flagged, no cause named: R27), an operating figure a quarter or more above or below a year before (not held), and a stale operating figure. Each row
-    is a fact with its day and the slide it is on."""
+    """"Dated company updates" (m2, the outside review of the live R32 decks; "Worth a watch" before: the owner, 7 Nov: a list only,
+    rule-based; no view of what to do). Each row is one event as a neutral fact (`fact`), its exact day (`at`), whether it is scheduled or
+    already announced or filed (`status`), where it is from (`source`), what the source adds that a reader needs (`context`, "" when it
+    adds nothing) and the slide it is on (`ref`): results filed but not yet in the figures, an auditor's resignation, a promoter stake
+    move of a point or more, results scheduled in the next week, and an operating figure a quarter or more above or below a year before
+    (not held). An entry with no day is not a dated update: a net margin above the EBITDA margin stays on the data-confidence page. No
+    word says whether an event is good or bad."""
     sec = v.get("sections") or {}
     own, ev, q = sec.get("ownership") or {}, sec.get("events") or {}, sec.get("quarter") or {}
     out = []
     for x in q.get("earlier") or []:
         if x.get("filed_unread"):
-            out.append({"name": x["name"], "fact": f"Results filed on {_day(x['filed_unread'])}; the figures here are still {x.get('of') or 'an earlier quarter'}",
-                        "at": x["filed_unread"], "ref": "The latest quarter"})
+            out.append({"name": x["name"], "fact": f"Quarterly results; the figures in this deck are still {x.get('of') or 'an earlier quarter'}",
+                        "at": x["filed_unread"], "status": "Announced", "source": "Results filing", "ref": "The latest quarter"})
     for x in own.get("red_flags") or []:
         if "auditor" in str(x.get("label")).lower():
-            out.append({"name": x["name"], "fact": str(x["label"]), "at": x.get("at"), "ref": "Events"})
+            fact, ctx = auditor_update(x)
+            out.append({"name": x["name"], "fact": fact, "context": ctx, "at": x.get("at"), "status": "Announced", "source": "Exchange filing",
+                        "ref": "Events"})
     for x in own.get("holdings") or []:
         if changed(x.get("promoter_change"), 1.0):
             out.append({"name": x["name"], "fact": f"Promoters' stake {_pts(x['promoter_change'])} to {_pc(x.get('promoter'))} in the quarter to {_month(x.get('quarter'))}",
-                        "at": x.get("quarter"), "ref": "Ownership"})
+                        "at": x.get("quarter"), "status": "Filed", "source": "Shareholding filing", "ref": "Ownership"})
     soon = (today + timedelta(days=7)).isoformat()
     for x in ev.get("results_due") or []:
         if str(x.get("date")) <= soon:
-            out.append({"name": x["name"], "fact": f"Results due ({x.get('purpose') or 'financial results'})", "at": x.get("date"), "ref": "Events"})
-    for x in (v.get("checks") or {}).get("one_off") or []:
-        out.append({"name": x["name"], "fact": f"Net margin {_pc(x.get('net'))} is above its EBITDA margin {_pc(x.get('ebitda')).replace('.0%', '%')}; {ANOMALY_WHY}",
-                    "at": None, "ref": "Data confidence"})
+            # a day still ahead is scheduled; one already past, with no results stored for it, was the scheduled day (never "announced")
+            ahead = str(x.get("date"))[:10] >= today.isoformat()
+            out.append({"name": x["name"], "fact": results_purpose(x.get("purpose")), "at": x.get("date"),
+                        "status": "Scheduled" if ahead else "Was scheduled", "context": "" if ahead else "No results for it are in this deck yet.",
+                        "source": "Results calendar", "ref": "Events"})
     biz = v.get("business") or {}
     for g in (biz.get("layers") or []) + (biz.get("subs") or []):
         for r in g.get("rows") or []:
             if r.get("held") or biz_stale(r, today) or any(o["name"] == r["name"] and o["ref"] == "Operating" for o in out):
                 continue
-            if changed(r.get("change_year"), 25.0) and "%" not in (r.get("unit") or ""):
+            if changed(r.get("change_year"), 25.0) and "%" not in (r.get("unit") or "") and r.get("filed"):
                 out.append({"name": r["name"], "fact": f"{r.get('metric') or 'Operating figure'} {_bizchg(r['change_year'], r.get('unit'))} on a year before "
-                                                         f"({_period(r.get('period'), r.get('span') or 'month')})", "at": r.get("filed"), "ref": "Operating"})
+                                                         f"({_period(r.get('period'), r.get('span') or 'month')})", "at": r.get("filed"),
+                            "status": "Filed", "source": "Operating update", "ref": "Operating"})
     seen, uniq = set(), []
     for x in out:
         k = (x["name"], x["fact"])
-        if k not in seen:
+        if k not in seen and x.get("at"):
             seen.add(k)
             uniq.append(x)
     return uniq[:WATCH_MAX]
+
+
+def results_purpose(purpose) -> str:
+    """What a scheduled results day is for, as the calendar states it: "Financial results", or "Financial results; other business matters"
+    (the calendar's own "Financial Results/Other business matters", in sentence case)."""
+    parts = [p.strip() for p in re.split(r"\s*/\s*|\s*;\s*", str(purpose or "")) if p.strip()]
+    if not parts:
+        return "Financial results"
+    said = "; ".join(p[:1].lower() + p[1:] if p[1:2].islower() else p for p in parts)
+    said = said[:1].upper() + said[1:]
+    return said if re.search(r"result", said, re.I) else f"Financial results; {said[:1].lower() + said[1:] if said[1:2].islower() else said}"
 
 
 WATCH_MAX = 16
@@ -2598,7 +2646,7 @@ def growth_base_line(rows: list, amt, limit: int = 5) -> str:
 
 
 def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: date, chained: bool = True, lender: bool = False) -> None:
-    """The findings up front: what the figures show (with page references), the data-confidence page and "Worth a watch". Every sentence is a
+    """The findings up front: what the figures show (with page references), the data-confidence page and "Dated company updates". Every sentence is a
     computed fact from the view; no AI writes a figure here, and nothing says what to buy or what is cheap."""
     chain = v.get("chain") or {}
     sec = v.get("sections") or {}
@@ -2678,8 +2726,9 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
     conf = confidence_rows(v, cov, today, lender)
     cards.append({"title": "How far the figures go", "lines": [f"{counts_words(reconciled_counts(v, cov))}.", f"{len(conf)} checks on every figure, each with what it found."],
                   "note": "⟦Data confidence⟧"})
-    cards.append({"title": "Worth a watch", "lines": [f"{_n(len(watch), 'company', 'companies')} with a dated fact, picked by fixed rules, each with its trigger." if watch
-                                                      else "No company meets the rules today."], "note": "⟦Worth a watch⟧" if watch else ""})
+    cards.append({"title": UPDATES_TITLE, "lines": [f"{_n(len(watch), 'dated update')} at {_n(len({x['name'] for x in watch}), 'company', 'companies')}, "
+                                                    "picked by fixed rules, each with its date, status and source." if watch
+                                                    else "No company meets the rules today."], "note": f"⟦{UPDATES_TITLE}⟧" if watch else ""})
     if len(cards) > 6:            # two short cards share one so the page keeps two rows of three
         a_, b_ = cards[-2], cards.pop()
         cards[-1] = {"title": f"{a_['title']}; {b_['title'].lower()}", "lines": a_["lines"] + b_["lines"], "note": ", ".join(x for x in (a_["note"], b_["note"]) if x)}
@@ -2711,22 +2760,23 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
     s.add("text", (M, TOP + th + 0.15, CW, nh), paras=[counts], size=BODY_MIN, floor=BODY_MIN, color=INK2)
     slides.append(s)
 
-    # worth a watch: only when a company meets the rules, on one page, the most recent first (R19)
+    # dated company updates (m2; "Worth a watch" before): only when a company meets the rules, on one page, the latest day first (R19)
     if watch:
         dated = sorted(watch, key=lambda x: str(x.get("at") or ""), reverse=True)
-        rows = [[x["name"], x["fact"], _day(x["at"]) if x.get("at") and re.match(r"^\d{4}-\d{2}-\d{2}", str(x["at"])) else _month(x["at"]) if x.get("at") else "–",
+        when = lambda at: _day(at) if re.match(r"^\d{4}-\d{2}-\d{2}", str(at)) else _month(at)      # noqa: E731
+        rows = [[x["name"], x["fact"] + (f". {x['context']}" if x.get("context") else ""), when(x["at"]), x.get("status") or "–", x.get("source") or "–",
                  f"⟦{x['ref']}⟧"] for x in dated]
-        note = ("The rules: results filed but not yet in the figures; an auditor's resignation; a promoter stake move of a point or more; results due in "
-                "the next week; a net margin above the EBITDA margin; an operating figure 25% or more above or below a year before.")
+        note = ("The rules: results filed but not yet in the figures; an auditor's resignation; a promoter stake move of a point or more; results "
+                "scheduled in the next week; an operating figure 25% or more above or below a year before. Scheduled: a day the company has given "
+                "for an event not yet held. Announced or filed: already made public, in the source named. Each event is as its source states it.")
         nh = note_h(note)
-        wh, ww = ["Company", "Trigger", "Date", "Slide"], [3.0, 6.6, 1.4, 1.0]
-        if all(r[2] == "–" for r in rows):          # R27: no trigger with a date (a margin flag has none): no column of dashes
-            wh, ww, rows = [wh[0], wh[1], wh[3]], [3.0, 8.0, 1.0], [[r[0], r[1], r[3]] for r in rows]
+        wh, ww = ["Company", "Update", "Date", "Status", "Source", "Slide"], [2.7, 4.5, 1.35, 1.15, 1.6, 0.7]
         first = table_pages(wh, rows, ww, CW, BOT - TOP - nh - 0.07)[0]
-        sub = "Companies with a dated fact that changes, or may change, their figures; picked by fixed rules, not a view"
+        sub = "Dated events at the theme's companies: what happened or is scheduled, its day, its status and its source; picked by fixed rules, not a view"
         if len(first) < len(rows):
-            sub = f"The {len(first)} most recent of {len(rows)} companies with a dated fact that changes, or may change, their figures; picked by fixed rules"
-        s = Slide("Worth a watch", sub, eyebrow=eyebrow)
+            sub = (f"The {len(first)} latest by date of {len(rows)} dated events at the theme's companies: each with its day, its status and its "
+                   "source; picked by fixed rules")
+        s = Slide(UPDATES_TITLE, sub, eyebrow=eyebrow)
         s.add("table", (M, TOP, CW, BOT - TOP - nh - 0.07), head=wh, rows=first, widths=ww, numeric=[False] * len(wh))
         s.add("text", (M, BOT - nh, CW, nh), paras=[note], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
         slides.append(s)
@@ -3763,11 +3813,11 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     slides.append(contents)
 
     # 3. the findings (the owner, 7 Nov: about five pages up front, with page references): what the figures show, how far they can be
-    # trusted and what is worth a watch, each from computed facts only (no AI writes a number here)
+    # trusted and the companies' dated updates, each from computed facts only (no AI writes a number here)
     names_shown = {x["layer"] for x in shown}
     unplaced_cos = sorted((c for x in unplaced for c in x.get("companies") or [] if c.get("status") != "unverified"), key=lambda c: -(c.get("cap") or 0))
     rows_c = [r for r in chain.get("rows") or [] if r.get("n") and r["layer"] in names_shown]
-    section("", "Findings", "What the figures show, how far they can be trusted, and the companies with a dated fact worth a watch.")
+    section("", "Findings", "What the figures show, how far they can be trusted, and the companies' dated updates.")
     _findings(slides, v, cov, ebm, cap, eb("Findings"), now_d := (now or datetime.now(timezone.utc)).astimezone(IST).date(), chained=chained, lender=lender)
 
     # 4. the value chain: where the margin sits, a chart and the table (only with two layers or more to set side by side)
@@ -5112,7 +5162,7 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
                   size=BODY_MIN, floor=BODY_MIN, color=MUTED)
         slides.append(s)
 
-    # ownership, events and management report cards are per-company lists: on the theme's page, and their dated facts in "Worth a watch" (R19)
+    # ownership, events and management report cards are per-company lists: on the theme's page, and their dated facts in "Dated company updates" (R19; m2: its name)
 
 
 def build_theme(v: dict, pdf: bool = False) -> bytes:
