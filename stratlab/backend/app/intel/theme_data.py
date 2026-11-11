@@ -37,7 +37,7 @@ FEW_BASE = 4                  # a highest or lowest median on this many companie
 COMPARE_MIN = MIN_BASE
 # R31 (the owner's review of the live R30 decks): a layer-vs-layer headline (the value chain's line, findings, questions) needs at least this
 # many companies with the figure in each layer it compares; tables still show every layer and mark (green, red) those of COMPARE_MIN or more
-DIVE_TEXT = 7          # R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
+DIVE_TEXT = 8          # R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
 HEADLINE_MIN = 5
 # R27 (headline eligibility): a comparison is said as a headline only on a figure for at least this share of the companies of each group it
 # compares (a layer, a family); one with less is shown as data, never ranked (the live R26 Semis deck: "RPO growth -3.9%" of 21 of 53)
@@ -393,6 +393,21 @@ def layer_counts(layer: dict) -> dict:
     return {"listed": len(recs), "n": sum(1 for x in recs if x["in"]), "out": dict(Counter(x["why"] for x in recs if not x["in"]))}
 
 
+def one_row_each(rows: list[dict]) -> list[dict]:
+    """One company listed under two symbols (a second listing or an old symbol with the same name and the same filed figures) kept once, so it
+    is never counted, summed or shown twice (R36: the live R33 Retail deck printed "Leslie's, Inc." on two identical rows)."""
+    import re as _re
+    seen, out = set(), []
+    for r in rows:
+        name = _re.sub(r"[^a-z0-9]+", " ", str(r.get("name") or "").lower()).strip()
+        key = (name, r.get("revenue"), r.get("cap"))
+        if name and r.get("revenue") is not None and key in seen:
+            continue
+        seen.add(key)
+        out.append(r)
+    return out
+
+
 def layer_block(name: str, rows: list[dict], wide: set[str]) -> dict:
     """A layer's table and its median and range for each figure. A company-wide figure (a group that runs other businesses too) is
     marked and left out of the median when the layer has any company that is its own; the layer says how many were left out. A company
@@ -401,6 +416,7 @@ def layer_block(name: str, rows: list[dict], wide: set[str]) -> dict:
     unknown or of low confidence in a layer that has models (`model_out`, theme_base.by_model) is listed but left out of the layer's figures
     the same way (`model_out`: their symbols). Lane m1: each row carries "calc" (calc_record), and "n" is the rows in the calculations: a
     company with no figure at all is listed, never counted in "n" (live: 15 in a table, 14 of 17 on the layer's page)."""
+    rows = one_row_each(rows)
     for r in rows:              # the one record of who is in the layer's calculations, and why each other is not (calc_record)
         r["calc"] = calc_record(r)
     sure = [r for r in rows if r["calc"]["in"]]
@@ -1441,7 +1457,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
             r["series_break"] = True
             for k in ("sales_1y", "sales_3y", "sales_5y", "profit_1y", "profit_3y", "profit_5y"):
                 r[k] = None
-    listed = sorted(rows.values(), key=lambda r: -(r.get("cap") or 0))
+    listed = one_row_each(sorted(rows.values(), key=lambda r: -(r.get("cap") or 0)))     # R36: one company under two symbols, once
     syms = [r["symbol"] for r in listed]
     # every total and median: the confirmed companies with their key figures (R22: one population, so no count is larger than the one stated)
     members = [r for r in listed if r.get("status") != "unverified" and has_figures(r)]

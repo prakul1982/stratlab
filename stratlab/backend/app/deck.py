@@ -4647,6 +4647,15 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     confirmed_ = [x for x in sec.get("leaders") or [] if status.get(x["symbol"]) != "unverified"]
     bare = [x for x in confirmed_ if not figs_of(x)]           # a stored page with no key figure isn't "with figures" (R20)
     lead = sorted((x for x in confirmed_ if figs_of(x)), key=lambda x: -(x.get("cap") or 0))
+    # R36 (GPT review of the live R33 Retail deck: "Leslie's, Inc." on two identical rows): one company listed under two symbols is one row
+    seen_, once_ = set(), []
+    for x in lead:
+        key_ = (clean_name(str(x.get("name") or "")).lower(), x.get("cap"), x.get("revenue"))
+        if key_[0] and key_ in seen_:
+            continue
+        seen_.add(key_)
+        once_.append(x)
+    lead = once_
     if lead:
         # short headings on one line, so 20 or more rows fit a page (R20: 8 rows a page)
         lcols = [("revenue", "Revenue", 1.15), ("sales_1y", "Growth", 0.95), ("ebitda", "EBITDA", 0.95), ("net", "Net", 0.9), ("roce", "ROCE", 0.85)]

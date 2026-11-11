@@ -240,3 +240,17 @@ def test_with_no_dated_update_the_findings_say_so_in_a_line_that_stays(monkeypat
     card = cards[-1]
     assert len(cards) == 6 and card["title"] == "How far the figures go; dated company updates"
     assert card["lines"][0] == "No company meets the rules today." and card["lines"][1].startswith("Considered 8 · confirmed 8")
+
+
+def test_one_company_listed_under_two_symbols_is_one_row_in_every_companys_figures():
+    """R36 (GPT review of the live R33 Retail deck: "Leslie's, Inc." printed on two identical rows of the appendix)."""
+    region, m, f = retail_like(12, 5, 2)
+    first = m["value_chain"][0]["companies"][0]
+    twin = {**copy.deepcopy(first), "ticker": first["ticker"] + "X"}
+    m["value_chain"][0]["companies"].append(twin)
+    f[twin["ticker"]] = copy.deepcopy(f[first["ticker"]])
+    v, slides = deck_of(region, m, f)
+    names = [r[0] for s in slides if s.title.startswith("Every company's figures")
+             for b in s.blocks if b["kind"] == "table" for r in b["rows"] if not isinstance(r, dict)]
+    assert names and len(names) == len(set(names)), [n for n in names if names.count(n) > 1]
+    assert not [d for d in deck.complete_flags(slides) if "twice" in d["why"]]
