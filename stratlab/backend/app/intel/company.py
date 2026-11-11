@@ -1082,7 +1082,7 @@ class Research:
                 try:
                     bars = older(self.kite.history(inst["token"], tf, days, ttl=60 if forming else None), until)
                     return {"currency": "INR", "source": "Kite", "tf": tf, "more": more,
-                            "candles": self._with_today(region, symbol, bars) if forming else bars}
+                            "candles": self._day_candles(region, symbol, bars, forming, tf, until)}
                 except Exception:
                     pass
         from .yahoo import INTERVAL
@@ -1091,7 +1091,17 @@ class Research:
         c = self.yahoo.chart(ysym, tf, days, ttl=60 if forming else None)
         bars = older(c["candles"], until)
         return {"currency": c["meta"].get("currency") or ("INR" if region == "IN" else "USD"),
-                "source": "Yahoo Finance", "tf": tf, "more": more, "candles": self._with_today(region, symbol, bars) if forming else bars}
+                "source": "Yahoo Finance", "tf": tf, "more": more, "candles": self._day_candles(region, symbol, bars, forming, tf, until)}
+
+    def _day_candles(self, region: str, symbol: str, bars: list[dict], forming: bool, tf: str, until) -> list[dict]:
+        """The daily candles a chart answers with: a market index's today candle ends on the level the market pulse and Mood
+        show, open or closed (LIVE6-004: My space's SENSEX tile said 81,504 +0.49% at 16:01 IST from a candle stored during the
+        session, while Mood had the 81,879.40 +0.95% close); any other symbol gets today's candle while the market trades."""
+        if tf != "1d" or until is not None:
+            return bars
+        if any(s == symbol for _, s in INDICES.get(region, [])):
+            return self._with_today(region, symbol, bars, level=True)
+        return self._with_today(region, symbol, bars) if forming else bars
 
     def _kite_index(self, symbol: str) -> dict | None:
         """An Indian index on the broker's feed ({"token"}), by the chart symbol the pages use (^NSEI, ^BSESN)."""
@@ -1133,16 +1143,47 @@ class Research:
         except Exception:
             return None
 
-    def _with_today(self, region: str, symbol: str, bars: list[dict]) -> list[dict]:
-        """Daily candles with today's, from the quote, when the source's last one is a previous session's while the market
-        trades (R7T-003: SENSEX's chart had no 9 Oct candle at 09:39 IST)."""
-        today = market_today(region)
-        if bars and str(bars[-1].get("t", ""))[:10] >= today:
-            return bars
+    INDEX_LEVEL_KEEP = 60.0   # seconds an index's level for its chart's today candle is reused (the pulse's own copy first)
+
+    def _index_level(self, region: str, symbol: str) -> dict | None:
+        """An index's level now as {"price", "at", ...}: the market pulse's kept reading (the one Mood shows) while it is under
+        a minute old and not from before the close, else the live quote, kept INDEX_LEVEL_KEEP seconds (a handful of
+        indices, so the store stays small)."""
+        name = next((n for n, s in INDICES.get(region, []) if s == symbol), None)
+        snap = self._levels_snap
+        kept = snap.kept(region) if snap is not None else None
+        if name and kept and kept[1] and time.time() - kept[0] < self.INDEX_LEVEL_KEEP:
+            row = next((i for i in kept[1] if i.get("name") == name), None)
+            if row and row.get("price") and not row.get("pre_close"):
+                return {"price": row["price"], "at": row.get("at")}
+        store = self.__dict__.setdefault("_index_levels", {})
+        hit = store.get((region, symbol))
+        if hit and time.time() - hit[0] < self.INDEX_LEVEL_KEEP:
+            return hit[1]
         q = self._live_quote(region, symbol)
+        if len(store) > 32:
+            store.clear()
+        store[(region, symbol)] = (time.time(), q)
+        return q
+
+    def _with_today(self, region: str, symbol: str, bars: list[dict], level: bool = False) -> list[dict]:
+        """Daily candles with today's, from the quote, when the source's last one is a previous session's while the market
+        trades (R7T-003: SENSEX's chart had no 9 Oct candle at 09:39 IST). `level`: a market index's, whose today candle also
+        closes on the index's level now, the session still trading or closed (LIVE6-004)."""
+        today = market_today(region)
+        has_today = bool(bars) and str(bars[-1].get("t", ""))[:10] >= today
+        if has_today and not level:
+            return bars
+        q = self._index_level(region, symbol) if level else self._live_quote(region, symbol)
         px = num((q or {}).get("price"))
         if not px or session_day((q or {}).get("at"), region) != today:
             return bars
+        if has_today:
+            b = bars[-1]
+            if str(b.get("t", ""))[:10] != today or num(b.get("c")) == px:
+                return bars
+            hi, lo = num(b.get("h")), num(b.get("l"))
+            return [*bars[:-1], {**b, "c": px, "h": max(hi, px) if hi else px, "l": min(lo, px) if lo else px}]
         from zoneinfo import ZoneInfo
         from ..data.markets import BY_ID
         t = datetime.fromisoformat(today).replace(tzinfo=ZoneInfo(BY_ID[region]["tz"])).isoformat()
