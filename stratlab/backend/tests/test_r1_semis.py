@@ -105,10 +105,11 @@ def test_live_semis_contract_layer_holds_the_foundries_and_not_stmicro():
     assert layer_of(vc, "AMAT")["layer"] == "Semiconductor equipment"
     assert layer_of(vc, "NVDA")["layer"] == "Fabless chip design"
     assert row_of(vc, "Q")["model"] == "components" and layer_of(vc, "Q") is layer_of(vc, "ENTG")
-    # R37 lane r2 (updated on purpose): Amkor's "packaging and test services" are contract making in so many words, so it is counted, with the
-    # foundries; the materials makers keep a layer of their own
+    # R37 lane r2 (updated on purpose): Amkor's "packaging and test services" are contract making in so many words, so it is counted, in the
+    # packaging and test layer (foundries keep their own contract layer); the materials makers keep a layer of their own
     assert row_of(vc, "AMKR")["model"] == "contract_manufacturing" and not row_of(vc, "AMKR").get("model_out")
-    assert "TSM" in {c["ticker"] for c in layer_of(vc, "AMKR")["companies"]} and "Q" not in {c["ticker"] for c in layer_of(vc, "AMKR")["companies"]}
+    assert layer_of(vc, "AMKR")["layer"] == "Packaging, test and materials suppliers" and layer_of(vc, "AMKR") is not cm
+    assert "Q" not in {c["ticker"] for c in layer_of(vc, "AMKR")["companies"]}
 
 
 # ---------- 3: solar makers filed as semiconductors ----------

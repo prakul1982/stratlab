@@ -717,13 +717,17 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
         # R32: a company whose own stored words say nothing of how it earns takes the model its map layer's name states (live R31 semis:
         # Qualcomm, Broadcom, AMD... with only "From its own filings: Quarterly report" as evidence sat unknown in "Fabless chip design")
         models, conf = models_from_layer(out_vc, models, conf, evidence)
+    settled = set()
     if models:
         # R31: a kept placement's models made exact by the R31 boundaries (lenders, landlords and developers; fabless and fab owners) from the
         # companies' evidence, with nothing asked again
+        had = {s_ for s_, m_ in models.items() if m_ not in ("", "unknown")}
         models, conf = refine_kept(models, conf, evidence, [c.get("ticker") for v in out_vc for c in v.get("companies") or []])
+        settled = {s_ for s_, m_ in models.items() if m_ not in ("", "unknown") and s_ not in had           # R37: models only their words state
+                   and refine_model("unknown", evidence(s_)) in ("", "unknown")}
     if models:
         before = {v["layer"]: {c.get("ticker") for c in v["companies"]} for v in out_vc if not v.get("official")}
-        out_vc = by_model(out_vc, models, theme, tags=tags, confidence=conf, evidence_of=evidence)
+        out_vc = by_model(out_vc, models, theme, tags=tags, confidence=conf, evidence_of=evidence, settled=settled)
         # R26: a layer of the map the split reshaped (companies moved in or out) whose name no longer fits how its companies earn is renamed by
         # the same check as the placement's; asked once a map and its split, kept with the rest
         reshaped = [v for v in out_vc if v["layer"] in before and not v.get("official") and not v.get("scale") and (v.get("model") or {}).get("line")
@@ -921,7 +925,7 @@ def _model_layer(name: str, cos: list[dict], **kw) -> dict:
 
 
 def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = None, confidence: dict | None = None,
-             evidence_of=None) -> list[dict]:
+             evidence_of=None, settled=()) -> list[dict]:
     """The placed map's layers with one revenue model family each, from `models` ({symbol: model id}, theme_check.MODELS):
     1. a layer of the map whose companies earn in different ways keeps its main family (the most of its companies; a tie, the family of the first
        of them, the map's own pick); each other company moves to the layer whose main family is its own (the largest), else to a new layer named
@@ -946,7 +950,7 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
     own evidence as the AI read it."""
     from collections import Counter
 
-    from .theme_check import FAMILIES, MODELS, model_evidence, model_family, off_industry, sub_basis
+    from .theme_check import FAMILIES, MODELS, SUB_BASIS, SUB_JOIN, SUB_OF, model_evidence, model_family, off_industry, stated_model, sub_basis
     tags, conf = tags or {}, confidence or {}
     every = {s: m_ for s, m_ in (models or {}).items() if m_ in MODELS}
     models = {s: m_ for s, m_ in every.items() if conf.get(s) != "low"}
@@ -991,8 +995,14 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
     for v in own:
         f = mains[id(v)] = main(v["companies"])
         if f:
-            movers += [{**c, "_from_layer": True} for c in v["companies"] if fam(c) not in ("", f)]
-            v["companies"] = [c for c in v["companies"] if fam(c) in ("", f)]
+            # R37 (lane r2): a company the map placed in a layer whose model only its own words state (`settled`: no answer gave it one) is never
+            # moved by it: it stays in the map's layer, left out of its figures as a company of another way of earning
+            held = {c.get("ticker") for c in v["companies"] if fam(c) not in ("", f) and c.get("ticker") in settled}
+            outside |= held
+            for s_ in held:
+                models.pop(s_, None)
+            movers += [{**c, "_from_layer": True} for c in v["companies"] if fam(c) not in ("", f) and c.get("ticker") not in held]
+            v["companies"] = [c for c in v["companies"] if fam(c) in ("", f) or c.get("ticker") in held]
     for v in out:
         if v.get("official") and v.get("basis") == "rest":
             movers += [{**c, "fit": True} for c in v["companies"] if fam(c)]
@@ -1007,41 +1017,48 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
     new: dict[str, dict] = {}
 
     inds = {id(v): Counter(key(x.get("industry")) for x in v["companies"] if x.get("industry")) for v in own}     # before any company moves
+    sizes = {id(v): len(v["companies"]) for v in own}
+    kinds = {id(v): sub_basis(mains[id(v)], [ev(x) for x in v["companies"] if fam(x) == mains[id(v)]]) for v in own
+             if mains.get(id(v)) in SUB_JOIN}
     stays = []
 
     def home_of(c, f):
         """The map's layer of its family a company moving by how it earns goes to: the largest of them. R36 (the live R35 Consumer retail
         deck: Amazon, leaving the marketplaces, would go to "Apparel and fashion retail chains"): for a company leaving a layer the map placed it
-        in, not the largest when that holds no company of its own official industry and another is mostly of it. R37 (lane r2, the same deck:
-        two propane distributors, two pawnbrokers and three online sellers moved out of "Other" into "Apparel and fashion retail chains"): the
-        largest stands only when it holds companies of the mover's official industry or its name or description shares a word of what the
-        mover's own words say it does (none of how any company earns: makes, sells, supplies...); else the largest of the family's layers
-        mostly of its industry (for a company of the "Other" group, the one holding the most of it), else the layer whose name has such a
-        word that no other layer's name of the family has, else a company of the "Other" group whose own words fit no layer stays there (the
-        map has no layer of its business)."""
+        in, not the largest when that holds no company of its own official industry and another is mostly of it.
+        R37 (lane r2), for a company of the "Other" group only (the same deck: two propane distributors, two pawnbrokers and three online
+        sellers moved out of "Other" into "Apparel and fashion retail chains"): the largest stands when it holds the company's official
+        industry, or its name or description shares a word of what the company's own words say it does (none of how any company earns:
+        makes, sells, supplies...), or the company has no words; else the layer whose every company is of its official industry and whose
+        name or description shares such a word, unless the layer's name states another way of earning ("Custom synthesis manufacturers"); else,
+        when no layer of its family holds its industry or shares its words, it stays in "Other" (the map has no layer of its business).
+        A contract maker's kind (packaging and test, or a foundry: theme_check.contract_kind) joins only a contract layer of its kind, else
+        a layer of its own (R37: foundries beside packaging and test services under "Packaging, test and materials suppliers")."""
         big = home.get(f)
         if big is None:
             return None
         cands = homes.get(f) or [big]
-        words = {id(v): kind_stems(v.get("was") or v.get("layer") or "") for v in cands}
-        mine = kind_stems(own_text(ev(c)))
-
-        def fits(v):
-            return mine & (words[id(v)] - set().union(*[words[id(x)] for x in cands if x is not v]))
+        if f in SUB_JOIN:
+            kind = SUB_OF[SUB_BASIS[f]](ev(c))
+            if kinds.get(id(big)) not in ("", kind):
+                alike = [v for v in cands if kinds.get(id(v)) == kind]
+                return max(alike, key=lambda v: sizes.get(id(v), 0)) if alike else None
         ind = key(c.get("industry")) if c.get("industry") else ""
         same = lambda v: inds.get(id(v), Counter())[ind] if ind else 0      # noqa: E731
-        if same(big) or mine & kind_stems(f"{big.get('layer') or ''} {big.get('description') or ''}"):
+        if c.get("_from_layer"):
+            if not ind or same(big):
+                return big
+            mostly = [v for v in cands if same(v) * 2 > sizes.get(id(v), len(v["companies"]))]
+            return max(mostly, key=lambda v: sizes.get(id(v), 0)) if mostly else big
+        mine = kind_stems(own_text(ev(c)))
+        words = lambda v: kind_stems(f"{v.get('layer') or ''} {v.get('description') or ''}")      # noqa: E731
+        if not mine or same(big) or mine & words(big):
             return big
-        mostly = [v for v in cands if same(v) * 2 > len(v["companies"])]
-        if mostly:
-            return max(mostly, key=lambda v: len(v["companies"]))
-        held = [v for v in cands if same(v)] if not c.get("_from_layer") else []
-        if held:                       # R37: a company of the "Other" group, to the layer holding the most of its official industry
-            return max(held, key=lambda v: (same(v), len(v["companies"])))
-        fit = [(len(fits(v)), len(v["companies"]), v) for v in cands if fits(v)]
-        if fit:
-            return max(fit, key=lambda x: x[:2])[2]
-        if c.get("fit") and mine and ind:      # neither its known official industry nor its own words fit any layer
+        alike = [v for v in cands if sizes.get(id(v)) and same(v) == sizes[id(v)] and mine & words(v)
+                 and stated_model(v.get("was") or v.get("layer") or "") in ("", models.get(c.get("ticker")))]
+        if alike:
+            return max(alike, key=lambda v: sizes[id(v)])
+        if ind and not any(same(v) or mine & words(v) for v in cands):
             return STAY
         return big
     for c in movers:

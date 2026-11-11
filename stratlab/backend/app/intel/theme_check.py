@@ -987,7 +987,21 @@ def commodity_of(evidence) -> str:
     return "other"
 
 
-SUB_OF = {"commodity": commodity_of}
+def contract_kind(evidence) -> str:
+    """R37 (lane r2): a contract maker's kind, from its own words: "osat" (packaging and test services for others), "foundry" (chips made to
+    its customers' designs), "" for any other (a CDMO, an EMS maker) or none shown."""
+    _, own = _split_evidence(evidence)
+    if re.search(OSAT_WORDS, own, re.I):
+        return "osat"
+    return "foundry" if foundry(evidence) else ""
+
+
+SUB_OF = {"commodity": commodity_of, "kind": contract_kind}
+# R37: contract makers by kind: foundries and packaging and test services earn by contract alike, yet a layer holds one kind, and a company
+# moving by how it earns joins only a contract layer of its own kind (theme_base.by_model); a CDMO or EMS maker has none and goes as before
+SUB_BASIS["contract_making"] = "kind"
+SUB_WORDS["kind"] = "kind"
+SUB_JOIN = {"contract_making"}
 
 
 def sub_basis(family: str, evidences: list) -> str:

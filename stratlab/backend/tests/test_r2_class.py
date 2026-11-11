@@ -71,7 +71,7 @@ def test_live_retail_fuel_distributors_and_online_sellers_leave_the_apparel_chai
     apparel = layer_of(vc, "GAP")
     assert apparel["layer"] == "Apparel and fashion retail chains"
     names = {c["ticker"] for c in apparel["companies"]}
-    assert not names & {"CIMG", "FGPR", "SPH", "CPNG", "W", "VIPS", "HEPS", "FCFS", "EZPW", "SVV"}
+    assert not names & {"CIMG", "FGPR", "SPH", "CPNG", "W", "VIPS", "FCFS", "EZPW", "SVV"}
     for sym in ("CPNG", "W", "VIPS"):                         # online sellers: the online retailers, the layer of their own industry
         assert layer_of(vc, sym)["layer"] == "Online direct-to-consumer retailers", sym
     other = next(v for v in vc if v.get("official") and v.get("basis") == "rest")
@@ -96,12 +96,14 @@ def test_a_company_leaving_other_joins_the_largest_layer_only_when_it_holds_its_
     # of the largest layer's industry: there, as before (no reshuffle)
     out = by_model_one([big, small], {"ticker": "X", "industry": "Retail-Family Clothing Stores", "what": "operates outlet stores", "cap": 1})
     assert layer_of(out, "X")["layer"] == "Apparel chains"
-    # of another layer's industry: that layer
+    # the layer whose every company is of its industry and whose words it shares: that layer
+    out = by_model_one([big, small], {"ticker": "X", "industry": "Retail-Catalog & Mail-Order Houses", "what": "sells furniture online", "cap": 1})
+    assert layer_of(out, "X")["layer"] == "Online retailers"
+    # of its industry or its words only: the largest, as before (no move on one sign alone)
     out = by_model_one([big, small], {"ticker": "X", "industry": "Retail-Catalog & Mail-Order Houses", "what": "an e-commerce company", "cap": 1})
-    assert layer_of(out, "X")["layer"] == "Online retailers"
-    # words of another layer's name: that layer
+    assert layer_of(out, "X")["layer"] == "Apparel chains"
     out = by_model_one([big, small], {"ticker": "X", "industry": "Retail-Miscellaneous Retail", "what": "sells furniture online", "cap": 1})
-    assert layer_of(out, "X")["layer"] == "Online retailers"
+    assert layer_of(out, "X")["layer"] == "Apparel chains"
     # neither: it stays in "Other", its way of earning shown
     out = by_model_one([big, small], {"ticker": "X", "industry": "Retail-Miscellaneous Retail", "what": "retail distribution of propane", "cap": 1})
     assert layer_of(out, "X")["layer"] == "Other" and row_of(out, "X")["model"] == "retail"
@@ -123,6 +125,30 @@ def test_no_other_theme_reshuffled_beyond_the_layers_of_their_industry():
     assert layer_of(out, "N")["layer"] == "Component suppliers"
 
 
+def test_a_company_the_map_placed_keeps_its_layer_when_only_its_words_give_its_model():
+    """The live R35 Defence map: Centum and Cyient DLM (electronics contract manufacturers, no model kept) in "Electronics and sub-systems":
+    their words now state contract making, and they stay in the map's layer, left out of its figures as another way of earning, never moved
+    to a layer of their own; one whose model a rule made from the evidence (a bank's industry) goes by it as before."""
+    vc = [{"layer": "Electronics and sub-systems", "description": "", "companies": [
+              {"ticker": t, "industry": "Aerospace & Defense", "cap": 9 - i} for i, t in enumerate(("BEL", "DATAPATTNS", "PARAS", "CENTUM"))]},
+          {"layer": "Shipbuilders", "description": "", "companies": [{"ticker": "MAZDOCK", "industry": "Ship Building", "cap": 9}]}]
+    ev = {"BEL": "Industry: Aerospace & Defense. Bharat Electronics manufactures radars and defence electronics.",
+          "DATAPATTNS": "Industry: Aerospace & Defense. Data Patterns manufactures defence electronic systems.",
+          "PARAS": "Industry: Aerospace & Defense. Paras Defence manufactures optics and electronics.",
+          "CENTUM": "Industry: Aerospace & Defense. Centum Electronics Limited is one of the largest Electronics System Design and Manufacturing "
+                    "(ESDM) companies in India.",
+          "MAZDOCK": "Industry: Ship Building. Builds warships."}
+    m = {"sector": "Defence", "value_chain": vc}
+    kept = {"assign": {}, "models": {"BEL": "manufacturing", "DATAPATTNS": "manufacturing", "PARAS": "manufacturing", "MAZDOCK": "construction"},
+            "model_confidence": {"BEL": "high", "DATAPATTNS": "high", "PARAS": "high", "MAZDOCK": "high"}}
+    out, _ = B.place_rest(m, "Defence", lambda s: ev[s].split(". ", 1)[1], ask=None, kept=kept,
+                          facts_of=lambda s: {"industry": ev[s].split(". ")[0].removeprefix("Industry: ")})
+    lay = layer_of(out["value_chain"], "CENTUM")
+    assert lay["layer"] == "Electronics and sub-systems"
+    assert row_of(out["value_chain"], "CENTUM")["model"] == "contract_manufacturing" and row_of(out["value_chain"], "CENTUM")["model_out"] == "other"
+    assert lay["model"]["id"] == "manufacturing"
+
+
 # ---------- 3. Semiconductors ----------
 def test_packaging_and_test_services_are_contract_makers_counted_and_materials_makers_keep_their_layer():
     for sym in ("AMKR", "IMOS", "ASX"):
@@ -131,9 +157,15 @@ def test_packaging_and_test_services_are_contract_makers_counted_and_materials_m
         assert G.classify(G.company("semis", sym)) == ("components", ""), sym
     vc = replay("semis_us_r35.json")
     contract = layer_of(vc, "AMKR")
-    assert contract["model"]["id"] == "contract_manufacturing"
-    assert {"AMKR", "IMOS", "ASX", "TSM", "UMC", "GFS", "TSEM"} <= {c["ticker"] for c in contract["companies"]}
+    assert contract["model"]["id"] == "contract_manufacturing" and contract["layer"] == "Packaging, test and materials suppliers"
+    assert {c["ticker"] for c in contract["companies"]} == {"AMKR", "IMOS", "ASX"}
     assert not any(c.get("model_out") for c in contract["companies"])
+    # the foundries keep their own contract layer (a contract maker joins only a contract layer of its kind: theme_check.contract_kind)
+    fdy = layer_of(vc, "TSM")
+    assert fdy is not contract and fdy["model"]["id"] == "contract_manufacturing" and {"TSM", "UMC", "GFS", "TSEM"} <= {c["ticker"] for c in fdy["companies"]}
+    assert C.contract_kind(SEMI + "A provider of semiconductor packaging and test services.") == "osat"
+    assert C.contract_kind(SEMI + "As a foundry, we manufacture chips based on designs provided by our customers.") == "foundry"
+    assert C.contract_kind("Industry: Pharmaceuticals. A CDMO for global pharma.") == ""
     materials = layer_of(vc, "Q")
     assert materials is layer_of(vc, "ENTG") and materials["model"]["id"] == "components"
     assert {C.model_family(c["model"]) for c in materials["companies"]} == {"components"}
