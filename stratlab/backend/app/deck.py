@@ -8,6 +8,7 @@ looking"): the paper and ink colours of frontend/src/styles.css, its serif headi
 Sans), and the green and red candles of the StratLab mark (frontend/src/lib/brand.ts). Text is measured with the PDF fonts
 (wider than PowerPoint's Calibri and Georgia), so what fits in the PDF fits in PowerPoint too; every text box is cut to its
 box with an ellipsis, never left to overflow."""
+import functools
 import io
 import os
 import re
@@ -74,10 +75,17 @@ def _face(text: str, bold: bool = False, head: bool = False) -> str:
     return "Head" if head else "Body-Bold" if bold else "Body"
 
 
-def _width(text: str, size: float, bold: bool = False, head: bool = False) -> float:
-    """Width in inches of one line of text (headings in the widest serif, so a fitted heading fits in either file)."""
+@functools.lru_cache(maxsize=200_000)
+def _measure(text: str, size: float, bold: bool, head: bool) -> float:
     from reportlab.pdfbase import pdfmetrics
-    return pdfmetrics.stringWidth(str(text), "Head" if head else _face(text, bold), size) / 72
+    _fonts()
+    return pdfmetrics.stringWidth(text, "Head" if head else _face(text, bold), size) / 72
+
+
+def _width(text: str, size: float, bold: bool = False, head: bool = False) -> float:
+    """Width in inches of one line of text (headings in the widest serif, so a fitted heading fits in either file). Kept once measured
+    (R35): a deck is laid out several times over (its pages, its tables' pages, the layout check), on the same words."""
+    return _measure(str(text), size, bool(bold), bool(head))
 
 
 def wrap(text: str, size: float, width: float, bold: bool = False, head: bool = False) -> list[str]:
@@ -167,7 +175,23 @@ def sentences(text: str, limit: int) -> str:
     end = max(cut.rfind(". "), cut.rfind("? "), cut.rfind("! "))
     if len(text) <= limit:                   # short: drop only a trailing half-sentence ("…East and Africa. It is")
         return text[:end + 1] if end > 0 else text
-    return cut[:end + 1] if end > limit * 0.4 else cut[:cut.rfind(" ")].rstrip(",;:") + "…"
+    if end > 0:                              # R35: the whole sentences that fit, however few (never a second one cut to "…monoclonal…")
+        return cut[:end + 1]
+    more = re.search(r"[.!?](?=\s|$)", text[limit:int(limit * 1.5)])
+    if more:                                 # one sentence a little over the limit is said whole
+        return text[:limit + more.end()]
+    return _no_joiner(cut[:cut.rfind(" ")] if " " in cut else cut) + "…"
+
+
+_JOINER = re.compile(r"[\s,;:(–-]+(?:and|or|of|the|a|an|for|in|to|with|by|on|at|from|its|their|&)$", re.I)
+
+
+def _no_joiner(text: str) -> str:
+    """A cut text never ends on a joining word ("Pharma and…", "listed as…" stays; "of the…" doesn't): the words before it."""
+    text = text.rstrip(" ,;:-–(")
+    while _JOINER.search(text):
+        text = _JOINER.sub("", text).rstrip(" ,;:-–(")
+    return text
 
 
 def clip(text: str, size: float, width: float, lines: int, bold=False, head=False) -> str:
@@ -604,6 +628,129 @@ def fit_chars(text: str, size: float, width: float) -> str:
     return text.rstrip(" ,;:-–(") + "…"
 
 
+# R35 (the owner's review of the R31.11 decks: "Component…", "Tyre…", "Mahindra & Mahindra…" down every table and chart): a name that
+# doesn't fit is said shorter, whole, before any of it is cut. Generic: no list of names, only the words every such name can lose.
+_LEGAL_TAIL = re.compile(r"[\s,]+(?:ltd|limited|inc|incorporated|corp|corporation|co|company|plc|llc)\.?$", re.I)
+_KIND_TAIL = re.compile(r"\s+(?:makers?|manufacturers?|companies|providers?|producers?|suppliers?|operators?|businesses|firms|players)$", re.I)
+_CORP_TAIL = re.compile(r"\s+(?:international|industries|enterprises|holdings|group|india)$", re.I)
+_PAREN = re.compile(r"\s*\((?!\D*\d)[^()]*\)")
+_LABEL_LIKE = re.compile(r"[^\W\d_][\w&'’.,()/+·:\- ]*$")
+
+
+def label_forms(text: str, deep: bool = True) -> list[str]:
+    """A label and its shorter ways of saying the same thing, longest first: "and" as "&", a company's legal ending left off ("Ltd",
+    "Company Limited"), the kind of business left off a layer's name ("makers", "companies", "providers"), and (`deep`) a bracketed
+    aside with no figure in it, then a name's last general word ("International", "Industries"). A figure, a sentence or a link has no shorter form."""
+    text = str(text).strip()
+    out = [text]
+    if not _LABEL_LIKE.match(text) or len(text.split()) > 9 or re.search(r"[.!?] |\d[%x]|https?:", text):
+        return out
+
+    def add(t):
+        t = t.strip(" ,;:-–&")
+        if t and t != out[-1] and re.search(r"[^\W\d_]{2}", t):
+            out.append(t)
+    add(re.sub(r"\s+and\s+", " & ", out[-1]))
+    t = out[-1]
+    while _LEGAL_TAIL.search(t) and len(t.split()) > 1:
+        t = _LEGAL_TAIL.sub("", t)
+    add(t)
+    if len(out[-1].split()) > 1:
+        add(_KIND_TAIL.sub("", out[-1]))
+    if deep:
+        add(_PAREN.sub("", out[-1]))
+        add(re.sub(r"^The\s+", "", out[-1]))
+        t = _CORP_TAIL.sub("", out[-1])
+        if len(t.split()) > 1 and t == _no_joiner(t):          # "Northfield Motherson International": the name without the last general word
+            add(t)
+    return out
+
+
+def _distinct(given: list, short: list) -> list:
+    """The shortened labels, with any two different names that came out the same given back in full (two layers are never one name)."""
+    names = {}
+    for g, t in zip(given, short):
+        names.setdefault(t, set()).add(g)
+    return [g if len(names[t]) > 1 else t for g, t in zip(given, short)]
+
+
+def _holds(text: str, size: float, width: float, lines: int, bold: bool = False) -> bool:
+    """Whether the text shows whole in this many lines of this width: every word on a line, none broken."""
+    return all(_width(w, size, bold) <= width for w in text.split()) and len(wrap(text, size, width, bold)) <= lines
+
+
+def short_label(text: str, size: float, width: float, lines: int = 1, bold: bool = False, tight: bool = False) -> str:
+    """A label that fits `lines` lines of `width`, whole: as given when it fits, else its first shorter form that does (label_forms).
+    `tight` (a one-line table row): a shorter form on one line before the name on two. Only a label no form of which fits is cut, at a
+    whole word, with an ellipsis (the publication gate lists it)."""
+    text = str(text)
+    if _width(text, size, bold) <= width:
+        return text
+    if tight:
+        for n in range(1, lines + 1):
+            for t in label_forms(text, deep=n == lines):
+                if _holds(t, size, width, n, bold):
+                    return t
+    else:
+        for t in label_forms(text):
+            if _holds(t, size, width, lines, bold):
+                return t
+    t = label_forms(text)[-1]
+    rows, cur = [], ""
+    for w in t.split():
+        nxt = f"{cur} {w}".strip()
+        if _width(nxt, size, bold) <= width:
+            cur = nxt
+        elif cur and len(rows) < lines - 1 and _width(w, size, bold) <= width:
+            rows, cur = rows + [cur], w
+        else:
+            break
+    else:
+        return t
+    rows = rows + [cur] if cur else rows
+    while rows and _width(rows[-1] + "…", size, bold) > width:        # room for the ellipsis: whole words give way, never part of one
+        rows[-1] = rows[-1][:rows[-1].rfind(" ")] if " " in rows[-1] else ""
+        rows = [r for r in rows if r]
+    kept = _no_joiner(" ".join(rows))
+    if not kept:                               # one word wider than the line: nothing whole to keep
+        kept = t.split()[0]
+        while len(kept) > 1 and _width(kept + "…", size, bold) > width:
+            kept = kept[:-1]
+    return kept + "…"
+
+
+def _fit_columns(b: dict, widths: list[float], size: float = BODY_MIN) -> list[float]:
+    """A one-line table's column widths, with the room a column doesn't use given to the columns whose cells don't fit on one line (R35:
+    "Component…" beside a half-empty figure column): first to short cells (a figure, a date), then to names. The total is unchanged."""
+    pad = 0.22
+    strong = set(b.get("strong") or ())
+    hard, full = [], []
+    for c, (hd, w) in enumerate(zip(b["head"], widths)):
+        one = _width(str(hd), size, True) + pad
+        need = one if one <= w + 1e-6 else max((_width(x, size, True) for x in str(hd).split()), default=0) + pad
+        short = long_ = need
+        for i, r in enumerate(b["rows"]):
+            if isinstance(r, dict) or c >= len(r):
+                continue
+            t = _cell_text(r[c])
+            cw = _width(t, size, i in strong) + pad
+            long_ = max(long_, cw)
+            if len(t) <= 16:
+                short = max(short, cw)
+        hard.append(short)
+        full.append(long_)
+    out = list(widths)
+    for need in (hard, full):
+        want = [max(0.0, n - w) for n, w in zip(need, out)]
+        spare = [max(0.0, w - f) for w, f in zip(out, full)]
+        tw, ts = sum(want), sum(spare)
+        if tw <= 1e-6 or ts <= 1e-6:
+            continue
+        k = min(1.0, ts / tw)
+        out = [w + a * k - sp * (tw * k / ts) for w, a, sp in zip(out, want, spare)]
+    return out
+
+
 ROW_MAX = 0.7                     # a table stretches its rows up to this to fill its box, so a short table doesn't sit in a half-empty slide
 
 
@@ -658,10 +805,21 @@ def table_layout(b: dict, w: float, h: float) -> dict:
     widths = _whole_words(b, widths, numeric)
     compact = bool(b.get("compact"))
     if compact:
-        # a reference table (R20: the appendix ran 8 rows a page): every cell on one line at the smallest body size, cut with an ellipsis,
-        # and rows only as tall as their line
-        b = {**b, "rows": [r if isinstance(r, dict) else [({**v, "text": fit_chars(_cell_text(v), BODY_MIN, cw - 0.2)} if isinstance(v, dict)
-                                                          else fit_chars(_cell_text(v), BODY_MIN, cw - 0.2)) for v, cw in zip(r, widths)] for r in b["rows"]]}
+        # a reference table (R20: the appendix ran 8 rows a page): every cell on one line at the smallest body size and rows only as tall
+        # as their line. R35: no cell is cut to "Component…": a column takes the room its neighbours don't use, a name that still doesn't
+        # fit is said shorter (short_label), and one that can't be takes a second line
+        widths = _fit_columns(b, widths)
+        st = set(b.get("strong") or ())
+        given = b["rows"]
+        rows = [r if isinstance(r, dict) else [({**v, "text": fit_chars(_cell_text(v), BODY_MIN, cw - 0.2)} if isinstance(v, dict)
+                                               else short_label(_cell_text(v), BODY_MIN, cw - 0.2, 2, i in st, tight=True))
+                                              for v, cw in zip(r, widths)] for i, r in enumerate(given)]
+        plain_ = [i for i, r in enumerate(given) if not isinstance(r, dict)]
+        for c in range(len(b["head"])):               # two different names never read the same once shortened
+            col = [i for i in plain_ if c < len(given[i]) and not isinstance(given[i][c], dict)]
+            for i, t in zip(col, _distinct([_cell_text(given[i][c]) for i in col], [rows[i][c] for i in col])):
+                rows[i][c] = t
+        b = {**b, "rows": rows}
     pad, floor_h = (0.022, 0.22) if compact else (0.12, 0.32)
 
     def heights_at(size):
@@ -826,10 +984,121 @@ def _mark_polys() -> list[tuple[str, list[tuple[float, float]]]]:
 
 
 # ---------- drawing: the blocks, once, over a few primitives each file implements ----------
+def title_size(sl) -> float:
+    """A slide's title size. R35: a title too long for its line at the usual size is set smaller (a cover's on two lines), never cut
+    ("Utilities (Indian power, gas and water-linked…")."""
+    if sl.kind == "cover":
+        size = fit([sl.title], CW - 1.0, 0.75, 42, 28, head=True)
+        return size if len(wrap(sl.title, size, CW - 1.0, head=True)) <= 1 else fit([sl.title], CW - 1.0, 0.8, 27, 18, head=True)
+    if sl.kind == "section":
+        return fit([sl.title], 5.7, 1.32, 38, 22, head=True)
+    size = fit([sl.title], CW - 0.6, 0.55, 28, 22, head=True)
+    return size if len(wrap(sl.title, size, CW - 0.6, head=True)) <= 1 else fit([sl.title], CW - 0.6, 0.6, 21, 16, head=True)     # smaller, then two lines
+
+
+def headline_size(text: str) -> float:
+    """A headline's size under its title: 14 pt on two lines, smaller when that is what shows it whole (three lines at 11 pt)."""
+    return fit([text], CW, 0.58, 14, BODY_MIN)
+
+
+def chart_title(title: str, w: float) -> tuple[float, int]:
+    """(size, lines) for a chart's title: one line at 12 pt, else at 11, else two lines."""
+    for size in (12, BODY_MIN):
+        if _width(title, size, True) <= w:
+            return size, 1
+    return BODY_MIN, 2
+
+
+def hbar_labels(cats: list, w: float, h: float) -> tuple[float, list[list[str]], float]:
+    """A bar chart's label column, each bar's name in lines, and their size: the column as wide as the longest name up to 45% of the
+    chart, a name on as many lines as a bar's share of the height holds (two, three for tall bars), said shorter before any of it is cut
+    and set at 10 pt when that is what shows it whole (R35: "Life Insurance Corporation Of…")."""
+    slot = max(h - 0.1, 0.2) / max(1, len(cats))
+    for size in (BODY_MIN, 10):
+        lines = 3 if slot >= 3 * _lh(size) else 2 if slot >= 0.3 else 1
+        lw = min(w * 0.45, max([_width(str(c), size) for c in cats] or [0.5]) + 0.15)
+        short = _distinct([str(c) for c in cats], [short_label(str(c), size, lw - 0.12, lines) for c in cats])
+        got = [wrap(t, size, lw - 0.12) for t in short]
+        if not any(ls[-1].endswith("…") and not str(c).endswith("…") for ls, c in zip(got, cats)):
+            break
+    return lw, got, size
+
+
+def drawn_lines(b: dict) -> dict:
+    """A line chart with only the series that have a line to draw: two points or more (R35: a layer's margins by year with no net margin
+    on file stopped the PDF being made at all: "Polyline must have 2 or more points")."""
+    return {**b, "series": [x for x in b["series"] if sum(1 for y in x[1] if y is not None) >= 2]}
+
+
+def column_labels(cats: list, w: float, size: float) -> tuple[list[list[str]], float]:
+    """A column chart's names under their columns, each in lines no wider than its column's share of the plot: two lines at most, at a
+    smaller size (10 pt) when that shows more of them whole."""
+    slot = max(0.3, w / max(1, len(cats)) - 0.08)
+    for fs in dict.fromkeys((size, 10)):
+        short = _distinct([str(c) for c in cats], [short_label(str(c), fs, slot, 2) for c in cats])
+        got = [wrap(t, fs, slot) for t in short]
+        if not any(ls[-1].endswith("…") and not str(c).endswith("…") for ls, c in zip(got, cats)):
+            break
+    return got, fs
+
+
 class Canvas:
-    """The slide frame and every block but tables and charts, drawn with rect, text, line and poly (each file implements those)."""
+    """The slide frame and every block but charts, drawn with rect, text, line and poly (each file implements those)."""
 
     # primitives: rect(x, y, w, h, fill, line=None, radius=0.08), text(...), line(x1, y1, x2, y2, color, width), poly(points, fill)
+
+    def clip(self, text, size, width, lines, bold=False, head=False):
+        """Text cut to its lines (the module's clip); a method so the layout check hears of every cut (Probe)."""
+        return clip(text, size, width, lines, bold, head)
+
+    def label(self, text, size, width, lines=1, bold=False):
+        """A label in its lines: said shorter before any of it is cut (short_label)."""
+        return short_label(text, size, width, lines, bold)
+
+    def _title_box(self, b):
+        """A chart's title above it, and the box left for the chart. R35: a title too long for one line is set smaller, then on two
+        lines ("Revenue against the same quarter a year before, the 14 largest…")."""
+        x, y, w, h = b["box"]
+        if not b.get("title"):
+            return x, y, w, h
+        size, lines = chart_title(b["title"], w)
+        self.text(x, y, w, 0.3 + (lines - 1) * _lh(size), [self.clip(b["title"], size, w, lines, bold=True)], size, color=INK2, bold=True)
+        drop = 0.36 + (lines - 1) * _lh(size)
+        return x, y + drop, w, h - drop
+
+    def b_table(self, b, lay=None):
+        x, y, w, h = b["box"]
+        lay = lay or table_layout(b, w, h)
+        rows = [b["head"]] + lay["rows"]
+        strong = set(b.get("strong") or ())
+        colors = b.get("colors") or {}
+        self.rect(x - 0.05, y - 0.05, w + 0.1, sum(lay["heights"]) + 0.1, CARD, line=LINE, radius=0.06)
+        yy, k, size = y, -1, lay["size"]
+        for r, (vals, hh) in enumerate(zip(rows, lay["heights"])):
+            group = isinstance(vals, dict)
+            if r > 0:
+                k += 1
+            if group:
+                self.rect(x, yy, w, hh, PAPER2, radius=0)
+                n = len(wrap(vals["group"], size, w - 0.2, True))
+                self.text(x + 0.1, yy + (hh - n * _lh(size)) / 2, w - 0.2, hh, [vals["group"]], size, color=INK, bold=True)
+            else:
+                cx = x
+                for c, (v, cw) in enumerate(zip(vals, lay["widths"])):
+                    link = v if isinstance(v, dict) and v.get("url") else None
+                    text = fit_chars(_cell_text(v), size, cw - 0.25) if link else _cell_text(v)
+                    color = MUTED if r == 0 else colors.get((k, c), BLUE if link else INK)
+                    bold = r == 0 or k in strong or (r > 0 and (k, c) in colors)
+                    n = len(wrap(text, size, cw - 0.2, bold))
+                    top = yy + (hh - n * _lh(size)) / 2
+                    self.text(cx + 0.1, top, cw - 0.2, hh, [text], size, color=color, bold=bold,
+                              align="right" if lay["numeric"][c] and c > 0 else "left", url=link["url"] if link else None)
+                    cx += cw
+            if r > 0 and k in strong:
+                self.line(x, yy, x + w, yy, LINE2, 1)
+            if r < len(rows) - 1:
+                self.line(x, yy + hh, x + w, yy + hh, LINE2 if r == 0 else LINE, 1 if r == 0 else 0.6)
+            yy += hh
 
     def mark(self, x, y, h):
         bx, by, bw, bh = MARK_BOX
@@ -841,14 +1110,15 @@ class Canvas:
         dark = sl.kind in ("cover", "section")
         self.page(DARK if dark else PAPER)
         if sl.kind == "cover":
-            size = fit([sl.title], CW - 1.0, 0.75, 42, 28, head=True)
-            self.text(M, 1.72, CW - 1.0, 0.8, [clip(sl.title, size, CW - 1.0, 1, head=True)], size, color=ON_DARK, head=True, name="Title")
+            size = title_size(sl)
+            self.text(M, 1.72, CW - 1.0, 0.8, [self.clip(sl.title, size, CW - 1.0, 2 if size < 28 else 1, head=True)], size, color=ON_DARK, head=True, name="Title")
             self.text(M, 1.36, CW, 0.3, [(sl.subtitle or "").upper()], 12, color=GREEN_WICK, bold=True)
             self.mark(M, 0.5, 0.62)
             self.text(M + 0.38, 0.62, 3, 0.4, ["StratLab"], 19, color=ON_DARK, head=True)
             return
         if sl.kind == "section":
-            self.text(M, 2.6, 5.7, 1.3, fit_paras([sl.title], 38, 5.7, 1.3, head=True), 38, color=ON_DARK, head=True, name="Title")
+            size = title_size(sl)
+            self.text(M, 2.6, 5.7, 1.3, [self.clip(sl.title, size, 5.7, int(1.33 / _lh(size)), head=True)], size, color=ON_DARK, head=True, name="Title")
             self.text(M, 1.25, 3, 1.2, [sl.part], 66, color=GREEN_WICK, head=True)
             if sl.subtitle:
                 size = fit([sl.subtitle], 5.5, 2.4, 17, 13)
@@ -856,19 +1126,21 @@ class Canvas:
             self._contents(sl)
             self._footer(footer, n, total, dark=True)
             return
-        size = fit([sl.title], CW - 0.6, 0.55, 28, 22, head=True)
-        self.text(M, 0.5, CW - 0.6, 0.6, [clip(sl.title, size, CW - 0.6, 1, head=True)], size, color=INK, head=True, name="Title")
+        size = title_size(sl)
+        self.text(M, 0.5, CW - 0.6, 0.6, [self.clip(sl.title, size, CW - 0.6, max(1, int(0.62 / _lh(size))), head=True)], size, color=INK, head=True, name="Title")
         if sl.subtitle:
-            self.text(M, 1.08, CW, 0.56, fit_paras([sl.subtitle], 14, CW, 0.56), 14, color=INK2)
+            two = len(wrap(sl.title, size, CW - 0.6, head=True)) > 1          # under a title on two lines, the headline starts a little lower
+            size = headline_size(sl.subtitle)
+            self.text(M, 1.16 if two else 1.08, CW, 0.56, [self.clip(sl.subtitle, size, CW, int(0.58 / _lh(size)))], size, color=INK2)
         if sl.eyebrow:
-            self.text(M, 0.3, CW - 0.6, 0.22, [clip(sl.eyebrow.upper(), 10, CW - 0.6, 1, bold=True)], 10, color=MUTED, bold=True)
+            self.text(M, 0.3, CW - 0.6, 0.22, [self.clip(sl.eyebrow.upper(), 10, CW - 0.6, 1, bold=True)], 10, color=MUTED, bold=True)
         self.mark(W_IN - M - 0.17, 0.32, 0.44)
         self._footer(footer, n, total, dark=False)
 
     def _footer(self, footer, n, total, dark):
         self.line(M, 7.0, W_IN - M, 7.0, DARK_LINE if dark else LINE2, 0.75)
         col = DARK_MUTED if dark else MUTED
-        self.text(M, 7.08, 8.4, 0.24, [clip(f"StratLab · {footer}", 9.5, 8.4, 1)], 9.5, color=col)
+        self.text(M, 7.08, 8.4, 0.24, [self.clip(f"StratLab · {footer}", 9.5, 8.4, 1)], 9.5, color=col)
         self.text(W_IN - M - 4, 7.08, 4, 0.24, [f"Not investment advice · {n} / {total}"], 9.5, color=col, align="right")
 
     def _contents(self, sl):
@@ -880,7 +1152,11 @@ class Canvas:
         for i, (title, page) in enumerate(rows):
             yy = 1.72 + i * step
             self.line(x, yy, x + w, yy, DARK_LINE, 0.75)
-            self.text(x, yy + (step - fs * 1.25 / 72) / 2, w - 0.7, fs * 1.3 / 72, [clip(title, fs, w - 0.7, 1)], fs, color=ON_DARK)
+            # R35 ("…grade and formulations) and…"): a long slide title is set smaller, then on two lines where its row holds them
+            ts = next((z for z in (fs, 12, BODY_MIN) if z <= fs and _width(title, z) <= w - 0.7), BODY_MIN)
+            lab = self.label(title, ts, w - 0.7, 2 if step >= 2 * _lh(ts) + 0.03 else 1)
+            n = len(wrap(lab, ts, w - 0.7))
+            self.text(x, yy + (step - n * ts * 1.25 / 72) / 2, w - 0.7, n * ts * 1.3 / 72, [lab], ts, color=ON_DARK)
             self.text(x + w - 0.6, yy + (step - fs * 1.25 / 72) / 2, 0.6, fs * 1.3 / 72, [str(page)], fs, color=DARK_MUTED, align="right")
         if rows:
             self.line(x, 1.72 + len(rows) * step, x + w, 1.72 + len(rows) * step, DARK_LINE, 0.75)
@@ -894,8 +1170,7 @@ class Canvas:
     def b_text(self, b):
         x, y, w, h = b["box"]
         size = fit(b["paras"], w, h, b.get("size", 14), b.get("floor", BODY_MIN), bold=b.get("bold", False), head=b.get("head", False))
-        self.text(x, y, w, h, fit_paras(b["paras"], size, w, h, b.get("bold", False), b.get("head", False)), size, color=b.get("color", INK),
-                  bold=b.get("bold", False), head=b.get("head", False))
+        self.text(x, y, w, h, b["paras"], size, color=b.get("color", INK), bold=b.get("bold", False), head=b.get("head", False))
 
     def b_stats(self, b):
         x, y, w, h = b["box"]
@@ -906,18 +1181,20 @@ class Canvas:
             cx = x + i * (cw + gap)
             self.rect(cx, y, cw, h, DARK2 if dark else CARD, line=DARK_LINE if dark else LINE)
             iw = cw - 0.36
-            lab = clip(label, BODY_MIN, iw, 2)
+            lab = self.label(label, BODY_MIN, iw, 2)
             lh = len(wrap(lab, BODY_MIN, iw)) * _lh(BODY_MIN)
             self.text(cx + 0.18, y + 0.13, iw, lh, [lab], BODY_MIN, color=DARK_MUTED if dark else MUTED)
             nh = min(0.6, len(wrap(note, BODY_MIN, iw)) * _lh(BODY_MIN)) if note else 0
             vy = y + 0.13 + lh + 0.06
+            # R35 (every live cover: "Their market value" with its note and no figure): the figure always has its line; a long note gives way
+            nh = min(nh, max(0.0, y + h - vy - 0.14 - _lh(15)))
             vh = y + h - vy - nh - (0.14 if note else 0.08)
             vs = fit([value], iw, min(vh, 26 * 1.3 / 72), 26, 15, head=True)       # one line where a size from 26 down to 15 allows
             if len(wrap(value, vs, iw, head=True)) > 1:
                 vs = fit([value], iw, vh, 26, 13, head=True)
-            self.text(cx + 0.18, vy, iw, vh, fit_paras([value], vs, iw, vh, head=True), vs, color=it[3] if len(it) > 3 else (ON_DARK if dark else INK), head=True)
+            self.text(cx + 0.18, vy, iw, vh, [value], vs, color=it[3] if len(it) > 3 else (ON_DARK if dark else INK), head=True)
             if note:
-                self.text(cx + 0.18, y + h - 0.12 - nh, iw, nh, fit_paras([note], BODY_MIN, iw, nh), BODY_MIN, color=DARK_MUTED if dark else MUTED)
+                self.text(cx + 0.18, y + h - 0.12 - nh, iw, nh, [note], BODY_MIN, color=DARK_MUTED if dark else MUTED)
 
     def b_stack(self, b):
         x, y, w, h = b["box"]
@@ -925,7 +1202,7 @@ class Canvas:
         for i, (label, value) in enumerate(b["items"]):
             yy = y + i * step
             self.line(x, yy, x + w, yy, LINE2, 0.75)
-            self.text(x, yy + 0.1, w, 0.3, [clip(label, 12, w, 1)], 12, color=MUTED)
+            self.text(x, yy + 0.1, w, 0.3, [self.label(label, 12, w, 1)], 12, color=MUTED)
             self.text(x, yy + 0.42, w, 0.6, [value], 28, color=DOWN if value[:1] in "-−" else INK, head=True)
 
     def b_cards(self, b):
@@ -933,17 +1210,17 @@ class Canvas:
             self.rect(cx, cy, cw, ch, CARD, line=LINE)
             iw, yy = cw - 0.5, cy + 0.22
             tw = iw - (1.3 if it.get("pill") else 0)
-            title = clip(it["title"], 13, tw, 2, bold=True)
+            title = self.label(it["title"], 13, tw, 2, bold=True)
             self.text(cx + 0.25, yy, tw, 0.6, [title], 13, color=INK, bold=True)
             if it.get("pill"):
                 label, color = it["pill"]
                 self.rect(cx + cw - 1.45, yy - 0.02, 1.2, 0.3, color, radius=0.15)
-                self.text(cx + cw - 1.45, yy + 0.02, 1.2, 0.26, [clip(label, BODY_MIN, 1.1, 1, bold=True)], BODY_MIN, color=WHITE, bold=True, align="center")
+                self.text(cx + cw - 1.45, yy + 0.02, 1.2, 0.26, [self.clip(label, BODY_MIN, 1.1, 1, bold=True)], BODY_MIN, color=WHITE, bold=True, align="center")
             yy += 0.3 * len(wrap(title, 13, tw, True)) + 0.12
             if it.get("value"):
                 vs = fit([it["value"]], iw, 0.75, 22, 14, head=True)
                 vp = fit_paras([it["value"]], vs, iw, 0.75, head=True)
-                self.text(cx + 0.25, yy, iw, 0.75, vp, vs, color=it.get("value_color", INK), head=True)
+                self.text(cx + 0.25, yy, iw, 0.75, [it["value"]], vs, color=it.get("value_color", INK), head=True)
                 yy += len(wrap(vp[0] if vp else "", vs, iw, head=True)) * _lh(vs) + 0.12
             note_h = (0.12 + min(3, len(wrap(it["note"], BODY_MIN, iw))) * _lh(BODY_MIN)) if it.get("note") else 0
             lines = [str(x) for x in it.get("lines") or [] if x]
@@ -951,9 +1228,9 @@ class Canvas:
                 room = cy + ch - 0.18 - yy - note_h
                 paras = [("• " if b.get("bullets") else "") + x for x in lines]
                 ls = fit(paras, iw, room, b.get("size", 13), BODY_MIN)
-                self.text(cx + 0.25, yy, iw, room, fit_paras(paras, ls, iw, room), ls, color=INK2)
+                self.text(cx + 0.25, yy, iw, room, paras, ls, color=INK2)
             if it.get("note"):
-                self.text(cx + 0.25, cy + ch - 0.16 - note_h + 0.12, iw, note_h - 0.12, fit_paras([it["note"]], BODY_MIN, iw, note_h - 0.12), BODY_MIN, color=MUTED)
+                self.text(cx + 0.25, cy + ch - 0.16 - note_h + 0.12, iw, note_h - 0.12, [it["note"]], BODY_MIN, color=MUTED)
 
     def b_flow(self, b):
         placed = flow_layout(b)
@@ -1152,20 +1429,13 @@ class PptxRenderer(Canvas):
             ch.legend.position, ch.legend.include_in_layout = XL_LEGEND_POSITION.TOP, False
             ch.legend.font.size = Pt(11)
 
-    def _title_box(self, b):
-        x, y, w, h = b["box"]
-        if b.get("title"):
-            self.text(x, y, w, 0.3, [clip(b["title"], 12, w, 1, bold=True)], 12, color=INK2, bold=True)
-            return x, y + 0.36, w, h - 0.36
-        return x, y, w, h
-
     def b_columns(self, b):
         from pptx.chart.data import CategoryChartData
         from pptx.enum.chart import XL_CHART_TYPE, XL_LABEL_POSITION
         from pptx.util import Inches, Pt
         x, y, w, h = self._title_box(b)
         cd = CategoryChartData()
-        cd.categories = b["cats"]
+        cd.categories = [" ".join(ls) for ls in column_labels(b["cats"], w - 0.75, 11)[0]]
         for name, vals, _ in b["series"]:
             cd.add_series(name, vals)
         ch = self.s.shapes.add_chart(XL_CHART_TYPE.COLUMN_CLUSTERED, Inches(x), Inches(y), Inches(w), Inches(h), cd).chart
@@ -1201,7 +1471,8 @@ class PptxRenderer(Canvas):
         from pptx.util import Inches, Pt
         x, y, w, h = self._title_box(b)
         cd = CategoryChartData()
-        cd.categories = [clip(c, BODY_MIN, w * 0.42, 2) for c in b["cats"]]
+        _, labels, fs = hbar_labels(b["cats"], w, h)
+        cd.categories = [" ".join(ls) for ls in labels]
         cd.add_series(b.get("title") or "", b["vals"])
         ch = self.s.shapes.add_chart(XL_CHART_TYPE.BAR_CLUSTERED, Inches(x), Inches(y), Inches(w), Inches(h), cd).chart
         self._chart_base(ch, False)
@@ -1225,13 +1496,16 @@ class PptxRenderer(Canvas):
         ch.category_axis.reverse_order = True
         ch.category_axis.format.line.color.rgb = self.rgb(LINE2)
         ch.category_axis.tick_labels.font.color.rgb = self.rgb(INK)
-        ch.category_axis.tick_labels.font.size = Pt(11)
+        ch.category_axis.tick_labels.font.size = Pt(fs)
 
     def b_lines(self, b):
         from pptx.chart.data import CategoryChartData
         from pptx.enum.chart import XL_CHART_TYPE, XL_LABEL_POSITION, XL_MARKER_STYLE
         from pptx.enum.dml import MSO_LINE_DASH_STYLE
         from pptx.util import Inches, Pt
+        b = drawn_lines(b)
+        if not b["series"]:
+            return
         x, y, w, h = self._title_box(b)
         cd = CategoryChartData()
         cd.categories = b["cats"]
@@ -1334,40 +1608,6 @@ class PdfRenderer(Canvas):
                     self.c.linkURL(url, (tx, self._y(yy), tx + lw * 72, self._y(yy - _lh(size))), relative=0)
             yy += gap * size / 72
 
-    def b_table(self, b):
-        x, y, w, h = b["box"]
-        lay = table_layout(b, w, h)
-        rows = [b["head"]] + lay["rows"]
-        strong = set(b.get("strong") or ())
-        colors = b.get("colors") or {}
-        self.rect(x - 0.05, y - 0.05, w + 0.1, sum(lay["heights"]) + 0.1, CARD, line=LINE, radius=0.06)
-        yy, k, size = y, -1, lay["size"]
-        for r, (vals, hh) in enumerate(zip(rows, lay["heights"])):
-            group = isinstance(vals, dict)
-            if r > 0:
-                k += 1
-            if group:
-                self.rect(x, yy, w, hh, PAPER2, radius=0)
-                n = len(wrap(vals["group"], size, w - 0.2, True))
-                self.text(x + 0.1, yy + (hh - n * _lh(size)) / 2, w - 0.2, hh, [vals["group"]], size, color=INK, bold=True)
-            else:
-                cx = x
-                for c, (v, cw) in enumerate(zip(vals, lay["widths"])):
-                    link = v if isinstance(v, dict) and v.get("url") else None
-                    text = fit_chars(_cell_text(v), size, cw - 0.25) if link else _cell_text(v)
-                    color = MUTED if r == 0 else colors.get((k, c), BLUE if link else INK)
-                    bold = r == 0 or k in strong or (r > 0 and (k, c) in colors)
-                    n = len(wrap(text, size, cw - 0.2, bold))
-                    top = yy + (hh - n * _lh(size)) / 2
-                    self.text(cx + 0.1, top, cw - 0.2, hh, [text], size, color=color, bold=bold,
-                              align="right" if lay["numeric"][c] and c > 0 else "left", url=link["url"] if link else None)
-                    cx += cw
-            if r > 0 and k in strong:
-                self.line(x, yy, x + w, yy, LINE2, 1)
-            if r < len(rows) - 1:
-                self.line(x, yy + hh, x + w, yy + hh, LINE2 if r == 0 else LINE, 1 if r == 0 else 0.6)
-            yy += hh
-
     def _axes(self, chart, cats, size=11):
         chart.categoryAxis.categoryNames = cats
         chart.categoryAxis.labels.fontName, chart.categoryAxis.labels.fontSize = "Deck", size
@@ -1378,13 +1618,6 @@ class PdfRenderer(Canvas):
         chart.valueAxis.strokeColor = self.col(CARD)
         chart.valueAxis.gridStrokeColor = self.col(LINE)
         chart.valueAxis.visibleGrid = True
-
-    def _title_box(self, b):
-        x, y, w, h = b["box"]
-        if b.get("title"):
-            self.text(x, y, w, 0.3, [clip(b["title"], 12, w, 1, bold=True)], 12, color=INK2, bold=True)
-            return x, y + 0.36, w, h - 0.36
-        return x, y, w, h
 
     def _legend(self, d, series, x, top, size=11):
         from reportlab.graphics.shapes import Rect, String
@@ -1404,7 +1637,11 @@ class PdfRenderer(Canvas):
         ch.x, ch.y, ch.width, ch.height = 44, 28, w * 72 - 54, h * 72 - 70
         ch.data = [list(vs) for _, vs, _ in b["series"]]
         small = max((abs(v) for _, vs, _ in b["series"] for v in vs if v is not None), default=0) < 100
-        self._axes(ch, b["cats"], 11 if len(b["cats"]) <= 8 else 10)
+        labels, fs = column_labels(b["cats"], ch.width / 72, 11 if len(b["cats"]) <= 8 else 10)
+        deep = max(len(ls) for ls in labels) - 1                # a name on two lines: the plot gives up a line's height to it
+        ch.y, ch.height = ch.y + deep * fs * 1.2, ch.height - deep * fs * 1.2
+        self._axes(ch, ["\n".join(ls) for ls in labels], fs)
+        ch.categoryAxis.labels.textAnchor = "middle"
         whole = _cr if b.get("inr") else (lambda v: f"{v:,.0f}")          # Indian grouping for Indian figures (DD-053)
         f = _fmt(b["fmt"])[0] if b.get("fmt") else (lambda v: f"{v:,.1f}") if small else whole
         ch.valueAxis.labelTextFormat = f
@@ -1432,16 +1669,17 @@ class PdfRenderer(Canvas):
         x, y, w, h = self._title_box(b)
         d = Drawing(w * 72, h * 72)
         ch = HorizontalBarChart()
-        lw = min(w * 0.42, max(_width(c, BODY_MIN) for c in b["cats"]) + 0.15)
-        cats = ["\n".join(wrap(clip(c, BODY_MIN, lw - 0.12, 2), BODY_MIN, lw - 0.12)) for c in b["cats"]]
+        lw, labels, fs = hbar_labels(b["cats"], w, h)
+        cats = ["\n".join(ls) for ls in labels]
         f = _fmt(b.get("fmt", "pct"))[0]
         vals = [v for v in b["vals"] if v is not None]
         rw = max((_width(f(v), BODY_MIN) for v in vals), default=0.4) + 0.12
         ch.x, ch.y, ch.width, ch.height = lw * 72, 4, (w - lw) * 72 - 4, h * 72 - 8
         data = list(reversed(b["vals"]))
         ch.data = [data]
-        self._axes(ch, list(reversed(cats)), BODY_MIN)
+        self._axes(ch, list(reversed(cats)), fs)
         ch.categoryAxis.labels.fillColor = self.col(INK)
+        ch.categoryAxis.labelAxisMode = "low"          # R35: the names stay in their column; a bar below zero ran under its own name
         ch.valueAxis.visible = False
         ch.valueAxis.visibleGrid = False
         lo, hi = min([0.0] + vals), max([0.0] + vals)
@@ -1455,8 +1693,9 @@ class PdfRenderer(Canvas):
         ch.barLabelFormat = f
         ch.barLabels.fontName, ch.barLabels.fontSize, ch.barLabels.fillColor = "Deck", BODY_MIN, self.col(INK2)
         ch.barLabels.boxTarget = "normal"
-        for j, v in enumerate(data):
-            ch.barLabels[(0, j)].boxAnchor, ch.barLabels[(0, j)].dx = ("e", -4) if v is not None and v < 0 else ("w", 4)
+        # beyond each bar's end: the chart turns the anchor round for a bar below zero itself (R35: set by hand as well, it was turned twice
+        # and the figure printed on the bar)
+        ch.barLabels.boxAnchor, ch.barLabels.dx = "w", 4
         d.add(ch)
         renderPDF.draw(d, self.c, x * 72, self._y(y + h))
 
@@ -1464,6 +1703,9 @@ class PdfRenderer(Canvas):
         from reportlab.graphics import renderPDF
         from reportlab.graphics.charts.linecharts import HorizontalLineChart
         from reportlab.graphics.shapes import Drawing
+        b = drawn_lines(b)
+        if not b["series"]:
+            return
         x, y, w, h = self._title_box(b)
         d = Drawing(w * 72, h * 72)
         ch = HorizontalLineChart()
@@ -1500,6 +1742,94 @@ class PdfRenderer(Canvas):
         self.c.showPage()
         self.c.save()
         return self.buf.getvalue()
+
+
+# ---------- the layout check (R35) ----------
+class Probe(Canvas):
+    """A renderer that draws nothing: it lays a slide out exactly as the files do and notes every text that would be cut with an ellipsis
+    ("cut"), shown without its last sentences or lines ("trimmed"), given to it already cut ("source"), a word broken across two lines
+    ("broken") and table rows left off the slide ("rows"). [{"kind", "text" (as planned), "shown" (as drawn)}]."""
+
+    def __init__(self):
+        self.found, self._heard = [], set()
+
+    def note(self, kind, text, shown=""):
+        self.found.append({"kind": kind, "text": str(text), "shown": str(shown)})
+        self._heard.add(str(shown))
+
+    def page(self, bg):
+        pass
+
+    def rect(self, *a, **k):
+        pass
+
+    def line(self, *a, **k):
+        pass
+
+    def poly(self, *a, **k):
+        pass
+
+    def clip(self, text, size, width, lines, bold=False, head=False):
+        got = clip(text, size, width, lines, bold, head)
+        if got != str(text):
+            self.note("cut" if got.endswith("…") else "trimmed", text, got)
+        return got
+
+    def label(self, text, size, width, lines=1, bold=False):
+        got = short_label(text, size, width, lines, bold)
+        if got.endswith("…") and not str(text).endswith("…"):
+            self.note("cut", text, got)
+        return got
+
+    def text(self, x, y, w, h, paras, size, color=INK, bold=False, head=False, align="left", url=None, name=None, gap=0.35):
+        paras = [str(p) for p in paras]
+        shown = fit_paras(paras, size, w, h, bold, head, gap)
+        for i, para in enumerate(paras):
+            got = shown[i] if i < len(shown) else ""
+            if got != para:
+                self.note("cut" if got.endswith("…") else "trimmed", para, got)
+            elif para in self._heard:
+                continue
+            elif para.endswith("…"):
+                self.note("cut" if url else "source", para, para)
+            elif not url and any(_width(x_, size, bold, head) > w + 0.01 for x_ in para.split()):
+                self.note("broken", para, para)
+
+    def b_table(self, b, lay=None):
+        x, y, w, h = b["box"]
+        lay = table_layout(b, w, h)
+        if len(lay["rows"]) < len(b["rows"]):
+            self.note("rows", f"{len(b['rows']) - len(lay['rows'])} of {len(b['rows'])} rows of the table", "")
+        for r0, r1 in zip(b["rows"], lay["rows"]):               # a one-line table's cells, cut by the layout
+            for v0, v1 in zip(r0, r1) if not isinstance(r0, dict) else ():
+                if _cell_text(v1).endswith("…") and not _cell_text(v0).endswith("…"):
+                    self.note("cut", _cell_text(v0), _cell_text(v1))
+        super().b_table(b, lay)
+
+    def _labels(self, cats, labels):
+        for c, ls in zip(cats, labels):
+            if ls and ls[-1].endswith("…") and not str(c).endswith("…"):
+                self.note("cut", c, " ".join(ls))
+
+    def b_columns(self, b):
+        x, y, w, h = self._title_box(b)
+        self._labels(b["cats"], column_labels(b["cats"], w - 0.75, 11 if len(b["cats"]) <= 8 else 10)[0])
+
+    def b_hbars(self, b):
+        x, y, w, h = self._title_box(b)
+        self._labels(b["cats"], hbar_labels(b["cats"], w, h)[1])
+
+    def b_lines(self, b):
+        if drawn_lines(b)["series"]:
+            self._title_box(b)
+
+
+def probe(sl: Slide) -> list[dict]:
+    """What the layout check finds on one slide (Probe)."""
+    _fonts()
+    p = Probe()
+    p.draw(sl, 1, 1, "")
+    return p.found
 
 
 def _render(slides: list[Slide], footer: str, title: str, pdf: bool) -> bytes:
@@ -2262,7 +2592,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 44                  # R35: a company line never cut at "Inc.", sub-theme members by their whole description; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 44                  # R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -2698,7 +3028,7 @@ GATE_ITEMS = (("sourced", "Figures have a period, source and formula"), ("reprod
               ("reconcile", "Counts, periods, shares and rounding reconcile"), ("classified", "Every company has a primary classification"),
               ("applicable", "Metrics pass applicability"), ("peers", "Peers pass comparability"),
               ("headline", "Headline findings pass sample and coverage"), ("marks", "Missing, n/a and not comparable are distinct"),
-              ("prose", "No advice words, forecasts or unsupported causes"))
+              ("prose", "No advice words, forecasts or unsupported causes"), ("layout", "No headline, label or sentence is cut short"))
 GATE_KEEP = 20                    # dropped sentences kept with the stored result (the log has every one)
 
 
@@ -2869,6 +3199,165 @@ def _unsourced(slides: list) -> list[dict]:
     return out
 
 
+def _shorter(text: str) -> str | None:
+    """The text one whole part shorter: without its last sentence, else without its last "; " clause. None when it is one clause."""
+    t = str(text).rstrip("… ").rstrip()
+    parts = _SENT.split(t)
+    if len(parts) > 1:
+        return " ".join(parts[:-1])
+    if "; " in t:
+        head = t[:t.rfind("; ")].rstrip(" ,;:")
+        return head + ("." if t.endswith(".") and not head.endswith(".") else "")
+    return None
+
+
+def _origin(sl, text: str) -> tuple:
+    """Where on the slide a text the layout check names was planned: ("headline",), ("para", block, i), ("line", block, card, i),
+    ("cell", block, row, column), ("label",) (a title, a name on a chart, a tile's label, a table's heading), or ("other",)."""
+    if text == sl.subtitle and sl.kind == "content":
+        return ("headline",)
+    if text == sl.title:
+        return ("label",)
+    for b in sl.blocks:
+        if b["kind"] == "text":
+            for i, para in enumerate(b.get("paras") or []):
+                if str(para) == text:
+                    return ("para", b, i)
+        elif b["kind"] == "cards":
+            for it in b.get("items") or []:
+                for i, ln in enumerate(it.get("lines") or []):
+                    if text in (str(ln), "• " + str(ln)):
+                        return ("line", b, it, i)
+                if text in (it.get("title"), it.get("value")):
+                    return ("label",)
+        elif b["kind"] == "table":
+            for i, r in enumerate(b.get("rows") or []):
+                for c, x in enumerate(() if isinstance(r, dict) else r):
+                    if isinstance(x, str) and x == text:
+                        return ("cell", b, i, c)
+            if any(text == _cell_text(x) for r in b.get("rows") or [] for x in ([r["group"]] if isinstance(r, dict) else r)) or text in map(str, b.get("head") or []):
+                return ("label",)
+        elif b["kind"] == "stats":
+            if any(text == str(x) for it in b.get("items") or [] for x in it[:2]):
+                return ("label",)
+        if text in map(str, b.get("cats") or []) or text == b.get("title"):
+            return ("label",)
+    return ("other",)
+
+
+def fit_slide(sl) -> tuple[list[dict], list[dict]]:
+    """One slide re-fitted so nothing on it is cut (R35): the layout check (probe) is run, and what it finds is put right the mildest way
+    that works. A headline is set smaller by the page itself (headline_size); one still too long, a note or a card's line loses whole
+    parts from its end (a sentence, then a "; " clause, then a card's last line), never part of a word or a sentence. What was changed,
+    and what could not be put right (a label no shorter form of which fits, a word broken across lines, rows left off): (refit, failed),
+    each {"slide", "text", "why", "rule": "layout"}."""
+    refit, failed, done = [], [], set()
+
+    def said(why, text, to):
+        to.append({"slide": sl.title, "text": str(text), "why": why, "rule": "layout"})
+
+    def still(text):                                 # whether the page still cuts this text
+        return any(f["kind"] == "cut" and f["text"] in (text, "• " + text) for f in probe(sl))
+
+    def whole(get, put, why):                        # the text one part shorter at a time until the page shows all of it
+        first = cur = get()
+        while True:
+            cur = _shorter(cur)
+            if cur is None:
+                put(first)
+                return False
+            put(cur)
+            if not still(cur):
+                said(why, first, refit)
+                return True
+    if sl.subtitle and sl.kind == "content" and headline_size(sl.subtitle) < 14:
+        said(f"headline set at {headline_size(sl.subtitle):g} pt to fit its lines", sl.subtitle, refit)
+    for _ in range(40):
+        f = next((x for x in probe(sl) if (x["kind"], x["text"]) not in done), None)
+        if f is None:
+            break
+        kind, text, shown = f["kind"], f["text"], f["shown"]
+        done.add((kind, text))
+        o = _origin(sl, text)
+        if kind == "rows":
+            said("rows left off the slide", text, failed)
+        elif kind == "broken":
+            said("a word broken across two lines", text, failed)
+        elif kind == "source":                       # cut before it reached the page (a long description): only a joining word at its end is put right
+            fixed = _no_joiner(text[:-1]) + "…"
+            if fixed != text and o[0] == "para":
+                o[1]["paras"][o[2]] = fixed
+                said("ended on a joining word", text, refit)
+            elif fixed != text and o[0] == "line":
+                o[2]["lines"][o[3]] = fixed
+                said("ended on a joining word", text, refit)
+            elif fixed != text and o[0] == "cell":
+                o[1]["rows"][o[2]][o[3]] = fixed
+                said("ended on a joining word", text, refit)
+            elif o[0] == "headline" and not whole(lambda: sl.subtitle, lambda t: setattr(sl, "subtitle", t), "a headline's cut clause left off"):
+                said("a headline ending in an ellipsis", text, failed)
+        elif o[0] == "headline":
+            if kind == "trimmed" and shown:
+                sl.subtitle = shown
+                said("a headline's last sentence left off to fit", text, refit)
+            elif not whole(lambda: sl.subtitle, lambda t: setattr(sl, "subtitle", t), "a headline's last clause left off to fit"):
+                said("a headline cut with an ellipsis", text, failed)
+        elif o[0] == "para":
+            b, i = o[1], o[2]
+            if kind == "trimmed":
+                b["paras"] = b["paras"][:i] + ([shown] if shown else []) + b["paras"][i + 1:]
+                said("its last sentences left off to fit" if shown else "a paragraph left off to fit", text, refit)
+            elif not whole(lambda: b["paras"][i], lambda t: b["paras"].__setitem__(i, t), "its last part left off to fit"):
+                said("a sentence cut with an ellipsis", text, failed)
+        elif o[0] == "line":
+            it, i = o[2], o[3]
+            if kind == "trimmed":
+                keep = shown[2:] if shown.startswith("• ") and not str(it["lines"][i]).startswith("• ") else shown
+                it["lines"] = it["lines"][:i] + ([keep] if keep else []) + it["lines"][i + 1:]
+                said("its last sentences left off to fit" if keep else "a card's line left off to fit", text, refit)
+            elif whole(lambda: it["lines"][i], lambda t: it["lines"].__setitem__(i, t), "its last part left off to fit"):
+                pass
+            elif len(it["lines"]) > 1:               # R21's rule: a card's last line gives way, whole
+                gone = it["lines"].pop()
+                done.discard((kind, text))
+                said("a card's last line left off to fit", gone, refit)
+            else:
+                said("a sentence cut with an ellipsis", text, failed)
+        elif kind == "cut":
+            said("cut with an ellipsis" + (f": {shown}" if shown else ""), text, failed)
+        # a title or a label "trimmed" to its whole sentences, and a footer or a legend: nothing is cut mid-sentence, nothing to list
+    return refit, failed
+
+
+def layout_gate(slides: list) -> dict:
+    """The publication gate's layout item (R35), run on the finished pages (after the page references and whole figures are set, so each
+    text is as long as it will print): every slide is re-fitted (fit_slide), each change logged, and what could not be put right fails
+    the item. {"refit": [...], "failed": [...]}."""
+    import logging
+    log = logging.getLogger("stratlab.deck")
+    refit, failed = [], []
+    for sl in slides:
+        a, b = fit_slide(sl)
+        refit += a
+        failed += b
+    for d in refit:
+        log.info("deck layout: re-fitted on %r (%s): %s", d["slide"], d["why"], d["text"][:200])
+    for d in failed:
+        log.warning("deck gate: layout: on %r (%s): %s", d["slide"], d["why"], d["text"][:200])
+    return {"refit": refit, "failed": failed}
+
+
+def with_layout(gate: dict, lay: dict) -> dict:
+    """The gate's result with its layout item filled from the finished pages (layout_gate): what failed counts as dropped, what was
+    re-fitted is kept beside it ("refit", "refit_n")."""
+    cut = lambda d: {"rule": d["rule"], "slide": d["slide"], "text": str(d["text"])[:200], "why": str(d.get("why") or "")[:120]}      # noqa: E731
+    items = [({**x, "ok": not lay["failed"], "dropped": len(lay["failed"]),
+               "note": f"{_n(len(lay['refit']), 'text')} re-fitted to show whole" if lay["refit"] else ""} if x["id"] == "layout" else x) for x in gate["items"]]
+    dropped = (list(gate.get("dropped") or []) + [cut(d) for d in lay["failed"]])[:GATE_KEEP]
+    return {**gate, "items": items, "passed": sum(1 for x in items if x["ok"]), "dropped": dropped,
+            "dropped_n": (gate.get("dropped_n") or 0) + len(lay["failed"]), "refit": [cut(d) for d in lay["refit"][:GATE_KEEP]], "refit_n": len(lay["refit"])}
+
+
 def publication_gate(slides: list, v: dict, reproduced: list | None = None) -> dict:
     """The checklist run before a deck is stored (R27): each item passes or fails, and what failed is dropped from the deck (a sentence, a card
     line, a table column), logged and listed here. `reproduced`: check_deck's dropped (R25). Items that need a later release's data (a primary
@@ -2940,6 +3429,7 @@ def publication_gate(slides: list, v: dict, reproduced: list | None = None) -> d
     none = max([(x.get("none") or 0) for x in peers.values() if isinstance(x, dict)] or [0])
     if none:
         notes["peers"] = f"{_n(none, 'company', 'companies')} with no comparable peer set, counted and left out"
+    notes["layout"] = "Checked on the finished pages"           # R35: layout_gate, once the page references are set (theme_plan)
     marks_noted = any(b["kind"] == "cards" and any(MARKS_LINE in (it.get("lines") or []) for it in b.get("items") or []) for s in slides for b in s.blocks)
     if not marks_noted and len(slides) > 2:
         dropped["marks"].append({"slide": "How to read this deck", "text": "the key to the three marks", "why": "not in the deck", "rule": "marks"})
@@ -3031,7 +3521,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     if v.get("core"):
         over.append(f"Everything converges on {v['core']}.")
     s.add("text", (M, 2.75, 9.6, 2.15), paras=over, size=17, floor=12, color=ON_DARK)
-    s.add("stats", (M, 5.12, CW, 1.25), dark=True, items=[
+    s.add("stats", (M, 4.98, CW, 1.45), dark=True, items=[       # R35: tall enough for a three-line note under its figure
         ("Companies", f"{total:,}", cov["universe"].split(" ", 1)[1] + (f"; {mem['not_confirmed']:,} not confirmed" if mem.get("not_confirmed") else "")), *([("Layers", str(len(shown)))] if chained else []),
         ("With figures", f"{cov['n']:,}", f"{cov['share']}% of the value of the {cov['valued']:,} with one" if cov.get("share") is not None else ""),
         # R29: the total is of the confirmed companies with figures and a market value, said so (the live R27 Semiconductors cover had "58 of
@@ -3157,6 +3647,19 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
                 s.add("hbars", (M + tw + 0.35, TOP, CW - tw - 0.35, th), title=f"Median {'ROE' if key == 'roe' else 'EBITDA margin'} by layer", cats=[f"{r['layer']} ({_of_n(r.get(key + '_n') or 0, r.get('n'))})" for r in charted],
                       vals=[r[key] for r in charted], colors=[mark.get(r["layer"], BLUE) for r in charted], fmt="pctw" if whole and key == "ebitda" else "pct")
             s.add("text", (M, BOT - fh, CW, fh), paras=[" ".join(foot)], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
+            slides.append(s)
+        if not chart and len(head) > 5 and 2 <= len(charted) <= 14:
+            # R35: a table of more than four figure columns keeps the full width, so its chart (R34 left it out) has a page of its own
+            # after it: the layers' medians side by side, each name whole, only with two layers or more on a median of MIN_BASE companies
+            mname = "ROE" if key == "roe" else "EBITDA margin"
+            cnote = (f"Each bar: the layer's median company, latest full year; its count of companies in its label. A layer is drawn on a median of "
+                     f"{MIN_BASE} companies or more; every layer is in the table before this page. How the figure is built: ⟦{NOTES_TITLE}⟧.")
+            ch_ = note_h(cnote)
+            s = Slide(f"Median {mname} by layer", chain.get("line") or f"Each layer's median company's {mname}, the layers side by side", eyebrow=eb("The value chain"))
+            s.add("hbars", (M, TOP, CW, min(BOT - TOP - ch_ - 0.2, 1.2 * len(charted) + 0.3)),
+                  cats=[f"{r['layer']} ({_of_n(r.get(key + '_n') or 0, r.get('n'))})" for r in charted], vals=[r[key] for r in charted],
+                  colors=[mark.get(r["layer"], BLUE) for r in charted], fmt="pctw" if whole and key == "ebitda" else "pct")
+            s.add("text", (M, BOT - ch_, CW, ch_), paras=[cnote], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
             slides.append(s)
     elif v.get("members_with_figures") == 0 or not shown:
         left_out.append(("none", "the value chain's figures (no company has stored figures)"))
@@ -3495,6 +3998,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             if b["kind"] == "table" and "Slide" in b["head"]:
                 b["head"], b["rows"], b["widths"], b["numeric"] = drop_empty(b["head"], b["rows"], b["widths"], b.get("numeric"), keep=tuple(range(len(b["head"]) - 1)))
     whole_deck(slides)
+    slides[0].gate = with_layout(slides[0].gate, layout_gate(slides))       # R35: nothing cut short, checked on the pages as they will print
     return slides, footer
 
 
@@ -3632,7 +4136,11 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
         a_, b_ = ("roe", "net") if lender else ("ebitda", "roce")
         both = [{**x, "ebitda": x[a_], "roce": x[b_]} for x in lay if x[a_] is not None and x[b_] is not None]
         chart = 2 <= len(both) <= 10
-        tw = 7.6 if chart else CW
+        # R35: a chart sits beside a table of four figure columns at most. A wider table keeps the full width, and its chart has a page of
+        # its own after it unless the value chain's page already charts the layers' medians (one such page a deck, not two)
+        beside = chart and len(head) <= 5
+        charted_ = any(b["kind"] == "hbars" for s_ in slides if s_.title.startswith(("The value chain by layer", "Median ")) for b in s_.blocks)
+        tw = 7.6 if beside else CW
         rk, rname = ("roe", "ROE") if lender else ("roce", "ROCE")
         cmp_ = [x for x in lay if not x.get("rest")]            # the "Other" group is never called highest or fastest (R22)
         best_r = top_of(cmp_, lambda x: x[rk], lambda x: x[f"{rk}_n"])
@@ -3652,11 +4160,20 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
             th = min(BOT - TOP - nh - 0.07, table_height(head, chunk, widths, tw))
             s.add("table", (M, TOP, tw, th), head=head, rows=chunk, widths=widths, tight=True)
             room.append((s, M, TOP + th + 0.25, tw, BOT - nh - 0.15 - (TOP + th + 0.25)))
-            if chart and k == 0:
-                n1, n2 = ("ROE", "Net margin") if lender else ("EBITDA margin", "ROCE")
+            n1, n2 = ("ROE", "Net margin") if lender else ("EBITDA margin", "ROCE")
+            series = [(n1, [x["ebitda"] for x in both], BLUE), (n2, [x["roce"] for x in both], ORANGE)]
+            if beside and k == 0:
                 s.add("columns", (M + tw + 0.4, TOP, CW - tw - 0.4, BOT - TOP - nh - 0.07), title=f"Median {n1} and {n2}", fmt="pct",
-                      cats=[clip(x["layer"], 10, 1.2, 1) for x in both], series=[(n1, [x["ebitda"] for x in both], BLUE), (n2, [x["roce"] for x in both], ORANGE)])
+                      cats=[x["layer"] for x in both], series=series)
             s.add("text", (M, BOT - nh, CW, nh), paras=[note], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
+            slides.append(s)
+        if chart and not beside and not charted_:
+            cnote = (f"Each pair of columns: the layer's median company, latest full year. A layer is drawn when both figures are medians of {MIN_BASE} "
+                     f"companies or more; every layer is in the table before this page. Periods: ⟦{NOTES_TITLE}⟧.")
+            ch_ = note_h(cnote)
+            s = Slide(f"Median {n1} and {n2} by layer", f"Each layer's median company: {n1} beside {n2}, the layers side by side", eyebrow=eyebrow)
+            s.add("columns", (M, TOP, CW, BOT - TOP - ch_ - 0.2), fmt="pct", cats=[x["layer"] for x in both], series=series)
+            s.add("text", (M, BOT - ch_, CW, ch_), paras=[cnote], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
             slides.append(s)
     if md.get("companies"):
         lead = md["layers"][0] if md.get("layers") else None
@@ -3670,6 +4187,8 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
         note = (f"Each company's part: its EBITDA as a share of all {md['n']} companies' revenue in {md['to']}, less the same in {md['from']}; the parts "
                 "add up to the change. A part moves with the company's own margin and with its weight in the group's revenue. The companies that moved it most.")
         nh = note_h(note)
+        while len(rows) > 2 and table_height(head, rows, widths, lw) > BOT - TOP - nh - 0.07:
+            rows.pop(-2)          # R35: long names made the table taller than its page and the total's row was left off; a company's row gives way
         s = Slide("What moved the aggregate margin", msg, eyebrow=eyebrow)
         th = min(BOT - TOP - nh - 0.07, table_height(head, rows, widths, lw))
         s.add("table", (M, TOP, lw, th), head=head, rows=rows, widths=widths, tight=True, strong=[len(rows) - 1])

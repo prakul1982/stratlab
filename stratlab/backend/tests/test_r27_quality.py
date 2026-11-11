@@ -251,8 +251,8 @@ def test_no_deck_sets_a_company_against_the_whole_market(name, v, slides):
 @pytest.mark.parametrize("name,v,slides", ALL27, ids=IDS27)
 def test_the_gate_runs_on_every_deck_before_it_is_stored_and_every_item_passes_on_the_synthetic_themes(name, v, slides):
     g = slides[0].gate
-    assert [x["id"] for x in g["items"]] == [k for k, _ in deck.GATE_ITEMS] and g["of"] == 9
-    assert g["passed"] == 9, [(x["id"], x["dropped"]) for x in g["items"] if not x["ok"]]
+    assert [x["id"] for x in g["items"]] == [k for k, _ in deck.GATE_ITEMS] and g["of"] == 10          # R35 added the layout item (updated on purpose)
+    assert g["passed"] == 10, [(x["id"], x["dropped"]) for x in g["items"] if not x["ok"]]
     skipped = {x["id"]: x["note"] for x in g["items"] if x["note"].startswith("Skipped")}
     assert set(skipped) <= {"classified", "applicable"}                                         # the later lanes' data, a pass with a note until then
     reading = next(it for s in slides if s.title == "How to read this deck" for b in s.blocks if b["kind"] == "cards" for it in b["items"]
@@ -277,7 +277,7 @@ def test_a_failing_item_drops_what_failed_and_the_result_lists_it():
     g = deck.publication_gate(slides, v2)
     by = {x["id"]: x for x in g["items"]}
     assert not by["marks"]["ok"] and by["marks"]["dropped"] == 2 and t["rows"][0][1] == "–" and t["rows"][1][2] == "–"
-    assert not by["classified"]["ok"] and not by["peers"]["ok"] and by["reproduce"]["ok"] and g["passed"] == 6
+    assert not by["classified"]["ok"] and not by["peers"]["ok"] and by["reproduce"]["ok"] and g["passed"] == 7      # of 10 (R35: the layout item, checked on the finished pages)
     assert len(g["dropped"]) == g["dropped_n"] == 4 and all(set(d) == {"rule", "slide", "text", "why"} for d in g["dropped"])
 
 
@@ -321,7 +321,7 @@ def test_a_deck_made_through_the_route_carries_its_gate_into_admin_library(lib):
         decks = lib.get("/admin/stored").json()["decks"]
     finally:
         main.app.dependency_overrides.pop(admin.admin_profile, None)
-    assert len(decks) == 1 and decks[0]["gate"]["of"] == 9 and len(decks[0]["gate"]["items"]) == 9
+    assert len(decks) == 1 and decks[0]["gate"]["of"] == 10 and len(decks[0]["gate"]["items"]) == 10
     assert all({"id", "label", "ok", "dropped", "note"} <= set(x) for x in decks[0]["gate"]["items"])
 
 
