@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { open, sane, sessionAs } from "./pages-kit";
 
-// R19 (owner, 7 Nov): a theme read is kept once for everyone and offered in the search box ("Already read"); every stored read says
+// R19 (owner, 7 Nov): a theme read is kept once for everyone and offered in the search box ("Ready to open", LIVE6-012); every stored read says
 // "Last updated" with a Refresh and the refreshes left today (none left: the button is off); Settings' "Your usage" matches the server;
 // Admin → Library shows what is kept. Each test signs in as its own Free user (refreshes are counted per person).
 const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
@@ -50,7 +50,10 @@ test("a theme read is offered as already read, says when it was updated, and Ref
   await page.getByRole("textbox", { name: "Theme" }).fill("steel");
   const already = page.getByTestId("theme-already");
   await expect(already).toBeVisible({ timeout: 30_000 });
-  await expect(already.getByRole("button", { name: /steel.*· India, read \d{1,2} [A-Z][a-z]{2}/i }).first()).toBeVisible();
+  // LIVE6-012: the shared library, never one person's reading ("Ready to open", the date the map was updated; no "Already read")
+  await expect(already).toContainText("Ready to open:");
+  await expect(already).not.toContainText(/Already read|, read \d/);
+  await expect(already.getByRole("button", { name: /steel.*· India, updated \d{1,2} [A-Z][a-z]{2}/i }).first()).toBeVisible();
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/r19-theme-${info.project.name}.png`, fullPage: false });
   await sane(page, errors);
 });

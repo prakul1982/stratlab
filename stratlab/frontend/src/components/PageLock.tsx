@@ -13,6 +13,9 @@ import { Notice } from "./kit";
 import { PlanActions } from "./PlanInterest";
 import { Lock } from "./Icons";
 
+/** A page's loading placeholders: the kit's Skeleton (aria-busy) and its Working bar (not one inside a table cell). */
+export const LOADING = 'main [aria-busy="true"], main .k-working:not(.inline)';
+
 /** At the top of a page holding a paid feature the person's plan doesn't include: which plan has it, and what to do,
  * honestly (no checkout while paid plans aren't on sale). The server refuses the feature either way (plans.allows).
  * A page that already says it in its own plan note (PlanNote) keeps that one: one note, not two. */
@@ -24,20 +27,31 @@ export function PageLock() {
   const unlocks = locked && gate ? gatePlan(gate) : null;
   const price = usePlanPrice(unlocks === "basic" || unlocks === "pro" ? unlocks : null);
   const [own, setOwn] = useState(false);
+  // LIVE6-020: a page with part of it on a plan was drawn with this note while its own figures loaded, and the page's own plan note,
+  // arriving with them, then took it away: everything under it jumped up about 200px (layout shift 0.40 on IPOs, 0.21 on Net worth on a
+  // phone). For such a page the note waits until the page's loading placeholders are gone, then shows only if the page has no note
+  // of its own. A whole page on a plan shows it at once, as before.
+  const [loading, setLoading] = useState(false);
   const slot = useLockSlot();           // the page's title draws it: the note goes under the title, on every page (RC7-003)
   useEffect(() => {
     setOwn(false);
+    setLoading(false);
     if (!locked) return;
+    const partial = !gate?.whole;
     // a page that words each of its locks where it applies (Tax tools: Basic's dividend detail, Pro's amounts) says so with
     // data-plan-notes, so its tabs don't get the page's note on one tab and their own on another (DP2-012)
-    const look = () => setOwn(!!document.querySelector("main .plan-note:not(.page-lock), main [data-plan-notes]"));
+    const look = () => {
+      setOwn(!!document.querySelector("main .plan-note:not(.page-lock), main [data-plan-notes]"));
+      setLoading(partial && !!document.querySelector(LOADING));
+    };
     look();
     const mo = new MutationObserver(look);
     const main = document.querySelector("main");
     if (main) mo.observe(main, { childList: true, subtree: true });
     return () => mo.disconnect();
   }, [locked, pathname]);
-  if (!locked || own || !gate || !me) return null;
+  if (!locked || own || loading || !gate || !me) return null;
+  if (!gate.whole && !(slot && slot.isConnected)) return null;          // the page itself still opening (its title not drawn yet)
   const plan = PLAN_NAME[gatePlan(gate)];
   const yours = PLAN_NAME[(me.plan ?? "free") as "free" | "basic" | "pro"] ?? "Free";
   const what = featureName(gate.feature);

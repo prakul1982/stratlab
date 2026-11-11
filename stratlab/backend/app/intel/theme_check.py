@@ -275,7 +275,11 @@ MODELS = {
     "components": ("components", "Parts, component and ingredient makers", "making parts, components or ingredients that other manufacturers "
                                                                           "build into their own products"),
     "contract_manufacturing": ("contract_making", "Contract manufacturing", "making products to other companies' designs and orders"),
-    "capacity": ("capacity", "Data centres, hosting and networks", "renting out computing, data-centre or network capacity, and connectivity subscriptions"),
+    "capacity": ("capacity", "Data centres, hosting and networks", "renting out computing, data-centre or network capacity, and connectivity to businesses"),
+    # q1 (the GPT review of the live R34 Telecom deck: Jio and Vodafone Idea left out, the operators' common model "licences and subscriptions for
+    # software they own"): a network operator's subscriptions are for a service it runs on its own network, never software it licenses
+    "telecom_services": ("telecom_services", "Telecom and broadband operators", "subscriptions and usage charges for mobile, broadband and "
+                                                                                 "fixed-line services on networks they run"),
     "construction": ("construction", "Engineering and construction contracts", "contracts to design and build projects for clients"),
     "lending": ("lending", "Lenders", "interest on loans they make"),
     "underwriting": ("underwriting", "Insurers", "premiums for the risks they insure, and returns on the premiums they invest"),
@@ -373,6 +377,8 @@ MODEL_NEEDS = {
     "metal_processing": r"\bpipes?\b|\btubes?\b|\bwires?\b|re-?rolling|cold[- ]rolled|galvani[sz]|extru|fabricat|\bcastings?\b|\bforgings?\b|"
                         r"conductors|\bstrips?\b|processing of (?:steel|metals?|alumini?um|copper)|value[- ]added (?:steel|metal)|foils?\b|"
                         r"(?:steel|metal|alumini?um|copper) products",
+    "telecom_services": r"telecom|cellular|\bmobile\b|wireless|broadband|fixed[- ]line|landline|\b[2345]g\b|subscribers?|\barpu\b|spectrum|"
+                        r"unified licen[cs]e|internet service|\bftth\b|fib(?:re|er) to the home|telephon|radiotelephone|network operator",
     "consumer_services": r"hotel|resort|hospitality|\btours?\b|travel (?:agen|services|booking|packages)|holiday|restaurant|quick[- ]service|"
                          r"food service|dining|cafe|educat|school|coaching|courses|tuition|amusement|theme park|wellness|salon|fitness|gym|"
                          r"cinema|multiplex|entertainment cent",
@@ -485,16 +491,61 @@ MODEL_SAYS = {
     "reinsurance": r"reinsurer|reinsurance company",
     "hardware_resale": r"(?:authori[sz]ed|channel) (?:partner|reseller|distributor) (?:of|for)|value[- ]added reseller|system integrator for",
     "property_development": r"real estate develop|residential (?:real estate )?develop",
+    "telecom_services": r"telecom(?:munications?)? (?:service providers?|operators?)|providers? of telecommunications? services|mobile network operators?|"
+                        r"(?:mobile|wireless|broadband|cellular) (?:and (?:home )?broadband )?operators?|wireless carriers?",
 }
 
 
 def model_from_words(evidence) -> str:
-    """The one model a company's own words state in so many words (MODEL_SAYS), or "" when none or more than one does."""
+    """The one model a company's own words state in so many words (MODEL_SAYS), or "" when none or more than one does. Its customers named
+    ("to telecom operators", "catering to mobile network operators") are not its own model (q1)."""
     _, own = _split_evidence(evidence)
+    own = not_customers(own)
     hits = [m_ for m_, rx in MODEL_SAYS.items() if re.search(rx, own, re.I)]
     if not hits and chip_designer(evidence):          # R32: a chip designer that owns no fabs says it in its own way ("designs GPUs and SoCs")
         return "fabless"
     return hits[0] if len(hits) == 1 else ""
+
+
+# ---------- q1: a network operator's subscriptions are for a service it runs, not software (the GPT review of the live R34 Telecom deck) ----------
+# Its customers named are never what it is: a tower company leases "to wireless telecom operators", a messaging platform caters "to mobile network
+# operators (MNOs)"
+_CUSTOMERS = re.compile(r"\b(?:to|for|serving|serves|catering to|customers(?: such as| include| including)?|clients(?: such as| include)?)\s+"
+                        r"(?:[\w&,()-]+\s+){0,5}?(?:telecom\w*|mobile|wireless|broadband|cellular)\s+(?:network\s+|service\s+)?"
+                        r"(?:operators?|service providers?|providers?|carriers?|companies|businesses|industry)\b(?:\s*\([^)]{0,12}\))?", re.I)
+# its own words that it runs a network service for subscribers
+TELECOM_OPERATOR = (r"telecom(?:munications?)?(?: and digital)? (?:services?|operators?|service providers?|business(?:es)?|activities)\b|"
+                    r"mobile (?:services|operators?|network operators?|telephony|and (?:home )?broadband)|wireless (?:services|carriers?|operators?|"
+                    r"telecommunications?)|wired and wireless|cellular (?:services|operators?|networks?)|fixed[- ]line|landline|"
+                    r"(?:home )?broadband (?:services|business|operators?|providers?)|\b[45]g (?:services|networks?)|unified licen[cs]e|telecom circles?|"
+                    r"internet service providers?|\bftth\b|fib(?:re|er) to the home")
+# its official industry that it is an operator (India's "Telecom - Cellular & Fixed line services", the SEC's radiotelephone and telephone codes)
+TELECOM_INDUSTRY = r"cellular|fixed[- ]line|radiotelephone|telephone communications|wireless telecom"
+# software it owns, sold by licence or subscription: a software company, whatever network it serves
+SOFTWARE_OWN = (r"software (?:products?|licen\w*|platforms?|solutions)|\bsaas\b|\bcpaas\b|software[- ]as[- ]a[- ]service|cloud communications|"
+                r"communications platform")
+# the network's passive parts, its gear or its building: towers and data centres are leased, equipment is made, networks are built for others
+NOT_OPERATOR = (r"\btowers?\b|passive (?:telecom )?infrastructure|infrastructure sharing|tenanc|colocation|data cent|manufactur|equipment|\bepc\b|"
+                r"installing|commissioning")
+
+
+def not_customers(own) -> str:
+    """A company's own words with the customers it names taken out (q1: "leases tower space to wireless telecom operators")."""
+    return _CUSTOMERS.sub(" ", str(own or ""))
+
+
+def telecom_operator(evidence) -> bool:
+    """Whether a company's evidence shows a network operator that sells mobile, broadband or fixed-line services (q1, generic for both markets):
+    its own words say so (telecommunication services, mobile and broadband, wired and wireless, a unified licence, landline), or its official
+    industry is an operator's and its own words name nothing of towers, data centres, equipment or network building; never a company whose
+    own words name software it owns sold by licence or subscription, nor one whose words name operators only as its customers."""
+    industry, own = _split_evidence(evidence)
+    own = not_customers(own)
+    if re.search(SOFTWARE_OWN, own, re.I):
+        return False
+    if re.search(TELECOM_OPERATOR, own, re.I):
+        return True
+    return bool(re.search(TELECOM_INDUSTRY, industry, re.I)) and not re.search(NOT_OPERATOR, own, re.I)
 
 
 def business_text(b) -> str:
@@ -568,7 +619,8 @@ KEEP_APART = ("regulated_utility (a regulator sets its tariffs for transmission 
               "sheets, castings or parts); resources for oil, gas and farming. retail (holds and sells its own stock) apart from platform (a "
               "marketplace earning commissions on others' goods). lending for a housing finance or home-loan company, never property_development "
               "(sells what it builds) or property (rents and leases, REITs). fabless for a company that designs chips or products and has them "
-              "made by foundries or contract makers; manufacturing only when it also owns its fabs or plants (IDM).")
+              "made by foundries or contract makers; manufacturing only when it also owns its fabs or plants (IDM). telecom_services (a network operator's "
+              "mobile, broadband or fixed-line subscriptions) apart from software (licences and subscriptions for software it owns).")
 
 
 def refine_model(model, evidence) -> str:
@@ -588,6 +640,9 @@ def refine_model(model, evidence) -> str:
         return hit[0] if len(hit) == 1 else ""
     if model == "utility":
         return one(("regulated_utility", "power_generation", "power_trading"), REFINE_HINTS) or model
+    # q1 (the live R34 Telecom deck: every operator "software", 5 of 8 left out): a network operator's subscriptions are telecom services
+    if model in ("software", "capacity", "unknown", "") and telecom_operator(evidence):
+        return "telecom_services"
     if model == "resources" and not re.search(r"\boil\b|\bgas\b|petroleum|crude|crops?\b|plantation|farm|\btea\b|coffee|sugar", text, re.I):
         return "commodity_mining" if re.search(MODEL_NEEDS["commodity_mining"], text, re.I) else model
     # R31 (the owner's review of the live R30 Real estate deck): a lender is never a developer or a landlord, and a developer who sells what it
@@ -609,6 +664,10 @@ def refine_model(model, evidence) -> str:
     # materials, chemicals, gases or substrates for chips or electronics, and not machines, is an ingredient maker (components)
     if model in ("manufacturing", "unknown", "") and chip_materials(own):
         return "components"
+    # q1 (the GPT review of the live R34 Semiconductors deck: GlobalFoundries in "Other semiconductor companies", TSMC and UMC called makers
+    # of their own products, so the foundry layer held makers and the one contract maker had no layer): a foundry is a contract maker
+    if model in ("manufacturing", "unknown", "") and foundry(evidence):
+        return "contract_manufacturing"
     if model in ("manufacturing", "fabless", "unknown", "") and re.search(SEMI_INDUSTRY, text, re.I):
         fab, out = re.search(FAB_OWN, own, re.I), re.search(OUTSOURCED, own, re.I)
         if fab and not out:
@@ -638,6 +697,34 @@ _OWN_EQUIPMENT = (r"\bequipment(?! (?:manufacturers?|makers?|suppliers?|vendors?
 # silicon carbide materials and devices", is a chip maker whose words also name the material it works in)
 _OWN_CHIPS = (r"(?:manufactur\w*|\bmakes?|\bmakers?|\bproduc(?:es|ers?)|\bdevelop\w*|\bdesign\w*)\b[^.;]{0,40}\b(?:semiconductors|chips|integrated circuits|"
               r"devices)\b|\bmaterials and devices\b")
+
+
+# q1: a foundry's own words (it makes chips to its customers' designs); "strong" ones stand whatever else its words name, the plain
+# "semiconductor foundry" only when it names no machines or tools of its own (an equipment maker's customers are foundries)
+FOUNDRY_STRONG = (r"\bas a foundry\b|designs provided by (?:them|its customers|our customers|customers)|(?:dedicated|independent|pure[- ]play) "
+                  r"(?:specialty )?(?:semiconductor )?foundr|contract manufactur\w*(?: company| services)?\b[^.]{0,30}\b(?:semiconductors?|chips?|wafers?|"
+                  r"integrated circuits?)|(?:semiconductors?|chips?|wafers?|integrated circuits?)\b[^.]{0,40}\bcontract manufactur|"
+                  # outsourced assembly and test (OSAT): packaging and testing others' chips is contract making too (R27)
+                  r"\bosat\b|(?:assembly|packaging) and test(?:ing)? services")
+FOUNDRY_WORDS = r"(?:specialty|semiconductor|wafer|analog|logic) foundr(?:y|ies)\b|\bfoundry (?:company|business|services|provider)"
+# a company that has foundries make its chips, or makes and sells its own (an IDM), is no foundry
+NOT_FOUNDRY = (r"(?:rel(?:y|ies|ying) (?:on|upon)|third[- ]party|external|outside|outsourc\w*|through|by)\s+(?:[\w-]+\s+){0,2}foundr|\bidm\b|"
+               r"integrated device manufactur|\bdesigns?,? (?:develops?,? )?(?:and )?manufactures?,? and sells\b")
+_FOUNDRY_CUSTOMERS = re.compile(r"\b(?:to|for|serving|serves|customers?(?: such as| include| including)?|clients)\s+(?:[\w&,()-]+\s+){0,6}?"
+                                r"foundr\w*", re.I)
+
+
+def foundry(evidence) -> bool:
+    """Whether a company's own words show a foundry: it makes chips to its customers' designs (q1: "as a foundry", "a leading semiconductor
+    foundry", "contract manufacturing of semiconductors"), or packages and tests them (OSAT), foundries named as its customers left out; never one that has foundries make its
+    chips, nor an IDM."""
+    _, own = _split_evidence(evidence)
+    own = _FOUNDRY_CUSTOMERS.sub(" ", str(own or ""))
+    if re.search(NOT_FOUNDRY, own, re.I):
+        return False
+    if re.search(FOUNDRY_STRONG, own, re.I):
+        return True
+    return bool(re.search(FOUNDRY_WORDS, own, re.I)) and not re.search(_OWN_EQUIPMENT, own, re.I) and not chip_materials(own)
 
 
 def chip_materials(own) -> bool:
@@ -748,7 +835,8 @@ segments it reports, its own description, its filings' titles); no other knowled
 evidence ("was"). For each company give the ONE model from this list: """ + ", ".join(MODELS) + """; "unknown" when the evidence doesn't show it.
 A model needs words of its kind in the evidence: platform needs a marketplace, commissions, listing fees, advertising or a take rate; hardware_resale
 needs reselling, distributing or installing others' hardware; distribution needs trading or wholesale; a company that sells subscriptions to a
-service it runs on its own network or software is software or capacity, not platform; consumer_services needs hotels, travel, meals, courses or
+service it runs on its own network is telecom_services (mobile, broadband, fixed-line) or capacity (computing, data-centre or network capacity
+for businesses), one for software it owns is software, never platform; consumer_services needs hotels, travel, meals, courses or
 other services paid for by consumers (services run for governments or companies are bpo or managed_services).
 """ + KEEP_APART + """
 Reply with ONLY this JSON: {"models": {"<symbol>": "<model>"}}"""
@@ -824,8 +912,9 @@ stock exchange files it under the theme's industry). Use only the companies' des
    A company that resells or installs hardware others make is hardware_resale, one that makes its own is manufacturing; one that sells
    licences or subscriptions to software it owns is software, one paid for projects or people's time is project_services.
    Read each one's "evidence" too (its official industry and sub-industry, the segments it reports, its business read, its filings' titles).
-   platform only with a marketplace, commissions, listing fees, advertising or a take rate in its evidence; a service sold by subscription over
-   its own network is software or capacity. Keep apart: bpo (customer service, back offices, claims run for clients) from managed_services
+   platform only with a marketplace, commissions, listing fees, advertising or a take rate in its evidence; a mobile, broadband or fixed-line
+   service sold by subscription over its own network is telecom_services, computing or network capacity for businesses is capacity, and
+   software is only for software the company owns. Keep apart: bpo (customer service, back offices, claims run for clients) from managed_services
    (running clients' IT systems) and project_services; contract_manufacturing (CDMO, CRAMS, EMS, foundry, OSAT: made to others' designs) from
    manufacturing (its own finished products and brands, an IDM) and fabless (its own designs made by contract makers); components (parts,
    components or ingredients such as APIs sold to other manufacturers) from manufacturing (finished goods, such as vehicles); life_insurance,

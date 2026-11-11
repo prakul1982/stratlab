@@ -106,7 +106,7 @@ def test_no_materials_supplier_sits_under_an_equipment_layer_whatever_model_it_w
 def test_the_rules_version_moved_so_kept_checks_and_dives_are_worked_out_again_and_placements_carry():
     """The cause on live: the materials rule came in without a new rules version, so the check kept under the old one (and the theme library's
     read of it) was served as it stood. The version is part of every kept check's, library read's and dive's key."""
-    assert B.RULES == 35 and T.PLACE_CARRY[34] == 33 and T.PLACE_CARRY[35] == 34          # lane n2 bumped RULES (updated on purpose)
+    assert B.RULES == 36 and T.PLACE_CARRY[34] == 33 and T.PLACE_CARRY[35] == 34 and T.PLACE_CARRY[36] == 35   # lane n2, q1 bumped RULES (updated on purpose)
     assert T.check_key("US", "Semiconductors", {"generated_at": 5})[-1] == B.RULES
 
 
@@ -312,7 +312,7 @@ def test_a_company_with_no_figures_carries_its_reason_on_its_row():
 
 
 def test_the_versions_moved_with_the_records():
-    assert D.DIVE_TEXT == 8 and deck.THEME_DECK_VERSION == 46
+    assert D.DIVE_TEXT == 9 and deck.THEME_DECK_VERSION == 48
 
 
 # ---------- 4. only layers of one way of earning are ranked together ----------

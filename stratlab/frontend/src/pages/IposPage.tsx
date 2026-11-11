@@ -6,7 +6,7 @@ import { eyebrowOf } from "../lib/eyebrow";
 import { asOf, fmtDate, marketTz, pct, price } from "../lib/format";
 import { useLiveRefresh } from "../lib/liveRefresh";
 import { ipoApi, type AlertPrefs, type EventKind, type IpoList, type IpoRow, type Market, type Stage } from "../lib/ipo";
-import { TAB_LINE, badgeOf, bandText, clockText, expectedText, minText, partsText, problemNote, segmentWord, sharesText, sizeText, spanText, tabsFor, timesText } from "../lib/ipoText";
+import { TAB_LINE, badgeOf, bandText, clockText, expectedText, minText, partsText, problemNote, segmentWord, sharesText, sizeText, spanText, tabsFor, timesText, unpricedRows } from "../lib/ipoText";
 import { Badge, Card, CardHead, CheckField, ChipSet, DataTable, Disclosure, EmptyState, ErrorState, PageHeader, PlanNote, Seg, Signed, Skeleton, type Column } from "../components/kit";
 import "./ipo.css";
 
@@ -50,6 +50,8 @@ function perfCell(r: IpoRow, which: "listing" | "now") {
   const p = r.perf;
   const v = which === "listing" ? p?.listing_change_pct : p?.change_pct;
   const px = which === "listing" ? p?.listing_price : p?.latest;
+  // its listing day: the opening price is in, the first close comes after the session (LIVE6-010)
+  if (which === "now" && px == null && p?.listing_price != null) return <span className="k-muted" data-testid="ipo-first-close">After its first close</span>;
   if (px == null || v == null) return <span className="k-muted">–</span>;
   // the latest close is dated: it is the last session's close, not a live price (RC2A-002)
   const day = which === "now" && p?.latest_date ? `Close ${fmtDate(p.latest_date, { year: false })} · ` : "";
@@ -167,7 +169,8 @@ export function IposPage() {
   const all = d?.tabs[now] ?? [];
   // a listed issue whose prices could not be read (small-board names mostly) is a row of dashes: those wait in a fold of their own,
   // so the list is the issues with figures (LIVE1A-031)
-  const unpriced = now === "listed" ? all.filter((r) => r.perf?.latest == null && r.perf?.listing_price == null) : [];
+  // an issue listed in the last few days stays in the table on its listing day, its prices to come (LIVE6-010)
+  const unpriced = now === "listed" && d ? unpricedRows(all, market, d.today) : [];
   const rows = unpriced.length && unpriced.length < all.length ? all.filter((r) => !unpriced.includes(r)) : all;
   const unpricedShown = unpriced.length > 0 && rows !== all ? unpriced : [];
   // one stamp on the page (LIVE2-023): the bids' reading on the Open tab (they move through the day), the list's reading elsewhere
@@ -186,7 +189,7 @@ export function IposPage() {
     <div className="k-page ipo-page">
       <PageHeader eyebrow={eyebrowOf("/invest/ipos")} title="IPOs"
         lede="India's and the US's public offerings in their stages, from the exchanges' and regulators' own pages. Facts, not advice."
-        asOf={liveBids ? d?.bids_read : d?.as_of} asOfTz={marketTz(market)} asOfLabel={liveBids ? "Bids read" : "Read"} info={<>When bidding opens and closes, the price band, the lot and the minimum, the bids received by category while an issue is open, and how a new listing has traded against its issue price.{d ? <> {d.note}</> : null}</>} infoLabel="Where this comes from" />
+        asOf={liveBids ? d?.bids_read : d?.as_of} asOfPending={!d && !error} asOfTz={marketTz(market)} asOfLabel={liveBids ? "Bids read" : "Read"} info={<>When bidding opens and closes, the price band, the lot and the minimum, the bids received by category while an issue is open, and how a new listing has traded against its issue price.{d ? <> {d.note}</> : null}</>} infoLabel="Where this comes from" />
       <div className="k-toolbar">
         <Seg label="Market" value={market} onChange={(v) => pick(v as Market)} options={[{ value: "IN", label: "India" }, { value: "US", label: "US" }]} />
       </div>

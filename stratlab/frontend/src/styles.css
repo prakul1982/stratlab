@@ -286,6 +286,9 @@ a.link { margin-inline: -2px; }
   background: var(--orange-soft); color: var(--ink); font-weight: 600; }
 .side-list a.side-feature > svg { color: var(--orange-ink); }
 .side-list a.side-feature:hover { border-color: var(--orange); background: var(--orange-soft); }
+/* LIVE6-016: on the Themes page the menu's own Themes entry is the one selected item; the pill is a plain outlined link there */
+.side-list a.side-feature.here { border-color: var(--line-2); background: none; font-weight: 500; color: var(--ink-2); }
+.side-list a.side-feature.here > svg { color: var(--ink-2); }
 .nb-dot { width: 16px; display: grid; place-items: center; flex: none; }
 .nb-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; position: relative; }   /* its hidden verdict words stay inside it (a long name put them 84px past the menu's edge) */
 .nb-pin { flex: none; display: inline-flex; color: var(--muted); }
@@ -3163,14 +3166,11 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .lp-checks .lp-art { display: none; }
   .lp-phone-fold > .stack { margin-top: 16px; }
 }
-/* LIVE5 partial (the analytics question covered the lower page for someone signed in who hadn't answered): in the app it is a band in
-   the page's flow above the page column, which scrolls away with the page and covers nothing, instead of a bar fixed over the foot of
-   every screen; the page needs no padding for it, and the Markets button stays in its corner */
-body:has(.shell) .consent { position: relative; left: auto; right: auto; bottom: auto; width: auto; margin: 12px 16px 0 calc(248px + 16px); z-index: 1; box-shadow: none; }
-body:has(.shell.slim) .consent { margin-left: 16px; }
-@media (max-width: 900px) { body:has(.shell) .consent { margin: 8px 12px 0; } }
-body:has(.shell) .shell { padding-bottom: 0; }
-body:has(.shell) .mw-launch { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+/* LIVE6-014: signed in, the analytics question was a band in the page's flow above the app (LIVE5 partial), so the whole app, side menu
+   included, stood 75-95 px lower until it was answered. It is an overlay again, never moving the app: the slim bar along the foot of the
+   page column (beside the side menu, LIVE4-008 above; on a phone along the window's foot), the page's end padded by its height
+   (--consent-h) so nothing stays out of reach under it, and the Markets button risen above it (consentLift.ts). */
+body:has(.shell) .consent { position: fixed; }
 /* LIVE5 partial: a few totals across one row (FactTable `across`): each figure with its note under it, the columns sharing the width */
 .k-facts-across .k-tbl-wrap { display: inline-block; max-width: 100%; vertical-align: top; }
 .k-facts-across .k-table { width: auto; }

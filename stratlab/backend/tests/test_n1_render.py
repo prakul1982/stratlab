@@ -238,17 +238,22 @@ def test_with_no_dated_update_the_findings_say_so_in_a_line_that_stays(monkeypat
     v, slides = deck_of(region, m, f)
     cards = next(b for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards")["items"]
     card = cards[-1]
-    assert len(cards) == 6 and card["title"] == "How far the figures go; dated company updates"
-    assert card["lines"][0] == "No company meets the rules today." and card["lines"][1].startswith("Considered 8 · confirmed 8")
+    # q1 (changed on purpose; the live R34 Private Banks card kept only the updates line, its coverage line given way): no dated update is
+    # said in the title, the card's lines are the coverage summary
+    assert len(cards) == 6 and card["title"] == "How far the figures go; no dated company update today"
+    assert card["lines"][0].startswith("Considered 8 · confirmed 8") and not any("rules today" in ln for ln in card["lines"])
 
 
 def test_one_company_listed_under_two_symbols_is_one_row_in_every_companys_figures():
     """R36 (GPT review of the live R33 Retail deck: "Leslie's, Inc." printed on two identical rows of the appendix)."""
     region, m, f = retail_like(12, 5, 2)
     first = m["value_chain"][0]["companies"][0]
-    twin = {**copy.deepcopy(first), "ticker": first["ticker"] + "X"}
+    twin = {**copy.deepcopy(first), "ticker": first["ticker"] + "X"}           # live: the twin's market value differed
     m["value_chain"][0]["companies"].append(twin)
     f[twin["ticker"]] = copy.deepcopy(f[first["ticker"]])
+    for k_ in ("market_cap", "cap"):
+        if isinstance(f[twin["ticker"]], dict) and f[twin["ticker"]].get(k_):
+            f[twin["ticker"]][k_] = f[twin["ticker"]][k_] * 0.7
     v, slides = deck_of(region, m, f)
     names = [r[0] for s in slides if s.title.startswith("Every company's figures")
              for b in s.blocks if b["kind"] == "table" for r in b["rows"] if not isinstance(r, dict)]

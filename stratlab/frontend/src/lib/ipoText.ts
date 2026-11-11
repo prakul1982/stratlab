@@ -159,3 +159,15 @@ export function kpiText(v: number | null | undefined, unit: "crore" | "pct" | "t
 }
 /** "the three months ending June 30, 2026" as "3 months to June 30, 2026"; a fiscal year as the document names it. */
 export const periodText = (label: string) => label.replace(/^the three months ending /i, "3 months to ").replace(/^the (\w+) months ending /i, "$1 months to ").replace(/^the /i, "");
+/** Days after its listing that an issue with no prices read yet stays in the Recently listed table, not the fold below it (LIVE6-010:
+ *  Antala Industries listed on 11 Nov and sat folded under "no prices read yet", so on its listing day it was on the page nowhere in sight). */
+export const JUST_LISTED_DAYS = 3;
+const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
+/** The listed issues that go in the fold: no listing price and no latest close, listed more than JUST_LISTED_DAYS days before `today`. */
+export function unpricedRows(rows: IpoRow[], market: Market, today: string): IpoRow[] {
+  return rows.filter((r) => {
+    if (r.perf?.latest != null || r.perf?.listing_price != null) return false;
+    const day = market === "US" ? r.priced : r.listing;
+    return !(day && today && daysBetween(day, today) <= JUST_LISTED_DAYS);
+  });
+}

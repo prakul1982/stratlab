@@ -7,11 +7,17 @@ the year so far and a year, the last day's volume and its 20-day average) and st
 companies' names, sectors and market values from the screens' index, which is kept in memory; the answer is shared by everyone for
 two minutes. So the page is one stored read, however many stocks it shows, and nothing runs between the daily runs.
 
+A theme's companies can sit outside every stored group (LIVE6-005: 11 of Cybersecurity's 16, Cloudflare and Zscaler among them, had no
+row and were left out). Those are read on demand, the largest first, at most ON_DEMAND a request within ON_DEMAND_SECS, each row kept
+for everyone until the next run's day; one still without closes is drawn at its stored last price with no change (grey), so the
+largest companies are never silently dropped.
+
 Facts only: a change is a change, a tile's size is the company's market value. Nothing here ranks or rates a stock."""
 import json
 import math
 import time
 from bisect import bisect_right
+from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends
@@ -34,6 +40,20 @@ CAP_UNIT = {"IN": "₹ crore", "US": "$ million"}
 
 _views = TTLCache(max_items=60, max_bytes=16 * 1024 * 1024)
 VIEW_FOR = 120                        # seconds one group's answer is shared by everyone (the rows change once a day)
+ON_DEMAND = 24                        # theme companies without a stored row read in one request (the largest first)
+ON_DEMAND_SECS = 8.0                  # how long one request waits for those reads; the rest are read on the next ask
+ON_DEMAND_DAYS = 400                  # calendar days of candles a row needs (a year back and the year before's last close)
+ON_DEMAND_WORKERS = 6
+ROW_FOR = 6 * 3600                    # seconds a row read on demand is kept (the stored rows change once a day)
+MISS_FOR = 30 * 60                    # seconds a company with no closes (not listed, suspended) is not asked again
+_read = TTLCache(max_items=5000, max_bytes=4 * 1024 * 1024)     # (region, day, symbol) -> row, or [] for none
+_history = None                       # (region, symbol, days) -> daily candles; set by main (setup), None in a bare import
+
+
+def setup(history) -> None:
+    """The daily-candle reader on-demand rows use (main: the breadth run's own reader, with a short wait for the broker's turn)."""
+    global _history
+    _history = history
 
 
 def _num(v) -> float | None:
@@ -126,6 +146,46 @@ def load(region: str) -> dict:
 
 def clear() -> None:
     _views.clear()
+    _read.clear()
+
+
+def read_missing(region: str, symbols: list[str], through: str | None) -> dict[str, list]:
+    """Rows for companies the daily run didn't store, from their daily candles: kept rows at once, then at most ON_DEMAND new reads (in
+    the order given: the largest first) within ON_DEMAND_SECS. A read that failed or ran out of time isn't kept, so it is tried again."""
+    got: dict[str, list] = {}
+    todo: list[str] = []
+    for s in symbols:
+        hit = _read.get((region, through, s))
+        if hit is None:
+            todo.append(s)
+        elif hit:
+            got[s] = hit
+    todo = todo[:ON_DEMAND]
+    if not todo or _history is None:
+        return got
+
+    def one(sym: str) -> list | None:
+        try:
+            return heat_row(_history(region, sym, ON_DEMAND_DAYS), through) or []
+        except LookupError:                      # not listed: nothing to read
+            return []
+        except Exception:                        # the source busy or down: asked again next time
+            return None
+
+    pool = ThreadPoolExecutor(max_workers=min(ON_DEMAND_WORKERS, len(todo)), thread_name_prefix="heatmap")
+    try:
+        futures = {pool.submit(one, s): s for s in todo}
+        done, _ = wait(futures, timeout=ON_DEMAND_SECS)
+        for f in done:
+            sym, row = futures[f], f.result()
+            if row is None:
+                continue
+            _read.set((region, through, sym), row, ROW_FOR if row else MISS_FOR)
+            if row:
+                got[sym] = row
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
+    return got
 
 
 # ---------- what the page shows ----------
@@ -162,7 +222,9 @@ def tile(symbol: str, row: list, f: dict | None, sector: str | None) -> dict:
 
 def view(region: str, universe: str | None = None, min_cap: float | None = None, symbols: list[str] | None = None) -> dict:
     """A group's tiles (or, with `symbols`, those companies'), the largest by market value first, at most MAX_TILES of them, with the
-    group's index over the same periods. `pending` is true until the daily run has stored the market's rows once."""
+    group's index over the same periods. `pending` is true until the daily run has stored the market's rows once. With `symbols`, a
+    company without a stored row is read on demand (read_missing), else drawn at its stored last price with no change (`price_only`
+    counts those); `members - with_prices - price_only` have neither and are left out."""
     from . import breadth
     group = universe if universe in UNIVERSES[region] else DEFAULT[region]
     doc = load(region)
@@ -171,7 +233,7 @@ def view(region: str, universe: str | None = None, min_cap: float | None = None,
     out = {"market": region, "universe": None if symbols is not None else group, "universe_name": None if symbols is not None else g["name"],
            "universes": universes(region), "periods": list(PERIODS), "as_of": doc.get("day"), "cap_unit": CAP_UNIT[region],
            "index": {"name": g["index_name"], "r": (doc.get("index") or {}).get(group)}, "pending": not stocks,
-           "min_cap": min_cap, "tiles": [], "members": 0, "with_prices": 0, "matching": 0, "shown": 0}
+           "min_cap": min_cap, "tiles": [], "members": 0, "with_prices": 0, "price_only": 0, "matching": 0, "shown": 0}
     if not stocks:
         return out
     if symbols is not None:
@@ -180,7 +242,18 @@ def view(region: str, universe: str | None = None, min_cap: float | None = None,
         want = breadth.members(group)
     rows, sectors = _facts(region)
     tiles = [tile(s, stocks[s], rows.get(s), sectors.get(s)) for s in want if s in stocks]
-    out["members"], out["with_prices"] = len(want), len(tiles)
+    if symbols is not None:
+        missing = sorted((s for s in want if s not in stocks), key=lambda s: -(_num((rows.get(s) or {}).get("market_cap")) or 0))
+        extra = read_missing(region, missing, doc.get("day")) if missing else {}
+        tiles += [tile(s, extra[s], rows.get(s), sectors.get(s)) for s in missing if s in extra]
+        out["with_prices"] = len(tiles)
+        blank = [None] * len(PERIODS)
+        last = [(s, _num((rows.get(s) or {}).get("price"))) for s in missing if s not in extra]
+        tiles += [tile(s, [px, *blank, None, None], rows.get(s), sectors.get(s)) for s, px in last if px and px > 0]
+        out["price_only"] = len(tiles) - out["with_prices"]
+    else:
+        out["with_prices"] = len(tiles)
+    out["members"] = len(want)
     if min_cap:
         tiles = [t for t in tiles if t["cap"] is not None and t["cap"] >= min_cap]
     tiles.sort(key=lambda t: (-(t["cap"] or 0), t["s"]))

@@ -37,7 +37,7 @@ FEW_BASE = 4                  # a highest or lowest median on this many companie
 COMPARE_MIN = MIN_BASE
 # R31 (the owner's review of the live R30 decks): a layer-vs-layer headline (the value chain's line, findings, questions) needs at least this
 # many companies with the figure in each layer it compares; tables still show every layer and mark (green, red) those of COMPARE_MIN or more
-DIVE_TEXT = 8          # R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
+DIVE_TEXT = 9          # LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
 HEADLINE_MIN = 5
 # R27 (headline eligibility): a comparison is said as a headline only on a figure for at least this share of the companies of each group it
 # compares (a layer, a family); one with less is shown as data, never ranked (the live R26 Semis deck: "RPO growth -3.9%" of 21 of 53)
@@ -422,7 +422,7 @@ def one_row_each(rows: list[dict]) -> list[dict]:
     seen, out = set(), []
     for r in rows:
         name = _re.sub(r"[^a-z0-9]+", " ", str(r.get("name") or "").lower()).strip()
-        key = (name, r.get("revenue"), r.get("cap"))
+        key = (name, r.get("revenue"))          # the same filed revenue under the same name: one company (its market values may differ)
         if name and r.get("revenue") is not None and key in seen:
             continue
         seen.add(key)
@@ -1253,6 +1253,55 @@ def notable_items(blocks: list[dict], chain: dict, histories: dict) -> list[dict
     return out
 
 
+# ---------- q1: who was in each layer's calculations at the runs before (the GPT review of the live R34 Telecom deck: 6 of 9 operators in
+# R33, 3 of 8 in R34, with nothing said) ----------
+COHORT_RUNS = 6               # a theme's kept layer cohorts, one for each run whose cohorts differ from the one before (theme_routes.sources)
+COHORT_SHARE = 1 / 3          # a layer whose count in its calculations falls by more than this share against the run before is said...
+COHORT_FALL = 3               # ...or by this many companies or more
+
+
+def cohort_point(blocks: list[dict], today: date) -> dict:
+    """This run's layer cohorts, as kept: {"d": the day, "layers": {layer: [the symbols in its calculations]}, "names": {symbol: name}}."""
+    layers, names = {}, {}
+    for b in blocks:
+        ins = sorted(c["symbol"] for c in b.get("companies") or [] if calc_of(c)["in"])
+        layers[b["layer"]] = ins
+        names.update({c["symbol"]: c.get("name") or c["symbol"] for c in b.get("companies") or [] if c["symbol"] in ins})
+    return {"d": today.isoformat(), "layers": layers, "names": names}
+
+
+def cohort_drops(points: list[dict], blocks: list[dict]) -> list[dict]:
+    """Each layer whose count in its calculations fell by more than COHORT_SHARE, or by COHORT_FALL or more, against the run before (q1):
+    {"layer", "from", "to", "on": that run's day, "left": [{"symbol", "name", "why"}]}, each company that left with its reason now (its own
+    record's reason when the layer still lists it, the layer it moved to, or no longer in the theme). A layer is the run before's of the same
+    name, else the one that held most of its companies then. `points`: the kept runs, oldest first, this run last."""
+    pts = [p for p in points or [] if isinstance(p, dict) and isinstance(p.get("layers"), dict)]
+    if len(pts) < 2:
+        return []
+    was, now = pts[-2], pts[-1]
+    where = {c["symbol"]: (b["layer"], calc_of(c)) for b in blocks for c in b.get("companies") or []}
+    out = []
+    for layer, ins in now["layers"].items():
+        before = was["layers"].get(layer)
+        if before is None:
+            listed = {c["symbol"] for b in blocks if b["layer"] == layer for c in b.get("companies") or []}
+            best = max(was["layers"].items(), key=lambda kv: len(listed & set(kv[1])), default=(None, []))
+            before = best[1] if best[0] is not None and len(listed & set(best[1])) * 2 >= max(1, len(best[1])) else None
+        if not before:
+            continue
+        fell = len(before) - len(ins)
+        if fell <= 0 or not (fell > COHORT_SHARE * len(before) or fell >= COHORT_FALL):
+            continue
+        left = []
+        for s_ in sorted(set(before) - set(ins), key=lambda x: (was.get("names") or {}).get(x, x)):
+            at = where.get(s_)
+            why = ("no longer in the theme" if at is None else at[1]["why"] or "in the calculations" if at[0] == layer
+                   else f"moved to {at[0]}" + (f" ({at[1]['why']})" if not at[1]["in"] and at[1]["why"] else ""))
+            left.append({"symbol": s_, "name": (was.get("names") or {}).get(s_) or (now.get("names") or {}).get(s_) or s_, "why": why})
+        out.append({"layer": layer, "from": len(before), "to": len(ins), "on": was.get("d"), "left": left})
+    return out
+
+
 # ---------- the sources, and the whole dive ----------
 class Sources:
     """Where a dive reads its stored figures. Each is a callable, so a test passes its own:
@@ -1262,6 +1311,7 @@ class Sources:
     card(symbol, row) -> the management report card checked against the reported years ({met, missed}) or None;
     history(key, point) -> the theme's kept points after adding `point` (a day's median P/E and the like), oldest first;
     peer_history(key, point) -> the theme's kept peer medians after adding this run's `point`, oldest first, this run last (R35, peer_moved);
+    cohort_history(key, point) -> the theme's kept layer cohorts after adding this run's `point`, oldest first, this run last (q1, cohort_drops);
     segments(symbol) -> the business segments the company's documents report ([{name, share_pct}]) or None (is_diversified);
     corp_history(symbol) -> the company's stored corporate actions (every kind, each with "kind" and "ex_date"), never read from a source;
     metrics(symbol, family) -> the company's filed sector figures (sector_metrics: a stored piece, read now or queued) or None (R23);
@@ -1270,10 +1320,11 @@ class Sources:
     def __init__(self, today: date, facts, index_rows=lambda: [], shareholding=lambda s: None, insider_buys=lambda: {},
                  results=lambda a, b, s: [], actions=lambda a, b, s: [], red_flags=lambda s, a, b: [], card=lambda s, r: None,
                  history=lambda k, p: [p], segments=lambda s: None, corp_history=lambda s: [], metrics=lambda s, fam: None, about=lambda s: None,
-                 peer_history=lambda k, p: [p]):
+                 peer_history=lambda k, p: [p], cohort_history=lambda k, p: [p]):
         self.today, self.facts, self.index_rows, self.shareholding, self.insider_buys = today, facts, index_rows, shareholding, insider_buys
         self.results, self.actions, self.red_flags, self.card, self.history, self.segments = results, actions, red_flags, card, history, segments
         self.corp_history, self.metrics, self.about, self.peer_history = corp_history, metrics, about, peer_history
+        self.cohort_history = cohort_history
 
 
 _STOP = {"company", "companies", "limited", "india", "indian", "sector", "theme", "other", "others", "product", "products", "service", "services",
@@ -1435,7 +1486,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
 
     blocks, histories = [], {}
     # R32: a split by market value one of whose halves shows no company is undone (theme_base.unsplit_unshown)
-    from .theme_base import unsplit_unshown
+    from .theme_base import own_words, unsplit_unshown
     for v in unsplit_unshown(checked.get("value_chain") or [], {s for s, r in rows.items() if r.get("status") != "unverified"}):
         mine = [rows[c["ticker"]] for c in v.get("companies") or [] if c["ticker"] in rows]
         what = {c["ticker"]: c.get("what") for c in v.get("companies") or []}
@@ -1443,7 +1494,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         from .theme_check import model_family
         for r in mine:                     # R30: an EBITDA margin checked against how the company earns
             validate_model(r, model_family(model_fields(v, r["symbol"]).get("model") or "") or ((v.get("model") or {}).get("family") or ""))
-        b = layer_block(v.get("layer") or "", [{**r, "what": what.get(r["symbol"]), "company_wide": r["symbol"] in wide, "official_industry": ind.get(r["symbol"]) or "",
+        b = layer_block(v.get("layer") or "", [{**r, "what": own_words(what.get(r["symbol"]), r.get("name") or "") or None, "company_wide": r["symbol"] in wide, "official_industry": ind.get(r["symbol"]) or "",
                                                 **model_fields(v, r["symbol"])} for r in mine], wide)
         b["description"] = v.get("description") or ""
         b["policy"] = v.get("policy")
@@ -1470,7 +1521,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         for c in sub_members(s, checked.get("value_chain") or [], src.about):
             r = rows.get(c["ticker"])
             if r:
-                cos.append({"symbol": r["symbol"], "name": r["name"], "what": c.get("what"), "cap": r["cap"], "sales_1y": r["sales_1y"], "ebitda": r["ebitda"],
+                cos.append({"symbol": r["symbol"], "name": r["name"], "what": own_words(c.get("what"), r["name"] or "") or None, "cap": r["cap"], "sales_1y": r["sales_1y"], "ebitda": r["ebitda"],
                             "company_wide": r["symbol"] in wide, "year": r["year"], "bank": r.get("bank"), "net": r.get("net"), "roe": r.get("roe")})
         subs.append({"name": s.get("name") or "", "detail": s.get("detail") or "", "companies": cos})
     for r in rows.values():                 # a merger or demerger broke the company's series: no growth figure for it, none in the growth totals
@@ -1536,6 +1587,11 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     out["metrics_pending"] = sorted(pending)
     out["metrics_families"] = pending_fam           # R29: each one's family, so a kept dive can queue a read the worker dropped again
     out["checks"] = data_checks(listed, blocks, out)
+    try:                          # q1: a layer whose count in its calculations fell against the run before, with who left and why
+        out["checks"]["cohort"] = cohort_drops(src.cohort_history(slug(theme), cohort_point(blocks, src.today)), blocks)
+    except Exception as e:
+        print("theme data: layer cohorts not kept:", type(e).__name__, str(e)[:100])
+        out["checks"]["cohort"] = []
     out["notable"] = notable_items(blocks, chain, histories)
     return out
 
@@ -1545,7 +1601,13 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
 # Live", "Option Chain", put counts, Diwali picks)
 NOISE = re.compile(r"share price|stock price|price today|price live|\blive\b.*\bchart\b|option chain|\b(?:put|call) contracts?\b|open interest|"
                    r"stock picks?|stocks? to (?:buy|watch)|top (?:gainers|losers)|gainers (?:&|and) losers|technical (?:signals|view|outlook)|"
-                   r"\bquote(?:,| and)|price,? news|multibagger|target price|\bbuy or sell\b|share price target|\bmuhurat\b", re.I)
+                   r"\bquote(?:,| and)|price,? news|multibagger|target price|\bbuy or sell\b|share price target|\bmuhurat\b|"
+                   # LIVE6-018: quote and forecast pages ("PANW Stock Quote Price and Forecast | CNN") and evergreen click-bait ("If You Invested
+                   # $1000 In CrowdStrike...") are not headlines
+                   r"\bstock quotes?\b|\bquote price\b|\b(?:stock|price|share) (?:forecast|prediction)s?\b|\bprice and forecast\b|"
+                   r"\bif you(?:'d| had| would have)? invested\b|\bhow much (?:you'd|you would) have\b|\bwould be worth\b|"
+                   r"\bmake you (?:a )?(?:rich|millionaire)\b|\bmillionaire[- ]maker\b|\bshould you buy\b|\btime to buy\b|\b(?:is it|still) a buy\b|"
+                   r"\bstocks? (?:you|i)(?:'d| would)? (?:should )?(?:buy|own)\b|\bbest stocks?\b|\bno-brainer\b", re.I)
 HOME = {"IN": re.compile(r"\bindia|\bindian\b|\bnse\b|\bbse\b|\bsebi\b|\brbi\b|\bgst\b|₹|\brs\.? ?\d|\bcrore|\blakh", re.I),
         "US": re.compile(r"\bu\.?s\.?\b|\bamerica|\bunited states|\bsec\b|\bnyse\b|\bnasdaq\b|\bfed\b|\$", re.I)}
 
@@ -1553,10 +1615,13 @@ HOME = {"IN": re.compile(r"\bindia|\bindian\b|\bnse\b|\bbse\b|\bsebi\b|\brbi\b|\
 def headline_kept(item: dict, region: str) -> bool:
     """Whether a headline is about the business: not a quote page, a derivatives table, a list of picks or a price roundup; and a headline
     about the theme in general (no company of the theme in it) must be about the theme's own market (the owner, 7 Nov: Mexico's tax plan,
-    Schaeffler's job cuts in Europe in an India theme). An exchange filing is always kept."""
-    text = str(item.get("headline") or "")
+    Schaeffler's job cuts in Europe in an India theme). It needs a headline and a source (LIVE6-018). An exchange filing with a title is
+    always kept."""
+    text = str(item.get("headline") or "").strip()
     if item.get("kind") == "filing" or str(item.get("source") or "").lower() in ("exchange filing", "sec filing"):
-        return True
+        return bool(text)
+    if not text or not str(item.get("source") or "").strip():          # LIVE6-018: a headline with no source isn't listed as one
+        return False
     if NOISE.search(text):
         return False
     if not item.get("company") and region in HOME and not HOME[region].search(text):

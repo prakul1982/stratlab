@@ -108,7 +108,9 @@ test("LIVE5-006/007: Market Watch says the last close's day once its markets are
   assert.match(visitor, /\{userId && <PublicMarkets userId=\{userId\} \/>\}/);
   const launcher = readFileSync(new URL("../src/components/watch/Launcher.tsx", import.meta.url), "utf8");
   // a redirect ("/" to the person's home, a replace) is not another page: a panel open at load stays
-  assert.match(launcher, /if \(how !== "REPLACE" && shown && shapeOf\(layout, window\.innerWidth\) !== "dock"\) close\(\);/);
+  // (LIVE6-013 rewrote the line: a float is shut on another page, kept through a redirect, and showsOn keeps it off a page reached by its address)
+  assert.match(launcher, /if \(!layout\.open \|\| shapeOf\(layout, window\.innerWidth\) === "dock" \|\| !asked\.current\) return;/);
+  assert.match(launcher, /if \(how === "REPLACE"\) \{ if \(!layout\.at \|\| layout\.at === from\) patch\(\{\}\); \} else close\(\);/);
   const css = readFileSync(new URL("../src/components/watch/launcher.css", import.meta.url), "utf8");
   assert.match(css, /@media \(max-width: 900px\) \{\n  \.mw-launch\.app, \.mw-launch\.public \{ display: none; \}/);
 });
@@ -161,10 +163,11 @@ test("LIVE4 partials: Angel One has its row in the Brokers table; HDFC's guide s
   assert.equal(G.guideFor("hdfc").file.help, undefined);
 });
 
-test("LIVE5 partial: signed in, the analytics question is a band in the page's flow, not a bar fixed over the page's foot", () => {
+test("LIVE5 partial, then LIVE6-014: signed in, the analytics question never moves the app (behaviour changed on purpose: the band in the page's flow pushed the app down 75-95 px)", () => {
   const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
-  assert.match(css, /body:has\(\.shell\) \.consent \{ position: relative; left: auto; right: auto; bottom: auto; width: auto; margin: 12px 16px 0 calc\(248px \+ 16px\);/);
-  assert.match(css, /body:has\(\.shell\) \.shell \{ padding-bottom: 0; \}/);
+  assert.doesNotMatch(css, /body:has\(\.shell\) \.consent \{ position: relative;/);
+  assert.doesNotMatch(css, /body:has\(\.shell\) \.shell \{ padding-bottom: 0; \}/);
+  assert.match(css, /\.shell \{ padding-bottom: var\(--consent-h, 0px\); \}/);          // the page's end clears the bar
 });
 
 test("LIVE5-002 globally: a list table wider than its box on a desktop wraps its words (k-fit) instead of hiding columns past the edge", () => {

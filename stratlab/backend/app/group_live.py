@@ -57,7 +57,10 @@ class Member:
         # India: the member's session timetable (a stock with derivatives closes through the auction)
         self.kind = "cash" if sess.polled else session_kind(sess.mgr.kite, inst)
         self.builder = CandleBuilder(sess.tf, self.kind, self.official if self.kind in ("cas", "index") else None)
-        self.last_price = self.bars[-1]["c"]
+        # the price it was last marked at, as saved (a tick may have moved it inside the last candle), unless candles closed while the server
+        # was down: those are run and mark it again. The stored candles' last close is only the fallback, so equity doesn't jump at a restart
+        saved = (state or {}).get("last_price")
+        self.last_price = float(saved) if saved and not self.missed else self.bars[-1]["c"]
         self.next_poll = 0.0
         self.bid = self.ask = None
         self.quote_at = 0.0

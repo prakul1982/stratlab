@@ -58,7 +58,7 @@ test("DE-013: the theme page names no unlisted company and shows the exchange's 
   assert.doesNotMatch(s, /\(not listed\)/);
   // (THEMES, 4 Nov: the exchange's list for the theme's industries is the theme's base now, every company of it in the members card)
   assert.match(read("src/components/ThemeDive.tsx"), /the exchange's own industry classification puts in the theme's industries/);
-  assert.match(s, /<MembersCard r=\{r\} region=\{region\} \/>/);
+  assert.match(s, /<MembersCard r=\{r\} region=\{region\} dive=\{dive\} \/>/);          // LIVE6-006: with the dive's market values (updated on purpose)
   assert.match(s, /written by AI from general knowledge, with no figures/);       // the AI's text carries no figure; every figure on the page is from reported numbers
 });
 

@@ -21,7 +21,7 @@ from . import blog, db, email_kit as kit
 IST = ZoneInfo("Asia/Kolkata")
 STATE_KEY = "blog:research:state"
 MONTH_KEY = "blog:research:month"
-GEN = 5                             # the version of what the builders write; bump it with a change to a post's words or tables and every post is written again at the next check after the deploy (LIVE2-029)
+GEN = 6                             # 6: theme posts with no layers, a headline for a name or a same-day twin are hidden (LIVE6-003); the version of what the builders write; bump it with a change to a post's words or tables and every post is written again at the next check after the deploy (LIVE2-029)
 GEN_KEY = "blog:research:gen"       # {"gen", "ok", "tries", "at"} of the last run made for a version
 SIP_AMOUNT = 10000
 SIP_HORIZONS = (3, 5)
@@ -721,6 +721,60 @@ def theme_post_from(src: dict, now: datetime | None = None) -> dict:
             "published_at": blog.now_iso(now), "indexable": True, "published": False, "day": blog.now_iso(now)[:10], "src": src}
 
 
+# a news headline is not a theme (LIVE6-003: "Auto names among top movers" was made a theme post): the words of a market report, a
+# question or an exclamation, a figure with a percent, or more words than a theme's name has
+_HEADLINE = re.compile(r"\b(?:among|amid|after|top (?:movers|gainers|losers)|gainers|losers|surges?|surged|rall(?:y|ies|ied)|jumps?|jumped|"
+                       r"slumps?|slumped|plunges?|plunged|soars?|soared|tumbles?|tumbled|falls?|fell|rises?|rose|gains|gained|hits?|record high|"
+                       r"why|says?|said|today|yesterday|this week)\b|[?!%\"“”:]", re.I)
+THEME_WORDS = 6
+THEME_MIN_LAYERS = 2                 # layers with a margin a theme post needs: its chart and its sentences are about them
+
+
+def headline_like(name: str) -> bool:
+    n = str(name or "").strip()
+    return bool(n) and (len(n.split()) > THEME_WORDS or bool(_HEADLINE.search(n)))
+
+
+def theme_problem(src: dict) -> str | None:
+    """Why a theme post can't stand (LIVE6-003: two posts said "sorted into 0 layers" over an empty "Margin by layer" chart), or None:
+    fewer than THEME_MIN_LAYERS layers with a median EBITDA margin, or a headline for the theme's name."""
+    layers = [r for r in src.get("rows") or [] if not r.get("official") and r.get("ebitda") is not None]
+    if len(layers) < THEME_MIN_LAYERS:
+        return f"{len(layers)} {'layer' if len(layers) == 1 else 'layers'} with a margin"
+    if headline_like(src.get("theme") or "") or headline_like(src.get("sector") or ""):
+        return "its name is a headline, not a theme"
+    return None
+
+
+def _theme_twin(a: dict, b: dict) -> bool:
+    """Two theme posts' figures of one theme: the same market and the same sector, or most of the same companies (four in five)."""
+    if (a.get("region") or "IN") != (b.get("region") or "IN"):
+        return False
+    if str(a.get("sector") or "").strip().lower() and str(a.get("sector") or "").strip().lower() == str(b.get("sector") or "").strip().lower():
+        return True
+    ca = {c["symbol"] for r in a.get("rows") or [] for c in r.get("companies") or [] if c.get("symbol")}
+    cb = {c["symbol"] for r in b.get("rows") or [] for c in r.get("companies") or [] if c.get("symbol")}
+    return bool(ca and cb) and len(ca & cb) >= 0.8 * len(ca | cb)
+
+
+def same_day_twin(post: dict, rows: list[dict] | None = None) -> str | None:
+    """The slug of another theme post stored the same day for the same theme (one post per theme per day, LIVE6-003: a third automotive
+    post the same day), or None."""
+    day = str(post.get("day") or post.get("published_at") or "")[:10]
+    try:
+        rows = rows if rows is not None else blog.admin_rows(500)
+    except Exception:
+        return None
+    for r in rows:
+        slug = str(r.get("slug") or "")
+        if not slug.startswith(THEME_PREFIX) or slug == post.get("slug") or str(r.get("published_at") or "")[:10] != day:
+            continue
+        other = (blog.get(slug) or {}).get("body") or {}
+        if isinstance(other.get("src"), dict) and _theme_twin(post.get("src") or {}, other["src"]):
+            return slug
+    return None
+
+
 def theme_post(dive: dict, theme: str, region: str, now: datetime | None = None, notable_only: bool = True) -> dict | None:
     """A DRAFT research post from a theme's deep dive (intel/theme_data.build) when the data shows something worth saying: one layer's
     EBITDA margin far from the others', or a layer whose margin moved a lot over three years. None when it shows nothing notable. The post is
@@ -728,10 +782,13 @@ def theme_post(dive: dict, theme: str, region: str, now: datetime | None = None,
     say what the table says. `notable_only=False` (the owner's button, and a theme read with no post yet: R15) makes it from any theme
     whose chain has two layers with a margin."""
     notable = dive.get("notable") or []
-    rows = [r for r in (dive.get("chain") or {}).get("rows") or [] if r.get("ebitda") is not None]
-    if (notable_only and not notable) or len(rows) < 2:
+    if notable_only and not notable:
         return None
-    return theme_post_from(theme_source(dive, theme, region), now)
+    src = theme_source(dive, theme, region)
+    if theme_problem(src):
+        return None
+    post = theme_post_from(src, now)
+    return None if same_day_twin(post) else post
 
 
 def p1_plain(v, unit: str = "") -> str:
@@ -759,7 +816,9 @@ def rewrite_theme_posts(now: datetime | None = None) -> tuple[list[dict], list[s
     from the figures kept in its row, or, for a post written before they were kept, from its own table and sentences. Its address, its first
     date and whether it is published stay (blog.upsert_research)."""
     made, problems = [], []
-    for row in blog.admin_rows(500):
+    rows = blog.admin_rows(500)
+    kept: list[tuple[str, dict]] = []               # (day, figures) of the theme posts kept so far, oldest first
+    for row in sorted(rows, key=lambda r: str(r.get("published_at") or "")):
         slug = str(row.get("slug") or "")
         if row.get("kind") != "research" or not slug.startswith(THEME_PREFIX):
             continue
@@ -769,6 +828,17 @@ def rewrite_theme_posts(now: datetime | None = None) -> tuple[list[dict], list[s
             if not src:
                 problems.append(f"{slug}: its figures couldn't be read")
                 continue
+            # LIVE6-003: a post with no layers to chart, a headline for a name, or a later twin of a theme posted the same day is hidden
+            # (kept in the store, answering "not found"), never written again
+            day = str(row.get("published_at") or "")[:10]
+            why = theme_problem(src) or ("a second post on this theme the same day" if any(d == day and _theme_twin(src, o) for d, o in kept) else None)
+            if why:
+                if row.get("published"):
+                    blog.set_published(slug, False, now)
+                made.append({"post": "theme", "slug": slug, "result": "hidden"})
+                problems.append(f"{slug}: hidden, {why}")
+                continue
+            kept.append((day, src))
             post = theme_post_from(src, now)
             post["slug"] = slug                     # the address it has, whatever the theme's words now make
             bad = advice_words(post)

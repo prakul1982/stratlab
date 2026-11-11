@@ -9,7 +9,7 @@ from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from .. import daily_report, db, deals, holdings, official_close, rotation, scan, universes
-from ..data.calendar import is_trading_day
+from ..data.calendar import had_session, is_trading_day
 from ..intel.company import INDICES
 from ..intel.net import TTLCache
 
@@ -54,9 +54,11 @@ def closed(region: str, day: date, now: datetime | None = None) -> bool:
 
 
 def previous_trading_day(region: str, day: date) -> date:
+    """The session before `day`, a special one on a weekend or holiday included (LIVE6-011: 9 Nov's brief measured from
+    6 Nov, past the 8 Nov Muhurat session)."""
     d = day - timedelta(days=1)
     for _ in range(10):
-        if is_trading_day(region, d):
+        if had_session(region, d):
             return d
         d -= timedelta(days=1)
     return d
@@ -80,6 +82,7 @@ def index_close(sym: str, day: date, since: str | None = None, prev: str | None 
     carrying 21 Oct's; it was −0.54%)."""
     back = max(21, (date.today() - day).days + 14)        # far enough back to hold that day and the session before it
     candles = _safe(lambda: _main().research_hub.yahoo.chart(sym, "1d", back, ttl=300)["candles"], []) or []
+    candles = with_special_sessions(sym, candles, day)
     upto = [c for c in candles if c["t"][:10] <= day.isoformat()]
     if not upto or (not since and upto[-1]["t"][:10] != day.isoformat()):
         return None                                    # no candle for that day (yet); the week ends at its last close
@@ -87,6 +90,26 @@ def index_close(sym: str, day: date, since: str | None = None, prev: str | None 
     if not since and prev and before and before[-1]["t"][:10] != prev:
         before = []                                    # the session before is missing from the candles
     return {"price": round(upto[-1]["c"], 2), "change_pct": _pct(upto[-1]["c"], before[-1]["c"]) if before else None}
+
+
+def with_special_sessions(sym: str, candles: list[dict], day: date) -> list[dict]:
+    """An Indian index's daily candles with the special sessions (Diwali's Muhurat trading on a weekend) the other source
+    leaves out, taken from the broker's candles of the same index (LIVE6-011: no 8 Nov candle, so 9 Nov's change was
+    measured from 6 Nov). The candles as given when none is missing or the broker's can't be read."""
+    from ..data.calendar import special_days
+    from ..intel.company import KITE_INDEX
+    if sym not in KITE_INDEX:
+        return candles
+    have = {str(c["t"])[:10] for c in candles}
+    first = min(have) if have else day.isoformat()
+    want = {d for d in _safe(lambda: special_days("IN"), set()) or set() if first <= d <= day.isoformat() and d not in have}
+    if not want:
+        return candles
+    got = _safe(lambda: _main().research_hub.chart("IN", sym, "1y", "1d"), {}) or {}
+    if got.get("source") != "Kite":
+        return candles
+    extra = [c for c in got.get("candles") or [] if str(c["t"])[:10] in want]
+    return sorted([*candles, *extra], key=lambda c: str(c["t"])[:10]) if extra else candles
 
 
 def index_moves(region: str, day: date, weekly: bool) -> list[dict]:
@@ -450,7 +473,7 @@ def week_window(region: str, day: date) -> tuple[str, str]:
     (Monday to Friday for a Saturday's issue), so a headline from the weekend either side isn't taken for the week's (R29B-016)."""
     start = reference_day(region, day, True) + timedelta(days=1)
     for _ in range(7):
-        if is_trading_day(region, start):
+        if had_session(region, start):
             break
         start += timedelta(days=1)
     return start.isoformat(), previous_trading_day(region, day + timedelta(days=1)).isoformat()

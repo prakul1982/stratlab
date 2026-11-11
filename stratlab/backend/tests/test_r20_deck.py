@@ -384,7 +384,8 @@ def test_an_ai_layer_shows_each_companys_industry_as_a_column_not_as_layers():
     assert t["head"][1] == "Industry" and {r[1] for r in plain(t["rows"]) if not r[0].startswith(("Median", "Range"))} == {"Software", "Networking equipment", "IT services"}
     # changed on purpose (R28, the owner: "only important pages"): a one-company layer has no page of its own, it is a row of "Smaller layers"
     assert not any(s.title.startswith("Layer 5") for s in slides)
-    small = table_of(slides, "Smaller layers")
-    assert [r[0] for r in plain(small["rows"])] == ["Security services"] and "Security services" in [r[0] for r in table_of(slides, "The value chain by layer")["rows"]]
+    # LIVE6-008 (updated on purpose): one such layer has no "Smaller layers" page for its one row; it is a row of the value chain's table
+    assert not any(s.title.startswith("Smaller layers") for s in slides)
+    assert "Security services" in [r[0] for r in table_of(slides, "The value chain by layer")["rows"]]
     cloud = table_of(slides, "Layer 4 · Cloud security")
     assert all(r[cloud["head"].index("EBITDA margin")].startswith("−") for r in plain(cloud["rows"])[:3])          # all loss-makers, shown as they are

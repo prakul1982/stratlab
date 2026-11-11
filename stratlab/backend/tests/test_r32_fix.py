@@ -147,7 +147,7 @@ def test_a_split_half_with_no_shown_company_is_undone():
     assert "Residential developers" in lays and not any("(larger)" in x or "(smaller)" in x for x in lays)
     text = " ".join(str(x) for s in slides for b in s.blocks for x in (b.get("paras") or []) + [s.title or ""])
     assert "(smaller)" not in text and "(larger)" not in text
-    assert deck.THEME_DECK_VERSION == 46 and B.RULES == 35          # lane m1 bumped RULES (updated on purpose; lane n2: RULES 35)
+    assert deck.THEME_DECK_VERSION == 48 and B.RULES == 36          # q1: RULES 36 (updated on purpose); lane m1 bumped RULES (updated on purpose; lane n2: RULES 35)
 
 
 def test_a_company_with_no_model_takes_the_one_its_map_layers_name_states():
@@ -279,7 +279,7 @@ def test_the_peer_pe_line_names_its_price_date():
     """GPT review of R31.9: the retail peer median moved from 19.2x to 18.4x between runs a day apart; the line says which close."""
     from app.deck import pe_peer_line
     pp = {"theme": 18.8, "peers": 18.4, "premium": 2.2, "n": 37, "sets": {"sector": 37}, "as_of": "2026-11-09"}
-    assert "(prices at the 2026-11-09 close)" in pe_peer_line(pp)
+    assert "(prices at the 09 Nov 2026 close)" in pe_peer_line(pp)          # LIVE6-006: day-month (updated on purpose)
     assert "prices at" not in pe_peer_line({k: v for k, v in pp.items() if k != "as_of"})
 
 

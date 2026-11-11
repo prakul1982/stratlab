@@ -64,6 +64,16 @@ def get(slug: str) -> dict | None:
     return rows[0] if rows else None
 
 
+# a theme post that sorted its companies into no layer (or one) says so in its summary: one written before the guard that keeps such
+# posts out (blog_research.theme_problem) is left out of every list until the next run hides it (LIVE6-003)
+_EMPTY_THEME = re.compile(r"sorted into [01] layers?\b")
+
+
+def shown(row: dict) -> bool:
+    """Whether a stored, published row may be listed: not a theme post with no layers to chart."""
+    return not (str(row.get("slug") or "").startswith("theme-") and _EMPTY_THEME.search(str(row.get("summary") or "")))
+
+
 def listing(kind: str | None = None, market: str | None = None, page: int = 1) -> tuple[list[dict], int]:
     """(one page of posts without their bodies, newest first; how many posts in all) of the posts a visitor may see: published
     and indexable. The read is as long as the page number asks for, at most MAX_PAGE pages."""
@@ -74,7 +84,9 @@ def listing(kind: str | None = None, market: str | None = None, page: int = 1) -
     if market:
         q = q.eq("market", market)
     got = q.order("published_at", desc=True).limit(page * PER_PAGE).execute()
-    return (got.data or [])[(page - 1) * PER_PAGE:page * PER_PAGE], got.count or 0
+    rows = got.data or []
+    keep = [r for r in rows if shown(r)]
+    return keep[(page - 1) * PER_PAGE:page * PER_PAGE], max(0, (got.count or 0) - (len(rows) - len(keep)))
 
 
 def neighbours(post: dict) -> tuple[dict | None, dict | None]:
@@ -92,13 +104,13 @@ def neighbours(post: dict) -> tuple[dict | None, dict | None]:
 def feed_rows() -> list[dict]:
     got = (_t().select("slug,kind,market,title,summary,published_at,updated_at").eq("published", True).eq("indexable", True)
            .order("published_at", desc=True).limit(FEED_ITEMS).execute().data)
-    return got or []
+    return [r for r in got or [] if shown(r)]
 
 
 def sitemap_rows() -> list[dict]:
-    got = (_t().select("slug,kind,updated_at").eq("published", True).eq("indexable", True).order("published_at", desc=True)
+    got = (_t().select("slug,kind,summary,updated_at").eq("published", True).eq("indexable", True).order("published_at", desc=True)
            .limit(SITEMAP_ROWS).execute().data)
-    return got or []
+    return [r for r in got or [] if shown(r)]
 
 
 def sitemap_urls(site: str) -> list[tuple[str, str | None]]:

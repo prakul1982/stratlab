@@ -881,7 +881,10 @@ def yahoo_symbol(row: dict) -> str | None:
         # an NSE SME stock is quoted as SYMBOL-SM.NS (RAVITA-SM.NS; RAVITA.NS is not found), so SME issues had no trading since listing (R17)
         return f"{row['symbol']}-SM.NS" if row.get("segment") == "sme" else f"{row['symbol']}.NS"
     # a BSE-only issue: the scrip code it trades under once listed (the issue list's code is the offer's own number, not the stock's)
-    code = row.get("bse_scrip") or row.get("bse_code")
+    code = row.get("bse_scrip")
+    if not code and row.get("listed_as"):
+        return f"{row['listed_as']}.BO"          # its trading symbol on BSE, from the broker's list (confirm_listings)
+    code = code or row.get("bse_code")
     return f"{code}.BO" if code else None
 
 
@@ -955,11 +958,19 @@ def performance(row: dict, yahoo, today: date | None = None, now: datetime | Non
     except Exception:
         bars = []
     first = next((b for b in bars if b["t"][:10] >= listed), None)
+    opening = first
     bars, first = _settle(row, bars, first, now or _now())
     bse = row.get("bse_perf") or {}
     issue = issue or bse.get("issue_price")
     if not issue:
         return None
+    if first is None and opening is not None and opening["t"][:10] == listed and opening.get("o"):
+        # its listing day, the session still going on (LIVE6-010: Antala Industries traded from 11 Nov's open while the list kept it in a
+        # fold of issues with no prices): the listing price is a fact from the open; the day's close and the latest wait for the close
+        if not bars or bars[-1]["t"][:10] < opening["t"][:10]:
+            return {"issue_price": issue, "listing_price": opening["o"], "listing_change_pct": round((opening["o"] / issue - 1) * 100, 2),
+                    "day_close": None, "day_change_pct": None, "latest": None, "latest_date": None, "change_pct": None,
+                    "listed": opening["t"][:10], "basis": "prices"}
     if not first or (date.fromisoformat(first["t"][:10]) - date.fromisoformat(listed)).days > 5:
         # the prices couldn't be read: BSE's own table of its listed issues, when it has this one
         if bse.get("day_close") and bse.get("latest"):

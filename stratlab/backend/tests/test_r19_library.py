@@ -285,3 +285,15 @@ def test_a_theme_map_and_its_check_survive_a_deploy(lib):
     assert m["generated_at"] == first["generated_at"]
     c = theme_routes.checked(r, theme, m)
     assert c["placements"]["checked"] and len(lib.calls) == calls
+
+
+def test_live6_012_the_search_box_list_is_one_shared_library_with_no_ones_reading_in_it(lib):
+    """LIVE6-012: free-1 and basic-1 were shown "Already read: Cybersecurity" that pro-1 had opened. The list is the shared library, by
+    design (kept once for everyone): every account gets the same items, and nothing in them is a person's (no user, no per-person read
+    date); the page heads it "Ready to open" (unit/live6-ui.test.mjs), never "Already read"."""
+    _sector(lib, "AI data centers")                                           # read by the signed-in Free user
+    mine = theme_library_suggest(lib, "data")
+    main.app.dependency_overrides[main.current_profile] = lambda: U2          # someone who never opened it
+    theirs = theme_library_suggest(lib, "data")
+    assert mine and theirs == mine
+    assert set(theirs[0]) == {"name", "q", "region", "at", "members", "searched"}

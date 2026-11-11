@@ -21,7 +21,7 @@ from tests.test_r18_deck import NOW, deck_of
 from tests.test_r20_deck import test_every_rule_holds_on_every_synthetic_theme as every_rule
 from tests.test_r29_cover import card_lines
 
-PRICED = "(prices at the 2026-10-06 close)"
+PRICED = "(prices at the 06 Oct 2026 close)"          # LIVE6-006: dates written day-month (updated on purpose)
 
 
 def chemicals(day="2026-10-06"):
@@ -53,7 +53,7 @@ def test_a_dive_kept_from_before_takes_the_decks_own_day_before_any_slide_is_wri
     v["sections"]["valuation"]["peers"]["pe"].pop("as_of")                      # as a dive stored before R35 holds it
     slides = deck.theme_plan(v, now=NOW)[0]
     said = [x for x in [s.subtitle or "" for s in slides] + card_lines(slides) if "their peers' median of" in x]
-    assert len(said) >= 3 and all(f"(prices at the {v['as_of']} close)" in x for x in said), said
+    assert len(said) >= 3 and all(f"(prices at the {deck._day(v['as_of'])} close)" in x for x in said), said          # LIVE6-006: day-month (updated on purpose)
     # every reader of the peers goes through the one function that dates them
     src = open(deck.__file__).read()
     assert src.count("pe_peer_line(") - 1 == 3 and src.count("peers = dated_peers(v)") == 4
@@ -216,7 +216,7 @@ def test_a_peer_median_more_than_five_percent_from_the_run_before_is_said_with_b
                   "n_from": None, "n_to": 11}
     note = next(ln for ln in card_lines([s for s in slides if s.title == "Valuation"]) if ln.startswith("Their peers' median P/E was"))
     w = deck.whole_figures
-    assert note == w(f"Their peers' median P/E was {was:.1f}x at the 2026-10-01 close and is {now:.1f}x at the 2026-10-06 close: "
+    assert note == w(f"Their peers' median P/E was {was:.1f}x at the 01 Oct 2026 close and is {now:.1f}x at the 06 Oct 2026 close: "
                      "prices moved between the two closes.")
     assert slides[0].gate["passed"] == slides[0].gate["of"], slides[0].gate
     every_rule("chemicals, peer median moved", v, slides)
@@ -225,7 +225,7 @@ def test_a_peer_median_more_than_five_percent_from_the_run_before_is_said_with_b
     assert "moved" not in v2["sections"]["valuation"]["peers"]["pe"] and "Their peers' median P/E was" not in " ".join(card_lines(slides2))
     same = deck.peer_moved_line({"moved": D.peer_moved([{"d": "2026-10-06", "peers": 19.2, "k": 212, "n": 37},
                                                         {"d": "2026-10-06", "peers": 18.0, "k": 208, "n": 35}])})
-    assert w(same) == ("Their peers' median P/E was 19.2x at an earlier run on the 2026-10-06 close and is 18x now: the peers or their reported "
+    assert w(same) == ("Their peers' median P/E was 19.2x at an earlier run on the 06 Oct 2026 close and is 18x now: the peers or their reported "
                        "figures changed; 37 of the theme's companies compared then, 35 now; 212 peers behind it then, 208 now.")
     assert D.peer_moved([{"d": "2026-10-06", "peers": 18.0}]) is None and D.peer_moved([]) is None and deck.peer_moved_line({}) == ""
     for word in ("cheap", "expensive", "fell", "rose", "worse", "better"):
@@ -246,7 +246,7 @@ def test_the_kept_peer_medians_are_one_a_run_that_differs_and_never_more_than_a_
     assert list(store) == ["theme:peers:IN:speciality-chemicals"] and len(json.loads(store["theme:peers:IN:speciality-chemicals"])) == D.PEER_RUNS
     assert len(store["theme:peers:IN:speciality-chemicals"]) < 600                          # bounded storage
     assert T.sources("US", "Speciality chemicals").peer_history("x", {"d": "2026-10-01", "peers": 30.0, "k": 9}) == [{"d": "2026-10-01", "peers": 30.0, "k": 9}]
-    assert D.DIVE_TEXT == 8          # lane m1 bumped it (updated on purpose)
+    assert D.DIVE_TEXT == 9          # lane m1 bumped it; LIVE6-007 too (updated on purpose)
 
 
 # ---------- 4. a median row's figure with its count is never cut ----------
@@ -363,4 +363,4 @@ def test_layer_names_take_the_room_the_figure_columns_dont_use_and_one_still_cut
     assert key.startswith("Layer names in full: ") and key.endswith(" = Digital engineering and consulting projects for governments.")
     assert "Other IT service companies" not in key
     assert deck.short_names(head, rows[:1], widths, 1) == "" and deck.short_names(head, rows, widths, None) == ""
-    assert deck.THEME_DECK_VERSION == 46
+    assert deck.THEME_DECK_VERSION == 48
