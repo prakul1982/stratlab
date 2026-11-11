@@ -37,7 +37,7 @@ FEW_BASE = 4                  # a highest or lowest median on this many companie
 COMPARE_MIN = MIN_BASE
 # R31 (the owner's review of the live R30 decks): a layer-vs-layer headline (the value chain's line, findings, questions) needs at least this
 # many companies with the figure in each layer it compares; tables still show every layer and mark (green, red) those of COMPARE_MIN or more
-DIVE_TEXT = 5          # part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
+DIVE_TEXT = 6          # part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
 HEADLINE_MIN = 5
 # R27 (headline eligibility): a comparison is said as a headline only on a figure for at least this share of the companies of each group it
 # compares (a layer, a family); one with less is shown as data, never ranked (the live R26 Semis deck: "RPO growth -3.9%" of 21 of 53)
@@ -1072,14 +1072,15 @@ class Sources:
     history(key, point) -> the theme's kept points after adding `point` (a day's median P/E and the like), oldest first;
     segments(symbol) -> the business segments the company's documents report ([{name, share_pct}]) or None (is_diversified);
     corp_history(symbol) -> the company's stored corporate actions (every kind, each with "kind" and "ex_date"), never read from a source;
-    metrics(symbol, family) -> the company's filed sector figures (sector_metrics: a stored piece, read now or queued) or None (R23)."""
+    metrics(symbol, family) -> the company's filed sector figures (sector_metrics: a stored piece, read now or queued) or None (R23);
+    about(symbol) -> the company's whole stored description or None, never read from a source (R35: sub_members)."""
 
     def __init__(self, today: date, facts, index_rows=lambda: [], shareholding=lambda s: None, insider_buys=lambda: {},
                  results=lambda a, b, s: [], actions=lambda a, b, s: [], red_flags=lambda s, a, b: [], card=lambda s, r: None,
-                 history=lambda k, p: [p], segments=lambda s: None, corp_history=lambda s: [], metrics=lambda s, fam: None):
+                 history=lambda k, p: [p], segments=lambda s: None, corp_history=lambda s: [], metrics=lambda s, fam: None, about=lambda s: None):
         self.today, self.facts, self.index_rows, self.shareholding, self.insider_buys = today, facts, index_rows, shareholding, insider_buys
         self.results, self.actions, self.red_flags, self.card, self.history, self.segments = results, actions, red_flags, card, history, segments
-        self.corp_history, self.metrics = corp_history, metrics
+        self.corp_history, self.metrics, self.about = corp_history, metrics, about
 
 
 _STOP = {"company", "companies", "limited", "india", "indian", "sector", "theme", "other", "others", "product", "products", "service", "services",
@@ -1273,7 +1274,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     subs = []
     for s in checked.get("sub_themes") or []:
         cos = []
-        for c in sub_members(s, checked.get("value_chain") or []):
+        for c in sub_members(s, checked.get("value_chain") or [], src.about):
             r = rows.get(c["ticker"])
             if r:
                 cos.append({"symbol": r["symbol"], "name": r["name"], "what": c.get("what"), "cap": r["cap"], "sales_1y": r["sales_1y"], "ebitda": r["ebitda"],
@@ -1577,24 +1578,63 @@ def claim_mismatches(text: str, shown: dict, floor: int = COMPARE_MIN) -> list[s
     return bad
 
 SUB_GENERIC = {"and", "of", "the", "for", "in", "with", "operators", "operator", "companies", "company", "makers", "maker", "providers", "provider",
-               "services", "service", "network", "networks", "players", "firms", "suppliers", "supplier", "other", "related", "solutions"}
+               "services", "service", "network", "networks", "players", "firms", "suppliers", "supplier", "other", "related", "solutions",
+               "carriers", "carrier"}
+# R35 (GPT review of R31.9: Jio left out of "Mobile network operators"; its line says "networks, devices, applications"): a sub-theme's own
+# word, said another way in a company's description. word -> (words that name the same business, a wider phrase that counts only when
+# the description names no narrower business, those narrower businesses). Used only for the map layer that holds most of the sub-theme's
+# own companies, so a handset distributor or a messaging platform elsewhere on the map never joins by "mobile".
+_MOBILE = (r"mobile|mobility|wireless|cellular|\bgsm\b|pre-?paid|post-?paid|\b[2-5]g\b|\blte\b",
+           r"telecom(?:munications?)?\s+(?:services?|operators?|service\s+providers?|compan(?:y|ies))|providers?\s+of\s+telecom(?:munications?)?\s+services",
+           r"broadband|fixed[- ]?line|landline|wire-?line|\bwired\b|internet\s+service|leased\s+lines?|fib(?:re|er)|cable|towers?|equipment|"
+           r"enterprise|satellite|handsets?")
+SUB_ALSO = {"mobile": _MOBILE, "wireless": _MOBILE, "cellular": _MOBILE}
+# a sentence that says the business ended names it no longer ("discontinued its GSM mobile services in 2017")
+_ENDED = re.compile(r"discontinu|ceased|exited|shut\s+down|surrender|divest|sold\s+its|transferred\s+its|no\s+longer", re.I)
 
 
-def sub_members(sub: dict, layers: list) -> list:
+def _names_word(word: str, text: str, wide: bool) -> bool:
+    """Whether a company's description names a sub-theme's word: the word itself, or (`wide`: the company sits in the sub-theme's main
+    layer) another way of saying it (SUB_ALSO), in a sentence that doesn't say the business ended."""
+    live = " ".join(x for x in re.split(r"(?<=[.;])\s+", text) if not _ENDED.search(x))
+    if re.search(rf"\b{word}", live):
+        return True
+    if not wide or word not in SUB_ALSO:
+        return False
+    same, wider, narrower = SUB_ALSO[word]
+    return bool(re.search(same, live)) or bool(re.search(wider, live) and not re.search(narrower, live))
+
+
+def sub_members(sub: dict, layers: list, about_of=None) -> list:
     """A sub-theme's companies, completed from the map (R34, GPT review of R31.5: Bharti Airtel left out of "Mobile network operators" while
     in the "Mobile and broadband operators" layer): a company of a map layer that holds one of the sub-theme's own companies joins it when its
-    own description names every word that sets the sub-theme apart (at most two: "mobile"); a name of more such words is left as the map has it."""
+    own description names every word that sets the sub-theme apart (at most two: "mobile"); a name of more such words is left as the map has it.
+    R35: the description is the company's line and, where kept, its whole stored description (`about_of(symbol)`, never read from a source
+    here); in the layer that holds most of the sub-theme's own companies a word also counts when said another way (SUB_ALSO: wireless,
+    cellular, "telecommunication services" with no narrower business named), so a broadband-only company stays out."""
     own = list(sub.get("companies") or [])
     have = {c.get("ticker") for c in own}
     words = [w for w in re.findall(r"[a-z]+", str(sub.get("name") or "").lower()) if w not in SUB_GENERIC and len(w) > 2]
     if not have or not 1 <= len(words) <= 2:
         return own
-    for v in layers:
-        if v.get("official") or not have & {c.get("ticker") for c in v.get("companies") or []}:
+    first = set(have)
+    shared = [(len(first & {c.get("ticker") for c in v.get("companies") or []}), v) for v in layers if not v.get("official")]
+    most = max((n for n, _ in shared), default=0)
+    main = next((v for n, v in shared if n and n == most), None)
+    for n, v in shared:
+        if not n:
             continue
         for c in v.get("companies") or []:
-            what = str(c.get("what") or "").lower()
-            if c.get("ticker") not in have and what and all(re.search(rf"\b{w}", what) for w in words):
+            if c.get("ticker") in have:
+                continue
+            more = ""
+            if about_of is not None:
+                try:
+                    more = str(about_of(c.get("ticker")) or "")
+                except Exception:
+                    more = ""
+            what = f"{c.get('what') or ''}. {more}".lower()
+            if what.strip(" .") and all(_names_word(w, what, v is main) for w in words):
                 own.append(c)
                 have.add(c.get("ticker"))
     return own

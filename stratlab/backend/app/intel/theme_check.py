@@ -422,6 +422,8 @@ def model_confidence(model, evidence, said="") -> str:
         level = said
     if level == "low" and model == "fabless" and chip_designer(evidence):
         level = "medium"           # R32: a semiconductor industry and the company's design words are enough (the live R31 deck left 29 of 37 out)
+    if level == "low" and model == "components" and chip_materials(own):
+        level = "medium"           # R35: its own words name the materials it supplies for chips: the rule that made it an ingredient maker shows it
     return level
 
 
@@ -575,7 +577,7 @@ def refine_model(model, evidence) -> str:
     # chips, GPUs or SoCs and owns no fabs is fabless, whether the AI called it a maker or left it unknown; own fabs make it an IDM (a maker)
     # R34 (GPT review of R31.5: a semiconductor materials supplier shown among equipment makers): a company whose own words say it supplies
     # materials, chemicals, gases or substrates for chips or electronics, and not machines, is an ingredient maker (components)
-    if model in ("manufacturing", "unknown", "") and re.search(CHIP_MATERIALS, own, re.I) and not re.search(r"\bequipment|machines|tools\b", own, re.I):
+    if model in ("manufacturing", "unknown", "") and chip_materials(own):
         return "components"
     if model in ("manufacturing", "fabless", "unknown", "") and re.search(SEMI_INDUSTRY, text, re.I):
         fab, out = re.search(FAB_OWN, own, re.I), re.search(OUTSOURCED, own, re.I)
@@ -591,6 +593,19 @@ def refine_model(model, evidence) -> str:
 
 CHIP_MATERIALS = (r"(?:semiconductor|electronic|electronics|chip|wafer)s?\b[^.]{0,40}\b(?:materials|chemicals|gases|substrates|slurr\w+|photoresists?)|"
                   r"(?:materials|chemicals|gases|substrates)\b[^.]{0,30}\b(?:for|used in)\b[^.]{0,20}\b(?:semiconductors?|chips?|electronics|wafers?)")
+# equipment as the company's own product; "original equipment manufacturers" and equipment makers named as its customers are not (R35: annual
+# reports name them)
+_OWN_EQUIPMENT = (r"\bequipment(?! (?:manufacturers?|makers?|suppliers?|vendors?|companies|customers|oems?)\b)|\bmachines\b|"
+                  r"\btools\b(?! (?:manufacturers?|makers?|suppliers?|vendors?|companies|customers)\b)")
+
+
+def chip_materials(own) -> bool:
+    """Whether a company's own words say it supplies materials, chemicals, gases or substrates for chips or electronics, and no machines of
+    its own (R34; R35: one rule for its model and for how surely its evidence shows it)."""
+    own = re.sub(r"(?i)\boriginal equipment\b", " ", str(own or ""))
+    return bool(re.search(CHIP_MATERIALS, own, re.I)) and not re.search(_OWN_EQUIPMENT, own, re.I)
+
+
 REFINE_HINTS = {"regulated_utility": r"transmission|distribution|electric utilit", "power_generation": r"power generation|electric services",
                 "power_trading": r"power trading|renewable", "commodity_mining": r"\bcoal\b|minerals|mining|pig iron|sponge iron|ferro ?alloys|"
                 r"diversified metals|precious metals", "metal_processing": r"products|pipes|tubes|castings|forgings|wires|fabricat",

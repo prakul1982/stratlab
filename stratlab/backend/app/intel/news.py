@@ -224,6 +224,32 @@ def is_about(name: str, title: str) -> bool:
     return all(w in have for w in want)
 
 
+# words a text about a company has: what it is (a company, a maker, a bank) or does (provides, makes, sells)
+_COMPANY_TEXT = re.compile(
+    r"\b(?:compan(?:y|ies)|corporation|conglomerate|manufactur\w+|makers?|makes|suppl(?:y|ies|iers?)|provide[sr]?|providers|produc(?:es|ers?)|"
+    r"develop(?:s|ers?)|design(?:s|ers?)|operat(?:es|ors?)|sells|offers|banks?|insurers?|firm|business|enterprise|subsidiary|retailers?|"
+    r"distribut(?:es|ors?)|utility|airline|brand|trust|fund|exchange|foundry|lender|broker|start-?up|multinational|headquartered|founded|"
+    r"incorporated|listed|holding|venture|engaged)\b", re.I)
+
+
+def company_text(text) -> bool:
+    """Whether a text speaks of a company at all (what it is or does), not of a myth, a place or a word."""
+    return bool(_COMPANY_TEXT.search(str(text or "")))
+
+
+def fits_company(name: str, article: dict | None) -> bool:
+    """Whether an encyclopedia article found for the company `name` is its own, for a use that places the company by the article's words
+    (themes; live: Ichor Holdings held the Greek myth's "Ichor", TOYO Co the tyre maker's "Toyo Tires"): its title has no distinctive word
+    the company's name lacks, and its text speaks of a company."""
+    if not article or not article.get("extract"):
+        return False
+    have = set(_words(name))
+    title = re.sub(r"\([^)]*\)", " ", str(article.get("title") or ""))
+    if any(w not in _GENERIC and w not in have for w in _words(title)):
+        return False
+    return company_text(f"{article.get('description') or ''} {article['extract']}")
+
+
 def mentions(name: str, symbol: str, headline: str) -> bool:
     """Whether a headline is about the company: its full name, its symbol as a word ("TCS shares..."), or the name's
     first word where that word is its own ("Infosys", "Reliance"), never a group's shared name alone ("Tata")."""

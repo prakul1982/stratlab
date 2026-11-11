@@ -1131,6 +1131,7 @@ class SEC(Source):
                          headers={"User-Agent": UA, "Accept": "application/json"})
         self._built = SizedDict(max_items=300, max_bytes=64 * 1024 * 1024)   # built companies, bounded in memory
         self._build_lock = threading.Lock()
+        self._business_lock = threading.Lock()                               # one annual report's front read at a time (business)
 
     def _json(self, url: str) -> dict:
         """One uncached call: company facts run to megabytes, so the result is cached once built, not raw."""
@@ -1268,6 +1269,35 @@ class SEC(Source):
         out = "\n\n".join(f"[{k.upper()}]\n{v}" for k, v in parts if len(v) > 500)
         return out or full[:120000]
 
+
+    def business(self, subs: dict) -> dict | None:
+        """{"text", "form", "filed", "url"}: what the company says it does at the start of the business part of its latest annual report
+        (business_opening), or None when it has filed none or the part isn't found. Only the front of the report is read (BUSINESS_BYTES),
+        one report at a time, and the few lines are kept for a month, never the report."""
+        f = latest_filing(subs, BUSINESS_FORMS)
+        if not f or not f["doc"]:
+            return None
+        url = f"https://www.sec.gov/Archives/edgar/data/{int(subs.get('cik') or 0)}/{f['accn'].replace('-', '')}/{f['doc']}"
+        hit = self.cache.get(("business", url))
+        if hit is not None:
+            return hit or None
+        with self._business_lock:
+            if not self.limit.take():
+                raise SourceError(self.name, f"{self.name} is busy (our rate limit). Try again in a minute.", busy=True)
+            try:
+                with self.http.stream("GET", url) as r:
+                    self.check(r)
+                    buf = bytearray()
+                    for chunk in r.iter_bytes():
+                        buf += chunk
+                        if len(buf) >= BUSINESS_BYTES:
+                            break
+            except httpx.HTTPError as e:
+                raise SourceError(self.name, f"Couldn't reach {self.name.replace('The ', 'the ', 1)} ({e.__class__.__name__}).", busy=True) from None
+            text = business_opening(report_lines(bytes(buf).decode("utf-8", "replace")))
+        out = {"text": text, "form": f["form"], "filed": f["filed"], "url": url} if text else {}
+        self.cache.set(("business", url), out, 30 * 86400)
+        return out or None
 
     def release_doc(self, d: dict) -> tuple[str, str]:
         """(link, text) of an earnings 8-K's press release: the exhibit 99 file in the filing's folder (the 8-K itself
@@ -1875,6 +1905,80 @@ def section(text: str, start: str, end: str, cap: int = 60000) -> str:
         if len(chunk) > len(best):
             best = chunk
     return best[:cap]
+
+
+# ---------- what a company says it does, from its annual report (themes: a profile or encyclopedia line too thin to show the business) ----------
+BUSINESS_BYTES = 6 * 1024 * 1024       # of an annual report read for the start of its business part: the part sits near the front
+BUSINESS_FORMS = ("10-K", "10-KT", "20-F", "40-F")
+BUSINESS_PARTS = (     # (the part's heading at the start of a line, where it ends): a 10-K's Item 1 (SECTIONS), a 20-F's Item 4.B
+    (r"(?:^|\n)\s*" + SECTIONS["business"][0], SECTIONS["business"][1]),
+    (r"(?:^|\n)\s*(?:item\s*4\.?\s*)?b\.?\s*business\s+overview\b", r"\n\s*(?:item\s*4\.?\s*)?c\.?\s*organi[sz]ational\s+structure"),
+)
+_BLOCK_END = re.compile(r"(?i)</(?:p|div|tr|td|th|li|h[1-6]|table|ul|ol)\s*>|<br\s*/?>")
+# a line about the report itself, not the business
+_REPORT_TALK = re.compile(r"forward[- ]looking|unless the context|unless otherwise (?:indicated|noted|stated)|references? (?:in this|to)\b|\brefers? to\b|"
+                          r"\bannual report\b|\bform (?:10-k|20-f|40-f)\b|table of contents|trademarks?|incorporated (?:herein )?by reference|"
+                          r"\bsee (?:note|item|part)\b|safe harbor|website|"
+                          r"\b(?:was|were) (?:originally |first )?(?:incorporated|formed|founded|organi[sz]ed|established)\b|\bincorporated (?:in|as|under)\b|"
+                          r"initial public offering|fiscal year|5[23]-week", re.I)
+# a sentence that says what the company is or does: the opening starts at the first one (a report can open with cautions and definitions)
+_SAYS_WORK = re.compile(
+    r"\bwe are (?:a|an|the|one of|primarily|principally|engaged)\b|"
+    r"(?:\b(?:company|corporation|group)|\)) (?:is|are) (?:a|an|the|one of|primarily|principally|engaged)\b|"
+    r"^(?!(?:The|This|Our|These|It|Its|Such|Each|That)\b)[A-Z][\w&.,’' -]{1,60}? (?:is|are) (?:a|an|one of|the)\b|"
+    r"\bwe (?:\w+ly )?(?:design|develop|manufactur|produce|provide|offer|sell|operate|supply|make|deliver|own|serve)|"
+    r"(?:\b(?:company|corporation)|\)),? (?:designs|develops|manufactures|produces|provides|offers|sells|operates|supplies|makes|delivers)\b")
+# a sentence ends at a full stop before a capital, never at a legal form or an initial ("Qnity Electronics, Inc. is ...", "the U.S. market")
+_SENTENCE_END = re.compile(r"(?<![A-Z]\.)(?<!\bInc\.)(?<!\bINC\.)(?<!\bCorp\.)(?<!\bLtd\.)(?<!\bCo\.)(?<!\bNo\.)(?<=[.!?])\s+(?=[A-Z“\"(])")
+
+
+def report_lines(raw: str) -> str:
+    """An annual report's HTML as plain words, one line a paragraph or table cell, quickly and without building a tree (filing_text keeps
+    no lines; html_text builds the whole tree): the inline XBRL header, scripts and styles left out."""
+    import html as _html
+    raw = re.sub(r"(?is)<ix:header>.*?</ix:header>", " ", raw)
+    raw = re.sub(r"(?is)<(script|style)\b.*?</\1>", " ", raw)
+    raw = _BLOCK_END.sub("\n", re.sub(r"\s+", " ", raw))
+    lines = (re.sub(r"[ \t\xa0]+", " ", x).strip() for x in _html.unescape(re.sub(r"<[^>]+>", "", raw)).split("\n"))
+    return "\n".join(x for x in lines if x)
+
+
+def business_opening(text: str, limit: int = 700) -> str:
+    """What a company says it does at the start of its annual report's business part (a 10-K's "Item 1. Business", a 20-F's "Business
+    overview"), from the report as lines (report_lines): the first paragraphs of prose after the heading, in the company's own words.
+    Sub-headings ("Overview", "General"), sentences about the report itself (forward-looking statements, defined terms) and about when
+    the company was formed are left out, and the opening starts at the first sentence that says what the company is or does; whole
+    sentences only, `limit` characters at most. "" when the part isn't found (the contents page names it too: the part is the first
+    heading followed by prose)."""
+    body = ""
+    for start, end in BUSINESS_PARTS:
+        for m in re.finditer(start, text, re.I):
+            rest = text[m.end(): m.end() + 20000]
+            e = re.search(end, rest, re.I)
+            rest = rest[: e.start()] if e else rest
+            if len(rest) > 1500:
+                body = rest
+                break
+        if body:
+            break
+    picks = []
+    for line in body.split("\n"):
+        if len(line.split()) < 12:               # a sub-heading, a page number, a table cell
+            continue
+        for x in _SENTENCE_END.split(line):
+            x = x.strip()
+            if len(x.split()) >= 6 and x.endswith((".", "!", "?")) and not _REPORT_TALK.search(x):
+                picks.append(x)
+        if sum(len(x) for x in picks) > 4 * limit:
+            break
+    first = next((i for i, x in enumerate(picks) if _SAYS_WORK.search(x)), 0)
+    out, size = [], 0
+    for x in picks[first:]:
+        if size + len(x) + 1 > limit:
+            break
+        out.append(x)
+        size += len(x) + 1
+    return " ".join(out)
 
 
 # ---------- a filing's own XBRL (the data the SEC's company facts are built from) ----------

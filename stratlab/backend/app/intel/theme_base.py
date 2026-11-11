@@ -1226,7 +1226,10 @@ def to_describe(m: dict, n: int = DESCRIBE_MAX) -> list[str]:
     return [s for _, s in rows[:n]]
 
 
-_FIRST = re.compile(r"^(.{20,240}?[.;])(?:\s|$)")
+# R35: a full stop after a legal form or an initial ends no sentence (live: "Qnity Electronics, Inc. is a major provider of materials..." was
+# shown as "Qnity Electronics, Inc", and so were Marvell, Skyworks and four more; "the U.S. market")
+_NOT_END = r"(?<![A-Z]\.)(?<!\bInc\.)(?<!\bINC\.)(?<!\bCorp\.)(?<!\bLtd\.)(?<!\bCo\.)(?<!\bPvt\.)(?<!\bNo\.)(?<!\bSt\.)(?<!\bDr\.)"
+_FIRST = re.compile(r"^(.{20,240}?[.;])" + _NOT_END + r"(?:\s|$)")
 # what a company's description says before its business (the owner, 7 Nov: "**Company Overview **", "Incorporatedin1994", "Business Overview:")
 _MARKUP = re.compile(r"\*+|#+")
 _HEADING = re.compile(r"\s*\b(?:company|business|corporate)\s+(?:overview|profile|description)\s*:?|\s*\babout\s+(?:us|the\s+company)\s*:", re.I)
@@ -1240,7 +1243,7 @@ _DOES = re.compile(r"\b(?:manufactur|make|produc|suppl|provid|engag|offer|design
 
 
 def _sentences(t: str) -> list[str]:
-    return [x.strip() for x in re.split(r"(?<=[.;])\s+(?=[A-Z“\"(])", t) if x.strip()]
+    return [x.strip() for x in re.split(_NOT_END + r"(?<=[.;])\s+(?=[A-Z“\"(])", t) if x.strip()]
 
 
 def one_line(about: str) -> str:
