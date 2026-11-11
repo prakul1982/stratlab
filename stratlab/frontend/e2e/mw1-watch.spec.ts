@@ -145,16 +145,25 @@ test("add a symbol and see its price, reorder the list, and the list is kept", a
 
 test("LIVE5-006: a panel floating over the page shuts on another page; a docked one stays mounted from page to page", async ({ page }, info) => {
   test.skip(info.project.name === "phone", "desktop only");
-  // 1440: a "docked" panel floats in the corner over the page (it docks from 1600): going to another page shuts it (behaviour changed on
-  // purpose: it stayed open over Sector rotation's controls)
+  // 1280: a "docked" panel floats in the corner over the page (it docks from 1360 since LIVE6-013; was 1600): going to another page
+  // shuts it (behaviour changed on purpose: it stayed open over Sector rotation's controls)
+  await page.setViewportSize({ width: 1280, height: 800 });
   await open(page, "/");
   await openPanel(page);
   await page.getByRole("link", { name: "Settings", exact: true }).first().click().catch(() => page.goto("/settings"));
   await expect(page).toHaveURL(/\/settings/);
   await expect(panel(page)).toHaveCount(0);
   await expect(launch(page)).toBeVisible();
-  // 1700: docked beside the page, it takes its width from the page and stays, the same element
-  await page.setViewportSize({ width: 1700, height: 1000 });
+  // LIVE6-013: the same when the next page is reached by its address (a full load): a floating panel stays on the page it was opened on
+  await openPanel(page);
+  await page.goto("/alerts");
+  await expect(launch(page)).toBeVisible();
+  await expect(panel(page)).toHaveCount(0);
+  await page.goto("/settings");                               // back on the page it was opened on, it is still there
+  await expect(panel(page)).toBeVisible();
+  await panel(page).getByRole("button", { name: "Close Market Watch" }).click();
+  // 1440 (LIVE6-013; was 1700): docked beside the page, it takes its width from the page and stays, the same element
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/");
   await openPanel(page);
   await page.evaluate(() => { (window as unknown as { __mw: Element }).__mw = document.querySelector("[data-testid=market-watch]")!; });
@@ -270,12 +279,14 @@ test("the panel never covers the cookie question or the page's main actions", as
   expect(gone(l, a), `the button ${JSON.stringify(l)} covers the question ${JSON.stringify(a)}`).toBe(true);
   await launch(page).click();
   const p = (await panel(page).boundingBox())!;
-  // at this window width the panel floats in the corner above the question and leaves the page as it is (the page keeps its width)
+  // at 1440 the panel is docked in its own column (LIVE6-013, behaviour changed on purpose: it floated over the page): the page and the
+  // question make room for it
   const a2 = (await ask.boundingBox())!;
   expect(gone(p, a2), `the panel ${JSON.stringify(p)} covers the question ${JSON.stringify(a2)}`).toBe(true);
   await expect(ask.getByRole("button", { name: "Allow" })).toBeVisible();
   const main = (await page.locator("#main").boundingBox())!;
-  expect(main.x + main.width, "the page keeps its width").toBeGreaterThan(p.x + 100);
+  expect(main.x + main.width, "the page ends where the docked panel begins").toBeLessThanOrEqual(p.x + 1);
+  expect(Math.round(p.height), "a docked panel is the window's full height").toBe(page.viewportSize()!.height);
   const action = (await page.locator(".side-new").first().boundingBox())!;
   expect(gone(action, p)).toBe(true);
   // closing it brings the button back, clear of the question
@@ -288,9 +299,10 @@ test("the panel never covers the cookie question or the page's main actions", as
 
 test("the panel can float, be dragged and be resized, and remembers where it was", async ({ page }, info) => {
   test.skip(info.project.name === "phone", "desktop only");
+  await page.setViewportSize({ width: 1280, height: 800 });
   await open(page, "/");
   const mw = await openPanel(page);
-  // on a window under 1600px wide there is no dock to choose: it floats, and says so by having no dock button
+  // on a window under 1360px wide (LIVE6-013; was 1600) there is no dock to choose: it floats, and says so by having no dock button
   await expect(mw.getByRole("button", { name: /Dock the panel|Float the panel/ })).toHaveCount(0);
   const before = (await mw.boundingBox())!;
   expect(before.height).toBeLessThan(page.viewportSize()!.height);

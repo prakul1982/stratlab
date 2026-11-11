@@ -15,6 +15,12 @@ const tiles = (page: Page) => page.locator(".hm-map .hm-tile");
 const controls = (page: Page) => page.getByTestId("hm-controls");
 const seg = (page: Page, group: string, choice: string) => controls(page).getByRole("radiogroup", { name: group }).getByRole("radio", { name: choice, exact: true });
 
+/** On a phone the settings are folded under Options but the period (LIVE6-019): open them. Nothing to do on a wider window. */
+async function unfold(page: Page) {
+  const btn = page.getByTestId("hm-fold").getByRole("button", { name: "Options" });
+  if (await btn.isVisible()) await btn.click();
+}
+
 /** Every tile inside the map, none on top of another (the drawing is geometry: check it as drawn). */
 async function tidy(page: Page) {
   const bad = await page.evaluate(() => {
@@ -56,6 +62,7 @@ test("the heatmap draws a market and every setting changes the picture in place"
   expect(new URL(page.url()).searchParams.get("p")).toBe("1m");
 
   // colour by volume: one blue scale, in multiples of the average
+  await unfold(page);
   await seg(page, "Colour by", "Volume").click();
   await expect(page.locator(".hm-legend-step").last()).toHaveText("no figure");
   await expect(page.locator(".hm-legend-step").nth(5)).toHaveText("3× and up");
@@ -121,6 +128,7 @@ test("the US market, the menu entry and the wait before the first daily run", as
   await tidy(page);
   await sane(page, errors);
   // switching the market keeps the page and reads the other market's own group
+  await unfold(page);
   await controls(page).getByRole("radiogroup", { name: "Market" }).getByRole("radio", { name: /India/ }).click();
   await expect(page.getByTestId("heatmap").getByRole("heading", { name: "NIFTY 500: 1 day" })).toBeVisible();
   await expect(tiles(page).first()).toHaveAttribute("href", /^\/research\/IN\//);
@@ -146,6 +154,7 @@ test("a theme opens its own heatmap, its companies grouped by the layers of its 
   await link.click();
   await expect(page).toHaveURL(/\/invest\/heatmap\?theme=/);
   await expect(page.getByRole("heading", { level: 1, name: /^Heatmap: / })).toBeVisible({ timeout: 30_000 });
+  await unfold(page);
   await expect(controls(page).getByRole("radiogroup", { name: "Group by" }).getByRole("radio", { name: "Layer" })).toHaveAttribute("aria-checked", "true");
   await expect(page.getByText(/Showing the companies of the theme/)).toBeVisible();
   // either the theme's tiles, or the plain line that none of its companies has stored closes
