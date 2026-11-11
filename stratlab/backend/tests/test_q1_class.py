@@ -261,23 +261,3 @@ def test_the_deck_says_a_fallen_cohort_on_the_data_confidence_page_and_the_gate_
     assert gate["cohort"] and any("deck gate: cohort:" in r.getMessage() for r in caplog.records)
     v3, _ = deck_of(region, m, f, cohort_history=kept)          # the same cohorts again: not kept twice, still said against the run before
     assert len(hist) == 2 and v3["checks"]["cohort"] == drops
-
-
-# ---------- 5. a ranking states the capital figures that let it rank ----------
-def test_a_ranked_value_chain_states_the_capital_per_revenue_figures_that_pass_the_rule():
-    """The live R34 Chemicals chain: four layers ranked (capital per revenue 1.06 to 2.20, within threefold); R33's layers (with polymers and
-    petrochemicals) were not. The rule is still applied to the new layers, and the page now shows the figures it passed on."""
-    from app import deck
-    from app.intel import theme_data as D
-    rows = [{"layer": "Chlor-alkali and soda ash producers", "intensity": 1.31}, {"layer": "Basic organic intermediates", "intensity": 1.21},
-            {"layer": "Fluorochemicals and refrigerants", "intensity": 1.51}, {"layer": "Custom synthesis manufacturers", "intensity": 2.2},
-            {"layer": "Specialty and performance chemicals", "intensity": 1.06}]
-    compared = ["Chlor-alkali and soda ash producers", "Basic organic intermediates", "Custom synthesis manufacturers", "Specialty and performance chemicals"]
-    assert D.comparable_intensity([r for r in rows if r["layer"] in compared], lambda r: r["intensity"])
-    chain = {"line": "Among the 4 layers ...", "highest": "Custom synthesis manufacturers", "lowest": "Basic organic intermediates", "compared": compared, "rows": rows}
-    note = deck.intensity_note(chain)
-    assert note.startswith("Capital for each unit of revenue") and "Custom synthesis manufacturers 2.20" in note and "Specialty and performance chemicals 1.06" in note
-    assert "Fluorochemicals" not in note and "2.1 times the lowest, within the 3 times" in note
-    # a layer three times as capital-hungry still stops the ranking (the rule, unchanged)
-    assert not D.comparable_intensity([{"i": 1.0}, {"i": 3.2}], lambda r: r["i"])
-    assert deck.intensity_note({**chain, "highest": None, "lowest": None}) == ""

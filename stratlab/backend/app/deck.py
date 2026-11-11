@@ -3168,7 +3168,7 @@ def intensity_note(chain: dict) -> str:
     over its revenue, how many times the lowest the highest is, and the threshold (theme_data.INTENSITY_FACTOR); "" when that is not why."""
     from .intel.theme_data import INTENSITY_FACTOR, INTENSITY_WORD
     if INTENSITY_WORD not in str(chain.get("line") or ""):
-        return ranked_intensity_note(chain)
+        return ""
     names = set(chain.get("not_ranked") or [])
     rows = [r for r in chain.get("rows") or [] if r.get("layer") in names and (r.get("intensity") or 0) > 0]
     if len(rows) < 2:
@@ -3178,25 +3178,6 @@ def intensity_note(chain: dict) -> str:
     return (f"Capital for each unit of revenue (book equity plus debt over the latest year's revenue, the layer's median company): {each}. "
             f"{hi['layer']}'s is {hi['intensity'] / lo['intensity']:.1f} times {lo['layer']}'s; layers are ranked only where the highest is "
             f"at most {INTENSITY_FACTOR:g} times the lowest.")
-
-
-def ranked_intensity_note(chain: dict) -> str:
-    """q1 (the GPT review of the live R34 Chemicals deck: R33 left the layers unranked for their capital needs, R34 ranked them once the
-    layers changed, with nothing to show the rule was applied): when the value chain ranks a highest and a lowest, the capital for each unit
-    of revenue of each layer it ranks, and that the highest is within the threshold of the lowest; "" when it ranks none or fewer than two
-    of them carry the figure."""
-    from .intel.theme_data import INTENSITY_FACTOR
-    if not (chain.get("highest") and chain.get("lowest")):
-        return ""
-    names = set(chain.get("compared") or [])
-    rows = [r for r in chain.get("rows") or [] if r.get("layer") in names and (r.get("intensity") or 0) > 0]
-    if len(rows) < 2:
-        return ""
-    lo, hi = min(rows, key=lambda r: r["intensity"]), max(rows, key=lambda r: r["intensity"])
-    each = "; ".join(f"{r['layer']} {r['intensity']:.2f}" for r in rows)
-    return (f"Capital for each unit of revenue (book equity plus debt over the latest year's revenue, the layer's median company) of the layers "
-            f"ranked: {each}. The highest is {hi['intensity'] / lo['intensity']:.1f} times the lowest, within the {INTENSITY_FACTOR:g} times at "
-            "which layers are ranked.")
 
 
 def compare_note(chain: dict, key: str) -> str:
@@ -4431,7 +4412,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         foot = [f"Each company's latest full year, in {unit}; how each figure is built: ⟦{NOTES_TITLE}⟧.",
                 "Layer revenue: its companies added together; margins and returns: its median company."]
         foot.append(compare_note(chain, key))
-        if intensity_note(chain):                 # n1: the figures behind "not ranked", so the suppression can be reproduced; q1: and behind a ranking
+        if intensity_note(chain):                 # n1: the figures behind "not ranked", so the suppression can be reproduced
             foot.append(intensity_note(chain))
         if any((r.get("listed") or 0) > r["n"] for r in rows_c):          # lane m1: the two scopes named where a layer's counts differ
             foot.append(COMPANIES_NOTE)
