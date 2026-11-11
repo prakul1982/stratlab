@@ -119,7 +119,9 @@ def test_a_net_margin_above_the_ebitda_margin_is_flagged_as_an_anomaly_never_exp
     v["checks"] = {**(v.get("checks") or {}), "one_off": [{"symbol": "X", "name": "X Ltd", "net": 24.6, "ebitda": 6.0}], "net_with": 9.9, "net_without": 7.7}
     slides = deck.theme_plan(v)[0]
     t = texts(slides)
-    assert "Net margin 24.6% is above its EBITDA margin 6%; the filing would show why" in t
+    # changed on purpose (m2): a flag with no day is not a dated update; it is on the data-confidence page, still with no cause named
+    assert "X Ltd (24.6% net, 6% EBITDA)" in t and "with them; the filing would show why." in t
+    assert not any(x["name"] == "X Ltd" for x in deck.watch_list(v, __import__("datetime").date(2026, 11, 7)))
     assert "Net above EBITDA margin" in t and "one-off" not in t.lower() and not re.search(r"\bgains?\b", t, re.I)
     assert deck.prose_flag("Net margin is above the EBITDA margin: a one-off gain is in it.") == "cause: one-off gain"
     assert deck.prose_flag("Margins rose, driven by lower costs.") == "cause: driven by"

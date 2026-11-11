@@ -37,7 +37,7 @@ FEW_BASE = 4                  # a highest or lowest median on this many companie
 COMPARE_MIN = MIN_BASE
 # R31 (the owner's review of the live R30 decks): a layer-vs-layer headline (the value chain's line, findings, questions) needs at least this
 # many companies with the figure in each layer it compares; tables still show every layer and mark (green, red) those of COMPARE_MIN or more
-DIVE_TEXT = 6          # R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
+DIVE_TEXT = 7          # R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
 HEADLINE_MIN = 5
 # R27 (headline eligibility): a comparison is said as a headline only on a figure for at least this share of the companies of each group it
 # compares (a layer, a family); one with less is shown as data, never ranked (the live R26 Semis deck: "RPO growth -3.9%" of 21 of 53)
@@ -354,14 +354,56 @@ def model_fields(layer: dict, sym: str) -> dict:
             **({"model_out": c.get("model_out")} if c.get("model_out") else {})}
 
 
+# ---------- one record of who is in a layer's calculations (lane m1: the outside review of the live R32 decks, "15 equipment companies" in
+# the value-chain table beside "14 of 17" on the layer's page and in the appendix) ----------
+# why a listed company is left out of its layer's calculations, in the order the pages say them
+CALC_WHY = ("other business", "way of earning not shown", "not confirmed", "no revenue figure")
+
+
+def calc_record(r: dict) -> dict:
+    """One company's place in its layer's calculations: {"in": True, "why": ""}, or {"in": False, "why": one of CALC_WHY}. In: confirmed, how
+    it earns shown and of the layer's kind, with a figure (a company with neither revenue nor any figure a median is taken of has none).
+    Worked out once (layer_block) and kept on the company's row as "calc": every count of a layer (its "n", the value chain's and the
+    economics' tables, the layer page's head, its roll and the appendix's) is taken from these rows, never worked out again by a page."""
+    if r.get("status") == "unverified":
+        return {"in": False, "why": "not confirmed"}
+    if r.get("model_out"):
+        return {"in": False, "why": "other business" if r["model_out"] == "other" else "way of earning not shown"}
+    if r.get("revenue") is None and not any(r.get(k) is not None for k in STAT_KEYS + tuple(sector_metrics.KEYS)):
+        return {"in": False, "why": "no revenue figure"}
+    return {"in": True, "why": ""}
+
+
+def calc_of(c: dict) -> dict:
+    """A company row's kept record (calc_record), worked out for a row of a dive kept before the record was."""
+    rec = c.get("calc")
+    return rec if isinstance(rec, dict) and "in" in rec else calc_record(c)
+
+
+def in_calc(c: dict) -> bool:
+    """Whether a company is in its layer's calculations (its kept record)."""
+    return bool(calc_of(c)["in"])
+
+
+def layer_counts(layer: dict) -> dict:
+    """A layer's counts from its one list of rows: {"listed": every company its page lists, "n": those in its calculations, "out": {why: how
+    many}}: listed = n + the left out, by construction."""
+    from collections import Counter
+    recs = [calc_of(c) for c in layer.get("companies") or []]
+    return {"listed": len(recs), "n": sum(1 for x in recs if x["in"]), "out": dict(Counter(x["why"] for x in recs if not x["in"]))}
+
+
 def layer_block(name: str, rows: list[dict], wide: set[str]) -> dict:
     """A layer's table and its median and range for each figure. A company-wide figure (a group that runs other businesses too) is
     marked and left out of the median when the layer has any company that is its own; the layer says how many were left out. A company
     whose membership isn't confirmed (status "unverified") is listed but left out of the medians and the revenue total; a net margin with a
     one-off gain in it is left out of the net margin's median (`net_all` keeps the median with it). R27: a company whose revenue model is
     unknown or of low confidence in a layer that has models (`model_out`, theme_base.by_model) is listed but left out of the layer's figures
-    the same way (`model_out`: their symbols)."""
-    sure = [r for r in rows if r.get("status") != "unverified" and not r.get("model_out")]
+    the same way (`model_out`: their symbols). Lane m1: each row carries "calc" (calc_record), and "n" is the rows in the calculations: a
+    company with no figure at all is listed, never counted in "n" (live: 15 in a table, 14 of 17 on the layer's page)."""
+    for r in rows:              # the one record of who is in the layer's calculations, and why each other is not (calc_record)
+        r["calc"] = calc_record(r)
+    sure = [r for r in rows if r["calc"]["in"]]
     own = [r for r in sure if r["symbol"] not in wide]
     pool = own or sure
     mark_bases(pool)
@@ -416,7 +458,7 @@ def chain_table(blocks: list[dict]) -> dict:
     rows = []
     for b in blocks:
         e, n, c = (b["stats"].get(k) for k in ("ebitda", "net", "roce"))
-        rows.append({"layer": b["layer"], "n": b["n"], "revenue": b["revenue"], "ebitda": e["median"] if e else None, "net": n["median"] if n else None,
+        rows.append({"layer": b["layer"], "n": b["n"], "listed": b.get("listed") or len(b.get("companies") or []), "revenue": b["revenue"], "ebitda": e["median"] if e else None, "net": n["median"] if n else None,
                      "roce": c["median"] if c else None, "ebitda_n": e["n"] if e else 0, "official": bool(b.get("official")), "rest": b.get("basis") == "rest",
                      **{k: (b["stats"].get(k) or {}).get("median") for k in LENDER_KEYS}, "roe_n": (b["stats"].get("roe") or {}).get("n", 0),
                      **{f"{k}_n": (b["stats"].get(k) or {}).get("n", 0) for k in STAT_KEYS if k not in ("ebitda", "roe")},
@@ -434,7 +476,7 @@ def chain_table(blocks: list[dict]) -> dict:
     if not same_basis([r["basis"] for r in have]):
         have = []
     have = one_family(have, lambda r: model_family_of(r["model"]))          # R29: layers of one business-model family only
-    line, hi, lo = None, None, None
+    line, hi, lo, out, beyond = None, None, None, [], ""
     if len(have) >= 2 and len(one_sub(have, lambda r: r["model"])) < 2:
         # R31: layers of one family that sell different commodities (its sub-basis) are described, each with its own figure, never ranked
         whole = whole_points([c for b in blocks for c in b["companies"]])
@@ -463,22 +505,14 @@ def chain_table(blocks: list[dict]) -> dict:
                     "points of each other, the rounding of whole points.") if float(gap) > 0 else None
         else:
             whole = whole_points([c for b in blocks for c in b["companies"]])
-            line = (f"Median EBITDA margin is highest in {hi['layer']} ({pts(hi['ebitda'], whole)}{few(hi['ebitda_n'], hi['n'])}) and lowest in {lo['layer']} "
-                    f"({pts(lo['ebitda'], whole)}{few(lo['ebitda_n'], lo['n'])}), "
+            # m2 (outside review of the live R32 decks): every highest/lowest headline says, in its own sentence, which layers it ranks
+            # (rank_scope: at least HEADLINE_MIN companies with the figure), and names each shown layer whose median is above the highest
+            # or below the lowest with why it is not ranked (unranked_rows), so the headline and the table or chart beside it agree
+            out = unranked_rows(rows, have, "ebitda")
+            line = (f"{rank_scope(len(have), out)}, median EBITDA margin is highest in {hi['layer']} ({pts(hi['ebitda'], whole)}{few(hi['ebitda_n'], hi['n'])}) "
+                    f"and lowest in {lo['layer']} ({pts(lo['ebitda'], whole)}{few(lo['ebitda_n'], lo['n'])}), "
                     f"a gap of {gap_of(hi['ebitda'], lo['ebitda'])} points.")
-            # R34 (live R31.1 pharma and semis: a layer with a higher or lower median than those named was left out without a word): the
-            # line states its own scope: how many layers with a median were compared and on what condition (never naming the others beside
-            # the ranking: R29), the rest are in the table
-            names = {r["layer"] for r in have}
-            out = [r for r in rows if r["ebitda"] is not None and not r["rest"] and r["layer"] not in names and (not r["official"] or not
-                   any(not x["official"] for x in have))]
-            if out:
-                # the qualification first, so a slide that shortens the line never drops it (GPT review of R31.2)
-                # R34 (GPT review of R31.7: the qualification still cut on the slides): the scope first and short, the test as its own sentence,
-                # so a box that keeps whole sentences drops the test cleanly, never mid-way
-                line = line.replace("Median EBITDA margin is highest in", f"Among the {len(have)} of {len(have) + len(out)} comparable layers, "
-                                    "median EBITDA margin is highest in", 1)
-                line += f" Comparable: at least {HEADLINE_MIN} companies with the figure and one kind of business."
+            beyond = beyond_words(out, "ebitda", hi["ebitda"], lo["ebitda"], lambda x: pts(x, whole))
     measure = "ebitda"
     if len(have) < 2:
         # lenders have no EBITDA margin: their layers are set side by side on return on equity (R18)
@@ -497,15 +531,83 @@ def chain_table(blocks: list[dict]) -> dict:
                 hi = lo = None
                 line = f"The median return on equity of the {len(lend)} layers with at least {HEADLINE_MIN} companies is the same."
             else:
-                line = (f"Median return on equity is highest in {hi['layer']} ({pts(hi['roe'], True)}{few(hi['roe_n'], hi['n'])}) and lowest in {lo['layer']} "
-                        f"({pts(lo['roe'], True)}{few(lo['roe_n'], lo['n'])}), "
+                out = unranked_rows(rows, lend, "roe")
+                line = (f"{rank_scope(len(lend), out)}, median return on equity is highest in {hi['layer']} ({pts(hi['roe'], True)}{few(hi['roe_n'], hi['n'])}) "
+                        f"and lowest in {lo['layer']} ({pts(lo['roe'], True)}{few(lo['roe_n'], lo['n'])}), "
                         f"a gap of {gap_of(hi['roe'], lo['roe'])} points.").replace(".0 points", " points")
+                beyond = beyond_words(out, "roe", hi["roe"], lo["roe"], lambda x: pts(x, True))
         else:
             line = None             # nothing to set side by side: no line at all (R18: the deck said it couldn't be done)
     if line and hi and any(r["rest"] for r in rows):
         line = line.rstrip(".") + "; among the map's layers, the \"Other\" group left out."
+    if line and hi and beyond:
+        line += " " + beyond
     return {"rows": rows, "line": line, "highest": hi["layer"] if hi else None, "lowest": lo["layer"] if lo else None, "measure": measure,
-            "compared": [r["layer"] for r in have], "gap": round(hi[measure] - lo[measure], 1) if hi else None}
+            "compared": [r["layer"] for r in have], "gap": round(hi[measure] - lo[measure], 1) if hi else None,
+            "unranked": [{"layer": r["layer"], "why": r["why"]} for r in out] if hi else []}
+
+
+# why a layer a table shows is not ranked, in one short clause (m2); "few" is said with the floor itself (unranked_rows)
+RANK_WHY = {"cover": "the figure for under half its companies",
+            "sparse": "how most of its companies earn is not shown", "family": "a different kind of business", "sub": "a different commodity",
+            "official": "an exchange industry, not one of the map's layers", "rest": "companies outside the map's layers",
+            "other": "not comparable with the ranked layers"}
+
+
+def rank_scope(n: int, out: list | None = None) -> str:
+    """How a ranking headline opens (m2): "Among the 4 layers with at least 5 companies with the figure", and " and one kind of business"
+    when a layer shown beside them is left out for how it earns. Said in the headline's own sentence, wherever the headline is shown."""
+    kind = any(r.get("why") in (RANK_WHY["family"], RANK_WHY["sub"], RANK_WHY["sparse"]) for r in out or [])
+    return f"Among the {n} layers with at least {HEADLINE_MIN} companies with the figure" + (" and one kind of business" if kind else "")
+
+
+def unranked_rows(rows: list, have: list, key: str) -> list[dict]:
+    """The layers a table or chart shows a median of (COMPARE_MIN companies or more) that the headline beside it does not rank, each with
+    why in one short clause (`why`, RANK_WHY), in the table's order (m2: Pharma's 26% layer beside a headline that called 21% the highest)."""
+    names = {r["layer"] for r in have}
+    fam = Counter(f for f in (model_family_of(r["model"]) for r in have) if f).most_common(1)
+    sub = Counter(x for x in (sub_of(r["model"]) for r in have) if x).most_common(1)
+    own = any(not r["official"] for r in have)
+    out = []
+    for r in rows:
+        n = r.get(f"{key}_n") or 0
+        if r["layer"] in names or r.get(key) is None or n < COMPARE_MIN:
+            continue
+        m = r.get("model")
+        if r.get("rest"):
+            why = "rest"
+        elif r.get("official") and own:
+            why = "official"
+        elif n < HEADLINE_MIN:
+            why = "few"
+        elif r.get("n") and n < r["n"] * COVERAGE_MIN:
+            why = "cover"
+        elif isinstance(m, dict) and m.get("sparse"):
+            why = "sparse"
+        elif fam and model_family_of(m) != fam[0][0]:
+            why = "family"
+        elif sub and sub_of(m) != sub[0][0]:
+            why = "sub"
+        else:
+            why = "other"
+        out.append({**r, "why": RANK_WHY.get(why) or f"fewer than {HEADLINE_MIN} companies with the figure"})
+    return out
+
+
+def beyond_words(out: list, key: str, hi: float, lo: float, fmt) -> str:
+    """"Shown, not ranked: A (26%), a different kind of business; B (4.9%) and C (3%), fewer than 5 companies with the figure." for the
+    unranked layers (unranked_rows) whose median is above the headline's highest or below its lowest; "" when none is. The "Other" group
+    has its own clause in the headline."""
+    by: dict = {}
+    for r in out:
+        v = r.get(key)
+        if v is None or lo <= v <= hi or r["why"] == RANK_WHY["rest"]:
+            continue
+        by.setdefault(r["why"], []).append(f"{r['layer']} ({fmt(v)})")
+    if not by:
+        return ""
+    join = lambda xs: xs[0] if len(xs) == 1 else ", ".join(xs[:-1]) + " and " + xs[-1]      # noqa: E731
+    return "Shown, not ranked: " + "; ".join(f"{join(xs)}, {why}" for why, xs in by.items()) + "."
 
 
 def gap_of(a: float, b: float) -> str:
@@ -609,17 +711,37 @@ def rank_pair(rows: list, value, count, floor: int | None = None, of=None, model
     """(highest, lowest) of `rows` by `value(row)` among those whose figure is of at least `floor` companies (`count(row)`) (R25: one floor for
     every comparison of layers) and, given `of`, `model` and `basis` (each a function of the row), passes headline_ok and shares one period
     basis (R27), and given `intensity`, are alike in asset intensity (R30); None when fewer than two qualify, or when the highest or the lowest is tied (no layer is named for a tie)."""
+    have = comparable_rows(rows, value, count, floor, of, model, basis, intensity)
+    if len(have) < 2 or value(have[-1]) == value(have[-2]) or value(have[0]) == value(have[1]):
+        return None
+    return have[-1], have[0]
+
+
+def comparable_rows(rows: list, value, count, floor: int | None = None, of=None, model=None, basis=None, intensity=None) -> list:
+    """The rows a sentence may rank against each other, lowest `value(row)` first: the one rule of "one kind of business" behind every
+    ranking (the chain's line, the findings, the questions and, lane m1, the "Layers side by side" headline, which ranked contractors
+    against developers and equipment makers against generators on the live R32 Real estate and Utilities decks). Each has the figure for
+    at least `floor` companies (HEADLINE_MIN) and COVERAGE_MIN of its own, and is of one business model (headline_ok); all are of one
+    business-model family and, where it declares one, one sub-basis (one_basis); on one period basis; alike in asset intensity. [] when the
+    period bases or the asset intensities differ."""
     have = sorted((r for r in rows if value(r) is not None and headline_ok(count(r) or 0, of(r) if of else None, model(r) if model else None, floor)),
                   key=value)
     if model:                       # R29: one business-model family only; R31: and one sub-basis (a commodity) where the family has one
         have = one_basis(have, model)
     if basis and not same_basis([basis(r) for r in have]):
-        return None
+        return []
     if intensity and not comparable_intensity(have, intensity):         # R30: alike in asset intensity
+        return []
+    return have
+
+
+def rank_top(rows: list, value, count, floor: int | None = None, of=None, model=None, basis=None, intensity=None):
+    """(the row with the highest `value(row)`, the rows it was ranked among) under comparable_rows' rule; None when fewer than two qualify
+    or the highest is tied."""
+    have = comparable_rows(rows, value, count, floor, of, model, basis, intensity)
+    if len(have) < 2 or value(have[-1]) == value(have[-2]):
         return None
-    if len(have) < 2 or value(have[-1]) == value(have[-2]) or value(have[0]) == value(have[1]):
-        return None
-    return have[-1], have[0]
+    return have[-1], have
 
 
 def layer_history(rows: list[dict]) -> dict | None:
@@ -859,8 +981,7 @@ def layer_valuation(blocks: list[dict], counted: set) -> list[dict]:
     companies with figures that are in its figures (never one whose model is left out, `model_out`); a layer with none of the three is left out."""
     out = []
     for b in blocks:
-        out_ = set(b.get("model_out") or [])
-        cos = [c for c in b.get("companies") or [] if c.get("symbol") in counted and c["symbol"] not in out_]
+        cos = [c for c in b.get("companies") or [] if c.get("symbol") in counted and in_calc(c)]
         st = {"pe": stat(c.get("pe") for c in cos if c.get("pe")), "pb": stat(c.get("pb") for c in cos if c.get("pb") is not None and c["pb"] > 0),
               "ev_ebitda": stat(c.get("ev_ebitda") for c in cos)}
         if any(st.values()):
@@ -1007,7 +1128,8 @@ def flagged_rows(items: list[dict], names: dict) -> list[dict]:
             continue
         seen.add(key)
         out.append({"symbol": i["symbol"], "name": names.get(i["symbol"]) or i.get("company") or i["symbol"], "at": i["at"], "label": label,
-                    "severity": i.get("severity"), "subject": i.get("subject") or i.get("title") or "", "url": i.get("url")})
+                    "severity": i.get("severity"), "subject": i.get("subject") or i.get("title") or "", "url": i.get("url"),
+                    "text": str(i.get("text") or "")[:240]})        # m2: the filing's own words, for the context a dated update states
     return out[:15]
 
 
@@ -1294,8 +1416,8 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
             from .theme_base import shown_model
             b["model"] = shown_model(b["model"], [r for r in b["companies"] if r.get("status") != "unverified"])
         blocks.append(b)
-        out_ = set(b.get("model_out") or [])            # R27: left out of the layer's figures (model unknown or of low confidence)
-        sure = [r for r in mine if r.get("status") != "unverified" and r["symbol"] not in out_]
+        ins = {r["symbol"] for r in b["companies"] if in_calc(r)}       # the layer's one record of who is in its calculations
+        sure = [r for r in mine if r["symbol"] in ins]
         histories[b["layer"]] = layer_history([r for r in sure if r["symbol"] not in wide] or sure)
     chain = chain_table(blocks)
     counted = [r for b in blocks for r in b["companies"] if r.get("status") != "unverified"]

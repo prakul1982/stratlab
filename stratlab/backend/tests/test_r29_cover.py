@@ -268,7 +268,10 @@ def test_no_headline_compares_layers_of_different_families(monkeypatch):
         return {"layer": name, "n": 4, "revenue": 100.0, "companies": cos, "model": {"id": fam, "family": fam, "line": ""},
                 "stats": {"ebitda": {"n": 4, "median": e}, "net": None, "roce": None}}
     one = D.chain_table([blk("Grid", "regulated_utility", 60.0), blk("Plants", "generation", 30.0), blk("Plants B", "generation", 20.0)])
-    assert set(one["compared"]) == {"Plants", "Plants B"} and one["highest"] == "Plants" and "Grid" not in (one["line"] or "")
+    assert set(one["compared"]) == {"Plants", "Plants B"} and one["highest"] == "Plants"
+    # changed on purpose (m2): a shown layer above the highest is named after the ranking, with why it is not ranked, never inside it
+    rank, _, rest = one["line"].partition(" Shown, not ranked: ")
+    assert "Grid" not in rank and rest == "Grid (60.0%), a different kind of business."
     tie = D.chain_table([blk("Grid", "regulated_utility", 60.0), blk("Grid B", "regulated_utility", 50.0), blk("Plants", "generation", 30.0),
                          blk("Plants B", "generation", 20.0)])
     assert tie["highest"] is None and tie["line"] is None
@@ -278,4 +281,4 @@ def test_no_headline_compares_layers_of_different_families(monkeypatch):
 
 
 def test_the_versions_are_bumped_so_kept_maps_and_decks_are_made_again():
-    assert B.RULES == 33 and deck.THEME_DECK_VERSION == 44          # R35 bumped the deck version (updated on purpose)
+    assert B.RULES == 34 and deck.THEME_DECK_VERSION == 45          # R35 bumped the deck version (updated on purpose)

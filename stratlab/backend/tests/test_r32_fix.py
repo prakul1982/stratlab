@@ -106,10 +106,17 @@ def test_a_model_named_layer_joins_the_map_s_layer_and_two_plain_ones_still_stay
     ], [])
     vc = B.by_model(copy.deepcopy(t["map"]["value_chain"]), t["models"], "Automobiles", tags=t["tags"], confidence=t["confidence"])
     names = [v["layer"] for v in vc if not v.get("official")]
-    assert names == ["Two-wheelers", "Passenger cars"]                                   # the model-named layer joins the larger plain one
+    # lane m1 (updated on purpose; live R32 Semiconductors showed nine makers under "Semiconductor equipment", the larger of two layers of
+    # makers): with two layers named by what they make, how the model-named layer's companies earn doesn't say which they belong to: it stays
+    assert names == ["Two-wheelers", "Makers of their own products", "Passenger cars"]
     two = vc[0]
-    assert {c["ticker"] for c in two["companies"]} == {f"TWO{i}" for i in range(5)} | {f"MKR{i}" for i in range(3)}
-    assert two["model"]["same_as"] == ["Passenger cars"]                                 # two layers named by what they make both stay
+    assert {c["ticker"] for c in two["companies"]} == {f"TWO{i}" for i in range(5)}
+    assert two["model"]["same_as"] == ["Makers of their own products", "Passenger cars"]   # each line says the three earn the same way
+    # one layer named by what it makes: the model-named layer joins it, as before
+    one = copy.deepcopy(t["map"]["value_chain"])[:2]
+    vc = B.by_model(one, t["models"], "Automobiles", tags=t["tags"], confidence=t["confidence"])
+    assert [v["layer"] for v in vc if not v.get("official")] == ["Two-wheelers"]
+    assert {c["ticker"] for c in vc[0]["companies"]} == {f"TWO{i}" for i in range(5)} | {f"MKR{i}" for i in range(3)}
 
 
 # ---------- 3. a market-value half with no shown company is undone ----------
@@ -140,7 +147,7 @@ def test_a_split_half_with_no_shown_company_is_undone():
     assert "Residential developers" in lays and not any("(larger)" in x or "(smaller)" in x for x in lays)
     text = " ".join(str(x) for s in slides for b in s.blocks for x in (b.get("paras") or []) + [s.title or ""])
     assert "(smaller)" not in text and "(larger)" not in text
-    assert deck.THEME_DECK_VERSION == 44 and B.RULES == 33
+    assert deck.THEME_DECK_VERSION == 45 and B.RULES == 34          # lane m1 bumped RULES (updated on purpose)
 
 
 def test_a_company_with_no_model_takes_the_one_its_map_layers_name_states():
