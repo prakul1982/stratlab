@@ -224,3 +224,38 @@ def test_broken_and_twin_theme_posts_are_hidden_and_their_pages_say_nothing_is_t
     assert blog.get("theme-cyber-security-margins-in")["published"] is False
     assert blog.get("theme-cybersecurity-margins-in")["published"] is True
     assert w["client"].get("/blog/theme-cyber-security-margins-in").status_code == 404
+
+
+# ---------- LIVE6-015: the last implied move is served at once and read again behind the page ----------
+def test_implied_moves_are_served_from_the_last_read_and_refreshed_behind(monkeypatch):
+    import threading
+    import time
+    from app import results as R
+    gate, calls = threading.Event(), []
+
+    def many(symbols, day):
+        calls.append(list(symbols))
+        if len(calls) > 1:
+            gate.wait(5)
+        return {s: {"pct": 2.0 + len(calls), "strike": 100, "expiry": "2026-11-25", "straddle": 3.0} for s in symbols}
+    R.setup(options_many=many)
+    monkeypatch.setattr(R, "fo_symbols", lambda: {"TCS", "INFY"})
+    first = R.implied_for(["TCS", "INFY"], "2026-11-12")
+    assert first["TCS"]["pct"] == 3.0 and len(calls) == 1
+    assert R.implied_for(["TCS", "INFY"], "2026-11-12")["TCS"]["pct"] == 3.0 and len(calls) == 1      # fresh: no read
+    monkeypatch.setattr(R, "IMPLIED_FRESH", 0.0)
+    t0 = time.monotonic()
+    again = R.implied_for(["TCS", "INFY"], "2026-11-12")
+    assert time.monotonic() - t0 < 0.5 and again["TCS"]["pct"] == 3.0                                 # the last read at once
+    gate.set()
+    for _ in range(50):
+        if R.implied_for(["TCS"], "2026-11-12")["TCS"]["pct"] == 4.0:
+            break
+        time.sleep(0.05)
+    assert R.implied_for(["TCS"], "2026-11-12")["TCS"]["pct"] == 4.0                                  # read again behind the page
+    # a busy read is never kept: asked again next time
+    R.setup(options_many=lambda s, d: (_ for _ in ()).throw(type("KiteBusy", (Exception,), {"busy": True})("busy")))
+    pending: list = []
+    assert R.implied_for(["TCS"], "2026-11-12", pending=pending)["TCS"] is None and pending == ["TCS"]
+    assert R._implied_store().get(("TCS", "2026-11-12")) is None
+    R.setup()
