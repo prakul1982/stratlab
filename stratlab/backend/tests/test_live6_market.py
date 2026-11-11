@@ -120,3 +120,57 @@ def test_an_issue_on_its_listing_day_has_its_listing_price_before_the_close():
     assert (p["listing_price"], p["day_close"], p["latest"]) == (52.80, 50.16, 50.16)
     # the BSE scrip code, when kept, is the symbol as before
     assert I.yahoo_symbol({**row, "bse_scrip": "544700"}) == "544700.BO"
+
+
+# ---------- LIVE6-009: business updates dated by their own fiscal year; implausible year-on-year moves held back ----------
+def _read(at, period, figures, span="month"):
+    return {"at": at, "title": "update", "url": f"https://nsearchives.nseindia.com/corporate/{at}.pdf", "read_at": at, "period": period,
+            "span": span, "problem": None, "reader": 3,
+            "figures": [{"segment": None, "unit": "units", "basis": "month", "prior": None, "headline": True, "quote": "q", "page": 1,
+                         "own": True, **f} for f in figures]}
+
+
+def test_a_figure_named_by_its_fiscal_year_is_dated_at_that_years_end():
+    from app import biz_updates as B
+    assert B.fy_period({"metric": "Consolidated revenue (FY 2024)"}, "2025-03") == "2024-03"
+    assert B.fy_period({"metric": "Revenue FY2023-24"}, "2025-03") == "2024-03"
+    assert B.fy_period({"metric": "Deposits", "segment": "Q2 FY27"}, "2026-10") == "2026-09"
+    assert B.fy_period({"metric": "Total sales"}, "2026-10") == "2026-10"
+    assert B.fy_period({"metric": "Revenue FY 2027"}, "2026-10") == "2026-10"          # a year not over by the filing: the filing's period
+    ms = B.series({"r": _read("2025-04-25T18:00", "2025-03", [{"metric": "Consolidated revenue (FY 2024)", "value": 1000122, "unit": "Rs crore"}])})
+    assert ms[0]["latest"]["period"] == "2024-03"
+
+
+def test_an_implausible_year_on_year_move_waits_for_the_filing_to_confirm_it():
+    from app import biz_updates as B
+    ago = _read("2025-11-01T12:00", "2025-10", [{"metric": "Total sales", "value": 30000}])
+    now = _read("2026-11-01T12:00", "2026-10", [{"metric": "Total sales", "value": 60300}])
+    m = B.series({"a": ago, "b": now})[0]
+    assert m["change_year"] is None and m["year_unconfirmed"] and m["year_ago"]["value"] == 30000
+    assert "on Oct 2025" not in B.words(m)
+    # the newest filing states the same year-ago figure: the move stands
+    now["figures"][0]["prior"] = 30000
+    m = B.series({"a": ago, "b": now})[0]
+    assert m["change_year"] == 101.0 and not m["year_unconfirmed"]
+    # a fall to a tenth, the filing's own year-ago figure another one: held back
+    now["figures"][0].update(value=3180, prior=12000)
+    assert B.series({"a": ago, "b": now})[0]["change_year"] is None
+    # an ordinary move is shown as before
+    now["figures"][0].update(value=33000, prior=None)
+    assert B.series({"a": ago, "b": now})[0]["change_year"] == 10.0
+
+
+def test_this_months_filing_is_read_before_older_rereads_for_a_company_short_of_months(monkeypatch):
+    from datetime import date, timedelta
+    from app import biz_updates as B
+    today = date.today()
+    items = [{"id": f"f{i}", "at": (today - timedelta(days=d)).isoformat() + "T12:00"} for i, d in enumerate((10, 40, 70, 100, 130))]
+    old = {i["id"]: {**_read(i["at"], "2026-01", [{"metric": "Total", "value": 1}]), "reader": 1} for i in items[2:]}
+    monkeypatch.setattr(B, "stored", lambda sym: dict(old))
+    monkeypatch.setattr(B, "candidates", lambda its: list(its))
+    monkeypatch.setattr(B, "_ai_budget", lambda: True)
+    monkeypatch.setattr(B, "save", lambda *a: None)
+    seen = []
+    monkeypatch.setattr(B, "read_one", lambda sym, item, d, ai, known: seen.append(item["id"]) or _read(item["at"], "2026-10", [{"metric": "Total", "value": 2}]))
+    B.read_new("MARUTI", items, None, None, limit=3)                      # no `since`: still short of its months
+    assert seen == ["f0", "f1", "f2"]

@@ -587,10 +587,14 @@ def read_new(symbol: str, items: list[dict], docs_api, ai, limit: int = READ_AT_
     # column or production (DF-009), and the year-ago months are what each change is worked out on
     # (RC1 DF-010/011: a company still short of its year of months read its older unread filings first, two a day, so the
     # newest figures an older reader got wrong waited weeks for a new read: they come before the older backfill)
+    # LIVE6-009: a company still short of its months (no `since`) read its re-reads and backfill first, two a day, so Maruti's,
+    # M&M's, Eicher's and Escorts' October updates waited behind them with the month's cells empty: whatever was filed in the
+    # last JOB_DAYS (unread, or read by an older reader) comes first, newest first, then the older re-reads, then the backfill
+    cut = since or (datetime.now(IST).date() - timedelta(days=JOB_DAYS)).isoformat()
     unread = [i for i in every if i["id"] not in reads]
-    recent = [i for i in unread if since and i["at"] >= since]
     again = [i for i in every if i["id"] in reads and int(reads[i["id"]].get("reader") or 1) < READER]
-    todo = (recent + again + ([] if since else unread))[:limit]
+    recent = [i for i in every if i["at"] >= cut and (i in unread or i in again)]
+    todo = (recent + [i for i in again if i not in recent] + ([] if since else [i for i in unread if i not in recent]))[:limit]
     done, problems = 0, []
     for item in todo:
         if not _ai_budget():
@@ -667,6 +671,32 @@ def tidy_figure(f: dict) -> dict:
     return f if (name, unit) == (f["metric"], f["unit"]) else {**f, "metric": name, "unit": unit}
 
 
+_FY = re.compile(r"\b(?:(Q[1-4]|H[12])\s*)?FY\s*'?(\d{2}|\d{4})(?:\s*[-/]\s*(\d{2}|\d{4}))?\b", re.I)
+
+
+def fy_period(f: dict, period: str) -> str:
+    """The month a figure is for when its own name says its Indian fiscal year (April to March): "Consolidated revenue (FY 2024)"
+    is the year to March 2024, "Q2 FY27" the quarter to September 2026, "FY2023-24" the year to March 2024 (LIVE6-009: RELIANCE's
+    FY 2024 revenue sat at Mar 2025, the month of the filing that restated it). A period after the filing's own month is never
+    taken; with no fiscal year named, the filing's period."""
+    m = _FY.search(f"{f.get('metric') or ''} {f.get('segment') or ''}")
+    if not m:
+        return period
+    y = m.group(3) or m.group(2)
+    year = int(y) + (2000 if len(y) == 2 else 0)
+    part = (m.group(1) or "").upper()
+    end = {"Q1": f"{year - 1:04d}-06", "Q2": f"{year - 1:04d}-09", "Q3": f"{year - 1:04d}-12", "H1": f"{year - 1:04d}-09"}.get(part, f"{year:04d}-03")
+    return end if shift(period, -36) <= end <= period else period
+
+
+YOY_UP, YOY_DOWN = 75.0, -50.0      # a year-on-year change beyond these is shown only once the filing itself confirms the year-ago figure
+
+
+def year_confirmed(value: float, prior: float | None, year_value: float) -> bool:
+    """Whether the year-ago figure a change is worked on is the one the newest filing itself states for that period (within 1%)."""
+    return prior is not None and year_value not in (None, 0) and abs(prior - year_value) <= abs(year_value) * 0.01
+
+
 def series(reads: dict) -> list[dict]:
     """Every measure across the stored reads: its points by period (a later filing's figure wins; a year-ago figure a
     filing states fills that month when nothing else does), the latest value, the change on the previous point and on
@@ -685,9 +715,10 @@ def series(reads: dict) -> list[dict]:
             m["metric"], m["headline"] = f["metric"], m["headline"] or bool(f.get("headline"))
             m["own"] = f.get("own") is not False
             src = {"at": r["at"], "url": r["url"], "page": f.get("page"), "quote": f.get("quote"), "exchange": r.get("exchange") or "NSE"}
-            m["points"][p] = {"period": p, "value": f["value"], "filed_later": False, "source": src}
+            fp = fy_period(f, p)
+            m["points"][fp] = {"period": fp, "value": f["value"], "filed_later": False, "source": src, "prior": f.get("prior")}
             if f.get("prior") is not None:
-                py = shift(p, -12)
+                py = shift(fp, -12)
                 if py not in m["points"] or m["points"][py]["filed_later"]:
                     m["points"][py] = {"period": py, "value": f["prior"], "filed_later": True, "source": src}
     newest = max((r for r in reads.values() if r.get("period") and r.get("figures")), key=lambda r: r.get("at") or "", default=None)
@@ -707,11 +738,17 @@ def series(reads: dict) -> list[dict]:
         if prev and shift(prev["period"], 1) != latest["period"] and not (step == "quarter" and shift(prev["period"], 3) == latest["period"]):
             prev = None
         lo = shift(latest["period"], -(CHART_MONTHS - 1))
+        yoy = change(latest["value"], year["value"], m["unit"]) if year else None
+        # LIVE6-009: Tata Motors PV "+101.0% on the year" and VST Tillers "-89.4%" set this month's figure against a year-ago one of
+        # another definition; a move that large stands only when the newest filing states that same year-ago figure itself
+        held = yoy is not None and "%" not in m["unit"] and (yoy > YOY_UP or yoy < YOY_DOWN) \
+            and not year_confirmed(latest["value"], latest.get("prior"), year["value"])
         out.append({**{x: m[x] for x in ("key", "metric", "segment", "unit", "basis", "span", "headline", "own")},
-                    "latest": latest, "prev": prev, "year_ago": year, "step": step,
+                    "latest": {k: v for k, v in latest.items() if k != "prior"}, "prev": prev and {k: v for k, v in prev.items() if k != "prior"},
+                    "year_ago": year and {k: v for k, v in year.items() if k != "prior"}, "step": step,
                     "change_prev": change(latest["value"], prev["value"], m["unit"]) if prev else None,
-                    "change_year": change(latest["value"], year["value"], m["unit"]) if year else None,
-                    "points": [x for x in pts if x["period"] >= lo]})
+                    "change_year": None if held else yoy, "year_unconfirmed": held or None,
+                    "points": [{k: v for k, v in x.items() if k != "prior"} for x in pts if x["period"] >= lo]})
     rank = {k: i for i, k in enumerate(order)}
     n = newest or {}
     newest_period = settled(n.get("period"), n.get("at") or "", n.get("span")) or ""
