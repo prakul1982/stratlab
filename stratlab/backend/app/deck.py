@@ -2874,8 +2874,12 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
         a_, b_ = cards[-2], cards.pop()
         # n1 (the live R33 Private Banks deck: the merged card's updates line gave way to fit, so the deck said nothing of dated updates):
         # one line of each first, so a line that gives way is never the only one of its card
-        first = (b_, a_) if b_["title"] == UPDATES_TITLE and not watch else (a_, b_)      # "no dated update" is the shorter: it goes first
+        first = (a_, b_)
         cards[-1] = {"title": f"{a_['title']}; {b_['title'].lower()}", "lines": first[0]["lines"][:1] + first[1]["lines"][:1] + first[0]["lines"][1:] + first[1]["lines"][1:], "note": ", ".join(x for x in (a_["note"], b_["note"]) if x)}
+        if b_["title"] == UPDATES_TITLE and not watch:
+            # q1 (the live R34 Private Banks deck: the merged card kept only "No company meets the rules today", its coverage line given way):
+            # no dated update is said in the card's title, so the card's lines are the coverage summary and none of it gives way for it
+            cards[-1] = {**a_, "title": f"{a_['title']}; no dated company update today"}
     s = Slide("Key findings", "What the reported figures show, each with the slide it comes from; findings, not advice", eyebrow=eyebrow)
     ccols = 3 if len(cards) != 4 else 2
     s.add("cards", (M, TOP, CW, BOT - TOP), cols=ccols, items=whole_lines(cards, (M, TOP, CW, BOT - TOP), ccols), fill=True, size=13)
