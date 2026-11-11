@@ -183,6 +183,34 @@ def sentences(text: str, limit: int) -> str:
     return _no_joiner(cut[:cut.rfind(" ")] if " " in cut else cut) + "…"
 
 
+_CLAUSE_END = re.compile(r"[,;:](?=\s)|\s[–—-](?=\s)|\s(?=\()|(?<=\))(?=\s)")
+_CLAUSE_LEAD = re.compile(r"\s(?:and|or|which|that|who|where|while|including|such as|as well as|along with|with|through|across|for)\s", re.I)
+
+
+def whole_clause(text: str, limit: int) -> str:
+    """A description for a table cell (m2, live R32 decks: "…(technical grade and formulations)…", "…aero-engines, avionics…"): the whole
+    sentences that fit `limit` characters, as sentences() keeps them; where the first sentence alone is longer, its whole clauses that
+    fit, the trailing clause dropped at the last comma, semicolon, colon, dash, bracket or joining word ("and", "including", "which"),
+    with no ellipsis and no bracket left open."""
+    got = sentences(text, limit)
+    if not got.endswith("…"):
+        return got
+    text = re.sub(r"\[\d+\]", "", re.sub(r"\s+", " ", text or "")).strip()
+    cut = text[:limit + 1]
+
+    def closed(t: str) -> str:
+        t = _no_joiner(t)
+        while t.count("(") > t.count(")"):               # a bracket the cut left open goes with the clause it opened
+            t = _no_joiner(t[:t.rfind("(")])
+        return t.rstrip(" ,;:-–—(")
+    least = max(24, int(limit * 0.4))
+    for at in sorted({m.start() for rx in (_CLAUSE_END, _CLAUSE_LEAD) for m in rx.finditer(cut)}, reverse=True):
+        kept = closed(text[:at])                         # the latest place a clause ends, or a new one is joined on
+        if len(kept) >= least:
+            return kept
+    return closed(got[:-1])
+
+
 _JOINER = re.compile(r"[\s,;:(–-]+(?:and|or|of|the|a|an|for|in|to|with|by|on|at|from|its|their|&)$", re.I)
 
 
@@ -834,6 +862,52 @@ def _room_for_counts(b: dict, widths: list[float]) -> list[float]:
     return out
 
 
+def _two_line_width(text: str, size: float, bold: bool = False) -> float:
+    """The narrowest column in which a text shows whole on two lines, no word broken (one line when it is one word)."""
+    words = str(text).split()
+    best = _width(" ".join(words), size, bold)
+    for k in range(1, len(words)):
+        best = min(best, max(_width(" ".join(words[:k]), size, bold), _width(" ".join(words[k:]), size, bold)))
+    return best
+
+
+def _keep_whole(b: dict, widths: list[float], size: float = BODY_MIN) -> list[float]:
+    """A compact table's column widths with no column under what its cells need to show whole (m2, live R32 Semiconductors: a sector
+    table's last page read "indie…" under "Compa/ny" and a median "+35…", its name and period columns given away to the counted cells):
+    a header's widest word; a figure, a date or another short cell on one line; a figure with its count on two lines ("127 days" over
+    "(79 of 95)"); a name in its shortest whole form (label_forms) on two lines. A column under its floor takes the room from the columns
+    over theirs. As given when the table is too narrow for every floor."""
+    pad = 0.22
+    strong = set(b.get("strong") or ())
+    floors = []
+    for c, hd in enumerate(b["head"]):
+        need = max((_width(x, size, True) for x in str(hd).split()), default=0.0)
+        for i, r in enumerate(b["rows"]):
+            if isinstance(r, dict) or c >= len(r):
+                continue
+            t = _cell_text(r[c])
+            if not t:
+                continue
+            if counted_cell(t):
+                need = max(need, _two_line_width(t, size, True))
+            elif len(t) <= 16:
+                need = max(need, _width(t, size, i in strong))
+            elif not isinstance(r[c], dict):
+                need = max(need, min(_two_line_width(f, size, i in strong) for f in label_forms(t)))
+        floors.append(need + pad)
+    short = {c: floors[c] - x for c, x in enumerate(widths) if floors[c] > x + 1e-6}
+    if not short or sum(floors) > sum(widths) + 1e-6:
+        return widths
+    spare = {c: x - floors[c] for c, x in enumerate(widths) if x > floors[c] + 1e-6}
+    want, have = sum(short.values()), sum(spare.values())
+    out = list(widths)
+    for c, x in short.items():
+        out[c] += x
+    for c, x in spare.items():
+        out[c] -= x * want / have
+    return out
+
+
 def table_layout(b: dict, w: float, h: float) -> dict:
     """Column widths, the font size (13 down to 11 pt, never smaller) and each row's height so the table fits its box; rows that still
     don't fit are left out (callers page their rows with table_pages, so none is). A row {"group": text} is a full-width heading row."""
@@ -850,7 +924,7 @@ def table_layout(b: dict, w: float, h: float) -> dict:
         # as their line. R35: no cell is cut to "Component…": a column takes the room its neighbours don't use, a name that still doesn't
         # fit is said shorter (short_label), and one that can't be takes a second line. A figure with its count in brackets (a median
         # row's cell) is never cut either: its column is widened where the others have room, and it wraps where they don't
-        widths = _room_for_counts(b, _fit_columns(b, widths))
+        widths = _keep_whole(b, _room_for_counts(b, _fit_columns(b, widths)))       # m2: and no column under what its cells need whole
         st = set(b.get("strong") or ())
         given = b["rows"]
 
@@ -3176,12 +3250,108 @@ def _deck_figures(slides: list) -> dict:
 PLACEHOLDER = re.compile(r"\{[a-z_]+\}|(?<![A-Za-z] )\bNone\b(?! of| is| has| shows| was| were| are)|\bnan\b|\bundefined\b|\bshown for [a-z]{1,2}\.")
 
 
+# ---------- m2 (outside review of the live R32 decks): the text itself is checked before a deck is stored ----------
+# a doubled word ("outside the the theme"), doubled punctuation ("Inc.. Revenue"), a space before punctuation ("metals , alloys") and a
+# hyphen broken off its word ("aero -engines") are repaired on every slide, whatever wrote the sentence (a template, a company's own
+# description, a headline), and each repair is logged and counted in the gate. Generic: fixed patterns, no list of sentences.
+_JOIN_WORDS = {"the", "a", "an", "of", "in", "on", "at", "to", "for", "and", "or", "with", "by", "from", "is", "are", "was", "were", "its",
+               "their", "this", "these", "than", "as", "be", "it"}
+_DOUBLE_OK = {"had", "that", "very", "so", "no", "bye", "more", "many", "much", "far", "long"}       # doubled in ordinary English
+_DOUBLED = re.compile(r"\b([A-Za-z]{2,})(\s+)\1\b", re.I)
+_TEXT_FIXES = (
+    (re.compile(r"\b([A-Z][A-Za-z]{0,5})\.\.(?=\s|$)"), r"\1.", "doubled full stop"),            # "Qualys, Inc..": an abbreviation's stop and the sentence's
+    (re.compile(r"(?<=[A-Za-z)])\.\.(?=\s+[A-Z(])"), ".", "doubled full stop"),                 # "Inc.. Revenue": the sentence's own stop
+    (re.compile(r"(?<![.])\.\.(?![.])(?=\s|$)"), "…", "two dots for an ellipsis"),             # a headline cut by its source: "say.."
+    (re.compile(r"([,;:!?])(?:\s*\1)+"), r"\1", "doubled punctuation"),                         # ",,", "; ;"
+    (re.compile(r"[,;:](?=\.(?:\s|$))"), "", "punctuation before a full stop"),                 # ",." and ";."
+    (re.compile(r"(?<=[A-Za-z)%’'\"]) +(?=[,;:!?](?:\s|$))|(?<=[0-9]) +(?=[,;!?](?:\s|$))"), "", "space before punctuation"),   # "1 : 2" stays
+    (re.compile(r"(?<=[A-Za-z)%]) +(?=\.(?:\s|$))"), "", "space before a full stop"),
+    (re.compile(r"\( +"), "(", "space inside a bracket"),
+    (re.compile(r"(?<=\S) +\)"), ")", "space inside a bracket"),
+    (re.compile(r"(?<=[a-z]) -(?=[a-z])"), "-", "hyphen broken off its word"),                  # "aero -engines"
+    (re.compile(r"(?<=[a-z])- (?=[a-z])(?!(?:and|or|to|as|than|but|nor)\b)"), "-", "hyphen broken off its word"),   # "aero- engines"; "pre- and post" stays
+)
+
+
+def _undouble(m) -> str:
+    word, rest = m.group(1), m.group(0)[len(m.group(1)) + len(m.group(2)):]
+    low = word.lower()
+    if low in _JOIN_WORDS or (rest.islower() and len(word) >= 3 and low not in _DOUBLE_OK):
+        return word                      # "the the", "The the", "companies companies"; a name ("Bora Bora") and "had had" stay
+    return m.group(0)
+
+
+def tidy_text(text) -> tuple[str, list[str]]:
+    """(the text with its mechanical defects repaired, what was repaired) (m2): a doubled word, doubled punctuation, a space before
+    punctuation or inside a bracket, a hyphen broken off its word. A text with none is given back as it is; a figure, a date, a name and
+    a three-dot ellipsis are never touched."""
+    if not isinstance(text, str) or len(text) < 3:
+        return text, []
+    out, why = text, []
+    got = _DOUBLED.sub(_undouble, out)
+    if got != out:
+        out, why = got, ["doubled word"]
+    for rx, to, name in _TEXT_FIXES:
+        got = rx.sub(to, out)
+        if got != out:
+            out = got
+            why.append(name)
+    return out, why
+
+
+def text_flags(text) -> list[str]:
+    """The mechanical defects a text holds (tidy_text's names); [] for a clean one."""
+    return tidy_text(text)[1]
+
+
+def tidy_deck(slides: list) -> list[dict]:
+    """Every sentence, label and cell of every slide through tidy_text (m2), as whole_deck sends every figure through one formatter; the
+    repairs made: [{"slide", "text" (as it was), "fixed", "why"}], logged."""
+    import logging
+    log = logging.getLogger("stratlab.deck")
+    done: list[dict] = []
+
+    def fix(x, where):
+        got, why = tidy_text(x)
+        if why:
+            done.append({"slide": where, "text": x, "fixed": got, "why": ", ".join(why)})
+        return got
+
+    def cell(x, where):
+        return {**x, "text": fix(x["text"], where)} if isinstance(x, dict) and isinstance(x.get("text"), str) else fix(x, where)
+    for s in slides:
+        t = s.title
+        s.title, s.subtitle = fix(s.title, t), fix(s.subtitle, t)
+        for b in s.blocks:
+            if b.get("paras"):
+                b["paras"] = [fix(x, t) for x in b["paras"]]
+            if b.get("rows"):
+                b["rows"] = [({**r, "group": fix(r["group"], t)} if "group" in r else r) if isinstance(r, dict) else [cell(x, t) for x in r]
+                             for r in b["rows"]]
+            if b.get("head"):
+                b["head"] = [fix(x, t) for x in b["head"]]
+            if b.get("cats"):
+                b["cats"] = [fix(x, t) for x in b["cats"]]
+            if isinstance(b.get("title"), str):
+                b["title"] = fix(b["title"], t)
+            if b["kind"] == "stats":
+                b["items"] = [tuple(fix(x, t) for x in it) if isinstance(it, tuple) else it for it in b.get("items") or []]
+            elif b.get("items") and isinstance(b["items"][0], dict):
+                b["items"] = [{k: ([fix(x, t) for x in val] if k == "lines" and isinstance(val, list) else fix(val, t) if isinstance(val, str) else val)
+                               for k, val in it.items()} for it in b["items"]]
+    for d in done:
+        log.warning("deck text: repaired on %r (%s): %s", d["slide"], d["why"], d["text"])
+    return done
+
+
 def check_deck(slides: list) -> list[dict]:
     """The consistency check before a deck is stored (R25): every percentage, multiple, gap in points and count that a headline (a slide's
     subtitle), a finding or a question states is looked for among the figures the deck's own tables, charts and tiles show, the rows they all
     come from. A headline part or a card line with a figure that isn't there is dropped (never shipped wrong) and logged. The dropped ones."""
     import logging
     from .intel.theme_data import claim_mismatches
+    if slides:
+        slides[0].tidied = tidy_deck(slides)          # m2: the text's own defects repaired first, so every later check reads the repaired text
     shown = _deck_figures(slides)
     log = logging.getLogger("stratlab.deck")
     dropped = []
@@ -3656,6 +3826,16 @@ def publication_gate(slides: list, v: dict, reproduced: list | None = None) -> d
     if none:
         notes["peers"] = f"{_n(none, 'company', 'companies')} with no comparable peer set, counted and left out"
     notes["layout"] = "Checked on the finished pages"           # R35: layout_gate, once the page references are set (theme_plan)
+    # m2: what tidy_deck repaired (a doubled word, doubled or spaced punctuation, a broken hyphen) is counted here; a defect that is still
+    # in a sentence after the repair fails the prose item and the sentence is listed
+    tidied = getattr(slides[0], "tidied", None) if slides else None
+    if tidied:
+        notes["prose"] = f"{_n(len(tidied), 'text repair')} (doubled words, punctuation, hyphens)"
+    for s_ in slides:
+        for txt in [s_.title, s_.subtitle] + [p for b in s_.blocks for p in b.get("paras") or []]:
+            why = text_flags(txt)
+            if why:
+                dropped["prose"].append({"slide": s_.title, "text": txt, "why": "text: " + ", ".join(why), "rule": "prose"})
     marks_noted = any(b["kind"] == "cards" and any(MARKS_LINE in (it.get("lines") or []) for it in b.get("items") or []) for s in slides for b in s.blocks)
     if not marks_noted and len(slides) > 2:
         dropped["marks"].append({"slide": "How to read this deck", "text": "the key to the three marks", "why": "not in the deck", "rule": "marks"})
@@ -4073,7 +4253,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     all_subs = v.get("subs") or []
     subs = [sub for sub in all_subs if sub.get("companies")]           # a sub-theme with no confirmed company is a count, not a row
     if subs:
-        rows = [[sub["name"], sentences(sub.get("detail") or "", 160) or "–", str(len(sub.get("companies") or [])),
+        rows = [[sub["name"], whole_clause(sub.get("detail") or "", 160) or "–", str(len(sub.get("companies") or [])),
                  names5(sorted(sub.get("companies") or [], key=lambda c: -(c.get("cap") or 0))) or "None confirmed by its own description"] for sub in subs]
         head, widths = ["Sub-theme", "What it is", "Companies", "The largest, by market value"], [2.4, 4.6, 1.2, 4.0]
         note = "Each sub-theme's description is written by AI from general knowledge, with no figures; a company is shown only where its own description says it does that work."
@@ -4321,7 +4501,7 @@ def _smaller_layers(slides: list, small: list, amt, eyebrow: str) -> None:
     cols = [col for col in co_cols(cos) if col[0] in keys]
     head = ["Layer", "Company", "What it does"] + [col[1] for col in cols] + ["Year"]
     widths = [2.3, 2.3, 3.6] + [col[2] for col in cols] + [1.0]
-    body = [[x["layer"], name, sentences(_what(c.get("what") or "") or x.get("description") or "", 110) or "–"]
+    body = [[x["layer"], name, whole_clause(_what(c.get("what") or "") or x.get("description") or "", 110) or "–"]
             + [co_cell(c, k, amt) for k, _, _ in cols] + [c.get("year") or "–"] for x, c, name in rows_]
     head, body, widths, numeric = drop_empty(head, body, widths, [False, False, False] + [True] * len(cols) + [False], keep=(0, 1, 2))
     note = ("Each of these layers has one confirmed company, so it has no median and no page of its own; it is in the value chain's table. "
