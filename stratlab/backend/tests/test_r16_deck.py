@@ -326,8 +326,9 @@ def test_red_flags_are_said_once_a_rights_issue_is_a_corporate_action_and_an_aud
 
 
 def test_quote_pages_picks_and_other_markets_headlines_are_left_out():
-    keep = [{"headline": "Mahindra & Mahindra Q2 results: Farm equipment revenue grows", "company": "M&M"},
-            {"headline": "Skoda Auto Volkswagen India cedes land for crash test site", "company": None},
+    # LIVE6-018 (updated on purpose): a headline is kept only with its source
+    keep = [{"headline": "Mahindra & Mahindra Q2 results: Farm equipment revenue grows", "company": "M&M", "source": "Paper"},
+            {"headline": "Skoda Auto Volkswagen India cedes land for crash test site", "company": None, "source": "Paper"},
             {"headline": "Press Release", "company": "Tata Motors", "source": "Exchange filing"}]
     drop = [{"headline": "Mahindra & Mahindra Share Price - Live NSE: M&M Stock Price & Chart", "company": "M&M"},
             {"headline": "MAHINDRA & MAHINDRA LTD Option Chain - Live", "company": "M&M"},
