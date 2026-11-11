@@ -255,3 +255,21 @@ def test_members_note_carries_no_stale_year():
         assert "on the day this test ran (the list as of Sep 2026):" in universes.members_note({"id": "nifty50", "market": "IN"})
     finally:
         p.pop("as_of")
+
+
+def test_a_restarted_member_keeps_the_price_it_was_last_marked_at(monkeypatch):
+    """The saved mark price is restored at a restart (CI: equity moved by the open position's mark when the stored candles ended at
+    another close than the one the session had last seen)."""
+    from tests.test_group_live import candle
+    from tests.test_live_polling import make_manager
+    import tests.test_group_live as T
+    mgr, _ = make_manager()
+    monkeypatch.setattr(mgr, "on_order", lambda s, ev: None)
+    s = group_live.GroupLiveSession(mgr, T.row())
+    m = s.members[0]
+    s._on_candle(m, candle(datetime(2999, 1, 1, 0, 0, tzinfo=timezone.utc).isoformat(), 123.45))
+    state = s.state()
+    sid = next(iter(state["members"]))
+    state["members"][sid]["last_price"] = 111.11                   # a tick after the last candle
+    s2 = group_live.GroupLiveSession(mgr, T.row(state))
+    assert s2.members[0].last_price == pytest.approx(111.11)
