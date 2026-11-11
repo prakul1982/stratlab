@@ -155,6 +155,13 @@ export function ThemesPage() {
             {r.summary && <p className="k-lede">{r.summary}</p>}
             {r.core && <p className="k-small">Everything converges on <b>{r.core}</b>.</p>}
             <ThemeDownloads r={r} dive={dive} region={region} theme={q} />
+            {/* L4: the theme's companies as tiles, grouped by layer, sized by market value and coloured by what the price did */}
+            {r.value_chain.some((v) => v.companies.length > 0) && (
+              <div className="k-row" data-testid="theme-heatmap">
+                <span className="k-small k-muted">See</span>
+                <Link className="btn quiet sm" to={`/invest/heatmap?theme=${encodeURIComponent(q)}&region=${region}`}>Heatmap of this theme</Link>
+              </div>
+            )}
             {r.etfs.length > 0 && (
               <DataTable label="Funds that track the theme" columns={[
                 { key: "t", header: "Fund", rowHeader: true, cell: (e: (typeof r.etfs)[number]) => <Link className="link" to={`/research/${region}/${encodeURIComponent(e.ticker)}`}><b>{e.ticker}</b></Link> },
