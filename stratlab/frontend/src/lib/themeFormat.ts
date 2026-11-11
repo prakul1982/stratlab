@@ -29,3 +29,12 @@ export function layerLines(l: Layer): LayerLine[] {
   }
   return out;
 }
+
+/** The heading of the search box's list of themes StratLab has already mapped (LIVE6-012). It is one shared library, kept once for
+ *  everyone, not this person's reading history: it never says "Already read" or "read <date>" (an account that never opened a theme was
+ *  shown "Already read: Cybersecurity · US, read 11 Nov"); the date is when the stored map was last updated. */
+export const LIBRARY_HEAD = "Ready to open:";
+export function libraryLabel(i: { name: string; region: string; at: string | null }, fmtDay: (iso: string) => string): string {
+  const where = ({ IN: "India", US: "US" } as Record<string, string>)[i.region] ?? i.region;
+  return `${i.name} · ${where}${i.at ? `, updated ${fmtDay(i.at.slice(0, 10))}` : ""}`;
+}
