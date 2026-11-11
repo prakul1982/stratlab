@@ -3134,6 +3134,24 @@ def unranked_words(chain: dict) -> str:
     return ("Shown, not ranked: " + "; ".join(f"{join(xs)}, {why}" for why, xs in by.items()) + ".") if by else ""
 
 
+def intensity_note(chain: dict) -> str:
+    """Why the value chain's layers are not ranked when their capital for each unit of revenue differs (n1, the outside review of the live
+    R33 Chemicals deck: "more than threefold", the figures nowhere): each such layer's median company's capital (book equity plus debt)
+    over its revenue, how many times the lowest the highest is, and the threshold (theme_data.INTENSITY_FACTOR); "" when that is not why."""
+    from .intel.theme_data import INTENSITY_FACTOR, INTENSITY_WORD
+    if INTENSITY_WORD not in str(chain.get("line") or ""):
+        return ""
+    names = set(chain.get("not_ranked") or [])
+    rows = [r for r in chain.get("rows") or [] if r.get("layer") in names and (r.get("intensity") or 0) > 0]
+    if len(rows) < 2:
+        return ""
+    lo, hi = min(rows, key=lambda r: r["intensity"]), max(rows, key=lambda r: r["intensity"])
+    each = "; ".join(f"{r['layer']} {r['intensity']:.2f}" for r in rows)
+    return (f"Capital for each unit of revenue (book equity plus debt over the latest year's revenue, the layer's median company): {each}. "
+            f"{hi['layer']}'s is {hi['intensity'] / lo['intensity']:.1f} times {lo['layer']}'s; layers are ranked only where the highest is "
+            f"at most {INTENSITY_FACTOR:g} times the lowest.")
+
+
 def compare_note(chain: dict, key: str) -> str:
     """The value chain's footnote on how layers are compared: the one floor of a ranking (theme_data.HEADLINE_MIN: the headline's and the
     marks', m2: the footnote said 3 while the headline ranked on 5), each shown layer that is not ranked with why, and the floor a median
@@ -3378,6 +3396,38 @@ def text_flags(text) -> list[str]:
     return tidy_text(text)[1]
 
 
+_TOKENS = (
+    (re.compile(r"(?:^|(?<=\s))[/\\][A-Za-z]{2,5}[/\\](?=[\s,.;:)]|$)"), "a filing token"),
+    (re.compile(r"\{[^{}\n]{0,40}\}"), "a template field"),
+    (re.compile(r"^\s*(?:None|none|null|nan|NaN|undefined)\s*$|(?<![.!?]\s)(?<!^)\bNone\b(?! of| is| has| shows| was| were| are)|\bnan\b|\bNaN\b"), "a missing value printed as a word"),
+    (re.compile(r"\bTBD\b|\blorem\b", re.I), "placeholder text"),
+)
+
+
+def token_flags(text) -> list[str]:
+    """What a slide's text holds that was never filled in (n1): a filing token ("/DE/"), a template field ("{name}"), a missing value
+    printed as a word ("None", "nan"; "None of them…" opening a sentence is English) or placeholder text ("TBD", "lorem")."""
+    t = str(text or "")
+    return [why for rx, why in _TOKENS if rx.search(t)]
+
+
+def slide_texts(s) -> list[str]:
+    """Every text one slide prints: its title, headline, paragraphs, table cells and headings, card titles, values and lines, tiles, chart
+    labels."""
+    out = [s.title, s.subtitle]
+    for b in s.blocks:
+        out += list(b.get("paras") or []) + list(b.get("head") or []) + list(b.get("cats") or [])
+        out += [r["group"] if isinstance(r, dict) else _cell_text(c) for r in b.get("rows") or [] for c in ([r] if isinstance(r, dict) else r)]
+        if isinstance(b.get("title"), str):
+            out.append(b["title"])
+        for it in b.get("items") or []:
+            if isinstance(it, (tuple, list)):
+                out += [str(x) for x in it]
+            elif isinstance(it, dict):
+                out += [it.get(k) for k in ("title", "value", "note", "text", "sub")] + list(it.get("lines") or [])
+    return [str(x) for x in out if isinstance(x, str) and x]
+
+
 def tidy_deck(slides: list) -> list[dict]:
     """Every sentence, label and cell of every slide through tidy_text (m2), as whole_deck sends every figure through one formatter; the
     repairs made: [{"slide", "text" (as it was), "fixed", "why"}], logged."""
@@ -3482,9 +3532,16 @@ def check_deck(slides: list) -> list[dict]:
 # (pass or fail per item, what was dropped) is stored with the deck and shown in Admin -> Library (the owner's outside review of the R26 decks)
 CAUSE_WORDS = re.compile(r"\b(?:because|driven by|due to|owing to|thanks to|as a result of|caused by|on the back of|led by|attributable to|"
                          r"explained by|reflects?|reflecting|one-off gains?|boosted by|dragged by|weighed (?:on|down) by)\b", re.I)
-# a business that buys or sells goods is a fact, not advice: only "buy" or "sell" of shares, a stake or a rating, or "buy now", is
-_TRADE_VERBS = re.compile(r"\b(?:buy|sell)(?:s|ing|ers?)\b|\bbuy-?backs?\b|\bsold\b|\b(?:buy|sell)\b(?!\s+(?:(?:the|its|this|these|their|more)\s+)?"
-                          r"(?:shares?|stocks?|stakes?|positions?|rating|calls?|signals?|now|on dips|into)\b)", re.I)
+# a business that buys or sells goods is a fact, not advice. n1 (the outside review of the live R33 Metals deck: "turning metal they buy into
+# pipes" dropped as advice): "buy", "sell" and "accumulate" are advice only as a recommendation ("buy the stock", "a buy", "should sell",
+# "accumulate on dips", "buy now"); every other use of them is a company's own trade and is read past
+_TRADE_ADVICE = re.compile(
+    r"\b(?:should|must|would|could|may|might|to consider|consider|a|strong|rated|rating|upgraded to|downgraded to|time to)"
+    r"\s+(?:not\s+)?(?:buy|sell|accumulate)\b(?!-)"
+    r"|\b(?:buy|sell|accumulate)\s+(?:(?:the|its|this|these|their|more|some|our)\s+)?(?:shares?|stocks?|stakes?|positions?|rating|calls?|signals?|"
+    r"now|on (?:dips|weakness|strength|declines)|the dips?|the rally|for the long term)\b"
+    r"|^\W*(?:buy|sell|accumulate)\b(?!-|s\b)", re.I)
+_TRADE_VERBS = re.compile(r"\b(?:buy|sell)(?:s|ing|ers?|-?backs?)?\b|\bsold\b|\baccumulat\w*", re.I)
 _BARE_SHARE = re.compile(r"\b\d+(?:\.\d+)?% of (?:the (?:theme's )?)?(?:market |combined )?value\b(?! of)", re.I)
 _PERIOD = re.compile(r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{4}\b")
 _RANKING = re.compile(r"\b(?:highest|lowest|fastest|slowest)\b", re.I)
@@ -3511,6 +3568,9 @@ def prose_flag(text: str) -> str | None:
     if m:
         return f"cause: {m.group(0)}"
     from .blog_research import advice_words
+    m = _TRADE_ADVICE.search(text or "")
+    if m:
+        return f"advice or forecast: {m.group(0).strip()}"
     bad = advice_words({"title": _TRADE_VERBS.sub("", text or "")})
     return f"advice or forecast: {bad}" if bad else None
 
@@ -4120,6 +4180,10 @@ def publication_gate(slides: list, v: dict, reproduced: list | None = None) -> d
             why = text_flags(txt)
             if why:
                 dropped["prose"].append({"slide": s_.title, "text": txt, "why": "text: " + ", ".join(why), "rule": "prose"})
+        for txt in slide_texts(s_):           # n1: and nothing left unfilled anywhere on the page, a table's cell or a card's line too
+            why = token_flags(txt)
+            if why:
+                dropped["prose"].append({"slide": s_.title, "text": txt, "why": "unfilled: " + ", ".join(why), "rule": "prose"})
     marks_noted = any(b["kind"] == "cards" and any(MARKS_LINE in (it.get("lines") or []) for it in b.get("items") or []) for s in slides for b in s.blocks)
     if not marks_noted and len(slides) > 2:
         dropped["marks"].append({"slide": "How to read this deck", "text": "the key to the three marks", "why": "not in the deck", "rule": "marks"})
@@ -4316,6 +4380,8 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         foot = [f"Each company's latest full year, in {unit}; how each figure is built: ⟦{NOTES_TITLE}⟧.",
                 "Layer revenue: its companies added together; margins and returns: its median company."]
         foot.append(compare_note(chain, key))
+        if intensity_note(chain):                 # n1: the figures behind "not ranked", so the suppression can be reproduced
+            foot.append(intensity_note(chain))
         if any((r.get("listed") or 0) > r["n"] for r in rows_c):          # lane m1: the two scopes named where a layer's counts differ
             foot.append(COMPANIES_NOTE)
         # R34 (GPT review of R31.7, Defence: "No listed company is shown for x."): a layer name with no word in it is no layer to name
