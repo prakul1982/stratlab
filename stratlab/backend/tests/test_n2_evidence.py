@@ -117,8 +117,9 @@ def test_the_check_reads_again_the_weak_models_stored_descriptions_and_no_others
 def test_a_kept_model_of_low_confidence_rises_with_the_evidence_read_since():
     ev = {"TSM": SEMI + "As a foundry, we manufacture semiconductors for our customers based on designs provided by them.", "X": SEMI}
     models, conf = B.refine_kept({"TSM": "manufacturing", "X": "manufacturing"}, {"TSM": "low", "X": "low"}, lambda s_: ev[s_], ["TSM", "X"])
-    assert models["TSM"] == "manufacturing" and conf["TSM"] == "medium" and conf["X"] == "low"      # lifted, never above "medium"
-    assert B.RULES == 35 and TR.PLACE_CARRY[35] == 34
+    # q1 (changed on purpose): foundry words make TSMC a contract maker, its confidence read from its own words, never above "medium"
+    assert models["TSM"] == "contract_manufacturing" and conf["TSM"] == "medium" and conf["X"] == "low"      # lifted, never above "medium"
+    assert B.RULES == 36 and TR.PLACE_CARRY[35] == 34 and TR.PLACE_CARRY[36] == 35     # q1 bumped RULES (updated on purpose)
 
 
 # ---------- 2. a services company's family ----------
