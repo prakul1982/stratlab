@@ -246,9 +246,12 @@ def test_one_company_listed_under_two_symbols_is_one_row_in_every_companys_figur
     """R36 (GPT review of the live R33 Retail deck: "Leslie's, Inc." printed on two identical rows of the appendix)."""
     region, m, f = retail_like(12, 5, 2)
     first = m["value_chain"][0]["companies"][0]
-    twin = {**copy.deepcopy(first), "ticker": first["ticker"] + "X"}
+    twin = {**copy.deepcopy(first), "ticker": first["ticker"] + "X"}           # live: the twin's market value differed
     m["value_chain"][0]["companies"].append(twin)
     f[twin["ticker"]] = copy.deepcopy(f[first["ticker"]])
+    for k_ in ("market_cap", "cap"):
+        if isinstance(f[twin["ticker"]], dict) and f[twin["ticker"]].get(k_):
+            f[twin["ticker"]][k_] = f[twin["ticker"]][k_] * 0.7
     v, slides = deck_of(region, m, f)
     names = [r[0] for s in slides if s.title.startswith("Every company's figures")
              for b in s.blocks if b["kind"] == "table" for r in b["rows"] if not isinstance(r, dict)]

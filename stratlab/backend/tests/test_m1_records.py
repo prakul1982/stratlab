@@ -312,7 +312,7 @@ def test_a_company_with_no_figures_carries_its_reason_on_its_row():
 
 
 def test_the_versions_moved_with_the_records():
-    assert D.DIVE_TEXT == 8 and deck.THEME_DECK_VERSION == 46
+    assert D.DIVE_TEXT == 9 and deck.THEME_DECK_VERSION == 47
 
 
 # ---------- 4. only layers of one way of earning are ranked together ----------
