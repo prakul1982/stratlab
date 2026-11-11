@@ -435,6 +435,15 @@ def model_confidence(model, evidence, said="") -> str:
     return level
 
 
+def own_words_show(model, evidence) -> bool:
+    """Whether a company's own words (not its official industry) show its model: words of the model's kind, or of its family's (lane n2)."""
+    if model not in MODELS:
+        return False
+    _, own = _split_evidence(evidence)
+    words = _words_of(model)
+    return bool(words and re.search(words, own, re.I)) or family_shown(model, own)
+
+
 def family_shown(model, own) -> bool:
     """Whether a company's own words have words of another model of its model's family (lane n2, the outside review of the live R33 IT deck:
     Wipro, "a global Information technology, consulting and business process services company", left out of "Large-scale outsourcing" as
