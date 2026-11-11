@@ -174,3 +174,53 @@ def test_this_months_filing_is_read_before_older_rereads_for_a_company_short_of_
     monkeypatch.setattr(B, "read_one", lambda sym, item, d, ai, known: seen.append(item["id"]) or _read(item["at"], "2026-10", [{"metric": "Total", "value": 2}]))
     B.read_new("MARUTI", items, None, None, limit=3)                      # no `since`: still short of its months
     assert seen == ["f0", "f1", "f2"]
+
+
+# ---------- LIVE6-003: no theme post with no layers, a headline for a name, or a same-day twin ----------
+from tests.test_blog import THEME_SRC, w  # noqa: E402,F401  (the blog's world fixture)
+
+
+def _empty_src(theme="automotive", sector="Automotive"):
+    return {**THEME_SRC, "theme": theme, "sector": sector, "region": "IN", "notable": [],
+            "rows": [{"layer": "Named in the theme's list", "n": 51, "revenue": 900000, "ebitda": 12.0, "net": 6.0, "roce": 15.0, "ebitda_n": 51,
+                      "official": True, "basis": "list", "companies": [{"symbol": "MARUTI", "name": "Maruti Suzuki"}]}]}
+
+
+def test_a_theme_with_no_layers_or_a_headline_for_a_name_gets_no_post():
+    from app import blog_research as BR
+    assert BR.theme_problem(_empty_src()) == "0 layers with a margin"
+    assert BR.theme_problem(THEME_SRC) is None
+    assert BR.theme_problem({**THEME_SRC, "theme": "Auto names among top movers"}) == "its name is a headline, not a theme"
+    for name in ("Automotive", "AI data centers", "Electric vehicles", "Defence", "Renewable energy", "EV supply chain"):
+        assert not BR.headline_like(name), name
+    for name in ("Auto names among top movers", "Nifty hits record high", "Why PSU banks rallied", "Metal stocks surge 4%"):
+        assert BR.headline_like(name), name
+    dive = {"sector": "Automotive", "notable": [], "chain": {"rows": [{"layer": "Named in the theme's list", "n": 51, "ebitda": 12.0, "official": True},
+                                                                      {"layer": "Other", "n": 3, "ebitda": 9.0, "official": True}]}, "layers": []}
+    assert BR.theme_post(dive, "automotive", "IN", notable_only=False) is None
+
+
+def test_broken_and_twin_theme_posts_are_hidden_and_their_pages_say_nothing_is_there(w, monkeypatch):
+    from datetime import datetime, timezone
+    from app import blog, blog_research as BR
+    day = datetime(2026, 11, 9, 6, tzinfo=timezone.utc)
+    broken = {**BR.theme_post_from(_empty_src(), day), "published": True}
+    assert "sorted into 0 layers" in broken["summary"]
+    blog.upsert_research(broken, day)
+    good = {**BR.theme_post_from({**THEME_SRC, "region": "IN"}, day), "slug": "theme-cybersecurity-margins-in", "published": True}
+    blog.upsert_research(good, day)
+    twin = {**BR.theme_post_from({**THEME_SRC, "region": "IN", "theme": "cyber security"}, datetime(2026, 11, 9, 9, tzinfo=timezone.utc)),
+            "slug": "theme-cyber-security-margins-in", "published": True}
+    assert BR.same_day_twin(twin) == "theme-cybersecurity-margins-in"            # a new one is never made the same day
+    blog.upsert_research(twin, datetime(2026, 11, 9, 9, tzinfo=timezone.utc))
+    # before the run: the empty post is already off the lists and its page says nothing is there
+    rows, _ = blog.listing("research")
+    assert broken["slug"] not in {r["slug"] for r in rows}
+    assert w["client"].get(f"/blog/{broken['slug']}").status_code == 404
+    made, problems = BR.rewrite_theme_posts(datetime(2026, 11, 10, tzinfo=timezone.utc))
+    res = {m["slug"]: m["result"] for m in made}
+    assert res[broken["slug"]] == "hidden" and res["theme-cyber-security-margins-in"] == "hidden" and res["theme-cybersecurity-margins-in"] != "hidden"
+    assert blog.get(broken["slug"]) and blog.get(broken["slug"])["published"] is False          # kept in the store, hidden
+    assert blog.get("theme-cyber-security-margins-in")["published"] is False
+    assert blog.get("theme-cybersecurity-margins-in")["published"] is True
+    assert w["client"].get("/blog/theme-cyber-security-margins-in").status_code == 404
