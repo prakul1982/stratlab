@@ -4102,7 +4102,7 @@ def complete_flags(slides: list) -> list[dict]:
             if not _lists(b) and len(data) >= 2 and sum(_dashy(c) for r in data for c in r[1:]) >= MOSTLY_EMPTY * sum(len(r) - 1 for r in data):
                 flag(s, s.title, "a table mostly dashes")
         tabs_ = [b for b in s.blocks if b["kind"] == "table"]
-        if len(tabs_) == 1 and not [b for b in s.blocks if b["kind"] in ("hbars", "columns", "lines", "stack", "stats")] and not _PAGED.match(s.title or "") \
+        if len(tabs_) == 1 and not [b for b in s.blocks if b["kind"] not in ("table", "text")] and not _PAGED.match(s.title or "") and "Appendix" not in (s.eyebrow or "") \
                 and len([r for r in tabs_[0].get("rows") or [] if not isinstance(r, dict)]) == 1:
             flag(s, s.title, "a page for a table of one row")           # LIVE6-008: one row joins another page
         m = _PAGED.match(s.title or "")
@@ -4652,8 +4652,8 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             s.add("text", (M, BOT - fh + 0.08, CW, fh - 0.08), paras=fnote, size=BODY_MIN, floor=BODY_MIN, color=MUTED)
         slides.append(s)
 
-    if small:
-        _smaller_layers(slides, small, amt, eb("The value chain"))
+    if len(small) >= 2:          # LIVE6-008: no page for a table of one row: one such layer is a row of the value chain's table and its
+        _smaller_layers(slides, small, amt, eb("The value chain"))         # company a row of the appendix
 
     # the operating figures of every layer and sub-theme on one or two pages, each company once, grouped by layer (R18: a page for each layer,
     # and HDFC Bank's figures on two layers' pages); the rest of a long list is in the appendix

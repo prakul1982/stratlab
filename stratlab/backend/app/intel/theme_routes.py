@@ -922,7 +922,8 @@ def members_of(m: dict, dive: dict) -> list[dict]:
             f = figs.get(c["ticker"]) or {}
             out.append({"symbol": c["ticker"], "name": c.get("name") or f.get("name") or c["ticker"], "layer": layer, "official": official.get(layer, False),
                         "industry": c.get("industry") or None, "what": theme_base.own_words(c.get("what") or f.get("what"), c.get("name") or f.get("name") or "") or None,
-                        "cap": f.get("cap") if f.get("cap") is not None else c.get("cap"),        # LIVE6-006: the dive's, on its one price date "revenue": f.get("revenue"), "ebitda": f.get("ebitda"),
+                        # LIVE6-006: the dive's market value, on its one price date
+                        "cap": f.get("cap") if f.get("cap") is not None else c.get("cap"), "revenue": f.get("revenue"), "ebitda": f.get("ebitda"),
                         "net": f.get("net"), "roce": f.get("roce"), "year": f.get("year"), "by": by_of(c)})
     return out
 

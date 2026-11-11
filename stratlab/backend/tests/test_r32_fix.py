@@ -279,7 +279,7 @@ def test_the_peer_pe_line_names_its_price_date():
     """GPT review of R31.9: the retail peer median moved from 19.2x to 18.4x between runs a day apart; the line says which close."""
     from app.deck import pe_peer_line
     pp = {"theme": 18.8, "peers": 18.4, "premium": 2.2, "n": 37, "sets": {"sector": 37}, "as_of": "2026-11-09"}
-    assert "(prices at the 2026-11-09 close)" in pe_peer_line(pp)
+    assert "(prices at the 09 Nov 2026 close)" in pe_peer_line(pp)          # LIVE6-006: day-month (updated on purpose)
     assert "prices at" not in pe_peer_line({k: v for k, v in pp.items() if k != "as_of"})
 
 
