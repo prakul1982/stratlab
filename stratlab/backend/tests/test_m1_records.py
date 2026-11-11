@@ -106,7 +106,7 @@ def test_no_materials_supplier_sits_under_an_equipment_layer_whatever_model_it_w
 def test_the_rules_version_moved_so_kept_checks_and_dives_are_worked_out_again_and_placements_carry():
     """The cause on live: the materials rule came in without a new rules version, so the check kept under the old one (and the theme library's
     read of it) was served as it stood. The version is part of every kept check's, library read's and dive's key."""
-    assert B.RULES == 39 and T.PLACE_CARRY[34] == 33 and T.PLACE_CARRY[35] == 34 and T.PLACE_CARRY[36] == 35 and T.PLACE_CARRY[37] == 36 and T.PLACE_CARRY[38] == 37 and T.PLACE_CARRY[39] == 38   # lane s1-fit bumped RULES (updated on purpose); lane r2, lane r1, lane n2, q1 bumped RULES (updated on purpose)
+    assert B.RULES == 40 and T.PLACE_CARRY[34] == 33 and T.PLACE_CARRY[35] == 34 and T.PLACE_CARRY[36] == 35 and T.PLACE_CARRY[37] == 36 and T.PLACE_CARRY[38] == 37 and T.PLACE_CARRY[39] == 38   # lane s1-fit bumped RULES (updated on purpose); lane r2, lane r1, lane n2, q1 bumped RULES (updated on purpose)
     assert T.check_key("US", "Semiconductors", {"generated_at": 5})[-1] == B.RULES
 
 

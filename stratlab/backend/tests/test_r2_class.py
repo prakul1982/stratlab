@@ -309,4 +309,4 @@ def test_unknown_models_fall_in_every_theme_and_rise_in_none():
 
 
 def test_the_rules_version_moved_with_its_carry():
-    assert B.RULES == 39 and TR.PLACE_CARRY[38] == 37 and TR.PLACE_CARRY[39] == 38   # lane s1-fit bumped RULES (updated on purpose)
+    assert B.RULES == 40 and TR.PLACE_CARRY[38] == 37 and TR.PLACE_CARRY[39] == 38   # lane s1-fit bumped RULES (updated on purpose)
