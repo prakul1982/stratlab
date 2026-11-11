@@ -154,7 +154,7 @@ test("the panel's roles are allowed ones: tablist holds tabs only, a sheet is a 
   assert.match(p, /<div className="mw-tablist" role="tablist" aria-label="Your lists" onKeyDown=\{tabKey\}>/);
   assert.doesNotMatch(p, /<aside|<header|<footer/);                    // an aside may not be a dialog; a header or footer in one is the page's banner and footer again
   assert.doesNotMatch(pub, /<aside|<header|<footer/);
-  assert.match(p, /role="separator"[^>]*aria-valuemin=\{MIN_W\} aria-valuemax=\{MAX_W\} aria-valuenow=\{layout\.w\}/);
+  assert.match(p, /role="separator"[^>]*aria-valuemin=\{MIN_W\} aria-valuemax=\{MAX_W\} aria-valuenow=\{drawn\.w\}/);   // the width drawn (a docked one is capped by the page's room, LIVE6-013)
   // the "new list" button and the limit's words sit beside the tablist, not inside it
   assert.match(p, /<\/div>\s*\{naming \? null : tabsFull/);
 });

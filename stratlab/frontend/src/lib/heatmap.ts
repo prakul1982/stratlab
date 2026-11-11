@@ -12,7 +12,20 @@ export type HeatView = {
   market: "IN" | "US"; universe: string | null; universe_name: string | null; universes: { id: string; name: string }[];
   periods: string[]; as_of: string | null; cap_unit: string; index: { name: string; r: (number | null)[] | null };
   pending: boolean; min_cap: number | null; tiles: Tile[]; members: number; with_prices: number; matching: number; shown: number;
+  /** a theme's companies with no closes drawn grey at their stored last price (LIVE6-005); absent from older answers */
+  price_only?: number;
 };
+
+/** The note under the map on companies without closes (LIVE6-005): those drawn grey at their last price, and those with neither closes
+ *  nor a price, which are left out. null when every company has its closes. */
+export function closesNote(v: Pick<HeatView, "members" | "with_prices" | "price_only">, where: string): string | null {
+  const n = (x: number) => x.toLocaleString("en-IN");
+  const grey = v.price_only ?? 0, gone = Math.max(0, v.members - v.with_prices - grey);
+  const parts: string[] = [];
+  if (grey) parts.push(`${n(grey)} of the ${n(v.members)} companies ${where} ${grey === 1 ? "has" : "have"} no closes on record yet and ${grey === 1 ? "is" : "are"} shown in grey at the last price.`);
+  if (gone) parts.push(`${n(gone)} of the ${n(v.members)} companies ${where} ${gone === 1 ? "has" : "have"} no closes or price on record and ${gone === 1 ? "is" : "are"} not shown.`);
+  return parts.length ? parts.join(" ") : null;
+}
 
 export const PERIODS = ["1d", "1w", "1m", "3m", "ytd", "1y"] as const;
 export type Period = (typeof PERIODS)[number];

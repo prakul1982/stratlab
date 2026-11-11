@@ -238,15 +238,20 @@ test("a docked panel makes room, a floating one and a sheet do not; dragging and
   assert.equal(L.dockWidth({ ...dock, open: false }, 1920), 0);
   assert.equal(L.dockWidth({ ...dock, mode: "float" }, 1920), 0);
   assert.equal(L.dockWidth(dock, 800), 0);                                // a phone: a sheet
-  assert.equal(L.dockWidth(dock, 1440), 0);                               // under 1600px the page keeps its width and the panel floats
-  assert.equal(L.shapeOf(dock, 1440), "float"); assert.equal(L.shapeOf(dock, 1600), "dock"); assert.equal(L.shapeOf(dock, 390), "sheet");
-  assert.equal(L.dockWidth({ ...dock, w: 720 }, 1600), 720);
+  // LIVE6-013 (behaviour changed on purpose): it docks from 1360px (the page keeps 1060px), at most the window less 1060px; under
+  // that the page keeps its width and the panel floats
+  assert.equal(L.dockWidth(dock, 1280), 0);
+  assert.equal(L.dockWidth(dock, 1440), 380);
+  assert.equal(L.shapeOf(dock, 1280), "float"); assert.equal(L.shapeOf(dock, 1440), "dock"); assert.equal(L.shapeOf(dock, 390), "sheet");
+  assert.equal(L.dockWidth({ ...dock, w: 720 }, 1920), 720);
+  assert.equal(L.dockWidth({ ...dock, w: 720 }, 1600), 540);
   assert.equal(L.dockWidth({ ...dock, w: 720 }, 1000), 0);
   const fl = { ...L.DEFAULT_LAYOUT, mode: "float", w: 400, h: 500, x: 100, y: 100 };
   const m = L.dragged(fl, -500, 9000, 1440, 900);
   assert.deepEqual([m.x, m.y], [0, 400]);
-  const s = L.resized({ ...L.DEFAULT_LAYOUT, mode: "dock", w: 400 }, -100, 0, 1440, 900);
+  const s = L.resized({ ...L.DEFAULT_LAYOUT, mode: "dock", w: 400 }, -100, 0, 1920, 900);
   assert.equal(s.w, 500);                                                 // dragged left: wider
+  assert.equal(L.resized({ ...L.DEFAULT_LAYOUT, mode: "dock", w: 380 }, -100, 0, 1440, 900).w, 380);   // never past the page's room
   assert.equal(L.resized({ ...L.DEFAULT_LAYOUT, w: 400 }, 900, 0, 1440, 900).w, 300);
   const r = L.resized(fl, -50, -60, 1440, 900);
   assert.deepEqual([r.w, r.h, r.x, r.y], [450, 560, 50, 40]);             // the top-left corner moves, the bottom-right stays

@@ -83,7 +83,7 @@ export const themeApi = {
   business: (r: Region, theme: string) => api<Business>(`/research/theme-dive/business?${q(r, theme)}`),
   /** EXPORT: the theme's deck, PowerPoint or PDF (counted against the plan's monthly decks, as a company's deck is) */
   deck: (r: Region, theme: string, format: "pptx" | "pdf") => api<Response>(`/research/theme-dive/deck?${q(r, theme)}&format=${format}`, { raw: true }),
-  /** Themes already read and kept for everyone that match what's typed (R19: the search box's "Already read"). */
+  /** Themes StratLab has mapped and kept once for everyone that match what's typed (R19; the search box's shared "Ready to open" list). */
   suggest: (r: Region, typed: string) => api<{ items: LibraryTheme[] }>(`/research/theme-library/suggest?${q(r, typed)}`),
   draft: (r: Region, theme: string) => api<{ result: string; slug: string | null; problem?: string }>("/admin/blog/theme", { method: "POST", body: { q: theme, region: r } }),
 };
@@ -91,4 +91,4 @@ export const themeApi = {
 /** The theme's words in a file name, as the server writes them (theme_data.slug): "India defence" is "india-defence". */
 export const themeSlug = (theme: string) => theme.split(/\s+/).filter(Boolean).join(" ").slice(0, 80).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
 
-export { amount, pc, times, points, span, layerLines, medCell, calcOf, CALC_WORDS, MIN_BASE, NO_WORDS, ownWords, type LayerLine } from "./themeFormat";
+export { amount, pc, times, points, span, layerLines, medCell, calcOf, CALC_WORDS, MIN_BASE, NO_WORDS, ownWords, libraryLabel, LIBRARY_HEAD, type LayerLine } from "./themeFormat";

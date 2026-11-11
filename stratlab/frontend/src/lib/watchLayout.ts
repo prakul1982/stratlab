@@ -12,6 +12,9 @@ export interface PanelLayout {
   list: string | null; sort: SortMode;
   /** The chart open in the panel, as "MARKET:SYMBOL" (null: the list). */
   chart: string | null;
+  /** The page a panel floating over it was opened on (LIVE6-013): a float belongs to that page, so it is shut on any other page however
+   *  the person got there (a link, or the address typed); null for a docked panel, which goes with every page. */
+  at?: string | null;
 }
 
 export { LAYOUT_KEY, isSheet };
@@ -35,22 +38,32 @@ export function clampLayout(raw: unknown, vw: number, vh: number): PanelLayout {
     list: typeof r.list === "string" && r.list.length <= 60 ? r.list : null,
     sort: r.sort === "change_desc" || r.sort === "change_asc" || r.sort === "name" ? r.sort : "custom",
     chart: typeof r.chart === "string" && /^[A-Z]{2,6}:[A-Za-z0-9^&._=-]{1,40}$/.test(r.chart) ? r.chart : null,
+    ...(typeof r.at === "string" && r.at.startsWith("/") && r.at.length <= 300 ? { at: r.at } : {}),
   };
 }
 
-/** A docked panel takes its width from the page, and a page drawn for a wide window is only right while it keeps about 1200px: under
- * this window width a "docked" panel floats in the bottom-right corner instead and the page is left as it is (found by the layout
- * lint, which showed pages built for a desktop window breaking at a docked panel's width). */
-export const DOCK_FROM = 1600;
+/** A docked panel takes its width from the page and the page reflows beside it. A page drawn for a desktop window stays right while it
+ * keeps PAGE_MIN px (the sidebar included): a docked panel is never wider than the window less that, so it docks from PAGE_MIN plus the
+ * narrowest panel; under DOCK_FROM a "docked" panel floats in the bottom-right corner instead. LIVE6-013: at 1440 (under the old 1600) a
+ * docked panel floated half the window high over the page's tables; it now takes its column there. */
+export const PAGE_MIN = 1060;
+export const DOCK_FROM = PAGE_MIN + MIN_W;
 
 export type PanelShape = "sheet" | "dock" | "float";
 /** How the panel is drawn at this window width. */
 export const shapeOf = (l: PanelLayout, vw: number): PanelShape => (isSheet(vw) ? "sheet" : l.mode === "dock" && vw >= DOCK_FROM ? "dock" : "float");
 
+/** A docked panel's width at this window width: the width chosen, at most the window less PAGE_MIN. */
+export const dockedW = (l: PanelLayout, vw: number): number => Math.max(MIN_W, Math.min(l.w, vw - PAGE_MIN));
+
 /** The panel's width a docked panel takes from the page (0 when shut, floating, or a sheet). */
 export function dockWidth(l: PanelLayout, vw: number): number {
-  return l.open && shapeOf(l, vw) === "dock" ? Math.min(l.w, vw - 320) : 0;
+  return l.open && shapeOf(l, vw) === "dock" ? dockedW(l, vw) : 0;
 }
+
+/** Whether a panel kept as open is shown on this page at load or after a change of page (LIVE6-013): a docked one on every page; one
+ * floating over the page only on the page it was opened on (one opened before pages were kept is shown, as it was). */
+export const showsOn = (l: PanelLayout, vw: number, path: string): boolean => l.open && (shapeOf(l, vw) === "dock" || !l.at || l.at === path);
 
 /** The panel's height as drawn. A "docked" panel on a window too narrow to dock floats in the corner over the page: there it is at
  * most half the window high, so the page's top half (its heading and each card's buttons) stays clear (Instinct #11, 2 Nov: at 560px
@@ -84,7 +97,7 @@ const within = (v: number, lo: number, hi: number): number => Math.round(Math.ma
  * only its left edge (dragging left makes it wider); a floating one is sized from its top-left corner unless told which edge. */
 export function resized(l: PanelLayout, dx: number, dy: number, vw: number, vh: number, edge: Edge = "nw"): PanelLayout {
   const maxW = Math.max(MIN_W, Math.min(MAX_W, vw - 80)), maxH = Math.max(MIN_H, vh - 32);
-  if (l.mode === "dock") return { ...l, w: within(l.w - dx, MIN_W, maxW) };
+  if (l.mode === "dock") return { ...l, w: within(dockedW(l, vw) - dx, MIN_W, Math.max(MIN_W, Math.min(maxW, vw - PAGE_MIN))) };
   const x0 = l.x ?? vw - l.w - 16, y0 = l.y ?? vh - l.h - 16;
   let left = x0, top = y0, right = x0 + l.w, bottom = y0 + l.h;
   if (edge.includes("w")) left = within(left + dx, Math.max(0, right - maxW), right - MIN_W);

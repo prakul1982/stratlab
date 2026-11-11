@@ -43,6 +43,14 @@
 .hm-controls > .k-field > .k-seg button { height: auto; min-height: 32px; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; }
 .hm-controls > .k-field > .k-chipwrap { min-height: var(--ctl); display: flex; align-items: center; }
 .hm-controls > .k-field > select.k-input { width: auto; min-width: 190px; }
+/* LIVE6-019: a phone's settings fold into one row (what is picked, and Options); wider screens never show the row */
+.hm-fold { display: none; }
+@media (max-width: 640px) {
+  .hm-fold { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); margin-bottom: var(--s3); }
+  .hm-fold-sum { min-width: 0; font-size: var(--t-label); color: var(--ink-2); line-height: 1.4; }
+  .hm-fold > .btn { flex: none; }
+  .hm-controls.folded > .k-field:not(:has(.k-chipwrap)) { display: none; }      /* folded: only the period's chips */
+}
 /* the search box in the map card's header row, beside Map / Table */
 .hm-search.k-input { width: 220px; max-width: 100%; }
 @media (max-width: 640px) {

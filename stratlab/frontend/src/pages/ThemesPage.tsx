@@ -4,7 +4,7 @@ import { useApp } from "../lib/app";
 import { fmtDate, marketTz } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { THEME_IDEAS, researchApi, useRegion, type SectorAI } from "../lib/research";
-import { themeApi, type Business, type Dive, type LibraryTheme, type Listing, type NewsRow, type Prices } from "../lib/theme";
+import { LIBRARY_HEAD, libraryLabel, themeApi, type Business, type Dive, type LibraryTheme, type Listing, type NewsRow, type Prices } from "../lib/theme";
 import { StoredNote, StoredStamp, useStoredRefresh } from "../components/StoredStamp";
 import { RegionSwitch } from "../components/Research";
 import { ChainCard, ClaimsCard, LayerCard, ListingsCard, MembersCard, NewsCard, NumbersCards, SubThemesCard, ThemeDownloads } from "../components/ThemeDive";
@@ -225,10 +225,9 @@ export function ThemesPage() {
   );
 }
 
-const REGION_WORD: Record<string, string> = { IN: "India", US: "US" };
-
-/** "Already read": themes kept for everyone that match what's typed, so a search for one of them opens at once (R19). Signed-in only,
- *  as the page is; nothing shows until there is one. */
+/** The shared library: themes StratLab has mapped and kept once for everyone that match what's typed, so a search for one of them opens
+ *  at once (R19). Not this account's reading history, so it is headed "Ready to open" with the date the map was updated (LIVE6-012).
+ *  Signed-in only, as the page is; nothing shows until there is one. */
 function AlreadyRead({ region, typed, current, onPick }: { region: "IN" | "US"; typed: string; current: string; onPick: (t: string) => void }) {
   const [items, setItems] = useState<LibraryTheme[]>([]);
   useEffect(() => {
@@ -242,10 +241,10 @@ function AlreadyRead({ region, typed, current, onPick }: { region: "IN" | "US"; 
   if (!shown.length) return null;
   return (
     <div className="k-row theme-already" data-testid="theme-already">
-      <span className="k-small k-muted">Already read:</span>
+      <span className="k-small k-muted" title="Themes already mapped on StratLab, kept for everyone">{LIBRARY_HEAD}</span>
       {shown.map((i) => (
         <button key={i.q} type="button" className="btn quiet sm" onClick={() => onPick(i.name)}>
-          {i.name} · {REGION_WORD[i.region] ?? i.region}{i.at ? `, read ${fmtDate(i.at.slice(0, 10), { year: false })}` : ""}
+          {libraryLabel(i, (d) => fmtDate(d, { year: false }))}
         </button>
       ))}
     </div>

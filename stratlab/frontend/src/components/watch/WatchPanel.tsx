@@ -23,12 +23,13 @@ import { lastTradingDay } from "../../lib/marketDay";
 import { marketState } from "../../lib/marketHours";
 import { signCls, currencySymbol } from "../../lib/format";
 import { getSparks, live } from "../../lib/watchApi";
+import { keepQuotes, keptQuotes } from "../../lib/watchQuotes";
 import type { LiveSub } from "../../lib/watchLive";
 import {
   addOutcome, asOfLine, changeAbsOf, changeArrow, changeOf, changeText, countSaid, currencyOf, DEFAULT_ID, itemFromPath, labelOf, listName, listsSaid, moveItem, newestDay,
   nextSort, POPULAR, priceText, SORTS, sortItems, subtitleOf, symbolsSaid, tabTitle, type SortMode, type WatchItem, type WatchQuote,
 } from "../../lib/watch";
-import { dragged, DOCK_FROM, drawnHeight, EDGES, isSheet, MAX_W, MIN_H, MIN_W, resized, shapeOf, type Edge, type PanelLayout } from "../../lib/watchLayout";
+import { dockedW, dragged, DOCK_FROM, drawnHeight, EDGES, isSheet, MAX_W, MIN_H, MIN_W, resized, shapeOf, type Edge, type PanelLayout } from "../../lib/watchLayout";
 import "./watch.css";
 
 export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout: PanelLayout; patch: (p: Partial<PanelLayout>) => void; vw: number; vh: number; onClose: () => void }) {
@@ -37,7 +38,8 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
   const sheet = isSheet(vw);
   const shape = shapeOf(layout, vw);
   // the layout as drawn: a "docked" panel on a window too narrow to dock in floats in the corner (watchLayout.DOCK_FROM)
-  const drawn: PanelLayout = shape === "dock" ? layout : { ...layout, mode: "float", h: drawnHeight(layout, vw, vh) };
+  // a docked one is at most the window less the page's room (watchLayout.PAGE_MIN), the width the page gives it
+  const drawn: PanelLayout = shape === "dock" ? { ...layout, w: dockedW(layout, vw) } : { ...layout, mode: "float", h: drawnHeight(layout, vw, vh) };
   const box = useRef<HTMLDivElement>(null);
   const plan = me?.plan_info.name ?? "Free";
   const listId = w.lists?.some((l) => l.id === layout.list) ? layout.list! : DEFAULT_ID;
@@ -56,7 +58,12 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
 
   // ---------- prices: the rows in view, and the chart open ----------
   const [visible, setVisible] = useState<string[]>([]);
-  const [quotes, setQuotes] = useState<Record<string, WatchQuote | null>>({});
+  // the prices last seen on this device at once, each with its own time, until the reads replace them (LIVE6-013)
+  const [quotes, setQuotes] = useState<Record<string, WatchQuote | null>>(() => keptQuotes(me?.id ?? "guest"));
+  useEffect(() => {
+    const t = window.setTimeout(() => keepQuotes(me?.id ?? "guest", quotes), 1000);
+    return () => window.clearTimeout(t);
+  }, [quotes]);       // eslint-disable-line react-hooks/exhaustive-deps
   const [ticks, setTicks] = useState<Record<string, number>>({});
   const [sparks, setSparks] = useState<Record<string, number[]>>({});
   const [tickAt, setTickAt] = useState<number | null>(null);          // when the last live tick came in: the foot's "as of" (LIVE4-009)
@@ -253,7 +260,7 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
   };
 
   const chartH = Math.max(260, Math.min(640, (shape === "float" ? drawn.h : vh) - 300));          // the header, the chart's toolbar and its range row take about 300px
-  const style = { ["--mw-w" as string]: `${layout.w}px`, ["--mw-h" as string]: `${Math.max(MIN_H, drawn.h)}px`, ["--mw-x" as string]: layout.x == null ? "auto" : `${layout.x}px`, ["--mw-y" as string]: layout.y == null ? "auto" : `${layout.y}px` };
+  const style = { ["--mw-w" as string]: `${drawn.w}px`, ["--mw-h" as string]: `${Math.max(MIN_H, drawn.h)}px`, ["--mw-x" as string]: layout.x == null ? "auto" : `${layout.x}px`, ["--mw-y" as string]: layout.y == null ? "auto" : `${layout.y}px` };
   const used = list?.items.length ?? 0;
   const said = list ? symbolsSaid(w.limits, used, plan) : null;
   const named = list ? (list.default ? list.name : listName(list.name)) : "";
@@ -264,7 +271,7 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
     <div ref={box} className={`mw mw-${shape}`} style={style} data-testid="market-watch" aria-label="Market Watch"
       {...(sheet ? { role: "dialog", "aria-modal": true } : { role: "complementary" })}>
       {/* the grips: the left edge is the one a keyboard reaches (a separator with its value); a floating panel has the other seven too */}
-      {!sheet && <div className="mw-size w" role="separator" aria-orientation="vertical" aria-valuemin={MIN_W} aria-valuemax={MAX_W} aria-valuenow={layout.w} aria-valuetext={`${layout.w} pixels wide`}
+      {!sheet && <div className="mw-size w" role="separator" aria-orientation="vertical" aria-valuemin={MIN_W} aria-valuemax={MAX_W} aria-valuenow={drawn.w} aria-valuetext={`${drawn.w} pixels wide`}
         aria-label={shape === "float" ? "Resize the panel. Left and right arrow keys change its width, up and down its height." : "Resize the panel. Use the left and right arrow keys."}
         tabIndex={0} onPointerDown={grab("size", "w")} onKeyDown={sizeKey} />}
       {shape === "float" && EDGES.filter((edge) => edge !== "w").map((edge) => <div key={edge} className={`mw-size ${edge}`} data-edge={edge} aria-hidden="true" onPointerDown={grab("size", edge)} />)}

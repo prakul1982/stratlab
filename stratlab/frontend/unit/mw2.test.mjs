@@ -243,7 +243,7 @@ test("the panel is never off-screen after the window is resized, and its size an
   assert.match(launcher, /const layout = useMemo\(\(\) => clampLayout\(raw, vw, vh\), \[raw, vw, vh\]\)/);
   assert.match(launcher, /window\.addEventListener\("resize", on\)/);
   // the top bar's button on a phone goes by what is drawn: a sheet kept open but not shown at load opens on the first press
-  assert.match(launcher, /const open = d\.open === "toggle" \? !\(layout\.open && asked\.current\) : d\.open !== false;/);
+  assert.match(launcher, /const open = d\.open === "toggle" \? !shownNow\.current : d\.open !== false;/);
   // eight grips on a floating panel (the left one is the keyboard's), each for a finger too; the header drags it
   assert.match(p, /shape === "float" && EDGES\.filter\(\(edge\) => edge !== "w"\)\.map\(/);
   assert.match(p, /<div className="mw-head" onPointerDown=\{grab\("move"\)\}>/);
