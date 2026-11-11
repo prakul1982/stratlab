@@ -345,7 +345,11 @@ MODEL_NEEDS = {
                               r"to (?:the|their|customers'?) (?:designs|specifications)|job work|for (?:global )?(?:brands|oems)|"
                               # lane n2: a foundry makes chips to its customers' designs (R27: foundries are contract makers)
                               r"(?:dedicated|independent|pure[- ]play|specialty) (?:semiconductor )?foundr|\bas a foundry\b|foundry (?:services|business)|"
-                              r"designs provided by (?:them|its customers|our customers)",
+                              r"designs provided by (?:them|its customers|our customers)|"
+                              # R36: chips made "using specialty process technologies" (Tower) and wafers to customers' specifications
+                              r"manufactur\w*\s+(?:integrated circuits|semiconductors|chips|wafers)\s+(?:using|with|on)\s+(?:its\s+|their\s+)?(?:own\s+)?"
+                              r"(?:specialty|advanced|mature|analog|differentiated)?\s*process(?:es)? technolog|"
+                              r"(?:to|according to|based on) (?:its |our |their )?customers?'? (?:own |proprietary )?(?:\w+ )?(?:designs|specifications)",
     "lending": r"\bloan|lend|credit|financ|bank|nbfc|microfinance|mortgage|deposit",
     "underwriting": r"insur|underwrit|premium|reinsur|assurance",
     "broking": r"brok|intermediar|distribut|commission|agent|advis|wealth|insurance web|aggregator",
@@ -668,6 +672,10 @@ def refine_model(model, evidence) -> str:
     # of their own products, so the foundry layer held makers and the one contract maker had no layer): a foundry is a contract maker
     if model in ("manufacturing", "unknown", "") and foundry(evidence):
         return "contract_manufacturing"
+    # R36 (GPT review of the live R35 deck: STMicroelectronics among the contract makers): a chip maker that names products of its own and no
+    # customers' designs is a maker of its own products (an IDM), whatever "contract manufacturing" its encyclopedia line says
+    if model == "contract_manufacturing" and chip_idm(evidence):
+        model = "manufacturing"
     if model in ("manufacturing", "fabless", "unknown", "") and re.search(SEMI_INDUSTRY, text, re.I):
         fab, out = re.search(FAB_OWN, own, re.I), re.search(OUTSOURCED, own, re.I)
         if fab and not out:
@@ -680,6 +688,11 @@ def refine_model(model, evidence) -> str:
     # marketplace (platform); a retailer with a marketplace beside its stores stays a retailer, the marketplace its tag
     if model == "retail" and re.search(MODEL_SAYS["platform"], own, re.I) and not re.search(RETAIL_STOCK, own, re.I):
         return "platform"
+    # R36 (GPT review of the live R35 Consumer retail deck: Amazon, "products to be sold by us and by third parties", among marketplaces that
+    # earn commissions): a company whose own words say it sells goods of its own (sold by us, its own stores, first-party, inventory it owns)
+    # is a retailer, its marketplace beside them a tag
+    if model == "platform" and re.search(SELLS_OWN, own, re.I):
+        return "retail"
     if model in ("manufacturing", "components") and re.search(METALS_INDUSTRY, industry, re.I):
         return one(("commodity_mining", "metal_processing"), REFINE_HINTS) or model
     return model
@@ -702,11 +715,27 @@ _OWN_CHIPS = (r"(?:manufactur\w*|\bmakes?|\bmakers?|\bproduc(?:es|ers?)|\bdevelo
 # q1: a foundry's own words (it makes chips to its customers' designs); "strong" ones stand whatever else its words name, the plain
 # "semiconductor foundry" only when it names no machines or tools of its own (an equipment maker's customers are foundries)
 FOUNDRY_STRONG = (r"\bas a foundry\b|designs provided by (?:them|its customers|our customers|customers)|(?:dedicated|independent|pure[- ]play) "
-                  r"(?:specialty )?(?:semiconductor )?foundr|contract manufactur\w*(?: company| services)?\b[^.]{0,30}\b(?:semiconductors?|chips?|wafers?|"
-                  r"integrated circuits?)|(?:semiconductors?|chips?|wafers?|integrated circuits?)\b[^.]{0,40}\bcontract manufactur|"
+                  r"(?:specialty )?(?:semiconductor )?foundr|\bfoundry services\b|"
+                  # R36: what it makes is its customers' (wafers to customer specifications, chips to customers' designs)
+                  r"(?:to|according to|based on) (?:its |our |their )?customers?'? (?:own |proprietary )?(?:\w+ )?(?:designs|specifications)|"
                   # outsourced assembly and test (OSAT): packaging and testing others' chips is contract making too (R27)
                   r"\bosat\b|(?:assembly|packaging) and test(?:ing)? services")
-FOUNDRY_WORDS = r"(?:specialty|semiconductor|wafer|analog|logic) foundr(?:y|ies)\b|\bfoundry (?:company|business|services|provider)"
+# R36 (GPT review of the live R35 Semiconductors deck: STMicroelectronics, "a semiconductor contract manufacturing and design company" that
+# makes "a wide range of microelectronics, including the widely used STM8 and STM32 microcontrollers", among the contract makers): contract
+# manufacturing of chips said in so many words is a foundry's only when the company names no products of its own (OWN_PRODUCTS); so is a maker
+# of chips "using specialty process technologies" (Tower: what a specialty foundry offers its customers, not a product of its own)
+FOUNDRY_WORDS = (r"(?:specialty|semiconductor|wafer|analog|logic) foundr(?:y|ies)\b|\bfoundry (?:company|business|services|provider)|"
+                 r"contract manufactur\w*(?: company| services)?\b[^.]{0,30}\b(?:semiconductors?|chips?|wafers?|integrated circuits?)|"
+                 r"(?:semiconductors?|chips?|wafers?|integrated circuits?)\b[^.]{0,40}\bcontract manufactur|"
+                 r"manufactur\w*\s+(?:integrated circuits|semiconductors|chips|wafers)\s+(?:using|with|on)\s+(?:its\s+|their\s+)?(?:own\s+)?"
+                 r"(?:specialty|advanced|mature|analog|differentiated)?\s*process(?:es)? technolog")
+# a company's own products named in its words: a range or portfolio of them, its own brands or product lines, products widely used
+OWN_PRODUCTS = (r"(?:manufactur\w*|makes?|produc(?:es|ing)|designs?|sells?|markets?|offers?)\s+(?:a\s+)?(?:wide|broad|diverse|large)\s+"
+                r"(?:range|portfolio|array|variety|catalog(?:ue)?)\s+of\b|\b(?:its|our)\s+(?:own\s+)?(?:branded\s+)?(?:products|brands?|"
+                r"product (?:lines?|portfolio|families))\b|\bwidely used\b|\bportfolio of (?:its own )?(?:products|semiconductors|chips)\b")
+# contract making in words no product company uses of itself: a foundry's own, or an EMS, CDMO or job worker's
+CONTRACT_STRONG = (FOUNDRY_STRONG + r"|\bems\b|electronics manufacturing services|\bcdmo\b|\bcmo\b|\bcrams\b|\bodm\b|on behalf of|job work|"
+                   r"for (?:global )?(?:brands|oems)")
 # a company that has foundries make its chips, or makes and sells its own (an IDM), is no foundry
 NOT_FOUNDRY = (r"(?:rel(?:y|ies|ying) (?:on|upon)|third[- ]party|external|outside|outsourc\w*|through|by)\s+(?:[\w-]+\s+){0,2}foundr|\bidm\b|"
                r"integrated device manufactur|\bdesigns?,? (?:develops?,? )?(?:and )?manufactures?,? and sells\b")
@@ -724,7 +753,18 @@ def foundry(evidence) -> bool:
         return False
     if re.search(FOUNDRY_STRONG, own, re.I):
         return True
-    return bool(re.search(FOUNDRY_WORDS, own, re.I)) and not re.search(_OWN_EQUIPMENT, own, re.I) and not chip_materials(own)
+    return (bool(re.search(FOUNDRY_WORDS, own, re.I)) and not re.search(_OWN_EQUIPMENT, own, re.I) and not chip_materials(own)
+            and not re.search(OWN_PRODUCTS, own, re.I))
+
+
+def chip_idm(evidence) -> bool:
+    """Whether a company given contract manufacturing makes and sells chips of its own (R36: STMicroelectronics): its industry or words are
+    a chip maker's, its own words name products of its own (OWN_PRODUCTS), and none says it makes to others' designs or orders
+    (CONTRACT_STRONG), so it is no foundry (foundry)."""
+    industry, own = _split_evidence(evidence)
+    own = _FOUNDRY_CUSTOMERS.sub(" ", str(own or ""))
+    return (bool(re.search(SEMI_INDUSTRY, f"{industry} {own}", re.I)) and bool(re.search(OWN_PRODUCTS, own, re.I))
+            and not re.search(CONTRACT_STRONG, own, re.I) and not foundry(evidence))
 
 
 def chip_materials(own) -> bool:
@@ -732,6 +772,26 @@ def chip_materials(own) -> bool:
     chips or devices of its own (R34; R35: one rule for its model and for how surely its evidence shows it)."""
     own = re.sub(r"(?i)\boriginal equipment\b", " ", str(own or ""))
     return bool(re.search(CHIP_MATERIALS, own, re.I)) and not re.search(_OWN_EQUIPMENT, own, re.I) and not re.search(_OWN_CHIPS, own, re.I)
+
+
+SELLS_OWN = (r"\bsold by us\b|\bwe sell (?!services|advertising|ads\b)|\bsells? (?:its|our) own (?:products|goods|merchandise)|"
+             r"\bfirst[- ]party (?:sales|retail|products|goods)|\b1p\b|\b(?:our|its) (?:own )?(?:online (?:and physical )?|physical |retail )?stores\b|"
+             r"\b(?:own|owned) inventory|\binventory (?:we|it) owns?\b|\bnet product sales\b")
+# R36 (GPT review of the live R35 Semiconductors deck: FTC Solar's trackers and T1 Energy's modules among "Makers of their own products"): the SEC
+# files solar module, tracker and inverter makers under semiconductors (SIC 3674); one whose own words describe solar products or installations
+# and no chips is in another business, whatever its code says. (official industry, its own words of another business, chip words that keep it)
+OFF_INDUSTRY = ((r"semiconductor|\bchips?\b|integrated circuits?",
+                 r"\bsolar\b|photovoltaic|\bpv\b (?:modules?|panels?|cells?|industry|systems?)",
+                 r"integrated circuits?|\bchips?\b|chipsets?|microcontrollers?|(?:micro)?processors?|\bics\b|\basics?\b|\bgpus?\b|"
+                 r"wafer fab|semiconductor (?:devices|chips|equipment|manufacturing)|power semiconductors?|\bleds?\b|lasers?"),)
+
+
+def off_industry(evidence) -> bool:
+    """Whether a company's official industry files it with a theme its own words show it is not in (R36, OFF_INDUSTRY: a solar module or
+    tracker maker filed as semiconductors): kept out of the theme's layers' figures, as a company of another business."""
+    industry, own = _split_evidence(evidence)
+    return any(re.search(ind, industry, re.I) and re.search(other, own, re.I) and not re.search(keep, own, re.I)
+               for ind, other, keep in OFF_INDUSTRY)
 
 
 RETAIL_STOCK = (r"\bstores?\b|\bshops?\b|inventor(?:y|ies)|\bretailer|\bwe sell\b|\bsells\b|\bselling\b|merchandise|own[- ]brands?|private label|"
