@@ -108,6 +108,7 @@ from . import results as results_calendar
 from . import corp_actions
 from . import surveillance
 from . import etf_nav
+from . import heatmap
 from . import vix
 from . import biz_updates, library_seed, shareholders
 from . import positioning
@@ -507,6 +508,7 @@ app.include_router(redflags_routes.router)     # /research/redflags, /research/h
 app.include_router(stock_futures.router)       # /trade/stock-futures
 app.include_router(slb.router)                 # /invest/stock-lending
 app.include_router(mtf.router)                 # /invest/margin-funding
+app.include_router(heatmap.router)             # /invest/heatmap: the stock heatmap's tiles, from the daily run's stored rows
 app.include_router(stock_desks.admin_router)   # /admin/stock-desks
 app.include_router(ai_admin.router)            # /admin/ai: the AI panel
 app.include_router(library_admin.router)       # /admin/stored: everything kept once for every user (R19)
