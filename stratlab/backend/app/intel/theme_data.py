@@ -505,7 +505,8 @@ def chain_table(blocks: list[dict]) -> dict:
             "unranked": [{"layer": r["layer"], "why": r["why"]} for r in out] if hi else []}
 
 
-RANK_WHY = {"few": "fewer companies with the figure than a ranking needs", "cover": "the figure for under half its companies",
+# why a layer a table shows is not ranked, in one short clause (m2); "few" is said with the floor itself (unranked_rows)
+RANK_WHY = {"cover": "the figure for under half its companies",
             "sparse": "how most of its companies earn is not shown", "family": "a different kind of business", "sub": "a different commodity",
             "official": "an exchange industry, not one of the map's layers", "rest": "companies outside the map's layers",
             "other": "not comparable with the ranked layers"}
@@ -547,7 +548,7 @@ def unranked_rows(rows: list, have: list, key: str) -> list[dict]:
             why = "sub"
         else:
             why = "other"
-        out.append({**r, "why": f"fewer than {HEADLINE_MIN} companies with the figure" if why == "few" else RANK_WHY[why]})
+        out.append({**r, "why": RANK_WHY.get(why) or f"fewer than {HEADLINE_MIN} companies with the figure"})
     return out
 
 
