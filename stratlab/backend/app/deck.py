@@ -183,6 +183,36 @@ def sentences(text: str, limit: int) -> str:
     return _no_joiner(cut[:cut.rfind(" ")] if " " in cut else cut) + "…"
 
 
+_CLAUSE_END = re.compile(r"[,;:](?=\s)|\s[–—-](?=\s)|\s(?=\()|(?<=\))(?=\s)")
+_CLAUSE_LEAD = re.compile(r"\s(?:and|or|which|that|who|where|while|including|such as|as well as|along with|with|through|across|for)\s", re.I)
+
+
+def whole_clause(text: str, limit: int) -> str:
+    """A description for a table cell (m2, live R32 decks: "…(technical grade and formulations)…", "…aero-engines, avionics…"): the whole
+    sentences that fit `limit` characters, as sentences() keeps them; where the first sentence alone is longer, its whole clauses that
+    fit, the trailing clause dropped at the last comma, semicolon, colon, dash, bracket or joining word ("and", "including", "which"),
+    with no ellipsis and no bracket left open."""
+    got = sentences(text, limit)
+    if not got.endswith("…"):
+        return got
+    text = re.sub(r"\[\d+\]", "", re.sub(r"\s+", " ", text or "")).strip()
+    cut = text[:limit + 1]
+
+    def closed(t: str) -> str:
+        t = _no_joiner(t)
+        while t.count("(") > t.count(")"):               # a bracket the cut left open goes with the clause it opened
+            t = _no_joiner(t[:t.rfind("(")])
+        return t.rstrip(" ,;:-–—(")
+    least = max(24, int(limit * 0.4))
+    for at in sorted({m.start() for rx in (_CLAUSE_END, _CLAUSE_LEAD) for m in rx.finditer(cut)}, reverse=True):
+        kept = closed(text[:at])                         # the latest place a clause ends, or a new one is joined on
+        if re.match(r"\s*(?:and|or)\s", text[at:], re.I) and re.search(r"\s(?:and|or|&)\s+[A-Za-z-]+$", kept):
+            kept = closed(re.sub(r"\s(?:and|or|&)\s+[A-Za-z-]+$", "", kept))      # "…properties and Management [and Hospitality…]": the pair goes together
+        if len(kept) >= least:
+            return kept
+    return closed(got[:-1])
+
+
 _JOINER = re.compile(r"[\s,;:(–-]+(?:and|or|of|the|a|an|for|in|to|with|by|on|at|from|its|their|&)$", re.I)
 
 
@@ -834,6 +864,52 @@ def _room_for_counts(b: dict, widths: list[float]) -> list[float]:
     return out
 
 
+def _two_line_width(text: str, size: float, bold: bool = False) -> float:
+    """The narrowest column in which a text shows whole on two lines, no word broken (one line when it is one word)."""
+    words = str(text).split()
+    best = _width(" ".join(words), size, bold)
+    for k in range(1, len(words)):
+        best = min(best, max(_width(" ".join(words[:k]), size, bold), _width(" ".join(words[k:]), size, bold)))
+    return best
+
+
+def _keep_whole(b: dict, widths: list[float], size: float = BODY_MIN) -> list[float]:
+    """A compact table's column widths with no column under what its cells need to show whole (m2, live R32 Semiconductors: a sector
+    table's last page read "indie…" under "Compa/ny" and a median "+35…", its name and period columns given away to the counted cells):
+    a header's widest word; a figure, a date or another short cell on one line; a figure with its count on two lines ("127 days" over
+    "(79 of 95)"); a name in its shortest whole form (label_forms) on two lines. A column under its floor takes the room from the columns
+    over theirs. As given when the table is too narrow for every floor."""
+    pad = 0.22
+    strong = set(b.get("strong") or ())
+    floors = []
+    for c, hd in enumerate(b["head"]):
+        need = max((_width(x, size, True) for x in str(hd).split()), default=0.0)
+        for i, r in enumerate(b["rows"]):
+            if isinstance(r, dict) or c >= len(r):
+                continue
+            t = _cell_text(r[c])
+            if not t:
+                continue
+            if counted_cell(t):
+                need = max(need, _two_line_width(t, size, True))
+            elif len(t) <= 16:
+                need = max(need, _width(t, size, i in strong))
+            elif not isinstance(r[c], dict):
+                need = max(need, min(_two_line_width(f, size, i in strong) for f in label_forms(t)))
+        floors.append(need + pad)
+    short = {c: floors[c] - x for c, x in enumerate(widths) if floors[c] > x + 1e-6}
+    if not short or sum(floors) > sum(widths) + 1e-6:
+        return widths
+    spare = {c: x - floors[c] for c, x in enumerate(widths) if x > floors[c] + 1e-6}
+    want, have = sum(short.values()), sum(spare.values())
+    out = list(widths)
+    for c, x in short.items():
+        out[c] += x
+    for c, x in spare.items():
+        out[c] -= x * want / have
+    return out
+
+
 def table_layout(b: dict, w: float, h: float) -> dict:
     """Column widths, the font size (13 down to 11 pt, never smaller) and each row's height so the table fits its box; rows that still
     don't fit are left out (callers page their rows with table_pages, so none is). A row {"group": text} is a full-width heading row."""
@@ -850,7 +926,7 @@ def table_layout(b: dict, w: float, h: float) -> dict:
         # as their line. R35: no cell is cut to "Component…": a column takes the room its neighbours don't use, a name that still doesn't
         # fit is said shorter (short_label), and one that can't be takes a second line. A figure with its count in brackets (a median
         # row's cell) is never cut either: its column is widened where the others have room, and it wraps where they don't
-        widths = _room_for_counts(b, _fit_columns(b, widths))
+        widths = _keep_whole(b, _room_for_counts(b, _fit_columns(b, widths)))       # m2: and no column under what its cells need whole
         st = set(b.get("strong") or ())
         given = b["rows"]
 
@@ -2229,7 +2305,9 @@ def descriptive_line(val: dict) -> str:
     pe_n = (val.get("pe") or {}).get("n") or 0
     k = (((val.get("peers") or {}).get("pe") or {}).get("n")) or 0
     head = "The theme's own median " + ", ".join(parts) if parts else "The theme's own valuation"
-    return f"{head}; comparable peers for {k} of {pe_n}, so no relative figure"
+    # m2 (live R32 Telecom: the one deck of 14 whose P/E line named no price date): the theme's own multiples are on prices too
+    priced = f", prices at the {_day(val['price_at'])} close" if parts and val.get("price_at") else ""
+    return f"{head}{priced}; comparable peers for {k} of {pe_n}, so no relative figure"
 
 
 def layer_valuation_rows(val: dict):
@@ -2255,10 +2333,15 @@ def dated_peers(v: dict) -> dict:
     """The theme's comparisons with its peers as every slide reads them (R35, GPT reviews of R31.5-R31.9: the live Retail deck's P/E line
     named no price date): the P/E one carries the close its prices are of, the dive's own or, for a dive kept from before, the deck's
     "as of" day. publication_gate set it after the slides were written, so no line had it."""
-    peers = (((v.get("sections") or {}).get("valuation") or {}).get("peers")) or {}
-    if isinstance(peers.get("pe"), dict) and not peers["pe"].get("as_of") and v.get("as_of"):
-        peers["pe"]["as_of"] = str(v["as_of"])[:10]
-    return peers
+    val = (v.get("sections") or {}).get("valuation") or {}
+    found = val.get("peers") or {}
+    if isinstance(found.get("pe"), dict) and not found["pe"].get("as_of") and v.get("as_of"):
+        found["pe"]["as_of"] = str(v["as_of"])[:10]
+    # m2: the valuation's own price day (descriptive_line: a theme with no comparable peers states its own P/E, on the same close)
+    day = (found.get("pe") or {}).get("as_of") if isinstance(found.get("pe"), dict) else None
+    if val and not val.get("price_at") and (day or v.get("as_of")):
+        val["price_at"] = str(day or v["as_of"])[:10]
+    return found
 
 
 def peer_moved_line(pp: dict) -> str:
@@ -2326,47 +2409,87 @@ def _refs(slides: list) -> None:
                                "note": fix(it.get("note"))} for it in b["items"]]
 
 
+UPDATES_TITLE = "Dated company updates"
+_AUDITOR_KIND = re.compile(r"\b(statutory|secretarial|internal|cost|joint)\s+auditors?\b", re.I)
+_AUDITOR_NEW = re.compile(r"\bappoint\w*\b.{0,120}\bauditors?\b|\bauditors?\b.{0,80}\b(?:appointed|appointment)\b|\bin place of\b|"
+                          r"casual vacancy.{0,80}\b(?:fill|appoint)", re.I | re.S)
+_AUDITOR_CLEAR = re.compile(r"\bno (?:other )?(?:material )?(?:concerns?|issues?|reasons?)\b|\b(?:has|have|had) not raised any\b|"
+                            r"\bnot raised any (?:concerns?|issues?)\b|\bno concerns? (?:or issues? )?(?:was|were|has been|have been) raised\b", re.I)
+
+
+def auditor_update(x: dict) -> tuple[str, str]:
+    """(the event, its context) of an auditor's resignation as its filing states it (m2): which auditor when the filing's subject or text
+    names the kind, and, only where those words say so, that a new auditor was appointed and that no concerns were raised. Fixed patterns
+    over the stored filing; nothing is said that the filing doesn't."""
+    words = f"{x.get('subject') or ''} {x.get('text') or ''}"
+    kind = _AUDITOR_KIND.search(words)
+    fact = f"Resignation of the {kind.group(1).lower()} auditor" if kind else "Resignation of an auditor"
+    ctx = []
+    if _AUDITOR_NEW.search(words):
+        ctx.append("a new auditor was appointed")
+    if _AUDITOR_CLEAR.search(words):
+        ctx.append("the auditor raised no concerns")
+    return fact, ("The filing says " + " and that ".join(ctx) + ".") if ctx else ""
+
+
 def watch_list(v: dict, today: date) -> list[dict]:
-    """"Worth a watch" (the owner, 7 Nov: a list only, rule-based, each company with its factual trigger; no view of what to do): results filed but
-    not yet in the figures, an auditor's resignation, a promoter stake move of a point or more, results due in the next week, a net margin above
-    the EBITDA margin (flagged, no cause named: R27), an operating figure a quarter or more above or below a year before (not held), and a stale operating figure. Each row
-    is a fact with its day and the slide it is on."""
+    """"Dated company updates" (m2, the outside review of the live R32 decks; "Worth a watch" before: the owner, 7 Nov: a list only,
+    rule-based; no view of what to do). Each row is one event as a neutral fact (`fact`), its exact day (`at`), whether it is scheduled or
+    already announced or filed (`status`), where it is from (`source`, with the filing's `url` when held), what the source adds that a reader needs (`context`, "" when it
+    adds nothing) and the slide it is on (`ref`): results filed but not yet in the figures, an auditor's resignation, a promoter stake
+    move of a point or more, results scheduled in the next week, and an operating figure a quarter or more above or below a year before
+    (not held). An entry with no day is not a dated update: a net margin above the EBITDA margin stays on the data-confidence page. No
+    word says whether an event is good or bad."""
     sec = v.get("sections") or {}
     own, ev, q = sec.get("ownership") or {}, sec.get("events") or {}, sec.get("quarter") or {}
     out = []
     for x in q.get("earlier") or []:
         if x.get("filed_unread"):
-            out.append({"name": x["name"], "fact": f"Results filed on {_day(x['filed_unread'])}; the figures here are still {x.get('of') or 'an earlier quarter'}",
-                        "at": x["filed_unread"], "ref": "The latest quarter"})
+            out.append({"name": x["name"], "fact": f"Quarterly results; the figures in this deck are still {x.get('of') or 'an earlier quarter'}",
+                        "at": x["filed_unread"], "status": "Announced", "source": "Results filing", "ref": "The latest quarter"})
     for x in own.get("red_flags") or []:
         if "auditor" in str(x.get("label")).lower():
-            out.append({"name": x["name"], "fact": str(x["label"]), "at": x.get("at"), "ref": "Events"})
+            fact, ctx = auditor_update(x)
+            out.append({"name": x["name"], "fact": fact, "context": ctx, "at": x.get("at"), "status": "Announced", "source": "Exchange filing",
+                        "url": x.get("url"), "ref": "Events"})
     for x in own.get("holdings") or []:
         if changed(x.get("promoter_change"), 1.0):
             out.append({"name": x["name"], "fact": f"Promoters' stake {_pts(x['promoter_change'])} to {_pc(x.get('promoter'))} in the quarter to {_month(x.get('quarter'))}",
-                        "at": x.get("quarter"), "ref": "Ownership"})
+                        "at": x.get("quarter"), "status": "Filed", "source": "Shareholding filing", "ref": "Ownership"})
     soon = (today + timedelta(days=7)).isoformat()
     for x in ev.get("results_due") or []:
         if str(x.get("date")) <= soon:
-            out.append({"name": x["name"], "fact": f"Results due ({x.get('purpose') or 'financial results'})", "at": x.get("date"), "ref": "Events"})
-    for x in (v.get("checks") or {}).get("one_off") or []:
-        out.append({"name": x["name"], "fact": f"Net margin {_pc(x.get('net'))} is above its EBITDA margin {_pc(x.get('ebitda')).replace('.0%', '%')}; {ANOMALY_WHY}",
-                    "at": None, "ref": "Data confidence"})
+            # a day still ahead is scheduled; one already past, with no results stored for it, was the scheduled day (never "announced")
+            ahead = str(x.get("date"))[:10] >= today.isoformat()
+            out.append({"name": x["name"], "fact": results_purpose(x.get("purpose")), "at": x.get("date"),
+                        "status": "Scheduled" if ahead else "Was scheduled", "context": "" if ahead else "No results for it are in this deck yet.",
+                        "source": "Results calendar", "ref": "Events"})
     biz = v.get("business") or {}
     for g in (biz.get("layers") or []) + (biz.get("subs") or []):
         for r in g.get("rows") or []:
             if r.get("held") or biz_stale(r, today) or any(o["name"] == r["name"] and o["ref"] == "Operating" for o in out):
                 continue
-            if changed(r.get("change_year"), 25.0) and "%" not in (r.get("unit") or ""):
+            if changed(r.get("change_year"), 25.0) and "%" not in (r.get("unit") or "") and r.get("filed"):
                 out.append({"name": r["name"], "fact": f"{r.get('metric') or 'Operating figure'} {_bizchg(r['change_year'], r.get('unit'))} on a year before "
-                                                         f"({_period(r.get('period'), r.get('span') or 'month')})", "at": r.get("filed"), "ref": "Operating"})
+                                                         f"({_period(r.get('period'), r.get('span') or 'month')})", "at": r.get("filed"),
+                            "status": "Filed", "source": "Operating update", "url": r.get("url"), "ref": "Operating"})
     seen, uniq = set(), []
     for x in out:
         k = (x["name"], x["fact"])
-        if k not in seen:
+        if k not in seen and x.get("at"):
             seen.add(k)
             uniq.append(x)
     return uniq[:WATCH_MAX]
+
+
+def results_purpose(purpose) -> str:
+    """What a scheduled results day is for, as the calendar states it: "Financial results", or "Financial results; other business matters"
+    (the calendar's own "Financial Results/Other business matters", in sentence case; an acronym keeps its capitals)."""
+    parts = [p.strip() for p in re.split(r"\s*/\s*|\s*;\s*", str(purpose or "")) if p.strip()]
+    said = "; ".join(" ".join(w.lower() if w.istitle() else w for w in p.split()) for p in parts)
+    if not re.search(r"result", said, re.I):
+        said = f"financial results; {said}" if said else "financial results"
+    return said[:1].upper() + said[1:]
 
 
 WATCH_MAX = 16
@@ -2391,7 +2514,9 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> li
         with_, without = ch.get("net_with"), ch.get("net_without")
         moved = with_ is not None and without is not None and _pc(with_) != _pc(without)      # said only when leaving them out changes it (R18)
         rows.append(["Net above EBITDA margin", f"Net margin above the EBITDA margin at {_n(len(ch['one_off']), 'company', 'companies')}: {oo}.",
-                     "Marked † and left out of net-margin medians" + (f": the median net margin is {_pc(without)} without them, {_pc(with_)} with them." if moved else ".")])
+                     # m2: the flag has no day, so it is here and not among the dated updates; no cause is named (ANOMALY_WHY, R27)
+                     "Marked † and left out of net-margin medians" + (f": the median net margin is {_pc(without)} without them, {_pc(with_)} with them" if moved else "")
+                     + f"; {ANOMALY_WHY}."])
     if ch.get("held"):             # R30: a figure that failed a check: named with the check, never a cause
         hd = ch["held"]
         said = "; ".join(f"{x['name']}, {HELD_WORDS.get(x['key'], x['key'])} {_pc(x['value']) if x['key'] != 'pb' else str(x['value']) + 'x'} "
@@ -2602,13 +2727,13 @@ def growth_base_line(rows: list, amt, limit: int = 5) -> str:
 
 
 def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: date, chained: bool = True, lender: bool = False) -> None:
-    """The findings up front: what the figures show (with page references), the data-confidence page and "Worth a watch". Every sentence is a
+    """The findings up front: what the figures show (with page references), the data-confidence page and "Dated company updates". Every sentence is a
     computed fact from the view; no AI writes a figure here, and nothing says what to buy or what is cheap."""
     chain = v.get("chain") or {}
     sec = v.get("sections") or {}
     layers = [x for x in v.get("layers") or [] if any(c.get("status") != "unverified" for c in x.get("companies") or [])]
     from statistics import median as _median
-    from .intel.theme_data import headline_ok, of_words, period_basis, rank_pair
+    from .intel.theme_data import HEADLINE_MIN, headline_ok, of_words, period_basis, rank_pair
     cards = []
     # 1. value-chain economics: only when there are layers to set side by side (R18: no card that says it can't be done)
     own = [x for x in layers if not x.get("official") and x.get("revenue")]
@@ -2635,8 +2760,11 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
                      intensity=lambda t: t[7]) if chained else None
     if pair:
         fast, slow = pair
-        lines = [f"Fastest revenue growth in the latest year: {fast[0]}, median {_chg(fast[1])} at a median {mword} of {f_(fast[2])} ({of_words(fast[3], fast[4])}).",
-                 f"Slowest: {slow[0]}, median {_chg(slow[1])} at {f_(slow[2])} ({of_words(slow[3], slow[4])})."]
+        # m2: one sentence that says which layers it ranks (the headline floor), the fastest and the slowest in it
+        kinds = {(t[5] or {}).get("family") for t in gm if isinstance(t[5], dict)} - {None, ""}       # a layer of another family is left out of it
+        lines = [f"Among layers of at least {HEADLINE_MIN} companies with the figure{' and one kind of business' if len(kinds) > 1 else ''}, revenue grew fastest in the latest year in {fast[0]} "
+                 f"(median {_chg(fast[1])}, median {mword} {f_(fast[2])}, {of_words(fast[3], fast[4])}) and slowest in {slow[0]} "
+                 f"(median {_chg(slow[1])}, {f_(slow[2])}, {of_words(slow[3], slow[4])})."]
     else:
         g = (sec.get("growth") or {}).get("median") or {}
         m_ = ((sec.get("medians") or {}).get(measure) or {}).get("median")
@@ -2680,8 +2808,9 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
     conf = confidence_rows(v, cov, today, lender)
     cards.append({"title": "How far the figures go", "lines": [f"{counts_words(reconciled_counts(v, cov))}.", f"{len(conf)} checks on every figure, each with what it found."],
                   "note": "⟦Data confidence⟧"})
-    cards.append({"title": "Worth a watch", "lines": [f"{_n(len(watch), 'company', 'companies')} with a dated fact, picked by fixed rules, each with its trigger." if watch
-                                                      else "No company meets the rules today."], "note": "⟦Worth a watch⟧" if watch else ""})
+    cards.append({"title": UPDATES_TITLE, "lines": [f"{_n(len(watch), 'dated update')} at {_n(len({x['name'] for x in watch}), 'company', 'companies')}, "
+                                                    "picked by fixed rules, each with its date, status and source." if watch
+                                                    else "No company meets the rules today."], "note": f"⟦{UPDATES_TITLE}⟧" if watch else ""})
     if len(cards) > 6:            # two short cards share one so the page keeps two rows of three
         a_, b_ = cards[-2], cards.pop()
         cards[-1] = {"title": f"{a_['title']}; {b_['title'].lower()}", "lines": a_["lines"] + b_["lines"], "note": ", ".join(x for x in (a_["note"], b_["note"]) if x)}
@@ -2713,22 +2842,24 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
     s.add("text", (M, TOP + th + 0.15, CW, nh), paras=[counts], size=BODY_MIN, floor=BODY_MIN, color=INK2)
     slides.append(s)
 
-    # worth a watch: only when a company meets the rules, on one page, the most recent first (R19)
+    # dated company updates (m2; "Worth a watch" before): only when a company meets the rules, on one page, the latest day first (R19)
     if watch:
         dated = sorted(watch, key=lambda x: str(x.get("at") or ""), reverse=True)
-        rows = [[x["name"], x["fact"], _day(x["at"]) if x.get("at") and re.match(r"^\d{4}-\d{2}-\d{2}", str(x["at"])) else _month(x["at"]) if x.get("at") else "–",
-                 f"⟦{x['ref']}⟧"] for x in dated]
-        note = ("The rules: results filed but not yet in the figures; an auditor's resignation; a promoter stake move of a point or more; results due in "
-                "the next week; a net margin above the EBITDA margin; an operating figure 25% or more above or below a year before.")
+        when = lambda at: _day(at) if re.match(r"^\d{4}-\d{2}-\d{2}", str(at)) else _month(at)      # noqa: E731
+        src = lambda x: {"text": x["source"], "url": x["url"]} if x.get("url") and x.get("source") else (x.get("source") or "–")     # noqa: E731
+        rows = [[x["name"], x["fact"] + (f". {x['context']}" if x.get("context") else ""), when(x["at"]), x.get("status") or "–", src(x),
+                 f"⟦{x['ref']}⟧"] for x in dated]         # the source: the filing itself, linked, where its address is held
+        note = ("The rules: results filed but not yet in the figures; an auditor's resignation; a promoter stake move of a point or more; results "
+                "scheduled in the next week; an operating figure 25% or more above or below a year before. Scheduled: a day the company has given "
+                "for an event not yet held. Announced or filed: already made public, in the source named. Each event is as its source states it.")
         nh = note_h(note)
-        wh, ww = ["Company", "Trigger", "Date", "Slide"], [3.0, 6.6, 1.4, 1.0]
-        if all(r[2] == "–" for r in rows):          # R27: no trigger with a date (a margin flag has none): no column of dashes
-            wh, ww, rows = [wh[0], wh[1], wh[3]], [3.0, 8.0, 1.0], [[r[0], r[1], r[3]] for r in rows]
+        wh, ww = ["Company", "Update", "Date", "Status", "Source", "Slide"], [2.7, 4.5, 1.35, 1.15, 1.6, 0.7]
         first = table_pages(wh, rows, ww, CW, BOT - TOP - nh - 0.07)[0]
-        sub = "Companies with a dated fact that changes, or may change, their figures; picked by fixed rules, not a view"
+        sub = "Dated events at the theme's companies: what happened or is scheduled, its day, its status and its source; picked by fixed rules, not a view"
         if len(first) < len(rows):
-            sub = f"The {len(first)} most recent of {len(rows)} companies with a dated fact that changes, or may change, their figures; picked by fixed rules"
-        s = Slide("Worth a watch", sub, eyebrow=eyebrow)
+            sub = (f"The {len(first)} latest by date of {len(rows)} dated events at the theme's companies: each with its day, its status and its "
+                   "source; picked by fixed rules")
+        s = Slide(UPDATES_TITLE, sub, eyebrow=eyebrow)
         s.add("table", (M, TOP, CW, BOT - TOP - nh - 0.07), head=wh, rows=first, widths=ww, numeric=[False] * len(wh))
         s.add("text", (M, BOT - nh, CW, nh), paras=[note], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
         slides.append(s)
@@ -2749,7 +2880,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 45                  # lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 45                  # R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -2959,22 +3090,45 @@ def chain_family_cols(rows: list) -> list[tuple]:
     return [c for c in CHAIN_FAMILY_COLS if any(r.get(c[0]) is not None for r in rows)]
 
 
+def unranked_words(chain: dict) -> str:
+    """"Shown, not ranked: A, a different kind of business; B and C, fewer than 5 companies with the figure." (m2: each layer a table or
+    chart shows a median of beside a ranking that leaves it out, with why, theme_data.unranked_rows); "" when every shown layer is ranked."""
+    by: dict = {}
+    for r in chain.get("unranked") or []:
+        by.setdefault(r["why"], []).append(r["layer"])
+    join = lambda xs: xs[0] if len(xs) == 1 else ", ".join(xs[:-1]) + " and " + xs[-1]      # noqa: E731
+    return ("Shown, not ranked: " + "; ".join(f"{join(xs)}, {why}" for why, xs in by.items()) + ".") if by else ""
+
+
 def compare_note(chain: dict, key: str) -> str:
-    """The value chain's footnote on how layers are compared: the one floor (theme_data.COMPARE_MIN), said whatever is marked (R25)."""
+    """The value chain's footnote on how layers are compared: the one floor of a ranking (theme_data.HEADLINE_MIN: the headline's and the
+    marks', m2: the footnote said 3 while the headline ranked on 5), each shown layer that is not ranked with why, and the floor a median
+    is shown on (theme_data.COMPARE_MIN)."""
     from .intel.theme_data import COMPARE_MIN, HEADLINE_MIN
     what = "return on equity" if key == "roe" else "EBITDA margin"
-    said = f" A sentence that compares layers needs at least {HEADLINE_MIN} companies with the figure in each."      # R31
+    shown = f" A median is shown for {COMPARE_MIN} companies or more."
+    un = unranked_words(chain)
     if chain.get("highest"):
-        return (f"Highest median {what} in green, lowest in red, among the layers whose median is of at least {COMPARE_MIN} companies; "
-                "a layer with fewer is shown but not ranked." + said)
-    return f"A layer is ranked only on a median of at least {COMPARE_MIN} companies; a layer with fewer is shown but not ranked." + said
+        return (f"Highest median {what} in green, lowest in red, among the layers ranked: those with at least {HEADLINE_MIN} companies with the figure"
+                + (" and one kind of business" if "one kind of business" in str(chain.get("line") or "") else "")
+                + (f". {un}" if un else "; any other layer is shown, not ranked.") + shown)
+    return f"A layer is ranked only on a median of at least {HEADLINE_MIN} companies with the figure; a layer with fewer is shown, not ranked." + shown
+
+
+def bar_marks(chain: dict, charted: list, key: str) -> tuple[list, list]:
+    """(labels, colours) of the value chain's bars (m2: the chart marks what the headline does not rank): each layer with its count, an
+    unranked one with "not ranked" in its label and a grey bar; the highest green, the lowest red, the other ranked layers blue."""
+    mark = {chain.get("highest"): UP, chain.get("lowest"): DOWN}
+    out = {r["layer"] for r in chain.get("unranked") or []} if chain.get("highest") else set()
+    cats = [f"{r['layer']} ({_of_n(r.get(key + '_n') or 0, r.get('n'))}{', not ranked' if r['layer'] in out else ''})" for r in charted]
+    return cats, [MUTED if r["layer"] in out else mark.get(r["layer"], BLUE) for r in charted]
 
 
 def top_of(rows: list, value, count):
-    """The one row with the highest `value(row)` among those whose figure is of at least COMPARE_MIN companies, when two or more qualify and no
-    other ties it; else None (R25: a highest is said only against another layer on the same floor)."""
-    from .intel.theme_data import COMPARE_MIN
-    have = sorted((r for r in rows if value(r) is not None and (count(r) or 0) >= COMPARE_MIN), key=value)
+    """The one row with the highest `value(row)` among those whose figure is of at least HEADLINE_MIN companies, when two or more qualify and no
+    other ties it; else None (R25: a highest is said only against another layer on the same floor; m2: the one floor of every ranking)."""
+    from .intel.theme_data import HEADLINE_MIN
+    have = sorted((r for r in rows if value(r) is not None and (count(r) or 0) >= HEADLINE_MIN), key=value)
     return have[-1] if len(have) >= 2 and value(have[-1]) != value(have[-2]) else None
 
 
@@ -3080,7 +3234,11 @@ def aggregate_margin_rows(mg: dict) -> list[list[str]]:
 
 
 CLAIM_CARDS = ("Key findings",)                  # the slides whose cards are findings; the questions card is checked wherever it sits
-_CHECK_SKIP = re.compile(r"within \d+% of|\d+% or more|\b\d+% (?:above|below) or|\(\d+% of (?:the (?:combined )?market value of [^)]*|value)\)")
+# m2: a ranking's own scope ("Among the 2 layers with at least 5 companies with the figure", "fewer than 5 companies with the figure") is the
+# rule and how many layers passed it, not a figure a table shows
+_CHECK_SKIP = re.compile(r"within \d+% of|\d+% or more|\b\d+% (?:above|below) or|\(\d+% of (?:the (?:combined )?market value of [^)]*|value)\)|"
+                         r"\bAmong (?:the \d+ )?layers (?:with|of) at least \d+ companies with the figure|"
+                         r"\b(?:at least|fewer than) \d+ companies with the figure")
 
 
 def _deck_figures(slides: list) -> dict:
@@ -3115,12 +3273,108 @@ def _deck_figures(slides: list) -> dict:
 PLACEHOLDER = re.compile(r"\{[a-z_]+\}|(?<![A-Za-z] )\bNone\b(?! of| is| has| shows| was| were| are)|\bnan\b|\bundefined\b|\bshown for [a-z]{1,2}\.")
 
 
+# ---------- m2 (outside review of the live R32 decks): the text itself is checked before a deck is stored ----------
+# a doubled word ("outside the the theme"), doubled punctuation ("Inc.. Revenue"), a space before punctuation ("metals , alloys") and a
+# hyphen broken off its word ("aero -engines") are repaired on every slide, whatever wrote the sentence (a template, a company's own
+# description, a headline), and each repair is logged and counted in the gate. Generic: fixed patterns, no list of sentences.
+_JOIN_WORDS = {"the", "a", "an", "of", "in", "on", "at", "to", "for", "and", "or", "with", "by", "from", "is", "are", "was", "were", "its",
+               "their", "this", "these", "than", "as", "be", "it"}
+_DOUBLE_OK = {"had", "that", "very", "so", "no", "bye", "more", "many", "much", "far", "long"}       # doubled in ordinary English
+_DOUBLED = re.compile(r"\b([A-Za-z]{2,})(\s+)\1\b", re.I)
+_TEXT_FIXES = (
+    (re.compile(r"\b([A-Z][A-Za-z]{0,5})\.\.(?=\s|$)"), r"\1.", "doubled full stop"),            # "Qualys, Inc..": an abbreviation's stop and the sentence's
+    (re.compile(r"(?<=[A-Za-z)])\.\.(?=\s+[A-Z(])"), ".", "doubled full stop"),                 # "Inc.. Revenue": the sentence's own stop
+    (re.compile(r"(?<![.])\.\.(?![.])(?=\s|$)"), "…", "two dots for an ellipsis"),             # a headline cut by its source: "say.."
+    (re.compile(r"([,;:!?])(?:\s*\1)+"), r"\1", "doubled punctuation"),                         # ",,", "; ;"
+    (re.compile(r"[,;:](?=\.(?:\s|$))"), "", "punctuation before a full stop"),                 # ",." and ";."
+    (re.compile(r"(?<=[A-Za-z)%’'\"]) +(?=[,;:!?](?:\s|$))|(?<=[0-9]) +(?=[,;!?](?:\s|$))"), "", "space before punctuation"),   # "1 : 2" stays
+    (re.compile(r"(?<=[A-Za-z)%]) +(?=\.(?:\s|$))"), "", "space before a full stop"),
+    (re.compile(r"\( +"), "(", "space inside a bracket"),
+    (re.compile(r"(?<=\S) +\)"), ")", "space inside a bracket"),
+    (re.compile(r"(?<=[a-z]) -(?=[a-z])"), "-", "hyphen broken off its word"),                  # "aero -engines"
+    (re.compile(r"(?<=[a-z])- (?=[a-z])(?!(?:and|or|to|as|than|but|nor)\b)"), "-", "hyphen broken off its word"),   # "aero- engines"; "pre- and post" stays
+)
+
+
+def _undouble(m) -> str:
+    word, rest = m.group(1), m.group(0)[len(m.group(1)) + len(m.group(2)):]
+    low = word.lower()
+    if low in _JOIN_WORDS or (rest.islower() and len(word) >= 3 and low not in _DOUBLE_OK):
+        return word                      # "the the", "The the", "companies companies"; a name ("Bora Bora") and "had had" stay
+    return m.group(0)
+
+
+def tidy_text(text) -> tuple[str, list[str]]:
+    """(the text with its mechanical defects repaired, what was repaired) (m2): a doubled word, doubled punctuation, a space before
+    punctuation or inside a bracket, a hyphen broken off its word. A text with none is given back as it is; a figure, a date, a name and
+    a three-dot ellipsis are never touched."""
+    if not isinstance(text, str) or len(text) < 3:
+        return text, []
+    out, why = text, []
+    got = _DOUBLED.sub(_undouble, out)
+    if got != out:
+        out, why = got, ["doubled word"]
+    for rx, to, name in _TEXT_FIXES:
+        got = rx.sub(to, out)
+        if got != out:
+            out = got
+            why.append(name)
+    return out, why
+
+
+def text_flags(text) -> list[str]:
+    """The mechanical defects a text holds (tidy_text's names); [] for a clean one."""
+    return tidy_text(text)[1]
+
+
+def tidy_deck(slides: list) -> list[dict]:
+    """Every sentence, label and cell of every slide through tidy_text (m2), as whole_deck sends every figure through one formatter; the
+    repairs made: [{"slide", "text" (as it was), "fixed", "why"}], logged."""
+    import logging
+    log = logging.getLogger("stratlab.deck")
+    done: list[dict] = []
+
+    def fix(x, where):
+        got, why = tidy_text(x)
+        if why:
+            done.append({"slide": where, "text": x, "fixed": got, "why": ", ".join(why)})
+        return got
+
+    def cell(x, where):
+        return {**x, "text": fix(x["text"], where)} if isinstance(x, dict) and isinstance(x.get("text"), str) else fix(x, where)
+    for s in slides:
+        t = s.title
+        s.title, s.subtitle = fix(s.title, t), fix(s.subtitle, t)
+        for b in s.blocks:
+            if b.get("paras"):
+                b["paras"] = [fix(x, t) for x in b["paras"]]
+            if b.get("rows"):
+                b["rows"] = [({**r, "group": fix(r["group"], t)} if "group" in r else r) if isinstance(r, dict) else [cell(x, t) for x in r]
+                             for r in b["rows"]]
+            if b.get("head"):
+                b["head"] = [fix(x, t) for x in b["head"]]
+            if b.get("cats"):
+                b["cats"] = [fix(x, t) for x in b["cats"]]
+            if isinstance(b.get("title"), str):
+                b["title"] = fix(b["title"], t)
+            if b["kind"] == "stats":
+                b["items"] = [tuple(fix(x, t) for x in it) if isinstance(it, tuple) else it for it in b.get("items") or []]
+            elif b.get("items") and isinstance(b["items"][0], dict):
+                b["items"] = [{k: ([fix(x, t) for x in val] if k == "lines" and isinstance(val, list) else fix(val, t) if isinstance(val, str) else val)
+                               for k, val in it.items()} for it in b["items"]]
+    for d in done:
+        log.warning("deck text: repaired on %r (%s): %s", d["slide"], d["why"], d["text"])
+    return done
+
+
 def check_deck(slides: list) -> list[dict]:
     """The consistency check before a deck is stored (R25): every percentage, multiple, gap in points and count that a headline (a slide's
     subtitle), a finding or a question states is looked for among the figures the deck's own tables, charts and tiles show, the rows they all
     come from. A headline part or a card line with a figure that isn't there is dropped (never shipped wrong) and logged. The dropped ones."""
     import logging
     from .intel.theme_data import claim_mismatches
+    if slides:
+        slides[0].tidied = tidy_deck(slides)          # m2: the text's own defects repaired first, so every later check reads the repaired text
     shown = _deck_figures(slides)
     log = logging.getLogger("stratlab.deck")
     dropped = []
@@ -3703,6 +3957,16 @@ def publication_gate(slides: list, v: dict, reproduced: list | None = None) -> d
     if none:
         notes["peers"] = f"{_n(none, 'company', 'companies')} with no comparable peer set, counted and left out"
     notes["layout"] = "Checked on the finished pages"           # R35: layout_gate, once the page references are set (theme_plan)
+    # m2: what tidy_deck repaired (a doubled word, doubled or spaced punctuation, a broken hyphen) is counted here; a defect that is still
+    # in a sentence after the repair fails the prose item and the sentence is listed
+    tidied = getattr(slides[0], "tidied", None) if slides else None
+    if tidied:
+        notes["prose"] = f"{_n(len(tidied), 'text repair')} (doubled words, punctuation, hyphens)"
+    for s_ in slides:
+        for txt in [s_.title, s_.subtitle] + [p for b in s_.blocks for p in b.get("paras") or []]:
+            why = text_flags(txt)
+            if why:
+                dropped["prose"].append({"slide": s_.title, "text": txt, "why": "text: " + ", ".join(why), "rule": "prose"})
     marks_noted = any(b["kind"] == "cards" and any(MARKS_LINE in (it.get("lines") or []) for it in b.get("items") or []) for s in slides for b in s.blocks)
     if not marks_noted and len(slides) > 2:
         dropped["marks"].append({"slide": "How to read this deck", "text": "the key to the three marks", "why": "not in the deck", "rule": "marks"})
@@ -3860,11 +4124,11 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     slides.append(contents)
 
     # 3. the findings (the owner, 7 Nov: about five pages up front, with page references): what the figures show, how far they can be
-    # trusted and what is worth a watch, each from computed facts only (no AI writes a number here)
+    # trusted and the companies' dated updates, each from computed facts only (no AI writes a number here)
     names_shown = {x["layer"] for x in shown}
     unplaced_cos = sorted((c for x in unplaced for c in x.get("companies") or [] if c.get("status") != "unverified"), key=lambda c: -(c.get("cap") or 0))
     rows_c = [r for r in chain.get("rows") or [] if r.get("n") and r["layer"] in names_shown]
-    section("", "Findings", "What the figures show, how far they can be trusted, and the companies with a dated fact worth a watch.")
+    section("", "Findings", "What the figures show, how far they can be trusted, and the companies' dated updates.")
     _findings(slides, v, cov, ebm, cap, eb("Findings"), now_d := (now or datetime.now(timezone.utc)).astimezone(IST).date(), chained=chained, lender=lender)
 
     # 4. the value chain: where the margin sits, a chart and the table (only with two layers or more to set side by side)
@@ -3920,21 +4184,24 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             s.add("table", (M, TOP, tw, th), head=head, rows=chunk, widths=widths,
                   colors={(i, 0): mark[r[0]] for i, r in enumerate(chunk) if r[0] in mark and r[0]})
             if chart and k == 0:
-                s.add("hbars", (M + tw + 0.35, TOP, CW - tw - 0.35, th), title=f"Median {'ROE' if key == 'roe' else 'EBITDA margin'} by layer", cats=[f"{r['layer']} ({_of_n(r.get(key + '_n') or 0, r.get('n'))})" for r in charted],
-                      vals=[r[key] for r in charted], colors=[mark.get(r["layer"], BLUE) for r in charted], fmt="pctw" if whole and key == "ebitda" else "pct")
+                bcats, bcols = bar_marks(chain, charted, key)
+                s.add("hbars", (M + tw + 0.35, TOP, CW - tw - 0.35, th), title=f"Median {'ROE' if key == 'roe' else 'EBITDA margin'} by layer", cats=bcats,
+                      vals=[r[key] for r in charted], colors=bcols, fmt="pctw" if whole and key == "ebitda" else "pct")
             s.add("text", (M, BOT - fh, CW, fh), paras=[" ".join(foot)], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
             slides.append(s)
         if not chart and len(head) > 5 and 2 <= len(charted) <= 14:
             # R35: a table of more than four figure columns keeps the full width, so its chart (R34 left it out) has a page of its own
             # after it: the layers' medians side by side, each name whole, only with two layers or more on a median of MIN_BASE companies
             mname = "ROE" if key == "roe" else "EBITDA margin"
+            un_ = unranked_words(chain) if chain.get("highest") else ""
             cnote = (f"Each bar: the layer's median company, latest full year; its count of companies in its label. A layer is drawn on a median of "
-                     f"{MIN_BASE} companies or more; every layer is in the table before this page. How the figure is built: ⟦{NOTES_TITLE}⟧.")
+                     f"{MIN_BASE} companies or more; every layer is in the table before this page."
+                     + (f" Grey bars are not ranked. {un_}" if un_ else "") + f" How the figure is built: ⟦{NOTES_TITLE}⟧.")
             ch_ = note_h(cnote)
             s = Slide(f"Median {mname} by layer", chain.get("line") or f"Each layer's median company's {mname}, the layers side by side", eyebrow=eb("The value chain"))
+            bcats, bcols = bar_marks(chain, charted, key)
             s.add("hbars", (M, TOP, CW, min(BOT - TOP - ch_ - 0.2, 1.2 * len(charted) + 0.3)),
-                  cats=[f"{r['layer']} ({_of_n(r.get(key + '_n') or 0, r.get('n'))})" for r in charted], vals=[r[key] for r in charted],
-                  colors=[mark.get(r["layer"], BLUE) for r in charted], fmt="pctw" if whole and key == "ebitda" else "pct")
+                  cats=bcats, vals=[r[key] for r in charted], colors=bcols, fmt="pctw" if whole and key == "ebitda" else "pct")
             s.add("text", (M, BOT - ch_, CW, ch_), paras=[cnote], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
             slides.append(s)
     elif v.get("members_with_figures") == 0 or not shown:
@@ -4126,7 +4393,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     all_subs = v.get("subs") or []
     subs = [sub for sub in all_subs if sub.get("companies")]           # a sub-theme with no confirmed company is a count, not a row
     if subs:
-        rows = [[sub["name"], sentences(sub.get("detail") or "", 160) or "–", str(len(sub.get("companies") or [])),
+        rows = [[sub["name"], whole_clause(sub.get("detail") or "", 160) or "–", str(len(sub.get("companies") or [])),
                  names5(sorted(sub.get("companies") or [], key=lambda c: -(c.get("cap") or 0))) or "None confirmed by its own description"] for sub in subs]
         head, widths = ["Sub-theme", "What it is", "Companies", "The largest, by market value"], [2.4, 4.6, 1.2, 4.0]
         note = "Each sub-theme's description is written by AI from general knowledge, with no figures; a company is shown only where its own description says it does that work."
@@ -4375,7 +4642,7 @@ def _smaller_layers(slides: list, small: list, amt, eyebrow: str) -> None:
     cols = [col for col in co_cols(cos) if col[0] in keys]
     head = ["Layer", "Company", "What it does"] + [col[1] for col in cols] + ["Year"]
     widths = [2.3, 2.3, 3.6] + [col[2] for col in cols] + [1.0]
-    body = [[x["layer"], name, sentences(_what(c.get("what") or "") or x.get("description") or "", 110) or "–"]
+    body = [[x["layer"], name, whole_clause(_what(c.get("what") or "") or x.get("description") or "", 110) or "–"]
             + [co_cell(c, k, amt) for k, _, _ in cols] + [c.get("year") or "–"] for x, c, name in rows_]
     head, body, widths, numeric = drop_empty(head, body, widths, [False, False, False] + [True] * len(cols) + [False], keep=(0, 1, 2))
     note = ("Each of these layers has one confirmed company, so it has no median and no page of its own; it is in the value chain's table. "
@@ -4399,12 +4666,14 @@ def economics_questions(v: dict, shown: list, sec: dict, ebm) -> list[str]:
     chain = v.get("chain") or {}
     rows = {r["layer"]: r for r in chain.get("rows") or []}
     hi, lo = rows.get(chain.get("highest")), rows.get(chain.get("lowest"))
-    from .intel.theme_data import of_words as ow, period_basis, rank_pair
+    from .intel.theme_data import HEADLINE_MIN, of_words as ow, period_basis, rank_pair
+    # m2: the question says which layers its highest and lowest are of, as the headline it repeats does
+    scope_ = f"Among the {len(chain.get('compared') or [])} layers with at least {HEADLINE_MIN} companies with the figure, " if len(chain.get("compared") or []) >= 2 else ""
     if hi and lo and chain.get("measure") == "roe":
-        out.append(f"{hi['layer']} has the highest median return on equity ({_pc(hi['roe'])}, {ow(hi['roe_n'], hi.get('n'))}) and {lo['layer']} the lowest "
+        out.append(f"{scope_}{hi['layer']} has the highest median return on equity ({_pc(hi['roe'])}, {ow(hi['roe_n'], hi.get('n'))}) and {lo['layer']} the lowest "
                    f"({_pc(lo['roe'])}, {ow(lo['roe_n'], lo.get('n'))}). What in each layer's business makes that gap? The figures show the gap, not its cause.")
     elif hi and lo:
-        out.append(f"{hi['layer']} has the highest median EBITDA margin ({ebm(hi['ebitda'])}, {ow(hi['ebitda_n'], hi.get('n'))}) and {lo['layer']} the lowest "
+        out.append(f"{scope_}{hi['layer']} has the highest median EBITDA margin ({ebm(hi['ebitda'])}, {ow(hi['ebitda_n'], hi.get('n'))}) and {lo['layer']} the lowest "
                    f"({ebm(lo['ebitda'])}, {ow(lo['ebitda_n'], lo.get('n'))}). What in each layer's business makes that gap? The figures show the gap, not its cause.")
     q = sec.get("quarter") or {}
     if q.get("quarter") and (q.get("sales") or {}).get("n", 0) >= MIN_BASE:
@@ -4504,9 +4773,11 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
             bits.append(f"highest median {rname} in {best_r['layer']} ({_pc(best_r[rk])})" + scope(got_r))
         if fast:
             bits.append(f"fastest median revenue growth in {fast['layer']} ({_chg(fast['growth'])})" + scope(got_g))
+        from .intel.theme_data import HEADLINE_MIN
         if len(sizes) == 1 and min(sizes) < len(cmp_):
             bits.append(f"among the {min(sizes)} layers of one kind of business")
-        msg = ("Medians by layer: " + "; ".join(bits) + ("; the \"Other\" group left out" if len(cmp_) < len(lay) else "")) if bits else \
+        msg = (f"Medians by layer, among the layers with at least {HEADLINE_MIN} companies with the figure: " + "; ".join(bits)
+               + ("; the \"Other\" group left out" if len(cmp_) < len(lay) else "")) if bits else \
             f"{_n(len(lay), 'layer')}: its median company's margins, returns, growth and P/E"
         note = ("Medians of each layer's confirmed companies (whole-company figures left out where the layer has its own); a median of fewer companies "
                 f"than the layer has shows its count, as N of M. Periods: ⟦{NOTES_TITLE}⟧.")
@@ -5225,7 +5496,7 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
                   size=BODY_MIN, floor=BODY_MIN, color=MUTED)
         slides.append(s)
 
-    # ownership, events and management report cards are per-company lists: on the theme's page, and their dated facts in "Worth a watch" (R19)
+    # ownership, events and management report cards are per-company lists: on the theme's page, and their dated facts in "Dated company updates" (R19; m2: its name)
 
 
 def build_theme(v: dict, pdf: bool = False) -> bytes:

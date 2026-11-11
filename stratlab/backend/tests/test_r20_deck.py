@@ -163,7 +163,7 @@ def test_every_rule_holds_on_every_synthetic_theme(name, v, slides):
     # page set: no dividers, nothing "continued", the single pages single, every page carries something, the appendix one table at the end
     assert not [s for s in slides if s.kind == "section"]
     assert not any("continued" in x or "all companies" in x for x in titles)
-    for single in ("Data confidence", "Worth a watch", "Tailwinds and risks", "Operating figures", "Sub-themes", "How to read this deck",
+    for single in ("Data confidence", "Dated company updates", "Tailwinds and risks", "Operating figures", "Sub-themes", "How to read this deck",
                    "The latest quarter against a year earlier", "Contents", "Key findings"):
         assert titles.count(single) <= 1 and not any(x.startswith(single + " (") for x in titles), single
     for s in slides[1:]:

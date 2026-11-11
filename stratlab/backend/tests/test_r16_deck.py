@@ -107,8 +107,10 @@ def test_one_quarter_per_median_and_newer_results_filed_but_not_read_are_marked(
     q_lines = next(it for s in slides if s.title == "The latest quarter against a year earlier" for b in s.blocks if b["kind"] == "cards" for it in b["items"])["lines"]
     assert any("still on an earlier quarter, left out of the median: MM Co, BO Co" in x for x in q_lines)
     assert any(x == "Newer results filed but not yet in the figures: MM Co." for x in q_lines)
-    watch = table_of(slides, "Worth a watch")
-    assert any(r[0] == "MM Co" and "Results filed on 05 Nov 2026" in r[1] for r in watch["rows"])
+    # changed on purpose (m2): "Dated company updates", the day in its own column beside the status and the source
+    watch = table_of(slides, "Dated company updates")
+    assert any(r[0] == "MM Co" and r[1].startswith("Quarterly results; the figures in this deck are still") and r[2:5] == ["05 Nov 2026", "Announced", "Results filing"]
+               for r in watch["rows"])
 
 
 def test_whole_point_margins_print_without_false_precision_and_a_gap_within_rounding_is_not_called():
@@ -247,7 +249,7 @@ def test_the_findings_come_first_with_page_references_that_point_at_their_slides
     # changed on purpose (R18): with no layer comparison the figures support (fewer than two layers of two companies with a margin), no
     # "Where the margin sits" card that says it can't be done
     assert [c["title"] for c in cards] == ["Growth beside margin", "Price beside growth and returns", "What changed",
-                                           "How far the figures go", "Worth a watch"]
+                                           "How far the figures go", "Dated company updates"]
     page = {re.sub(r" \(\d+ of \d+\)$", "", s.title): i for i, s in reversed(list(enumerate(slides, 1)))}
     refs = {c["title"]: c["note"] for c in cards}                                     # the page reference, as the card's note: never cut
     assert refs["Price beside growth and returns"] == f"p. {page['Valuation']}"
@@ -264,11 +266,12 @@ def test_worth_a_watch_is_a_rule_based_list_each_with_its_factual_trigger_and_no
                                               {"symbol": "MINEB", "name": "Mine B", "date": "2026-12-20", "purpose": "Financial Results"}]
     w = deck.watch_list(v, date(2026, 11, 7))
     facts_ = {x["name"]: x["fact"] for x in w}
-    assert facts_["Cell B"] == "Auditor resigned"
+    assert facts_["Cell B"] == "Resignation of an auditor"                    # changed on purpose (m2): the event, as a neutral fact
     assert facts_["Tenneco"] == "Promoters' stake −15.0 pts to 59.8% in the quarter to Sep 2026"
-    assert facts_["Mine A"].startswith("Results due") and "Mine B" not in facts_                        # due in the next week only
+    assert facts_["Mine A"] == "Financial results" and "Mine B" not in facts_                           # scheduled in the next week only
+    assert next(x for x in w if x["name"] == "Mine A")["status"] == "Scheduled"                         # m2: upcoming results read as scheduled
     slides = slides_of(v)
-    wt = texts([s for s in slides if s.title.startswith("Worth a watch")])
+    wt = texts([s for s in slides if s.title.startswith("Dated company updates")])
     assert "picked by fixed rules, not a view" in wt
     for word in ADVICE:
         assert not re.search(rf"\b{word}\b", wt.lower()), word
@@ -297,10 +300,10 @@ def test_ownership_lists_the_changes_only_with_quarters_as_months_and_no_signed_
         {"symbol": "B", "name": "B Co", "quarter": "2026-09-30", "promoter": 40.0, "institutions": 20.0, "promoter_change": 0.8, "institutions_change": 0.1},
         {"symbol": "C", "name": "C Co", "quarter": "2026-09-30", "promoter": 30.0, "institutions": 20.0, "promoter_change": -0.02, "institutions_change": 1.7}]
     # changed on purpose (R19, the owner: "keep the important ones"): ownership is a per-company list on the theme's page, no deck page; a stake
-    # move of a point or more is in "Worth a watch"
+    # move of a point or more is in "Dated company updates" (m2: its name)
     slides = slides_of(v)
     assert "Ownership" not in [s.title for s in slides]
-    assert not any("B Co" in r[0] for r in table_of(slides, "Worth a watch")["rows"])          # 0.8 points: under the rule
+    assert not any("B Co" in r[0] for r in table_of(slides, "Dated company updates")["rows"])  # 0.8 points: under the rule
     assert deck._pts(-0.04) == "0.0 pts" and deck._pts(0.04) == "0.0 pts" and deck._pts(-1.25) == "−1.2 pts"
 
 
@@ -316,10 +319,10 @@ def test_red_flags_are_said_once_a_rights_issue_is_a_corporate_action_and_an_aud
     v = full()
     v["sections"]["ownership"]["red_flags"] = [{**x, "name": x["symbol"]} for x in reversed(flags)]
     v["sections"]["ownership"]["fund_raises"] = [{**x, "name": "OLA"} for x in D.fund_raises(items, {})]
-    # changed on purpose (R19): no events page; an auditor's resignation is a dated fact in "Worth a watch"
+    # changed on purpose (R19): no events page; an auditor's resignation is a dated fact in "Dated company updates" (m2: its name)
     slides = slides_of(v)
     assert "Events" not in [s.title for s in slides]
-    assert any(r[0] == "TML" and r[1] == "Auditor resigned" for r in table_of(slides, "Worth a watch")["rows"])
+    assert any(r[0] == "TML" and r[1] == "Resignation of an auditor" and r[3] == "Announced" for r in table_of(slides, "Dated company updates")["rows"])
 
 
 def test_quote_pages_picks_and_other_markets_headlines_are_left_out():

@@ -137,7 +137,10 @@ def test_layers_of_one_commodity_are_still_ranked_among_themselves():
     t, vc, m = split(t)
     view, _ = deck_of(t["region"], m, t["facts"])
     ch = view["chain"]
-    assert set(ch["compared"]) == {"Integrated steel", "Mini mills"} and ch["highest"] == "Integrated steel" and "Aluminium" not in ch["line"]
+    assert set(ch["compared"]) == {"Integrated steel", "Mini mills"} and ch["highest"] == "Integrated steel"
+    # changed on purpose (m2): the layer of another commodity is named after the ranking, with why it is not ranked, never inside it
+    rank, _, rest = ch["line"].partition(" Shown, not ranked: ")
+    assert "Aluminium" not in rank and rest == "Aluminium smelting (41%), a different commodity."
     rows = [("A", 10.0, 5, {"family": "mining", "sub": "steel"}), ("B", 5.0, 5, {"family": "mining", "sub": "steel"}),
             ("C", 50.0, 5, {"family": "mining", "sub": "copper"})]
     pair = D.rank_pair(rows, lambda r: r[1], lambda r: r[2], model=lambda r: r[3])
@@ -228,9 +231,10 @@ def test_a_layer_vs_layer_headline_needs_five_companies_with_the_figure_in_each(
     assert D.rank_pair(rows, lambda r: r[1], lambda r: r[2], floor=3)[1][0] == "B"           # an explicit floor still holds
     assert deck.headline_flag("Median EBITDA margin is highest in A (30%, 4 of 4 companies)") == "ranked on 4 of 4"
     assert deck.headline_flag("Median EBITDA margin is highest in A (30%, 5 of 6 companies)") is None
-    # the marks (green, red) keep the floor of 3; the footnote says both
+    # changed on purpose (m2): the marks follow the headline (its floor of 5); the footnote says that floor, and the 3 a median is shown on
     note = deck.compare_note({"highest": "A"}, "ebitda")
-    assert "at least 3 companies" in note and "needs at least 5 companies with the figure in each" in note
+    assert "those with at least 5 companies with the figure" in note and "A median is shown for 3 companies or more." in note
+    assert "at least 3 companies" not in note
 
 
 def _all_decks():
@@ -309,4 +313,6 @@ def test_a_ranking_line_states_how_many_layers_it_compared():
     t, vc, m = split(t)
     view, _ = deck_of(t["region"], m, t["facts"])
     line = view["chain"]["line"]
-    assert line.startswith("Among the 2 of 3 comparable layers") and line.endswith("one kind of business.") and "Aluminium" not in line
+    # changed on purpose (m2): the scope is in the ranking's own sentence, and the layer left out is named after it with why
+    assert line.startswith("Among the 2 layers with at least 5 companies with the figure and one kind of business, median EBITDA margin is highest in")
+    assert line.endswith("Shown, not ranked: Aluminium smelting (41%), a different commodity.") and "Aluminium" not in line.split(" Shown, not ranked: ")[0]

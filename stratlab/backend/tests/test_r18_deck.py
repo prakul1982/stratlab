@@ -117,7 +117,7 @@ def test_a_lender_theme_shows_lenders_measures_and_never_a_column_that_is_empty_
     assert "EBITDA margin" not in chain["head"] and "ROCE" not in chain["head"]
     for col in ("ROE", "NII / assets", "Gross NPA", "P/B"):
         assert col in chain["head"], col
-    assert v["chain"]["measure"] == "roe" and v["chain"]["line"].startswith("Median return on equity is highest in")
+    assert v["chain"]["measure"] == "roe" and "median return on equity is highest in" in v["chain"]["line"]          # m2: after the headline's own scope ("Among the 2 layers with ...")
     cards = next(b for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards")["items"]
     assert any(c["title"] == "Where the return sits" for c in cards)
     assert "Fewer than two layers" not in texts(slides) and "EBITDA margin –" not in texts(slides)
@@ -221,7 +221,7 @@ def test_the_deck_says_one_count_of_companies_not_confirmed_and_no_line_that_con
     v["checks"]["net_with"], v["checks"]["net_without"] = 10.02, 9.98                       # the same to one decimal
     rows = deck.confidence_rows(v, deck.coverage(v), TODAY)
     one = next(r for r in rows if r[0] == "Net above EBITDA margin")              # R27: the anomaly named, no cause guessed
-    assert one[2] == "Marked † and left out of net-margin medians."
+    assert one[2] == "Marked † and left out of net-margin medians; the filing would show why."      # changed on purpose (m2): the flag has no day, so no cause named is said here
 
 
 # ---------- 5. a held figure hides both its comparisons ----------

@@ -48,7 +48,7 @@ def test_no_continued_pages_and_none_of_the_dropped_parts():
         assert not any("continued" in t or "all companies" in t for t in titles), name
         for t in dropped:
             assert t not in titles, (name, t)
-        for single in ("Data confidence", "Worth a watch", "Tailwinds and risks", "Operating figures", "Sub-themes", "How to read this deck",
+        for single in ("Data confidence", "Dated company updates", "Tailwinds and risks", "Operating figures", "Sub-themes", "How to read this deck",
                        "The latest quarter against a year earlier"):
             assert len([x for x in titles if x == single or x.startswith(single + " (")]) <= 1, (name, single)
             assert not any(x.startswith(single + " (") for x in titles), (name, single)
@@ -83,15 +83,15 @@ def test_data_confidence_is_one_page_with_its_counts_and_worth_a_watch_only_with
     slides = deck.theme_plan(v)[0]
     assert len([s for s in slides if s.title.startswith("Data confidence")]) == 1
     _, packaging = deck_of(*theme_a())
-    assert "Worth a watch" not in [s.title for s in packaging]                                 # no company meets the rules
+    assert "Dated company updates" not in [s.title for s in packaging]                         # no company meets the rules (m2: the page's name)
     cards = next(b for s in packaging if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards")["items"]
-    assert next(c for c in cards if c["title"] == "Worth a watch")["lines"] == ["No company meets the rules today."]
+    assert next(c for c in cards if c["title"] == "Dated company updates")["lines"] == ["No company meets the rules today."]
     v = full_view()
     v["sections"]["events"]["results_due"] = [{"symbol": f"R{i}", "name": f"Results Co {i}", "date": f"2026-11-{1 + i % 7:02d}", "purpose": "Results"} for i in range(30)]
     slides = deck.theme_plan(v, now=__import__("datetime").datetime(2026, 10, 31, tzinfo=__import__("datetime").timezone.utc))[0]
-    watch = [s for s in slides if s.title.startswith("Worth a watch")]
-    assert len(watch) == 1 and watch[0].title == "Worth a watch" and "most recent of" in watch[0].subtitle
-    dates = [r[2] for r in table_of(slides, "Worth a watch")["rows"]]
+    watch = [s for s in slides if s.title.startswith("Dated company updates")]
+    assert len(watch) == 1 and watch[0].title == "Dated company updates" and "latest by date of" in watch[0].subtitle
+    dates = [r[2] for r in table_of(slides, "Dated company updates")["rows"]]
     assert dates == sorted(dates, key=lambda d: __import__("datetime").datetime.strptime(d, "%d %b %Y") if d != "–" else __import__("datetime").datetime.min, reverse=True)
 
 
