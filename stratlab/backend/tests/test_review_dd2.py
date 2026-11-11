@@ -187,10 +187,10 @@ def test_a_cached_only_encyclopedia_lookup_never_calls_the_site():
         raise AssertionError("no call")
     wk = Wikipedia(transport=httpx.MockTransport(boom))
     assert wk.company("Acme Industries", cached=True) is None
-    wk.cache.set(("/api/rest_v1/page/summary/Acme_Industries", (), "json"), {"title": "Acme Industries", "extract": "Pumps."}, 600)
+    wk.cache.set(("/api/rest_v1/page/summary/Acme_Industries", (), "json"), {"title": "Acme Industries", "extract": "Acme Industries is a maker of pumps."}, 600)
     wk.cache.set(("/w/api.php", tuple(sorted({"action": "query", "list": "search", "srsearch": "Acme Industries company", "srlimit": 1,
                                                 "format": "json"}.items())), "json"), {"query": {"search": [{"title": "Acme Industries"}]}}, 600)
-    assert wk.company("Acme Industries", cached=True)["extract"] == "Pumps."
+    assert wk.company("Acme Industries", cached=True)["extract"] == "Acme Industries is a maker of pumps."      # lane n2: an article must speak of a company (updated on purpose)
 
 
 # ---------- DD-072: the watchlist's list view has the P/E and the 52-week position ----------
