@@ -639,6 +639,13 @@ def whole_lines(items: list[dict], box: tuple, cols: int, bullets: bool = False)
     for it in items:
         while len(it["lines"]) > 1 and card_height(it, cw, bullets, BODY_MIN) > room:
             it["lines"].pop()
+        # n1 (the outside review of the live R33 decks: three findings cards of one sentence still ended "…"): a card's one line that still
+        # doesn't fit loses whole parts from its end (a sentence, a "; " clause, a part after ", " or " and "), never part of a word
+        while it["lines"] and card_height(it, cw, bullets, BODY_MIN) > room:
+            got = _shorter(it["lines"][-1])
+            if not got:
+                break
+            it["lines"][-1] = got
     return items
 
 
@@ -2847,7 +2854,10 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
                                                     else "No company meets the rules today."], "note": f"⟦{UPDATES_TITLE}⟧" if watch else ""})
     if len(cards) > 6:            # two short cards share one so the page keeps two rows of three
         a_, b_ = cards[-2], cards.pop()
-        cards[-1] = {"title": f"{a_['title']}; {b_['title'].lower()}", "lines": a_["lines"] + b_["lines"], "note": ", ".join(x for x in (a_["note"], b_["note"]) if x)}
+        # n1 (the live R33 Private Banks deck: the merged card's updates line gave way to fit, so the deck said nothing of dated updates):
+        # one line of each first, so a line that gives way is never the only one of its card
+        first = (b_, a_) if b_["title"] == UPDATES_TITLE and not watch else (a_, b_)      # "no dated update" is the shorter: it goes first
+        cards[-1] = {"title": f"{a_['title']}; {b_['title'].lower()}", "lines": first[0]["lines"][:1] + first[1]["lines"][:1] + first[0]["lines"][1:] + first[1]["lines"][1:], "note": ", ".join(x for x in (a_["note"], b_["note"]) if x)}
     s = Slide("Key findings", "What the reported figures show, each with the slide it comes from; findings, not advice", eyebrow=eyebrow)
     ccols = 3 if len(cards) != 4 else 2
     s.add("cards", (M, TOP, CW, BOT - TOP), cols=ccols, items=whole_lines(cards, (M, TOP, CW, BOT - TOP), ccols), fill=True, size=13)
@@ -2914,7 +2924,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 45                  # R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 46                  # n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -3536,7 +3546,7 @@ CAUSE_WORDS = re.compile(r"\b(?:because|driven by|due to|owing to|thanks to|as a
 # pipes" dropped as advice): "buy", "sell" and "accumulate" are advice only as a recommendation ("buy the stock", "a buy", "should sell",
 # "accumulate on dips", "buy now"); every other use of them is a company's own trade and is read past
 _TRADE_ADVICE = re.compile(
-    r"\b(?:should|must|would|could|may|might|to consider|consider|a|strong|rated|rating|upgraded to|downgraded to|time to)"
+    r"\b(?:should|must|to consider|consider|a|strong|rated|rating|upgraded to|downgraded to|time to)"
     r"\s+(?:not\s+)?(?:buy|sell|accumulate)\b(?!-)"
     r"|\b(?:buy|sell|accumulate)\s+(?:(?:the|its|this|these|their|more|some|our)\s+)?(?:shares?|stocks?|stakes?|positions?|rating|calls?|signals?|"
     r"now|on (?:dips|weakness|strength|declines)|the dips?|the rally|for the long term)\b"
@@ -3855,11 +3865,12 @@ def _shorter(text: str) -> str | None:
         head = t[:t.rfind("; ")].rstrip(" ,;:")
         return head + ("." if t.endswith(".") and not head.endswith(".") else "")
     # n1 (the outside review of the live R33 decks: three findings cards still ended "…, 7…"): one clause still too long loses its last
-    # part joined by ", " or " and " before a small word, outside any bracket, and keeps at least half of itself
+    # part, joined by ", " or " and " right after a bracket or a figure ("(13.5%) and slowest in…", "4.1%, a gap of…"), outside any
+    # bracket and before a small word (never inside a name: "Chlor-alkali, soda ash and bulk inorganics"), keeping at least half of itself
     depth, cut = 0, None
     for i, ch in enumerate(t):
         depth += (ch == "(") - (ch == ")")
-        if depth == 0 and i >= len(t) // 2 and (t.startswith(", ", i) or t.startswith(" and ", i)):
+        if depth == 0 and i >= len(t) // 2 and i and (t[i - 1] in ")%x" or t[i - 1].isdigit()) and (t.startswith(", ", i) or t.startswith(" and ", i)):
             nxt = t[i:].lstrip(", ").removeprefix("and ").lstrip()
             if nxt[:1].islower():
                 cut = i
