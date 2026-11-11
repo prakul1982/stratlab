@@ -98,7 +98,10 @@ def test_a_market_with_history_but_no_heatmap_rows_is_read_once_at_the_first_cha
     runner().run("IN", IST_OPEN)                                # the history every group needs
     del mem[heatmap.KEY + "IN"]                                 # ...stored before the heatmap existed
     job = breadth.Job(runner(calls=calls), ready=lambda r: r == "IN")
-    morning = datetime(2026, 10, 1, 5, 0, tzinfo=timezone.utc)                          # Thursday 10:30 IST, before the day's run
+    open_hours = datetime(2026, 10, 1, 5, 0, tzinfo=timezone.utc)                       # Thursday 10:30 IST: the market is open
+    assert job.tick(open_hours) == 0 and len(calls) == 0                                # ...so no full read beside the live session
+    job._heat_wait = {}                                                                 # (the quarter-hour wait over)
+    morning = datetime(2026, 10, 1, 10, 30, tzinfo=timezone.utc)                        # 16:00 IST: after the close, before the day's run
     assert job.tick(morning) == 1 and len(calls) == 3
     assert heatmap.load("IN")["stocks"]
     assert job.tick(morning + timedelta(minutes=5)) == 0 and len(calls) == 3           # ...once

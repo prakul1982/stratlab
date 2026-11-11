@@ -988,6 +988,16 @@ class Job(news_job.Job):
         if not empty:
             self.last[f"breadth-{region}-filled"] = "1"
             return True
+        if empty == ["heatmap"]:
+            # only the heatmap's rows are missing: in market hours they wait for the close (the day's own run stores them), so a full read
+            # of every stock never runs beside the live session; asked again a quarter of an hour on
+            from . import breadth_live  # here, not at the top: that module imports this one
+            wait = getattr(self, "_heat_wait", None) or {}
+            if time.time() < wait.get(region, 0) or breadth_live.is_open(region, now or datetime.now(ZoneInfo("UTC"))):
+                if time.time() >= wait.get(region, 0):
+                    wait[region] = time.time() + 900
+                    self._heat_wait = wait
+                return True
         day = (now or datetime.now(ZoneInfo("UTC"))).astimezone(ZoneInfo(RUN_AT[region][0])).date().isoformat()
         mark = f"{day}|{','.join(empty)}"
         if db.get_setting(FILL_KEY + region) == mark:
