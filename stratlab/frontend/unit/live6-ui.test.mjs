@@ -21,3 +21,14 @@ test("LIVE6-012: the search box's theme list is the shared library, never worded
   assert.doesNotMatch(page, /Already read:|, read \$\{/);
   assert.match(page, /\{LIBRARY_HEAD\}/);
 });
+
+test("LIVE6-005: the heatmap's note says which theme companies are grey at their last price and which have nothing", async () => {
+  const { closesNote } = await import("../src/lib/heatmap.ts");
+  assert.equal(closesNote({ members: 16, with_prices: 16, price_only: 0 }, "in the theme"), null);
+  assert.equal(closesNote({ members: 16, with_prices: 14, price_only: 2 }, "in the theme"),
+    "2 of the 16 companies in the theme have no closes on record yet and are shown in grey at the last price.");
+  assert.equal(closesNote({ members: 16, with_prices: 14, price_only: 1 }, "in the theme"),
+    "1 of the 16 companies in the theme has no closes on record yet and is shown in grey at the last price. 1 of the 16 companies in the theme has no closes or price on record and is not shown.");
+  assert.equal(closesNote({ members: 500, with_prices: 498 }, "in this group"), "2 of the 500 companies in this group have no closes or price on record and are not shown.");
+  assert.doesNotMatch(src("pages/HeatmapPage.tsx"), /have no stored closes and are not shown/);
+});

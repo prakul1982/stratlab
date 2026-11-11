@@ -4,7 +4,7 @@ import { api, ApiError } from "../lib/api";
 import { bigMoney, fmtDate, pct, price } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { researchApi, useRegion, type Region } from "../lib/research";
-import { PERIODS, PERIOD_LABEL, PERIOD_SHORT, colorValue, isPeriod, matches, type ColorBy, type GroupBy, type HeatView, type Period, type Placed, type SizeBy, type Tile } from "../lib/heatmap";
+import { PERIODS, PERIOD_LABEL, PERIOD_SHORT, closesNote, colorValue, isPeriod, matches, type ColorBy, type GroupBy, type HeatView, type Period, type Placed, type SizeBy, type Tile } from "../lib/heatmap";
 import { Treemap, TreemapLegend } from "../components/chart/Treemap";
 import { Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, Field, FieldGroup, PageHeader, Seg, Select, Signed, Working, type Column } from "../components/kit";
 
@@ -203,7 +203,7 @@ export function HeatmapPage() {
             )}
             {cut && <p className="k-note">The {view.shown.toLocaleString("en-IN")} largest of {view.matching.toLocaleString("en-IN")} companies are shown. Pick a smallest market value to narrow the group.</p>}
             {!table && leftOut > 0 && <p className="k-note">{leftOut} {leftOut === 1 ? "company has" : "companies have"} no {size === "cap" ? "market value" : "traded value"} on record and {leftOut === 1 ? "is" : "are"} left out of the map. The Table view lists {leftOut === 1 ? "it" : "them"}.</p>}
-            {view.with_prices < view.members && <p className="k-note">{(view.members - view.with_prices).toLocaleString("en-IN")} of the {view.members.toLocaleString("en-IN")} companies {cos ? "in the theme" : "in this group"} have no stored closes and are not shown.</p>}
+            {closesNote(view, cos ? "in the theme" : "in this group") && <p className="k-note" data-testid="hm-closes-note">{closesNote(view, cos ? "in the theme" : "in this group")}</p>}
           </Card>
         )}
     </div>

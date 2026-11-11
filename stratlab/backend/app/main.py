@@ -5476,6 +5476,8 @@ def results_options_many(symbols: list[str], day: str | None) -> dict[str, dict 
 
 # the results page's reads wait at most 3 s for a broker turn: behind a job's queue they come back "pending" and are asked again
 results_calendar.setup(history=lambda r, s, d: breadth_load(r, s, d, max_wait=3.0), options=results_options, options_many=results_options_many)
+# a theme's companies outside the stored heatmap rows are read on demand, with the same short wait for a broker turn (LIVE6-005)
+heatmap.setup(history=lambda r, s, d: breadth_load(r, s, d, max_wait=3.0))
 
 
 def breadth_index(region: str, symbol: str, days: int) -> list[dict]:

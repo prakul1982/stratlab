@@ -198,3 +198,79 @@ def test_one_answer_is_shared_until_the_next_run_stores_new_rows(w, monkeypatch)
     assert len(calls) == 1
     heatmap.save("IN", "2026-10-28", {"S000": [1.0, 1, 1, 1, 1, 1, 1, 10.0, 10.0]}, {})
     assert c.get("/invest/heatmap?market=IN", headers=h).json()["as_of"] == "2026-10-28" and len(calls) == 2
+
+
+# ---------- LIVE6-005: a theme's companies outside every stored group ----------
+def _candles(last=110.0):
+    """Daily candles over 400 calendar days to 27 Oct 2026, the last close `last`, so heat_row gives a full row."""
+    end = datetime(2026, 10, 27)
+    out = [{"t": (end - timedelta(days=d)).strftime("%Y-%m-%d"), "c": 100.0, "v": 1000.0} for d in range(400, 0, -1)
+           if (end - timedelta(days=d)).weekday() < 5]
+    return out + [{"t": "2026-10-27", "c": last, "v": 3000.0}]
+
+
+def _outside(extra):
+    """The screens' index with companies the stored rows don't have (the theme's non-index members), largest first."""
+    idx = json.loads(db.get_setting(screens.INDEX_KEY + "IN"))
+    idx["rows"] += extra
+    db.set_setting(screens.INDEX_KEY + "IN", json.dumps(idx))
+    with screens._mem_lock:
+        screens._mem.clear()
+
+
+def test_live6_005_theme_members_without_a_stored_row_are_read_on_demand_largest_first_and_kept(w, monkeypatch):
+    store()
+    _outside([{"symbol": "BIG", "name": "Big Co", "sector": "Technology", "market_cap": 90000.0, "price": 55.0},
+              {"symbol": "MID", "name": "Mid Co", "sector": "Technology", "market_cap": 5000.0, "price": 20.0}])
+    calls = []
+    monkeypatch.setattr(heatmap, "_history", lambda r, s, d: calls.append((r, s, d)) or _candles())
+    c, h = w["client"], headers("free-token")
+    v = c.get("/invest/heatmap?market=IN&symbols=S000,MID,BIG", headers=h).json()
+    assert [t["s"] for t in v["tiles"]] == ["BIG", "MID", "S000"]                   # the largest drawn first, none dropped
+    assert v["members"] == 3 and v["with_prices"] == 3 and v["price_only"] == 0
+    big = v["tiles"][0]
+    assert big["px"] == 110.0 and big["r"][0] == 10.0 and big["n"] == "Big Co" and big["cap"] == 90000.0
+    assert sorted(s for _, s, _ in calls) == ["BIG", "MID"] and all(d >= 380 for *_, d in calls)  # a year and more back
+    c.get("/invest/heatmap?market=IN&symbols=S000,MID,BIG", headers=h)
+    assert len(calls) == 2                                                           # kept: not read again before the next run
+
+
+def test_live6_005_reads_are_bounded_and_a_company_still_without_closes_shows_its_last_price(w, monkeypatch):
+    store()
+    _outside([{"symbol": f"X{i:02d}", "name": f"Extra {i}", "market_cap": 1000.0 * (40 - i), "price": 10.0 + i} for i in range(30)]
+             + [{"symbol": "GONE", "name": "Gone Co", "market_cap": 99999.0, "price": None}])
+    calls = []
+
+    def hist(r, s, d):
+        calls.append(s)
+        if s == "X00":
+            raise RuntimeError("busy")                 # the source busy: not kept, tried again next time
+        if s == "GONE":
+            raise LookupError("not listed")
+        return _candles()
+
+    monkeypatch.setattr(heatmap, "_history", hist)
+    monkeypatch.setattr(heatmap, "ON_DEMAND", 10)
+    syms = ",".join(["GONE"] + [f"X{i:02d}" for i in range(30)])
+    v = w["client"].get(f"/invest/heatmap?market=IN&symbols={syms}", headers=headers("free-token")).json()
+    assert sorted(calls) == ["GONE"] + [f"X{i:02d}" for i in range(9)]               # at most ON_DEMAND reads, the largest ten
+    assert v["members"] == 31 and v["with_prices"] == 8                               # X01..X08 read
+    assert v["price_only"] == 22                                                      # X00 (busy) and X09..X29: their last price, grey
+    grey = next(t for t in v["tiles"] if t["s"] == "X20")
+    assert grey["px"] == 30.0 and grey["r"] == [None] * 6 and grey["vx"] is None
+    assert "GONE" not in {t["s"] for t in v["tiles"]}                                 # no closes and no price: left out, counted
+    v2 = w["client"].get(f"/invest/heatmap?market=IN&symbols={syms}", headers=headers("free-token")).json()
+    assert sorted(calls[10:]) == ["X00"] + [f"X{i:02d}" for i in range(9, 18)]       # GONE kept as none; the next ten read
+    assert v2["with_prices"] == 17
+
+
+def test_live6_005_a_slow_source_never_holds_the_page_past_its_wait(w, monkeypatch):
+    import time as _t
+    store()
+    _outside([{"symbol": "SLOW", "name": "Slow Co", "market_cap": 1.0, "price": 7.0}])
+    monkeypatch.setattr(heatmap, "_history", lambda r, s, d: _t.sleep(1.5) or _candles())
+    monkeypatch.setattr(heatmap, "ON_DEMAND_SECS", 0.2)
+    began = _t.perf_counter()
+    v = w["client"].get("/invest/heatmap?market=IN&symbols=S000,SLOW", headers=headers("free-token")).json()
+    assert _t.perf_counter() - began < 1.2
+    assert v["with_prices"] == 1 and v["price_only"] == 1
