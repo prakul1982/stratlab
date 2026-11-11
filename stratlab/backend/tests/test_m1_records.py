@@ -108,3 +108,208 @@ def test_the_rules_version_moved_so_kept_checks_and_dives_are_worked_out_again_a
     read of it) was served as it stood. The version is part of every kept check's, library read's and dive's key."""
     assert B.RULES == 34 and T.PLACE_CARRY[34] == 33
     assert T.check_key("US", "Semiconductors", {"generated_at": 5})[-1] == B.RULES
+
+
+# ---------- 2. one set of records behind every count of a layer ----------
+import copy                                                                      # noqa: E402
+import re                                                                        # noqa: E402
+
+import pytest                                                                    # noqa: E402
+
+from app import deck                                                             # noqa: E402
+from app.intel import theme_data as D                                            # noqa: E402
+from tests.synth_structures_r27class import banks_in, it_in, structures as class_structures      # noqa: E402
+from tests.synth_structures_r29 import structures as broad_structures            # noqa: E402
+from tests.test_r18_deck import deck_of                                          # noqa: E402
+from tests.test_r25_deck import EVERY, IDS                                       # noqa: E402
+
+
+def _row(sym, **kw):
+    return {"symbol": sym, "name": f"{sym} Inc", "status": "core", "revenue": 100.0, "ebitda": 20.0, "net": 10.0, "roce": 12.0, **kw}
+
+
+def live_shaped_layer():
+    """The live "Semiconductor equipment" layer's shape: 17 listed, two whose way of earning isn't shown, one with no figure at all, one
+    whose net margin is left out of its median."""
+    rows = [_row(f"IN{i}") for i in range(13)] + [_row("PART", one_off=True)]
+    rows += [_row("KLIC", model_out="unknown"), _row("ICHR", model_out="unknown"),
+             {"symbol": "ATEYY", "name": "Advantest Corp", "status": "core", "revenue": None, "ebitda": None, "net": None, "roce": None}]
+    return D.layer_block("Semiconductor equipment", rows, set())
+
+
+def test_every_count_of_the_live_shaped_layer_comes_from_its_rows_records():
+    b = live_shaped_layer()
+    assert (b["n"], b["listed"]) == (14, 17)                      # live said 15 in one table: the company with no figure counted
+    assert D.layer_counts(b) == {"listed": 17, "n": 14, "out": {"way of earning not shown": 2, "no revenue figure": 1}}
+    assert [c["symbol"] for c in b["companies"] if not c["calc"]["in"]] == ["KLIC", "ICHR", "ATEYY"]
+    assert b["stats"]["ebitda"]["n"] == 14 and b["stats"]["net"]["n"] == 13          # each median is of the 14
+    row = D.chain_table([b])["rows"][0]
+    assert (row["n"], row["listed"]) == (14, 17) and deck.companies_cell(row["n"], row["listed"]) == "14 of 17"
+    cos = b["companies"]
+    ins, outs = deck.layer_roll(b, cos)
+    assert (len(ins), len(ins) + len(outs)) == (14, 17)
+    assert deck.layer_head(b, cos, lambda x: f"${x} m").startswith("17 companies (14 in the layer's calculations)")
+    assert deck.roll_line(ins, outs)[0].count("(14 of 17)") == 1
+    assert deck.companies_cell(4, 4) == "4" and deck.companies_cell(4, None) == "4"
+
+
+def test_a_company_with_a_figure_but_no_revenue_stays_in_and_one_with_none_is_out():
+    assert D.calc_record({"revenue": None, "roe": 11.0}) == {"in": True, "why": ""}                 # a lender's return with no revenue stored
+    assert D.calc_record({"revenue": None}) == {"in": False, "why": "no revenue figure"}
+    assert D.calc_record({"revenue": 5, "status": "unverified", "model_out": "unknown"})["why"] == "not confirmed"
+    assert D.calc_record({"revenue": 5, "model_out": "other"})["why"] == "other business"
+    assert D.calc_record({"revenue": 5, "model_out": True})["why"] == "way of earning not shown"   # a dive kept before the reason was named
+    assert set(D.CALC_WHY) == {"other business", "way of earning not shown", "not confirmed", "no revenue figure"} and deck.ROLL_WHY is D.CALC_WHY
+    # a row of a dive kept before the record is read the same way
+    assert not D.in_calc({"revenue": 5, "model_out": "unknown"}) and D.in_calc({"revenue": 5})
+    assert D.in_calc({"revenue": None, "calc": {"in": True, "why": ""}})                         # the kept record is the one read
+
+
+def _split_deck(t):
+    t = copy.deepcopy(t)
+    vc = B.by_model(t["map"]["value_chain"], t["models"], t["map"]["sector"], tags=t["tags"], confidence=t["confidence"])
+    return deck_of(t["region"], {**t["map"], "value_chain": vc}, t["facts"])
+
+
+def test_a_layer_with_companies_left_out_states_one_pair_on_every_page():
+    v, slides = _split_deck(banks_in())
+    said = deck.layer_count_statements(slides)["Retail and commercial lenders"]
+    assert {p for p, _ in said} == {(5, 7)}                                       # the same two numbers wherever the layer is counted
+    where = {w.split(" (")[0] for _, w in said}
+    assert {"The value chain by layer", "Layers side by side", "Layer 1 · Retail and commercial lenders"} <= where, where
+    chain = next(b for s in slides if s.title == "The value chain by layer" for b in s.blocks if b["kind"] == "table")
+    row = next(r for r in chain["rows"] if r[0] == "Retail and commercial lenders")
+    assert row[chain["head"].index("Companies")] == "5 of 7"
+    notes = " ".join(p for s in slides if s.title == "The value chain by layer" for b in s.blocks if b["kind"] == "text" for p in b["paras"])
+    assert deck.COMPANIES_NOTE in notes                                           # the two scopes are named where they differ
+    layer = next(x for x in v["layers"] if x["layer"] == "Retail and commercial lenders")
+    assert D.layer_counts(layer) == {"listed": 7, "n": 5, "out": {"way of earning not shown": 2}} and layer["n"] == 5
+    assert deck.layer_count_flags(slides) == []
+    assert next(x for x in slides[0].gate["items"] if x["id"] == "reconcile")["ok"]
+
+
+def test_the_gate_fails_when_two_pages_state_different_totals_for_a_layer():
+    """The live R32 Semiconductors deck: "15" in the value chain's table, "14 of 17" on the layer's page and in the appendix."""
+    v, slides = _split_deck(banks_in())
+    chain = next(b for s in slides if s.title == "The value chain by layer" for b in s.blocks if b["kind"] == "table")
+    at = chain["head"].index("Companies")
+    chain["rows"] = [[*r[:at], "6", *r[at + 1:]] if r[0] == "Retail and commercial lenders" else r for r in chain["rows"]]
+    flags = deck.layer_count_flags(slides)
+    assert [f["layer"] for f in flags] == ["Retail and commercial lenders"] and "6 on “The value chain by layer”" in flags[0]["text"]
+    assert "5 of 7 on" in flags[0]["text"]
+    gate = deck.publication_gate(slides, v)
+    item = next(x for x in gate["items"] if x["id"] == "reconcile")
+    assert not item["ok"] and any(d["text"].startswith("layer counts: Retail and commercial lenders") for d in gate["dropped"])
+    # the scope named ("5 of 7") in every place is no failure, and neither is a layer whose every company is counted
+    assert deck.layer_count_flags([s for s in slides if s.title != "The value chain by layer"]) == []
+
+
+@pytest.mark.parametrize("name,v,slides", EVERY, ids=IDS)
+def test_no_synthetic_theme_states_two_counts_for_a_layer(name, v, slides):
+    assert deck.layer_count_flags(slides) == [], name
+    for layer in v["layers"]:
+        got = D.layer_counts(layer)
+        assert got["n"] == layer["n"] and got["listed"] == layer["listed"] == got["n"] + sum(got["out"].values()), (name, layer["layer"])
+    for layer, said in deck.layer_count_statements(slides).items():
+        assert len({p for p, _ in said}) == 1 and all(n <= listed for (n, listed), _ in said), (name, layer, said)
+
+
+STRUCTURES = list(class_structures()) + list(broad_structures())
+
+
+@pytest.mark.parametrize("name,theme", STRUCTURES, ids=[n for n, _ in STRUCTURES])
+def test_no_split_structure_states_two_counts_for_a_layer(name, theme):
+    v, slides = _split_deck(theme)
+    assert deck.layer_count_flags(slides) == [], name
+    assert next(x for x in slides[0].gate["items"] if x["id"] == "reconcile")["ok"], slides[0].gate["dropped"]
+    stated = deck.layer_count_statements(slides)
+    for layer in v["layers"]:
+        got = D.layer_counts(layer)
+        for (n, listed), where in stated.get(layer["layer"], []):
+            assert (n, listed) == (got["n"], got["listed"]), (name, layer["layer"], where)
+
+
+# ---------- 3. every company left out of a layer's calculations carries its reason, and the reason is the stored one ----------
+def _left_out_named(slides, title):
+    """{name: reason} as a layer's page and the appendix's roll say them (the reason before the names it is of)."""
+    texts = [p for s in slides if s.title == title for b in s.blocks if b["kind"] == "text" for p in b["paras"] if "Left out (" in p]
+    texts += [str(r[2]) for s in slides if s.title.startswith(deck.ROLL_TITLE) for b in s.blocks if b["kind"] == "table"
+              for r in b["rows"] if title.endswith("· " + str(r[0]))]
+    got = {}
+    for t in texts:
+        body = t.split("Left out (", 1)[-1].split("): ", 1)[-1] if "Left out (" in t else t.split(": ", 1)[-1]
+        body = body.split(". Every one:")[0].rstrip(".")
+        for part in re.split(r"; (?=(?:" + "|".join(D.CALC_WHY) + "): )", body):
+            why, _, names = part.partition(": ")
+            assert why in D.CALC_WHY, (why, t)
+            for nm in names.split(", "):
+                if not re.match(r"(?:and )?\d+ more$", nm.split(" and ")[-1] if " and " in nm and nm.split(" and ")[-1].endswith("more") else nm):
+                    got[nm.split(" and ")[0] if nm.endswith("more") else nm] = why
+    return got
+
+
+def _reasons_carried(v, slides) -> int:
+    """How many left-out companies the deck names with the reason their row keeps, on their own row or in a roll; fails on one without."""
+    seen = 0
+    for layer in [x for x in v["layers"] if any(not D.in_calc(c) for c in x["companies"])]:
+        out = {deck._LEGAL.sub("", c["name"]).strip(" ,."): (c["name"], c["calc"]["why"]) for c in layer["companies"] if not c["calc"]["in"]}
+        assert all(w in D.CALC_WHY for _, w in out.values())                                # kept on the row, one of the four reasons
+        page = next((s for s in slides if deck._LAYER_PAGE.match(s.title or "") and s.title.endswith("· " + layer["layer"])), None)
+        if page is None:               # a layer with no page of its own (one confirmed company, or the companies the map doesn't place)
+            continue
+        named = _left_out_named(slides, page.title)
+        rows = [str(r[0]) for b in page.blocks if b["kind"] == "table" for r in b["rows"]]
+        for nm, (full, why) in out.items():
+            on_row = any(r == f"{full} ({deck.ROLL_TAG[why]})" for r in rows)
+            assert on_row or named.get(nm) == why, (layer["layer"], nm, why, named, rows)
+            seen += 1
+    return seen
+
+
+def test_every_left_out_company_of_the_it_layer_carries_its_stored_reason():
+    """The live R32 IT deck: 4 of 13 in the large-outsourcing layer's calculations; nine names with their one reason after the last of them
+    read as "TCS, Wipro, Tech Mahindra have none". Thirty listed, ten left out for three reasons: each is named under its reason."""
+    from tests.test_r35_deck import it_theme
+    region, m, f = it_theme()
+    v, slides = deck_of(region, m, f)
+    layer = next(x for x in v["layers"] if x["layer"] == "Large outsourcing")
+    assert D.layer_counts(layer) == {"listed": 30, "n": 20, "out": {"other business": 7, "way of earning not shown": 2, "not confirmed": 1}}
+    assert _reasons_carried(v, slides) == 10
+    assert {p for p, _ in deck.layer_count_statements(slides)["Large outsourcing"]} == {(20, 30)}
+    assert deck.layer_count_flags(slides) == []
+
+
+def test_every_left_out_company_of_every_structure_carries_its_stored_reason():
+    seen = sum(_reasons_carried(*_split_deck(theme)) for _, theme in STRUCTURES)
+    assert seen >= 1
+
+
+def test_the_roll_says_each_reason_before_the_companies_it_is_of():
+    outs = [("Tata Consultancy Services", "way of earning not shown"), ("Wipro", "way of earning not shown"),
+            ("Tech Mahindra", "way of earning not shown"), ("Black Box", "no revenue figure")]
+    line, _ = deck.roll_line([("Infosys", ""), ("HCL Technologies", "")], outs)
+    assert line == ("In the layer's calculations (2 of 6): Infosys, HCL Technologies. Left out (4): way of earning not shown: Tata Consultancy "
+                    "Services, Wipro, Tech Mahindra; no revenue figure: Black Box.")
+
+
+def test_a_company_with_no_figures_carries_its_reason_on_its_row():
+    t = copy.deepcopy(banks_in())
+    sym = t["map"]["value_chain"][0]["companies"][1]["ticker"]
+    name = t["map"]["value_chain"][0]["companies"][1]["name"]
+    f = t["facts"][sym]
+    t["facts"][sym] = {k: x for k, x in f.items() if k in ("symbol", "name", "region", "unit", "industry", "market_cap", "cap")}
+    v, slides = _split_deck(t)
+    row = next((c for x in v["layers"] for c in x["companies"] if c["symbol"] == sym), None)
+    if row is None or row["calc"]["in"]:
+        pytest.skip("the synthetic store keeps a figure for it")
+    assert row["calc"] == {"in": False, "why": "no revenue figure"}
+    page = next(s for s in slides if any(str(r[0]).startswith(name) for b in s.blocks if b["kind"] == "table" for r in b["rows"])
+                and deck._LAYER_PAGE.match(s.title or ""))
+    cell = next(str(r[0]) for b in page.blocks if b["kind"] == "table" for r in b["rows"] if str(r[0]).startswith(name))
+    notes = " ".join(p for b in page.blocks if b["kind"] == "text" for p in b["paras"])
+    assert cell.endswith("(no figures)") and "(no figures): no revenue figure is stored" in notes or "no revenue figure: " in notes
+    assert deck.layer_count_flags(slides) == []
+
+
+def test_the_versions_moved_with_the_records():
+    assert D.DIVE_TEXT == 7 and deck.THEME_DECK_VERSION == 45

@@ -3246,6 +3246,67 @@ def reconcile_flag(text: str, counts: dict, periods: set) -> str | None:
     return f"period {miss[0]} is in no table" if miss else None
 
 
+_LAYER_PAGE = re.compile(r"^Layer \d+ · (.+)$")
+_HEAD_BOTH = re.compile(r"^(\d[\d,]*) compan(?:y|ies) \((\d[\d,]*) in the layer's calculations\)")
+_HEAD_ONE = re.compile(r"^(\d[\d,]*) compan(?:y|ies), revenue")
+_ROLL_OF = re.compile(r"In the layer's calculations \((\d[\d,]*) of (\d[\d,]*)\)")
+_CELL_OF = re.compile(r"^(\d[\d,]*)(?: of (\d[\d,]*))?\b")
+
+
+def layer_count_statements(slides: list) -> dict:
+    """Every count of a layer's companies the deck states, as {layer: [((in its calculations, listed), slide title)]} (lane m1): the
+    "Companies" cell of a table of layers ("14 of 17", or "15" alone: 15 listed and every one counted), a layer page's head ("17 companies
+    (14 in the layer's calculations)", or "15 companies, revenue ..."), its roll ("In the layer's calculations (14 of 17)") and the
+    appendix's roll ("14 of 17: ...")."""
+    num = lambda x: int(str(x).replace(",", ""))          # noqa: E731
+    got: dict = {}
+
+    def say(layer, n, listed, where):
+        got.setdefault(str(layer), []).append(((num(n), num(listed if listed else n)), where))
+    for s in slides:
+        page = _LAYER_PAGE.match(str(s.title or ""))
+        if page:
+            for rx in (_HEAD_BOTH, _HEAD_ONE):
+                m = rx.match(str(s.subtitle or ""))
+                if m:
+                    say(page.group(1), m.group(2) if rx is _HEAD_BOTH else m.group(1), m.group(1), s.title)
+                    break
+        for b in s.blocks:
+            if b["kind"] == "text" and page:
+                for p in b.get("paras") or []:
+                    for m in _ROLL_OF.finditer(p if isinstance(p, str) else ""):
+                        say(page.group(1), m.group(1), m.group(2), s.title)
+            if b["kind"] != "table" or not b.get("head") or b["head"][0] != "Layer":
+                continue
+            at = next((i for i, h in enumerate(b["head"]) if h in ("Companies", "In its calculations")), None)
+            if at is None:
+                continue
+            for r in b.get("rows") or []:
+                if isinstance(r, dict) or len(r) <= at:
+                    continue
+                cell = lambda x: str(x.get("text") if isinstance(x, dict) else x)          # noqa: E731
+                m = _CELL_OF.match(cell(r[at]).strip())
+                if m:
+                    say(cell(r[0]), m.group(1), m.group(2), s.title)
+    return got
+
+
+def layer_count_flags(slides: list) -> list[dict]:
+    """What breaks "one set of records behind every count" (lane m1, the live R32 Semiconductors deck: 15 equipment companies in the
+    value-chain table, 14 of 17 on the layer's page and in the appendix): a layer whose pages state two different counts without naming
+    the scope. Every statement of a layer gives the same pair (in its calculations, listed); a count alone says both are that number.
+    [{"layer", "slide", "text"}], [] when they agree."""
+    out = []
+    for layer, said in layer_count_statements(slides).items():
+        pairs = {p for p, _ in said}
+        if len(pairs) > 1:
+            first = said[0]
+            other = next(x for x in said if x[0] != first[0])
+            words = lambda x: (f"{x[0][0]} of {x[0][1]}" if x[0][0] != x[0][1] else f"{x[0][0]}") + f" on “{x[1]}”"        # noqa: E731
+            out.append({"layer": layer, "slide": other[1], "text": f"{layer}: {words(first)}, {words(other)}"})
+    return out
+
+
 def counts_flags(counts: dict) -> list[str]:
     """What breaks the order of the deck's four counts (R28, the owner's review: "confirmed 59 (of 60 checked) · with figures 60"): each is a
     subset of the one before, so with figures <= confirmed <= considered, and every calculation's count <= with figures. [] when they hold."""
@@ -3543,6 +3604,9 @@ def publication_gate(slides: list, v: dict, reproduced: list | None = None) -> d
     # doesn't fails the item, whatever the sentences say
     dropped["reconcile"] += [{"slide": "", "text": f"the four counts: {x}", "why": "a count above the one it is part of", "rule": "reconcile"}
                              for x in counts_flags(counts)]
+    # lane m1: a layer's counts are one set of records: two pages that state different totals for it, the scope not named, fail the item
+    dropped["reconcile"] += [{"slide": x["slide"], "text": f"layer counts: {x['text']}", "why": "two counts of one layer with no scope named",
+                              "rule": "reconcile"} for x in layer_count_flags(slides)]
     # R30: the coverage table (count, market value, each figure, each layer) reconciles, on the page and with the members
     for s_ in slides:
         for b in s_.blocks:
