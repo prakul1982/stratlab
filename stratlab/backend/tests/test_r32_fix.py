@@ -112,9 +112,21 @@ def test_a_model_named_layer_joins_the_map_s_layer_and_two_plain_ones_still_stay
     two = vc[0]
     assert {c["ticker"] for c in two["companies"]} == {f"TWO{i}" for i in range(5)}
     assert two["model"]["same_as"] == ["Makers of their own products", "Passenger cars"]   # each line says the three earn the same way
-    # one layer named by what it makes: the model-named layer joins it, as before
+    # one layer named by what it makes: the model-named layer joins it only with the companies whose words fit it. R38 lane s1-fit (updated
+    # on purpose; the live R37 Semiconductors deck had Micron, Intel and SK Hynix in "Semiconductor equipment" because both "make their own
+    # products"): carmakers never join "Two-wheelers"
     one = copy.deepcopy(t["map"]["value_chain"])[:2]
     vc = B.by_model(one, t["models"], "Automobiles", tags=t["tags"], confidence=t["confidence"])
+    assert [v["layer"] for v in vc if not v.get("official")] == ["Two-wheelers", "Makers of their own products"]
+    assert {c["ticker"] for c in vc[0]["companies"]} == {f"TWO{i}" for i in range(5)}
+    # ...and makers whose words say what the two-wheeler layer makes do join it
+    fit = build("IN", "Automobiles", [
+        ("Two-wheelers", "These firms build motorcycles and scooters.", _rows("TWO", 5, "Bikeco", "makes motorcycles and scooters in its plants",
+                                                                             "2/3 Wheelers", "manufacturing")),
+        ("Makers of their own products", "Made.", _rows("MKR", 3, "Ridewell", "makes motorcycles and electric scooters in its plants", "2/3 Wheelers",
+                                                       "manufacturing")),
+    ], [])
+    vc = B.by_model(copy.deepcopy(fit["map"]["value_chain"]), fit["models"], "Automobiles", tags=fit["tags"], confidence=fit["confidence"])
     assert [v["layer"] for v in vc if not v.get("official")] == ["Two-wheelers"]
     assert {c["ticker"] for c in vc[0]["companies"]} == {f"TWO{i}" for i in range(5)} | {f"MKR{i}" for i in range(3)}
 
@@ -147,7 +159,7 @@ def test_a_split_half_with_no_shown_company_is_undone():
     assert "Residential developers" in lays and not any("(larger)" in x or "(smaller)" in x for x in lays)
     text = " ".join(str(x) for s in slides for b in s.blocks for x in (b.get("paras") or []) + [s.title or ""])
     assert "(smaller)" not in text and "(larger)" not in text
-    assert deck.THEME_DECK_VERSION == 49 and B.RULES == 38          # lane r2: RULES 38 (updated on purpose); lane r1: RULES 37 (updated on purpose); q1: RULES 36 (updated on purpose); lane m1 bumped RULES (updated on purpose; lane n2: RULES 35)
+    assert deck.THEME_DECK_VERSION == 49 and B.RULES == 39          # lane s1-fit: RULES 39 (updated on purpose); lane r2: RULES 38 (updated on purpose); lane r1: RULES 37 (updated on purpose); q1: RULES 36 (updated on purpose); lane m1 bumped RULES (updated on purpose; lane n2: RULES 35)
 
 
 def test_a_company_with_no_model_takes_the_one_its_map_layers_name_states():
