@@ -821,7 +821,8 @@ def models_from_layer(vc: list[dict], models: dict, conf, evidence=None) -> tupl
     in a fabless layer)."""
     import re
     from .theme_check import MODELS, model_from_words
-    evidence = evidence if isinstance(evidence, dict) else {}
+    given = evidence
+    ev_of = given if callable(given) else (lambda s_: (given if isinstance(given, dict) else {}).get(s_))   # the caller passes a reader
     models, out_conf = dict(models), (dict(conf) if isinstance(conf, dict) else {})
     for v in vc:
         if v.get("official") or v.get("by_model"):
@@ -832,7 +833,7 @@ def models_from_layer(vc: list[dict], models: dict, conf, evidence=None) -> tupl
         for c in v.get("companies") or []:
             s_ = c.get("ticker")
             if s_ and models.get(s_, "") in ("", "unknown"):
-                ev = str(evidence.get(s_) or "")
+                ev = str(ev_of(s_) or "")
                 if model_from_words(ev) not in ("", m_) or re.search(LAYER_MODEL_NOT, ev, re.I):
                     continue
                 models[s_] = m_
@@ -1226,7 +1227,10 @@ def to_describe(m: dict, n: int = DESCRIBE_MAX) -> list[str]:
     return [s for _, s in rows[:n]]
 
 
-_FIRST = re.compile(r"^(.{20,240}?[.;])(?:\s|$)")
+# R35: a full stop after a legal form or an initial ends no sentence (live: "Qnity Electronics, Inc. is a major provider of materials..." was
+# shown as "Qnity Electronics, Inc", and so were Marvell, Skyworks and four more; "the U.S. market")
+_NOT_END = r"(?<![A-Z]\.)(?<!\bInc\.)(?<!\bINC\.)(?<!\bCorp\.)(?<!\bLtd\.)(?<!\bCo\.)(?<!\bPvt\.)(?<!\bNo\.)(?<!\bSt\.)(?<!\bDr\.)"
+_FIRST = re.compile(r"^(.{20,240}?[.;])" + _NOT_END + r"(?:\s|$)")
 # what a company's description says before its business (the owner, 7 Nov: "**Company Overview **", "Incorporatedin1994", "Business Overview:")
 _MARKUP = re.compile(r"\*+|#+")
 _HEADING = re.compile(r"\s*\b(?:company|business|corporate)\s+(?:overview|profile|description)\s*:?|\s*\babout\s+(?:us|the\s+company)\s*:", re.I)
@@ -1240,7 +1244,7 @@ _DOES = re.compile(r"\b(?:manufactur|make|produc|suppl|provid|engag|offer|design
 
 
 def _sentences(t: str) -> list[str]:
-    return [x.strip() for x in re.split(r"(?<=[.;])\s+(?=[A-Z“\"(])", t) if x.strip()]
+    return [x.strip() for x in re.split(_NOT_END + r"(?<=[.;])\s+(?=[A-Z“\"(])", t) if x.strip()]
 
 
 def one_line(about: str) -> str:

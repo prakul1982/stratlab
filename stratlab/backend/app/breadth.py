@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 
-from . import db, job_status, memguard, official_close, rotation, scan_presets, sector_members, universes
+from . import db, heatmap, job_status, memguard, official_close, rotation, scan_presets, sector_members, universes
 from .engine.indicators import stage
 from .data import calendar
 from . import deals  # noqa: F401  (before the newsletter job, which imports it back while loading)
@@ -544,6 +544,8 @@ class Runner:
             sec = {}
         tally, loaded, failed, streak, last_error, unlisted = Tally(), 0, 0, 0, None, 0
         bases: dict[str, list] = {}                              # each stock's finished days, for the intraday view
+        heats: dict[str, list] = {}                              # each stock's changes over six periods, for the heatmap
+        heat_index: dict[str, list] = {}                         # group -> its index over the same periods
         scans: dict[str, dict[str, dict | None]] = {}            # group -> {symbol: scan_presets.evaluate answer}
         scan_secs, scan_groups = 0.0, set(scan_presets.STORED.values())
         for i, (sym, gs) in enumerate(sorted(by_stock.items())):
@@ -569,6 +571,13 @@ class Runner:
             base = base_row(bars, through)
             if base:
                 bases[sym] = base
+            try:                        # the heatmap's row, from the candles just read (no second request)
+                heat = heatmap.heat_row(bars, through)
+            except Exception as e:      # a heatmap problem never costs the breadth counts
+                heat = None
+                print("breadth heatmap:", sym, str(e)[:120])
+            if heat:
+                heats[sym] = heat
             for g in gs:
                 tally.add(g, flags, sec.get(sym), sector_from)
             mine = [g for g in gs if g in scan_groups]
@@ -598,6 +607,7 @@ class Runner:
                 out[g] = {"days": len(stored[g]), "stocks": 0, "members": 0, "as_of": max(stored[g]) if stored[g] else None}
                 continue
             index = self._index(region, GROUPS[g]["index"], days, through)
+            heat_index[g] = heatmap.index_row(index)
             fresh = rows_of(tally.groups.get(g), index)
             laid = {d: r for d, r in fresh.items() if d >= keep_from}        # the days the merge lays over the stored ones
             changed = [{**r, "at": _now()} for r in revisions(stored[g], laid, through)] if stored[g] else []
@@ -619,6 +629,11 @@ class Runner:
                 save_base(region, last_trading(region, through), bases)
             except Exception as e:      # the intraday view rebuilds it when it needs to
                 print("breadth base save:", region, str(e)[:120])
+        if heats:
+            try:
+                heatmap.save(region, last_trading(region, through), heats, heat_index)
+            except Exception as e:      # the heatmap keeps the day before's rows
+                print("breadth heatmap save:", region, str(e)[:120])
         for g, found in scans.items():
             try:
                 scan_presets.save(g, scan_presets.build(found))
@@ -968,9 +983,21 @@ class Job(news_job.Job):
         live. Now a group without days is filled at the first chance; the try is remembered for the day in the
         database, so a group the exchange gives no list for isn't read again on every check or restart."""
         empty = sorted(g for g, v in GROUPS.items() if v["region"] == region and not load_hist(g))
+        if not heatmap.load(region).get("stocks"):
+            empty.append("heatmap")     # the heatmap's rows, stored by the same run: a market without them is read once at the first chance
         if not empty:
             self.last[f"breadth-{region}-filled"] = "1"
             return True
+        if empty == ["heatmap"]:
+            # only the heatmap's rows are missing: in market hours they wait for the close (the day's own run stores them), so a full read
+            # of every stock never runs beside the live session; asked again a quarter of an hour on
+            from . import breadth_live  # here, not at the top: that module imports this one
+            wait = getattr(self, "_heat_wait", None) or {}
+            if time.time() < wait.get(region, 0) or breadth_live.is_open(region, now or datetime.now(ZoneInfo("UTC"))):
+                if time.time() >= wait.get(region, 0):
+                    wait[region] = time.time() + 900
+                    self._heat_wait = wait
+                return True
         day = (now or datetime.now(ZoneInfo("UTC"))).astimezone(ZoneInfo(RUN_AT[region][0])).date().isoformat()
         mark = f"{day}|{','.join(empty)}"
         if db.get_setting(FILL_KEY + region) == mark:

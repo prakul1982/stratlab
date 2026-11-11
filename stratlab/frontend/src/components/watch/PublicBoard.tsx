@@ -49,25 +49,31 @@ export default function PublicBoard({ layout, vw, onClose }: { layout: PanelLayo
         {failed && !rows && <p className="mw-limit" role="status">The prices couldn't be read just now. Trying again in a few seconds.</p>}
         {!rows && !failed && <p className="k-small k-muted mw-pad" role="status">Loading the markets…</p>}
         {rows && (
-          <ul className="mw-rows" aria-label="Main markets">
-            {rows.map((r) => {
-              const it = asItem(r), cur = it.kind === "index" || it.market === "FX" || it.market === "CRYPTO" ? "" : r.currency === "USD" ? "$" : r.currency === "INR" ? "₹" : "";
-              const t = changeText(r.change_pct);
-              return (
-                <li key={r.id} className="mw-row static">
-                  <span className="mw-grip off" aria-hidden="true" />
-                  <div className="mw-open static">
-                    <span className="mw-name"><b>{labelOf(it)}</b><small>{MARKET_NAME[it.market] ?? it.market}</small></span>
-                    <span className="mw-spark" aria-hidden="true">{r.spark && r.spark.length > 1 ? <Spark values={r.spark} tone="neutral" label={`${labelOf(it)}, recent closes`} height={24} /> : null}</span>
-                    <span className="mw-px">
-                      <b className="mw-price">{r.price == null ? "–" : <>{cur}{priceText(r.price, r.currency ?? null, it.market, it.symbol)}</>}</b>
-                      <span className={`mw-chg ${signCls(r.change_pct, t)}`}>{changeArrow(r.change_pct)}{t}</span>
-                    </span>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+          /* the same table as a person's own list (watch.css): Symbol, Last, Change %, the figures in right-aligned columns */
+          <div className="mw-table fixed plain no-abs">
+            <div className="mw-cols">
+              <span aria-hidden="true" /><span className="mw-col">Symbol</span><span className="mw-c-spark" aria-hidden="true" />
+              <span className="mw-col num">Last</span><span className="mw-col num">Change %</span><span aria-hidden="true" />
+            </div>
+            <ul className="mw-rows" aria-label="Main markets">
+              {rows.map((r) => {
+                const it = asItem(r), cur = it.kind === "index" || it.market === "FX" || it.market === "CRYPTO" ? "" : r.currency === "USD" ? "$" : r.currency === "INR" ? "₹" : "";
+                const t = changeText(r.change_pct);
+                return (
+                  <li key={r.id} className="mw-row static">
+                    <span className="mw-grip off" aria-hidden="true" />
+                    <div className="mw-open static">
+                      <span className="mw-name"><b>{labelOf(it)}</b><small className="mw-sub">{MARKET_NAME[it.market] ?? it.market}</small></span>
+                      <span className="mw-spark mw-c-spark" aria-hidden="true">{r.spark && r.spark.length > 1 ? <Spark values={r.spark} tone="neutral" label={`${labelOf(it)}, recent closes`} height={20} /> : null}</span>
+                      <b className="mw-num mw-price">{r.price == null ? "–" : <>{cur}{priceText(r.price, r.currency ?? null, it.market, it.symbol)}</>}</b>
+                      <span className={`mw-num mw-chg ${signCls(r.change_pct, t)}`}><i className="mw-arrow">{changeArrow(r.change_pct)}</i>{t}</span>
+                    </div>
+                    <span aria-hidden="true" />
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         )}
       </div>
       <div className="mw-foot mw-signin">

@@ -140,7 +140,7 @@ def test_a_split_half_with_no_shown_company_is_undone():
     assert "Residential developers" in lays and not any("(larger)" in x or "(smaller)" in x for x in lays)
     text = " ".join(str(x) for s in slides for b in s.blocks for x in (b.get("paras") or []) + [s.title or ""])
     assert "(smaller)" not in text and "(larger)" not in text
-    assert deck.THEME_DECK_VERSION == 43 and B.RULES == 33
+    assert deck.THEME_DECK_VERSION == 44 and B.RULES == 33
 
 
 def test_a_company_with_no_model_takes_the_one_its_map_layers_name_states():
@@ -282,3 +282,14 @@ def test_a_placeholder_sentence_never_ships():
     assert PLACEHOLDER.search("No listed company is shown for x.") and PLACEHOLDER.search("Revenue of {layer} rose") and PLACEHOLDER.search("Median nan")
     assert not PLACEHOLDER.search("No listed company is shown for Missile systems.") and not PLACEHOLDER.search("Nonetheless, margins rose.")
     assert not PLACEHOLDER.search("None of these 3 companies' descriptions shows how it earns.")
+
+
+def test_the_layer_name_guard_reads_a_companys_evidence_from_a_reader_too():
+    """The placement passes a reader (a function), not a dict: the guard applies to it the same way."""
+    from app.intel import theme_base
+    vc = [{"layer": "Fabless chip design", "companies": [{"ticker": "MAT"}, {"ticker": "FAB"}]}]
+    words = {"MAT": "A provider of materials and specialty chemicals for semiconductor manufacturing", "FAB": "From its own filings: Quarterly report"}
+    by_reader, _ = theme_base.models_from_layer(vc, {"MAT": "unknown", "FAB": "unknown"}, {}, lambda s_: words.get(s_, ""))
+    by_dict, _ = theme_base.models_from_layer(vc, {"MAT": "unknown", "FAB": "unknown"}, {}, words)
+    assert by_reader == by_dict
+    assert by_reader["MAT"] == "unknown" and by_reader["FAB"] not in ("", "unknown")

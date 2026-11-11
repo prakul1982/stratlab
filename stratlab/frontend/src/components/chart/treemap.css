@@ -1,0 +1,96 @@
+/* The heatmap (pages/HeatmapPage.tsx, components/chart/Treemap.tsx). Loaded with the page, never with the landing page.
+ *
+ * The colours: a change is green above nothing and red below it, in three steps each side of a neutral grey, each step the
+ * app's own --up / --down mixed further into the card's colour; volume is one blue, light to strong. Every step is written
+ * for light and for dark (twice, as styles.css writes its dark tokens: explicit dark and "follow the system"), and each
+ * carries the text colour that reads on it at 4.5:1 or better (unit/heatmap.test.mjs checks both). */
+.hm-page {
+  --heat-d3: #B23B3B; --heat-d2: #D78B84; --heat-d1: #EDC4BD; --heat-z: #CBC8C1; --heat-u1: #BCD3C3; --heat-u2: #7BA991; --heat-u3: #0F7452;
+  --heat-v0: #E2E8F2; --heat-v1: #B8C9E8; --heat-v2: #90ABDC; --heat-v3: #688CD0; --heat-v4: #446EC3; --heat-v5: #1F4FB5;
+  --heat-na: #EDEBE5; --heat-ink: #1D1B17; --heat-on: #FFFDF8;
+}
+:root[data-theme="dark"] .hm-page {
+  --heat-d3: #EE7B70; --heat-d2: #844C45; --heat-d1: #573832; --heat-z: #47443D; --heat-u1: #304A3A; --heat-u2: #386E53; --heat-u3: #3CC48F;
+  --heat-v0: #292B30; --heat-v1: #383F4F; --heat-v2: #475370; --heat-v3: #566893; --heat-v4: #6F8BCC; --heat-v5: #7EA0F0;
+  --heat-na: #2C2925; --heat-ink: #EFE9DC; --heat-on: #1F1D1A;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .hm-page {
+    --heat-d3: #EE7B70; --heat-d2: #844C45; --heat-d1: #573832; --heat-z: #47443D; --heat-u1: #304A3A; --heat-u2: #386E53; --heat-u3: #3CC48F;
+    --heat-v0: #292B30; --heat-v1: #383F4F; --heat-v2: #475370; --heat-v3: #566893; --heat-v4: #6F8BCC; --heat-v5: #7EA0F0;
+    --heat-na: #2C2925; --heat-ink: #EFE9DC; --heat-on: #1F1D1A;
+  }
+}
+.hm-d3 { background: var(--heat-d3); color: var(--heat-on); }
+.hm-d2 { background: var(--heat-d2); color: var(--heat-ink); }
+.hm-d1 { background: var(--heat-d1); color: var(--heat-ink); }
+.hm-z { background: var(--heat-z); color: var(--heat-ink); }
+.hm-u1 { background: var(--heat-u1); color: var(--heat-ink); }
+.hm-u2 { background: var(--heat-u2); color: var(--heat-ink); }
+.hm-u3 { background: var(--heat-u3); color: var(--heat-on); }
+.hm-v0 { background: var(--heat-v0); color: var(--heat-ink); }
+.hm-v1 { background: var(--heat-v1); color: var(--heat-ink); }
+.hm-v2 { background: var(--heat-v2); color: var(--heat-ink); }
+.hm-v3 { background: var(--heat-v3); color: var(--heat-ink); }
+.hm-v4 { background: var(--heat-v4); color: var(--heat-on); }
+.hm-v5 { background: var(--heat-v5); color: var(--heat-on); }
+.hm-na { background: var(--heat-na); color: var(--heat-ink); }
+
+/* the settings: each choice under its own label, as wide as it is, wrapping to the page's width */
+.hm-controls { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--s4) var(--s5); min-width: 0; }
+.hm-controls > .k-field { flex: 0 0 auto; max-width: 100%; }
+.hm-controls > .k-field > .k-seg { min-height: var(--ctl); align-items: stretch; box-sizing: border-box; max-width: 100%; }
+.hm-controls > .k-field > .k-seg button { height: auto; min-height: 32px; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; }
+.hm-controls > .k-field > .k-chipwrap { min-height: var(--ctl); display: flex; align-items: center; }
+.hm-controls > .k-field > select.k-input { width: auto; min-width: 190px; }
+/* the search box in the map card's header row, beside Map / Table */
+.hm-search.k-input { width: 220px; max-width: 100%; }
+@media (max-width: 640px) {
+  .hm-controls { gap: var(--s3) var(--s4); }
+  .hm-controls > .k-field { flex: 1 1 100%; }
+  .hm-controls > .k-field:has(> select.k-input) { flex: 1 1 140px; }      /* the two dropdowns side by side */
+  .hm-controls > .k-field > select.k-input { width: 100%; min-width: 0; }
+  .k-card-actions:has(> .hm-search) { flex: 1 1 100%; }
+  .hm-search.k-input { flex: 1 1 140px; width: auto; }
+}
+
+/* the line of facts over the map */
+.hm-facts { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s4); font-size: var(--t-label); color: var(--muted); margin: 0; }
+.hm-facts b { color: var(--ink); font-weight: 600; }
+
+/* the map */
+.hm-map { position: relative; width: 100%; min-height: 360px; border-radius: var(--r-ctl); overflow: hidden; background: var(--card); }
+.hm-group-head { position: absolute; display: flex; align-items: center; justify-content: space-between; gap: var(--s2); padding: 0 6px; box-sizing: border-box;
+  background: var(--chip); color: var(--ink-2); font-size: 11.5px; font-weight: 600; line-height: 18px; white-space: nowrap; overflow: hidden; border-radius: 3px 3px 0 0; }
+.hm-group-name { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.hm-group-fig { flex: none; font-weight: 500; font-variant-numeric: tabular-nums; }
+.hm-tile { position: absolute; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 2px;
+  overflow: hidden; text-decoration: none; border-radius: 2px; font-size: 12px; line-height: 1.1; text-align: center; transition: opacity .12s ease; }
+.hm-tile:hover, .hm-tile:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; z-index: 2; }
+/* a tile is a link, but its words keep the colour that reads on its fill when the pointer is on it (not the link blue) */
+.hm-map a.hm-tile:hover, .hm-map a.hm-tile:focus-visible { color: var(--heat-ink); text-decoration: none; }
+.hm-map a.hm-tile:is(.hm-d3, .hm-u3, .hm-v4, .hm-v5):hover, .hm-map a.hm-tile:is(.hm-d3, .hm-u3, .hm-v4, .hm-v5):focus-visible { color: var(--heat-on); }
+.hm-tile.sm { font-size: 10px; }
+.hm-tile.lg { font-size: 15px; gap: 4px; }
+.hm-sym { font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: clip; white-space: nowrap; letter-spacing: .01em; }
+.hm-fig { font-variant-numeric: tabular-nums; white-space: nowrap; font-size: .92em; }
+.hm-tile.off { opacity: .22; }
+.hm-tile.hit { outline: 2px solid var(--ink); outline-offset: -2px; z-index: 1; }
+@media (prefers-reduced-motion: reduce) { .hm-tile { transition: none; } }
+
+/* the tooltip: the tile's own figures, beside the pointer */
+.hm-tip { position: absolute; z-index: 5; pointer-events: none; box-sizing: border-box; padding: var(--s3); border-radius: var(--r-ctl); background: var(--card);
+  border: 1px solid var(--line-2); box-shadow: var(--shadow); color: var(--ink); font-size: var(--t-note); line-height: 1.35; }
+.hm-tip-name { font-weight: 600; font-size: var(--t-label); overflow-wrap: anywhere; }
+.hm-tip-sub { color: var(--muted); margin-bottom: var(--s2); overflow-wrap: anywhere; }
+.hm-tip dl { display: grid; grid-template-columns: auto auto; gap: 3px var(--s3); margin: 0; }
+.hm-tip dt { color: var(--muted); }
+.hm-tip dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+
+/* the legend */
+.hm-legend { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); font-size: var(--t-note); color: var(--muted); }
+.hm-legend-steps { display: flex; flex-wrap: wrap; gap: 2px; }
+.hm-legend-step { display: inline-flex; align-items: center; justify-content: center; min-width: 58px; height: 24px; padding: 0 8px; box-sizing: border-box;
+  font-size: 11.5px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; border-radius: 2px; }
+.hm-legend-step.hm-na { margin-left: var(--s2); }
+@media (max-width: 640px) { .hm-legend-step { min-width: 44px; padding: 0 5px; font-size: 11px; } }

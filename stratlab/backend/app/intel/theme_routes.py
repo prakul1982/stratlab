@@ -27,7 +27,7 @@ from . import ai as A
 from . import grounding, theme_base, theme_check, theme_data, theme_library, theme_prices
 from . import sector_metrics
 from .net import SourceError, TTLCache
-from .news import aggregator_url, company_headline, plain_headline, publisher_url
+from .news import aggregator_url, company_headline, company_text, fits_company, plain_headline, publisher_url
 
 router = APIRouter(tags=["research"])
 
@@ -41,10 +41,12 @@ NO_DESCRIPTION_DAYS = 3                                                   # ...a
 VERDICTS: dict = {}                                                       # placement answers (a few hundred bytes each), cleared past VERDICT_KEEP
 VERDICT_KEEP = 3000
 DESCRIBE_READS = 6                                                        # descriptions read from the companies' own pages a request
+FILING_READS_PER_MINUTE = DESCRIBE_READS                                  # R35: annual reports read for a thin description a minute, across every theme
 PLACE_READS = 60                                                          # R28: descriptions read for a theme's companies to place, in its check, at most
 PRICE_READS_PER_MINUTE = 20                                               # companies' candles read from the sources a minute, across every theme
 PRICE_BUDGET = 45.0                                                       # seconds a request may spend reading candles
 price_reads = Window()
+filing_reads = Window()
 _price_gate = threading.BoundedSemaphore(2)
 _ai_gate = threading.Lock()
 HISTORY_KEEP = 120                                                        # a theme's kept points: about two years of weekly ones
@@ -89,13 +91,43 @@ def own_filings(region: str, sym: str) -> str:
     return ("From its own filings: " + ". ".join(keep[:FILING_LINES]) + ".")[:FILING_CHARS] if keep else ""
 
 
-ABOUT_WORDS, ABOUT_V = 30, 2          # R34: a stored description under 30 words, kept before v2, is read again once (in the same bounded batches)
+ABOUT_WORDS, ABOUT_V = 30, 3          # R34: a stored description under 30 words, kept before this format, is read again once (in the same bounded batches)
 
 
-def thin_about(got: dict) -> bool:
-    """Whether a stored description is too thin to show the business and was kept before R34 (GPT review of R31.5: Bharti Airtel's
-    profile line names no mobile service; Qnity's held only its name), so it is read once more."""
-    return got.get("v") != ABOUT_V and len(str(got.get("about") or "").split()) < ABOUT_WORDS
+def thin_about(got: dict, region: str = "") -> bool:
+    """Whether a stored description is read once more: too thin to show the business and kept before the current format (GPT review of
+    R31.5: Bharti Airtel's profile line names no mobile service; R35: a US company with no encyclopedia article had none at all, and its
+    annual report says what it does), or the read of its annual report was put off (`owed`: FILING_READS_PER_MINUTE were taken), or (US,
+    where the only line was an encyclopedia's) kept before R35 and not about a company at all (live: Ichor Holdings held the Greek myth)."""
+    about = str(got.get("about") or "")
+    if got.get("owed"):
+        return True
+    return got.get("v") != ABOUT_V and (len(about.split()) < ABOUT_WORDS or (region == "US" and not company_text(about)))
+
+
+def _business_read(sym: str) -> str:
+    """The start of the business part of a US company's latest annual report (sec.SEC.business: the front of one report, kept a month)."""
+    from .. import main
+    feed = main.sec_feed
+    return (feed.business(feed.submissions(feed.cik(sym))) or {}).get("text") or ""
+
+
+def filed_business(region: str, sym: str, read=None) -> tuple[str, bool]:
+    """(what the company's latest annual report says it does, whether that read is still owed), for a description the profile and the
+    encyclopedia leave thin (R35). US: the opening of its 10-K's "Item 1. Business" through the SEC feed the company pages use, at most
+    FILING_READS_PER_MINUTE across every theme (a read past that is owed and made in a later batch, never a burst); a company that files
+    none has "". India: nothing more is kept in the company's own words than its profile and the lines of its filings (own_filings)."""
+    if region != "US":
+        return "", False
+    if not filing_reads.hit("about", FILING_READS_PER_MINUTE):
+        return "", True
+    try:
+        return theme_check.clean_description((read or _business_read)(sym)), False
+    except SourceError as e:
+        return "", bool(e.busy)                  # busy: read in a later batch; no annual report on file: not asked again until the description is
+    except Exception as e:
+        print("theme: annual report not read:", sym, type(e).__name__, str(e)[:100])
+        return "", False
 
 
 def plain_name(name: str) -> str:
@@ -118,7 +150,7 @@ def evidence_reader(region: str, names: dict):
                 got = db.json_value(db.get_setting(key), {})
             except Exception:
                 got = {}
-            if got.get("at") and not thin_about(got):
+            if got.get("at") and not thin_about(got, region):
                 age = (datetime.now(timezone.utc) - datetime.fromisoformat(got["at"])).days
                 if age < (EVIDENCE_DAYS if got.get("about") else NO_DESCRIPTION_DAYS):
                     hit = got
@@ -132,14 +164,21 @@ def evidence_reader(region: str, names: dict):
                     w = R.hub.wiki.company(plain_name(names.get(sym) or sym)) or {}
                 except Exception:
                     w = {}
+                if not fits_company(names.get(sym) or sym, w):       # R35: another company's article, or one about no company (Toyo Tires, the myth's Ichor)
+                    w = {}
                 about = " ".join(x for x in (about, w.get("extract") or "") if x)
+            owed = False
+            if len(about.split()) < ABOUT_WORDS:          # R35: still thin: what its latest annual report says it does (US), a few a minute
+                filed, owed = filed_business(region, sym)
+                about = " ".join(x for x in (about, filed) if x)
             hit = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "about": theme_check.clean_description(about), "industry": industry,
-                   "v": ABOUT_V}
+                   "v": ABOUT_V, **({"owed": True} if owed else {})}
             try:
                 db.set_setting(key, json.dumps(hit, ensure_ascii=False))
             except Exception as e:
                 print("theme: description not kept:", sym, str(e)[:100])
-        EVIDENCE_CACHE.set(key, hit, 6 * 3600)
+        if not hit.get("owed"):                           # one whose annual report is still to be read is asked again in the next batch
+            EVIDENCE_CACHE.set(key, hit, 6 * 3600)
         filed = own_filings(region, sym)
         if not hit.get("about") and not filed:
             return None
@@ -526,7 +565,7 @@ def _about_reader(region: str, names: dict, limit: int = DESCRIBE_READS):
                 got = db.json_value(db.get_setting(k), {})
             except Exception:
                 got = {}
-            if got.get("at") and not thin_about(got):
+            if got.get("at") and not thin_about(got, region):
                 hit = got
                 EVIDENCE_CACHE.set(k, hit, 6 * 3600)
         if hit is None:
@@ -542,6 +581,19 @@ def _about_reader(region: str, names: dict, limit: int = DESCRIBE_READS):
         return hit.get("about") or own_filings(region, sym) or None         # no description: the lines of its own filings
     about_of.reads = reads
     return about_of
+
+
+def kept_about(region: str):
+    """symbol -> the company's whole stored description or None, for a dive (theme_data.sub_members): from memory or storage only, each
+    looked up once a dive; the lines of its filings that stand in for a missing description are not its description."""
+    read, seen = _about_reader(region, {}, 0), {}
+
+    def about(sym):
+        if sym not in seen:
+            got = read(sym) or ""
+            seen[sym] = None if not got or got.startswith("From its own filings:") else got
+        return seen[sym]
+    return about
 
 
 def with_descriptions(region: str, m: dict, reads: int = 0) -> dict:
@@ -606,6 +658,24 @@ def sources(region: str, theme: str, fresh: bool = False):
                 print("theme: history not kept:", str(e)[:100])
         return pts
 
+    peer_key = f"theme:peers:{region}:{theme_data.slug(theme)}"
+
+    def peer_history(_, point):
+        """R35: the theme's peer median P/E of each run that differs from the one before (its close, the median, how many peers), the last
+        theme_data.PEER_RUNS of them, this run last: what theme_data.peer_moved sets this run against."""
+        try:
+            pts = db.json_value(db.get_setting(peer_key), [])
+        except Exception:
+            pts = []
+        pts = [p for p in pts if isinstance(p, dict) and p.get("d") and p.get("peers")]
+        if not pts or (pts[-1].get("d"), pts[-1].get("peers")) != (point.get("d"), point.get("peers")):
+            pts = (pts + [point])[-theme_data.PEER_RUNS:]
+            try:
+                db.set_setting(peer_key, json.dumps(pts, separators=(",", ":")))
+            except Exception as e:
+                print("theme: peer medians not kept:", str(e)[:100])
+        return pts
+
     def card(sym, row):
         stored = report_card.stored(sym) if region == "IN" else None
         if not stored or not row:
@@ -632,9 +702,10 @@ def sources(region: str, theme: str, fresh: bool = False):
         shareholding=(lambda s: shareholders.company(s)) if region == "IN" else (lambda s: None),
         insider_buys=(lambda: deals.buys().get("buys") or {}) if region == "IN" else (lambda: {}),
         results=lambda a, b, s: results.between(region, a, b, s), actions=lambda a, b, s: corp_actions.between(region, a, b, s),
-        red_flags=red, card=card, history=history, segments=segments,
+        red_flags=red, card=card, history=history, segments=segments, peer_history=peer_history,
         corp_history=lambda s: corp_actions.history(region, s, None, fetch=False),
-        metrics=sector_metrics.reader(region, fresh))           # R23: filed sector figures, read once and kept for everyone
+        metrics=sector_metrics.reader(region, fresh),           # R23: filed sector figures, read once and kept for everyone
+        about=kept_about(region))                               # R35: the stored descriptions only (nothing is read from a page)
     src.pieces = pieces
     return src
 

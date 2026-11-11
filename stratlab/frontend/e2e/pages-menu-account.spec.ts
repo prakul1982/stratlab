@@ -200,7 +200,7 @@ test("the menu (IA-1): a space's short list of entries, the one you are in lit, 
   if (phone) await page.getByRole("button", { name: "Close menu" }).click();
   await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Market today" }).click();
   await expect(page).toHaveURL(/\/invest\/g\/market-today$/);
-  await expect(page.getByTestId("group-card")).toHaveCount(5);
+  await expect(page.getByTestId("group-card")).toHaveCount(6);       // Mood, Breadth, Heatmap (L4), Sectors, Flows, Today's brief
   // the old addresses still work, the old groups' pages too
   await page.goto("/research/scans");
   await expect(page).toHaveURL(/\/research\/scan$/);

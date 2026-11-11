@@ -8,7 +8,7 @@ const DAY = 24 * 60;
 const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 /** The wall clock in a time zone: weekday (0 = Sunday), minutes past midnight, and the zone's offset from UTC in minutes. */
-function wall(now: Date, tz: string) {
+export function wall(now: Date, tz: string) {
   const parts = new Intl.DateTimeFormat("en-GB", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", weekday: "short",
     hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(now);
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "0";
@@ -28,7 +28,7 @@ function zoned(iso: string, mins: number, tz: string, offset: number): Date {
   return off === offset ? guess : new Date(local - off * 60000);
 }
 
-const hm = (s: string) => { const [h, m] = s.split(":").map(Number); return h * 60 + m; };
+export const hm = (s: string) => { const [h, m] = s.split(":").map(Number); return h * 60 + m; };
 
 export function inWords(mins: number): string {
   const total = Math.round(mins);       // whole minutes first: 1439.6 is a day, not "23h 60m"

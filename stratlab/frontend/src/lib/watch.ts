@@ -21,6 +21,13 @@ export const SORTS: { value: SortMode; label: string }[] = [
   { value: "change_asc", label: "Biggest fall first" }, { value: "name", label: "Name" },
 ];
 
+/** The order a column head's press gives: Symbol goes to names in order and back to your own order; Change % to the biggest
+ * rise first, then the biggest fall first, then back to your own order. */
+export function nextSort(now: SortMode, col: "name" | "change"): SortMode {
+  if (col === "name") return now === "name" ? "custom" : "name";
+  return now === "change_desc" ? "change_asc" : now === "change_asc" ? "custom" : "change_desc";
+}
+
 /** The indices a list can hold, by the symbol the chart and quotes use: the three on the broker's feed and the three US ones. */
 export const INDEX_NAME: Record<string, string> = { "^NSEI": "NIFTY 50", "^BSESN": "SENSEX", "^NSEBANK": "NIFTY BANK", "^GSPC": "S&P 500", "^IXIC": "NASDAQ", "^DJI": "DOW JONES" };
 const KITE_INDEX_SYMBOL: Record<string, string> = { "NIFTY 50": "^NSEI", "NIFTY BANK": "^NSEBANK", "SENSEX": "^BSESN" };
@@ -199,10 +206,15 @@ export const planName = (plan: string | undefined): string => PLAN_NAME[(plan ??
 /** A price in the item's own currency, with the decimals its size calls for (forex in 5, crypto by size, the rest in 2). */
 export function priceText(v: number | null | undefined, currency: string | null | undefined, market: string, symbol: string): string {
   if (v == null || !Number.isFinite(v)) return "–";
-  const a = Math.abs(v);
-  const dp = market === "FX" ? (/JPY/.test(symbol) ? 3 : 5) : market === "CDS" ? 4 : a >= 1 ? 2 : a >= 0.01 ? 4 : 8;
+  const dp = priceDp(v, market, symbol);
   const loc = currency === "INR" ? "en-IN" : "en-US";
   return v.toLocaleString(loc, { minimumFractionDigits: dp, maximumFractionDigits: dp });
+}
+
+/** The decimals a price of this size is written in: forex in 5 (3 against the yen), currency futures in 4, the rest by size. */
+export function priceDp(price: number, market: string, symbol: string): number {
+  const a = Math.abs(price);
+  return market === "FX" ? (/JPY/.test(symbol) ? 3 : 5) : market === "CDS" ? 4 : a >= 1 ? 2 : a >= 0.01 ? 4 : 8;
 }
 
 /** The arrow before a change, from the change as written: none on "0.00%" (LIVE4-009: TCS at +0.004% showed "▲ 0.00%"). */
@@ -211,18 +223,105 @@ export function changeArrow(v: number | null | undefined): string {
   return t.startsWith("+") ? "▲ " : t.startsWith("−") ? "▼ " : "";
 }
 
+const DAY_FMT = { weekday: "short", day: "numeric", month: "short" } as const;
+/** "Fri 6 Nov" for a calendar date ("2026-11-06"). */
+export const dayText = (iso: string): string => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-GB", { ...DAY_FMT, timeZone: "UTC" }).replace(",", "");
+
 /** When the newest price on the list was read, for the panel's foot: "Prices as of 12:55:04 IST"; null before any price
  * (LIVE4-009: every other price block says when, the Market Watch panel said nothing). `ats` are the quotes' times and the
- * moment the last tick came in. */
-export function asOfLine(ats: (string | number | null | undefined)[], tz = "Asia/Kolkata", closed = false): string | null {
+ * moment the last tick came in. With every market on the list shut it is "Closed · last close Fri 6 Nov": `lastDay` is the last
+ * day those markets traded (marketDay.lastTradingDay), never the day the prices were read (owner, 9 Nov: "last close Sun", the
+ * day he looked). Without it the newest price's own day is said, moved back to the Friday when that is a Saturday or a Sunday. */
+export function asOfLine(ats: (string | number | null | undefined)[], tz = "Asia/Kolkata", closed = false, lastDay?: string | null): string | null {
+  if (closed && lastDay) return `Closed · last close ${dayText(lastDay)}`;
   const ms = ats.map((a) => (a == null ? NaN : typeof a === "number" ? a : Date.parse(a))).filter((x) => Number.isFinite(x));
   if (!ms.length) return null;
   const d = new Date(Math.max(...ms));
   // every market on the list is shut: its prices are the last close, said with the day, never the moment they were read
   // (LIVE5-006: "Prices as of 16:29:39 IST" for the 15:30 close)
-  if (closed) return `Closed · last close ${d.toLocaleDateString("en-GB", { timeZone: tz, weekday: "short", day: "numeric", month: "short" }).replace(",", "")}`;
+  if (closed) {
+    const wd = d.toLocaleDateString("en-GB", { timeZone: tz, weekday: "short" });
+    const back = wd === "Sat" ? 1 : wd === "Sun" ? 2 : 0;
+    return `Closed · last close ${new Date(d.getTime() - back * 86_400_000).toLocaleDateString("en-GB", { ...DAY_FMT, timeZone: tz }).replace(",", "")}`;
+  }
   const t = d.toLocaleTimeString("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
   return `Prices as of ${t} ${tz === "Asia/Kolkata" ? "IST" : tz === "America/New_York" ? "ET" : ""}`.trim();
+}
+
+/** The newest of the last trading days of a list's markets (each from marketDay.lastTradingDay; null and unknown ones left out). */
+export const newestDay = (days: (string | null | undefined)[]): string | null => days.filter((d): d is string => !!d).sort().pop() ?? null;
+
+/** A list's name as its tab and every sentence about it say it. A name that is only a number ("1", "2") reads "List 1": beside its
+ * count the tab read "1 6" and "2 1" (owner, 9 Nov). */
+export function listName(name: string): string {
+  const n = name.trim();
+  return /^\d+$/.test(n) ? `List ${n}` : n || "List";
+}
+/** "1 symbol", "6 symbols". */
+export const countSaid = (n: number): string => `${n} ${n === 1 ? "symbol" : "symbols"}`;
+/** What a tab says when pointed at: its name and how many it holds, in words ("List 1: 6 symbols"). */
+export const tabTitle = (l: Pick<WatchList, "name" | "items" | "default">): string => `${l.default ? "Your Research watchlist" : listName(l.name)}: ${countSaid(l.items.length)}`;
+
+/** The day's change of a row in price terms: the price against the previous close, or the quote's own figure. */
+export function changeAbsOf(q: WatchQuote | undefined, price?: number | null): number | null {
+  if (!q) return null;
+  const p = price ?? q.price;
+  if (p != null && q.prev_close) return p - q.prev_close;
+  return q.change;
+}
+
+/** +12.40, −3.05 (a real minus), 0.00 when it rounds to nothing, – with no figure. The decimals are those of the price it is a
+ * change of (a ₹1,520 stock's change is in paise, a coin of a few cents in more), so the two columns read alike. */
+export function changeAbsText(v: number | null | undefined, price: number | null | undefined, currency: string | null | undefined, market: string, symbol: string): string {
+  if (v == null || !Number.isFinite(v)) return "–";
+  const dp = priceDp(price ?? v, market, symbol);
+  const t = Math.abs(v).toLocaleString(currency === "INR" ? "en-IN" : "en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
+  return /^[0.,]+$/.test(t) ? t : `${v > 0 ? "+" : "−"}${t}`;
+}
+
+/** Where an instrument trades, as a search result says it: the exchange for an Indian listing (NSE, BSE), else the market. */
+export function exchangeOf(i: { market?: string; exchange?: string }): string {
+  if (i.market === "IN") return i.exchange === "BSE" ? "BSE" : "NSE";
+  return ({ US: "US", UK: "London", EU: "Europe", JP: "Tokyo", FX: "Forex", CRYPTO: "Crypto", MCX: "MCX", CDS: "NSE currency", CMDTY: "Global futures" } as Record<string, string>)[i.market ?? ""] ?? i.market ?? "";
+}
+
+/** One row of the add-symbol search: the list item it would add, what the row says (symbol, name, exchange) and whether the list
+ * already holds it. */
+export interface AddRow { item: WatchItem; symbol: string; name: string; exchange: string; kind: string; on: boolean }
+const KIND_SAID: Record<WatchItem["kind"], string> = { stock: "Stock", etf: "ETF", index: "Index", fx: "Currency pair", crypto: "Crypto", commodity: "Commodity", future: "Future" };
+
+/** The search's answer as rows to add: only what a list can hold (acceptable), each instrument once, at most `max`, in the
+ * server's order (best match first); `has` says which are on the list already. */
+export function addRows(found: Parameters<typeof itemOf>[0][], has: (id: string) => boolean, max = 20): AddRow[] {
+  const out: AddRow[] = [], seen = new Set<string>();
+  for (const f of found) {
+    const item = itemOf(f);
+    if (!item || seen.has(item.id)) continue;
+    seen.add(item.id);
+    const symbol = labelOf(item), name = item.name && item.name.toUpperCase() !== symbol.toUpperCase() ? item.name : "";
+    out.push({ item, symbol, name, exchange: exchangeOf(f as { market?: string; exchange?: string }), kind: KIND_SAID[item.kind], on: has(item.id) });
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+/** The highlighted row after a key in the search field: the arrows go round, Home and End to the ends; -1 with no rows. */
+export function stepRow(on: number, n: number, key: string): number {
+  if (n <= 0) return -1;
+  if (key === "ArrowDown") return (on + 1) % n;
+  if (key === "ArrowUp") return on <= 0 ? n - 1 : on - 1;
+  if (key === "Home") return 0;
+  if (key === "End") return n - 1;
+  return Math.max(0, Math.min(n - 1, on));
+}
+
+/** What adding an instrument to a list comes to, said in a line under the search field: added, already there, or the list is full
+ * (`fullSaid` is the plan's sentence). */
+export function addOutcome(list: Pick<WatchList, "name" | "items" | "default">, it: WatchItem, cap: number | null, fullSaid: string | null): { ok: boolean; text: string } {
+  const where = list.default ? "your watchlist" : listName(list.name);
+  if (list.items.some((x) => x.id === it.id)) return { ok: false, text: `${labelOf(it)} is already on ${where}.` };
+  if (cap != null && list.items.length >= cap) return { ok: false, text: fullSaid ?? "This list is full." };
+  return { ok: true, text: `Added ${labelOf(it)} to ${where}.` };
 }
 
 /** +1.23%, −0.40% (a real minus), 0.00% when it rounds to nothing, – with no figure. */

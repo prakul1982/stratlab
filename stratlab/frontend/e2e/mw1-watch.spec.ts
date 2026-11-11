@@ -74,17 +74,46 @@ test("add a symbol and see its price, reorder the list, and the list is kept", a
   await expect(mw.getByText("Your watchlist is empty")).toBeVisible();
   // one tap for the usual ones, on an empty list
   await mw.getByRole("button", { name: "BTC/USD", exact: true }).click();
-  // the search every other page uses: type, pick
-  await mw.getByRole("button", { name: "+ Add symbol" }).click();
-  await mw.getByRole("combobox", { name: /^Search/ }).fill("NIFTY 50");
-  await mw.getByRole("option").filter({ hasText: "NIFTY 50" }).first().click();
-  await mw.getByRole("combobox", { name: /^Search/ }).fill("INFY");
-  await mw.getByRole("option").filter({ hasText: "INFY" }).first().click();
+  // MW-2: one search field over every market, always there (no "+ Add symbol" to open first, no market to pick): type, click a result
+  const field = mw.getByRole("combobox", { name: "Search to add a symbol" });
+  await field.fill("NIFTY 50");
+  const nifty = mw.getByRole("option").filter({ hasText: "NIFTY 50" }).first();
+  await expect(nifty).toContainText("NSE");                                  // a result says where it trades
+  await nifty.click();
+  // added: the line says so, the search has ended and the field is ready for the next one
+  await expect(mw.getByTestId("mw-said")).toHaveText("Added NIFTY 50 to your watchlist.");
+  await expect(field).toHaveValue("");
+  await expect(mw.getByRole("option")).toHaveCount(0);
+  // ...and from the keyboard: type, Enter adds the highlighted (first) result
+  await field.fill("INFY");
+  await expect(mw.getByRole("option").first()).toHaveAttribute("aria-selected", "true");
+  await expect(mw.getByRole("option").first()).toContainText("INFY");
+  await field.press("ArrowDown");
+  await field.press("ArrowUp");
+  await expect(mw.getByRole("option").first()).toHaveAttribute("aria-selected", "true");
+  await field.press("Enter");
+  await expect(mw.getByTestId("mw-said")).toHaveText("Added INFY to your watchlist.");
+  await expect(field).toBeFocused();
+  // one already on the list is said, not added twice; Esc ends the search and leaves the panel open
+  await field.fill("INFY");
+  await expect(mw.getByRole("option").first()).toContainText("On this list");
+  await field.press("Enter");
+  await expect(mw.getByTestId("mw-said")).toHaveText("INFY is already on your watchlist.");
+  await field.press("Escape");
+  await expect(field).toHaveValue("");
+  await expect(mw).toBeVisible();
   const rows = mw.getByRole("list", { name: "Watchlist" }).getByRole("listitem");
   await expect(rows).toHaveCount(3);
   // prices come in within a few seconds, and the day's change carries its sign and arrow
   for (let i = 0; i < 3; i++) await expect(rows.nth(i).locator(".mw-price")).not.toHaveText("–", { timeout: 15_000 });
   await expect(rows.nth(0).locator(".mw-chg")).toHaveText(/^(▲ \+|▼ −)?\d+\.\d\d%$|^[+−]?0\.00%$/);
+  // MW-2: a row is one line under the column heads, and each column of figures ends on one line down the list
+  await expect(mw.locator(".mw-cols")).toHaveText(/Symbol\s*Last\s*Change\s*Change %/);
+  for (const col of [".mw-price", ".mw-abs", ".mw-chg"]) {
+    const rights = await rows.locator(col).evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().right)));
+    expect(new Set(rights).size, `${col} is right-aligned in one column: ${rights}`).toBe(1);
+  }
+  expect((await rows.nth(0).boundingBox())!.height).toBeLessThanOrEqual(44);
   const names = async () => (await rows.locator(".mw-name b").allInnerTexts());
   expect(await names()).toEqual(["BTC/USD", "NIFTY 50", "INFY"]);
   // reorder with the keyboard: the grip of the last row, arrow up
@@ -97,9 +126,15 @@ test("add a symbol and see its price, reorder the list, and the list is kept", a
   const research = await (await request.get(`${API}/research/watchlist`, { headers: { Authorization: "Bearer admin-token" } })).json();
   expect(research.items.map((i: { symbol: string }) => i.symbol)).toEqual(["INFY"]);
   // sorted by the day's change leaves the kept order alone
-  await mw.getByLabel("Sort the list").selectOption("change_desc");
+  // (MW-2: the Change % column's head sorts: biggest rise first, a second press biggest fall first, a third your own order again)
+  const byChange = mw.getByRole("button", { name: "Sort by the day's change" });
+  await byChange.click();
   await expect(rows.first().locator(".mw-grip")).toHaveClass(/off/);
-  await mw.getByLabel("Sort the list").selectOption("custom");
+  await expect(byChange).toHaveAttribute("aria-pressed", "true");
+  await byChange.click();
+  await byChange.click();
+  await expect(byChange).toHaveAttribute("aria-pressed", "false");
+  await expect(rows.first().locator(".mw-grip")).not.toHaveClass(/off/);
   // a reload: the panel is open where it was, with the list
   await page.reload();
   await expect(panel(page)).toBeVisible();
@@ -137,10 +172,8 @@ test("open the chart, change the timeframe, add an indicator, draw a trend line,
   await reset(request, "drawer");
   const { errors } = await open(page, "/", { who: "drawer" });
   const mw = await openPanel(page);
-  await mw.getByRole("button", { name: "+ Add symbol" }).click();
   await mw.getByRole("combobox", { name: /^Search/ }).fill("INFY");
   await mw.getByRole("option").filter({ hasText: "INFY" }).first().click();
-  await mw.getByRole("button", { name: "Done" }).click();
   await mw.getByRole("button", { name: "Open the chart of INFY" }).click();
   const chart = mw.getByTestId("price-chart");
   await expect(chart).toHaveAttribute("data-bars", /^[1-9]\d*$/, { timeout: 30_000 });
@@ -221,6 +254,9 @@ test("the phone gets a full-height sheet from the top bar and no floating button
   await page.reload();
   await page.waitForTimeout(800);
   await expect(panel(page)).toHaveCount(0);
+  // ...and one press of the top bar's button opens it then (it took two: the first only marked the kept sheet shut)
+  await openPanel(page);
+  await panel(page).getByRole("button", { name: "Close Market Watch" }).click();
   expect(errors).toEqual([]);
 });
 
