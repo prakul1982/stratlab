@@ -667,7 +667,10 @@ def fit_chars(text: str, size: float, width: float) -> str:
 
 # R35 (the owner's review of the R31.11 decks: "Component…", "Tyre…", "Mahindra & Mahindra…" down every table and chart): a name that
 # doesn't fit is said shorter, whole, before any of it is cut. Generic: no list of names, only the words every such name can lose.
-_LEGAL_TAIL = re.compile(r"[\s,]+(?:ltd|limited|inc|incorporated|corp|corporation|co|company|plc|llc)\.?$", re.I)
+# R38: and the legal endings of companies listed outside India and the US ("NXP Semiconductors N.V.", "Siemens AG", "Banco Santander, S.A."),
+# in capitals only, so no English word is taken for one
+_LEGAL_TAIL = re.compile(r"[\s,]+(?:ltd|limited|inc|incorporated|corp|corporation|co|company|plc|llc|"
+                         r"(?-i:N\.?V|S\.?A|S\.?E|A\.?G|S\.?p\.?A|GmbH|B\.?V|AB|ASA|Oyj|KGaA|Tbk|Bhd|L\.?P))\.?$", re.I)
 _KIND_TAIL = re.compile(r"\s+(?:makers?|manufacturers?|companies|providers?|producers?|suppliers?|operators?|businesses|firms|players)$", re.I)
 _CORP_TAIL = re.compile(r"\s+(?:international|industries|enterprises|holdings|group|india)$", re.I)
 _PAREN = re.compile(r"\s*\((?!\D*\d)[^()]*\)")
@@ -802,6 +805,9 @@ def _whole_words(b: dict, widths: list[float], numeric: list[bool]) -> list[floa
         # a figure, a short cell ("Mar 2026") and a link's text (fit_chars would cut it to "01 Oct 20…") stay on one line
         n = max([n] + [_width(_cell_text(x), 13) + pad + (0.06 if isinstance(x, dict) else 0) for x in cells
                        if isinstance(x, dict) or (numeric[c] and len(_cell_text(x)) <= 16) or len(_cell_text(x)) <= 9])
+        # R38 (the live R36 Semiconductors deck: "Texas Instrument / s Inc"): no word of a cell is broken inside either, a link's or a
+        # code's long run of characters aside
+        n = max([n] + [_width(x, 13) + pad for v in cells if not isinstance(v, dict) for x in _cell_text(v).split() if len(x) <= 20])
         need.append(n)
     out = list(widths)
     for _ in range(len(out)):
@@ -2950,7 +2956,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 48                  # LIVE6: calendar price periods, own words only, one market value per company, short charts and empty tables dropped; q1: the appendix counts "with figures" by the dive's rule, a layer's cohort that fell against the run before on the data-confidence page; n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 49                  # R38: foreign legal endings left off a label before any of it is cut, no word of a table cell broken inside; LIVE6: calendar price periods, own words only, one market value per company, short charts and empty tables dropped; q1: the appendix counts "with figures" by the dive's rule, a layer's cohort that fell against the run before on the data-confidence page; n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
