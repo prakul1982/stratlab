@@ -658,6 +658,24 @@ def sources(region: str, theme: str, fresh: bool = False):
                 print("theme: history not kept:", str(e)[:100])
         return pts
 
+    peer_key = f"theme:peers:{region}:{theme_data.slug(theme)}"
+
+    def peer_history(_, point):
+        """R35: the theme's peer median P/E of each run that differs from the one before (its close, the median, how many peers), the last
+        theme_data.PEER_RUNS of them, this run last: what theme_data.peer_moved sets this run against."""
+        try:
+            pts = db.json_value(db.get_setting(peer_key), [])
+        except Exception:
+            pts = []
+        pts = [p for p in pts if isinstance(p, dict) and p.get("d") and p.get("peers")]
+        if not pts or (pts[-1].get("d"), pts[-1].get("peers")) != (point.get("d"), point.get("peers")):
+            pts = (pts + [point])[-theme_data.PEER_RUNS:]
+            try:
+                db.set_setting(peer_key, json.dumps(pts, separators=(",", ":")))
+            except Exception as e:
+                print("theme: peer medians not kept:", str(e)[:100])
+        return pts
+
     def card(sym, row):
         stored = report_card.stored(sym) if region == "IN" else None
         if not stored or not row:
@@ -684,7 +702,7 @@ def sources(region: str, theme: str, fresh: bool = False):
         shareholding=(lambda s: shareholders.company(s)) if region == "IN" else (lambda s: None),
         insider_buys=(lambda: deals.buys().get("buys") or {}) if region == "IN" else (lambda: {}),
         results=lambda a, b, s: results.between(region, a, b, s), actions=lambda a, b, s: corp_actions.between(region, a, b, s),
-        red_flags=red, card=card, history=history, segments=segments,
+        red_flags=red, card=card, history=history, segments=segments, peer_history=peer_history,
         corp_history=lambda s: corp_actions.history(region, s, None, fetch=False),
         metrics=sector_metrics.reader(region, fresh),           # R23: filed sector figures, read once and kept for everyone
         about=kept_about(region))                               # R35: the stored descriptions only (nothing is read from a page)

@@ -37,7 +37,7 @@ FEW_BASE = 4                  # a highest or lowest median on this many companie
 COMPARE_MIN = MIN_BASE
 # R31 (the owner's review of the live R30 decks): a layer-vs-layer headline (the value chain's line, findings, questions) needs at least this
 # many companies with the figure in each layer it compares; tables still show every layer and mark (green, red) those of COMPARE_MIN or more
-DIVE_TEXT = 6          # part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
+DIVE_TEXT = 6          # R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
 HEADLINE_MIN = 5
 # R27 (headline eligibility): a comparison is said as a headline only on a figure for at least this share of the companies of each group it
 # compares (a layer, a family); one with less is shown as data, never ranked (the live R26 Semis deck: "RPO growth -3.9%" of 21 of 53)
@@ -760,31 +760,43 @@ def comparable_peers(r: dict, market: list[dict], theme: set) -> tuple[list[dict
     return (band, "sector_theme") if len(band) >= PEER_MIN else ([], "none")
 
 
-def _peer_median(r: dict, market: list[dict], key: str, ok, theme: set) -> tuple[float | None, str]:
-    """(the median of `key` over a company's comparable peers that have it, the set's name); (None, "none") with fewer than PEER_MIN."""
+def _peer_values(r: dict, market: list[dict], key: str, ok, theme: set) -> tuple[list[dict], str]:
+    """(a company's comparable peers that have `key`, the set's name); ([], "none") with fewer than PEER_MIN."""
     peers, basis = comparable_peers(r, market, theme)
-    xs = [x for x in (num(m.get(key)) for m in peers) if x is not None and ok(x)]
-    return (median(xs), basis) if basis != "none" and len(xs) >= PEER_MIN else (None, "none")
+    got = [m for m in peers if num(m.get(key)) is not None and ok(num(m.get(key)))]
+    return (got, basis) if basis != "none" and len(got) >= PEER_MIN else ([], "none")
 
 
-def peers_section(rows: list[dict], market: list[dict]) -> dict:
+PEER_KEEP = 120               # peer symbols kept behind a peer median, those the most companies are compared with first; "symbols_n" counts all
+PEER_MOVE = 5.0               # a peer median this many % away from the stored run before it is said with both (peer_moved)
+PEER_RUNS = 8                 # a theme's kept peer medians, one for each run that differs from the one before (theme_routes.sources)
+
+
+def peers_section(rows: list[dict], market: list[dict], as_of: str | None = None) -> dict:
     """Each company against its comparable peers (comparable_peers: its own sector first, then similar market value, the same market and
     accounts): its P/E, its revenue growth over three years and its ROCE beside their medians, and the theme's median company of each (the
     owner, 7 Nov: "valuation premium vs same-size peers beside growth and ROCE"). `sets` counts the companies compared with each set, and
     "none" those with the figure but no comparable peer set (R27: left out, never set against the whole market). Facts: a comparison, never
-    a view of what is cheap."""
+    a view of what is cheap. R35 (GPT reviews of R31.5-R31.9: a peer median moved between two runs with nothing to trace it by): each
+    median keeps the peers behind it ("symbols", the most used first, at most PEER_KEEP; "symbols_n" all of them) and the latest close its
+    prices are of ("as_of": the peers' and the companies' own, `as_of` when the rows carry no day)."""
     theme = {r["symbol"] for r in rows}
     out = {}
     for key, mkey, ok in (("pe", "pe", lambda x: 0 < x <= stock_pages.PE_MAX), ("sales_3y", "sales_cagr_3y", lambda x: True), ("roce", "roce", lambda x: True)):
-        own, peer, prem, sets = [], [], [], {}
+        own, peer, prem, sets, used, days = [], [], [], {}, {}, []
         for r in rows:
             v = num(r.get(key))
             if v is None or not ok(v):
                 continue
-            pm, basis = _peer_median(r, market, mkey, ok, theme)
+            got, basis = _peer_values(r, market, mkey, ok, theme)
             sets[basis] = sets.get(basis, 0) + 1
-            if pm is None:
+            if not got:
                 continue
+            pm = median(num(m.get(mkey)) for m in got)
+            for m in got:
+                if m.get("symbol"):
+                    used[m["symbol"]] = used.get(m["symbol"], 0) + 1
+            days += [str(d)[:10] for d in [r.get("price_at")] + [m.get("price_at") for m in got] if d]
             own.append(v)
             peer.append(pm)
             if key == "pe" and pm > 0:
@@ -794,10 +806,28 @@ def peers_section(rows: list[dict], market: list[dict]) -> dict:
             # company's own gap, 8.2%, sat beside medians 3.4% apart)
             mo, mp = median(own), median(peer)
             out[key] = {"n": len(own), "theme": round(mo, 1), "peers": round(mp, 1), "sets": sets, "none": sets.get("none", 0),
-                        "premium": round((round(mo, 1) / round(mp, 1) - 1) * 100, 1) if prem and round(mp, 1) > 0 else None}
+                        "premium": round((round(mo, 1) / round(mp, 1) - 1) * 100, 1) if prem and round(mp, 1) > 0 else None,
+                        "symbols": sorted(used, key=lambda s_: (-used[s_], s_))[:PEER_KEEP], "symbols_n": len(used),
+                        "as_of": max(days, default=None) or as_of}
         elif sets.get("none"):
             out[key] = {"n": 0, "theme": None, "peers": None, "sets": sets, "none": sets["none"], "premium": None}
     return out
+
+
+def peer_moved(points: list[dict]) -> dict | None:
+    """What a theme's peer median P/E was at the stored run before this one, when the two are more than PEER_MOVE % apart (R35: 19.2x one day
+    and 18.4x the next, with nothing said): {"from", "on", "to", "at", "pct", "peers_from", "peers_to", "n_from", "n_to"}; None otherwise.
+    `points`: the kept runs, oldest first, this run last ({"d": the close, "peers": the median, "k": how many peers, "n": how many of the
+    theme's companies were compared})."""
+    pts = [p for p in points or [] if isinstance(p, dict) and num(p.get("peers"))]
+    if len(pts) < 2 or pts[-2]["peers"] <= 0:
+        return None
+    was, now = pts[-2], pts[-1]
+    pct = round((now["peers"] / was["peers"] - 1) * 100, 1)
+    if abs(pct) <= PEER_MOVE:
+        return None
+    return {"from": was["peers"], "on": was.get("d"), "to": now["peers"], "at": now.get("d"), "pct": pct, "peers_from": was.get("k"), "peers_to": now.get("k"),
+            "n_from": was.get("n"), "n_to": now.get("n")}
 
 
 def valuation_section(rows: list[dict], market: list[dict]) -> dict:
@@ -810,7 +840,8 @@ def valuation_section(rows: list[dict], market: list[dict]) -> dict:
     ev = stat(r["ev_ebitda"] for r in rows)
     losses = sum(1 for r in rows if r.get("profit") is not None and r["profit"] <= 0)
     return {"pe": pe, "market_pe": mkt, "market_n": mkt["n"] if mkt else 0, "pb": pb, "market_pb": mpb, "ev_ebitda": ev,
-            "ev_missing": sum(1 for r in rows if r.get("ev_ebitda") is None and not r.get("bank")), "losses": losses, "peers": peers_section(rows, market),
+            "ev_missing": sum(1 for r in rows if r.get("ev_ebitda") is None and not r.get("bank")), "losses": losses,
+            "peers": peers_section(rows, market, max((str(r["price_at"])[:10] for r in rows if r.get("price_at")), default=None)),
             "n": len(rows)}                 # the population every count here is of (R22: 11 with a P/E and 6 loss-makers of 15)
 
 
@@ -1070,6 +1101,7 @@ class Sources:
     results(frm, to, symbols), actions(frm, to, symbols), red_flags(symbols, frm, to) -> stored rows;
     card(symbol, row) -> the management report card checked against the reported years ({met, missed}) or None;
     history(key, point) -> the theme's kept points after adding `point` (a day's median P/E and the like), oldest first;
+    peer_history(key, point) -> the theme's kept peer medians after adding this run's `point`, oldest first, this run last (R35, peer_moved);
     segments(symbol) -> the business segments the company's documents report ([{name, share_pct}]) or None (is_diversified);
     corp_history(symbol) -> the company's stored corporate actions (every kind, each with "kind" and "ex_date"), never read from a source;
     metrics(symbol, family) -> the company's filed sector figures (sector_metrics: a stored piece, read now or queued) or None (R23);
@@ -1077,10 +1109,11 @@ class Sources:
 
     def __init__(self, today: date, facts, index_rows=lambda: [], shareholding=lambda s: None, insider_buys=lambda: {},
                  results=lambda a, b, s: [], actions=lambda a, b, s: [], red_flags=lambda s, a, b: [], card=lambda s, r: None,
-                 history=lambda k, p: [p], segments=lambda s: None, corp_history=lambda s: [], metrics=lambda s, fam: None, about=lambda s: None):
+                 history=lambda k, p: [p], segments=lambda s: None, corp_history=lambda s: [], metrics=lambda s, fam: None, about=lambda s: None,
+                 peer_history=lambda k, p: [p]):
         self.today, self.facts, self.index_rows, self.shareholding, self.insider_buys = today, facts, index_rows, shareholding, insider_buys
         self.results, self.actions, self.red_flags, self.card, self.history, self.segments = results, actions, red_flags, card, history, segments
-        self.corp_history, self.metrics, self.about = corp_history, metrics, about
+        self.corp_history, self.metrics, self.about, self.peer_history = corp_history, metrics, about, peer_history
 
 
 _STOP = {"company", "companies", "limited", "india", "indian", "sector", "theme", "other", "others", "product", "products", "service", "services",
@@ -1299,6 +1332,16 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     except Exception as e:
         print("theme data: history not kept:", type(e).__name__, str(e)[:100])
         val["history"] = []
+    pp = val["peers"].get("pe") or {}
+    if pp.get("peers"):           # R35: this run's peer median beside the stored run before it, said when the two are apart (peer_moved)
+        try:
+            moved = peer_moved(src.peer_history(slug(theme), {"d": pp.get("as_of") or src.today.isoformat(), "peers": pp["peers"],
+                                                              "k": pp.get("symbols_n"), "n": pp.get("n")}))
+        except Exception as e:
+            print("theme data: peer medians not kept:", type(e).__name__, str(e)[:100])
+            moved = None
+        if moved:
+            pp["moved"] = moved
     market_med = {k: stat(m.get(k) for m in market) for k in ("opm", "net_margin", "roce", "sales_cagr_3y")} if market else {}
     as_of = max((r["price_at"] for r in members if r.get("price_at")), default=None)
     own_set = {r["symbol"] for r in own}
