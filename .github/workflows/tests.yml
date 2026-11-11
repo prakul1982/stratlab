@@ -79,7 +79,7 @@ jobs:
           cache-dependency-path: stratlab/frontend/package-lock.json
       - run: pip install -r requirements.txt pytest time-machine
         working-directory: stratlab/backend
-      - run: npm ci && npm run build && npx playwright install --with-deps chromium
+      - run: npm ci && npm run build && (npx playwright install --with-deps chromium || npx playwright install chromium)
         working-directory: stratlab/frontend
       - run: npm run e2e -- --shard=${{ matrix.shard }}/6
         working-directory: stratlab/frontend
@@ -114,7 +114,7 @@ jobs:
           cache-dependency-path: stratlab/frontend/package-lock.json
       - run: pip install -r requirements.txt pytest time-machine
         working-directory: stratlab/backend
-      - run: npm ci && npm run build && npx playwright install --with-deps chromium
+      - run: npm ci && npm run build && (npx playwright install --with-deps chromium || npx playwright install chromium)
         working-directory: stratlab/frontend
       - run: npm run ui-lint
         working-directory: stratlab/frontend
