@@ -623,7 +623,7 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
                     conf[s_] = model_confidence(md, evidence(s_), "medium")
             except Exception as e:           # the AI busy: those companies' models stay unknown
                 print("theme base: models not asked again:", theme[:40], type(e).__name__, str(e)[:100])
-        for s_ in dict.fromkeys(syms):
+        for s_ in dict.fromkeys(syms if ans.get("models") else ()):     # R30: an answer that gave no models is left as it came
             if s_ and s_ not in keep:
                 ev = evidence(s_)
                 md = stated_model(ev)             # R37: each family's words, making and trading words too
@@ -912,8 +912,7 @@ def kind_stems(text) -> set[str]:
 
 def own_text(evidence) -> str:
     """A company's own words in its evidence, its official industry line left out."""
-    import re as _re
-    m = _re.match(r"\s*Industry:\s*[^.]*\.\s*", str(evidence or ""))
+    m = re.match(r"\s*Industry:\s*[^.]*\.\s*", str(evidence or ""))
     return str(evidence or "")[m.end():] if m else str(evidence or "")
 
 
@@ -1017,8 +1016,9 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
         two propane distributors, two pawnbrokers and three online sellers moved out of "Other" into "Apparel and fashion retail chains"): the
         largest stands only when it holds companies of the mover's official industry or its name or description shares a word of what the
         mover's own words say it does (none of how any company earns: makes, sells, supplies...); else the largest of the family's layers
-        mostly of its industry (for a company of the "Other" group, the one holding the most of it), else the layer whose name has such a word that no other layer's name of the family has, else a company of
-        the "Other" group whose own words fit no layer stays there (the map has no layer of its business)."""
+        mostly of its industry (for a company of the "Other" group, the one holding the most of it), else the layer whose name has such a
+        word that no other layer's name of the family has, else a company of the "Other" group whose own words fit no layer stays there (the
+        map has no layer of its business)."""
         big = home.get(f)
         if big is None:
             return None
@@ -1041,7 +1041,7 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
         fit = [(len(fits(v)), len(v["companies"]), v) for v in cands if fits(v)]
         if fit:
             return max(fit, key=lambda x: x[:2])[2]
-        if c.get("fit") and mine:
+        if c.get("fit") and mine and ind:      # neither its known official industry nor its own words fit any layer
             return STAY
         return big
     for c in movers:
