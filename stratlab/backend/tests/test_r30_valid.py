@@ -231,7 +231,9 @@ def test_a_kept_placement_asks_its_unknown_models_once_and_keeps_that_it_did():
         return {"place": [{"symbol": "EL2", "layer": "L2"}, {"symbol": "MS2", "layer": "L0"}, {"symbol": "SH2", "layer": "L1"}, {"symbol": "XX1", "layer": "none"}],
                 "models": {"EL2": "manufacturing"}}
     _, got = B.place_rest(mapped(), "Defence", ABOUT.get, ask=first)
-    assert got["models"] and "MS2" not in got["models"] and "reasked" not in got
+    # R37 lane r2 (updated on purpose): Missile Two's own words state its model ("makes rocket propellants"); Ship Two's ("builds and repairs
+    # naval ships") don't, so it is the one asked again
+    assert got["models"]["MS2"] == "manufacturing" and "SH2" not in got["models"] and "reasked" not in got
     calls = []
 
     def later(system, text):
@@ -240,6 +242,6 @@ def test_a_kept_placement_asks_its_unknown_models_once_and_keeps_that_it_did():
         calls.append(sorted(c["symbol"] for c in body["companies"]))
         return {"models": {"MS2": "manufacturing", "SH2": "manufacturing"}}
     _, got2 = B.place_rest(mapped(), "Defence", ABOUT.get, ask=later, kept=got)
-    assert len(calls) == 1 and "MS2" in calls[0] and "EL2" not in calls[0]
-    assert got2["models"]["MS2"] == "manufacturing" and set(got2["reasked"]) == set(calls[0])
+    assert len(calls) == 1 and "SH2" in calls[0] and "EL2" not in calls[0] and "MS2" not in calls[0]
+    assert got2["models"]["SH2"] == "manufacturing" and set(got2["reasked"]) == set(calls[0])
     B.place_rest(mapped(), "Defence", ABOUT.get, ask=lambda s, t: pytest.fail("asked again"), kept=got2)
