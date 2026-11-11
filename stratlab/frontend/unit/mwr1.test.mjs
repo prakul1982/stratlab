@@ -134,7 +134,10 @@ test("the list tabs move with the arrow keys and the tab row keeps its height", 
   const css = read("src/components/watch/watch.css");
   assert.match(css, /\.mw-tabs \{ flex: none;/);                       // a column's overflow row shrank to nothing when the add box opened
   assert.match(css, /\.mw-bar \{ flex: none;/);
-  assert.match(css, /\.mw-add \{ flex: none; max-height: 50%; overflow-y: auto;/);
+  // MW-2: the add box that opened between the bar and the list is gone; the search's results take the list's own place, inside the
+  // one part of the panel that scrolls, so the tabs and the bar keep their height whatever is found
+  assert.doesNotMatch(css, /\.mw-add\b/);
+  assert.match(p, /<div className="mw-scroll" ref=\{scroller\}[^>]*>[\s\S]*?<AddSaid s=\{search\} \/>\s*\{search\.active && <AddResults s=\{search\} \/>\}/);
 });
 
 // ---------- MWR1-014: a line of closes being read is read once ----------

@@ -1,15 +1,17 @@
 /* Market Watch (MW-1): the panel that floats over every page. Several named lists of instruments from every market (the first is
- * the Research watchlist), with the last price, the day's change and a line of recent closes; a tap opens the chart without leaving
- * the page. Docked to the right edge, floating, or a full-height sheet on a phone. Prices are read every 5 seconds for the rows
- * in view only, and tick by tick where the broker's feed carries them. Facts only: names, prices, counts. */
-import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from "react";
+ * the Research watchlist), with the last price and the day's change; a tap opens the chart without leaving the page. Docked to the
+ * right edge, floating, or a full-height sheet on a phone. Prices are read every 5 seconds for the rows in view only, and tick by
+ * tick where the broker's feed carries them. Facts only: names, prices, counts.
+ * MW-2 (owner, 9 Nov: "only extendable from one top corner ... very cluttered, we need to redesign it"): a floating panel is sized
+ * from every edge and corner and dragged by its header; one search field adds a symbol; a row is one line under column heads
+ * (Symbol, Last, Change, Change %) that also sort the list; the tabs say their lists' names in words. */
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import { Link } from "react-router-dom";
 import { ChartWorkspace } from "./ChartWorkspace";
-import { AddSymbol } from "./AddSymbol";
+import { AddField, AddResults, AddSaid, useAddSearch } from "./AddSymbol";
 import { WatchRow } from "./WatchRow";
 import { useWatch } from "./useWatch";
 import { ConfirmDialog } from "../kit/ConfirmDialog";
-import { Select } from "../kit/Form";
 import { useDialogFocus, usePopover } from "../kit/Dialog";
 import { EmptyState, ErrorState, Skeleton } from "../kit/States";
 import { Chevron, Close, Download, Plus } from "../Icons";
@@ -17,15 +19,15 @@ import { downloadCsv } from "../../lib/csvDownload";
 import { csvName } from "../../lib/csv";
 import { istToday } from "../../lib/format";
 import { useApp } from "../../lib/app";
-import { marketState } from "../../lib/marketHours";
+import { lastTradingDay, marketState } from "../../lib/marketHours";
 import { signCls, currencySymbol } from "../../lib/format";
 import { getSparks, live } from "../../lib/watchApi";
 import type { LiveSub } from "../../lib/watchLive";
 import {
-  asOfLine, changeArrow, changeOf, changeText, currencyOf, DEFAULT_ID, itemFromPath, labelOf, listsSaid, moveItem, POPULAR, priceText, SORTS, sortItems,
-  subtitleOf, symbolsSaid, type SortMode, type WatchItem, type WatchQuote,
+  addOutcome, asOfLine, changeAbsOf, changeArrow, changeOf, changeText, countSaid, currencyOf, DEFAULT_ID, itemFromPath, labelOf, listName, listsSaid, moveItem, newestDay,
+  nextSort, POPULAR, priceText, SORTS, sortItems, subtitleOf, symbolsSaid, tabTitle, type SortMode, type WatchItem, type WatchQuote,
 } from "../../lib/watch";
-import { dragged, DOCK_FROM, drawnHeight, isSheet, MAX_W, MIN_H, MIN_W, resized, shapeOf, type PanelLayout } from "../../lib/watchLayout";
+import { dragged, DOCK_FROM, drawnHeight, EDGES, isSheet, MAX_W, MIN_H, MIN_W, resized, shapeOf, type Edge, type PanelLayout } from "../../lib/watchLayout";
 import "./watch.css";
 
 export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout: PanelLayout; patch: (p: Partial<PanelLayout>) => void; vw: number; vh: number; onClose: () => void }) {
@@ -113,8 +115,14 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
   const allShut = !!list?.items.length && list.items.every((it) => open[it.market] === false);
   // a list of only US stocks says its day in New York's time (the US close is past midnight in India)
   const tzOf = list?.items.length && list.items.every((it) => it.market === "US") ? "America/New_York" : "Asia/Kolkata";
-  const asOf = asOfLine([...Object.values(quotes).map((q) => q?.at), allShut ? null : tickAt], allShut ? tzOf : undefined, allShut);
-  const noteOf = (it: WatchItem): "Delayed" | "Closed" | null => (quotes[it.id]?.delayed ? "Delayed" : open[it.market] === false ? "Closed" : null);
+  // shut: the day said is the last day the list's markets traded (the newest of them), from each exchange's own days, never the
+  // day the prices were read (owner, 9 Nov: "last close Sun")
+  const lastDay = allShut ? newestDay([...new Set(list!.items.map((it) => it.market))].map((id) => { const m = markets.find((x) => x.id === id); return m ? lastTradingDay(m) : null; })) : null;
+  const asOf = asOfLine([...Object.values(quotes).map((q) => q?.at), allShut ? null : tickAt], allShut ? tzOf : undefined, allShut, lastDay);
+  // "Closed" is said on a row only while another market on the list is trading: with all of them shut the foot says it once
+  const noteOf = (it: WatchItem): "Delayed" | "Closed" | null => (quotes[it.id]?.delayed ? "Delayed" : open[it.market] === false && !allShut ? "Closed" : null);
+  const notes = new Set(list?.items.map(noteOf));
+  const changeAbsFor = (it: WatchItem) => changeAbsOf(quotes[it.id] ?? undefined, ticks[it.id]);
 
   // ---------- the rows in order, and dragging them ----------
   const [drag, setDrag] = useState<{ id: string; order: string[] } | null>(null);
@@ -155,16 +163,26 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
   };
 
   // ---------- adding, lists ----------
-  const [adding, setAdding] = useState(false);
   const capSymbols = w.limits?.symbols ?? null;
   const full = capSymbols != null && !!list && list.items.length >= capSymbols;
-  const add = (it: WatchItem) => {
-    if (!list) return;
-    if (list.items.some((x) => x.id === it.id)) { notify(`${labelOf(it)} is already on ${list.name === "Watchlist" ? "this list" : list.name}.`); return; }
-    if (full) { notify(symbolsSaid(w.limits, list.items.length, plan) ?? "This list is full."); return; }
-    void w.add(listId, it);
-    notify(`Added ${labelOf(it)}.`);
+  const onList = list?.items.map((x) => x.id).join(",") ?? "";
+  const has = useCallback((id: string) => onList.split(",").includes(id), [onList]);
+  /** Add to the open list, and what came of it in a sentence (added, there already, or the list is full). */
+  const add = (it: WatchItem): { ok: boolean; text: string } => {
+    if (!list) return { ok: false, text: "Your lists are still loading." };
+    const out = addOutcome(list, it, capSymbols, symbolsSaid(w.limits, list.items.length, plan));
+    if (out.ok) { void w.add(listId, it); setFresh(it.id); }
+    return out;
   };
+  // the row just added is brought into view and marked for a moment: the list itself shows what was added
+  const [fresh, setFresh] = useState<string | null>(null);
+  useEffect(() => {
+    if (!fresh) return;
+    const show = window.setTimeout(() => rowRefs.current.get(fresh)?.scrollIntoView({ block: "nearest" }), 60);
+    const done = window.setTimeout(() => setFresh(null), 2400);
+    return () => { window.clearTimeout(show); window.clearTimeout(done); };
+  }, [fresh]);
+  const search = useAddSearch(has, add, listId);
   const [naming, setNaming] = useState<null | "new" | "rename">(null);
   const [name, setName] = useState("");
   const [askDelete, setAskDelete] = useState(false);
@@ -199,40 +217,56 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
     return itemFromPath(m, s.join(":"));
   }, [chartKey, w.lists]);
 
-  // ---------- the panel's place: a floating one is dragged by its header, any one but a sheet is resized from its edge ----------
-  const grab = (kind: "move" | "size") => (e: RPointerEvent<HTMLElement>) => {
-    if (sheet || (kind === "move" && (shape !== "float" || (e.target as HTMLElement).closest("button, a")))) return;
+  // ---------- the panel's place: a floating one is dragged by its header and sized from any edge or corner, a docked one from its
+  // left edge; the pointer is a mouse, a pen or a finger alike, and the size and place are kept on this device for this person ----------
+  const grab = (kind: "move" | "size", edge: Edge = "w") => (e: RPointerEvent<HTMLElement>) => {
+    if (sheet || e.button > 0 || (kind === "move" && (shape !== "float" || (e.target as HTMLElement).closest("button, a, input")))) return;
     e.preventDefault();
-    const x0 = e.clientX, y0 = e.clientY;
-    let latest = drawn;
+    const el = e.currentTarget, id = e.pointerId, x0 = e.clientX, y0 = e.clientY, from = drawn;
+    try { el.setPointerCapture(id); } catch { /* the pointer is already gone */ }
+    document.body.classList.add("mw-moving");
     const move = (ev: PointerEvent) => {
-      latest = kind === "move" ? dragged(drawn, ev.clientX - x0, ev.clientY - y0, vw, vh) : resized(drawn, ev.clientX - x0, ev.clientY - y0, vw, vh);
-      patch(kind === "move" ? { w: latest.w, h: latest.h, x: latest.x, y: latest.y, mode: "float" } : { w: latest.w, h: latest.h, x: latest.x, y: latest.y });
+      if (ev.pointerId !== id) return;
+      const l = kind === "move" ? dragged(from, ev.clientX - x0, ev.clientY - y0, vw, vh) : resized(from, ev.clientX - x0, ev.clientY - y0, vw, vh, edge);
+      // a panel sized or moved while it floats is the person's own floating panel from then on: its height is theirs, not half the window
+      patch(shape === "dock" ? { w: l.w } : { w: l.w, h: l.h, x: l.x, y: l.y, mode: "float" });
     };
-    const end = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", end); };
+    const end = (ev: PointerEvent) => {
+      if (ev.pointerId !== id) return;
+      window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", end); window.removeEventListener("pointercancel", end);
+      document.body.classList.remove("mw-moving");
+      try { el.releasePointerCapture(id); } catch { /* released with the pointer */ }
+    };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
   };
+  // from the keyboard: left and right change the width, and on a floating panel up and down change the height
   const sizeKey = (e: React.KeyboardEvent) => {
-    const by = e.key === "ArrowLeft" ? -24 : e.key === "ArrowRight" ? 24 : 0;
-    if (!by) return;
+    const dx = e.key === "ArrowLeft" ? 24 : e.key === "ArrowRight" ? -24 : 0;
+    const dy = shape !== "float" ? 0 : e.key === "ArrowUp" ? -24 : e.key === "ArrowDown" ? 24 : 0;
+    if (!dx && !dy) return;
     e.preventDefault();
-    const r = resized(drawn, by * -1, 0, vw, vh);
-    patch({ w: r.w, x: r.x });
+    const r = resized(drawn, dx, dy, vw, vh, "nw");
+    patch(shape === "dock" ? { w: r.w } : { w: r.w, h: r.h, x: r.x, y: r.y, mode: "float" });
   };
 
   const chartH = Math.max(260, Math.min(640, (shape === "float" ? drawn.h : vh) - 300));          // the header, the chart's toolbar and its range row take about 300px
   const style = { ["--mw-w" as string]: `${layout.w}px`, ["--mw-h" as string]: `${Math.max(MIN_H, drawn.h)}px`, ["--mw-x" as string]: layout.x == null ? "auto" : `${layout.x}px`, ["--mw-y" as string]: layout.y == null ? "auto" : `${layout.y}px` };
   const used = list?.items.length ?? 0;
   const said = list ? symbolsSaid(w.limits, used, plan) : null;
+  const named = list ? (list.default ? list.name : listName(list.name)) : "";
   const listsLine = listsSaid(w.limits, w.lists?.length ?? 0, plan);
 
   return (
     // a sheet is a dialog, which an aside element may not be; and the panel's top and bottom bars are not the page's banner and footer (MWR1-016)
     <div ref={box} className={`mw mw-${shape}`} style={style} data-testid="market-watch" aria-label="Market Watch"
       {...(sheet ? { role: "dialog", "aria-modal": true } : { role: "complementary" })}>
-      {!sheet && <div className="mw-size" role="separator" aria-orientation="vertical" aria-valuemin={MIN_W} aria-valuemax={MAX_W} aria-valuenow={layout.w} aria-valuetext={`${layout.w} pixels wide`}
-        aria-label="Resize the panel. Use the left and right arrow keys." tabIndex={0} onPointerDown={grab("size")} onKeyDown={sizeKey} />}
+      {/* the grips: the left edge is the one a keyboard reaches (a separator with its value); a floating panel has the other seven too */}
+      {!sheet && <div className="mw-size w" role="separator" aria-orientation="vertical" aria-valuemin={MIN_W} aria-valuemax={MAX_W} aria-valuenow={layout.w} aria-valuetext={`${layout.w} pixels wide`}
+        aria-label={shape === "float" ? "Resize the panel. Left and right arrow keys change its width, up and down its height." : "Resize the panel. Use the left and right arrow keys."}
+        tabIndex={0} onPointerDown={grab("size", "w")} onKeyDown={sizeKey} />}
+      {shape === "float" && EDGES.filter((edge) => edge !== "w").map((edge) => <div key={edge} className={`mw-size ${edge}`} data-edge={edge} aria-hidden="true" onPointerDown={grab("size", edge)} />)}
       <div className="mw-head" onPointerDown={grab("move")}>
         {chartItem
           ? <button type="button" className="mw-back" onClick={() => patch({ chart: null })} aria-label="Back to the list"><span className="mw-back-ic" aria-hidden="true"><Chevron size={16} /></span>Lists</button>
@@ -266,7 +300,7 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
             <div className="mw-tablist" role="tablist" aria-label="Your lists" onKeyDown={tabKey}>
               {w.lists?.map((l) => (
                 <button key={l.id} type="button" role="tab" id={`mw-tab-${l.id}`} className="mw-tab" aria-selected={l.id === listId} tabIndex={l.id === listId ? 0 : -1}
-                  onClick={() => patch({ list: l.id })} title={l.default ? "Your Research watchlist" : l.name}>{l.name}<small aria-hidden="true">{l.items.length}</small></button>
+                  onClick={() => patch({ list: l.id })} title={tabTitle(l)}>{l.default ? l.name : listName(l.name)}</button>
               ))}
             </div>
             {naming ? null : tabsFull
@@ -282,19 +316,18 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
             </form>
           )}
           <div className="mw-bar">
-            <button type="button" className="btn sm mw-addbtn" aria-expanded={adding} onClick={() => setAdding(!adding)}>{adding ? "Done" : "+ Add symbol"}</button>
-            <Select small label="Sort the list" value={sort} onChange={(v) => patch({ sort: v as SortMode })} options={SORTS} />
+            <AddField s={search} disabled={!list} />
             {/* EXPORT: the list as a CSV, in its order, with the prices it shows now */}
             {list && list.items.length > 0 && (
-              <button type="button" className="mw-ic" data-csv={`watchlist ${list.name}`} aria-label={`Download CSV: the list ${list.name}`} title="Download this list as a CSV file"
-                onClick={() => downloadCsv(csvName(`watchlist ${list.name}`, istToday()), ["Symbol", "Name", "Market", "Kind", "Currency", "Price", "Change today (%)"],
-                  shown.map((it) => { const c = changeFor(it); return [it.symbol, it.name || null, it.market, it.kind, currencyOf(it), priceOf(it), c == null ? null : Math.round(c * 100) / 100]; }))}>
+              <button type="button" className="mw-ic" data-csv={`watchlist ${list.name}`} aria-label={`Download CSV: the list ${named}`} title="Download this list as a CSV file"
+                onClick={() => downloadCsv(csvName(`watchlist ${list.name}`, istToday()), ["Symbol", "Name", "Market", "Kind", "Currency", "Price", "Change today", "Change today (%)"],
+                  shown.map((it) => { const c = changeFor(it), a = changeAbsFor(it); return [it.symbol, it.name || null, it.market, it.kind, currencyOf(it), priceOf(it), a == null ? null : Math.round(a * 10000) / 10000, c == null ? null : Math.round(c * 100) / 100]; }))}>
                 <Download size={16} />
               </button>
             )}
             {list && !list.default && (
               <span className="mw-listmenu">
-                <button ref={menuTrigger} type="button" className="mw-ic" aria-label={`Actions for the list ${list.name}`} aria-haspopup="menu" aria-expanded={listMenu} onClick={() => setListMenu(!listMenu)}><span aria-hidden="true">⋯</span></button>
+                <button ref={menuTrigger} type="button" className="mw-ic" aria-label={`Actions for the list ${named}`} aria-haspopup="menu" aria-expanded={listMenu} onClick={() => setListMenu(!listMenu)}><span aria-hidden="true">⋯</span></button>
                 {listMenu && (
                   <div ref={menuBox} className="mw-menu right" role="menu" aria-label="This list">
                     <button type="button" role="menuitem" onClick={() => { setListMenu(false); setName(list.name); setNaming("rename"); }}>Rename the list</button>
@@ -304,46 +337,68 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
               </span>
             )}
           </div>
-          {adding && list && <AddSymbol onAdd={add} />}
           {full && list && <p className="mw-limit" role="status">{said} <Link to="/plans">See plans</Link></p>}
 
           <div className="mw-scroll" ref={scroller} role="tabpanel" aria-labelledby={`mw-tab-${listId}`}>
             {w.failed && <ErrorState title="Your lists couldn't be read" action={{ label: "Try again", onClick: () => void w.reload() }}>Check your connection. Nothing was lost.</ErrorState>}
             {!w.lists && !w.failed && <div className="mw-skel"><Skeleton label="Loading your lists" lines={5} /></div>}
-            {list && list.items.length === 0 && (
-              <EmptyState title={list.default ? "Your watchlist is empty" : `${list.name} is empty`} action={!adding ? { label: "Add a symbol", onClick: () => setAdding(true) } : undefined}>
-                Add anything the app covers: stocks, indices, crypto, currencies, commodities. {list.default ? "Stocks you star on a company page are here too." : ""}
+            <AddSaid s={search} />
+            {search.active && <AddResults s={search} />}
+            {!search.active && list && list.items.length === 0 && (
+              <EmptyState title={list.default ? "Your watchlist is empty" : `${named} is empty`} action={{ label: "Add a symbol", onClick: search.focus }}>
+                Search above for anything the app covers: stocks, indices, crypto, currencies, commodities. {list.default ? "Stocks you star on a company page are here too." : ""}
               </EmptyState>
-
             )}
-            {list && list.items.length === 0 && (
+            {!search.active && list && list.items.length === 0 && (
               <div className="mw-pop mw-quick" role="group" aria-label="Quick add">
                 <span className="k-small k-muted">Quick add</span>
-                {POPULAR.slice(0, 8).map((p) => <button key={p.id} type="button" className="btn quiet sm" onClick={() => add(p)}>{labelOf(p)}</button>)}
+                {POPULAR.slice(0, 8).map((p) => <button key={p.id} type="button" className="btn quiet sm" onClick={() => notify(add(p).text)}>{labelOf(p)}</button>)}
               </div>
             )}
-            {list && list.items.length > 0 && (
-              <ul className="mw-rows" aria-label={list.name}>
-                {shown.map((it) => (
-                  <WatchRow key={it.id} ref={setRow(it.id)} item={it} quote={quotes[it.id]} price={priceOf(it)} change={changeFor(it)} spark={sparks[it.id]} note={noteOf(it)}
-                    canMove={canMove} dragging={drag?.id === it.id} lists={w.lists ?? []} listId={listId}
-                    onOpen={() => { patch({ chart: it.id }); }} onRemove={() => void w.remove(listId, it.id)} onMoveTo={(to) => void w.moveTo(listId, to, it)}
-                    onGrip={startDrag(it.id)} onNudge={(by) => nudge(it, by)} />
-                ))}
-              </ul>
+            {!search.active && list && list.items.length > 0 && (
+              <div className={`mw-table${canMove ? "" : " fixed"}`}>
+                {/* the column heads: Symbol and Change % sort the list too (a press again turns it round, a third gives your own order back) */}
+                <div className="mw-cols" role="group" aria-label={`Columns. The list is in this order: ${SORTS.find((x) => x.value === sort)!.label}`}>
+                  <span aria-hidden="true" />
+                  <button type="button" className="mw-col" aria-pressed={sort === "name"} aria-label="Sort by name" title={sort === "name" ? "In order of name. Press for your own order." : "Sort by name"}
+                    onClick={() => patch({ sort: nextSort(sort, "name") })}>Symbol{sort === "name" && <i aria-hidden="true">▲</i>}</button>
+                  <span className="mw-c-spark" aria-hidden="true" />
+                  <span className="mw-col num">Last</span>
+                  <span className="mw-col num mw-c-abs">Change</span>
+                  <button type="button" className="mw-col num" aria-pressed={sort === "change_desc" || sort === "change_asc"} aria-label="Sort by the day's change"
+                    title={sort === "change_desc" ? "Biggest rise first. Press for the biggest fall first." : sort === "change_asc" ? "Biggest fall first. Press for your own order." : "Sort by the day's change"}
+                    onClick={() => patch({ sort: nextSort(sort, "change") })}>Change %{sort === "change_desc" ? <i aria-hidden="true">▼</i> : sort === "change_asc" ? <i aria-hidden="true">▲</i> : null}</button>
+                  <span aria-hidden="true" />
+                </div>
+                <ul className="mw-rows" aria-label={named}>
+                  {shown.map((it) => (
+                    <WatchRow key={it.id} ref={setRow(it.id)} item={it} quote={quotes[it.id]} price={priceOf(it)} change={changeFor(it)} changeAbs={changeAbsFor(it)} spark={sparks[it.id]} note={noteOf(it)}
+                      canMove={canMove} dragging={drag?.id === it.id} fresh={fresh === it.id} lists={w.lists ?? []} listId={listId}
+                      onOpen={() => { patch({ chart: it.id }); }} onRemove={() => void w.remove(listId, it.id)} onMoveTo={(to) => void w.moveTo(listId, to, it)}
+                      onGrip={startDrag(it.id)} onNudge={(by) => nudge(it, by)} />
+                  ))}
+                </ul>
+              </div>
             )}
           </div>
           <div className="mw-foot">
             {list && w.limits?.symbols != null && !full && said ? <span role="status">{said} <Link to="/plans">See plans</Link></span>
-              : <span className="mw-foot-note">{list ? `${used} ${used === 1 ? "symbol" : "symbols"}` : ""}
+              : <span className="mw-foot-note">{list ? countSaid(used) : ""}
                 {list && asOf && <span data-testid="mw-as-of"> · {asOf}</span>}</span>}
+            {/* a narrow panel marks a delayed or shut row with a dot beside its symbol: what the dots are */}
+            {!search.active && (notes.has("Delayed") || notes.has("Closed")) && (
+              <span className="mw-legend">
+                {notes.has("Delayed") && <span><i className="mw-dot delayed" aria-hidden="true" />Delayed, up to 15 minutes</span>}
+                {notes.has("Closed") && <span><i className="mw-dot" aria-hidden="true" />Market closed</span>}
+              </span>
+            )}
           </div>
         </>
       )}
       {askDelete && list && (
-        <ConfirmDialog title={`Delete the list ${list.name}?`} confirmLabel="Delete the list" onClose={() => setAskDelete(false)}
+        <ConfirmDialog title={`Delete the list ${named}?`} confirmLabel="Delete the list" onClose={() => setAskDelete(false)}
           onConfirm={() => { setAskDelete(false); patch({ list: null }); void w.delete(list.id); }}>
-          The list and its {list.items.length} {list.items.length === 1 ? "symbol" : "symbols"} are removed. Your charts and drawings are not.
+          The list and its {countSaid(list.items.length)} are removed. Your charts and drawings are not.
         </ConfirmDialog>
       )}
     </div>

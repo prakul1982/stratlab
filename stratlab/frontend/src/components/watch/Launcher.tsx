@@ -62,7 +62,9 @@ export function MarketsLauncher({ mode, userId, button = mode, autoOpen }: { mod
   useEffect(() => {
     const on = (e: Event) => {
       const d = ((e as CustomEvent).detail ?? {}) as { open?: boolean | "toggle"; chart?: string };
-      const open = d.open === "toggle" ? !layout.open : d.open !== false;
+      // "toggle" goes by what is on screen: a phone's sheet kept as open but not drawn (a sheet is never open at page load) opens
+      // on the first press, where it used to take two (the first only marked it shut)
+      const open = d.open === "toggle" ? !(layout.open && asked.current) : d.open !== false;
       if (open) openIt(d.chart ? { chart: d.chart } : {}); else patch({ open: false });
     };
     window.addEventListener("stratlab:markets", on);

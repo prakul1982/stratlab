@@ -129,8 +129,11 @@ test("VR7-009, VR7-011: the Market Watch sheet's controls are 44px on a phone", 
   await expect(mw).toBeVisible();
   await expect(mw.locator(".mw-row").first()).toBeVisible({ timeout: 30_000 });
   expect(await small(page, ".mw button, .mw a")).toEqual([]);
-  await mw.getByRole("button", { name: "+ Add symbol" }).click();
-  expect((await mw.locator(".mw-tabs").boundingBox())!.height, "the list tabs keep their height with the add form open").toBeGreaterThanOrEqual(43);
+  // (MW-2: the add form is one search field in the bar; its results take the list's place)
+  await mw.getByRole("combobox", { name: /^Search/ }).fill("REL");
+  await expect(mw.getByTestId("mw-results").getByRole("option").first()).toBeVisible({ timeout: 10_000 });
+  expect(await small(page, ".mw button, .mw a")).toEqual([]);
+  expect((await mw.locator(".mw-tabs").boundingBox())!.height, "the list tabs keep their height with the search's results open").toBeGreaterThanOrEqual(43);
 });
 
 test("VR7-013: the plans tables fit their cards at 390px and 360px", async ({ page }) => {

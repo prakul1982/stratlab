@@ -158,3 +158,28 @@ def test_the_exchange_names_its_holidays_r84_014(monkeypatch):
     later = calendar.refresh_from_exchange(lambda: ["2027-01-26"], "IN")
     assert later["names"] == {"2026-11-10": "Diwali-Balipratipada", "2026-12-25": "Christmas"}
     assert json.loads(store[calendar.AUTO + "IN"])["names"] == later["names"]
+
+
+def test_markets_send_the_holidays_just_behind_today_too(monkeypatch):
+    """A "last close <day>" label names the last day the exchange traded, which is behind today: /markets sends the holidays of the
+    ten days before today with the coming ones (Market Watch said "last close Sun", the day the prices were read; owner, 9 Nov)."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    from app import data
+    from app.data.markets import BY_ID
+    asked = {}
+    real = calendar.holidays
+
+    def spy(market, start, days=60):
+        asked[market] = (start, days)
+        return real(market, start, days)
+    monkeypatch.setattr(calendar, "holidays", spy)
+    import app.main as main
+    rows = {m["id"]: m for m in main.markets.markets()}
+    for market in ("IN", "US"):
+        start, days = asked[market]
+        today = datetime.now(ZoneInfo(BY_ID[market]["tz"])).date()
+        assert (today - start).days == data.HOLIDAYS_BACK == 10 and days == 70
+        assert rows[market]["holidays"] == real(market, today - timedelta(days=10), 70)
+    # a Tuesday morning after a Monday holiday: the Monday is in the list, so the last trading day is the Friday before
+    assert "2025-10-02" in real("IN", date(2025, 10, 7) - timedelta(days=10), 70)
