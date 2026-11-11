@@ -246,7 +246,7 @@ def test_the_kept_peer_medians_are_one_a_run_that_differs_and_never_more_than_a_
     assert list(store) == ["theme:peers:IN:speciality-chemicals"] and len(json.loads(store["theme:peers:IN:speciality-chemicals"])) == D.PEER_RUNS
     assert len(store["theme:peers:IN:speciality-chemicals"]) < 600                          # bounded storage
     assert T.sources("US", "Speciality chemicals").peer_history("x", {"d": "2026-10-01", "peers": 30.0, "k": 9}) == [{"d": "2026-10-01", "peers": 30.0, "k": 9}]
-    assert D.DIVE_TEXT == 6
+    assert D.DIVE_TEXT == 7          # m2: the ranking headline's sentences changed (updated on purpose)
 
 
 # ---------- 4. a median row's figure with its count is never cut ----------
@@ -361,4 +361,4 @@ def test_layer_names_take_the_room_the_figure_columns_dont_use_and_one_still_cut
     key = deck.short_names(head, tight, [2.5, 0.9, 1.2, 1.15, 0.95, 0.95, 0.9, 0.85, 0.8, 0.8], 1)
     assert key.startswith("Layer names in full: ") and key.endswith(" = Other IT service companies.")
     assert deck.short_names(head, rows[:1], widths, 1) == "" and deck.short_names(head, rows, widths, None) == ""
-    assert deck.THEME_DECK_VERSION == 44
+    assert deck.THEME_DECK_VERSION == 45          # m2 bumped it (updated on purpose)

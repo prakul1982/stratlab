@@ -206,6 +206,8 @@ def whole_clause(text: str, limit: int) -> str:
     least = max(24, int(limit * 0.4))
     for at in sorted({m.start() for rx in (_CLAUSE_END, _CLAUSE_LEAD) for m in rx.finditer(cut)}, reverse=True):
         kept = closed(text[:at])                         # the latest place a clause ends, or a new one is joined on
+        if re.match(r"\s*(?:and|or)\s", text[at:], re.I) and re.search(r"\s(?:and|or|&)\s+[A-Za-z-]+$", kept):
+            kept = closed(re.sub(r"\s(?:and|or|&)\s+[A-Za-z-]+$", "", kept))      # "…properties and Management [and Hospitality…]": the pair goes together
         if len(kept) >= least:
             return kept
     return closed(got[:-1])
@@ -2478,13 +2480,12 @@ def watch_list(v: dict, today: date) -> list[dict]:
 
 def results_purpose(purpose) -> str:
     """What a scheduled results day is for, as the calendar states it: "Financial results", or "Financial results; other business matters"
-    (the calendar's own "Financial Results/Other business matters", in sentence case)."""
+    (the calendar's own "Financial Results/Other business matters", in sentence case; an acronym keeps its capitals)."""
     parts = [p.strip() for p in re.split(r"\s*/\s*|\s*;\s*", str(purpose or "")) if p.strip()]
-    if not parts:
-        return "Financial results"
-    said = "; ".join(p[:1].lower() + p[1:] if p[1:2].islower() else p for p in parts)
-    said = said[:1].upper() + said[1:]
-    return said if re.search(r"result", said, re.I) else f"Financial results; {said[:1].lower() + said[1:] if said[1:2].islower() else said}"
+    said = "; ".join(" ".join(w.lower() if w.istitle() else w for w in p.split()) for p in parts)
+    if not re.search(r"result", said, re.I):
+        said = f"financial results; {said}" if said else "financial results"
+    return said[:1].upper() + said[1:]
 
 
 WATCH_MAX = 16
@@ -2871,7 +2872,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 44                  # R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 45                  # m2: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" (was "Worth a watch") with day, status, source and context, the text repaired before the gate, description cells on a whole clause, compact tables that never cut a name or figure, the price date on a theme's own P/E; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
