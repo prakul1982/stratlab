@@ -821,7 +821,8 @@ def models_from_layer(vc: list[dict], models: dict, conf, evidence=None) -> tupl
     in a fabless layer)."""
     import re
     from .theme_check import MODELS, model_from_words
-    evidence = evidence if isinstance(evidence, dict) else {}
+    given = evidence
+    ev_of = given if callable(given) else (lambda s_: (given if isinstance(given, dict) else {}).get(s_))   # the caller passes a reader
     models, out_conf = dict(models), (dict(conf) if isinstance(conf, dict) else {})
     for v in vc:
         if v.get("official") or v.get("by_model"):
@@ -832,7 +833,7 @@ def models_from_layer(vc: list[dict], models: dict, conf, evidence=None) -> tupl
         for c in v.get("companies") or []:
             s_ = c.get("ticker")
             if s_ and models.get(s_, "") in ("", "unknown"):
-                ev = str(evidence.get(s_) or "")
+                ev = str(ev_of(s_) or "")
                 if model_from_words(ev) not in ("", m_) or re.search(LAYER_MODEL_NOT, ev, re.I):
                     continue
                 models[s_] = m_
