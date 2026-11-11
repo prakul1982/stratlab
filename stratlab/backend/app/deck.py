@@ -2431,7 +2431,7 @@ def auditor_update(x: dict) -> tuple[str, str]:
 def watch_list(v: dict, today: date) -> list[dict]:
     """"Dated company updates" (m2, the outside review of the live R32 decks; "Worth a watch" before: the owner, 7 Nov: a list only,
     rule-based; no view of what to do). Each row is one event as a neutral fact (`fact`), its exact day (`at`), whether it is scheduled or
-    already announced or filed (`status`), where it is from (`source`), what the source adds that a reader needs (`context`, "" when it
+    already announced or filed (`status`), where it is from (`source`, with the filing's `url` when held), what the source adds that a reader needs (`context`, "" when it
     adds nothing) and the slide it is on (`ref`): results filed but not yet in the figures, an auditor's resignation, a promoter stake
     move of a point or more, results scheduled in the next week, and an operating figure a quarter or more above or below a year before
     (not held). An entry with no day is not a dated update: a net margin above the EBITDA margin stays on the data-confidence page. No
@@ -2447,7 +2447,7 @@ def watch_list(v: dict, today: date) -> list[dict]:
         if "auditor" in str(x.get("label")).lower():
             fact, ctx = auditor_update(x)
             out.append({"name": x["name"], "fact": fact, "context": ctx, "at": x.get("at"), "status": "Announced", "source": "Exchange filing",
-                        "ref": "Events"})
+                        "url": x.get("url"), "ref": "Events"})
     for x in own.get("holdings") or []:
         if changed(x.get("promoter_change"), 1.0):
             out.append({"name": x["name"], "fact": f"Promoters' stake {_pts(x['promoter_change'])} to {_pc(x.get('promoter'))} in the quarter to {_month(x.get('quarter'))}",
@@ -2468,7 +2468,7 @@ def watch_list(v: dict, today: date) -> list[dict]:
             if changed(r.get("change_year"), 25.0) and "%" not in (r.get("unit") or "") and r.get("filed"):
                 out.append({"name": r["name"], "fact": f"{r.get('metric') or 'Operating figure'} {_bizchg(r['change_year'], r.get('unit'))} on a year before "
                                                          f"({_period(r.get('period'), r.get('span') or 'month')})", "at": r.get("filed"),
-                            "status": "Filed", "source": "Operating update", "ref": "Operating"})
+                            "status": "Filed", "source": "Operating update", "url": r.get("url"), "ref": "Operating"})
     seen, uniq = set(), []
     for x in out:
         k = (x["name"], x["fact"])
@@ -2757,7 +2757,8 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
     if pair:
         fast, slow = pair
         # m2: one sentence that says which layers it ranks (the headline floor), the fastest and the slowest in it
-        lines = [f"Among layers of at least {HEADLINE_MIN} companies with the figure, revenue grew fastest in the latest year in {fast[0]} "
+        kinds = {(t[5] or {}).get("family") for t in gm if isinstance(t[5], dict)} - {None, ""}       # a layer of another family is left out of it
+        lines = [f"Among layers of at least {HEADLINE_MIN} companies with the figure{' and one kind of business' if len(kinds) > 1 else ''}, revenue grew fastest in the latest year in {fast[0]} "
                  f"(median {_chg(fast[1])}, median {mword} {f_(fast[2])}, {of_words(fast[3], fast[4])}) and slowest in {slow[0]} "
                  f"(median {_chg(slow[1])}, {f_(slow[2])}, {of_words(slow[3], slow[4])})."]
     else:
@@ -2841,8 +2842,9 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
     if watch:
         dated = sorted(watch, key=lambda x: str(x.get("at") or ""), reverse=True)
         when = lambda at: _day(at) if re.match(r"^\d{4}-\d{2}-\d{2}", str(at)) else _month(at)      # noqa: E731
-        rows = [[x["name"], x["fact"] + (f". {x['context']}" if x.get("context") else ""), when(x["at"]), x.get("status") or "–", x.get("source") or "–",
-                 f"⟦{x['ref']}⟧"] for x in dated]
+        src = lambda x: {"text": x["source"], "url": x["url"]} if x.get("url") and x.get("source") else (x.get("source") or "–")     # noqa: E731
+        rows = [[x["name"], x["fact"] + (f". {x['context']}" if x.get("context") else ""), when(x["at"]), x.get("status") or "–", src(x),
+                 f"⟦{x['ref']}⟧"] for x in dated]         # the source: the filing itself, linked, where its address is held
         note = ("The rules: results filed but not yet in the figures; an auditor's resignation; a promoter stake move of a point or more; results "
                 "scheduled in the next week; an operating figure 25% or more above or below a year before. Scheduled: a day the company has given "
                 "for an event not yet held. Announced or filed: already made public, in the source named. Each event is as its source states it.")
@@ -3094,8 +3096,8 @@ def compare_note(chain: dict, key: str) -> str:
     un = unranked_words(chain)
     if chain.get("highest"):
         return (f"Highest median {what} in green, lowest in red, among the layers ranked: those with at least {HEADLINE_MIN} companies with the figure"
-                + (" and one kind of business" if "one kind of business" in str(chain.get("line") or "") else "") + "; any other layer is shown, not ranked."
-                + (" " + un if un else "") + shown)
+                + (" and one kind of business" if "one kind of business" in str(chain.get("line") or "") else "")
+                + (f". {un}" if un else "; any other layer is shown, not ranked.") + shown)
     return f"A layer is ranked only on a median of at least {HEADLINE_MIN} companies with the figure; a layer with fewer is shown, not ranked." + shown
 
 
@@ -3218,7 +3220,11 @@ def aggregate_margin_rows(mg: dict) -> list[list[str]]:
 
 
 CLAIM_CARDS = ("Key findings",)                  # the slides whose cards are findings; the questions card is checked wherever it sits
-_CHECK_SKIP = re.compile(r"within \d+% of|\d+% or more|\b\d+% (?:above|below) or|\(\d+% of (?:the (?:combined )?market value of [^)]*|value)\)")
+# m2: a ranking's own scope ("Among the 2 layers with at least 5 companies with the figure", "fewer than 5 companies with the figure") is the
+# rule and how many layers passed it, not a figure a table shows
+_CHECK_SKIP = re.compile(r"within \d+% of|\d+% or more|\b\d+% (?:above|below) or|\(\d+% of (?:the (?:combined )?market value of [^)]*|value)\)|"
+                         r"\bAmong (?:the \d+ )?layers (?:with|of) at least \d+ companies with the figure|"
+                         r"\b(?:at least|fewer than) \d+ companies with the figure")
 
 
 def _deck_figures(slides: list) -> dict:

@@ -71,8 +71,8 @@ def test_the_value_chains_footnote_and_chart_agree_with_the_headline():
     v, slides = steel()
     page = next(s for s in slides if s.title == "The value chain by layer")
     foot = " ".join(p for b in page.blocks if b["kind"] == "text" for p in b["paras"])
-    assert f"among the layers ranked: those with {FLOOR} and one kind of business; any other layer is shown, not ranked." in foot
-    assert ("Shown, not ranked: Aluminium smelting, a different commodity; Sponge iron makers, "
+    assert (f"among the layers ranked: those with {FLOOR} and one kind of business. "
+            "Shown, not ranked: Aluminium smelting, a different commodity; Sponge iron makers, "
             f"fewer than {D.HEADLINE_MIN} companies with the figure.") in foot
     assert f"A median is shown for {D.COMPARE_MIN} companies or more." in foot
     assert "at least 3 companies;" not in foot                                                    # the marks' floor is the headline's, said once
@@ -110,6 +110,16 @@ def test_a_ranking_of_every_shown_layer_adds_no_second_sentence_and_ties_say_no_
     assert deck.unranked_words(inside) == f"Shown, not ranked: C banks, fewer than {D.HEADLINE_MIN} companies with the figure."
 
 
+def test_the_rankings_own_scope_is_not_a_figure_the_tables_must_show():
+    """A deck whose tables show no "5" and no "2" keeps its headline: the scope is the rule, not a claim."""
+    shown = {"pct": {22.0, 12.0, 41.0}, "x": set(), "pts": set(), "n": set(), "gaps": set(), "money": set()}
+    line = (f"Among the 2 layers with {FLOOR} and one kind of business, median EBITDA margin is highest in A (22%) and lowest in B (12%), "
+            "a gap of 10 points. Shown, not ranked: C (41%), a different commodity")
+    assert D.claim_mismatches(deck._CHECK_SKIP.sub("", line), shown) == []
+    assert D.claim_mismatches(deck._CHECK_SKIP.sub("", f"D (8%), fewer than {D.HEADLINE_MIN} companies with the figure."), {**shown, "pct": {8.0}}) == []
+    assert D.claim_mismatches(deck._CHECK_SKIP.sub("", line.replace("(22%)", "(23%)")), shown) == ["23%", "10 points"]      # a figure is still checked, and the gap with it
+
+
 def test_every_ranking_floor_is_the_headline_floor():
     rows = [{"v": 9.0, "n": 3}, {"v": 4.0, "n": 5}, {"v": 6.0, "n": 6}]
     assert deck.top_of(rows, lambda r: r["v"], lambda r: r["n"]) == rows[2]                       # the three-company layer is never the highest
@@ -122,7 +132,7 @@ def updates_view():
     v = full_view()
     own = v["sections"]["ownership"]
     own["red_flags"] = [{"symbol": "AUD", "name": "Audit Co", "at": "2026-10-31", "label": "Auditor resigned",
-                         "subject": "Resignation of Statutory Auditor",
+                         "subject": "Resignation of Statutory Auditor", "url": "https://filings.example/aud.pdf",
                          "text": "M/s Old & Co have resigned as statutory auditors citing pre-occupation; there are no other material reasons. "
                                  "The Board has appointed M/s New & Co as statutory auditors to fill the casual vacancy."},
                         {"symbol": "AUE", "name": "Bare Co", "at": "2026-10-30", "label": "Auditor resigned", "subject": "Updates", "text": ""}]
@@ -139,7 +149,7 @@ def updates_view():
 def test_each_dated_update_has_its_day_status_source_and_the_context_its_source_gives():
     w = {x["name"]: x for x in deck.watch_list(updates_view(), date(2026, 11, 7))}
     assert w["Audit Co"] == {"name": "Audit Co", "fact": "Resignation of the statutory auditor", "at": "2026-10-31", "status": "Announced",
-                             "source": "Exchange filing", "ref": "Events",
+                             "source": "Exchange filing", "url": "https://filings.example/aud.pdf", "ref": "Events",
                              "context": "The filing says a new auditor was appointed and that the auditor raised no concerns."}
     assert w["Bare Co"]["fact"] == "Resignation of an auditor" and w["Bare Co"]["context"] == ""   # nothing the filing doesn't say
     assert w["Promoter Co"]["status"] == "Filed" and w["Promoter Co"]["source"] == "Shareholding filing"
@@ -160,7 +170,8 @@ def test_the_page_is_named_dated_company_updates_everywhere_and_takes_no_side():
     rows = {r[0]: r for r in t["rows"]}
     assert rows["Due Co"][1:5] == ["Financial results; other business matters", "09 Nov 2026", "Scheduled", "Results calendar"]
     assert rows["Audit Co"][1] == ("Resignation of the statutory auditor. The filing says a new auditor was appointed and that the auditor raised "
-                                   "no concerns.") and rows["Audit Co"][2:5] == ["31 Oct 2026", "Announced", "Exchange filing"]
+                                   "no concerns.") and rows["Audit Co"][2:5] == ["31 Oct 2026", "Announced", {"text": "Exchange filing", "url": "https://filings.example/aud.pdf"}]
+    assert rows["Bare Co"][4] == "Exchange filing"                                                 # no address held: the source named, not linked
     assert [r[2] for r in t["rows"]] == sorted((r[2] for r in t["rows"]), key=lambda d: datetime.strptime(d, "%d %b %Y" if d[:2].isdigit() else "%b %Y"),
                                                 reverse=True)
     card = next(it for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards" for it in b["items"]
