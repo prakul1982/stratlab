@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 
 # the version of the membership rules (who is in a theme, which industries, which layers): part of every cached read's key, so a read kept
 # from before a deploy never keeps the old rules' companies or figures (R18: "Private banks" kept the public banks after the fix)
-RULES = 36                       # q1: a network operator given software or capacity is telecom_services (theme_check.telecom_operator), a rule-made model of another family not held at the answer's "low" (said_for), foundry words read in a 10-K/20-F as contract making; lane n2: a kept model of low confidence read again from the evidence as it is now (refine_kept), foundry words as contract making, family words (theme_check.model_confidence), retail vs platform (refine_model); R34: the model rules that changed after R33 (a chip materials supplier is an ingredient maker; a model-named layer joins a map layer only when one layer has its model) apply to every kept check, placement and dive: whenever refine_model, by_model or a model rule changes, bump this; R33: a company with no model takes the one its map layer's name states (models_from_layer); R32: chip designers without fabs as fabless (theme_check.chip_designer), a layer named by how it earns joins the map's layer of its primary model, a market-value half with no shown company undone (unsplit_unshown); R31: lenders apart from developers and landlords, fabless vs IDM by owned fabs (theme_check.refine_model), a metals family's commodity as its sub-basis, a split-made layer of one primary model joins the map's (by_model 3b); R30: a kept placement's unknown models asked again once the companies' descriptions are kept (reask_unknown); R29: kinds of utility and of metals business as their own models (theme_check.refine_model); R21: every confirmed company in one of the map's layers (place_rest); R22: layer names fit, currencies, extra layers; R25: one revenue model a layer; R26: models from more evidence and checked by it, names after the split; R27: primary model, tags and confidence, comparable segments, no one-company layer; R28: the companies to place carry their own descriptions (theme_routes.describe_unplaced)
+RULES = 37                       # R36 (GPT review of the live R35 decks): foundry words with products of its own named are no contract maker's and a chip maker naming its own products given contract manufacturing is a maker (theme_check.chip_idm), chips made using specialty process technologies are a foundry's, a seller of its own goods given platform is a retailer, a company of another business filed under the theme's industry (solar under semiconductors) stays in "Other" (theme_check.off_industry), a company leaving a map layer for its family goes to the family's layer of its own industry (by_model); q1: a network operator given software or capacity is telecom_services (theme_check.telecom_operator), a rule-made model of another family not held at the answer's "low" (said_for), foundry words read in a 10-K/20-F as contract making; lane n2: a kept model of low confidence read again from the evidence as it is now (refine_kept), foundry words as contract making, family words (theme_check.model_confidence), retail vs platform (refine_model); R34: the model rules that changed after R33 (a chip materials supplier is an ingredient maker; a model-named layer joins a map layer only when one layer has its model) apply to every kept check, placement and dive: whenever refine_model, by_model or a model rule changes, bump this; R33: a company with no model takes the one its map layer's name states (models_from_layer); R32: chip designers without fabs as fabless (theme_check.chip_designer), a layer named by how it earns joins the map's layer of its primary model, a market-value half with no shown company undone (unsplit_unshown); R31: lenders apart from developers and landlords, fabless vs IDM by owned fabs (theme_check.refine_model), a metals family's commodity as its sub-basis, a split-made layer of one primary model joins the map's (by_model 3b); R30: a kept placement's unknown models asked again once the companies' descriptions are kept (reask_unknown); R29: kinds of utility and of metals business as their own models (theme_check.refine_model); R21: every confirmed company in one of the map's layers (place_rest); R22: layer names fit, currencies, extra layers; R25: one revenue model a layer; R26: models from more evidence and checked by it, names after the split; R27: primary model, tags and confidence, comparable segments, no one-company layer; R28: the companies to place carry their own descriptions (theme_routes.describe_unplaced)
 INDUSTRIES_DAYS = 30            # the AI's pick of a free-text theme's industries is made again after this long (at most monthly)
 FIGURES_MAX = 100               # companies the dive works figures out for: every one the AI named, then the largest of the base (R31: 60 -> 100; stored reads only, the deck built in under a second for 100 synthetic companies, the sector-figure worker bounded by its queue)
 DESCRIBE_MAX = 120              # base companies whose own one-line description is looked up for the page, largest first
@@ -807,7 +807,8 @@ SPLIT_PART = 3                  # each part of such a split holds at least this 
 
 
 R31_REFINE = ("property_development", "property", "construction", "manufacturing", "fabless", "unknown", "retail",      # models the R31 boundaries can make exact
-              "software", "capacity")         # q1: a network operator given software or capacity is telecom_services
+              "software", "capacity",         # q1: a network operator given software or capacity is telecom_services
+              "contract_manufacturing", "platform")     # R36: a chip maker with products of its own is no contract maker; a seller of its own goods is a retailer
 
 
 def said_for(new, old_model, said) -> str:
@@ -908,11 +909,29 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
     own evidence as the AI read it."""
     from collections import Counter
 
-    from .theme_check import FAMILIES, MODELS, model_evidence, model_family, sub_basis
+    from .theme_check import FAMILIES, MODELS, model_evidence, model_family, off_industry, sub_basis
     tags, conf = tags or {}, confidence or {}
     every = {s: m_ for s, m_ in (models or {}).items() if m_ in MODELS}
     models = {s: m_ for s, m_ in every.items() if conf.get(s) != "low"}
     out = [dict(v, companies=list(v.get("companies") or [])) for v in vc]
+    ev_memo: dict = {}
+
+    def ev(c):
+        s_ = c.get("ticker")
+        if s_ not in ev_memo:
+            got = ""
+            if evidence_of is not None:
+                try:
+                    got = evidence_of(s_) or ""
+                except Exception as e:          # the evidence store can't answer now: the company's own line and industry still count
+                    print("theme base: evidence not read:", s_, type(e).__name__, str(e)[:100])
+            ev_memo[s_] = got or model_evidence(c.get("industry") or "", c.get("what") or "")
+        return ev_memo[s_]
+    # R36 (GPT review of the live R35 Semiconductors deck: solar tracker and module makers, filed as semiconductors, among "Makers of their own
+    # products"): a company whose own words show another business than the one its official industry files it under (theme_check.off_industry)
+    # moves to no layer by how it earns: the "Other" group keeps it, and in a layer of the map it is left out of the figures as another business
+    outside = {c.get("ticker") for v in out for c in v["companies"] if c.get("ticker") in models and off_industry(ev(c))}
+    models = {s: m_ for s, m_ in models.items() if s not in outside}
     own = [v for v in out if not v.get("official")]
     if not own or not every:
         return vc
@@ -935,22 +954,37 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
     for v in own:
         f = mains[id(v)] = main(v["companies"])
         if f:
-            movers += [c for c in v["companies"] if fam(c) not in ("", f)]
+            movers += [{**c, "_from_layer": True} for c in v["companies"] if fam(c) not in ("", f)]
             v["companies"] = [c for c in v["companies"] if fam(c) in ("", f)]
     for v in out:
         if v.get("official") and v.get("basis") == "rest":
             movers += [{**c, "fit": True} for c in v["companies"] if fam(c)]
             v["companies"] = [c for c in v["companies"] if not fam(c)]
-    home = {}
+    home, homes = {}, {}
     for v in own:
         f = mains[id(v)]
         if f and (f not in home or len(v["companies"]) > len(home[f]["companies"])):
             home[f] = v
+        if f:
+            homes.setdefault(f, []).append(v)
     new: dict[str, dict] = {}
+
+    def home_of(c, f):
+        """The largest of the map's layers of its family; R36 (the live R35 Consumer retail deck: Amazon, a retailer the map placed among
+        marketplaces, would go to "Apparel and fashion retail chains" beside the map's "Online direct-to-consumer retailers"): for a company
+        leaving a layer the map placed it in, not that one when it holds no company of its own official industry and another of them is
+        mostly of it (the largest such)."""
+        big = home.get(f)
+        ind = key(c.get("industry")) if c.get("industry") else ""
+        same = lambda v: sum(1 for x in v["companies"] if ind and key(x.get("industry")) == ind)      # noqa: E731
+        if big is None or not ind or not c.get("_from_layer") or same(big):
+            return big
+        mostly = [v for v in homes.get(f) or [] if same(v) * 2 > len(v["companies"])]
+        return max(mostly, key=lambda v: len(v["companies"])) if mostly else big
     for c in movers:
         f = fam(c)
-        target = home.get(f) or new.setdefault(f, _model_layer("", []))
-        target["companies"].append({**c, "moved": True})
+        target = home_of(c, f) or new.setdefault(f, _model_layer("", []))
+        target["companies"].append({**{k: x for k, x in c.items() if k != "_from_layer"}, "moved": True})
     taken = {v["layer"] for v in out}
     for f, v in new.items():
         nm = name_of(v["companies"], f)
@@ -1000,20 +1034,6 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
 
     # 3b. R31: no two layers of one primary model (the live R30 Semiconductors deck had "Fabless chip design" beside "Product designers that
     # outsource making"): a layer the split made joins the map's own layer of its primary model, family and sub-basis
-    ev_memo: dict = {}
-
-    def ev(c):
-        s_ = c.get("ticker")
-        if s_ not in ev_memo:
-            got = ""
-            if evidence_of is not None:
-                try:
-                    got = evidence_of(s_) or ""
-                except Exception as e:          # the evidence store can't answer now: the company's own line and industry still count
-                    print("theme base: evidence not read:", s_, type(e).__name__, str(e)[:100])
-            ev_memo[s_] = got or model_evidence(c.get("industry") or "", c.get("what") or "")
-        return ev_memo[s_]
-
     def primary(cos):
         f = main(cos)
         known = [c for c in cos if fam(c) == f] if f else []
@@ -1068,7 +1088,7 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
         what = MODELS[mid][2] if mid in MODELS else FAMILIES.get(f, ("", MODELS[sorted(fines)[0]][2]))[1]
         rest = [c for c in cos if fam(c) != f]
         known_ids = {c.get("ticker") for c in known}
-        v["companies"] = [c if c.get("ticker") in known_ids else {**c, "model_out": "other" if fam(c) else "unknown"} for c in cos]      # R34: why, named
+        v["companies"] = [c if c.get("ticker") in known_ids else {**c, "model_out": "other" if fam(c) or c.get("ticker") in outside else "unknown"} for c in cos]      # R34: why, named
         sparse = len(known) * 2 < len(cos)
         if sparse:
             # R26: a line resting on a few of a layer's companies isn't what they have in common: said plainly instead (the live R25 IT services

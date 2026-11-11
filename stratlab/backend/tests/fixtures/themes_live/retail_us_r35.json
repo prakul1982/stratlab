@@ -1,0 +1,1158 @@
+{
+"note": "The live US Consumer retail theme map as GET /research/sector answered on 11 Nov 2026 (Release 35 live): each layer's companies with the model, confidence and tags the kept placement gave them, and whether the split moved them there. Market values rounded; 'what' is each company's stored one-line description; 'about' holds the encyclopedia summary its company page showed, where it has one.",
+"theme": "Consumer retail",
+"region": "US",
+"layers": [
+{
+"layer": "Brand owners selling direct and wholesale",
+"description": "Margin rests on brand strength, which supports pricing, offset by reliance on contract manufacturers abroad and exposure to import tariffs.",
+"model": "manufacturing",
+"companies": [
+{
+"ticker": "NKE",
+"name": "Nike, Inc.",
+"what": "It is the world's largest supplier of athletic shoes and apparel and a major manufacturer of sports equipment",
+"industry": "Rubber & Plastics Footwear",
+"cap": 57394,
+"basis": "added",
+"model": "manufacturing",
+"model_confidence": "medium",
+"model_tags": []
+},
+{
+"ticker": "LULU",
+"name": "lululemon athletica inc.",
+"what": "We offer a comprehensive line of technical athletic apparel, footwear, and accessories marketed under the lululemon brand",
+"industry": "Apparel & Other Finishd Prods Of  Fabrics & Similar Matl",
+"cap": 11654,
+"basis": "added",
+"model": "manufacturing",
+"model_confidence": "medium",
+"model_tags": [
+"retail"
+]
+},
+{
+"ticker": "LEVI",
+"name": "Levi Strauss & Co",
+"what": "an American clothing company known worldwide for its Levi's brand of denim jeans",
+"industry": "Apparel & Other Finishd Prods Of  Fabrics & Similar Matl",
+"cap": 9563,
+"basis": "added",
+"model": "manufacturing",
+"model_confidence": "medium",
+"model_tags": []
+},
+{
+"ticker": "RL",
+"name": "Ralph Lauren Corp",
+"what": "The company markets products in apparel, home, accessories, and fragrances, and is most known for its flagship brand, Polo Ralph Lauren.",
+"industry": "Men'S & Boys' Furnishgs, Work Clothg, & Allied Garments",
+"cap": 24416,
+"basis": "added",
+"model": "manufacturing",
+"model_confidence": "medium",
+"model_tags": []
+},
+{
+"ticker": "VNCE",
+"name": "Vince Holding Corp.",
+"what": "Vince offers women's and men's ready-to-wear, footwear, and accessories through brick-and-mortar retail stores, vince.com, as well as through premium wholesale channels globally",
+"industry": "Retail-Apparel & Accessory Stores",
+"cap": 168,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "medium",
+"model_tags": [
+"retail"
+]
+},
+{
+"ticker": "HNST",
+"name": "Honest Company, Inc.",
+"what": "The Honest Company, Inc. is an American digital-first consumer goods company, based in Los Angeles and founded by actress Jessica Alba, Christopher Gavigan, and Brian Lee",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 567,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "low",
+"model_tags": []
+},
+{
+"ticker": "GROV",
+"name": "Grove Collaborative Holdings, Inc.",
+"what": "The company makes and sells its own environmentally friendly home and personal care products under its Grove Co. brand, as well as products from other companies",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 45,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "medium",
+"model_tags": [
+"retail"
+]
+}
+]
+},
+{
+"layer": "Warehouse clubs and mass merchants",
+"description": "These chains sell groceries and general goods in large stores at low prices, and clubs add membership fees. Margin is thin on goods and depends on purchasing scale, inventory turnover and, for clubs, fee income, with heavy store and logistics investment.",
+"model": "retail",
+"companies": [
+{
+"ticker": "WMT",
+"name": "Walmart Inc.",
+"what": "operates a chain of hypermarkets, discount department stores, grocery stores, pharmacies, and gas stations in the United States and 19 other countries",
+"industry": "Retail-Variety Stores",
+"cap": 996082,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "COST",
+"name": "Costco Wholesale Corp",
+"what": "",
+"industry": "Retail-Variety Stores",
+"cap": 472438,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "TGT",
+"name": "Target Corp",
+"what": "Target operates small-format and large-format retail stores and hypermarkets.",
+"industry": "Retail-Variety Stores",
+"cap": 73496,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "BJ",
+"name": "BJ's Wholesale Club Holdings, Inc.",
+"what": "BJ’s Wholesale Club is a leading operator of membership warehouse clubs concentrated primarily in the eastern half of the United States.",
+"industry": "Retail-Variety Stores",
+"cap": 13945,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "PSMT",
+"name": "Pricesmart Inc",
+"what": "PriceSmart, Inc. is a United States based operator of membership warehouse clubs in Central America, the Caribbean, and South America",
+"industry": "Retail-Variety Stores",
+"cap": 5156,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "medium",
+"model_tags": []
+}
+]
+},
+{
+"layer": "Off-price and dollar stores",
+"description": "Margin depends on opportunistic buying from brands, low store costs and, for dollar stores, shipping and labor costs and exposure to lower-income customers.",
+"model": "retail",
+"companies": [
+{
+"ticker": "TJX",
+"name": "TJX Companies Inc",
+"what": "is the leading off-price apparel and home fashions retailer in the United States and worldwide.",
+"industry": "Retail-Family Clothing Stores",
+"cap": 150608,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "ROST",
+"name": "Ross Stores, Inc.",
+"what": "It is the 2nd largest off-price retailer in the U.S.; as of July 2024, Ross operates 1,795 stores",
+"industry": "Retail-Family Clothing Stores",
+"cap": 76333,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "BURL",
+"name": "Burlington Stores, Inc.",
+"what": "is an American national off-price retailer, a division of Burlington Coat Factory Warehouse Corporation with more than 1,287 stores in 47 states and Puerto Rico.",
+"industry": "Retail-Department Stores",
+"cap": 15952,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "DG",
+"name": "Dollar General Corp",
+"what": "Dollar General Corporation is an American chain of discount stores headquartered in Goodlettsville, Tennessee.",
+"industry": "Retail-Variety Stores",
+"cap": 30293,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "DLTR",
+"name": "Dollar Tree, Inc.",
+"what": "is an American multi-price-point chain of discount variety stores",
+"industry": "Retail-Variety Stores",
+"cap": 26424,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "CTRN",
+"name": "Citi Trends Inc",
+"what": "Citi Trends, Inc. (“CITITRENDS” or the “Company”) is a highly differentiated off-price value retailer known for trendy fashions, great brands and amazing prices",
+"industry": "Retail-Apparel & Accessory Stores",
+"cap": 380,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "FIVE",
+"name": "Five Below, Inc",
+"what": "Five Below, Inc. is an American chain of specialty discount gift shops that prices most of its products at up to $5, plus a smaller assortment of products priced up to $40",
+"industry": "Retail-Variety Stores",
+"cap": 13957,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "OLLI",
+"name": "Ollie's Bargain Outlet Holdings, Inc.",
+"what": "It was founded in Mechanicsburg, Pennsylvania, in 1982 by Morton Bernstein, Mark Butler, Harry Coverman, and Oliver \"Ollie\" Rosenberg, the company's namesake",
+"industry": "Retail-Variety Stores",
+"cap": 5661,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "MNSO",
+"name": "MINISO Group Holding Ltd",
+"what": "MINISO Group Holding Limited, trading as MINISO is a Chinese retailer and variety store chain that specializes in household and consumer goods including cosmetics, stationery, toys, and kitchenware featuring IP design",
+"industry": "Retail-Variety Stores",
+"cap": 3428,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+}
+]
+},
+{
+"layer": "Online marketplaces and e-commerce sellers",
+"description": "These companies sell goods online, either as marketplaces hosting third-party sellers or as direct e-retailers, earning on commissions, fees and product margin. Spending on fulfilment and delivery shapes their economics.",
+"model": "platform",
+"companies": [
+{
+"ticker": "AMZN",
+"name": "Amazon.com Inc",
+"what": "We design our stores to enable hundreds of millions of unique products to be sold by us and by third parties across dozens of product categories.",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 2928955,
+"basis": "industry",
+"model": "platform",
+"model_confidence": "medium",
+"model_tags": [
+"retail"
+]
+},
+{
+"ticker": "REAL",
+"name": "TheRealReal, Inc.",
+"what": "In addition, we operate several larger footprint flagship stores in San Francisco, California, Los Angeles, California and New York, New York",
+"industry": "Retail-Miscellaneous Retail",
+"cap": 0,
+"basis": "industry",
+"model": "platform",
+"model_confidence": "medium",
+"model_tags": []
+},
+{
+"ticker": "GCT",
+"name": "GigaCloud Technology Inc",
+"what": "GigaCloud Technology Inc. is an American e-commerce company that helps retailers buy and sell big and bulky, non-standardized items such as furniture, appliances, and fitness equipment",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 4401,
+"basis": "industry",
+"model": "platform",
+"model_confidence": "medium",
+"model_tags": []
+},
+{
+"ticker": "JMIA",
+"name": "Jumia Technologies AG",
+"what": "Our platform consists of our marketplace, which connects sellers with customers, our logistics service, which enables the shipment and delivery of packages from sellers to customers, and our payment gateways, which…",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 684,
+"basis": "industry",
+"model": "platform",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "DIBS",
+"name": "1stdibs.com, Inc.",
+"what": "We are one of the world’s leading online marketplaces for connecting design lovers with many of the best sellers and makers of vintage, antique, and contemporary furniture, home décor, jewelry, watches, art, and fashion",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 199,
+"basis": "industry",
+"model": "platform",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "TDUP",
+"name": "ThredUp Inc.",
+"what": "ThredUp Inc. is an American company that operates an online resale platform specializing in the sale of second-hand clothing, footwear, and accessories",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 198,
+"basis": "industry",
+"model": "platform",
+"model_confidence": "high",
+"model_tags": [
+"retail"
+]
+}
+]
+},
+{
+"layer": "Home improvement and beauty chains",
+"description": "These stores sell tools, building materials and beauty products through large specialty stores, earning on product margin. Assortment, advice and professional customers set them apart, with exposure to housing activity and rates.",
+"model": "retail",
+"companies": [
+{
+"ticker": "HD",
+"name": "Home Depot, Inc.",
+"what": "is an American multinational home improvement retail corporation which sells tools, construction products, building materials, appliances, and services",
+"industry": "Retail-Lumber & Other Building Materials Dealers",
+"cap": 350189,
+"basis": "added",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "LOW",
+"name": "Lowes Companies Inc",
+"what": "the world’s second largest home improvement retailer",
+"industry": "Retail-Lumber & Other Building Materials Dealers",
+"cap": 130092,
+"basis": "added",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "ULTA",
+"name": "Ulta Beauty, Inc.",
+"what": "Ulta Beauty carries both high- and low-end cosmetics, fragrances, nail products, bath and body products, beauty tools and haircare products.",
+"industry": "Retail-Retail Stores, Nec",
+"cap": 28408,
+"basis": "added",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+}
+]
+},
+{
+"layer": "Apparel and fashion retail chains",
+"description": "Store-based and omnichannel chains selling clothing, footwear and accessories, including department stores, earning on product margin. Mall and fashion-cycle exposure sets them apart.",
+"model": "resale",
+"companies": [
+{
+"ticker": "DDS",
+"name": "Dillard's, Inc.",
+"what": "It is headquartered in Little Rock, Arkansas, and operates approximately 271 stores in 30 states",
+"industry": "Retail-Department Stores",
+"cap": 9907,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "GAP",
+"name": "Gap Inc",
+"what": "The company operates four primary divisions: the namesake Gap, Banana Republic, Old Navy, and Athleta",
+"industry": "Retail-Family Clothing Stores",
+"cap": 7717,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "URBN",
+"name": "Urban Outfitters Inc",
+"what": "Operating in the United States, the United Kingdom, Canada, select Western European countries, Poland, the United Arab Emirates, and Qatar, the Urban Outfitters brand targets young adults with a merchandise mix of…",
+"industry": "Retail-Family Clothing Stores",
+"cap": 7450,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "M",
+"name": "Macy's, Inc.",
+"what": "Macy's IP Holdings, LLC, doing business as Macy's, is an American department store chain founded in 1858 by Rowland Hussey Macy",
+"industry": "Retail-Department Stores",
+"cap": 6550,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "ANF",
+"name": "Abercrombie & Fitch Co",
+"what": "Headquartered in New Albany, Ohio, the company operates four offshoot brands: Abercrombie Kids, Your Personal Best, Hollister Co., and Gilly Hicks with 780+ company operated stores across its brands, as of Q4 2024",
+"industry": "Retail-Family Clothing Stores",
+"cap": 6535,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "AEO",
+"name": "American Eagle Outfitters Inc",
+"what": "It was founded in 1977 by brothers Jerry and Mark Silverman as a subsidiary of Retail Ventures, Inc., a company that also owned and operated Silverman's Menswear",
+"industry": "Retail-Family Clothing Stores",
+"cap": 3599,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "KSS",
+"name": "Kohls Corp",
+"what": "Our teams of associates take care of each other, our customers, and the communities we serve",
+"industry": "Retail-Department Stores",
+"cap": 2806,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "medium",
+"model_tags": []
+},
+{
+"ticker": "BKE",
+"name": "Buckle Inc",
+"what": "The Buckle, Inc., is an American fashion retailer selling clothing, footwear, and accessories for men, women, and children",
+"industry": "Retail-Family Clothing Stores",
+"cap": 2242,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "ZUMZ",
+"name": "Zumiez Inc",
+"what": "Zumiez Inc. is an American multinational specialty clothing store founded by Thomas Campion and Gary Haakenson in 1978, and publicly traded since 2005",
+"industry": "Retail-Apparel & Accessory Stores",
+"cap": 220,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "CURV",
+"name": "Torrid Holdings Inc.",
+"what": "Torrid Holdings Inc. is an American women's retail chain formerly owned by Hot Topic",
+"industry": "Retail-Apparel & Accessory Stores",
+"cap": 214,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "DLTH",
+"name": "Duluth Holdings Inc.",
+"what": "Duluth Trading is a lifestyle brand of men’s and women’s workwear, casual wear, outdoor apparel and accessories primarily sold through our own omnichannel platform",
+"industry": "Retail-Apparel & Accessory Stores",
+"cap": 144,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "TLYS",
+"name": "Tilly's, Inc.",
+"what": "Tillys is headquartered in Irvine, California and operated 223 stores in 33 states as of January 31, 2026",
+"industry": "Retail-Apparel & Accessory Stores",
+"cap": 127,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "medium",
+"model_tags": []
+},
+{
+"ticker": "DXLG",
+"name": "Destination XL Group, Inc.",
+"what": "Destination XL Group, Inc. (DXLG) is a leading retailer of Men's Big and Tall apparel with 290 retail and outlet store locations throughout the United States operated under the business subsidiaries DXL and Casual Male…",
+"industry": "Retail-Family Clothing Stores",
+"cap": 23,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "PLCE",
+"name": "Childrens Place, Inc.",
+"what": "From its own filings: Quarterly report (10-Q)",
+"industry": "Retail-Family Clothing Stores",
+"cap": 4,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "medium",
+"model_tags": []
+},
+{
+"ticker": "LE",
+"name": "Lands' End, Inc.",
+"what": "Lands' End, Inc. is an American retailer of clothing, baggage, and furniture which began as a mail-order yachting supply company in 1963 in Chicago",
+"industry": "Retail-Family Clothing Stores",
+"cap": 0,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "JL",
+"name": "J-Long Group Ltd",
+"what": "Mainly through our HK Operating Subsidiary, we are an established distributor in Hong Kong of reflective and non-reflective garment trims including, among others, heat transfers, fabrics, woven labels and tapes, sewing…",
+"industry": "Retail-Apparel & Accessory Stores",
+"cap": 15,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "low",
+"model_tags": []
+},
+{
+"ticker": "DBGI",
+"name": "Digital Brands Group, Inc.",
+"what": "Digital Brands Group is a curated collection of lifestyle apparel brands, including Bailey 44, DSTLD, Stateside, and Sundry, that offers a variety of apparel products through direct-to-consumer and wholesale distribution channels",
+"industry": "Retail-Apparel & Accessory Stores",
+"cap": 2,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "low",
+"model_tags": []
+},
+{
+"ticker": "JEM",
+"name": "707 Cayman Holdings Ltd.",
+"what": "We, through 707IL, are a Hong Kong-based group that sells quality apparel products and provide supply chain management total solutions to our customers spanning from Western Europe, North America to the Middle East and East Asia",
+"industry": "Retail-Apparel & Accessory Stores",
+"cap": 64,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "low",
+"model_tags": []
+},
+{
+"ticker": "CPNG",
+"name": "Coupang, Inc.",
+"what": "Coupang, Inc. is an American online retail and technology company headquartered in Seattle, Washington, operating primarily in South Korea and Taiwan",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 29492,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "medium",
+"model_tags": [
+"platform"
+],
+"moved": true
+},
+{
+"ticker": "W",
+"name": "Wayfair Inc.",
+"what": "Wayfair Inc. is an American multinational e-commerce company based in Boston, Massachusetts that sells furniture and home goods online",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 15397,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "medium",
+"model_tags": [],
+"moved": true
+},
+{
+"ticker": "VIPS",
+"name": "Vipshop Holdings Ltd",
+"what": "Vipshop is a Chinese company that operates the e-commerce website VIP.com specializing in online discount sales",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 6926,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "medium",
+"model_tags": [],
+"moved": true
+},
+{
+"ticker": "HEPS",
+"name": "D-MARKET Electronic Services & Trading",
+"what": "Starting in 2010, we began widening the range of products we offer by not only introducing new categories such as home textile, cosmetics, and gardening, but also by increasing our product range in non-electronic…",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 986,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "medium",
+"model_tags": [],
+"moved": true
+},
+{
+"ticker": "FCFS",
+"name": "FirstCash Holdings, Inc.",
+"what": "FirstCash Holdings, Inc. is an American pawnshop company headquartered in Fort Worth, Texas which operates retail pawn stores in the U.S. and Latin America",
+"industry": "Retail-Miscellaneous Retail",
+"cap": 7867,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "medium",
+"model_tags": [],
+"moved": true
+},
+{
+"ticker": "EZPW",
+"name": "Ezcorp Inc",
+"what": "EZCORP, Inc. is an American pawn shop operator based in Austin, Texas which provides services across the United States and Latin America",
+"industry": "Retail-Miscellaneous Retail",
+"cap": 2399,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "medium",
+"model_tags": [],
+"moved": true
+},
+{
+"ticker": "SVV",
+"name": "Savers Value Village, Inc.",
+"what": "Savers Value Village, Inc. (the “Company”, “we”, “us”, or “our\") is the largest for-profit thrift operator in the United States (“U.S.”) and Canada based on number of stores",
+"industry": "Retail-Miscellaneous Retail",
+"cap": 1547,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": [],
+"moved": true
+},
+{
+"ticker": "SPH",
+"name": "Suburban Propane Partners LP",
+"what": "We believe, based on LP/Gas Magazine dated February 2025, that we are the third-largest retail marketer of propane in the United States, measured by retail gallons sold in calendar year 2024",
+"industry": "Retail-Miscellaneous Retail",
+"cap": 1182,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "medium",
+"model_tags": [],
+"moved": true
+},
+{
+"ticker": "BWMX",
+"name": "Betterware De Mexico, S.a.p.i. De C.V",
+"what": "We are a company in the consumer product goods industry, focused on building meaningful brands that the consumer appreciates",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 619,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "medium",
+"model_tags": [],
+"moved": true
+},
+{
+"ticker": "PLBY",
+"name": "Playboy, Inc.",
+"what": "",
+"industry": "Retail-Miscellaneous Retail",
+"cap": 149,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "medium",
+"model_tags": [],
+"moved": true
+},
+{
+"ticker": "CIMG",
+"name": "Cimg Inc.",
+"what": "We previously focused on specialty coffee and related technologies, but we are now expanding our sales and distribution channels in Asia to provide a wider variety of healthy foods to Asian customers",
+"industry": "Retail-Miscellaneous Retail",
+"cap": 0,
+"basis": "industry",
+"model": "distribution",
+"model_confidence": "medium",
+"model_tags": [],
+"moved": true
+},
+{
+"ticker": "FGPR",
+"name": "Ferrellgas Partners L P",
+"what": "Ferrellgas Partners is a publicly traded Delaware limited partnership formed in 1994 and is primarily engaged in the retail distribution of propane and related equipment sales",
+"industry": "Retail-Miscellaneous Retail",
+"cap": 0,
+"basis": "industry",
+"model": "distribution",
+"model_confidence": "high",
+"model_tags": [],
+"moved": true
+}
+]
+},
+{
+"layer": "Online direct-to-consumer retailers",
+"description": "Companies selling mainly online direct to consumers, such as pets, fashion and grocery, earning on product margin.",
+"model": "retail",
+"companies": [
+{
+"ticker": "CHWY",
+"name": "Chewy, Inc.",
+"what": "Chewy, Inc. is an American online retailer of pet food and other pet-related products based in Plantation, Florida",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 9478,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "RVLV",
+"name": "Revolve Group, Inc.",
+"what": "As a trusted premium lifestyle brand and a go-to online source for discovery and inspiration, we deliver exceptional service and an engaging customer experience with a vast yet curated offering totaling over 140,000…",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 1438,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "medium",
+"model_tags": []
+},
+{
+"ticker": "SFIX",
+"name": "Stitch Fix, Inc.",
+"what": "Stitch Fix, Inc. is an online personal styling service in the United States",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 384,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "medium",
+"model_tags": []
+},
+{
+"ticker": "LUXE",
+"name": "LuxExperience B.V.",
+"what": "We offer one of the finest edits in luxury, curated from the world’s most coveted brands of womenswear, menswear, kidswear, lifestyle products and fine jewelry",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 1458,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "medium",
+"model_tags": []
+},
+{
+"ticker": "DDL",
+"name": "Dingdong (Cayman) Ltd",
+"what": "We are a leading fresh grocery e-commerce company in mainland China with sustainable growth",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 204,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "high",
+"model_tags": []
+},
+{
+"ticker": "AKA",
+"name": "A.k.a. Brands Holding Corp.",
+"what": "Princess Polly is a leading fashion brand loved globally for its trend-driven designs, viral online presence and exclusive influencer collaborations",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 100,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "medium",
+"model_tags": []
+},
+{
+"ticker": "LVLU",
+"name": "Lulu's Fashion Lounge Holdings, Inc.",
+"what": "",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 33,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "medium",
+"model_tags": []
+},
+{
+"ticker": "LITB",
+"name": "LightInTheBox Holding Co., Ltd.",
+"what": "LightInTheBox Holding Co., Ltd. is an online clothing sales company which specialises in cheap men's and women's clothes, and other goods that they describe as \"lifestyle products\"",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 45,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "medium",
+"model_tags": []
+},
+{
+"ticker": "HOUR",
+"name": "Hour Loop, Inc",
+"what": "",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 52,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "medium",
+"model_tags": []
+},
+{
+"ticker": "QVCG",
+"name": "QVC Group, Inc.",
+"what": "",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 0,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "medium",
+"model_tags": []
+},
+{
+"ticker": "NXH",
+"name": "Neighborhood Intelligence, Inc.",
+"what": "Bed Bath & Beyond, Inc., is an e-commerce-focused retailer with an affinity model that owns or has ownership interests in various brands, offering a comprehensive array of products and services that enable its customers…",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 150,
+"basis": "industry",
+"model": "retail",
+"model_confidence": "medium",
+"model_tags": []
+}
+]
+},
+{
+"layer": "Other consumer retail companies",
+"description": "",
+"official": true,
+"basis": "rest",
+"companies": [
+{
+"ticker": "CDW",
+"name": "CDW Corp",
+"what": "CDW Corporation is an American multi-brand provider of information technology services, serving business, government, education, and healthcare sectors across the United States, the United Kingdom, and Canada",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 21138,
+"basis": "industry",
+"model": "",
+"model_confidence": "",
+"model_tags": []
+},
+{
+"ticker": "NSIT",
+"name": "Insight Enterprises Inc",
+"what": "Insight Enterprises Inc. is an Arizona-based publicly traded global technology company that focuses on business-to-business and information technology (IT) for enterprises",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 4862,
+"basis": "industry",
+"model": "managed_services",
+"model_confidence": "low",
+"model_tags": []
+},
+{
+"ticker": "PTRN",
+"name": "Pattern Group Inc.",
+"what": "Pattern is a global ecommerce acceleration platform that helps consumer brands sell products on global ecommerce marketplaces",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 3588,
+"basis": "industry",
+"model": "project_services",
+"model_confidence": "low",
+"model_tags": [
+"platform"
+]
+},
+{
+"ticker": "WINA",
+"name": "Winmark Corp",
+"what": "Winmark Corporation is an American franchisor of five retail businesses that specialize in buying and selling used goods",
+"industry": "Retail-Miscellaneous Retail",
+"cap": 968,
+"basis": "industry",
+"model": "",
+"model_confidence": "",
+"model_tags": []
+},
+{
+"ticker": "TMS",
+"name": "Teamshares Inc",
+"what": "We are a blank check company formed on November 27, 2024 as a Cayman Islands exempted company and for the purpose of effecting a Business Combination with one or more businesses or entities",
+"industry": "Retail-Miscellaneous Retail",
+"cap": 422,
+"basis": "industry",
+"model": "holding",
+"model_confidence": "low",
+"model_tags": []
+},
+{
+"ticker": "AASP",
+"name": "Agassi Sports Entertainment Corp.",
+"what": "",
+"industry": "Retail-Miscellaneous Retail",
+"cap": 71,
+"basis": "industry",
+"model": "",
+"model_confidence": "",
+"model_tags": []
+},
+{
+"ticker": "WSHP",
+"name": "WeShop Holdings Ltd",
+"what": "",
+"industry": "Retail-Miscellaneous Retail",
+"cap": 51,
+"basis": "industry",
+"model": "",
+"model_confidence": "",
+"model_tags": []
+},
+{
+"ticker": "POM",
+"name": "Pomdoctor Ltd",
+"what": "",
+"industry": "Retail-Miscellaneous Retail",
+"cap": 37,
+"basis": "industry",
+"model": "",
+"model_confidence": "",
+"model_tags": []
+},
+{
+"ticker": "LIVE",
+"name": "Live Ventures Inc",
+"what": "",
+"industry": "Retail-Miscellaneous Retail",
+"cap": 22,
+"basis": "industry",
+"model": "holding",
+"model_confidence": "low",
+"model_tags": [
+"retail"
+]
+},
+{
+"ticker": "CAHO",
+"name": "Caro Holdings Inc.",
+"what": "",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 22,
+"basis": "industry",
+"model": "",
+"model_confidence": "",
+"model_tags": []
+},
+{
+"ticker": "GIFT",
+"name": "Giftify, Inc.",
+"what": "",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 18,
+"basis": "industry",
+"model": "",
+"model_confidence": "",
+"model_tags": []
+},
+{
+"ticker": "VIPZ",
+"name": "VIP Play, Inc.",
+"what": "",
+"industry": "Retail-Miscellaneous Retail",
+"cap": 10,
+"basis": "industry",
+"model": "",
+"model_confidence": "",
+"model_tags": []
+},
+{
+"ticker": "UZX",
+"name": "Linkage Global Inc",
+"what": "",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 6,
+"basis": "industry",
+"model": "",
+"model_confidence": "",
+"model_tags": []
+},
+{
+"ticker": "WBUY",
+"name": "Webuy Global Ltd",
+"what": "",
+"industry": "Retail-Miscellaneous Retail",
+"cap": 2,
+"basis": "industry",
+"model": "",
+"model_confidence": "",
+"model_tags": []
+},
+{
+"ticker": "RTON",
+"name": "Right On Brands, Inc.",
+"what": "",
+"industry": "Retail-Miscellaneous Retail",
+"cap": 2,
+"basis": "industry",
+"model": "",
+"model_confidence": "",
+"model_tags": []
+},
+{
+"ticker": "FVTI",
+"name": "Fortune Valley Treasures, Inc.",
+"what": "",
+"industry": "Retail-Miscellaneous Retail",
+"cap": 1,
+"basis": "industry",
+"model": "",
+"model_confidence": "",
+"model_tags": []
+},
+{
+"ticker": "NEXR",
+"name": "Nexera Technologies Ltd",
+"what": "",
+"industry": "Retail-Miscellaneous Retail",
+"cap": 0,
+"basis": "industry",
+"model": "",
+"model_confidence": "",
+"model_tags": []
+},
+{
+"ticker": "BLPG",
+"name": "Blue Line Protection Group, Inc.",
+"what": "",
+"industry": "Retail-Miscellaneous Retail",
+"cap": 0,
+"basis": "industry",
+"model": "",
+"model_confidence": "",
+"model_tags": []
+},
+{
+"ticker": "AMZE",
+"name": "Amaze Holdings, Inc.",
+"what": "AMAZE is a virtual reality concert production company founded in July 2015 by former executives and founders of Kakao",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 0,
+"basis": "industry",
+"model": "media",
+"model_confidence": "low",
+"model_tags": []
+},
+{
+"ticker": "BLMH",
+"name": "Blum Holdings, Inc.",
+"what": "",
+"industry": "Retail-Miscellaneous Retail",
+"cap": 0,
+"basis": "industry",
+"model": "",
+"model_confidence": "",
+"model_tags": []
+},
+{
+"ticker": "IPSI",
+"name": "Innovative Payment Solutions, Inc.",
+"what": "We are a provider of digital payment solutions and services to businesses and consumers",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 0,
+"basis": "industry",
+"model": "",
+"model_confidence": "",
+"model_tags": []
+},
+{
+"ticker": "MDEX",
+"name": "Madison Technologies Inc.",
+"what": "",
+"industry": "Retail-Miscellaneous Retail",
+"cap": 0,
+"basis": "industry",
+"model": "",
+"model_confidence": "",
+"model_tags": []
+},
+{
+"ticker": "BZUN",
+"name": "Baozun Inc.",
+"what": "We are a holding company and operate our business through our consolidated subsidiaries, our VIE and its subsidiaries",
+"industry": "Retail-Catalog & Mail-Order Houses",
+"cap": 207,
+"basis": "industry",
+"model": "project_services",
+"model_confidence": "high",
+"model_tags": [
+"retail"
+],
+"moved": true
+},
+{
+"ticker": "ESSI",
+"name": "Eco Science Solutions, Inc.",
+"what": "Eco Science Solutions, Inc. (“ESSI,” the “Company,” “we,” “our,” or “us”) is focused on the development and commercialization of enterprise software and financial technology solutions designed to support businesses…",
+"industry": "Retail-Miscellaneous Retail",
+"cap": 0,
+"basis": "industry",
+"model": "software",
+"model_confidence": "medium",
+"model_tags": [],
+"moved": true
+},
+{
+"ticker": "FBCD",
+"name": "FBC Holding, Inc.",
+"what": "FBC Bank, whose full name is FBC Bank Limited, is a commercial bank in Zimbabwe",
+"industry": "Retail-Apparel & Accessory Stores",
+"cap": 0,
+"basis": "industry",
+"model": "lending",
+"model_confidence": "medium",
+"model_tags": [],
+"moved": true
+}
+]
+}
+],
+"about": {
+"REAL": "The RealReal, Inc. is an online marketplace for users to buy and sell luxury goods that are authenticated by experts. It was started in 2011 by Julie Wainwright and is headquartered in San Francisco.",
+"GCT": "GigaCloud Technology Inc. is an American e-commerce company that helps retailers buy and sell big and bulky, non-standardized items such as furniture, appliances, and fitness equipment. They own a business-to-business online marketplace and act as a middleman by handling sales, logistics and also delivery to end customers. GigaCloud is headquartered in El Monte, California, and is listed on the Nasdaq stock exchange since August 2022.",
+"TDUP": "ThredUp Inc. is an American company that operates an online resale platform specializing in the sale of second-hand clothing, footwear, and accessories. Founded in 2009 and headquartered in Oakland, California, it has established itself as one of the leading resale fashion marketplaces."
+}
+}
