@@ -333,29 +333,32 @@ def test_the_appendix_says_in_full_each_layer_name_it_shows_cut():
         note = " ".join(p for b in s.blocks if b["kind"] == "text" for p in b["paras"])
         assert "Software" not in cut.values() and set(cut.values()) <= full
         for short, name in cut.items():
-            assert short.endswith("…") and f"{short} = {name}" in note, (short, note)
+            assert f"{short} = {name}" in note, (short, note)      # a name shown shorter (or cut) is given in full under the table
             keyed += 1
         assert ("Layer names in full:" in note) == bool(cut)
         text = next(b for b in s.blocks if b["kind"] == "text")
         assert deck.note_h(note) <= text["box"][3] + 1e-6 and table["box"][1] + table["box"][3] <= text["box"][1] + 1e-6       # the key has its room
-    assert keyed >= 2
+    # with the same release's layout work the Layer column takes the room the figure columns don't use, so here every name is shown whole;
+    # a name that is ever shown otherwise carries its key (the loop above) and is tested in the next test
+    assert keyed == 0
     every_rule("IT, long layer names", v, slides)
 
 
-def test_layer_names_take_the_room_the_figure_columns_dont_use_and_two_cut_alike_are_both_said():
+def test_layer_names_take_the_room_the_figure_columns_dont_use_and_one_still_cut_is_said_in_full():
     head = ["Company", "Layer", "Market value", "Revenue", "Growth", "EBITDA", "Net", "ROCE", "P/E", "P/B"]
     widths = [2.5, 1.9, 1.2, 1.15, 0.95, 0.95, 0.9, 0.85, 0.8, 0.8]
     rows = [["Runwell 0 Ltd", "Other IT service companies", "₹9.04 lakh cr", "₹2.67 lakh cr", "+4.6%", "27%", "18.5%", "63%", "17.6x", "7.6x"],
             ["Codecraft 0 Ltd", "Digital engineering and consulting projects for industries", "₹95,645 cr", "₹14,748 cr", "+23.5%", "19%", "12.6%", "34.4%", "52.9x", "11.1x"],
             ["Codecraft 1 Ltd", "Digital engineering and consulting projects for governments", "₹390 cr", "₹693 cr", "−4.5%", "−2.6%", "5.1%†", "13%", "17.5x", "1x"]]
-    plain_ = deck.table_layout({"head": head, "rows": rows, "widths": widths, "compact": True}, deck.CW, 99)
-    roomy = deck.table_layout({"head": head, "rows": rows, "widths": widths, "compact": True, "full": [1]}, deck.CW, 99)
-    assert plain_["rows"][0][1].endswith("…") and roomy["rows"][0][1] == "Other IT service companies"
-    assert roomy["widths"][1] > plain_["widths"][1] and all(r[2:] == g[2:] for r, g in zip(roomy["rows"], rows))        # no figure cut for it
-    key = deck.short_names(head, rows, widths, 1)
-    short = roomy["rows"][1][1]
-    assert short == roomy["rows"][2][1] and short.endswith("…")
-    assert key == (f"Layer names in full: {short} = Digital engineering and consulting projects for industries or Digital engineering and "
-                   "consulting projects for governments.")
+    # with the layout work of the same release every column takes the room its neighbours don't use, so these names are shown whole
+    for t in ({"head": head, "rows": rows, "widths": widths, "compact": True}, {"head": head, "rows": rows, "widths": widths, "compact": True, "full": [1]}):
+        lay = deck.table_layout(t, deck.CW, 99)
+        assert [r[1] for r in lay["rows"]] == [r[1] for r in rows] and lay["widths"][1] > widths[1] * deck.CW / sum(widths)
+        assert all(r[2:] == g[2:] for r, g in zip(lay["rows"], rows))                                                    # no figure cut for it
+    assert deck.short_names(head, rows, widths, 1) == ""                                                                 # nothing to explain
+    # where the figure columns leave no room (each carries its count), a name not shown as written is given in full under the table
+    tight = [r[:2] + [x + " (59 of 90)" for x in r[2:]] for r in rows]
+    key = deck.short_names(head, tight, [2.5, 0.9, 1.2, 1.15, 0.95, 0.95, 0.9, 0.85, 0.8, 0.8], 1)
+    assert key.startswith("Layer names in full: ") and key.endswith(" = Other IT service companies.")
     assert deck.short_names(head, rows[:1], widths, 1) == "" and deck.short_names(head, rows, widths, None) == ""
     assert deck.THEME_DECK_VERSION == 44
