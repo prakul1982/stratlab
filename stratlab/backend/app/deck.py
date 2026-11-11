@@ -4643,7 +4643,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     # 6. the appendix: ONE compact table of every confirmed company's key figures, one row each, so any figure can be checked (R19)
     layer_of = {c["symbol"]: x["layer"] for x in layers for c in x.get("companies") or []}
     prof_of = {c["symbol"]: c.get("profile") for x in layers for c in x.get("companies") or []}          # R25: an insurer has no GNPA column
-    figs_of = lambda x: x.get("revenue") is not None or x.get("profit") is not None or x.get("net") is not None      # noqa: E731
+    from .intel.theme_data import has_figures as figs_of        # q1: the dive's own rule for "with figures", so the appendix counts as page 4 does
     confirmed_ = [x for x in sec.get("leaders") or [] if status.get(x["symbol"]) != "unverified"]
     bare = [x for x in confirmed_ if not figs_of(x)]           # a stored page with no key figure isn't "with figures" (R20)
     lead = sorted((x for x in confirmed_ if figs_of(x)), key=lambda x: -(x.get("cap") or 0))

@@ -163,3 +163,30 @@ def test_the_foundry_layer_takes_globalfoundries_out_of_other():
     assert not any(c["ticker"] == "GFS" for v in vc if v.get("basis") == "rest" for c in v["companies"])
     makers = next(v for v in vc if v["layer"] == "Makers of their own products")
     assert {"MU", "INTC"} <= {c["ticker"] for c in makers["companies"]}
+
+
+# ---------- 4. one deduplicated list for every count ----------
+def test_the_live_twin_listings_collapse_and_every_count_reads_the_same_list():
+    """The live R34 Consumer retail dive: Leslie's, Inc. as LESL ($1.0 m) and LESLQ ($0.68 m), the same filed revenue; Baozun with margins
+    but no revenue or profit (counted "with figures" by the appendix, 97, but not by page 4, 96)."""
+    from app.intel import theme_data as D
+    from tests.test_n1_render import retail_like
+    from tests.test_r18_deck import deck_of
+    rows = [{"symbol": "LESL", "name": "Leslie's, Inc.", "revenue": 1241.91, "cap": 1.0}, {"symbol": "LESLQ", "name": "Leslie's, Inc.", "revenue": 1241.91, "cap": 0.68},
+            {"symbol": "LESLX", "name": "Leslie's Inc", "revenue": 1241.91, "cap": None}]
+    assert [r["symbol"] for r in D.one_row_each(rows)] == ["LESL"]
+    region, m, f = retail_like(12, 5, 2)
+    first = m["value_chain"][0]["companies"][0]
+    twin = {**copy.deepcopy(first), "ticker": first["ticker"] + "Q"}
+    m["value_chain"][0]["companies"].append(twin)
+    f[twin["ticker"]] = {**copy.deepcopy(f[first["ticker"]]), "symbol": twin["ticker"], "market_cap": f[first["ticker"]]["market_cap"] * 0.68}
+    bz = m["value_chain"][0]["companies"][1]["ticker"]
+    f[bz] = {**f[bz], "report_currency": "CNY"}           # live Baozun: reports in yuan, no rate kept: its margins stand, its money figures out
+    v, slides = deck_of(region, m, f)
+    import re
+    said = [int(re.match(r"(\d+) confirmed compan", s.subtitle or "").group(1)) for s in slides
+            if s.title.startswith("Every company's figures") and re.match(r"(\d+) confirmed compan", s.subtitle or "")]
+    rows_ = [r[0] for s in slides if s.title.startswith("Every company's figures") for b in s.blocks if b["kind"] == "table"
+             for r in b["rows"] if not isinstance(r, dict)]
+    assert said and set(said) == {v["with_figures"]} == {len(rows_)}, (said, v["with_figures"], len(rows_))
+    assert len(rows_) == len(set(rows_))
