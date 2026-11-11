@@ -1545,7 +1545,13 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
 # Live", "Option Chain", put counts, Diwali picks)
 NOISE = re.compile(r"share price|stock price|price today|price live|\blive\b.*\bchart\b|option chain|\b(?:put|call) contracts?\b|open interest|"
                    r"stock picks?|stocks? to (?:buy|watch)|top (?:gainers|losers)|gainers (?:&|and) losers|technical (?:signals|view|outlook)|"
-                   r"\bquote(?:,| and)|price,? news|multibagger|target price|\bbuy or sell\b|share price target|\bmuhurat\b", re.I)
+                   r"\bquote(?:,| and)|price,? news|multibagger|target price|\bbuy or sell\b|share price target|\bmuhurat\b|"
+                   # LIVE6-018: quote and forecast pages ("PANW Stock Quote Price and Forecast | CNN") and evergreen click-bait ("If You Invested
+                   # $1000 In CrowdStrike...") are not headlines
+                   r"\bstock quotes?\b|\bquote price\b|\b(?:stock|price|share) (?:forecast|prediction)s?\b|\bprice and forecast\b|"
+                   r"\bif you(?:'d| had| would have)? invested\b|\bhow much (?:you'd|you would) have\b|\bwould be worth\b|"
+                   r"\bmake you (?:a )?(?:rich|millionaire)\b|\bmillionaire[- ]maker\b|\bshould you buy\b|\btime to buy\b|\b(?:is it|still) a buy\b|"
+                   r"\bstocks? (?:you|i)(?:'d| would)? (?:should )?(?:buy|own)\b|\bbest stocks?\b|\bno-brainer\b", re.I)
 HOME = {"IN": re.compile(r"\bindia|\bindian\b|\bnse\b|\bbse\b|\bsebi\b|\brbi\b|\bgst\b|₹|\brs\.? ?\d|\bcrore|\blakh", re.I),
         "US": re.compile(r"\bu\.?s\.?\b|\bamerica|\bunited states|\bsec\b|\bnyse\b|\bnasdaq\b|\bfed\b|\$", re.I)}
 
@@ -1553,10 +1559,13 @@ HOME = {"IN": re.compile(r"\bindia|\bindian\b|\bnse\b|\bbse\b|\bsebi\b|\brbi\b|\
 def headline_kept(item: dict, region: str) -> bool:
     """Whether a headline is about the business: not a quote page, a derivatives table, a list of picks or a price roundup; and a headline
     about the theme in general (no company of the theme in it) must be about the theme's own market (the owner, 7 Nov: Mexico's tax plan,
-    Schaeffler's job cuts in Europe in an India theme). An exchange filing is always kept."""
-    text = str(item.get("headline") or "")
+    Schaeffler's job cuts in Europe in an India theme). It needs a headline and a source (LIVE6-018). An exchange filing with a title is
+    always kept."""
+    text = str(item.get("headline") or "").strip()
     if item.get("kind") == "filing" or str(item.get("source") or "").lower() in ("exchange filing", "sec filing"):
-        return True
+        return bool(text)
+    if not text or not str(item.get("source") or "").strip():          # LIVE6-018: a headline with no source isn't listed as one
+        return False
     if NOISE.search(text):
         return False
     if not item.get("company") and region in HOME and not HOME[region].search(text):

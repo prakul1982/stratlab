@@ -47,3 +47,39 @@ def test_the_theme_and_its_index_over_the_same_calendar_periods_and_the_line_end
     assert out["returns"]["1M"]["bench"] == round((bench[-1] / bench[i0] - 1) * 100, 1)
     i3 = max(i for i, d in enumerate(days) if d <= date(2026, 8, 10))
     assert out["returns"]["3M"]["bench"] == round((bench[-1] / bench[i3] - 1) * 100, 1)
+
+
+# ---------- LIVE6-018: only articles with a source and a headline; no quote pages or click-bait ----------
+def test_quote_pages_click_bait_and_rows_with_no_source_are_not_headlines():
+    from app.intel.theme_data import headline_kept
+    co = {"company": "CrowdStrike", "kind": "news"}
+    assert not headline_kept({**co, "headline": "PANW Stock Quote Price and Forecast | CNN", "source": "CNN"}, "US")
+    assert not headline_kept({**co, "headline": "If You Invested $1000 In CrowdStrike A Decade Ago, This Is How Much It Would Be Worth Now",
+                              "source": "Benzinga"}, "US")
+    assert not headline_kept({**co, "headline": "CrowdStrike stock forecast 2027", "source": "Site"}, "US")
+    assert not headline_kept({**co, "headline": "CrowdStrike wins a federal contract", "source": ""}, "US")            # no source
+    assert not headline_kept({**co, "headline": "", "source": "Reuters"}, "US")
+    assert headline_kept({**co, "headline": "CrowdStrike wins a federal contract", "source": "Reuters"}, "US")
+    assert headline_kept({"kind": "filing", "headline": "Annual report", "source": "SEC filing", "company": "X"}, "US")
+
+
+def test_a_news_list_kept_before_the_rules_is_served_by_them(monkeypatch):
+    from app.intel import theme_routes as T
+    kept = {"items": [{"at": "2026-11-09", "headline": "PANW Stock Quote Price and Forecast | CNN", "company": "Palo Alto", "source": "CNN", "kind": "news"},
+                      {"at": "2026-11-09", "headline": "Palo Alto buys a startup", "company": "Palo Alto", "source": "", "kind": "news"},
+                      {"at": "2026-11-08", "headline": "Palo Alto buys a startup", "company": "Palo Alto", "source": "Reuters", "kind": "news"}], "as_of": "x"}
+
+    class R:
+        @staticmethod
+        def theme_map(profile, region, q):
+            return "US", q, {"generated_at": 1, "value_chain": [], "sub_themes": []}, None
+
+        @staticmethod
+        def ok(x):
+            return x
+    monkeypatch.setattr(T, "_routes", lambda: R)
+    monkeypatch.setattr(T, "checked", lambda r, t, m: m)
+    monkeypatch.setattr(T.theme_base, "for_figures", lambda m: (m, None))
+    monkeypatch.setattr(T.computed, "get", lambda kind, key, **k: {"value": kept})
+    out = T.theme_dive_news("Cyber", "US", profile=None)
+    assert [i["source"] for i in out["items"]] == ["Reuters"]

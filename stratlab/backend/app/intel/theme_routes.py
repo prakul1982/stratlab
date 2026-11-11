@@ -1320,6 +1320,8 @@ def theme_dive_news(q: str, region: str = "IN", profile=Depends(current_profile)
     kept = computed.get("theme:news", key)            # R19: kept for everyone with the theme's read; a Refresh of the theme is a new key
     hit = kept["value"] if kept is not None else None
     if hit is not None:
+        # a list kept before today's rules is served by them too (LIVE6-018: quote pages and a row with no source were kept)
+        hit = {**hit, "items": [i for i in hit.get("items") or [] if theme_data.headline_kept(i, r)]}
         NEWS_CACHE.set((r, theme.lower(), key[2]), hit, 20 * 60)     # (the deck reads the page's latest headlines here)
     if hit is None:
         names = _map_names(m)
