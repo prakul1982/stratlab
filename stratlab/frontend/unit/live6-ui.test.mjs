@@ -90,3 +90,13 @@ test("LIVE6-016: on the Themes page only the menu's Themes entry is highlighted;
   assert.match(here, /border-color: var\(--line-2\)/);                 // no orange edge: it doesn't read as selected
   assert.doesNotMatch(here, /orange/);
 });
+
+test("LIVE6-019: on a phone the heatmap's settings fold into one row with Options; the period stays out", () => {
+  const page = src("pages/HeatmapPage.tsx"), css = src("components/chart/treemap.css");
+  assert.match(page, /className=\{`hm-controls\$\{opts \? "" : " folded"\}`\}/);
+  assert.match(page, /aria-expanded=\{opts\} aria-controls="hm-controls"/);
+  assert.match(css, /\.hm-fold \{ display: none; \}/);                                          // wider screens: as before
+  const phone = css.slice(css.indexOf("LIVE6-019"), css.indexOf("/* the search box in the map card's header row"));
+  assert.match(phone, /@media \(max-width: 640px\)/);
+  assert.match(phone, /\.hm-controls\.folded > \.k-field:not\(:has\(\.k-chipwrap\)\) \{ display: none; \}/);
+});

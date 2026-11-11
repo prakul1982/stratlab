@@ -14,6 +14,7 @@ import { Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, Field, Fiel
  * The figures are the daily closes the app already stores (one read; the settings below change the picture without another).
  * Facts only: a tile says what the price did, never what to do about it. */
 
+const REGION_NAME: Record<Region, string> = { IN: "India", US: "United States" };
 const COLORS: { value: ColorBy; label: string }[] = [{ value: "change", label: "Change" }, { value: "vs", label: "Vs index" }, { value: "volume", label: "Volume" }];
 const SIZES: { value: SizeBy; label: string }[] = [{ value: "cap", label: "Market value" }, { value: "equal", label: "Equal" }, { value: "traded", label: "Value traded" }];
 // the smallest market value offered, in the market's own unit (₹ crore, $ million)
@@ -59,6 +60,7 @@ export function HeatmapPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [again, setAgain] = useState(0);
+  const [opts, setOpts] = useState(false);          // a phone's settings folded under "Options" (LIVE6-019)
   const [query, setQuery] = useState("");
   const [leftOut, setLeftOut] = useState(0);
   const [sort, setSort] = useState<{ key: string; desc: boolean }>({ key: "cap", desc: true });
@@ -151,7 +153,14 @@ export function HeatmapPage() {
         lede={theme ? "The theme's companies as tiles, grouped by the layers of its chain: each tile's size is the company's market value and its colour is what the price did. Facts, not advice."
           : "A market as one picture: each tile is a company, its size the market value and its colour what the price did over the period you pick. Facts, not advice."} />
       <Card label="Heatmap settings">
-        <div className="hm-controls" data-testid="hm-controls">
+        {/* LIVE6-019: on a phone the settings filled the first screen and the map began about 1,150px down. There they fold into one
+            row: what is picked, in words, and Options to open the rest; the period stays out as the one setting changed most */}
+        <div className="hm-fold" data-testid="hm-fold">
+          <span className="hm-fold-sum">{[REGION_NAME[region], !theme && view?.universe_name, !theme && minCap && MIN_CAPS[region].find((o) => o.value === minCap)?.label,
+            COLORS.find((c) => c.value === color)!.label, SIZES.find((x) => x.value === size)!.label, groups.find((g) => g.value === group)?.label].filter(Boolean).join(" · ")}</span>
+          <button type="button" className="btn quiet sm" aria-expanded={opts} aria-controls="hm-controls" onClick={() => setOpts((o) => !o)}>{opts ? "Done" : "Options"}</button>
+        </div>
+        <div id="hm-controls" className={`hm-controls${opts ? "" : " folded"}`} data-testid="hm-controls">
           <FieldGroup label="Market"><Seg label="Market" value={region} onChange={(v) => { setRegion(v as Region); set({ region: v, u: null, min: null }); }} options={[{ value: "IN", label: "₹ India" }, { value: "US", label: "$ United States" }]} /></FieldGroup>
           {!theme && view && view.universes.length > 0 && (
             <Field label="Stocks">{(id) => <Select id={id} value={view.universe ?? ""} onChange={(v) => set({ u: v })} options={view.universes.map((u) => ({ value: u.id, label: u.name }))} />}</Field>
