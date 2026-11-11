@@ -208,6 +208,8 @@ test("R15 #4: Holdings' import is one row, the upload and a chip a connected bro
   await pending.getByRole("button", { name: "Cancel" }).click();
   await expect(card.getByRole("radio", { name: "Add to my holdings" })).toHaveCount(0);
   await sane(page, errors);
+  // the page reads its holdings again on its own; a read still in the route when the test ends is not a result of the test
+  await page.unrouteAll({ behavior: "ignoreErrors" });
 });
 
 test("R15 #6: Mutual funds' upload is one row (pick, read, the files so far); the file's choices come once it is picked", async ({ page }, info) => {
