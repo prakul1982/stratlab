@@ -698,12 +698,26 @@ class KiteService:
         dedup = self._with_tail(token, tf, dedup, note=True, continuous=continuous)
         if market is not None and tf == "1d":
             dedup = self._with_latest_session(token, dedup, now)
+            self._note_sessions(dedup)
         if not store:
             return self._official_days(token, tf, dedup)
         self._cache[key] = (time.time(), dedup)
         if len(self._cache) > 300:
             self._cache.pop(next(iter(self._cache)))
         return self._official_days(token, tf, dedup)
+
+    @staticmethod
+    def _note_sessions(bars: list[dict]) -> None:
+        """The exchange's own daily candles dated on a weekend are special sessions (Diwali's Muhurat trading): noted so a
+        series of sessions counts them (LIVE6-011)."""
+        try:
+            from .data.calendar import note_session
+            for b in bars[-300:]:
+                d = date.fromisoformat(str(b["t"])[:10])
+                if d.weekday() >= 5:
+                    note_session("IN", d)
+        except Exception:
+            pass
 
     BEHIND_RETRY = 60.0       # seconds a copy of candles that lacks the market's latest completed session is reused
 
