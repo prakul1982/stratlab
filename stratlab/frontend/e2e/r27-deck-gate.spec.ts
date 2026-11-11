@@ -23,12 +23,12 @@ test("Admin's Library lists each kept theme deck with its publication check", as
   const decks = page.getByRole("table", { name: "Theme decks and their publication check" });
   await expect(decks).toBeVisible({ timeout: 30_000 });
   const row = decks.getByRole("row").filter({ hasText: /steel/i }).first();
-  await expect(row).toContainText(/\d of 9 passed/);
+  await expect(row).toContainText(/\d+ of 10 passed/);        // ten items since the layout check joined the gate (R35)
   await row.locator("summary").first().click();
   const items = row.getByTestId("deck-gate-items");
   await expect(items).toBeVisible();
   for (const label of ["Headlines reproduce from the tables", "Counts, periods, shares and rounding reconcile", "Peers pass comparability",
-    "No advice words, forecasts or unsupported causes"]) await expect(items).toContainText(label);
+    "No advice words, forecasts or unsupported causes", "No headline, label or sentence is cut short"]) await expect(items).toContainText(label);
   await expect(items).toContainText(/(Pass|Fail) · Figures have a period, source and formula/);
   for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme });
