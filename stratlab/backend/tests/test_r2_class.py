@@ -102,13 +102,23 @@ def test_a_company_leaving_other_joins_the_largest_layer_only_when_it_holds_its_
     # of its industry or its words only: the largest, as before (no move on one sign alone)
     out = by_model_one([big, small], {"ticker": "X", "industry": "Retail-Catalog & Mail-Order Houses", "what": "an e-commerce company", "cap": 1})
     assert layer_of(out, "X")["layer"] == "Apparel chains"
+    # R38 lane s1-fit (updated on purpose: the live R37 Consumer retail deck had 34 such companies in its largest layer): one shared word
+    # with another layer, none with the largest, and no layer of its family holds its industry: never the largest by default, it stays in
+    # "Other"; two shared words place it in that layer
     out = by_model_one([big, small], {"ticker": "X", "industry": "Retail-Miscellaneous Retail", "what": "sells furniture online", "cap": 1})
-    assert layer_of(out, "X")["layer"] == "Apparel chains"
+    assert layer_of(out, "X")["layer"] == "Other"
+    home = ("Furniture and home stores", "Stores selling furniture and home decor.", [("Retail-Furniture Stores", "sells furniture")] * 2)
+    out = by_model_one([big, small, home], {"ticker": "X", "industry": "Retail-Miscellaneous Retail", "what": "sells furniture and home decor online",
+                                            "cap": 1})
+    assert layer_of(out, "X")["layer"] == "Furniture and home stores"
     # neither: it stays in "Other", its way of earning shown
     out = by_model_one([big, small], {"ticker": "X", "industry": "Retail-Miscellaneous Retail", "what": "retail distribution of propane", "cap": 1})
     assert layer_of(out, "X")["layer"] == "Other" and row_of(out, "X")["model"] == "retail"
-    # no words at all: the largest layer, as before
+    # no words at all: R38 lane s1-fit (updated on purpose: live, a propane distributor and a pawnbroker with no stored words went to the
+    # largest retail layer): the largest only when it holds its industry, else "Other"
     out = by_model_one([big, small], {"ticker": "X", "industry": "Retail-Miscellaneous Retail", "what": "", "cap": 1})
+    assert layer_of(out, "X")["layer"] == "Other"
+    out = by_model_one([big, small], {"ticker": "X", "industry": "Retail-Family Clothing Stores", "what": "", "cap": 1})
     assert layer_of(out, "X")["layer"] == "Apparel chains"
 
 
@@ -299,4 +309,4 @@ def test_unknown_models_fall_in_every_theme_and_rise_in_none():
 
 
 def test_the_rules_version_moved_with_its_carry():
-    assert B.RULES == 38 and TR.PLACE_CARRY[38] == 37
+    assert B.RULES == 39 and TR.PLACE_CARRY[38] == 37 and TR.PLACE_CARRY[39] == 38   # lane s1-fit bumped RULES (updated on purpose)
