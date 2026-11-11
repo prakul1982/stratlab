@@ -1253,6 +1253,55 @@ def notable_items(blocks: list[dict], chain: dict, histories: dict) -> list[dict
     return out
 
 
+# ---------- q1: who was in each layer's calculations at the runs before (the GPT review of the live R34 Telecom deck: 6 of 9 operators in
+# R33, 3 of 8 in R34, with nothing said) ----------
+COHORT_RUNS = 6               # a theme's kept layer cohorts, one for each run whose cohorts differ from the one before (theme_routes.sources)
+COHORT_SHARE = 1 / 3          # a layer whose count in its calculations falls by more than this share against the run before is said...
+COHORT_FALL = 3               # ...or by this many companies or more
+
+
+def cohort_point(blocks: list[dict], today: date) -> dict:
+    """This run's layer cohorts, as kept: {"d": the day, "layers": {layer: [the symbols in its calculations]}, "names": {symbol: name}}."""
+    layers, names = {}, {}
+    for b in blocks:
+        ins = sorted(c["symbol"] for c in b.get("companies") or [] if calc_of(c)["in"])
+        layers[b["layer"]] = ins
+        names.update({c["symbol"]: c.get("name") or c["symbol"] for c in b.get("companies") or [] if c["symbol"] in ins})
+    return {"d": today.isoformat(), "layers": layers, "names": names}
+
+
+def cohort_drops(points: list[dict], blocks: list[dict]) -> list[dict]:
+    """Each layer whose count in its calculations fell by more than COHORT_SHARE, or by COHORT_FALL or more, against the run before (q1):
+    {"layer", "from", "to", "on": that run's day, "left": [{"symbol", "name", "why"}]}, each company that left with its reason now (its own
+    record's reason when the layer still lists it, the layer it moved to, or no longer in the theme). A layer is the run before's of the same
+    name, else the one that held most of its companies then. `points`: the kept runs, oldest first, this run last."""
+    pts = [p for p in points or [] if isinstance(p, dict) and isinstance(p.get("layers"), dict)]
+    if len(pts) < 2:
+        return []
+    was, now = pts[-2], pts[-1]
+    where = {c["symbol"]: (b["layer"], calc_of(c)) for b in blocks for c in b.get("companies") or []}
+    out = []
+    for layer, ins in now["layers"].items():
+        before = was["layers"].get(layer)
+        if before is None:
+            listed = {c["symbol"] for b in blocks if b["layer"] == layer for c in b.get("companies") or []}
+            best = max(was["layers"].items(), key=lambda kv: len(listed & set(kv[1])), default=(None, []))
+            before = best[1] if best[0] is not None and len(listed & set(best[1])) * 2 >= max(1, len(best[1])) else None
+        if not before:
+            continue
+        fell = len(before) - len(ins)
+        if fell <= 0 or not (fell > COHORT_SHARE * len(before) or fell >= COHORT_FALL):
+            continue
+        left = []
+        for s_ in sorted(set(before) - set(ins), key=lambda x: (was.get("names") or {}).get(x, x)):
+            at = where.get(s_)
+            why = ("no longer in the theme" if at is None else at[1]["why"] or "in the calculations" if at[0] == layer
+                   else f"moved to {at[0]}" + (f" ({at[1]['why']})" if not at[1]["in"] and at[1]["why"] else ""))
+            left.append({"symbol": s_, "name": (was.get("names") or {}).get(s_) or (now.get("names") or {}).get(s_) or s_, "why": why})
+        out.append({"layer": layer, "from": len(before), "to": len(ins), "on": was.get("d"), "left": left})
+    return out
+
+
 # ---------- the sources, and the whole dive ----------
 class Sources:
     """Where a dive reads its stored figures. Each is a callable, so a test passes its own:
@@ -1262,6 +1311,7 @@ class Sources:
     card(symbol, row) -> the management report card checked against the reported years ({met, missed}) or None;
     history(key, point) -> the theme's kept points after adding `point` (a day's median P/E and the like), oldest first;
     peer_history(key, point) -> the theme's kept peer medians after adding this run's `point`, oldest first, this run last (R35, peer_moved);
+    cohort_history(key, point) -> the theme's kept layer cohorts after adding this run's `point`, oldest first, this run last (q1, cohort_drops);
     segments(symbol) -> the business segments the company's documents report ([{name, share_pct}]) or None (is_diversified);
     corp_history(symbol) -> the company's stored corporate actions (every kind, each with "kind" and "ex_date"), never read from a source;
     metrics(symbol, family) -> the company's filed sector figures (sector_metrics: a stored piece, read now or queued) or None (R23);
@@ -1270,10 +1320,11 @@ class Sources:
     def __init__(self, today: date, facts, index_rows=lambda: [], shareholding=lambda s: None, insider_buys=lambda: {},
                  results=lambda a, b, s: [], actions=lambda a, b, s: [], red_flags=lambda s, a, b: [], card=lambda s, r: None,
                  history=lambda k, p: [p], segments=lambda s: None, corp_history=lambda s: [], metrics=lambda s, fam: None, about=lambda s: None,
-                 peer_history=lambda k, p: [p]):
+                 peer_history=lambda k, p: [p], cohort_history=lambda k, p: [p]):
         self.today, self.facts, self.index_rows, self.shareholding, self.insider_buys = today, facts, index_rows, shareholding, insider_buys
         self.results, self.actions, self.red_flags, self.card, self.history, self.segments = results, actions, red_flags, card, history, segments
         self.corp_history, self.metrics, self.about, self.peer_history = corp_history, metrics, about, peer_history
+        self.cohort_history = cohort_history
 
 
 _STOP = {"company", "companies", "limited", "india", "indian", "sector", "theme", "other", "others", "product", "products", "service", "services",
@@ -1536,6 +1587,11 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     out["metrics_pending"] = sorted(pending)
     out["metrics_families"] = pending_fam           # R29: each one's family, so a kept dive can queue a read the worker dropped again
     out["checks"] = data_checks(listed, blocks, out)
+    try:                          # q1: a layer whose count in its calculations fell against the run before, with who left and why
+        out["checks"]["cohort"] = cohort_drops(src.cohort_history(slug(theme), cohort_point(blocks, src.today)), blocks)
+    except Exception as e:
+        print("theme data: layer cohorts not kept:", type(e).__name__, str(e)[:100])
+        out["checks"]["cohort"] = []
     out["notable"] = notable_items(blocks, chain, histories)
     return out
 

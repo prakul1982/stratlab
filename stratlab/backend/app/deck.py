@@ -2564,6 +2564,9 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> li
                          f"({', '.join(x['checks'])})" for x in hd[:4]) + (f"; and {len(hd) - 4} more" if len(hd) > 4 else "")
         rows.append(["Figure checks", f"{_n(len(hd), 'figure')} failed a check: {said}.",
                      f"Shown as –; left out of every median and ranking ({ANOMALY_WHY})."])
+    for x in cohort_words(ch.get("cohort")):          # q1: a layer's count in its calculations fell against the run before
+        rows.append(["Since the run before", x, "The layer's figures are of the companies in its calculations now; each one that left is named with "
+                     "its reason."])
     if ch.get("series"):
         rows.append(["Broken series", f"{_n(len(ch['series']), 'company', 'companies')} whose years don't make one series (a merger, demerger or new listing): {names(ch['series'])}.",
                      "Growth figures not worked out for them; left out of growth totals."])
@@ -2609,6 +2612,21 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> li
                  + (f" Medians are of: {counts} companies." if counts else "") + (f" {_n(val['losses'], 'loss-maker')} with no P/E." if val.get("losses") else ""),
                  "Each slide says its period and count."])
     return rows
+
+
+def cohort_words(drops) -> list[str]:
+    """Each layer whose count in its calculations fell against the run before (theme_data.cohort_drops, q1), in one sentence: the two counts,
+    the run's day, and every company that left with its reason."""
+    out = []
+    for x in drops or []:
+        if not isinstance(x, dict) or not x.get("layer"):
+            continue
+        left = x.get("left") or []
+        named = "; ".join(f"{clean_name(str(c.get('name') or c.get('symbol')))} ({c.get('why') or 'reason not kept'})" for c in left[:8])
+        more = f"; and {len(left) - 8} more" if len(left) > 8 else ""
+        on = f" at the run of {_day(x['on'])}" if x.get("on") else " at the run before"
+        out.append(f"{x['layer']}: {x['from']} in its calculations{on}, {x['to']} now" + (f"; left: {named}{more}." if left else "."))
+    return out
 
 
 HELD_WORDS = {"net": "net margin", "ebitda": "EBITDA margin", "roe": "return on equity", "pb": "price to book"}
@@ -2924,7 +2942,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 47                  # n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 48                  # q1: the appendix counts "with figures" by the dive's rule, a layer's cohort that fell against the run before on the data-confidence page; n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -4206,7 +4224,10 @@ def publication_gate(slides: list, v: dict, reproduced: list | None = None) -> d
     for d in every:
         if d["rule"] != "reproduce":         # check_deck logged its own
             log.warning("deck gate: %s: dropped on %r (%s): %s", d["rule"], d["slide"], d["why"], d["text"])
-    return {"passed": sum(1 for x in items if x["ok"]), "of": len(items), "items": items,
+    cohort = cohort_words((v.get("checks") or {}).get("cohort"))
+    for line in cohort:                      # q1: a layer's cohort that fell against the run before, logged with who left and why
+        log.warning("deck gate: cohort: %s", line)
+    return {"passed": sum(1 for x in items if x["ok"]), "of": len(items), "items": items, **({"cohort": cohort} if cohort else {}),
             "dropped": [{"rule": d["rule"], "slide": d["slide"], "text": str(d["text"])[:200], "why": str(d.get("why") or "")[:120]} for d in every[:GATE_KEEP]],
             "dropped_n": len(every)}
 

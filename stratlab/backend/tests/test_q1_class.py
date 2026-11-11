@@ -190,3 +190,74 @@ def test_the_live_twin_listings_collapse_and_every_count_reads_the_same_list():
              for r in b["rows"] if not isinstance(r, dict)]
     assert said and set(said) == {v["with_figures"]} == {len(rows_)}, (said, v["with_figures"], len(rows_))
     assert len(rows_) == len(set(rows_))
+
+
+# ---------- 3. a layer's cohort against the run before ----------
+def test_a_layer_whose_cohort_fell_by_a_third_or_three_names_who_left_and_why():
+    from app.intel import theme_data as D
+    blocks = [{"layer": "Mobile and broadband operators", "companies": [
+        {"symbol": s_, "name": n, "calc": {"in": s_ in ("BHARTIARTL", "BHARTIHEXA", "TTML"), "why": "" if s_ in ("BHARTIARTL", "BHARTIHEXA", "TTML")
+                                                       else "way of earning not shown"}}
+        for s_, n in (("JPL", "Jio Platforms Ltd"), ("BHARTIARTL", "Bharti Airtel Ltd"), ("BHARTIHEXA", "Bharti Hexacom Ltd"),
+                      ("TTML", "Tata Teleservices (Maharashtra) Ltd"), ("MTNL", "Mahanagar Telephone Nigam Ltd"), ("IDEA", "Vodafone Idea Ltd"),
+                      ("QUADRANT", "Quadrant Televentures Ltd"), ("CITYONLINE", "City Online Services Ltd"))]},
+              {"layer": "Tower infrastructure", "companies": [{"symbol": "INDUSTOWER", "name": "Indus Towers Ltd", "calc": {"in": True, "why": ""}},
+                                                              {"symbol": "RAILTEL", "name": "RailTel", "calc": {"in": True, "why": ""}}]}]
+    from datetime import date
+    now = D.cohort_point(blocks, date(2026, 11, 10))
+    assert now["layers"]["Mobile and broadband operators"] == ["BHARTIARTL", "BHARTIHEXA", "TTML"]
+    was = {"d": "2026-11-04", "layers": {"Mobile operators and broadband": ["BHARTIARTL", "BHARTIHEXA", "IDEA", "JPL", "MTNL", "RCOM"],
+                                         "Tower infrastructure": ["INDUSTOWER"]},
+           "names": {"JPL": "Jio Platforms Ltd", "IDEA": "Vodafone Idea Ltd", "MTNL": "Mahanagar Telephone Nigam Ltd", "RCOM": "Reliance Communications Ltd",
+                     "BHARTIARTL": "Bharti Airtel Ltd", "BHARTIHEXA": "Bharti Hexacom Ltd", "INDUSTOWER": "Indus Towers Ltd"}}
+    drops = D.cohort_drops([was, now], blocks)          # renamed layer: matched by the companies it held
+    assert drops == [{"layer": "Mobile and broadband operators", "from": 6, "to": 3, "on": "2026-11-04", "left": [
+        {"symbol": "JPL", "name": "Jio Platforms Ltd", "why": "way of earning not shown"},
+        {"symbol": "MTNL", "name": "Mahanagar Telephone Nigam Ltd", "why": "way of earning not shown"},
+        {"symbol": "RCOM", "name": "Reliance Communications Ltd", "why": "no longer in the theme"},
+        {"symbol": "IDEA", "name": "Vodafone Idea Ltd", "why": "way of earning not shown"}]}]
+    # a fall of a third or less and fewer than three is not said; nor a rise; nor a first run
+    small = {**was, "layers": {"Mobile and broadband operators": ["BHARTIARTL", "BHARTIHEXA", "TTML", "JPL"]}}
+    assert D.cohort_drops([small, now], blocks) == [] and D.cohort_drops([now], blocks) == []
+    nine = {**was, "layers": {"Mobile and broadband operators": ["BHARTIARTL", "BHARTIHEXA", "TTML", "JPL", "IDEA", "MTNL", "X1", "X2", "X3"]}}
+    blocks9 = copy.deepcopy(blocks)
+    for c in blocks9[0]["companies"][:7]:
+        c["calc"] = {"in": c["symbol"] not in ("JPL", "IDEA", "MTNL"), "why": "" if c["symbol"] not in ("JPL", "IDEA", "MTNL") else "other business"}
+    six = D.cohort_point(blocks9 + [{"layer": "Other telecom companies", "companies": [{"symbol": "X1", "name": "X1 Ltd", "calc": {"in": True, "why": ""}}]}],
+                         date(2026, 11, 10))
+    got = D.cohort_drops([nine, six], blocks9 + [{"layer": "Other telecom companies", "companies": [{"symbol": "X1", "name": "X1 Ltd", "calc": {"in": True, "why": ""}}]}])
+    assert got[0]["from"] == 9 and got[0]["to"] == 4 and {"symbol": "X1", "name": "X1 Ltd", "why": "moved to Other telecom companies"} in got[0]["left"]
+
+
+def test_the_deck_says_a_fallen_cohort_on_the_data_confidence_page_and_the_gate_logs_it(caplog):
+    import logging
+
+    from app import deck
+    from tests.test_n1_render import retail_like
+    from tests.test_r18_deck import deck_of
+    hist = []
+
+    def kept(_, p):
+        if not hist or hist[-1]["layers"] != p["layers"]:
+            hist.append(p)
+        return hist[-6:]
+    region, m, f = retail_like(12, 5, 2)
+    v1, _ = deck_of(region, m, f, cohort_history=kept)
+    assert v1["checks"]["cohort"] == [] and len(hist) == 1
+    lay = m["value_chain"][0]
+    gone = [c for c in lay["companies"] if c["ticker"][1] == "R"][:5]
+    for c in gone:
+        c["model_out"] = "unknown"
+    v2, slides = deck_of(region, m, f, cohort_history=kept)
+    drops = v2["checks"]["cohort"]
+    assert len(hist) == 2 and drops and drops[0]["from"] - drops[0]["to"] == 5
+    assert {x["symbol"] for x in drops[0]["left"]} == {c["ticker"] for c in gone} and {x["why"] for x in drops[0]["left"]} == {"way of earning not shown"}
+    page = next(s for s in slides if s.title == "Data confidence")
+    rows = [r for b in page.blocks if b["kind"] == "table" for r in b["rows"] if not isinstance(r, dict)]
+    said = next(r for r in rows if r[0] == "Since the run before")
+    assert f"{drops[0]['from']} in its calculations at the run of" in said[1] and "(way of earning not shown)" in said[1]
+    with caplog.at_level(logging.WARNING, logger="stratlab.deck"):
+        gate = deck.publication_gate(slides, v2)
+    assert gate["cohort"] and any("deck gate: cohort:" in r.getMessage() for r in caplog.records)
+    v3, _ = deck_of(region, m, f, cohort_history=kept)          # the same cohorts again: not kept twice, still said against the run before
+    assert len(hist) == 2 and v3["checks"]["cohort"] == drops
