@@ -122,3 +122,32 @@ def test_the_deck_and_csv_take_one_market_value_per_company_and_write_dates_one_
     pp = {"theme": 40.0, "peers": 30.0, "n": 5, "premium": 33.3, "as_of": "2026-11-10"}
     assert "prices at the 10 Nov 2026 close" in deck.pe_peer_line(pp)
     assert "2026-11" not in deck.peer_moved_line({"moved": {"from": 19.2, "to": 18.4, "on": "2026-11-08", "at": "2026-11-09"}})
+
+
+# ---------- LIVE6-008: no line through under 4 points, no row of dashes, no table mostly dashes; the gate catches each ----------
+def test_a_line_needs_four_points_a_measure_row_a_figure_and_a_table_more_than_dashes():
+    from app import deck as D
+    s = D.Slide("Valuation", "x", eyebrow="Numbers")
+    s.add("table", (D.M, D.TOP, 7.0, 2.0), head=["Measure", "Theme median", "Range"], rows=[["P/E", "43.0x", "10x to 90x"], ["Interest cover", "–", "–"]],
+          widths=[2.6, 1.3, 1.8])
+    s.add("lines", (D.M + 7.4, D.TOP, D.CW - 7.4, 4.0), title="weekly", cats=["06 Nov", "13 Nov"], series=[("P/E", [125.4, 43.0], D.BLUE)], fmt="x")
+    t = D.Slide("Balance sheet", "y", eyebrow="Numbers")
+    t.add("table", (D.M, D.TOP, D.CW, 2.0), head=["Measure", "Median", "Range", "Peers", "Companies"],
+          rows=[["A", "– (2)", "–", "–", "2"], ["B", "– (1 of 6)", "–", "n/a", "6"], ["C", "–", "–", "–", "5"]], widths=[3, 1, 1, 1, 1])
+    flags = D.complete_flags([s, t])
+    assert {"a line chart through 2 points", "a table mostly dashes"} <= {f["why"] for f in flags}
+    done = D.tidy_tables([s, t])
+    assert [b["kind"] for b in s.blocks] == ["table"] and s.blocks[0]["box"][2] == D.CW          # the table takes the chart's room
+    assert [r[0] for r in s.blocks[0]["rows"]] == ["P/E"]                                          # the row of dashes is dropped
+    assert t.blocks[0]["kind"] == "text" and t.blocks[0]["paras"][0] == "Left out here, as most of their figures aren't stored yet: A, B, C."
+    assert len(done) == 3
+    assert not [f for f in D.complete_flags([s, t]) if f["why"] in ("a line chart through 2 points", "a table mostly dashes")]
+    # a list of companies keeps every row, whatever its cells
+    u = D.Slide("Layer 1 · X", "z", eyebrow="Layers")
+    u.add("table", (D.M, D.TOP, D.CW, 2.0), head=["Company", "Revenue"], rows=[["A Co (no figures)", "–"], ["B Co", "–"]], widths=[3, 1])
+    D.tidy_tables([u])
+    assert len(u.blocks[0]["rows"]) == 2
+    # a page whose one table has one row is caught
+    one = D.Slide("New listings", "w", eyebrow="Numbers")
+    one.add("table", (D.M, D.TOP, D.CW, 1.0), head=["Issue", "Stage"], rows=[["X", "Coming"]], widths=[3, 1])
+    assert "a page for a table of one row" in {f["why"] for f in D.complete_flags([one])}

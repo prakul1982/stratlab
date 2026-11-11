@@ -63,3 +63,18 @@ test("LIVE6-006: one market value per company on the page: the dive's wherever i
   assert.match(src, /csv: \(x\) => x\.fig\?\.cap \?\? x\.co\.cap \?\? null/);
   assert.match(read("src/pages/ThemesPage.tsx"), /<MembersCard r=\{r\} region=\{region\} dive=\{dive\} \/>/);
 });
+
+test("LIVE6-017: section links at the top, long tables folded, tables titled, all-dash rows dropped, no promoters on a US theme", () => {
+  const page = read("src/pages/ThemesPage.tsx");
+  // the links come before the companies' card, not after it
+  assert.ok(page.indexOf("<PageNav items={nav} />") < page.indexOf("<MembersCard"), "nav before the members");
+  const src = read("src/components/ThemeDive.tsx");
+  assert.match(src, /function Fold<T>/);
+  for (const what of ["Every company in the theme with its figures", "Latest dated headlines and filings for the theme", "The theme's median P/E over time"])
+    assert.ok(new RegExp(`<Fold[^\\n]*\\n?[^\\n]*label="${what.replace(/[()]/g, "\\$&")}"`).test(src) || src.includes(`<DataTable label="${what}" columns={cols} rows={shown}`) || src.includes(`(shown) => <DataTable label="${what}"`), what);
+  assert.match(src, /<h3 className="k-sub">The theme's median P\/E, week by week<\/h3>/);
+  assert.match(src, /Margins by year, the same \{hist\.n\} companies added together/);
+  assert.match(src, /rows=\{said\(rows\)\}/);
+  assert.match(src, /\{r === "IN" && <>\s*\n\s*<h3 className="k-sub">Promoter and named institutional holdings<\/h3>/);
+  assert.match(src, /const basisWords = \(b: string\) => b\.replace\(/);
+});
