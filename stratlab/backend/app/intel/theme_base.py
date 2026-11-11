@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 
 # the version of the membership rules (who is in a theme, which industries, which layers): part of every cached read's key, so a read kept
 # from before a deploy never keeps the old rules' companies or figures (R18: "Private banks" kept the public banks after the fix)
-RULES = 34                       # R34: the model rules that changed after R33 (a chip materials supplier is an ingredient maker; a model-named layer joins a map layer only when one layer has its model) apply to every kept check, placement and dive: whenever refine_model, by_model or a model rule changes, bump this; R33: a company with no model takes the one its map layer's name states (models_from_layer); R32: chip designers without fabs as fabless (theme_check.chip_designer), a layer named by how it earns joins the map's layer of its primary model, a market-value half with no shown company undone (unsplit_unshown); R31: lenders apart from developers and landlords, fabless vs IDM by owned fabs (theme_check.refine_model), a metals family's commodity as its sub-basis, a split-made layer of one primary model joins the map's (by_model 3b); R30: a kept placement's unknown models asked again once the companies' descriptions are kept (reask_unknown); R29: kinds of utility and of metals business as their own models (theme_check.refine_model); R21: every confirmed company in one of the map's layers (place_rest); R22: layer names fit, currencies, extra layers; R25: one revenue model a layer; R26: models from more evidence and checked by it, names after the split; R27: primary model, tags and confidence, comparable segments, no one-company layer; R28: the companies to place carry their own descriptions (theme_routes.describe_unplaced)
+RULES = 35                       # lane n2: a kept model of low confidence read again from the evidence as it is now (refine_kept), foundry words as contract making, family words (theme_check.model_confidence), retail vs platform (refine_model); R34: the model rules that changed after R33 (a chip materials supplier is an ingredient maker; a model-named layer joins a map layer only when one layer has its model) apply to every kept check, placement and dive: whenever refine_model, by_model or a model rule changes, bump this; R33: a company with no model takes the one its map layer's name states (models_from_layer); R32: chip designers without fabs as fabless (theme_check.chip_designer), a layer named by how it earns joins the map's layer of its primary model, a market-value half with no shown company undone (unsplit_unshown); R31: lenders apart from developers and landlords, fabless vs IDM by owned fabs (theme_check.refine_model), a metals family's commodity as its sub-basis, a split-made layer of one primary model joins the map's (by_model 3b); R30: a kept placement's unknown models asked again once the companies' descriptions are kept (reask_unknown); R29: kinds of utility and of metals business as their own models (theme_check.refine_model); R21: every confirmed company in one of the map's layers (place_rest); R22: layer names fit, currencies, extra layers; R25: one revenue model a layer; R26: models from more evidence and checked by it, names after the split; R27: primary model, tags and confidence, comparable segments, no one-company layer; R28: the companies to place carry their own descriptions (theme_routes.describe_unplaced)
 INDUSTRIES_DAYS = 30            # the AI's pick of a free-text theme's industries is made again after this long (at most monthly)
 FIGURES_MAX = 100               # companies the dive works figures out for: every one the AI named, then the largest of the base (R31: 60 -> 100; stored reads only, the deck built in under a second for 100 synthetic companies, the sector-figure worker bounded by its queue)
 DESCRIBE_MAX = 120              # base companies whose own one-line description is looked up for the page, largest first
@@ -806,7 +806,7 @@ SPLIT_MIN = 8                   # ...when it has at least this many, by revenue 
 SPLIT_PART = 3                  # each part of such a split holds at least this many companies
 
 
-R31_REFINE = ("property_development", "property", "construction", "manufacturing", "fabless", "unknown")      # models the R31 boundaries can make exact
+R31_REFINE = ("property_development", "property", "construction", "manufacturing", "fabless", "unknown", "retail")      # models the R31 boundaries can make exact
 
 
 LAYER_MODEL_NOT = (r"\bmaterials?\b|chemicals?|\bgases\b|\bwafers? (?:supplier|maker)|substrates?|"
@@ -845,14 +845,16 @@ def refine_kept(models: dict, conf, evidence, syms=()) -> tuple[dict, dict | Non
     """(models, confidence) with the R31/R32 boundaries applied to the models in R31_REFINE (theme_check.refine_model); a company whose model
     changes, or a fabless one of low confidence, has its confidence read again from its evidence, never below what it was (R32: a kept
     placement left 29 of the 37 chip designers out with low confidence). R36: `syms`, the map's companies: one the answer gave no model at
-    all is read as "unknown" is (live: Entegris, a chip materials supplier with no model, could sit in whatever layer it was placed in)."""
+    all is read as "unknown" is (live: Entegris, a chip materials supplier with no model, could sit in whatever layer it was placed in).
+    Lane n2 (the outside review of the live R33 decks: TSMC and UMC left out of the foundry layer as "way of earning not shown"): every kept
+    model of low confidence has its confidence read again from the evidence as it is now (a 20-F's Item 4 read since), never below it."""
     from .theme_check import model_confidence, refine_model
     models, out_conf = dict(models), (dict(conf) if isinstance(conf, dict) else None)
     absent = [(s_, "unknown") for s_ in dict.fromkeys(x for x in syms if x and x not in models)]
     for s_, md in list(models.items()) + absent:
         new = refine_model(md, evidence(s_)) if md in R31_REFINE else md
         old = (out_conf or {}).get(s_, "")
-        if new != md or (new == "fabless" and old == "low"):
+        if new != md or old == "low":
             models[s_] = new
             if new and new != "unknown":
                 out_conf = out_conf if out_conf is not None else {}

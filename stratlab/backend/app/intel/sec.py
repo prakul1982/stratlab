@@ -365,10 +365,13 @@ def revenue(facts: dict, kind: str, unit: str = "USD") -> dict[str, float]:
     profit plus cost of sales, or operating profit plus total costs)."""
     read = (lambda cs: flows(facts, cs, "annual", unit)) if kind == "annual" else (lambda cs: quarterly(facts, cs, unit))   # noqa: E731
     out: dict[str, float] = {}
+    seen: dict[str, list[float]] = {}
     for c in TOP_LINE:
         for end, v in read((c,)).items():
-            if end not in out or v > out[end]:
-                out[end] = v
+            seen.setdefault(end, []).append(v)
+    cost = read(COST_OF_SALES)
+    for end, vs in seen.items():
+        out[end] = top_line(vs, cost.get(end))
     for c in REVENUE_ELSE:
         for end, v in read((c,)).items():
             if v >= 0:              # a narrower line below nil is a deduction (grants netted off research costs), not sales
@@ -400,6 +403,32 @@ def revenue(facts: dict, kind: str, unit: str = "USD") -> dict[str, float]:
     for end in [e for e in out if out[e] and no_sales_in_statement(op, op_costs, e)]:      # a nil stays: it is the right figure
         del out[end]
     return out
+
+
+SCALE_SLIP = (1e3, 1e6)          # a figure tagged in thousands or millions too many (lane n2: Tigo Energy's 2025 10-K)
+
+
+def _slipped(big: float, small: float) -> bool:
+    """Whether `big` is `small` times a thousand or a million, to within half a percent: one figure filed at the wrong scale."""
+    return small > 0 and any(abs(big / small / k - 1) < 0.005 for k in SCALE_SLIP)
+
+
+def top_line(values: list[float], cost: float | None = None) -> float:
+    """A period's top line from the figures its top-line concepts give: the largest (a part can be tagged alone, never more than the
+    whole), except one that is another of them times a thousand or a million (lane n2, the outside review of the live R33 decks: Tigo
+    Energy's 10-K tags RevenueFromContractWithCustomerExcludingAssessedTax at $103,536 million beside Revenues of $103.5 million, and a
+    $57 m company showed $103.5 bn of revenue), or one more than 500 times the period's cost of sales whose thousandth part is 1 to 20
+    times it (the same slip with no second concept to show it)."""
+    vs = sorted((v for v in values if v is not None), reverse=True)
+    if not vs:
+        return 0.0
+    for v in vs:
+        if any(_slipped(v, w) for w in vs if w < v):
+            continue
+        if cost and cost > 0 and v > 500 * cost and 1 <= v / 1e3 / cost <= 20:
+            return v / 1e3
+        return v
+    return vs[-1]
 
 
 def no_sales_in_statement(op: dict[str, float], costs: dict[str, float], end: str) -> bool:
@@ -1278,7 +1307,7 @@ class SEC(Source):
         if not f or not f["doc"]:
             return None
         url = f"https://www.sec.gov/Archives/edgar/data/{int(subs.get('cik') or 0)}/{f['accn'].replace('-', '')}/{f['doc']}"
-        hit = self.cache.get(("business", url))
+        hit = self.cache.get(BUSINESS_KEY + (url,))
         if hit is not None:
             return hit or None
         with self._business_lock:
@@ -1296,7 +1325,7 @@ class SEC(Source):
                 raise SourceError(self.name, f"Couldn't reach {self.name.replace('The ', 'the ', 1)} ({e.__class__.__name__}).", busy=True) from None
             text = business_opening(report_lines(bytes(buf).decode("utf-8", "replace")))
         out = {"text": text, "form": f["form"], "filed": f["filed"], "url": url} if text else {}
-        self.cache.set(("business", url), out, 30 * 86400)
+        self.cache.set(BUSINESS_KEY + (url,), out, 30 * 86400)
         return out or None
 
     def release_doc(self, d: dict) -> tuple[str, str]:
@@ -1910,9 +1939,17 @@ def section(text: str, start: str, end: str, cap: int = 60000) -> str:
 # ---------- what a company says it does, from its annual report (themes: a profile or encyclopedia line too thin to show the business) ----------
 BUSINESS_BYTES = 6 * 1024 * 1024       # of an annual report read for the start of its business part: the part sits near the front
 BUSINESS_FORMS = ("10-K", "10-KT", "20-F", "40-F")
+BUSINESS_KEY = ("business", 2)         # lane n2: the reads kept before a 20-F's Item 4 was read (TSMC's and UMC's: nothing) are read again
 BUSINESS_PARTS = (     # (the part's heading at the start of a line, where it ends): a 10-K's Item 1 (SECTIONS), a 20-F's Item 4.B
     (r"(?:^|\n)\s*" + SECTIONS["business"][0], SECTIONS["business"][1]),
-    (r"(?:^|\n)\s*(?:item\s*4\.?\s*)?b\.?\s*business\s+overview\b", r"\n\s*(?:item\s*4\.?\s*)?c\.?\s*organi[sz]ational\s+structure"),
+    # lane n2 (the outside review of the live R33 decks: TSMC's and UMC's 20-F gave nothing, or a line on process technology): a 20-F's
+    # whole Item 4, "Information on the Company", whose history part often says first what the company is (UMC: "We are one of the
+    # world's largest independent semiconductor foundries") and whose business overview follows it...
+    (r"(?:^|\n)\s*item\s*4\.?\s*(?:—|-|:)?\s*information\s+on\s+the\s+company\b", r"\n\s*item\s*(?:4\s*a|5)\b"),
+    # ...else its business overview alone, the letter not always there ("Business Overview of the Company", TSMC), ending at the next
+    # lettered part or at Item 4A/5
+    (r"(?:^|\n)\s*(?:item\s*4\.?\s*)?(?:b\.?\s*)?business\s+overview\b(?:\s+of\s+the\s+company)?[ \t]*(?=\n)",
+     r"\n\s*(?:(?:item\s*4\.?\s*)?c\.?\s*organi[sz]ational\s+structure|item\s*4\s*a\b|item\s*5\b)"),
 )
 _BLOCK_END = re.compile(r"(?i)</(?:p|div|tr|td|th|li|h[1-6]|table|ul|ol)\s*>|<br\s*/?>")
 # a line about the report itself, not the business
@@ -1943,26 +1980,16 @@ def report_lines(raw: str) -> str:
     return "\n".join(x for x in lines if x)
 
 
-def business_opening(text: str, limit: int = 700) -> str:
-    """What a company says it does at the start of its annual report's business part (a 10-K's "Item 1. Business", a 20-F's "Business
-    overview"), from the report as lines (report_lines): the first paragraphs of prose after the heading, in the company's own words.
-    Sub-headings ("Overview", "General"), sentences about the report itself (forward-looking statements, defined terms) and about when
-    the company was formed are left out, and the opening starts at the first sentence that says what the company is or does; whole
-    sentences only, `limit` characters at most. "" when the part isn't found (the contents page names it too: the part is the first
-    heading followed by prose)."""
-    body = ""
-    for start, end in BUSINESS_PARTS:
-        for m in re.finditer(start, text, re.I):
-            rest = text[m.end(): m.end() + 20000]
-            e = re.search(end, rest, re.I)
-            rest = rest[: e.start()] if e else rest
-            if len(rest) > 1500:
-                body = rest
-                break
-        if body:
-            break
-    picks = []
-    for line in body.split("\n"):
+def _prose(body: str, limit: int) -> list[str]:
+    """The whole sentences of a part of a report, in order: sub-headings, page numbers, table cells and sentences about the report itself
+    left out; about 4 x `limit` characters of them at most."""
+    picks, lines = [], []
+    for line in body.split("\n"):              # a paragraph set as one line a printed line (TSMC's 20-F) is one paragraph again
+        if lines and len(lines[-1].split()) >= 8 and not lines[-1].rstrip().endswith((".", "!", "?", ":", "”", '"')) and line[:1].strip():
+            lines[-1] += " " + line
+        else:
+            lines.append(line)
+    for line in lines:
         if len(line.split()) < 12:               # a sub-heading, a page number, a table cell
             continue
         for x in _SENTENCE_END.split(line):
@@ -1971,7 +1998,37 @@ def business_opening(text: str, limit: int = 700) -> str:
                 picks.append(x)
         if sum(len(x) for x in picks) > 4 * limit:
             break
-    first = next((i for i, x in enumerate(picks) if _SAYS_WORK.search(x)), 0)
+    return picks
+
+
+def business_opening(text: str, limit: int = 700) -> str:
+    """What a company says it does at the start of its annual report's business part (a 10-K's "Item 1. Business", a 20-F's "Business
+    overview"), from the report as lines (report_lines): the first paragraphs of prose after the heading, in the company's own words.
+    Sub-headings ("Overview", "General"), sentences about the report itself (forward-looking statements, defined terms) and about when
+    the company was formed are left out, and the opening starts at the first sentence that says what the company is or does; whole
+    sentences only, `limit` characters at most. "" when the part isn't found (the contents page names it too: the part is the first
+    heading followed by prose)."""
+    fallback = None
+    for start, end in BUSINESS_PARTS:
+        body = ""
+        for m in re.finditer(start, text, re.I):
+            rest = text[m.end(): m.end() + 20000]
+            e = re.search(end, rest, re.I)
+            rest = rest[: e.start()] if e else rest
+            if len(rest) > 1500:
+                body = rest
+                break
+        if not body:
+            continue
+        picks = _prose(body, limit)
+        first = next((i for i, x in enumerate(picks) if _SAYS_WORK.search(x)), None)
+        if first is not None:
+            break
+        # lane n2: a part with no sentence that says what the company is or does (UMC's "Business Overview" opens on its fabs' quality)
+        # gives way to the next part that has one; the first part found stands when none has
+        fallback = fallback or picks
+    else:
+        picks, first = fallback or [], 0
     out, size = [], 0
     for x in picks[first:]:
         if size + len(x) + 1 > limit:

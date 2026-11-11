@@ -108,7 +108,7 @@ def test_the_feed_reads_the_front_of_the_latest_annual_report_once_and_keeps_onl
     assert got["form"] == "10-K" and got["filed"] == "2026-02-20" and got["url"] == url
     assert got["text"].startswith("Acme Materials, Inc. is a leading supplier of slurries")
     assert feed.business(_subs()) == got and calls == [url]                         # kept: the report is read once
-    assert len(json.dumps(feed.cache.get(("business", url)))) < 2000                # the few lines, never the report
+    assert len(json.dumps(feed.cache.get(sec.BUSINESS_KEY + (url,)))) < 2000                # the few lines, never the report
     none = {"cik": 1234, "filings": {"recent": {"form": ["8-K"], "filingDate": ["2026-03-01"], "accessionNumber": ["0001-26-000009"],
                                                 "primaryDocument": ["a8k.htm"]}}}
     assert feed.business(none) is None and calls == [url]                           # no annual report on file: nothing is read

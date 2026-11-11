@@ -184,22 +184,29 @@ class Wikipedia(Source):
     def company(self, name: str, cached: bool = False) -> dict | None:
         """The company's own article, or None. A search's top hit (or a page under the name) that isn't about this
         company (another of the group's companies, a person, a place) is never shown as its description. `cached`: only
-        what the company page already read (the deck's cover, DD-053), never a call to the site."""
+        what the company page already read (the deck's cover, DD-053), never a call to the site. Lane n2 (the outside review of the live R33
+        decks: the company pages of Ichor Holdings and TOYO Co still showed the Greek myth's "Ichor" and the tyre maker's "Toyo Tires"): an
+        article is the company's only when it passes the check the themes use (fits_company: no distinctive title word the name lacks, a text
+        about a company), for every caller (the company page, the deck's cover, the deep dive, the themes); an answer kept from before is
+        checked again as it is read, so a wrong one stored earlier is never shown again."""
         if not name:
             return None
         clean = _SUFFIX.sub("", name.strip()) or name
+
+        def own(r, title):
+            return bool(r) and is_about(clean, r.get("title") or title) and fits_company(name, {**r, "title": r.get("title") or title})
         try:
             q = {"action": "query", "list": "search", "srsearch": f"{clean} company", "srlimit": 1, "format": "json"}
             s = self.peek("/w/api.php", q, ttl=7 * 86400) if cached else self.fetch("/w/api.php", q, ttl=7 * 86400)
             hit = ((s or {}).get("query") or {}).get("search") or []
             if hit and is_about(clean, hit[0].get("title") or ""):
                 r = self._summary(hit[0]["title"], cached)
-                if r and is_about(clean, r.get("title") or hit[0]["title"]):
+                if own(r, hit[0]["title"]):
                     return r
         except SourceError:
             pass
         r = self._summary(clean, cached)
-        return r if r and is_about(clean, r.get("title") or clean) else None
+        return r if own(r, clean) else None
 
 
 # words that name no company on their own: a match on these alone could be any company of a group or a country

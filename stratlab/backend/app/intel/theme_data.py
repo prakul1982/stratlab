@@ -253,7 +253,10 @@ OTHER_INCOME_SHARE = 0.5      # income outside operations above half the year's 
 CHECKS = {"sign": "net profit positive, return on capital negative", "sign_page": "net margin and net profit of opposite signs",
           "other_income": "income outside operations above half the net profit", "net_unusual": f"net margin beyond ±{NET_UNUSUAL:.0f}%",
           "ebitda_unusual": f"EBITDA margin above {EBITDA_UNUSUAL:.0f}%", "neg_equity": "return on equity with negative equity",
-          "neg_book": "price to book with negative equity"}
+          "neg_book": "price to book with negative equity",
+          "revenue_scale": "revenue above 200 times market value and out of scale with the company's own profit or loss"}
+REVENUE_CAP_MAX = 200         # lane n2: a revenue above this many times the market value...
+REVENUE_PROFIT_MIN = 0.002    # ...whose years' profit or loss never reached this share of it is out of scale with the filing (a unit slip)
 
 
 def hold(r: dict, key: str, check: str) -> None:
@@ -286,11 +289,30 @@ def validate_row(r: dict, f: dict, last: dict | None) -> dict:
         hold(r, "net", "other_income")
     if net is not None and abs(net) > NET_UNUSUAL:
         hold(r, "net", "net_unusual")
+    if revenue_out_of_scale(r):
+        # lane n2 (the outside review of the live R33 decks: Tigo Energy, $103.5 bn of revenue beside a $57 m market value, its filing's
+        # revenue tagged a thousand times too large): the revenue is kept out of every sum, median and ranking until it is read again,
+        # with the margins and the capital worked out on it; the data-confidence page names the company and the check
+        r["held_revenue"] = {"value": r["revenue"], "checks": [CHECKS["revenue_scale"]]}
+        r["revenue"], r["capital_rev"] = None, None
+        hold(r, "ebitda", "revenue_scale")
+        hold(r, "net", "revenue_scale")
     bv = num(f.get("book_value"))
     if bv is not None and bv < 0 or f.get("net_worth_negative"):
         hold(r, "roe", "neg_equity")
         hold(r, "pb", "neg_book")
     return r
+
+
+def revenue_out_of_scale(r: dict) -> bool:
+    """Whether a row's revenue is more than REVENUE_CAP_MAX times its market value and no year's profit or loss on its page reached
+    REVENUE_PROFIT_MIN of it: a figure out of scale with the company's own filing (lane n2), not a thin-margin business."""
+    rev, cap = num(r.get("revenue")), num(r.get("cap"))
+    if not rev or not cap or cap <= 0 or rev <= REVENUE_CAP_MAX * cap:
+        return False
+    sizes = [abs(num(y.get("profit"))) for y in r.get("years") or [] if num(y.get("profit")) is not None]
+    sizes += [abs(num(r.get("profit")))] if num(r.get("profit")) is not None else []
+    return bool(sizes) and max(sizes) < REVENUE_PROFIT_MIN * rev
 
 
 def validate_model(r: dict, family: str) -> None:

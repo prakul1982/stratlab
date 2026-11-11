@@ -330,14 +330,18 @@ def model_family(model) -> str:
 # evidence (its official industry, its description, its segments' names, its filings' titles); a model not listed here needs none.
 MODEL_NEEDS = {
     "platform": r"marketplace|commission|advertis|take[- ]rate|listing fee|listings|classified|aggregator|gross merchandise|gmv|booking platform|"
-                r"connects (?:buyers|sellers|users|customers)|two-sided|e-?commerce platform|online travel|food delivery|ride-hailing",
+                r"connects (?:buyers|sellers|users|customers)|two-sided|(?:e-?)?commerce platforms?|online travel|food delivery|ride-hailing|"
+                r"third[- ]party sellers",
     "hardware_resale": r"resell|resale|reseller|distribut|system integrat|systems integrat|value[- ]added|channel partner|authori[sz]ed partner|"
                        r"install|trading|dealer|partner of (?:leading|global)|brands? such as",
     "distribution": r"distribut|wholesal|trading|trader|dealer|stockist|import|export|supply chain services",
     "retail": r"retail|store|outlet|showroom|e-?commerce|online shop|consumer brand|direct[- ]to[- ]consumer|supermarket|hypermarket",
     "royalties": r"royalt|licens|patent|intellectual property|\bip\b",
     "contract_manufacturing": r"contract manufactur|\bems\b|electronics manufacturing services|\bcdmo\b|\bcmo\b|\bcrams\b|\bodm\b|on behalf of|"
-                              r"to (?:the|their|customers'?) (?:designs|specifications)|job work|for (?:global )?(?:brands|oems)",
+                              r"to (?:the|their|customers'?) (?:designs|specifications)|job work|for (?:global )?(?:brands|oems)|"
+                              # lane n2: a foundry makes chips to its customers' designs (R27: foundries are contract makers)
+                              r"(?:dedicated|independent|pure[- ]play|specialty) (?:semiconductor )?foundr|\bas a foundry\b|foundry (?:services|business)|"
+                              r"designs provided by (?:them|its customers|our customers)",
     "lending": r"\bloan|lend|credit|financ|bank|nbfc|microfinance|mortgage|deposit",
     "underwriting": r"insur|underwrit|premium|reinsur|assurance",
     "broking": r"brok|intermediar|distribut|commission|agent|advis|wealth|insurance web|aggregator",
@@ -379,7 +383,9 @@ MODEL_NEEDS = {
 # segments, filings) have them, "medium" when only its official industry does, "low" when nothing does. A model with needs uses them too.
 MODEL_WORDS = {
     "project_services": r"project|consult|time[- ](?:and|&)[- ]material|fixed[- ]price|professional services|implementation|engineering services|"
-                        r"digital (?:transformation|engineering)|staffing|talent|\bit services\b",
+                        r"digital (?:transformation|engineering)|staffing|talent|\bit services\b|"
+                        # lane n2: "an engineering and technology services company", "a software service provider"
+                        r"\b(?:it|technology|software|engineering|digital|testing|validation)[- ](?:and [a-z]+ )?services?\b",
     "managed_services": r"managed (?:services|infrastructure)|outsourc|multi-year|annuity|application (?:maintenance|management|support)|"
                         r"infrastructure management|remote infrastructure|run (?:and|&) maintain|\bams\b",
     "software": r"software|\bsaas\b|subscription|licen[cs]|cloud-based|products? suite|own (?:platform|product)",
@@ -420,11 +426,25 @@ def model_confidence(model, evidence, said="") -> str:
     level = "high" if words and re.search(words, own, re.I) else "medium" if words and re.search(words, industry, re.I) else "low"
     if said in CONFIDENCE and CONFIDENCE.index(said) > CONFIDENCE.index(level):
         level = said
+    if level == "low" and family_shown(model, own):
+        level = "medium"           # lane n2: its own words show its family's way of earning (Wipro, "IT, consulting and business process services")
     if level == "low" and model == "fabless" and chip_designer(evidence):
         level = "medium"           # R32: a semiconductor industry and the company's design words are enough (the live R31 deck left 29 of 37 out)
     if level == "low" and model == "components" and chip_materials(own):
         level = "medium"           # R35: its own words name the materials it supplies for chips: the rule that made it an ingredient maker shows it
     return level
+
+
+def family_shown(model, own) -> bool:
+    """Whether a company's own words have words of another model of its model's family (lane n2, the outside review of the live R33 IT deck:
+    Wipro, "a global Information technology, consulting and business process services company", left out of "Large-scale outsourcing" as
+    its words named consulting, not managed services): a layer holds one family (theme_base.by_model), so the family shown is what its
+    figures need; never more than "medium"."""
+    fam = model_family(model)
+    if not fam:
+        return False
+    sibs = [m_ for m_, v in MODELS.items() if v[0] == fam and m_ != model]
+    return any(_words_of(m_) and re.search(_words_of(m_), str(own or ""), re.I) for m_ in sibs)
 
 
 def model_tags(tags, model, evidence) -> list[str]:
@@ -446,9 +466,10 @@ MODEL_SAYS = {
     "project_services": r"time[- ](?:and|&)[- ]material|fixed[- ]price (?:projects|contracts)|consulting fees|staff augmentation",
     "managed_services": r"managed services contracts|infrastructure management services|application maintenance (?:and support|contracts)",
     "bpo": r"business process (?:outsourcing|management)|\bbpo\b|contact cent(?:re|er) services|call cent(?:re|er) services",
-    "contract_manufacturing": r"contract manufactur|\bcdmo\b|\bcrams\b|electronics manufacturing services|\bems provider|\bosat\b|pure-play foundry",
+    "contract_manufacturing": r"contract manufactur|\bcdmo\b|\bcrams\b|electronics manufacturing services|\bems provider|\bosat\b|pure-play foundry|"
+                              r"(?:dedicated|independent) (?:semiconductor )?foundr",
     "fabless": r"fabless",
-    "platform": r"commission income|take rate|online marketplace|gross merchandise value",
+    "platform": r"commission income|take rate|online marketplace|gross merchandise value|marketplace (?:revenue|commissions?|fees)",
     "lending": r"interest income (?:on|from) loans|loan book|\bnbfc\b|non-banking financ",
     "life_insurance": r"life insurance company|life insurer",
     "general_insurance": r"general insurance company|general insurer|health insurer|non-life insurer",
@@ -586,6 +607,11 @@ def refine_model(model, evidence) -> str:
         if (out and not fab) or chip_designer(evidence):
             return "fabless"
         return model
+    # lane n2 (the outside review of the live R33 Consumer retail deck: online retailers and marketplace operators compared as one): a
+    # "retail" company whose own words say it earns commissions or fees on others' goods and nothing of selling stock of its own is a
+    # marketplace (platform); a retailer with a marketplace beside its stores stays a retailer, the marketplace its tag
+    if model == "retail" and re.search(MODEL_SAYS["platform"], own, re.I) and not re.search(RETAIL_STOCK, own, re.I):
+        return "platform"
     if model in ("manufacturing", "components") and re.search(METALS_INDUSTRY, industry, re.I):
         return one(("commodity_mining", "metal_processing"), REFINE_HINTS) or model
     return model
@@ -612,6 +638,8 @@ def chip_materials(own) -> bool:
     return bool(re.search(CHIP_MATERIALS, own, re.I)) and not re.search(_OWN_EQUIPMENT, own, re.I) and not re.search(_OWN_CHIPS, own, re.I)
 
 
+RETAIL_STOCK = (r"\bstores?\b|\bshops?\b|inventor(?:y|ies)|\bretailer|\bwe sell\b|\bsells\b|\bselling\b|merchandise|own[- ]brands?|private label|"
+                r"first[- ]party|\b1p\b|direct sales|supermarket|hypermarket")
 REFINE_HINTS = {"regulated_utility": r"transmission|distribution|electric utilit", "power_generation": r"power generation|electric services",
                 "power_trading": r"power trading|renewable", "commodity_mining": r"\bcoal\b|minerals|mining|pig iron|sponge iron|ferro ?alloys|"
                 r"diversified metals|precious metals", "metal_processing": r"products|pipes|tubes|castings|forgings|wires|fabricat",

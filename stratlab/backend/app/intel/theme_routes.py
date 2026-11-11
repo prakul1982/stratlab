@@ -91,7 +91,18 @@ def own_filings(region: str, sym: str) -> str:
     return ("From its own filings: " + ". ".join(keep[:FILING_LINES]) + ".")[:FILING_CHARS] if keep else ""
 
 
-ABOUT_WORDS, ABOUT_V = 30, 3          # R34: a stored description under 30 words, kept before this format, is read again once (in the same bounded batches)
+ABOUT_WORDS, ABOUT_V = 30, 4          # R34: a stored description under 30 words, kept before this format, is read again once (in the same bounded batches); lane n2: 4, one that doesn't say what the company does (says_work)
+# lane n2 (the outside review of the live R33 decks: UMC's article, "a Taiwanese company based in Hsinchu ... founded as Taiwan's first
+# semiconductor company", has 40 words and none of what it does, so its foundry business, said in its 20-F, never reached its model)
+_DOES = re.compile(r"\b(?:provid\w*|produc(?:es|ers?|ing|ts?)|manufactur\w*|makes?|makers?|sells?|selling|suppl(?:y|ies|iers?)|designs?|develops?|"
+                   r"operat(?:es|ors?)|offers?|distribut\w*|retail\w*|services?|foundr(?:y|ies)|licens\w*|leases?|lend\w*|insur\w*|earns?|revenues?|"
+                   r"customers?|clients?|subscri\w*|platforms?|stores?|brands?)\b", re.I)
+
+
+def says_work(about) -> bool:
+    """Whether a description says what the company does (provides, makes, sells, operates; its customers, services, stores...), not only
+    where it is and when it was founded (lane n2)."""
+    return bool(_DOES.search(str(about or "")))
 
 
 def thin_about(got: dict, region: str = "") -> bool:
@@ -102,7 +113,7 @@ def thin_about(got: dict, region: str = "") -> bool:
     about = str(got.get("about") or "")
     if got.get("owed"):
         return True
-    return got.get("v") != ABOUT_V and (len(about.split()) < ABOUT_WORDS or (region == "US" and not company_text(about)))
+    return got.get("v") != ABOUT_V and (len(about.split()) < ABOUT_WORDS or (region == "US" and not (company_text(about) and says_work(about))))
 
 
 def _business_read(sym: str) -> str:
@@ -168,7 +179,9 @@ def evidence_reader(region: str, names: dict):
                     w = {}
                 about = " ".join(x for x in (about, w.get("extract") or "") if x)
             owed = False
-            if len(about.split()) < ABOUT_WORDS:          # R35: still thin: what its latest annual report says it does (US), a few a minute
+            # R35: still thin: what its latest annual report says it does (US), a few a minute; lane n2: also when the words it has don't
+            # say what it does (UMC's article: where it is and when it was founded), a 20-F's Item 4 as a 10-K's Item 1
+            if len(about.split()) < ABOUT_WORDS or (region == "US" and not says_work(about)):
                 filed, owed = filed_business(region, sym)
                 about = " ".join(x for x in (about, filed) if x)
             hit = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "about": theme_check.clean_description(about), "industry": industry,
@@ -351,7 +364,7 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged): the one before carries
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged): the one before carries
 
 
 def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
@@ -368,6 +381,7 @@ def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
     names = {c["ticker"]: c.get("name") for v in out.get("value_chain") or [] for c in v.get("companies") or []}
     if ask is not None:                       # the background check, about to ask the AI: the companies it places carry their own words
         describe_unplaced(region, out, names, kept)
+        reread_weak(region, out, names, kept)
     about = _about_reader(region, names, 0)                           # stored descriptions only: nothing is read from a page here
     new, got = theme_base.place_rest(out, theme, lambda s_: about(s_), ask=ask, kept=kept, facts_of=_facts_reader(region))
     if ask is not None and got and got != kept and (got.get("names_for") or any(x.get("by") == "ai" for x in (got.get("assign") or {}).values())):
@@ -420,6 +434,43 @@ def describe_unplaced(region: str, out: dict, names: dict, kept: dict | None) ->
             evidence_reader(region, names)(want)
         except Exception as e:                  # a source busy: placed by the words it has, read on a later check
             print("theme: descriptions to place not read:", type(e).__name__, str(e)[:100])
+    return want
+
+
+def _stored_evidence(region: str, sym: str) -> dict:
+    try:
+        return db.json_value(db.get_setting(f"theme:evidence:{region}:{sym}"), {}) or {}
+    except Exception:
+        return {}
+
+
+def reread_weak(region: str, out: dict, names: dict, kept: dict | None) -> list[str]:
+    """Lane n2 (the outside review of the live R33 decks: TSMC and UMC left out of the foundry layer as "way of earning not shown", their
+    descriptions stored before a 20-F's Item 4 was read): before the background check works the models out, the map's companies whose kept
+    model is unknown or of low confidence and whose stored description is due a read again (thin_about) are read again once (evidence_reader:
+    the annual report a few a minute, the rest owed to a later check), largest first, at most PLACE_READS a check. The symbols read."""
+    kept = kept if isinstance(kept, dict) else {}
+    models = kept.get("models") if isinstance(kept.get("models"), dict) else {}
+    conf = kept.get("model_confidence") if isinstance(kept.get("model_confidence"), dict) else {}
+    cos = sorted({c["ticker"]: c for v in out.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}.values(),
+                 key=lambda c: (-(c.get("cap") or 0), c["ticker"]))
+    want = []
+    for c in cos:
+        s_ = c["ticker"]
+        if len(want) >= PLACE_READS:
+            break
+        if (models.get(s_) or "unknown") != "unknown" and conf.get(s_) != "low":
+            continue
+        got = _stored_evidence(region, s_)
+        if got.get("at") and thin_about(got, region):
+            want.append(s_)
+    if want:
+        for s_ in want:
+            EVIDENCE_CACHE.pop(f"theme:evidence:{region}:{s_}")
+        try:
+            evidence_reader(region, names)(want)
+        except Exception as e:                  # a source busy: read on a later check
+            print("theme: weak descriptions not read again:", type(e).__name__, str(e)[:100])
     return want
 
 
