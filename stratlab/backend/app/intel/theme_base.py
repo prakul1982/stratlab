@@ -847,7 +847,8 @@ def refine_kept(models: dict, conf, evidence, syms=()) -> tuple[dict, dict | Non
     placement left 29 of the 37 chip designers out with low confidence). R36: `syms`, the map's companies: one the answer gave no model at
     all is read as "unknown" is (live: Entegris, a chip materials supplier with no model, could sit in whatever layer it was placed in).
     Lane n2 (the outside review of the live R33 decks: TSMC and UMC left out of the foundry layer as "way of earning not shown"): every kept
-    model of low confidence has its confidence read again from the evidence as it is now (a 20-F's Item 4 read since), never below it."""
+    model of low confidence has its confidence read again from the evidence as it is now (a 20-F's Item 4 read since): "medium" at most
+    when the company's own words show the model, never below what it was."""
     from .theme_check import model_confidence, own_words_show, refine_model
     models, out_conf = dict(models), (dict(conf) if isinstance(conf, dict) else None)
     absent = [(s_, "unknown") for s_ in dict.fromkeys(x for x in syms if x and x not in models)]
@@ -860,8 +861,9 @@ def refine_kept(models: dict, conf, evidence, syms=()) -> tuple[dict, dict | Non
                 out_conf = out_conf if out_conf is not None else {}
                 out_conf[s_] = model_confidence(new, evidence(s_), old)
                 if old == "low" and new == md and own_words_show(new, evidence(s_)):
-                    # lane n2: a kept "low" (the AI's word on thinner evidence) gives way when the company's own words read since show the model
-                    out_conf[s_] = model_confidence(new, evidence(s_))
+                    # lane n2: a kept "low" (the AI's word on thinner evidence) gives way to "medium" when the company's own words read since
+                    # show the model, never above (the AI's word still caps it: R32)
+                    out_conf[s_] = model_confidence(new, evidence(s_), "medium")
     return models, out_conf
 
 
