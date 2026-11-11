@@ -5714,14 +5714,16 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
             rows = [[lbl, _chg(((prices.get("median") or {}).get(k) or {}).get("median")), _chg((ret.get(k) or {}).get("theme")), _chg((ret.get(k) or {}).get("bench")),
                      str(((prices.get("median") or {}).get(k) or {}).get("n", "–"))] for k, lbl in (("1M", "1 month"), ("3M", "3 months"), ("1Y", "1 year"), ("3Y", "3 years"))]
             lw = 6.6
-            s.add("table", (M, TOP, lw, 2.3), head=["Over", "Median company", "Theme, equal-weighted", bench, "Companies"], rows=rows, widths=[1.2, 1.4, 1.6, 1.3, 1.1])
+            # LIVE6-002: calendar periods to one last close, said in the table's head
+            over = f"Over, to {_day(prices['returns_to'])}" if prices.get("returns_to") else "Over"
+            s.add("table", (M, TOP, lw, 2.3), head=[over, "Median company", "Theme, equal-weighted", bench, "Companies"], rows=rows, widths=[1.2, 1.4, 1.6, 1.3, 1.1])
             if breadth:
                 s.add("table", (M, TOP + 2.55, lw, BOT - TOP - 2.55), head=["Companies that are", "Count", "Share"],
                       rows=[[lbl, f"{x['count']} of {x['n']}", f"{x['share']}%" if x.get("share") is not None else "–"] for lbl, x in breadth], widths=[3.6, 1.3, 1.0])
             line = prices.get("line")
             if line:
                 s.add("lines", (M + lw + 0.4, TOP, CW - lw - 0.4, BOT - TOP), title=f"The theme against {bench}, weekly, rebased to 100",
-                      cats=[_day(w)[:6] for w in line["weeks"]], fmt="num1",
+                      cats=[_day(w)[3:] for w in line["weeks"]], fmt="num1",        # "Nov 2026": the axis says the year (LIVE6-002)
                       series=[("Theme", line["theme"], BLUE), (bench, line["bench"], MUTED), ("Relative strength", line["rs"], ORANGE, True)])
         else:
             lw = 6.6

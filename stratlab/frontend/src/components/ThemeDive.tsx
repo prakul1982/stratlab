@@ -494,9 +494,9 @@ function PriceCards({ dive, prices, busy }: { dive: Dive; prices: Prices | null;
   }));
   return (
     <Card id="numbers-price" label="Price">
-      <CardHead title="Price" info="Price change from daily closes. Median: the middle company. Equal-weighted: the companies' weekly changes averaged, so each counts the same. Stage and Supertrend are from each company's stored page." />
+      <CardHead title="Price" info="Price change over calendar periods to the last close: one month is from the close on or before the same day a month earlier. Median: the middle company. Equal-weighted: the companies' weekly changes averaged, so each counts the same. Stage and Supertrend are from each company's stored page." />
       <DataTable label="The theme's price change against the market's index" columns={[
-        { key: "m", header: "Over", rowHeader: true, cell: (x: KV) => x.measure }, { key: "a", header: "Median company", numeric: true, cell: (x) => x.a },
+        { key: "m", header: prices?.returns_to ? `Over, to ${fmtDate(prices.returns_to)}` : "Over", rowHeader: true, cell: (x: KV) => x.measure }, { key: "a", header: "Median company", numeric: true, cell: (x) => x.a },
         { key: "b", header: "Theme, equal-weighted", numeric: true, cell: (x) => x.b }, { key: "c", header: prices?.benchmark || "Index", numeric: true, cell: (x) => x.c },
         { key: "d", header: "Companies", numeric: true, cell: (x) => x.d },
       ]} rows={retRows} rowKey={(x) => x.key} empty={busy ? "Reading prices…" : "No prices yet."} />
@@ -505,7 +505,7 @@ function PriceCards({ dive, prices, busy }: { dive: Dive; prices: Prices | null;
       {prices?.line && (
         <>
           <h3 className="k-sub">The theme against {prices.benchmark}, weekly, rebased to 100</h3>
-          <LineChart ariaLabel={`The theme's equal-weighted price line and relative strength against ${prices.benchmark}`} height={220} format={(v) => v.toFixed(1)} labels={prices.line.weeks.map((w) => fmtDate(w))}
+          <LineChart ariaLabel={`The theme's equal-weighted price line and relative strength against ${prices.benchmark}`} height={220} format={(v) => v.toFixed(1)} labels={prices.line.weeks.map((w) => fmtDate(w))} times={prices.line.weeks} ranges={false}
             lines={[{ label: "Theme", color: "var(--blue)", values: prices.line.theme }, { label: prices.benchmark, color: "var(--muted)", values: prices.line.bench },
               { label: "Relative strength (theme over index)", short: "Rel. strength", color: "var(--orange)", values: prices.line.rs, dash: "4 3" }]} legend baseline={100} />
         </>

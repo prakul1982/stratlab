@@ -61,6 +61,8 @@ export interface Prices {
   above200: { n: number; count: number; share: number | null }; near_high: { n: number; count: number; share: number | null }; near_low: { n: number; count: number; share: number | null };
   line: { weeks: string[]; theme: number[]; bench: number[]; rs: number[] } | null;
   returns: Record<string, { theme: number | null; bench: number | null }> | null;
+  /** the last close the theme's and the index's period changes run to (LIVE6-002) */
+  returns_to?: string | null;
 }
 export interface NewsRow { at: string; headline: string; company: string | null; symbol: string | null; source: string; url: string; kind: "news" | "filing" }
 export interface Listing { id: string; name: string; symbol: string | null; stage: string; industry: string | null; open: string | null; close: string | null; listing: string | null; groups: string[]; what: string }

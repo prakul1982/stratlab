@@ -7,9 +7,10 @@ whole history; the reduced figures are what the caller keeps for the rest of the
 from datetime import date, datetime, timedelta
 from statistics import median
 
-PERIODS = (("1M", 30), ("3M", 91), ("1Y", 365), ("3Y", 1095))
+# LIVE6-002: every period is a calendar one, counted back from the last close: one month is the close on or before the same day a month back
+# (the live SPY "1 month" was worked out over two weeks of a weekly line with gaps, and "3 months" over four)
+PERIODS = (("1M", 1), ("3M", 3), ("1Y", 12), ("3Y", 36))
 WEEKS = 160                                   # weekly closes kept for a company: three years and a bit
-WEEK_RETURNS = {"1M": 4, "3M": 13, "1Y": 52, "3Y": 156}
 NEAR_HIGH, NEAR_LOW = 0.05, 0.10             # within 5% below the 52-week closing high, within 10% above the closing low
 
 
@@ -29,13 +30,20 @@ def _pairs(bars: list[dict]) -> list[tuple[date, float]]:
     return sorted(out.items())
 
 
-def change(pairs: list[tuple[date, float]], days: int) -> float | None:
-    """The price change in percent from the last close on or before (last day - days) to the last close; None when the candles
-    don't reach back that far."""
+def months_back(d: date, months: int) -> date:
+    """The same day `months` calendar months before `d` (the month's last day when it is shorter: 31 May -> 30 Apr)."""
+    import calendar
+    y, m = divmod(d.year * 12 + d.month - 1 - months, 12)
+    return date(y, m + 1, min(d.day, calendar.monthrange(y, m + 1)[1]))
+
+
+def change(pairs: list[tuple[date, float]], months: int) -> float | None:
+    """The price change in percent from the last close on or before the same day `months` calendar months before the last close, to the
+    last close; None when the closes don't reach back that far. `pairs`: (date, close), oldest first (a weekly line's dated points too)."""
     if len(pairs) < 2:
         return None
     last_d, last_c = pairs[-1]
-    target = last_d - timedelta(days=days)
+    target = months_back(last_d, months)
     if pairs[0][0] > target:
         return None
     base = None
@@ -45,6 +53,11 @@ def change(pairs: list[tuple[date, float]], days: int) -> float | None:
         else:
             break
     return round((last_c / base - 1) * 100, 1) if base else None
+
+
+def week_of(d: date) -> int:
+    """The week a close is in, as the ordinal of that week's Friday (a weekend close joins the Friday before)."""
+    return (d + timedelta(days=(4 - d.weekday()) % 7 if d.weekday() <= 4 else -(d.weekday() - 4))).toordinal()
 
 
 def reduce_bars(bars: list[dict]) -> dict | None:
@@ -59,8 +72,7 @@ def reduce_bars(bars: list[dict]) -> dict | None:
     hi, lo = max(year), min(year)
     weekly: dict[int, float] = {}
     for d, c in pairs:
-        friday = d + timedelta(days=(4 - d.weekday()) % 7 if d.weekday() <= 4 else -(d.weekday() - 4))
-        weekly[friday.toordinal()] = c
+        weekly[week_of(d)] = c
     keys = sorted(weekly)[-WEEKS:]
     return {"last": last, "date": last_d.isoformat(), "ret": {k: change(pairs, n) for k, n in PERIODS},
             "above200": (last > sum(closes[-200:]) / 200) if len(closes) >= 200 else None,
@@ -91,10 +103,10 @@ def equal_weight(series: list[dict]) -> tuple[list[int], list[float]]:
     return weeks, line
 
 
-def _from_weeks(line: list[float], weeks: list[int], n: int) -> float | None:
-    if len(line) <= n or n <= 0:
-        return None
-    return round((line[-1] / line[-1 - n] - 1) * 100, 1)
+def week_label(week: int, end: date) -> str:
+    """A week's date as a chart says it: its Friday, or the last close when the week isn't over (LIVE6-002: the live line ended on
+    "13 Nov", a Friday after its last close)."""
+    return min(date.fromordinal(week), end).isoformat()
 
 
 def compute(members: list[tuple[str, str]], reduced: dict[str, dict | None], bench: dict | None, bench_name: str, pending: int = 0) -> dict:
@@ -113,7 +125,7 @@ def compute(members: list[tuple[str, str]], reduced: dict[str, dict | None], ben
         medians[k] = {"median": round(median(xs), 1), "n": len(xs)} if xs else None
     series = [have[s] for s, _ in members if s in have]
     out = {"companies": rows, "median": medians, "above200": share("above200"), "near_high": share("near_high"), "near_low": share("near_low"),
-           "pending": pending, "benchmark": bench_name, "line": None, "returns": None, "as_of": max((r["date"] for r in rows), default=None)}
+           "pending": pending, "benchmark": bench_name, "line": None, "returns": None, "returns_to": None, "as_of": max((r["date"] for r in rows), default=None)}
     if len(series) >= 2:
         weeks, line = equal_weight(series)
         if len(line) >= 5:
@@ -124,7 +136,11 @@ def compute(members: list[tuple[str, str]], reduced: dict[str, dict | None], ben
                 bw = [b[w] / b[w0] * 100 for w, _ in use]
                 tl = [v / use[0][1] * 100 for _, v in use]
                 rs = [round(t / x * 100, 2) for t, x in zip(tl, bw)]
-                out["line"] = {"weeks": [date.fromordinal(w).isoformat() for w, _ in use], "theme": [round(v, 2) for v in tl],
-                               "bench": [round(v, 2) for v in bw], "rs": rs}
-                out["returns"] = {k: {"theme": _from_weeks(tl, [], n), "bench": _from_weeks(bw, [], n)} for k, n in WEEK_RETURNS.items()}
+                end = max(_day(out["as_of"]) or date.min, _day((bench or {}).get("date")) or date.min)
+                days = [week_label(w, end) for w, _ in use]
+                out["line"] = {"weeks": days, "theme": [round(v, 2) for v in tl], "bench": [round(v, 2) for v in bw], "rs": rs}
+                # the theme and its index over the same calendar periods, to the same last week (LIVE6-002)
+                dated = [date.fromisoformat(d) for d in days]
+                out["returns"] = {k: {"theme": change(list(zip(dated, tl)), m), "bench": change(list(zip(dated, bw)), m)} for k, m in PERIODS}
+                out["returns_to"] = days[-1]
     return out
