@@ -107,6 +107,7 @@ APPROVED_LAYER = {
     "semis:KOPN": ('Makers of their own products', 'microdisplays and optics: R39 (lane s1-fit): moved from "Other" into the split\'s "Makers of their own products"; that layer no longer joins the map\'s "Memory and logic chip fabricators" whole for sharing its model: only companies whose own words share two of that layer\'s words join'),
     "semis:LPTH": ('Makers of their own products', 'optics (its words name no product): R39 (lane s1-fit): moved from "Other" into the split\'s "Makers of their own products"; that layer no longer joins the map\'s "Memory and logic chip fabricators" whole for sharing its model: only companies whose own words share two of that layer\'s words join'),
     "semis:STM": ('Makers of their own products', 'its stored words call it "a semiconductor contract manufacturing and design company": R39 (lane s1-fit): moved from "Other" into the split\'s "Makers of their own products"; that layer no longer joins the map\'s "Memory and logic chip fabricators" whole for sharing its model: only companies whose own words share two of that layer\'s words join'),
+    "retail:PLBY": ('Other', 'R39 (lane s1-fit): no words of its own in this fixture, and "Apparel and fashion retail chains", the largest, holds none of its industry (Miscellaneous Retail): it stays in Other (licensing, digital content, lingerie: not an apparel chain)'),
 }
 
 
@@ -166,7 +167,7 @@ def test_the_moves_are_the_intended_ones_only():
     for k in APPROVED_LAYER:
         by_theme.setdefault(k.split(":")[0], set()).add(k.split(":")[1])
     assert set(by_theme) == {"auto", "chem", "semis", "pharma", "realty", "retail"}
-    assert by_theme["retail"] == {"CPNG", "W", "VIPS", "FCFS", "EZPW", "SVV", "SPH", "CIMG", "FGPR"}
+    assert by_theme["retail"] == {"CPNG", "W", "VIPS", "FCFS", "EZPW", "SVV", "SPH", "CIMG", "FGPR", "PLBY"}     # R38 lane s1-fit: PLBY (on purpose)
     assert by_theme["semis"] == {"Q", "ENTG", "AXTI", "ALMU"} | {"QRVO", "VIAV", "AAOI", "IPGP", "LASR", "PLAB", "KOPN", "LPTH", "STM"} \
         and by_theme["realty"] == {"PROZONER"} and by_theme["pharma"] == {"ADVENZYMES"}      # R38 lane s1-fit added the nine makers (on purpose)
     every = {f"{t['key']}:{c['s']}": c for t in LAYERS["themes"] for c in t["companies"]}

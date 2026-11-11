@@ -114,8 +114,11 @@ def test_a_company_leaving_other_joins_the_largest_layer_only_when_it_holds_its_
     # neither: it stays in "Other", its way of earning shown
     out = by_model_one([big, small], {"ticker": "X", "industry": "Retail-Miscellaneous Retail", "what": "retail distribution of propane", "cap": 1})
     assert layer_of(out, "X")["layer"] == "Other" and row_of(out, "X")["model"] == "retail"
-    # no words at all: the largest layer, as before
+    # no words at all: R38 lane s1-fit (updated on purpose: live, a propane distributor and a pawnbroker with no stored words went to the
+    # largest retail layer): the largest only when it holds its industry, else "Other"
     out = by_model_one([big, small], {"ticker": "X", "industry": "Retail-Miscellaneous Retail", "what": "", "cap": 1})
+    assert layer_of(out, "X")["layer"] == "Other"
+    out = by_model_one([big, small], {"ticker": "X", "industry": "Retail-Family Clothing Stores", "what": "", "cap": 1})
     assert layer_of(out, "X")["layer"] == "Apparel chains"
 
 

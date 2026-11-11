@@ -56,7 +56,7 @@ KEEP = {
 }
 
 
-def replay_vc(t) -> list[dict]:
+def replay_vc(t, blank: bool = False) -> list[dict]:
     """The value chain when the live map is placed again from its kept answer (theme_base.place_rest, no AI): the map's own layers with
     the companies the kept placement left there (the halves of a layer split by market value joined again: the smaller half's companies the
     map placed stay in it), every company the split moved (and the "Other" group's) back in one official group, each company's words its
@@ -76,6 +76,8 @@ def replay_vc(t) -> list[dict]:
             if c.get("g"):
                 tags[c["s"]] = c["g"]
             if v.get("official") or (v.get("by_model") and not joined) or c.get("mv"):
+                if blank:          # its stored evidence holds no words of its own (live: no description read yet)
+                    words[c["s"]], row["what"] = "", ""
                 rest.append(row)
             else:
                 own.setdefault(base, {"layer": base, "description": "", "companies": []})["companies"].append(row)
@@ -257,3 +259,54 @@ def test_layer_diff_lists_every_company_whose_layer_changed(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "retail\tW\tWayfair\tOff-price\t->\tOnline sellers" in out and out.strip().endswith("1 companies changed layer")
     assert ld.main([str(before), str(tmp_path / "missing")]) == 2
+
+
+def test_a_company_with_no_words_joins_the_largest_only_when_it_holds_its_industry():
+    """Live R37 Consumer retail: Suburban Propane and FirstCash, whose stored evidence held no words of their own, went to "Off-price, dollar
+    and value-format retailers", the largest retail layer, which holds none of their industry (Retail-Miscellaneous Retail): they stay in
+    "Other". A company with no words whose industry the largest holds still joins it; with no industry known either, the largest, as before."""
+    t = _theme("retail")
+    blank = {"SPH", "FCFS", "EZPW"}
+    t2 = {**t, "companies": [{**{k: x for k, x in c.items() if k != "a"}, "w": ""} if c["s"] in blank else c for c in t["companies"]]}
+    got = layer_of(replay_vc(t2))
+    for s in blank:
+        assert got[s] == "Other", (s, got[s])
+    big = ("Apparel chains", "Chains selling clothing and footwear.", [("Retail-Family Clothing Stores", "sells clothing")] * 5)
+    small = ("Online retailers", "Companies selling online.", [("Retail-Catalog & Mail-Order Houses", "sells online")] * 3)
+    vc = [{"layer": n, "description": d, "companies": [{"ticker": f"{n[:3]}{i}", "industry": ind, "what": w, "cap": 10 - i} for i, (ind, w) in enumerate(cos)]}
+          for n, d, cos in (big, small)]
+    vc.append({"layer": "Other", "description": "", "official": True, "basis": "rest", "companies": [
+        {"ticker": "P", "industry": "Retail-Miscellaneous Retail", "what": "", "cap": 1},
+        {"ticker": "Q", "industry": "Retail-Family Clothing Stores", "what": "", "cap": 1},
+        {"ticker": "R", "industry": "", "what": "", "cap": 1}]})
+    models = {c["ticker"]: "retail" for v in vc for c in v["companies"]}
+    out = layer_of(B.by_model(vc, models, "Retail", confidence={s: "high" for s in models}))
+    assert out["P"] == "Other" and out["Q"] == "Apparel chains" and out["R"] == "Apparel chains"
+
+
+def test_with_every_movers_words_blanked_none_lands_in_a_layer_of_another_industry():
+    """Every company the split moves (and the "Other" group's) replayed with no words of its own, as live has them when its stored evidence
+    is missing: each ends in "Other", a layer named by how it earns, or a map layer that holds its official industry; never in a layer of
+    another industry by default. The review items hold too."""
+    for t in LAYERS["themes"]:
+        got = layer_of(replay_vc(t, blank=True))
+        inds, movers = {}, []
+        for c in t["companies"]:
+            v = t["layers"][c["x"]]
+            base = _HALF.sub("", v["layer"])
+            joined = v.get("by_model") and base != v["layer"]
+            if v.get("official") or (v.get("by_model") and not joined) or c.get("mv"):
+                movers.append(c)
+            else:
+                inds.setdefault(base, set()).add(B.key(c["i"]))
+        wrong = [(c["s"], c["i"], got[c["s"]]) for c in movers if got[c["s"]] in inds and B.key(c["i"]) not in inds[got[c["s"]]]]
+        assert not wrong, (t["key"], wrong)
+    retail = layer_of(replay_vc(_theme("retail"), blank=True))
+    for s in ("SPH", "FCFS", "EZPW", "FGPR", "CPNG", "W", "VIPS", "CHWY", "LULU", "JD"):
+        assert retail[s] == "Other", (s, retail[s])
+    auto = layer_of(replay_vc(_theme("auto"), blank=True))
+    for s in ("BOSCHLTD", "ASAHIINDIA", "VELJAN"):
+        assert auto[s] == "Component and systems suppliers", s
+    semis = layer_of(replay_vc(_theme("semis"), blank=True))
+    for s in ("MU", "INTC", "SKHY"):
+        assert semis[s] != "Semiconductor equipment", s

@@ -1044,7 +1044,8 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
         makes, sells, supplies...), or the company has no words; else the layer whose every company is of its official industry and whose
         name or description shares such a word, unless the layer's name states another way of earning ("Custom synthesis manufacturers"); else,
         when no layer of its family holds its industry or shares its words, it stays in "Other" (the map has no layer of its business).
-        R39 (lane s1-fit): first, when the largest holds none of its industry and a layer of the map is all of its industry (and most of the
+        R39 (lane s1-fit): a company with no words of its own joins the largest only when that layer holds its industry (or no industry is
+        known), else stays in "Other" (also when leaving a map layer with no layer mostly of its industry). First, when the largest holds none of its industry and a layer of the map is all of its industry (and most of the
         map's companies of it), that layer, of whatever way of earning (left out of its figures); and where the largest neither holds its
         industry nor shares its words and no layer of its family holds its industry, never the largest: the layer of its family sharing
         two of its words (not one named for another way of earning), else "Other". Everything else as R37.
@@ -1065,7 +1066,10 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
             if not ind or same(big):
                 return big
             mostly = [v for v in cands if same(v) * 2 > sizes.get(id(v), len(v["companies"]))]
-            return max(mostly, key=lambda v: sizes.get(id(v), 0)) if mostly else big
+            if mostly:
+                return max(mostly, key=lambda v: sizes.get(id(v), 0))
+            # R39 (lane s1-fit): no words of its own and the largest holds none of its industry: nothing places it there ("Other")
+            return big if kind_stems(own_text(ev(c))) else STAY
         # R39 (lane s1-fit; the live R37 Automotive deck: Bosch and Asahi India Glass, auto component makers the answer read as makers of their
         # own products, moved into "Tyre manufacturers"): when the largest layer of its family holds none of its industry and a layer of the
         # map is all of its industry and holds most of the map's companies of it, that layer, whatever way its companies earn; it is listed
@@ -1079,7 +1083,12 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
         if kin:
             return max(kin, key=lambda v: same(v))
         words = lambda v: kind_stems(f"{v.get('layer') or ''} {v.get('description') or ''}")      # noqa: E731
-        if not mine or same(big) or mine & words(big):
+        # R39 (lane s1-fit; live R37 Consumer retail: a propane distributor and a pawnbroker whose stored evidence held no words of their
+        # own went to "Off-price", the largest, which holds none of their industry): a company with no words joins the largest only when
+        # that layer holds its official industry (no industry known either: the largest, as before); else it stays in "Other"
+        if not mine:
+            return big if (same(big) or not ind) else STAY
+        if same(big) or mine & words(big):
             return big
         alike = [v for v in cands if sizes.get(id(v)) and same(v) == sizes[id(v)] and mine & words(v)
                  and stated_model(v.get("was") or v.get("layer") or "") in ("", models.get(c.get("ticker")))]
