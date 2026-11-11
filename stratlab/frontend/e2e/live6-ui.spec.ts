@@ -90,3 +90,63 @@ test("on the Themes page only the menu's Themes entry is highlighted (LIVE6-016)
   await expect(pill).not.toHaveClass(/\bhere\b/);
   await sane(page, errors);
 });
+
+// LIVE6-014: signed in, the analytics question (a band in the page's flow) pushed the whole app, side menu included, down 75-95 px.
+// LIVE6-013: at 1440 a docked Markets panel floated half the window high over the page. Both checked here at 1440 and 390.
+const ADS_ON = { ADS_ENABLED: "true", ADSENSE_CLIENT: "ca-pub-1234567890123456", ADSENSE_SLOT_PUBLIC: "1111111111", ADSENSE_SLOT_AI: "2222222222" };
+for (const width of [1440, 390]) {
+  test(`the analytics question never moves the app, and the Markets panel docks in its own column at ${width}px (LIVE6-013, LIVE6-014)`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: width < 500 ? 844 : 900 });
+    await page.route(/\/config\.js(\?|$)/, async (r) => {
+      const real = await (await r.fetch()).text();
+      await r.fulfill({ status: 200, contentType: "text/javascript", body: `${real}\nObject.assign(window.STRATLAB_CONFIG, ${JSON.stringify(ADS_ON)});\n` });
+    });
+    const errors = await open(page, "/invest", "Invest", FREE);
+    const ask = page.getByTestId("consent");
+    await expect(ask).toBeVisible({ timeout: 30_000 });
+    expect(await ask.evaluate((e) => getComputedStyle(e).position)).toBe("fixed");
+    const shell = (await page.locator(".shell").boundingBox())!;
+    expect(Math.round(shell.y), "the app starts at the top of the window").toBe(0);
+    const box = (await ask.boundingBox())!;
+    expect(Math.round(box.y + box.height), "along the window's foot").toBeGreaterThanOrEqual(page.viewportSize()!.height - 17);
+    await shot(page, "consent", info);
+    if (width < 500) { await sane(page, errors); return; }
+    // the panel: docked at 1440 in its own column, the full window high; the page and the question make room
+    await page.getByTestId("markets-launch").click();
+    const mw = page.getByTestId("market-watch");
+    await expect(mw).toBeVisible();
+    await expect(mw).toHaveClass(/\bmw-dock\b/);
+    const p = (await mw.boundingBox())!;
+    expect(Math.round(p.x + p.width)).toBe(1440);
+    expect(Math.round(p.height)).toBe(900);
+    const main = (await page.locator("#main").boundingBox())!;
+    expect(main.x + main.width, "the page reflows beside it").toBeLessThanOrEqual(p.x + 1);
+    const a2 = (await ask.boundingBox())!;
+    expect(a2.x + a2.width, "the question is left of the panel").toBeLessThanOrEqual(p.x + 1);
+    await shot(page, "markets-docked", info);
+    // it goes with the next page (the person's choice: docked, open)
+    await page.goto("/research/rotation");
+    await expect(mw).toBeVisible();
+    await sane(page, errors);
+  });
+}
+
+// LIVE6-012: the Themes search box's list is the shared library, never worded as the viewer's own reading
+test("the Themes search box offers the shared library as Ready to open, never Already read (LIVE6-012)", async ({ page }, info) => {
+  test.setTimeout(150_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  // a theme kept first, as someone else read it (the fake world maps it in a few seconds)
+  await open(page, "/research/themes?region=IN&q=" + encodeURIComponent("India steel and mining"), "Download", session);
+  const other = await page.context().newPage();                                                   // someone who never opened it
+  await other.setViewportSize({ width: 1440, height: 900 });
+  const errors = await open(other, "/research/themes?region=IN", "Map it", FREE);
+  await expect(other.locator(".side-account, .sidebar").getByText("Free").first()).toBeVisible();
+  await other.getByRole("textbox", { name: "Theme" }).fill("steel");
+  const list = other.getByTestId("theme-already");
+  await expect(list).toBeVisible({ timeout: 30_000 });
+  await expect(list).toContainText("Ready to open:");
+  await expect(list).not.toContainText(/Already read|, read \d/);
+  await expect(list.getByRole("button", { name: /· India, updated \d{1,2} [A-Z][a-z]{2}/ }).first()).toBeVisible();
+  await shot(other, "themes-library", info);
+  await sane(other, errors);
+});
