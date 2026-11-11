@@ -100,3 +100,12 @@ test("LIVE6-019: on a phone the heatmap's settings fold into one row with Option
   assert.match(phone, /@media \(max-width: 640px\)/);
   assert.match(phone, /\.hm-controls\.folded > \.k-field:not\(:has\(\.k-chipwrap\)\) \{ display: none; \}/);
 });
+
+test("LIVE6-020: a page with part of it on a plan gets the page's plan note only once it has loaded and has none of its own", () => {
+  const lock = src("components/PageLock.tsx");
+  assert.match(lock, /export const LOADING = 'main \[aria-busy="true"\], main \.k-working:not\(\.inline\)';/);
+  assert.match(lock, /setLoading\(partial && !!document\.querySelector\(LOADING\)\);/);
+  assert.match(lock, /if \(!locked \|\| own \|\| loading \|\| !gate \|\| !me\) return null;/);
+  assert.match(lock, /if \(!gate\.whole && !\(slot && slot\.isConnected\)\) return null;/);
+  assert.match(src("pages/IposPage.tsx"), /asOfPending=\{!d && !error\}/);                    // the as-of badge's place kept while loading
+});
