@@ -286,6 +286,9 @@ a.link { margin-inline: -2px; }
   background: var(--orange-soft); color: var(--ink); font-weight: 600; }
 .side-list a.side-feature > svg { color: var(--orange-ink); }
 .side-list a.side-feature:hover { border-color: var(--orange); background: var(--orange-soft); }
+/* LIVE6-016: on the Themes page the menu's own Themes entry is the one selected item; the pill is a plain outlined link there */
+.side-list a.side-feature.here { border-color: var(--line-2); background: none; font-weight: 500; color: var(--ink-2); }
+.side-list a.side-feature.here > svg { color: var(--ink-2); }
 .nb-dot { width: 16px; display: grid; place-items: center; flex: none; }
 .nb-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; position: relative; }   /* its hidden verdict words stay inside it (a long name put them 84px past the menu's edge) */
 .nb-pin { flex: none; display: inline-flex; color: var(--muted); }

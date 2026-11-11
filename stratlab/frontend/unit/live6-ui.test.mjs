@@ -81,3 +81,12 @@ test("LIVE6-014: signed in, the analytics question is an overlay along the foot 
   assert.doesNotMatch(css, /\.consent \{ position: relative/);
   assert.doesNotMatch(css, /body:has\(\.shell\) \.mw-launch \{ bottom: calc\(16px \+ env/);   // the Markets button rises above the bar again
 });
+
+test("LIVE6-016: on the Themes page only the menu's Themes entry is highlighted; the pill is a plain link there", () => {
+  const shell = src("components/Shell.tsx"), css = src("styles.css");
+  assert.match(shell, /className=\{`side-feature\$\{path\.startsWith\(THEMES\) \? " here" : ""\}`\}/);
+  const here = css.match(/\.side-list a\.side-feature\.here \{([^}]*)\}/)?.[1] ?? "";
+  assert.match(here, /background: none/);
+  assert.match(here, /border-color: var\(--line-2\)/);                 // no orange edge: it doesn't read as selected
+  assert.doesNotMatch(here, /orange/);
+});
