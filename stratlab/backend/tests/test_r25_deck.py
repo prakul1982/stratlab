@@ -124,12 +124,16 @@ def test_every_count_beside_a_layer_figure_is_n_of_its_companies(name, v, slides
                 continue
             at = b["head"].index("Companies")
             for r in plain(b["rows"]):
+                # lane m1 (updated on purpose): the cell is the companies in the layer's calculations, "of" those it lists where some are
+                # left out ("14 of 17"); each figure's count is of the first
+                own, _, listed = str(r[at]).partition(" of ")
+                assert not listed or int(own) < int(listed), (s.title, r[0], r[at])
                 for cell in r[at + 1:]:
                     for k, of in re.findall(r"\((\d+)(?: of (\d+))?\)", str(cell)):
                         if of:                                  # never "6" beside "15% (5)": "(5 of 6)", or the layer's own count alone
-                            assert int(of) == int(r[at]) and int(k) < int(of), (s.title, r[0], cell)
+                            assert int(of) == int(own) and int(k) < int(of), (s.title, r[0], cell)
                         else:
-                            assert int(k) == int(r[at]), (s.title, r[0], cell)
+                            assert int(k) == int(own), (s.title, r[0], cell)
     for a, b in re.findall(r"(\d+) of (\d+)\b", texts(slides)):
         assert int(a) <= int(b), (a, b)
 
@@ -235,7 +239,7 @@ def test_the_contents_lists_the_notes_page_and_references_point_at_it():
 
 # ---------- 5. the version ----------
 def test_the_deck_version_is_27_so_kept_deck_files_are_made_again_once():
-    assert deck.THEME_DECK_VERSION == 44                     # R35 bumped it (R25's test, updated: a new release makes kept files again)
+    assert deck.THEME_DECK_VERSION == 45                     # R35 bumped it (R25's test, updated: a new release makes kept files again)
 
 
 # ---------- 6. the live R24 decks: a layer's columns follow its family; notes name only the families shown ----------

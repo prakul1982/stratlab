@@ -99,8 +99,8 @@ def test_a_layer_page_says_who_is_in_its_calculations_and_why_each_other_is_not(
     # thirty long names take more than two lines, and six of each group still do: three of each, the count of the rest, and the appendix page
     # that names every one
     assert roll_note == ("In the layer's calculations (20 of 30): " + ", ".join(f"{run} {i}" for i in range(3)) + " and 17 more. "
-                         "Left out (10): " + ", ".join(f"{tag} {i}" for i in range(3)) + " and 4 more (other business); "
-                         f"Vague 0, Vague 1 (way of earning not shown); Stranger 0 (not confirmed). Every one: appendix, p. {at}.")
+                         "Left out (10): other business: " + ", ".join(f"{tag} {i}" for i in range(3)) + " and 4 more; "       # lane m1: the reason first (updated on purpose)
+                         f"way of earning not shown: Vague 0, Vague 1; not confirmed: Stranger 0. Every one: appendix, p. {at}.")
     assert len(deck.wrap(roll_note, deck.BODY_MIN, deck.CW)) <= deck.ROLL_LINES
     assert not any(p.startswith("(not confirmed)") for p in note)             # no "(not confirmed)" row on the page: the roll's line says it
     text = next(b for b in page.blocks if b["kind"] == "text" and roll_note in b["paras"])
@@ -113,8 +113,8 @@ def test_a_layer_page_says_who_is_in_its_calculations_and_why_each_other_is_not(
     assert table["head"] == ["Layer", "In its calculations", "Left out, and why"] and [r[0] for r in table["rows"]] == ["Large outsourcing"]
     row = table["rows"][0]
     assert row[1] == "20 of 30: " + ", ".join(f"{run} {i}" for i in range(20))                  # every one named
-    assert row[2] == ("10: " + ", ".join(f"{tag} {i}" for i in range(7)) + " (other business); Vague 0, Vague 1 (way of earning not shown); "
-                      "Stranger 0 (not confirmed)")
+    assert row[2] == ("10: other business: " + ", ".join(f"{tag} {i}" for i in range(7)) + "; way of earning not shown: Vague 0, Vague 1; "
+                      "not confirmed: Stranger 0")
     lay = deck.table_layout(table, table["box"][2], table["box"][3])
     assert len(lay["rows"]) == 1                                                               # the row is on its page whole
     assert "who is in each layer's calculations" in texts([s for s in slides if s.title == "Contents"])
@@ -133,7 +133,7 @@ def test_a_short_roll_stays_on_the_layer_page_and_adds_no_appendix_page():
     page = next(s for s in slides if s.title.endswith("· Retail and commercial lenders"))
     assert "(5 in the layer's calculations)" in page.subtitle
     assert ("In the layer's calculations (5 of 7): Lendwell 0, Lendwell 1, Lendwell 2, Lendwell 3, Lendwell 4. "
-            "Left out (2): Vaguebank 0, Quietfin 0 (way of earning not shown).") in " ".join(paras(slides, page.title))
+            "Left out (2): way of earning not shown: Vaguebank 0, Quietfin 0.") in " ".join(paras(slides, page.title))
     assert not any(s.title.startswith(deck.ROLL_TITLE) for s in slides)
     every_rule("banks, a short roll", v, slides)
 
@@ -171,8 +171,8 @@ def test_the_roll_counts_as_the_header_does_and_names_each_reason():
     assert deck.layer_head(layer, cos, lambda x: f"₹{x} cr").startswith("8 companies (4 in the layer's calculations)")
     line, cut = deck.roll_line(ins, outs)
     assert not cut and line == ("In the layer's calculations (4 of 8): Alpha; Beta (figures in part), Gamma (figures in part), Wide (whole company: "
-                                "revenue only). Left out (4): Other (other business); Unknown (way of earning not shown); Unsure (not confirmed); "
-                                "Nofig (no revenue figure).")
+                                "revenue only). Left out (4): other business: Other; way of earning not shown: Unknown; not confirmed: Unsure; "
+                                "no revenue figure: Nofig.")
     # a layer whose every company is the whole company's keeps them in its medians: no "revenue only"
     assert deck.layer_roll({**layer, "stats_over": "all"}, cos)[0][3] == ("Wide", "")
 
@@ -246,7 +246,7 @@ def test_the_kept_peer_medians_are_one_a_run_that_differs_and_never_more_than_a_
     assert list(store) == ["theme:peers:IN:speciality-chemicals"] and len(json.loads(store["theme:peers:IN:speciality-chemicals"])) == D.PEER_RUNS
     assert len(store["theme:peers:IN:speciality-chemicals"]) < 600                          # bounded storage
     assert T.sources("US", "Speciality chemicals").peer_history("x", {"d": "2026-10-01", "peers": 30.0, "k": 9}) == [{"d": "2026-10-01", "peers": 30.0, "k": 9}]
-    assert D.DIVE_TEXT == 6
+    assert D.DIVE_TEXT == 7          # lane m1 bumped it (updated on purpose)
 
 
 # ---------- 4. a median row's figure with its count is never cut ----------
@@ -361,4 +361,4 @@ def test_layer_names_take_the_room_the_figure_columns_dont_use_and_one_still_cut
     key = deck.short_names(head, tight, [2.5, 0.9, 1.2, 1.15, 0.95, 0.95, 0.9, 0.85, 0.8, 0.8], 1)
     assert key.startswith("Layer names in full: ") and key.endswith(" = Other IT service companies.")
     assert deck.short_names(head, rows[:1], widths, 1) == "" and deck.short_names(head, rows, widths, None) == ""
-    assert deck.THEME_DECK_VERSION == 44
+    assert deck.THEME_DECK_VERSION == 45
