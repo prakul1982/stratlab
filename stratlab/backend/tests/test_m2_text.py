@@ -329,13 +329,13 @@ def test_a_theme_with_no_comparable_peers_names_the_price_date_of_its_own_pe():
     v, slides = steel()
     val = v["sections"]["valuation"]
     assert not D.relative_ok(val) and val["price_at"] == str(v["as_of"])[:10]
-    priced = f"prices at the {val['price_at']} close"
+    priced = f"prices at the {deck._day(val['price_at'])} close"                                 # a day as the deck writes days
     lines = [x for x in said(slides) if "The theme's own median P/E" in x]
     assert len(lines) >= 2 and all(priced in x for x in lines), lines                              # the findings and the valuation page
     bare = {"pe": {"median": 20.0, "n": 5, "min": 10.0, "max": 30.0}}
     assert "prices at" not in deck.descriptive_line(bare)                                          # no day held: none said
     assert deck.descriptive_line({**bare, "price_at": "2026-11-09"}).endswith(
-        "5 companies, 10.0x to 30.0x), prices at the 2026-11-09 close; comparable peers for 0 of 5, so no relative figure")
+        "5 companies, 10.0x to 30.0x), prices at the 09 Nov 2026 close; comparable peers for 0 of 5, so no relative figure")
 
 
 def test_the_versions_are_bumped_so_kept_dives_and_decks_are_made_again():

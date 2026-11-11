@@ -49,7 +49,7 @@ def test_the_theme_deck_carries_every_part_of_the_page():
     v = full_view()
     slides, _ = deck.theme_plan(v)
     titles = [s.title for s in slides]
-    page = ["Contents", "Key findings", "Data confidence", "Worth a watch",
+    page = ["Contents", "Key findings", "Data confidence", "Dated company updates",
             "The value chain by layer",                 # ChainCard
             *[f"Layer {i + 1} · {x['layer']}" for i, x in enumerate(v["layers"])],      # LayerCard, every layer with companies
             # (operating figures: one company files them in this fixture, under 3: a line in data confidence, no page, R21)
@@ -64,7 +64,7 @@ def test_the_theme_deck_carries_every_part_of_the_page():
         assert gone not in titles, gone
     words = texts(slides)
     for must in ("ore turned into cells", "BATT", "Digs it out.", "Makes cells.", "Subsidy scheme extended", "filed operating figures between results",
-                 "Auditor resigned", "Quarterly results", "Written by AI from general knowledge"):
+                 "Resignation of an auditor", "Quarterly results",          # changed on purpose (m2): the event as a neutral fact "Written by AI from general knowledge"):
         assert must in words, must
     lead = [r[0].removesuffix(" (whole company)") for s in slides if s.title.startswith("Every company's figures") for b in s.blocks if b["kind"] == "table" for r in b["rows"]]
     assert sorted(lead) == sorted(x["name"] for x in v["sections"]["leaders"] if v["status"].get(x["symbol"]) != "unverified")      # confirmed, once each

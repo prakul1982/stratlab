@@ -359,6 +359,8 @@ def test_layer_names_take_the_room_the_figure_columns_dont_use_and_one_still_cut
     # where the figure columns leave no room (each carries its count), a name not shown as written is given in full under the table
     tight = [r[:2] + [x + " (59 of 90)" for x in r[2:]] for r in rows]
     key = deck.short_names(head, tight, [2.5, 0.9, 1.2, 1.15, 0.95, 0.95, 0.9, 0.85, 0.8, 0.8], 1)
-    assert key.startswith("Layer names in full: ") and key.endswith(" = Other IT service companies.")
+    # changed on purpose (m2): no column is narrower than its cells need whole, so "Other IT service companies" is shown as written
+    assert key.startswith("Layer names in full: ") and key.endswith(" = Digital engineering and consulting projects for governments.")
+    assert "Other IT service companies" not in key
     assert deck.short_names(head, rows[:1], widths, 1) == "" and deck.short_names(head, rows, widths, None) == ""
     assert deck.THEME_DECK_VERSION == 45          # m2 bumped it (updated on purpose)

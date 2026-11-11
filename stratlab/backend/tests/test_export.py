@@ -59,14 +59,14 @@ def test_the_theme_deck_has_the_cover_chain_layers_members_claims_and_notes():
     """DECK (5 Nov): the deck follows the page part by part: each part opens with a section slide, each layer has its own slide."""
     slides, footer = deck.theme_plan(view())
     titles = [s.title for s in slides]
-    # R16 (owner, 7 Nov): changed on purpose; findings up front (key findings, data confidence, worth a watch), the companies' figures in the
+    # R16 (owner, 7 Nov): changed on purpose; findings up front (key findings, data confidence, dated company updates), the companies' figures in the
     # core, every company's own words in the appendix; the cover counts the companies the figures are for instead of the AI's additions
     # R17 (owner, 7 Nov): changed on purpose; data confidence carries the table of counts each total is of (under the checks, or on a page of
     # its own when it doesn't fit), and the Industry economics part follows the value chain
     # R18 (owner, 7 Nov: the core ran 41 pages): changed on purpose; one contents page in place of a divider before each part, each layer on one
     # page, every company's figures in the appendix
     # R19 (owner, 7 Nov: "just keep the important ones not everything"): changed on purpose; no overview page (its words are in the notes), no
-    # "Worth a watch" when no company meets the rules, no page for a part with nothing important (an empty sub-theme, margins over time, the
+    # "Dated company updates" when no company meets the rules, no page for a part with nothing important (an empty sub-theme, margins over time, the
     # balance sheet when it shows nothing), the notes on one page and the appendix one table of every confirmed company's figures
     assert titles == ["Test theme", "Contents", "Key findings", "Data confidence",
                       "The value chain by layer", "Layer 1 · Mining", "Layer 2 · Cells", "Layers side by side", "What moved the aggregate margin",

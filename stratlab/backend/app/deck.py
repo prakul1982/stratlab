@@ -2302,7 +2302,7 @@ def descriptive_line(val: dict) -> str:
     k = (((val.get("peers") or {}).get("pe") or {}).get("n")) or 0
     head = "The theme's own median " + ", ".join(parts) if parts else "The theme's own valuation"
     # m2 (live R32 Telecom: the one deck of 14 whose P/E line named no price date): the theme's own multiples are on prices too
-    priced = f", prices at the {val['price_at']} close" if parts and val.get("price_at") else ""
+    priced = f", prices at the {_day(val['price_at'])} close" if parts and val.get("price_at") else ""
     return f"{head}{priced}; comparable peers for {k} of {pe_n}, so no relative figure"
 
 
@@ -2330,14 +2330,14 @@ def dated_peers(v: dict) -> dict:
     named no price date): the P/E one carries the close its prices are of, the dive's own or, for a dive kept from before, the deck's
     "as of" day. publication_gate set it after the slides were written, so no line had it."""
     val = (v.get("sections") or {}).get("valuation") or {}
-    peers = val.get("peers") or {}
-    if isinstance(peers.get("pe"), dict) and not peers["pe"].get("as_of") and v.get("as_of"):
-        peers["pe"]["as_of"] = str(v["as_of"])[:10]
+    found = val.get("peers") or {}
+    if isinstance(found.get("pe"), dict) and not found["pe"].get("as_of") and v.get("as_of"):
+        found["pe"]["as_of"] = str(v["as_of"])[:10]
     # m2: the valuation's own price day (descriptive_line: a theme with no comparable peers states its own P/E, on the same close)
-    day = (peers.get("pe") or {}).get("as_of") if isinstance(peers.get("pe"), dict) else None
+    day = (found.get("pe") or {}).get("as_of") if isinstance(found.get("pe"), dict) else None
     if val and not val.get("price_at") and (day or v.get("as_of")):
         val["price_at"] = str(day or v["as_of"])[:10]
-    return peers
+    return found
 
 
 def peer_moved_line(pp: dict) -> str:
@@ -2510,7 +2510,9 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> li
         with_, without = ch.get("net_with"), ch.get("net_without")
         moved = with_ is not None and without is not None and _pc(with_) != _pc(without)      # said only when leaving them out changes it (R18)
         rows.append(["Net above EBITDA margin", f"Net margin above the EBITDA margin at {_n(len(ch['one_off']), 'company', 'companies')}: {oo}.",
-                     "Marked † and left out of net-margin medians" + (f": the median net margin is {_pc(without)} without them, {_pc(with_)} with them." if moved else ".")])
+                     # m2: the flag has no day, so it is here and not among the dated updates; no cause is named (ANOMALY_WHY, R27)
+                     "Marked † and left out of net-margin medians" + (f": the median net margin is {_pc(without)} without them, {_pc(with_)} with them" if moved else "")
+                     + f"; {ANOMALY_WHY}."])
     if ch.get("held"):             # R30: a figure that failed a check: named with the check, never a cause
         hd = ch["held"]
         said = "; ".join(f"{x['name']}, {HELD_WORDS.get(x['key'], x['key'])} {_pc(x['value']) if x['key'] != 'pb' else str(x['value']) + 'x'} "
