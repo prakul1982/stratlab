@@ -14,7 +14,7 @@ register("data:text/javascript," + encodeURIComponent(`export async function res
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 const W = await import("../src/lib/watch.ts");
 const L = await import("../src/lib/watchLayout.ts");
-const H = await import("../src/lib/marketHours.ts");
+const H = await import("../src/lib/marketDay.ts");
 
 const market = (id, tz, open, close, extra = {}) => ({ id, name: id, venues: "", currency: "INR", symbol: "", tz, hours: open ? { open, close, days: "Mon–Fri" } : null,
   what: "", costs: "", brokerage: 0, status: "live", max_days: null, holidays: [], ...extra });

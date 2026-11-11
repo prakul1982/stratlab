@@ -230,7 +230,7 @@ export const dayText = (iso: string): string => new Date(`${iso}T12:00:00Z`).toL
 /** When the newest price on the list was read, for the panel's foot: "Prices as of 12:55:04 IST"; null before any price
  * (LIVE4-009: every other price block says when, the Market Watch panel said nothing). `ats` are the quotes' times and the
  * moment the last tick came in. With every market on the list shut it is "Closed · last close Fri 6 Nov": `lastDay` is the last
- * day those markets traded (marketHours.lastTradingDay), never the day the prices were read (owner, 9 Nov: "last close Sun", the
+ * day those markets traded (marketDay.lastTradingDay), never the day the prices were read (owner, 9 Nov: "last close Sun", the
  * day he looked). Without it the newest price's own day is said, moved back to the Friday when that is a Saturday or a Sunday. */
 export function asOfLine(ats: (string | number | null | undefined)[], tz = "Asia/Kolkata", closed = false, lastDay?: string | null): string | null {
   if (closed && lastDay) return `Closed · last close ${dayText(lastDay)}`;
@@ -248,7 +248,7 @@ export function asOfLine(ats: (string | number | null | undefined)[], tz = "Asia
   return `Prices as of ${t} ${tz === "Asia/Kolkata" ? "IST" : tz === "America/New_York" ? "ET" : ""}`.trim();
 }
 
-/** The newest of the last trading days of a list's markets (each from marketHours.lastTradingDay; null and unknown ones left out). */
+/** The newest of the last trading days of a list's markets (each from marketDay.lastTradingDay; null and unknown ones left out). */
 export const newestDay = (days: (string | null | undefined)[]): string | null => days.filter((d): d is string => !!d).sort().pop() ?? null;
 
 /** A list's name as its tab and every sentence about it say it. A name that is only a number ("1", "2") reads "List 1": beside its

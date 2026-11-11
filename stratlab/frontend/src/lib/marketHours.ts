@@ -8,7 +8,7 @@ const DAY = 24 * 60;
 const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 /** The wall clock in a time zone: weekday (0 = Sunday), minutes past midnight, and the zone's offset from UTC in minutes. */
-function wall(now: Date, tz: string) {
+export function wall(now: Date, tz: string) {
   const parts = new Intl.DateTimeFormat("en-GB", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", weekday: "short",
     hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(now);
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "0";
@@ -28,7 +28,7 @@ function zoned(iso: string, mins: number, tz: string, offset: number): Date {
   return off === offset ? guess : new Date(local - off * 60000);
 }
 
-const hm = (s: string) => { const [h, m] = s.split(":").map(Number); return h * 60 + m; };
+export const hm = (s: string) => { const [h, m] = s.split(":").map(Number); return h * 60 + m; };
 
 export function inWords(mins: number): string {
   const total = Math.round(mins);       // whole minutes first: 1439.6 is a day, not "23h 60m"
@@ -95,25 +95,6 @@ export function marketState(m: Market, now = new Date()): MarketState {
   const short = open ? "open" : closedFor ?? (until < DAY ? `opens ${inWords(until)}` : `opens ${change.toLocaleDateString("en-GB", { weekday: "short" })}`);
   return { ...base, open, closedFor, short, change, hoursLocal: `${m.hours.open}–${m.hours.close} local, ${m.hours.days}`,
     hoursYours: `${yours(todayOpen)}–${yours(todayClose)} your time` };
-}
-
-/** The last day the market traded, as a date in the exchange's own calendar ("2026-11-06"): today once today's session has opened,
- * else the nearest earlier day that is neither a weekend day nor one of the exchange's holidays. Null for a market that never shuts
- * (crypto). Forex and the global commodity futures trade from Sunday evening to Friday 17:00 New York time, so a Saturday, and a
- * Sunday before the open, is Friday's (and from that open it is Monday's session). What a "last close" label says (owner, 9 Nov: Market Watch said "last close Sun"). */
-export function lastTradingDay(m: Market, now = new Date()): string | null {
-  if (m.id === "CRYPTO") return null;
-  if (m.id === "FX" || !m.hours?.open || !m.hours?.close) {
-    const w = wall(now, "America/New_York");
-    const sunOpen = (m.id === "CMDTY" ? 18 : 17) * 60;
-    // the session that opens on Sunday evening is Monday's
-    return w.iso(w.wd === 6 ? -1 : w.wd === 0 ? (w.min < sunOpen ? -2 : 1) : 0);
-  }
-  const w = wall(now, m.tz), shut = new Set(m.holidays ?? []);
-  const trades = (n: number) => { const d = (((w.wd + n) % 7) + 7) % 7; return d >= 1 && d <= 5 && !shut.has(w.iso(n)); };
-  let n = trades(0) && w.min >= hm(m.hours.open) ? 0 : -1;
-  while (!trades(n) && n > -30) n--;
-  return w.iso(n);
 }
 
 /** Minutes since the market closed today (null when it hasn't traded today or is still open): how long its closing

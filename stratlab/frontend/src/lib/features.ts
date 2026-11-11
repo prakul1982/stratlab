@@ -84,7 +84,7 @@ export const FEATURES: Feature[] = [
   { id: "breadth", title: "Market breadth", what: "How many stocks rose or fell, sit above their 50- and 200-day averages or made 52-week highs and lows, with McClellan and sectors.", to: "/invest/breadth",
     words: "market breadth advance decline advances declines a/d line ad ratio mcclellan oscillator summation index new highs lows 52 week dma moving average stage 2 trin arms thrust sector breadth nifty 500 midcap smallcap" },
   { id: "heatmap", title: "Heatmap", what: "A market as tiles: each company sized by its market value and coloured by its change over a day to a year, grouped by sector. India and the US, or one theme's companies.", to: "/invest/heatmap",
-    words: "heatmap heat map treemap tiles market map sector map gainers losers movers nifty 500 s&p 500 market cap" },
+    words: "heatmap heat map treemap tiles sector map gainers losers movers market cap" },
   { id: "filings", title: "Filings and red flags", what: "Fund raises (QIP), pledges, resignations and defaults your watchlist companies filed, with an evening alert.", to: "/research/filings",
     words: "filings announcements red flags qip fund raise preferential rights issue pledge resignation auditor default sebi rating downgrade nse bse alert", home: true, goal: "find", flag: "filings" },
   { id: "deepdive", title: "Company deep dive", what: "Open any Indian or US company, then Deep dive: 10 years of numbers, its business, capex plans and whether management delivered.", to: "/research",
