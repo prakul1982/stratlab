@@ -2034,11 +2034,15 @@ def note_h(text: str, w: float = CW) -> float:
     return len(wrap(text, BODY_MIN, w)) * _lh(BODY_MIN) + 0.04
 
 
-def _what(text: str) -> str:
+NO_WORDS = "No description in its own words yet"          # LIVE6-007: the page's words for a company with none (theme_base.NO_WORDS)
+
+
+def _what(text: str, name: str = "") -> str:
     """What a company does, as the page shows it, cleaned as a new read would be (theme_base.one_line): a "**Company Overview **" heading,
-    "Incorporatedin1994" or a month's sales line never reaches a slide."""
-    from .intel.theme_base import one_line
-    return one_line(text) if text else ""
+    "Incorporatedin1994" or a month's sales line never reaches a slide; nor a line that isn't its own words about its work (LIVE6-007:
+    theme_base.own_words: "Fortinet, Inc. | What it does: Fortinet, Inc.", a filing's title)."""
+    from .intel.theme_base import one_line, own_words
+    return own_words(one_line(text), name) if text else ""
 
 
 def shown_label(cos: list, k: int) -> str:
@@ -2367,7 +2371,7 @@ def pe_peer_line(pp: dict) -> str:
     the ratio of those two medians, the two numbers the valuation table shows. Which peer set it is, and how many have none, said (R27)."""
     return (f"Median P/E {_times(pp['theme'])} for the {_n(pp['n'], 'company', 'companies')} with comparable peers {peer_set_words(pp)}, "
             f"{premium_words(pp['premium'])} their peers' median of {_times(pp['peers'])}"
-            + (f" (prices at the {pp['as_of']} close)" if pp.get("as_of") else "") + no_peer_words(pp))
+            + (f" (prices at the {_day(pp['as_of'])} close)" if pp.get("as_of") else "") + no_peer_words(pp))       # LIVE6-006: one date format
 
 
 def dated_peers(v: dict) -> dict:
@@ -2397,10 +2401,10 @@ def peer_moved_line(pp: dict) -> str:
     count = (f"; {n0:,} of the theme's companies compared then, {n1:,} now" if n0 and n1 and n0 != n1 else "") + \
         (f"; {k0:,} peers behind it then, {k1:,} now" if k0 and k1 and k0 != k1 else "")
     if same_day:
-        return (f"Their peers' median P/E was {_times(mv['from'])} at an earlier run on the {mv['on']} close and is {_times(mv['to'])} now: "
+        return (f"Their peers' median P/E was {_times(mv['from'])} at an earlier run on the {_day(mv['on'])} close and is {_times(mv['to'])} now: "
                 f"the peers or their reported figures changed{count}.")
-    return (f"Their peers' median P/E was {_times(mv['from'])} at the {mv.get('on') or 'earlier'} close and is {_times(mv['to'])} "
-            f"at the {mv.get('at') or 'latest'} close: prices moved between the two closes{count}.")
+    return (f"Their peers' median P/E was {_times(mv['from'])} at the {_day(mv['on']) if mv.get('on') else 'earlier'} close and is {_times(mv['to'])} "
+            f"at the {_day(mv['at']) if mv.get('at') else 'latest'} close: prices moved between the two closes{count}.")
 
 
 def no_peer_words(pp: dict) -> str:
@@ -2924,7 +2928,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 47                  # n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 47                  # LIVE6: calendar price periods to one close with years on the axis, headlines with a source and no quote pages, own words only, one market value per company, charts of 4 points or more, one-row tables joined; n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -4016,6 +4020,59 @@ def _block_shows(b: dict) -> bool:
     return True
 
 
+MIN_POINTS = 4                 # LIVE6-008: a line chart needs this many points (the live p.19 drew a "weekly" trend through 2)
+_DASHY = re.compile(r"^(?:–|-|n/a|not comparable)?(?: \(\d[\d,]*(?: of \d[\d,]*)?\))?$")
+MOSTLY_EMPTY = 0.75           # a table this share of whose figure cells are dashes says too little to keep
+
+
+def _dashy(v) -> bool:
+    return bool(_DASHY.match(_cell_text(v).strip()))
+
+
+def _points(b: dict) -> int:
+    """How many points a line chart draws: the categories where any series has a value."""
+    series = b.get("series") or []
+    return sum(1 for i in range(len(b.get("cats") or [])) if any(i < len(x[1]) and x[1][i] is not None for x in series))
+
+
+def _lists(b: dict) -> bool:
+    """Whether a table is a list of companies or layers (its rows are what a page's counts are made of: never thinned here)."""
+    return bool(b.get("head")) and _cell_text(b["head"][0]).split(":")[0] in ("Company", "Layer", "Part", "Kind", "Date", "Filed", "Ex-date")
+
+
+def tidy_tables(slides: list) -> list[dict]:
+    """LIVE6-008 (the live R34 Cybersecurity deck: a table cut off its card beside a "weekly" line through 2 points, rows of "– (2)", a
+    table mostly dashes): on every content page a line chart through fewer than MIN_POINTS points is dropped and the table or cards beside
+    it take the page's width; a measure table's row with no figure is dropped; a measure table MOSTLY_EMPTY dashes is replaced by a line
+    that says so. Tables that list companies or layers keep every row (the page's counts are made of them). Returns what was changed."""
+    done = []
+    for s in slides:
+        if s.kind != "content":
+            continue
+        for b in [b for b in s.blocks if b["kind"] == "lines" and _points(b) < MIN_POINTS]:
+            s.blocks.remove(b)
+            done.append({"slide": s.title, "why": f"a line through {_points(b)} points dropped"})
+            for o in s.blocks:
+                x, y, w, h = o["box"]
+                if o["kind"] in ("table", "cards", "text") and x + w <= b["box"][0] + 0.01 and abs(x - M) < 0.01:
+                    o["box"] = (M, y, CW, h)
+        for i, b in enumerate(list(s.blocks)):
+            if b["kind"] != "table" or _lists(b) or "Slide" in (b.get("head") or []):
+                continue
+            rows = [r for r in b.get("rows") or [] if isinstance(r, dict) or not all(_dashy(c) for c in r[1:])]
+            if len(rows) < len(b.get("rows") or []):
+                done.append({"slide": s.title, "why": f"{len(b['rows']) - len(rows)} row(s) with no figure dropped"})
+                b["rows"] = rows
+            cells = [c for r in rows if not isinstance(r, dict) for c in r[1:] if _cell_text(c).strip()]
+            if len([r for r in rows if not isinstance(r, dict)]) >= 2 and cells and sum(map(_dashy, cells)) / len(cells) >= MOSTLY_EMPTY:
+                x, y, w, h = b["box"]
+                names = ", ".join(_cell_text(r[0]) for r in rows if not isinstance(r, dict))
+                s.blocks[s.blocks.index(b)] = {"kind": "text", "box": (x, y, w, 0.6), "size": BODY_MIN, "floor": BODY_MIN, "color": MUTED,
+                                               "paras": [clip(f"Left out here, as most of their figures aren't stored yet: {names}.", BODY_MIN, w, 2)]}
+                done.append({"slide": s.title, "why": "a table mostly dashes replaced by a line"})
+    return done
+
+
 def complete_flags(slides: list) -> list[dict]:
     """What the finished pages leave out (n1, the outside review of the live R33 decks: Retail's appendix said 3 layers had companies left
     out and its pages named 2 over a table with no row; Real Estate's first roll page was an empty table): a table page that prints no data
@@ -4033,12 +4090,21 @@ def complete_flags(slides: list) -> list[dict]:
         if s.blocks and not any(_block_shows(b) for b in s.blocks):          # its blocks all empty (a headline alone is a page's own choice)
             flag(s, s.title, "a page with nothing on it")
         for b in s.blocks:
+            if b["kind"] == "lines" and _points(b) < MIN_POINTS:        # LIVE6-008
+                flag(s, b.get("title") or s.title, f"a line chart through {_points(b)} points")
             if b["kind"] != "table":
                 continue
             x, y, w, h = b["box"]
             lay = table_layout(b, w, h)
             if not any(not isinstance(r, dict) for r in lay["rows"]):
                 flag(s, s.title, "a table page that prints no data row")
+            data = [r for r in b.get("rows") or [] if not isinstance(r, dict)]
+            if not _lists(b) and len(data) >= 2 and sum(_dashy(c) for r in data for c in r[1:]) >= MOSTLY_EMPTY * sum(len(r) - 1 for r in data):
+                flag(s, s.title, "a table mostly dashes")
+        tabs_ = [b for b in s.blocks if b["kind"] == "table"]
+        if len(tabs_) == 1 and not [b for b in s.blocks if b["kind"] not in ("table", "text")] and not _PAGED.match(s.title or "") and "Appendix" not in (s.eyebrow or "") \
+                and len([r for r in tabs_[0].get("rows") or [] if not isinstance(r, dict)]) == 1:
+            flag(s, s.title, "a page for a table of one row")           # LIVE6-008: one row joins another page
         m = _PAGED.match(s.title or "")
         base, k, n = (m.group(1), int(m.group(2)), int(m.group(3))) if m else (s.title, 1, 1)
         if any(b["kind"] == "table" for b in s.blocks):
@@ -4275,7 +4341,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
 
     for m in members:                       # what a company does, as one business sentence (headings, glued words, results lines left off)
         if m.get("what"):
-            m["what"] = _what(m["what"])
+            m["what"] = _what(m["what"], m.get("name") or "")
     cov = coverage(v)
     mem = v.get("membership") or {}
 
@@ -4586,8 +4652,8 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             s.add("text", (M, BOT - fh + 0.08, CW, fh - 0.08), paras=fnote, size=BODY_MIN, floor=BODY_MIN, color=MUTED)
         slides.append(s)
 
-    if small:
-        _smaller_layers(slides, small, amt, eb("The value chain"))
+    if len(small) >= 2:          # LIVE6-008: no page for a table of one row: one such layer is a row of the value chain's table and its
+        _smaller_layers(slides, small, amt, eb("The value chain"))         # company a row of the appendix
 
     # the operating figures of every layer and sub-theme on one or two pages, each company once, grouped by layer (R18: a page for each layer,
     # and HDFC Bank's figures on two layers' pages); the rest of a long list is in the appendix
@@ -4836,6 +4902,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             if x) + ".", str(slides.index(later_slides[0]) + 1)])
     contents.add("table", (M, TOP, CW, min(BOT - TOP, table_height(["Part", "What it holds", "Page"], crow, [2.6, 8.4, 0.9], CW))),
                  head=["Part", "What it holds", "Page"], rows=crow, widths=[2.6, 8.4, 0.9], numeric=[False, False, True], tight=True)
+    slides[0].tidied = tidy_tables(slides)          # LIVE6-008: no line through under 4 points, no row of dashes, no table mostly dashes
     slides[0].checked = check_deck(slides)          # R25: every headline and finding figure found again in the tables, else dropped
     slides[0].gate = publication_gate(slides, v, slides[0].checked)        # R27: the checklist before a deck is stored, its result kept with it
     _sections(sector, slides)
@@ -4879,7 +4946,7 @@ def _smaller_layers(slides: list, small: list, amt, eyebrow: str) -> None:
     cols = [col for col in co_cols(cos) if col[0] in keys]
     head = ["Layer", "Company", "What it does"] + [col[1] for col in cols] + ["Year"]
     widths = [2.3, 2.3, 3.6] + [col[2] for col in cols] + [1.0]
-    body = [[x["layer"], name, whole_clause(_what(c.get("what") or "") or x.get("description") or "", 110) or "–"]
+    body = [[x["layer"], name, whole_clause(_what(c.get("what") or "", c.get("name") or ""), 110) or NO_WORDS]
             + [co_cell(c, k, amt) for k, _, _ in cols] + [c.get("year") or "–"] for x, c, name in rows_]
     head, body, widths, numeric = drop_empty(head, body, widths, [False, False, False] + [True] * len(cols) + [False], keep=(0, 1, 2))
     note = ("Each of these layers has one confirmed company, so it has no median and no page of its own; it is in the value chain's table. "
@@ -5594,7 +5661,7 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
             msg += f"; P/E of {pe_n} of the {pop} companies, {_n(losses, 'loss-maker')} with none"
         s = Slide("Valuation", msg, eyebrow=E())
         hist = val.get("history") or []
-        lw = 7.0 if len(hist) >= 2 else CW
+        lw = 7.0 if len(hist) >= MIN_POINTS else CW         # LIVE6-008: no "weekly" line through 2 points; the table keeps the page's width
         # R27 (P2): how each is worked out, and who the peers are, live on the notes page; this page says only what its figures are of
         notes = []
         if val.get("losses"):
@@ -5602,8 +5669,9 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
         if val.get("ev_missing"):
             notes.append(f"EV/EBITDA is n/a for {_n(val['ev_missing'], 'company', 'companies')} where debt, cash or EBITDA isn't stored; the market's debt and "
                          "cash aren't kept, so it has no comparison.")
-        if len(hist) < 2:
-            notes.append("The theme's own P/E history builds forward from its page: it keeps the median once a week.")
+        if len(hist) < MIN_POINTS:
+            notes.append("The theme's own P/E history builds forward from its page: it keeps the median once a week"
+                         + (f" ({_n(len(hist), 'week')} so far; a line is drawn from {MIN_POINTS})." if hist else "."))
         if descriptive:
             notes.append(peer_cover_words(val) + " Each figure is the theme's own: no peer or market comparison is made.")
         elif peer_moved_line(pp):          # R35: the stored run before this one, when the peers' median is more than 5% away from it
@@ -5625,7 +5693,7 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
                 s.add("table", (M, y_, lw, lt), head=lh_, rows=lr_, widths=lwd, tight=True)
                 y_ += lt + 0.25
         s.add("cards", (M, y_, lw, BOT - y_), cols=1, fill=True, size=12, items=[{"title": "What the figures are of", "lines": notes}])
-        if len(hist) >= 2:
+        if len(hist) >= MIN_POINTS:
             h = hist[-26:]
             s.add("lines", (M + lw + 0.4, TOP, CW - lw - 0.4, BOT - TOP), title=f"The theme's median P/E, weekly ({_day(h[0]['d'])} to {_day(h[-1]['d'])})",
                   cats=[_day(x["d"])[:6] for x in h], series=[("Median P/E", [x["pe"] for x in h], BLUE)], fmt="x", labels=len(h) <= 8)
@@ -5714,14 +5782,16 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
             rows = [[lbl, _chg(((prices.get("median") or {}).get(k) or {}).get("median")), _chg((ret.get(k) or {}).get("theme")), _chg((ret.get(k) or {}).get("bench")),
                      str(((prices.get("median") or {}).get(k) or {}).get("n", "–"))] for k, lbl in (("1M", "1 month"), ("3M", "3 months"), ("1Y", "1 year"), ("3Y", "3 years"))]
             lw = 6.6
-            s.add("table", (M, TOP, lw, 2.3), head=["Over", "Median company", "Theme, equal-weighted", bench, "Companies"], rows=rows, widths=[1.2, 1.4, 1.6, 1.3, 1.1])
+            # LIVE6-002: calendar periods to one last close, said in the table's head
+            over = f"Over, to {_day(prices['returns_to'])}" if prices.get("returns_to") else "Over"
+            s.add("table", (M, TOP, lw, 2.3), head=[over, "Median company", "Theme, equal-weighted", bench, "Companies"], rows=rows, widths=[1.2, 1.4, 1.6, 1.3, 1.1])
             if breadth:
                 s.add("table", (M, TOP + 2.55, lw, BOT - TOP - 2.55), head=["Companies that are", "Count", "Share"],
                       rows=[[lbl, f"{x['count']} of {x['n']}", f"{x['share']}%" if x.get("share") is not None else "–"] for lbl, x in breadth], widths=[3.6, 1.3, 1.0])
             line = prices.get("line")
             if line:
                 s.add("lines", (M + lw + 0.4, TOP, CW - lw - 0.4, BOT - TOP), title=f"The theme against {bench}, weekly, rebased to 100",
-                      cats=[_day(w)[:6] for w in line["weeks"]], fmt="num1",
+                      cats=[_day(w)[3:] for w in line["weeks"]], fmt="num1",        # "Nov 2026": the axis says the year (LIVE6-002)
                       series=[("Theme", line["theme"], BLUE), (bench, line["bench"], MUTED), ("Relative strength", line["rs"], ORANGE, True)])
         else:
             lw = 6.6

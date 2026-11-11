@@ -41,7 +41,8 @@ def test_every_company_is_a_member_row_with_its_layer_figures_and_how_it_is_in()
     assert [(r["symbol"], r["layer"]) for r in rows] == [("MINEA", "Mining"), ("MINEB", "Mining"), ("CELLA", "Cells"), ("CELLB", "Cells"),
                                                           ("RELIANCE", "Cells"), ("SCRAP", "Named in a sub-theme only")]
     by = {r["symbol"]: r for r in rows}
-    assert (by["MINEA"]["revenue"], by["MINEA"]["ebitda"], by["MINEA"]["net"], by["MINEA"]["cap"]) == (1500, 50, 24.0, 1000.0)
+    # LIVE6-006 (updated on purpose): the market value is the dive's, on its one price date, as the page shows it
+    assert (by["MINEA"]["revenue"], by["MINEA"]["ebitda"], by["MINEA"]["net"], by["MINEA"]["cap"]) == (1500, 50, 24.0, 40000.0)
     assert by["MINEA"]["by"] == "Official industry"
     assert by["CELLA"]["by"] == "Added, confirmed by its own words" and by["CELLB"]["by"] == "Added, not yet confirmed"
     assert by["SCRAP"]["revenue"] is None and by["SCRAP"]["by"] == "Added, not yet confirmed"       # no stored page: listed, with no figures

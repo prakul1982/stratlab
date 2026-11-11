@@ -37,7 +37,7 @@ FEW_BASE = 4                  # a highest or lowest median on this many companie
 COMPARE_MIN = MIN_BASE
 # R31 (the owner's review of the live R30 decks): a layer-vs-layer headline (the value chain's line, findings, questions) needs at least this
 # many companies with the figure in each layer it compares; tables still show every layer and mark (green, red) those of COMPARE_MIN or more
-DIVE_TEXT = 9          # R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
+DIVE_TEXT = 9          # LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
 HEADLINE_MIN = 5
 # R27 (headline eligibility): a comparison is said as a headline only on a figure for at least this share of the companies of each group it
 # compares (a layer, a family); one with less is shown as data, never ranked (the live R26 Semis deck: "RPO growth -3.9%" of 21 of 53)
@@ -1435,7 +1435,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
 
     blocks, histories = [], {}
     # R32: a split by market value one of whose halves shows no company is undone (theme_base.unsplit_unshown)
-    from .theme_base import unsplit_unshown
+    from .theme_base import own_words, unsplit_unshown
     for v in unsplit_unshown(checked.get("value_chain") or [], {s for s, r in rows.items() if r.get("status") != "unverified"}):
         mine = [rows[c["ticker"]] for c in v.get("companies") or [] if c["ticker"] in rows]
         what = {c["ticker"]: c.get("what") for c in v.get("companies") or []}
@@ -1443,7 +1443,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         from .theme_check import model_family
         for r in mine:                     # R30: an EBITDA margin checked against how the company earns
             validate_model(r, model_family(model_fields(v, r["symbol"]).get("model") or "") or ((v.get("model") or {}).get("family") or ""))
-        b = layer_block(v.get("layer") or "", [{**r, "what": what.get(r["symbol"]), "company_wide": r["symbol"] in wide, "official_industry": ind.get(r["symbol"]) or "",
+        b = layer_block(v.get("layer") or "", [{**r, "what": own_words(what.get(r["symbol"]), r.get("name") or "") or None, "company_wide": r["symbol"] in wide, "official_industry": ind.get(r["symbol"]) or "",
                                                 **model_fields(v, r["symbol"])} for r in mine], wide)
         b["description"] = v.get("description") or ""
         b["policy"] = v.get("policy")
@@ -1470,7 +1470,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         for c in sub_members(s, checked.get("value_chain") or [], src.about):
             r = rows.get(c["ticker"])
             if r:
-                cos.append({"symbol": r["symbol"], "name": r["name"], "what": c.get("what"), "cap": r["cap"], "sales_1y": r["sales_1y"], "ebitda": r["ebitda"],
+                cos.append({"symbol": r["symbol"], "name": r["name"], "what": own_words(c.get("what"), r["name"] or "") or None, "cap": r["cap"], "sales_1y": r["sales_1y"], "ebitda": r["ebitda"],
                             "company_wide": r["symbol"] in wide, "year": r["year"], "bank": r.get("bank"), "net": r.get("net"), "roe": r.get("roe")})
         subs.append({"name": s.get("name") or "", "detail": s.get("detail") or "", "companies": cos})
     for r in rows.values():                 # a merger or demerger broke the company's series: no growth figure for it, none in the growth totals
@@ -1545,7 +1545,13 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
 # Live", "Option Chain", put counts, Diwali picks)
 NOISE = re.compile(r"share price|stock price|price today|price live|\blive\b.*\bchart\b|option chain|\b(?:put|call) contracts?\b|open interest|"
                    r"stock picks?|stocks? to (?:buy|watch)|top (?:gainers|losers)|gainers (?:&|and) losers|technical (?:signals|view|outlook)|"
-                   r"\bquote(?:,| and)|price,? news|multibagger|target price|\bbuy or sell\b|share price target|\bmuhurat\b", re.I)
+                   r"\bquote(?:,| and)|price,? news|multibagger|target price|\bbuy or sell\b|share price target|\bmuhurat\b|"
+                   # LIVE6-018: quote and forecast pages ("PANW Stock Quote Price and Forecast | CNN") and evergreen click-bait ("If You Invested
+                   # $1000 In CrowdStrike...") are not headlines
+                   r"\bstock quotes?\b|\bquote price\b|\b(?:stock|price|share) (?:forecast|prediction)s?\b|\bprice and forecast\b|"
+                   r"\bif you(?:'d| had| would have)? invested\b|\bhow much (?:you'd|you would) have\b|\bwould be worth\b|"
+                   r"\bmake you (?:a )?(?:rich|millionaire)\b|\bmillionaire[- ]maker\b|\bshould you buy\b|\btime to buy\b|\b(?:is it|still) a buy\b|"
+                   r"\bstocks? (?:you|i)(?:'d| would)? (?:should )?(?:buy|own)\b|\bbest stocks?\b|\bno-brainer\b", re.I)
 HOME = {"IN": re.compile(r"\bindia|\bindian\b|\bnse\b|\bbse\b|\bsebi\b|\brbi\b|\bgst\b|₹|\brs\.? ?\d|\bcrore|\blakh", re.I),
         "US": re.compile(r"\bu\.?s\.?\b|\bamerica|\bunited states|\bsec\b|\bnyse\b|\bnasdaq\b|\bfed\b|\$", re.I)}
 
@@ -1553,10 +1559,13 @@ HOME = {"IN": re.compile(r"\bindia|\bindian\b|\bnse\b|\bbse\b|\bsebi\b|\brbi\b|\
 def headline_kept(item: dict, region: str) -> bool:
     """Whether a headline is about the business: not a quote page, a derivatives table, a list of picks or a price roundup; and a headline
     about the theme in general (no company of the theme in it) must be about the theme's own market (the owner, 7 Nov: Mexico's tax plan,
-    Schaeffler's job cuts in Europe in an India theme). An exchange filing is always kept."""
-    text = str(item.get("headline") or "")
+    Schaeffler's job cuts in Europe in an India theme). It needs a headline and a source (LIVE6-018). An exchange filing with a title is
+    always kept."""
+    text = str(item.get("headline") or "").strip()
     if item.get("kind") == "filing" or str(item.get("source") or "").lower() in ("exchange filing", "sec filing"):
-        return True
+        return bool(text)
+    if not text or not str(item.get("source") or "").strip():          # LIVE6-018: a headline with no source isn't listed as one
+        return False
     if NOISE.search(text):
         return False
     if not item.get("company") and region in HOME and not HOME[region].search(text):

@@ -49,7 +49,7 @@ test("the theme page is a deep dive made of tables, with each company only where
   await expect(members.getByRole("table", { name: /Power generation: companies in the theme/ })).toContainText("Added");
   // the whole chain in one table, with the basis said
   const chain = page.getByRole("table", { name: /value chain by layer/i });
-  await expect(chain.locator("thead th")).toHaveText([/^Layer$/, /^Companies$/, /^i?Revenue$/, /^i?EBITDA margin$/, /^Net margin$/, /^i?ROCE$/]);
+  await expect(chain.locator("thead th")).toHaveText([/^Layer$/, /^i?Companies$/, /^i?Revenue$/, /^i?EBITDA margin$/, /^Net margin$/, /^i?ROCE$/]);
   await expect(chain.locator("tbody tr")).toHaveCount(3);          // the map's three layers (R21: Vedanta placed in one of them)
   await expect(main).toContainText("Consolidated accounts where the company files them");
   // a layer: its companies in their own words, the median and the range as rows; the wrong placement (ONGC under steel) isn't there
@@ -59,6 +59,13 @@ test("the theme page is a deep dive made of tables, with each company only where
   await expect(steel).toContainText("In its own words");
   await expect(steel.locator('tr[data-kind="median"]')).toContainText("Median");
   await expect(steel.locator('tr[data-kind="range"]')).toContainText("Range");
+  // LIVE6-001: the layer says how many it lists and how many are in its calculations; the median is of those
+  await expect(steel.getByTestId("layer-count")).toHaveText(/^\d+ companies listed, \d+ in the layer's calculations/);
+  await expect(steel.locator('tr[data-kind="median"]')).toContainText("in the layer's calculations");
+  // LIVE6-017: the section links come before the companies
+  const navY = await page.getByRole("navigation", { name: "On this page" }).first().evaluate((e) => e.getBoundingClientRect().top + window.scrollY);
+  const memY = await members.evaluate((e) => e.getBoundingClientRect().top + window.scrollY);
+  expect(navY, "section links above the companies").toBeLessThan(memY);
   await expect(main).not.toContainText("Oil and Natural Gas");
   // a sub-theme with no listed company says so
   await expect(page.locator("#theme-subs")).toContainText("No listed company is shown for this sub-theme");
@@ -73,7 +80,12 @@ test("the theme page is a deep dive made of tables, with each company only where
     expect(await page.locator(`#${id} table`).count(), `${id} has a table`).toBeGreaterThan(0);
   }
   const val = page.locator("#numbers-valuation");
-  for (const m of ["P/E", "P/B", "EV/EBITDA"]) await expect(val.getByRole("rowheader", { name: m, exact: true })).toBeVisible();
+  await expect(val.getByRole("rowheader", { name: "P/E", exact: true })).toBeVisible();
+  // LIVE6-017 (updated on purpose): a measure no company has a figure for is no row: every row shown has a median or a range
+  for (const row of await val.getByRole("table").first().locator("tbody tr").all()) {
+    const cells = (await row.locator("td").allInnerTexts()).slice(0, 2).map((t) => t.trim());
+    expect(cells.some((t) => t !== "–" && t !== ""), `a valuation row with figures: ${cells.join(" | ")}`).toBe(true);
+  }
   await expect(page.locator("#numbers-listings")).toBeVisible();
   const leaders = page.locator("#numbers-leaders table");
   if (phone) await page.locator("#numbers-leaders").getByLabel("Sort by").selectOption({ label: "Market value" });          // a phone's cards have no header row: the Sort by box does it
