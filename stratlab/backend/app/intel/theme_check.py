@@ -599,11 +599,17 @@ _OWN_EQUIPMENT = (r"\bequipment(?! (?:manufacturers?|makers?|suppliers?|vendors?
                   r"\btools\b(?! (?:manufacturers?|makers?|suppliers?|vendors?|companies|customers)\b)")
 
 
+# chips or devices as the company's own product (R36, live: Wolfspeed, "developer and manufacturer of wide-bandgap semiconductors, focused on
+# silicon carbide materials and devices", is a chip maker whose words also name the material it works in)
+_OWN_CHIPS = (r"(?:manufactur\w*|\bmakes?|\bmakers?|\bproduc(?:es|ers?)|\bdevelop\w*|\bdesign\w*)\b[^.;]{0,40}\b(?:semiconductors|chips|integrated circuits|"
+              r"devices)\b|\bmaterials and devices\b")
+
+
 def chip_materials(own) -> bool:
-    """Whether a company's own words say it supplies materials, chemicals, gases or substrates for chips or electronics, and no machines of
-    its own (R34; R35: one rule for its model and for how surely its evidence shows it)."""
+    """Whether a company's own words say it supplies materials, chemicals, gases or substrates for chips or electronics, and no machines,
+    chips or devices of its own (R34; R35: one rule for its model and for how surely its evidence shows it)."""
     own = re.sub(r"(?i)\boriginal equipment\b", " ", str(own or ""))
-    return bool(re.search(CHIP_MATERIALS, own, re.I)) and not re.search(_OWN_EQUIPMENT, own, re.I)
+    return bool(re.search(CHIP_MATERIALS, own, re.I)) and not re.search(_OWN_EQUIPMENT, own, re.I) and not re.search(_OWN_CHIPS, own, re.I)
 
 
 REFINE_HINTS = {"regulated_utility": r"transmission|distribution|electric utilit", "power_generation": r"power generation|electric services",

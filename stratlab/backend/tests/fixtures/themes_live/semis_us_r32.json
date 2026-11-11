@@ -1,0 +1,1194 @@
+{
+"note": "The live US Semiconductors theme map as GET /research/sector answered on 11 Nov 2026 (R32 live): each layer's companies with the layer, model and confidence the kept placement gave them, and whether the split moved them there. Market values rounded; descriptions are the stored one-liners, Qnity's the whole stored description.",
+"theme": "Semiconductors",
+"region": "US",
+"layers": [
+{
+"layer": "Design software and IP licensing",
+"description": "These companies sell chip-design tools and license processor architectures that designers build on. Revenue comes from software subscriptions and royalties. Margins are high because switching tools or architectures is costly and little physical capital is needed.",
+"companies": [
+{
+"ticker": "SNPS",
+"name": "Synopsys Inc",
+"what": "Synopsys supplies tools and services to the semiconductor design and manufacturing industry. Products include tools for implementation of digital and analog circuits, simulators, and debugging environments",
+"industry": "Services-Prepackaged Software",
+"cap": 88143,
+"basis": "added",
+"model": "software",
+"model_confidence": "medium"
+},
+{
+"ticker": "CDNS",
+"name": "Cadence Design Systems Inc",
+"what": "the company currently makes software and hardware for designing products such as integrated circuits, systems on chips (SoCs), printed circuit boards",
+"industry": "Services-Prepackaged Software",
+"cap": 90995,
+"basis": "added",
+"model": "software",
+"model_confidence": "high"
+},
+{
+"ticker": "ARM",
+"name": "Arm Holdings PLC",
+"what": "whose primary business is the design of central processing unit (CPU) cores that implement the ARM architecture family of instruction sets",
+"industry": "Semiconductors & Related Devices",
+"cap": 193115,
+"basis": "industry",
+"model": "software",
+"model_confidence": "medium"
+},
+{
+"ticker": "AIP",
+"name": "Arteris, Inc.",
+"what": "Arteris, Inc. is a multinational technology company headquartered in Campbell, California",
+"industry": "Semiconductors & Related Devices",
+"cap": 949,
+"basis": "industry",
+"model": "software",
+"model_confidence": "high"
+}
+]
+},
+{
+"layer": "Fabless chip design",
+"description": "They earn by selling chips at a markup over foundry cost. Margins depend on product leadership, software lock-in and supply allocation at foundries, with low capital intensity.",
+"companies": [
+{
+"ticker": "NVDA",
+"name": "NVIDIA Corp",
+"what": "The company develops graphics processing units (GPUs), systems on chips (SoCs), and application programming interfaces (APIs) for data science, high-performance computing, artificial intelligence (AI)",
+"industry": "Semiconductors & Related Devices",
+"cap": 4070249,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "high"
+},
+{
+"ticker": "AVGO",
+"name": "Broadcom Inc.",
+"what": "Broadcom Inc. is an American multinational designer, developer, manufacturer, and global supplier of a wide range of semiconductor and infrastructure software products.",
+"industry": "Semiconductors & Related Devices",
+"cap": 1584750,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "QCOM",
+"name": "Qualcomm Inc",
+"what": "The company develops and designs technologies for global communications and computing, including next-generation mobile networks, smart devices, and semiconductors — such as mobile processors and artificial intelligence chips.",
+"industry": "Radio & Tv Broadcasting & Communications Equipment",
+"cap": 185677,
+"basis": "list",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "AMD",
+"name": "Advanced Micro Devices Inc",
+"what": "For data centers, we offer AI accelerators, microprocessors (CPUs), graphic processing units (GPUs), data processing units (DPUs), AI Network Interface Cards (AI NICs) and field programmable gate arrays (FPGAs)",
+"industry": "Semiconductors & Related Devices",
+"cap": 844989,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "MRVL",
+"name": "Marvell Technology, Inc.",
+"what": "Marvell Technology, Inc. is an American company, headquartered in Santa Clara, California, which develops and produces semiconductors and related technology",
+"industry": "Semiconductors & Related Devices",
+"cap": 135385,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "MPWR",
+"name": "Monolithic Power Systems, Inc.",
+"what": "Monolithic Power Systems, Inc. is an American, publicly traded company headquartered in West Palm Beach, Florida",
+"industry": "Semiconductors & Related Devices",
+"cap": 66207,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "ALAB",
+"name": "Astera Labs, Inc.",
+"what": "Astera Labs, Inc., headquartered in San Jose, California, is a fabless manufacturing company that develops connectivity technologies and related software that are used in data centers serving the artificial intelligence…",
+"industry": "Semiconductors & Related Devices",
+"cap": 37784,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "high"
+},
+{
+"ticker": "CRDO",
+"name": "Credo Technology Group Holding Ltd",
+"what": "The multibillion-dollar data infrastructure market that we serve is driven largely by hyperscale data centers (hyperscalers) and emerging NeoClouds building AI/Machine Learning (ML) Infrastructure as well as general compute and data centers",
+"industry": "Semiconductors & Related Devices",
+"cap": 24396,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "MTSI",
+"name": "MACOM Technology Solutions Holdings, Inc.",
+"what": "MACOM Technology Solutions, Inc. is an American developer and producer of radio, microwave, and millimeter wave semiconductor devices and components",
+"industry": "Semiconductors & Related Devices",
+"cap": 17296,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "LSCC",
+"name": "Lattice Semiconductor Corp",
+"what": "Lattice Semiconductor Corporation is an American semiconductor company specializing in the design and manufacturing of low-power field-programmable gate arrays (FPGAs)",
+"industry": "Semiconductors & Related Devices",
+"cap": 15823,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "SITM",
+"name": "Sitime Corp",
+"what": "SiTime Corporation is a publicly traded fabless chipmaker based in Santa Clara, California that develops micro-electromechanical systems (MEMS), used for timing devices in electronics",
+"industry": "Semiconductors & Related Devices",
+"cap": 13427,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "high"
+},
+{
+"ticker": "SWKS",
+"name": "Skyworks Solutions, Inc.",
+"what": "Skyworks Solutions, Inc. is an American semiconductor company headquartered in Irvine, California, United States",
+"industry": "Semiconductors & Related Devices",
+"cap": 12446,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "low"
+},
+{
+"ticker": "SMTC",
+"name": "Semtech Corp",
+"what": "Semtech Corporation is an American supplier of analog and mixed-signal semiconductors and advanced algorithms for consumer, enterprise computing, communications and industrial end-markets",
+"industry": "Semiconductors & Related Devices",
+"cap": 10572,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "SLAB",
+"name": "Silicon Laboratories Inc.",
+"what": "Silicon Laboratories Inc. is a leader in secure, intelligent wireless technology for a more connected world",
+"industry": "Semiconductors & Related Devices",
+"cap": 7394,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "CRUS",
+"name": "Cirrus Logic, Inc.",
+"what": "Cirrus Logic Inc. is an American fabless semiconductor supplier that specializes in analog, mixed-signal, and audio DSP integrated circuits (ICs)",
+"industry": "Semiconductors & Related Devices",
+"cap": 5992,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "high"
+},
+{
+"ticker": "SIMO",
+"name": "Silicon Motion Technology CORP",
+"what": "From its own filings: Annual report (20-F)",
+"industry": "Semiconductors & Related Devices",
+"cap": 5672,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "SYNA",
+"name": "Synaptics Inc",
+"what": "Synaptics, Inc. is an American technologies and computer-to-human interface devices development company based in San Jose, California",
+"industry": "Semiconductors & Related Devices",
+"cap": 4676,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "MXL",
+"name": "Maxlinear, Inc",
+"what": "MaxLinear, Inc. is an American electronic hardware company",
+"industry": "Semiconductors & Related Devices",
+"cap": 4899,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "AMBA",
+"name": "Ambarella Inc",
+"what": "Ambarella, Inc. is an American fabless semiconductor design company, focusing on low-power, high-definition (HD) and Ultra HD video compression, image processing, and computer vision processors",
+"industry": "Semiconductors & Related Devices",
+"cap": 2664,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "high"
+},
+{
+"ticker": "POWI",
+"name": "Power Integrations Inc",
+"what": "Power Integrations, Inc. is a publicly traded semiconductor company headquartered in San Jose, California",
+"industry": "Semiconductors & Related Devices",
+"cap": 2455,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "NVTS",
+"name": "Navitas Semiconductor Corp",
+"what": "Navitas Semiconductor Corporation (“we,” us,” “Navitas” or the “Company”) designs, develops and markets next-generation power semiconductors including gallium nitride (GaN) power integrated circuits (ICs), high-voltage…",
+"industry": "Semiconductors & Related Devices",
+"cap": 2287,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "HIMX",
+"name": "Himax Technologies, Inc.",
+"what": "From its own filings: Annual report (20-F)",
+"industry": "Semiconductors & Related Devices",
+"cap": 1490,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "SQNS",
+"name": "Sequans Communications",
+"what": "We are a fabless designer, developer and supplier of semiconductor solutions primarily for the IoT markets",
+"industry": "Semiconductors & Related Devices",
+"cap": 1016,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "AMBQ",
+"name": "Ambiq Micro, Inc.",
+"what": "Ambiq Micro, Inc. is an American semiconductor company specializing in low-power microcontrollers and systems-on-chip, including products for devices smartwatches, medical devices, and sensors",
+"industry": "Semiconductors & Related Devices",
+"cap": 1094,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "INDI",
+"name": "indie Semiconductor, Inc.",
+"what": "In May 2025, indie entered into a non-binding agreement with United Faith Auto-Engineering Co., Ltd., a publicly-listed company in the People’s Republic of China (“United Faith”), to sell up to all of our 34.38% equity interest in Wuxi",
+"industry": "Semiconductors & Related Devices",
+"cap": 549,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "LAES",
+"name": "Sealsq Corp",
+"what": "This technology seamlessly integrates Semiconductors, PKI, and Provisioning Services, with a strategic emphasis on developing state-of-the-art quantum-resistant cryptography and semiconductors designed to address the…",
+"industry": "Semiconductors & Related Devices",
+"cap": 272,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "QUIK",
+"name": "Quicklogic Corp",
+"what": "We are a fabless semiconductor company whose primary offerings include eFPGA IP licensing, discrete FPGA devices, and related development tools and software",
+"industry": "Semiconductors & Related Devices",
+"cap": 151,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "VLN",
+"name": "Valens Semiconductor Ltd.",
+"what": "Valens Semiconductor (Valens) is an Israeli fabless manufacturing company providing semiconductors for the automotive and audio-video industries",
+"industry": "Semiconductors & Related Devices",
+"cap": 167,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "high"
+},
+{
+"ticker": "GSIT",
+"name": "Gsi Technology Inc",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 123,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "GCTS",
+"name": "GCT Semiconductor Holding, Inc.",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 133,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "ICG",
+"name": "Intchains Group Ltd",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 90,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "GUER",
+"name": "Guerrilla RF, Inc.",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 57,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "BZAI",
+"name": "Blaize Holdings, Inc.",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 26,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "MOBX",
+"name": "Mobix Labs, Inc",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 26,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "PRSO",
+"name": "Peraso Inc.",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 5,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "MTLK",
+"name": "Metalink Ltd",
+"what": "Metalink Ltd. was an Israeli-based hi-tech company specializing in silicon solutions for wireless and wireline broadband communications",
+"industry": "Semiconductors & Related Devices",
+"cap": 0,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "CBRS",
+"name": "Cerebras Systems Inc.",
+"what": "Cerebras Systems Inc., headquartered in Sunnyvale, California, develops semiconductors, supercomputers, and related software to power artificial intelligence deep-learning applications such as inference engines",
+"industry": "Semiconductors & Related Devices",
+"cap": 0,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "NA",
+"name": "Nano Labs Ltd",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 0,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "OSIS",
+"name": "Osi Systems Inc",
+"what": "OSI Systems, Inc. is an American company based in California that develops and markets security and inspection systems such as airport security X-ray machines and metal detectors, medical monitoring and anesthesia…",
+"industry": "Semiconductors & Related Devices",
+"cap": 3098,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium",
+"moved": true
+}
+]
+},
+{
+"layer": "Semiconductor equipment",
+"description": "These companies build the lithography, etch, deposition and inspection machines fabs use. They earn from tool sales and service contracts. Margins rest on technology lock-in at a few suppliers, while sales swing with customer capital budgets and export controls on China.",
+"companies": [
+{
+"ticker": "ASML",
+"name": "ASML Holding NV",
+"what": "develops and manufactures photolithography machines used to produce integrated circuits",
+"industry": "Special Industry Machinery, Nec",
+"cap": 581152,
+"basis": "list",
+"model": "manufacturing",
+"model_confidence": "high"
+},
+{
+"ticker": "AMAT",
+"name": "Applied Materials Inc",
+"what": "supplies equipment, services and software for the manufacture of semiconductor chips for electronics, flat panel displays for computers, smartphones, televisions, and solar products",
+"industry": "Semiconductors & Related Devices",
+"cap": 295639,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "high"
+},
+{
+"ticker": "LRCX",
+"name": "Lam Research Corp",
+"what": "Lam Research Corporation is an American supplier of wafer-fabrication equipment and related services to the semiconductor industry.",
+"industry": "Special Industry Machinery, Nec",
+"cap": 277803,
+"basis": "list",
+"model": "manufacturing",
+"model_confidence": "high"
+},
+{
+"ticker": "ATEYY",
+"name": "Advantest Corp",
+"what": "Advantest Corporation (株式会社アドバンテスト) is a Japanese leading manufacturer of automatic test equipment (ATE) for the semiconductor industry, and a manufacturer of measuring instruments used in the design, production and…",
+"industry": "Semiconductors & Related Devices",
+"cap": 32043,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "high"
+},
+{
+"ticker": "FORM",
+"name": "Formfactor Inc",
+"what": "FormFactor, Inc. is a provider of test and measurement technologies for integrated circuits, with its headquarters in Livermore, California",
+"industry": "Semiconductors & Related Devices",
+"cap": 6714,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "high"
+},
+{
+"ticker": "KLIC",
+"name": "Kulicke & Soffa Industries Inc",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 3647,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "low"
+},
+{
+"ticker": "UCTT",
+"name": "Ultra Clean Holdings, Inc.",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 0,
+"basis": "industry",
+"model": "",
+"model_confidence": ""
+},
+{
+"ticker": "ICHR",
+"name": "Ichor Holdings, Ltd.",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 1325,
+"basis": "industry",
+"model": "",
+"model_confidence": ""
+},
+{
+"ticker": "KLAC",
+"name": "KLA Corp",
+"what": "KLA Corporation is an American company based in Milpitas, California that makes wafer fab equipment",
+"industry": "Optical Instruments & Lenses",
+"cap": 199340,
+"basis": "list",
+"model": "manufacturing",
+"model_confidence": "high"
+},
+{
+"ticker": "TER",
+"name": "Teradyne, Inc",
+"what": "Teradyne, Inc. is an American automatic test equipment (ATE) designer and manufacturer based in North Reading, Massachusetts",
+"industry": "Instruments For Meas & Testing Of  Electricity & Elec Signals",
+"cap": 38313,
+"basis": "list",
+"model": "manufacturing",
+"model_confidence": "high"
+},
+{
+"ticker": "QRVO",
+"name": "Qorvo, Inc.",
+"what": "Qorvo, Inc. was an American semiconductor company headquartered in Greensboro, North Carolina",
+"industry": "Semiconductors & Related Devices",
+"cap": 10048,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "high",
+"moved": true
+},
+{
+"ticker": "NLST",
+"name": "Netlist Inc",
+"what": "Netlist, Inc. is a Delaware-registered corporation headquartered in Irvine, California that designs and sells high-performance SSDs and modular memory subsystems to enterprise customers in diverse industries",
+"industry": "Semiconductors & Related Devices",
+"cap": 2248,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "medium",
+"moved": true
+},
+{
+"ticker": "Q",
+"name": "Qnity Electronics, Inc.",
+"what": "Qnity Electronics, Inc. is a major provider of materials for the semiconductor manufacturing and electronics industries headquartered in Wilmington, Delaware",
+"industry": "Semiconductors & Related Devices",
+"cap": 25846,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "medium",
+"moved": true
+},
+{
+"ticker": "VIAV",
+"name": "Viavi Solutions Inc.",
+"what": "Viavi Solutions Inc., formerly part of JDS Uniphase Corporation (JDSU), is an American network test, measurement and assurance technology company based in Chandler, Arizona",
+"industry": "Semiconductors & Related Devices",
+"cap": 7626,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "high",
+"moved": true
+},
+{
+"ticker": "IPGP",
+"name": "Ipg Photonics Corp",
+"what": "IPG Photonics Corporation is an American manufacturer of fiber lasers",
+"industry": "Semiconductors & Related Devices",
+"cap": 2954,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "high",
+"moved": true
+},
+{
+"ticker": "PLAB",
+"name": "Photronics Inc",
+"what": "Photronics, Inc. is an American photomask manufacturer for integrated circuits and flat-panel displays",
+"industry": "Semiconductors & Related Devices",
+"cap": 1658,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "medium",
+"moved": true
+},
+{
+"ticker": "KOPN",
+"name": "Kopin Corp",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 617,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "high",
+"moved": true
+},
+{
+"ticker": "TYGO",
+"name": "Tigo Energy, Inc.",
+"what": "It provides products, technologies, software, and services to installers, distributors, and original equipment manufacturers within the photovoltaic industry",
+"industry": "Semiconductors & Related Devices",
+"cap": 54,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "medium",
+"moved": true
+},
+{
+"ticker": "MAXNQ",
+"name": "Maxeon Solar Technologies, Ltd.",
+"what": "Maxeon Solar Technologies, Ltd. is a Singapore-based company that designs and manufactures photovoltaic panels",
+"industry": "Semiconductors & Related Devices",
+"cap": 0,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "high",
+"moved": true
+}
+]
+},
+{
+"layer": "Foundry and memory manufacturing",
+"description": "These companies run fabs producing logic for others or their own DRAM and NAND. They earn from wafer or chip sales. Margins are set by process leadership and utilization, and the heavy capital spending makes memory especially cyclical.",
+"companies": [
+{
+"ticker": "MU",
+"name": "Micron Technology Inc",
+"what": "manufactures computer memory and computer data storage products, including dynamic random-access memory (DRAM), flash memory, High Bandwidth Memory (HBM), and solid-state drives (SSDs)",
+"industry": "Semiconductors & Related Devices",
+"cap": 820406,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "high"
+},
+{
+"ticker": "TSM",
+"name": "Taiwan Semiconductor Manufacturing Co Ltd",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 2056346,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "low"
+},
+{
+"ticker": "INTC",
+"name": "Intel Corp",
+"what": "Intel Corporation is an American multinational technology company headquartered in Santa Clara, California",
+"industry": "Semiconductors & Related Devices",
+"cap": 308961,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "high"
+},
+{
+"ticker": "UMC",
+"name": "United Microelectronics Corp",
+"what": "United Microelectronics Corporation is a Taiwanese company based in Hsinchu, Taiwan",
+"industry": "Semiconductors & Related Devices",
+"cap": 37865,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "low"
+},
+{
+"ticker": "TSEM",
+"name": "Tower Semiconductor Ltd",
+"what": "Tower Semiconductor Ltd.(Nasdaq/TASE: TSEM) is an Israeli company that manufactures integrated circuits using specialty process technologies, including SiGe, BiCMOS, Silicon Photonics, SOI, mixed-signal and RFCMOS, CMOS…",
+"industry": "Semiconductors & Related Devices",
+"cap": 16610,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "medium"
+},
+{
+"ticker": "SKHY",
+"name": "SK hynix Inc.",
+"what": "SK Hynix Inc., stylized SK hynix, is a South Korean semiconductor company that manufactures dynamic random-access memory (DRAM) chips and flash memory chips",
+"industry": "Semiconductors & Related Devices",
+"cap": 0,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "high"
+}
+]
+},
+{
+"layer": "Analog and power integrated device makers",
+"description": "These firms design and make analog, power and microcontroller chips in their own plants for industrial and auto buyers. They earn from large catalogs sold over many years. Margins depend on owned fab utilization and are helped by subsidies, but follow industrial demand.",
+"companies": [
+{
+"ticker": "TXN",
+"name": "Texas Instruments Inc",
+"what": "The company's focus is on developing analog chips and embedded processors, which account for more than 80% of its revenue.",
+"industry": "Semiconductors & Related Devices",
+"cap": 274606,
+"basis": "industry",
+"model": "fabless",
+"model_confidence": "medium"
+},
+{
+"ticker": "MCHP",
+"name": "Microchip Technology Inc",
+"what": "manufactures microcontrollers, microprocessors, integrated circuits, and flash memory",
+"industry": "Semiconductors & Related Devices",
+"cap": 32833,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "high"
+},
+{
+"ticker": "ADI",
+"name": "Analog Devices Inc",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 190580,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "low"
+},
+{
+"ticker": "NXPI",
+"name": "NXP Semiconductors N.V.",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 65927,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "low"
+},
+{
+"ticker": "STM",
+"name": "STMicroelectronics N.V.",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 39728,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "low"
+},
+{
+"ticker": "ON",
+"name": "On Semiconductor Corp",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 27098,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "low"
+},
+{
+"ticker": "ALGM",
+"name": "Allegro Microsystems, Inc.",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 5725,
+"basis": "industry",
+"model": "",
+"model_confidence": ""
+},
+{
+"ticker": "DIOD",
+"name": "Diodes Inc /del/",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 3964,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "low"
+},
+{
+"ticker": "WOLF",
+"name": "Wolfspeed, Inc.",
+"what": "Wolfspeed, Inc. is an American developer and manufacturer of wide-bandgap semiconductors, focused on silicon carbide materials and devices for power applications such as transportation, power supplies, power inverters, and wireless systems",
+"industry": "Semiconductors & Related Devices",
+"cap": 1405,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "high"
+},
+{
+"ticker": "AOSL",
+"name": "Alpha & Omega Semiconductor Ltd",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 857,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "low"
+},
+{
+"ticker": "NVEC",
+"name": "Nve Corp",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 388,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "low"
+},
+{
+"ticker": "MRAM",
+"name": "Everspin Technologies Inc.",
+"what": "Everspin Technologies, Inc. is a publicly traded semiconductor company headquartered in Chandler, Arizona, United States",
+"industry": "Semiconductors & Related Devices",
+"cap": 309,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "high"
+},
+{
+"ticker": "MX",
+"name": "Magnachip Semiconductor Corp",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 96,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "low"
+},
+{
+"ticker": "SODI",
+"name": "Solitron Devices Inc",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 79,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "low"
+},
+{
+"ticker": "IPWR",
+"name": "Ideal Power Inc.",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 37,
+"basis": "industry",
+"model": "",
+"model_confidence": ""
+},
+{
+"ticker": "IFNNY",
+"name": "Infineon Technologies AG",
+"what": "Infineon Technologies AG is a German company which designs and manufactures semiconductor devices",
+"industry": "Semiconductors & Related Devices",
+"cap": 0,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "high"
+}
+]
+},
+{
+"layer": "Outsourced packaging and test",
+"description": "These companies assemble finished wafers into packages and test them for chip designers. They earn per unit processed. Margins are thinner and capital-heavy, though advanced packaging for AI chips carries better pricing.",
+"companies": [
+{
+"ticker": "AMKR",
+"name": "Amkor Technology, Inc.",
+"what": "Amkor Technology, Inc. is an American semiconductor product packaging and test services provider.",
+"industry": "Semiconductors & Related Devices",
+"cap": 8542,
+"basis": "industry",
+"model": "",
+"model_confidence": ""
+},
+{
+"ticker": "ASX",
+"name": "ASE Technology Holding Co., Ltd.",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 0,
+"basis": "industry",
+"model": "",
+"model_confidence": ""
+},
+{
+"ticker": "IMOS",
+"name": "Chipmos Technologies Inc",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 1689,
+"basis": "industry",
+"model": "",
+"model_confidence": ""
+}
+]
+},
+{
+"layer": "Designs licensed for royalties",
+"description": "",
+"by_model": true,
+"companies": [
+{
+"ticker": "RMBS",
+"name": "Rambus Inc",
+"what": "Rambus Inc. is an American technology company that designs, develops and licenses chip interface technologies and architectures that are used in digital electronics products",
+"industry": "Semiconductors & Related Devices",
+"cap": 8649,
+"basis": "industry",
+"model": "royalties",
+"model_confidence": "high",
+"moved": true
+},
+{
+"ticker": "ATOM",
+"name": "Atomera Inc",
+"what": "Atomera Incorporated is a materials engineering company based in Los Gatos, California engaged in the development, commercialization and licensing of processes and technologies for the semiconductor industry",
+"industry": "Semiconductors & Related Devices",
+"cap": 113,
+"basis": "industry",
+"model": "royalties",
+"model_confidence": "high",
+"moved": true
+}
+]
+},
+{
+"layer": "Other semiconductor companies",
+"description": "",
+"official": true,
+"basis": "rest",
+"companies": [
+{
+"ticker": "ENTG",
+"name": "Entegris Inc",
+"what": "Entegris, Inc. is a supplier of materials for the semiconductor and other high-tech industries",
+"industry": "Plastics Products, Nec",
+"cap": 21173,
+"basis": "list",
+"model": "",
+"model_confidence": ""
+},
+{
+"ticker": "KYOCF",
+"name": "Kyocera Corp",
+"what": "Kyocera Corporation is a Japanese multinational ceramics and electronics manufacturer headquartered in Kyoto, Japan",
+"industry": "Semiconductors & Related Devices",
+"cap": 7042,
+"basis": "industry",
+"model": "",
+"model_confidence": ""
+},
+{
+"ticker": "AAOI",
+"name": "Applied Optoelectronics, Inc.",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 4386,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "low"
+},
+{
+"ticker": "AXTI",
+"name": "Axt Inc",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 2578,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "low"
+},
+{
+"ticker": "PENG",
+"name": "Penguin Solutions, Inc.",
+"what": "Penguin Solutions is an American technology company headquartered in Fremont, California",
+"industry": "Semiconductors & Related Devices",
+"cap": 2689,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "low"
+},
+{
+"ticker": "LASR",
+"name": "Nlight, Inc.",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 2562,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "low"
+},
+{
+"ticker": "DQ",
+"name": "Daqo New Energy Corp.",
+"what": "Daqo New Energy Corp. is a Chinese company engaged in the manufacture of monocrystalline silicon (mono-Si) and polysilicon (poly-Si), primarily for use in solar photovoltaic systems",
+"industry": "Semiconductors & Related Devices",
+"cap": 790,
+"basis": "industry",
+"model": "",
+"model_confidence": ""
+},
+{
+"ticker": "TE",
+"name": "T1 Energy Inc.",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 610,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "low"
+},
+{
+"ticker": "POET",
+"name": "Poet Technologies Inc.",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 671,
+"basis": "industry",
+"model": "",
+"model_confidence": ""
+},
+{
+"ticker": "LPTH",
+"name": "Lightpath Technologies Inc",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 560,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "low"
+},
+{
+"ticker": "PALX",
+"name": "Palomino Laboratories Inc.",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 387,
+"basis": "industry",
+"model": "",
+"model_confidence": ""
+},
+{
+"ticker": "TOYO",
+"name": "TOYO Co., Ltd",
+"what": "Toyo Tire Corporation , commonly known as Toyo Tires, is a multinational tire and rubber products company based in Itami, Japan",
+"industry": "Semiconductors & Related Devices",
+"cap": 187,
+"basis": "industry",
+"model": "",
+"model_confidence": ""
+},
+{
+"ticker": "ALMU",
+"name": "Aeluma, Inc.",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 142,
+"basis": "industry",
+"model": "",
+"model_confidence": ""
+},
+{
+"ticker": "HYSR",
+"name": "Sunhydrogen, Inc.",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 90,
+"basis": "industry",
+"model": "",
+"model_confidence": ""
+},
+{
+"ticker": "SPCB",
+"name": "SuperCom Ltd",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 46,
+"basis": "industry",
+"model": "",
+"model_confidence": ""
+},
+{
+"ticker": "FTCI",
+"name": "FTC Solar, Inc.",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 28,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "low"
+},
+{
+"ticker": "LEDS",
+"name": "SemiLEDs Corp",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 20,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "low"
+},
+{
+"ticker": "SUNE",
+"name": "SUNation Energy, Inc.",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 14,
+"basis": "industry",
+"model": "construction",
+"model_confidence": "low"
+},
+{
+"ticker": "ASTI",
+"name": "Ascent Solar Technologies, Inc.",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 4,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "low"
+},
+{
+"ticker": "SMTK",
+"name": "SmartKem, Inc.",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 2,
+"basis": "industry",
+"model": "manufacturing",
+"model_confidence": "low"
+},
+{
+"ticker": "SELXF",
+"name": "Semilux International Ltd.",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 0,
+"basis": "industry",
+"model": "",
+"model_confidence": ""
+},
+{
+"ticker": "SNSC",
+"name": "SunScout Holding Ltd",
+"what": "",
+"industry": "Semiconductors & Related Devices",
+"cap": 0,
+"basis": "industry",
+"model": "",
+"model_confidence": ""
+},
+{
+"ticker": "GFS",
+"name": "Globalfoundries Inc.",
+"what": "GlobalFoundries Inc. is a multinational semiconductor technology development, design and contract manufacturing company domiciled in the Cayman Islands and headquartered in Malta, New York",
+"industry": "Semiconductors & Related Devices",
+"cap": 22580,
+"basis": "industry",
+"model": "contract_manufacturing",
+"model_confidence": "high",
+"moved": true
+}
+]
+}
+],
+"about": {
+"Q": "Qnity Electronics, Inc. is a major provider of materials for the semiconductor manufacturing and electronics industries headquartered in Wilmington, Delaware. The company's Semiconductor Technologies segment produces products for chemical-mechanical polishing, photolithography, sealing applications, and OLED displays. Its Interconnect Solutions segment provides products for signal integrity, including semiconductor coatings, thermal and electromagnetic shielding, and laminate materials. Kapton is a brand of the company."
+}
+}
