@@ -83,3 +83,42 @@ def test_a_news_list_kept_before_the_rules_is_served_by_them(monkeypatch):
     monkeypatch.setattr(T.computed, "get", lambda kind, key, **k: {"value": kept})
     out = T.theme_dive_news("Cyber", "US", profile=None)
     assert [i["source"] for i in out["items"]] == ["Reuters"]
+
+
+# ---------- LIVE6-007: a company's own words only when they say what it does ----------
+OWN_CASES = [  # (text, name, shown)
+    ("From its own filings: Annual report (20-F).", "Check Point Software", False),
+    ("Annual report (20-F)", "Check Point Software", False),
+    ("Fortinet, Inc.", "Fortinet, Inc.", False),
+    ("Fortinet, Inc. is an American multinational corporation headquartered in Sunnyvale, California", "Fortinet, Inc.", False),
+    ("Rapid7 is an American cybersecurity company headquartered in Boston, Massachusetts", "Rapid7, Inc.", False),
+    ("Fortinet provides cybersecurity solutions to enterprises and service providers", "Fortinet, Inc.", True),
+    ("Tata Motors Limited is a leading global automobile manufacturer", "Tata Motors Ltd", True),
+    ("The company is engaged in the business of manufacturing auto components", "Uno Minda Ltd", True),
+    ("It manufactures steel wheels for cars", "Steel Strips Wheels Ltd", True),
+]
+
+
+def test_a_line_is_shown_as_its_own_words_only_when_it_says_what_the_company_does():
+    from app.intel.theme_base import own_words
+    for text, name, shown in OWN_CASES:
+        assert bool(own_words(text, name)) is shown, text
+    from app import deck
+    assert deck._what("Fortinet, Inc.", "Fortinet, Inc.") == "" and deck.NO_WORDS == "No description in its own words yet"
+    from app.intel import theme_routes as T
+    m = T.with_caps({"value_chain": [{"companies": [{"ticker": "CHKP", "name": "Check Point", "what": "From its own filings: Annual report (20-F)."},
+                                                    {"ticker": "FTNT", "name": "Fortinet", "what": "Fortinet provides network security products"}]}],
+                     "sub_themes": []}, [])
+    assert [c["what"] for c in m["value_chain"][0]["companies"]] == ["", "Fortinet provides network security products"]
+
+
+# ---------- LIVE6-006: one market value per company, one date format ----------
+def test_the_deck_and_csv_take_one_market_value_per_company_and_write_dates_one_way():
+    from app.intel import theme_routes as T
+    from app import deck
+    m = {"value_chain": [{"layer": "L", "companies": [{"ticker": "PANW", "name": "Palo Alto Networks", "cap": 267000.0}]}], "sub_themes": []}
+    dive = {"layers": [{"companies": [{"symbol": "PANW", "name": "Palo Alto Networks", "cap": 256700.0}]}], "subs": []}
+    assert [x["cap"] for x in T.members_of(m, dive)] == [256700.0]
+    pp = {"theme": 40.0, "peers": 30.0, "n": 5, "premium": 33.3, "as_of": "2026-11-10"}
+    assert "prices at the 10 Nov 2026 close" in deck.pe_peer_line(pp)
+    assert "2026-11" not in deck.peer_moved_line({"moved": {"from": 19.2, "to": 18.4, "on": "2026-11-08", "at": "2026-11-09"}})

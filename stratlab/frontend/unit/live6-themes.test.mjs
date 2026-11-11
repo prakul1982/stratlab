@@ -36,3 +36,30 @@ test("LIVE6-002: the price table says the close its periods run to, and the char
   assert.match(src, /Over, to \$\{fmtDate\(prices\.returns_to\)\}/);
   assert.match(src, /times=\{prices\.line\.weeks\}/);
 });
+
+test("LIVE6-007: the page shows a line as a company's own words by the deck's rule (theme_base.own_words)", async () => {
+  const TF = await import("../src/lib/themeFormat.ts");
+  const cases = [
+    ["From its own filings: Annual report (20-F).", "Check Point Software", false],
+    ["Annual report (20-F)", "Check Point Software", false],
+    ["Fortinet, Inc.", "Fortinet, Inc.", false],
+    ["Fortinet, Inc. is an American multinational corporation headquartered in Sunnyvale, California", "Fortinet, Inc.", false],
+    ["Rapid7 is an American cybersecurity company headquartered in Boston, Massachusetts", "Rapid7, Inc.", false],
+    ["Fortinet provides cybersecurity solutions to enterprises and service providers", "Fortinet, Inc.", true],
+    ["Tata Motors Limited is a leading global automobile manufacturer", "Tata Motors Ltd", true],
+    ["The company is engaged in the business of manufacturing auto components", "Uno Minda Ltd", true],
+    ["It manufactures steel wheels for cars", "Steel Strips Wheels Ltd", true],
+  ];
+  for (const [t, n, shown] of cases) assert.equal(!!TF.ownWords(t, n), shown, t);
+  assert.equal(TF.NO_WORDS, "No description in its own words yet");
+  // the backend's cases are the same list (tests/test_live6_themes.py OWN_CASES)
+  const py = readFileSync(new URL("../../backend/tests/test_live6_themes.py", import.meta.url), "utf8");
+  for (const [t] of cases) assert.ok(py.includes(JSON.stringify(t)), t);
+});
+
+test("LIVE6-006: one market value per company on the page: the dive's wherever it has the company", () => {
+  const src = read("src/components/ThemeDive.tsx");
+  assert.match(src, /amount\(caps\.get\(c\.ticker\) \?\? c\.cap \?\? null, region\)/);
+  assert.match(src, /csv: \(x\) => x\.fig\?\.cap \?\? x\.co\.cap \?\? null/);
+  assert.match(read("src/pages/ThemesPage.tsx"), /<MembersCard r=\{r\} region=\{region\} dive=\{dive\} \/>/);
+});

@@ -91,4 +91,4 @@ export const themeApi = {
 /** The theme's words in a file name, as the server writes them (theme_data.slug): "India defence" is "india-defence". */
 export const themeSlug = (theme: string) => theme.split(/\s+/).filter(Boolean).join(" ").slice(0, 80).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
 
-export { amount, pc, times, points, span, layerLines, medCell, calcOf, CALC_WORDS, MIN_BASE, type LayerLine } from "./themeFormat";
+export { amount, pc, times, points, span, layerLines, medCell, calcOf, CALC_WORDS, MIN_BASE, NO_WORDS, ownWords, type LayerLine } from "./themeFormat";

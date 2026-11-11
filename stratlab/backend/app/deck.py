@@ -2034,11 +2034,15 @@ def note_h(text: str, w: float = CW) -> float:
     return len(wrap(text, BODY_MIN, w)) * _lh(BODY_MIN) + 0.04
 
 
-def _what(text: str) -> str:
+NO_WORDS = "No description in its own words yet"          # LIVE6-007: the page's words for a company with none (theme_base.NO_WORDS)
+
+
+def _what(text: str, name: str = "") -> str:
     """What a company does, as the page shows it, cleaned as a new read would be (theme_base.one_line): a "**Company Overview **" heading,
-    "Incorporatedin1994" or a month's sales line never reaches a slide."""
-    from .intel.theme_base import one_line
-    return one_line(text) if text else ""
+    "Incorporatedin1994" or a month's sales line never reaches a slide; nor a line that isn't its own words about its work (LIVE6-007:
+    theme_base.own_words: "Fortinet, Inc. | What it does: Fortinet, Inc.", a filing's title)."""
+    from .intel.theme_base import one_line, own_words
+    return own_words(one_line(text), name) if text else ""
 
 
 def shown_label(cos: list, k: int) -> str:
@@ -2367,7 +2371,7 @@ def pe_peer_line(pp: dict) -> str:
     the ratio of those two medians, the two numbers the valuation table shows. Which peer set it is, and how many have none, said (R27)."""
     return (f"Median P/E {_times(pp['theme'])} for the {_n(pp['n'], 'company', 'companies')} with comparable peers {peer_set_words(pp)}, "
             f"{premium_words(pp['premium'])} their peers' median of {_times(pp['peers'])}"
-            + (f" (prices at the {pp['as_of']} close)" if pp.get("as_of") else "") + no_peer_words(pp))
+            + (f" (prices at the {_day(pp['as_of'])} close)" if pp.get("as_of") else "") + no_peer_words(pp))       # LIVE6-006: one date format
 
 
 def dated_peers(v: dict) -> dict:
@@ -2397,10 +2401,10 @@ def peer_moved_line(pp: dict) -> str:
     count = (f"; {n0:,} of the theme's companies compared then, {n1:,} now" if n0 and n1 and n0 != n1 else "") + \
         (f"; {k0:,} peers behind it then, {k1:,} now" if k0 and k1 and k0 != k1 else "")
     if same_day:
-        return (f"Their peers' median P/E was {_times(mv['from'])} at an earlier run on the {mv['on']} close and is {_times(mv['to'])} now: "
+        return (f"Their peers' median P/E was {_times(mv['from'])} at an earlier run on the {_day(mv['on'])} close and is {_times(mv['to'])} now: "
                 f"the peers or their reported figures changed{count}.")
-    return (f"Their peers' median P/E was {_times(mv['from'])} at the {mv.get('on') or 'earlier'} close and is {_times(mv['to'])} "
-            f"at the {mv.get('at') or 'latest'} close: prices moved between the two closes{count}.")
+    return (f"Their peers' median P/E was {_times(mv['from'])} at the {_day(mv['on']) if mv.get('on') else 'earlier'} close and is {_times(mv['to'])} "
+            f"at the {_day(mv['at']) if mv.get('at') else 'latest'} close: prices moved between the two closes{count}.")
 
 
 def no_peer_words(pp: dict) -> str:
@@ -2924,7 +2928,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 46                  # n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 47                  # LIVE6: calendar price periods to one close with years on the axis, headlines with a source and no quote pages, own words only, one market value per company, charts of 4 points or more, one-row tables joined; n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -4275,7 +4279,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
 
     for m in members:                       # what a company does, as one business sentence (headings, glued words, results lines left off)
         if m.get("what"):
-            m["what"] = _what(m["what"])
+            m["what"] = _what(m["what"], m.get("name") or "")
     cov = coverage(v)
     mem = v.get("membership") or {}
 
@@ -4879,7 +4883,7 @@ def _smaller_layers(slides: list, small: list, amt, eyebrow: str) -> None:
     cols = [col for col in co_cols(cos) if col[0] in keys]
     head = ["Layer", "Company", "What it does"] + [col[1] for col in cols] + ["Year"]
     widths = [2.3, 2.3, 3.6] + [col[2] for col in cols] + [1.0]
-    body = [[x["layer"], name, whole_clause(_what(c.get("what") or "") or x.get("description") or "", 110) or "–"]
+    body = [[x["layer"], name, whole_clause(_what(c.get("what") or "", c.get("name") or ""), 110) or NO_WORDS]
             + [co_cell(c, k, amt) for k, _, _ in cols] + [c.get("year") or "–"] for x, c, name in rows_]
     head, body, widths, numeric = drop_empty(head, body, widths, [False, False, False] + [True] * len(cols) + [False], keep=(0, 1, 2))
     note = ("Each of these layers has one confirmed company, so it has no median and no page of its own; it is in the value chain's table. "

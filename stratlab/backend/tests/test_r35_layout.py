@@ -314,4 +314,4 @@ def test_the_page_of_what_moved_the_margin_keeps_its_total_row_whatever_the_name
 
 
 def test_the_deck_version_is_44_so_kept_files_are_made_again():
-    assert deck.THEME_DECK_VERSION == 46
+    assert deck.THEME_DECK_VERSION == 47

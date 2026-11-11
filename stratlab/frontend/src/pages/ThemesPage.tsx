@@ -122,9 +122,12 @@ export function ThemesPage() {
     try { const d = await themeApi.draft(region, q); setDraft(d.result === "nothing notable" || d.result === "too few figures" ? "The theme needs two layers with margin figures for a post." : d.slug ? `Draft saved (${d.result}). It is hidden: read it under Admin, Blog, and publish it there if it is right.` : `Not drafted: ${d.problem ?? d.result}.`); }
     catch (e) { setDraft((e as Error).message); }
   };
-  const nav = dive ? [
-    { id: "theme-members", label: "Companies" }, { id: "theme-chain", label: "The chain" }, ...(dive.layers.length ? [{ id: "layer-0", label: "Layers" }] : []), ...(dive.subs.length ? [{ id: "theme-subs", label: "Sub-themes" }] : []),
-    { id: "theme-claims", label: "Tailwinds and risks" }, { id: "theme-news", label: "Latest" }, { id: "numbers-size", label: "The theme in numbers" }, { id: "numbers-leaders", label: "Every company" },
+  // LIVE6-017: the section links sit at the top, under the theme's head, not halfway down the page after the companies
+  const nav = r ? [
+    { id: "theme-members", label: "Companies" },
+    ...(dive && dive.members > 0 ? [{ id: "theme-chain", label: "The chain" }] : []), ...(dive?.layers.length ? [{ id: "layer-0", label: "Layers" }] : []), ...(dive?.subs.length ? [{ id: "theme-subs", label: "Sub-themes" }] : []),
+    ...(r.tailwinds.length + r.risks.length > 0 ? [{ id: "theme-claims", label: "Tailwinds and risks" }] : []), ...(dive ? [{ id: "theme-news", label: "Latest" }] : []),
+    ...(dive && dive.members > 0 ? [{ id: "numbers-size", label: "The theme in numbers" }, { id: "numbers-leaders", label: "Every company" }] : []),
   ] : [];
   return (
     <div className="k-page">
@@ -181,12 +184,12 @@ export function ThemesPage() {
               The theme's layers couldn't be finished just now. The companies below are the exchange's own classification.
             </Notice>
           )}
-          <MembersCard r={r} region={region} />
+          {nav.length > 1 && <PageNav items={nav} />}
+          <MembersCard r={r} region={region} dive={dive} />
           {diveError && <ErrorState title="The theme's numbers couldn't be loaded" action={{ label: "Try again", onClick: () => run(q, { keep: true }) }}>{diveError}</ErrorState>}
           {!dive && !diveError && <Card><Skeleton label="Working out the theme's figures" lines={5} /></Card>}
           {dive && (
             <>
-              {nav.length > 1 && <PageNav items={nav} />}
               {/* on every theme with figures (owner, 7 Nov: "did you remove the blog button for me too?": it showed only when the figures were notable) */}
               {me?.is_admin && dive.members > 0 && (
                 <div className="k-row" data-testid="theme-blog">

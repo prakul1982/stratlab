@@ -13,7 +13,7 @@ import { filedOn } from "./BizUpdates";
 import { fmtDate, pct, ratio, safeHref } from "../lib/format";
 import type { Co, Region, SectorAI } from "../lib/research";
 import {
-  amount, calcOf, CALC_WORDS, layerLines, medCell, MIN_BASE, pc, points, span, times,
+  amount, calcOf, CALC_WORDS, layerLines, medCell, MIN_BASE, NO_WORDS, ownWords, pc, points, span, times,
   themeApi,
   type BizRow, type Business, type Dive, type DiveRow, type Layer, type LayerLine, type Listing, type NewsRow, type Prices, type Stat,
 } from "../lib/theme";
@@ -27,9 +27,12 @@ const Name = ({ r, sym, name, wide }: { r: Region; sym: string; name: string; wi
   <><Link className="link" to={co(r, sym)}><b>{name}</b></Link>{wide && <span className="k-sub-line">Whole-company figures</span>}</>
 );
 const dash = <span className="k-muted">–</span>;
-/** LIVE6-007: a company with no description in its own words says so in one way everywhere */
-const NO_WORDS = "No description in its own words yet";
+
 const chg = (v: number | null | undefined) => (v == null ? dash : <Signed value={v} fmt={(x) => pct(x, 1)} />);
+
+/** The basis line without "in $ million": the page writes each amount with its own unit ($14.2B), so a unit note under it would contradict
+ *  the figures (LIVE6-017). */
+const basisWords = (b: string) => b.replace(/, in (?:₹ crore|\$ million)\./, ".");
 
 /** The whole chain in one table, and the one comparison across layers: where the margin sits. */
 export function ChainCard({ dive }: { dive: Dive }) {
@@ -45,11 +48,11 @@ export function ChainCard({ dive }: { dive: Dive }) {
   ];
   return (
     <Card id="theme-chain" label="The whole chain in one table">
-      <CardHead title="The whole chain in one table" info={dive.basis} />
+      <CardHead title="The whole chain in one table" info={basisWords(dive.basis)} />
       <DataTable label="The value chain by layer: companies, revenue and median margins" columns={cols} rows={dive.chain.rows} rowKey={(x) => x.layer} />
       {dive.chain.line && <p className="k-small">{dive.chain.line}</p>}
       {dive.chain.rows.some((x) => x.ebitda_n > 0 && x.ebitda_n < MIN_BASE) && <p className="k-note">A median is shown on {MIN_BASE} companies or more in a layer's calculations; each company's own figures are on its layer's table.</p>}
-      <p className="k-note">{dive.basis}</p>
+      <p className="k-note">{basisWords(dive.basis)}</p>
     </Card>
   );
 }
@@ -58,13 +61,34 @@ function Spk({ row }: { row: BizRow }) {
   return <Spark values={row.points.map((p) => p.value)} label={`${row.name}, ${row.metric}, by month`} tone="neutral" height={24} />;
 }
 
+/** LIVE6-017: a long table shows its first rows and the rest a press away ("Show all N"), so the page isn't 16,000 px tall. */
+function Fold<T>({ rows, n = 10, what = "rows", children }: { rows: T[]; n?: number; what?: string; children: (shown: T[]) => ReactNode }) {
+  const [all, setAll] = useState(false);
+  return (
+    <>
+      {children(all || rows.length <= n + 2 ? rows : rows.slice(0, n))}
+      {rows.length > n + 2 && (all ? <ShowLess onLess={() => setAll(false)} /> : <button type="button" className="btn quiet sm" data-testid="show-all" onClick={() => setAll(true)}>{`Show all ${rows.length} ${what}`}</button>)}
+    </>
+  );
+}
+/** a row whose every figure is a dash says nothing: it is left out (LIVE6-017) */
+const isDash = (v: ReactNode) => v == null || v === "–" || v === "" || (typeof v === "object" && v !== null && (v as { props?: { children?: unknown } }).props?.children === "–");
+const said = (rows: KV[]) => rows.filter((x) => ![x.a, x.b].every(isDash));
+
 const MEMBERS_SHOWN = 12;     // a group's first rows; the rest a press away (a theme of 500 drug makers is listed in full)
 
 /** Every company in the theme, by layer (THEMES): the base is every listed company the exchange classifies in the theme's industries,
  * which the AI can sort into its layers but never removes; the AI's additions from other industries are marked, confirmed in their own
  * words or not yet. Counts said once, honestly. */
-export function MembersCard({ r, region }: { r: SectorAI; region: Region }) {
+export function MembersCard({ r, region, dive }: { r: SectorAI; region: Region; dive?: Dive | null }) {
   const p = r.placements;
+  // LIVE6-006: one market value per company on the page: the dive's (its stated price date) wherever it has the company
+  const caps = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const x of [...(dive?.layers ?? []).flatMap((l) => l.companies), ...(dive?.subs ?? []).flatMap((s) => s.companies), ...(dive?.sections.leaders ?? [])])
+      if (x.cap != null && !m.has(x.symbol)) m.set(x.symbol, x.cap);
+    return m;
+  }, [dive]);
   const inLayer = new Set(r.value_chain.flatMap((v) => v.companies.map((c) => c.ticker)));
   const subOnly = [...new Map(r.sub_themes.flatMap((s) => s.companies).filter((c) => !inLayer.has(c.ticker)).map((c) => [c.ticker, c])).values()];
   const groups = [...r.value_chain.map((v) => ({ name: v.layer, official: !!v.official && v.basis !== "list", rows: v.companies })),
@@ -75,8 +99,8 @@ export function MembersCard({ r, region }: { r: SectorAI; region: Region }) {
   const cols: Column<Co>[] = [
     { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (c) => <><Name r={region} sym={c.ticker} name={c.name} /><span className="k-sub-line k-muted">{c.ticker}</span></> },
     { key: "i", header: "Industry", wrap: true, cell: (c) => c.industry || dash },
-    { key: "m", header: "Market value", numeric: true, cell: (c) => amount(c.cap ?? null, region) },
-    { key: "w", header: "What it does, in its own words", wrap: true, cell: (c) => (c.what ? <>“{c.what}”</> : <span className="k-muted">{NO_WORDS}</span>) },
+    { key: "m", header: "Market value", numeric: true, cell: (c) => amount(caps.get(c.ticker) ?? c.cap ?? null, region) },
+    { key: "w", header: "What it does, in its own words", wrap: true, cell: (c) => { const w = ownWords(c.what, c.name); return w ? <>“{w}”</> : <span className="k-muted">{NO_WORDS}</span>; } },
     { key: "f", header: "In the theme by", cell: (c) => (c.base ? (c.basis === "list" ? "Named in the theme's list" : "Official industry")
       : <><Badge tone="plain" dot={false}>Added</Badge><span className="k-sub-line">{c.verified ? "Confirmed by its own words" : "Not yet confirmed"}</span></>) },
   ];
@@ -136,14 +160,14 @@ export function memberColumns(region: Region, unit: string | null): Column<Membe
     { key: "s", header: "Symbol", cell, csv: (x) => x.co.ticker },
     { key: "l", header: "Layer", cell, csv: (x) => x.layer },
     { key: "i", header: "Industry", cell, csv: (x) => x.co.industry || null },
-    { key: "m", header: `Market value (${cap})`, cell, csv: (x) => x.co.cap ?? x.fig?.cap ?? null },
+    { key: "m", header: `Market value (${cap})`, cell, csv: (x) => x.fig?.cap ?? x.co.cap ?? null },
     { key: "rev", header: `Revenue (${u})`, cell, csv: (x) => x.fig?.revenue ?? null },
     { key: "e", header: "EBITDA margin (%)", cell, csv: (x) => x.fig?.ebitda ?? null },
     { key: "n", header: "Net margin (%)", cell, csv: (x) => x.fig?.net ?? null },
     { key: "roce", header: "ROCE (%)", cell, csv: (x) => x.fig?.roce ?? null },
     { key: "y", header: "Year of the figures", cell, csv: (x) => x.fig?.year ?? null },
     { key: "b", header: "In the theme by", cell, csv: (x) => memberBy(x.co) },
-    { key: "w", header: "What it does, in its own words", cell, csv: (x) => x.co.what || null },
+    { key: "w", header: "What it does, in its own words", cell, csv: (x) => ownWords(x.co.what, x.co.name) || null },
   ];
 }
 
@@ -207,7 +231,7 @@ function layerColumns(r: Region, wide: Set<string>, wideOut: boolean): Column<La
   };
   return [
     { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (x) => x.kind !== "company" ? <b>{x.label}</b>
-      : <><Name r={r} sym={x.row!.symbol} name={x.row!.name} wide={wide.has(x.row!.symbol)} />{mark(x.row!)}{x.row!.what ? <span className="k-sub-line">In its own words: “{x.row!.what}”</span> : <span className="k-sub-line k-muted">{NO_WORDS}</span>}</> },
+      : <><Name r={r} sym={x.row!.symbol} name={x.row!.name} wide={wide.has(x.row!.symbol)} />{mark(x.row!)}{ownWords(x.row!.what, x.row!.name) ? <span className="k-sub-line">In its own words: “{ownWords(x.row!.what, x.row!.name)}”</span> : <span className="k-sub-line k-muted">{NO_WORDS}</span>}</> },
     { key: "rev", header: "Revenue", numeric: true, cell: (x) => x.kind === "company" ? amount(x.row!.revenue, r) : "" },
     { key: "e", header: "EBITDA margin", numeric: true, cell: f("ebitda") },
     { key: "n", header: "Net margin", numeric: true, cell: f("net") },
@@ -231,7 +255,9 @@ export function LayerCard({ layer, i, region, business }: { layer: Layer; i: num
         ? <p className="k-small">No listed company is shown for this layer: none of the companies the map named has a description that shows it does this work.</p>
         : <>
           <p className="k-small k-muted" data-testid="layer-count">{listed} compan{listed === 1 ? "y" : "ies"} listed, {inCalc} in the layer's calculations{inCalc < MIN_BASE ? `: a median needs ${MIN_BASE}, so each company's own figures are shown` : ""}.</p>
-          <DataTable label={`${layer.layer}: companies, revenue and margins`} columns={layerColumns(region, wide, layer.left_out > 0)} rows={lines} rowKey={(x) => x.key} rowAttrs={(x) => ({ "data-kind": x.kind })} />
+          <Fold rows={lines.filter((x) => x.kind === "company")} n={10} what="companies">{(shown) => (
+            <DataTable label={`${layer.layer}: companies, revenue and margins`} columns={layerColumns(region, wide, layer.left_out > 0)} rows={[...shown, ...lines.filter((x) => x.kind !== "company")]} rowKey={(x) => x.key} rowAttrs={(x) => ({ "data-kind": x.kind })} />
+          )}</Fold>
           {layer.line && <p className="k-small">{layer.line}</p>}
           {wide.size > 0 && <p className="k-note">"Whole-company figures": the company runs other businesses too, so its figures are the whole company's, not this layer's own.</p>}
           {layer.companies.some((c) => c.one_off && c.net != null) && <p className="k-note">†: net margin above the EBITDA margin (a one-off gain in the year), left out of the net margin's median.</p>}
@@ -262,7 +288,7 @@ export function SubThemesCard({ dive, business }: { dive: Dive; business?: Busin
   if (dive.subs.length === 0) return null;
   const cols: Column<(typeof dive.subs)[number]["companies"][number]>[] = [
     { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (x) => <Name r={r} sym={x.symbol} name={x.name} wide={x.company_wide} /> },
-    { key: "w", header: "What it does here, in its own words", wrap: true, cell: (x) => (x.what ? <>“{x.what}”</> : <span className="k-muted">{NO_WORDS}</span>) },
+    { key: "w", header: "What it does here, in its own words", wrap: true, cell: (x) => { const w = ownWords(x.what, x.name); return w ? <>“{w}”</> : <span className="k-muted">{NO_WORDS}</span>; } },
     { key: "m", header: "Market value", numeric: true, cell: (x) => amount(x.cap, r) },
     { key: "g", header: "Revenue growth", numeric: true, info: "Latest full year against the year before.", cell: (x) => chg(x.sales_1y) },
     { key: "e", header: "EBITDA margin", numeric: true, cell: (x) => pc(x.ebitda) },
@@ -276,7 +302,7 @@ export function SubThemesCard({ dive, business }: { dive: Dive; business?: Busin
           <p className="k-small k-muted">{s.detail}</p>
           {s.companies.length === 0
             ? <p className="k-small">No listed company is shown for this sub-theme.</p>
-            : <DataTable label={`${s.name}: listed companies`} columns={cols} rows={s.companies} rowKey={(x) => x.symbol} />}
+            : <Fold rows={s.companies} n={10} what="companies">{(shown) => <DataTable label={`${s.name}: listed companies`} columns={cols} rows={shown} rowKey={(x) => x.symbol} />}</Fold>}
           {(business?.subs[k]?.rows.length ?? 0) > 0 && <BusinessTable rows={business!.subs[k].rows} label={`${s.name}: operating figures from business updates`} />}
         </section>
       ))}
@@ -318,7 +344,7 @@ export function NewsCard({ items, loading }: { items: NewsRow[] | null; loading:
     <Card id="theme-news" label="Latest on this theme">
       <CardHead title="Latest on this theme" info="The most recent dated headlines and exchange filings for the theme's companies, as published. No view is added." />
       {items == null ? (loading ? <p className="k-note">Loading the latest headlines…</p> : <p className="k-note">The latest headlines couldn't be loaded.</p>)
-        : <DataTable label="Latest dated headlines and filings for the theme" columns={cols} rows={items} rowKey={(x) => `${x.at}${x.headline}`} empty="No recent headlines or filings were found for this theme's companies." />}
+        : <Fold rows={items.filter((x) => x.headline && x.source)} n={10} what="headlines">{(shown) => <DataTable label="Latest dated headlines and filings for the theme" columns={cols} rows={shown} rowKey={(x) => `${x.at}${x.headline}`} empty="No recent headlines or filings were found for this theme's companies." />}</Fold>}
     </Card>
   );
 }
@@ -353,6 +379,7 @@ export function NumbersCards({ dive, prices, pricesBusy }: { dive: Dive; prices:
     <>
       <Card id="numbers-size" label="Size and shape">
         <CardHead title="Size and shape" info={`Companies in the theme with a stored company page. Market value is price times shares in issue, as each company's page shows it.`} />
+        <h3 className="k-sub">The biggest companies by market value</h3>
         <DataTable label="The theme's biggest companies by market value" columns={[
           { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (x: (typeof s.size.biggest)[number]) => <Name r={r} sym={x.symbol} name={x.name} wide={dive.company_wide.includes(x.symbol)} /> },
           { key: "m", header: "Market value", numeric: true, cell: (x) => amount(x.cap, r) },
@@ -363,6 +390,7 @@ export function NumbersCards({ dive, prices, pricesBusy }: { dive: Dive; prices:
 
       <Card id="numbers-growth" label="Growth and profitability">
         <CardHead title="Growth and profitability" info="Together: the companies' figures added up, for the companies that report both ends of the period (growth a year for three years). Median: the middle company's own rate. Companies that run other businesses too are left out." />
+        <h3 className="k-sub">Revenue and profit growth</h3>
         <KVTable t={kv("Revenue and profit growth", ["Together, 1 year", "Together, 3 years a year", "Median company, 1 year", "Median company, 3 years a year"], growthRows)} />
         {p5 && <p className="k-note">Median company, 5 years a year: revenue {med(gm.median.revenue_5y, (v) => pct(v))}, profit {med(gm.median.profit_5y, (v) => pct(v))}.</p>}
         {m && m.years.length >= 2 ? (
@@ -376,15 +404,16 @@ export function NumbersCards({ dive, prices, pricesBusy }: { dive: Dive; prices:
             ]} rows={m.years.map((y, i) => ({ y, e: m.ebitda[i], n: m.net[i] }))} rowKey={(h) => h.y} />
           </>
         ) : <p className="k-note">Too few companies report the same years to draw the margins over time.</p>}
+        <h3 className="k-sub">The theme's medians against all listed companies</h3>
         <DataTable label="Margins and returns: the theme against all listed companies" columns={[
           { key: "m", header: "Median", rowHeader: true, cell: (x: KV) => x.measure }, { key: "a", header: "Theme", numeric: true, cell: (x) => x.a }, { key: "b", header: "Companies", numeric: true, cell: (x) => x.b },
           { key: "c", header: "All listed", numeric: true, info: "The middle company among all those StratLab holds figures for.", cell: (x) => x.c },
-        ]} rowKey={(x) => x.key} rows={[
+        ]} rowKey={(x) => x.key} rows={said([
           { key: "e", measure: "EBITDA margin", a: med(s.medians.ebitda), b: s.medians.ebitda?.n ?? dash, c: med(s.market.opm) },
           { key: "n", measure: "Net margin", a: med(s.medians.net), b: s.medians.net?.n ?? dash, c: med(s.market.net_margin) },
           { key: "r", measure: "ROCE", a: med(s.medians.roce), b: s.medians.roce?.n ?? dash, c: med(s.market.roce) },
           { key: "g", measure: "Revenue growth, 3 years a year", a: med(gm.median.revenue_3y, (v) => pct(v)), b: gm.median.revenue_3y?.n ?? dash, c: med(s.market.sales_cagr_3y, (v) => pct(v)) },
-        ]} />
+        ])} />
       </Card>
 
       <Card id="numbers-valuation" label="Valuation">
@@ -392,75 +421,84 @@ export function NumbersCards({ dive, prices, pricesBusy }: { dive: Dive; prices:
         <DataTable label="Valuation: the theme against all listed companies" columns={[
           { key: "m", header: "Measure", rowHeader: true, cell: (x: KV) => x.measure }, { key: "a", header: "Theme median", numeric: true, cell: (x) => x.a }, { key: "b", header: "Range", numeric: true, cell: (x) => x.b },
           { key: "c", header: "Companies", numeric: true, cell: (x) => x.c }, { key: "d", header: "All listed, median", numeric: true, cell: (x) => x.d },
-        ]} rowKey={(x) => x.key} rows={[
+        ]} rowKey={(x) => x.key} rows={said([
           { key: "pe", measure: "P/E", a: med(val.pe, (v) => times(v)), b: span(val.pe, (v) => times(v)), c: val.pe?.n ?? dash, d: med(val.market_pe, (v) => times(v)) },
           { key: "pb", measure: "P/B", a: med(val.pb, (v) => times(v)), b: span(val.pb, (v) => times(v)), c: val.pb?.n ?? dash, d: med(val.market_pb, (v) => times(v)) },
           { key: "ev", measure: "EV/EBITDA", a: med(val.ev_ebitda, (v) => times(v)), b: span(val.ev_ebitda, (v) => times(v)), c: val.ev_ebitda?.n ?? dash, d: dash },
-        ]} />
+        ])} />
         {medianPe != null && marketPe != null && <p className="k-small">The theme's median P/E is {times(medianPe)} against {times(marketPe)} for all {val.market_n.toLocaleString("en-IN")} listed companies with one.</p>}
         {val.ev_missing > 0 && <p className="k-note">EV/EBITDA is n/a for {val.ev_missing} compan{val.ev_missing === 1 ? "y" : "ies"} where debt, cash or EBITDA isn't stored. The all-listed comparison is not worked out for it.</p>}
         {val.history.length >= 2
-          ? <DataTable label="The theme's median P/E over time" columns={[
+          ? <><h3 className="k-sub">The theme's median P/E, week by week</h3><Fold rows={val.history.slice(-26).reverse()} n={8} what="weeks">{(shown) => <DataTable label="The theme's median P/E over time" columns={[
             { key: "d", header: "Week of", rowHeader: true, cell: (h: (typeof val.history)[number]) => fmtDate(h.d) }, { key: "p", header: "Median P/E", numeric: true, cell: (h) => times(h.pe) }, { key: "n", header: "Companies", numeric: true, cell: (h) => h.n },
-          ]} rows={val.history.slice(-26).reverse()} rowKey={(h) => h.d} />
+          ]} rows={shown} rowKey={(h) => h.d} />}</Fold></>
           : <p className="k-note">The theme's own P/E history builds forward from this page: it keeps the median once a week from now.</p>}
       </Card>
 
       <Card id="numbers-quarter" label="The latest quarter">
         <CardHead title="The latest quarter against a year earlier" info="Each company's latest reported quarter against the same quarter a year before, as its company page gives it. It compares a company with its own past, not with anyone's estimate." />
-        <DataTable label="Latest reported quarter against the same quarter a year before" columns={[
+        <Fold rows={s.quarter.companies} n={12} what="companies">{(shownQ) => <DataTable label="Latest reported quarter against the same quarter a year before" columns={[
           { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (x: (typeof s.quarter.companies)[number]) => <Name r={r} sym={x.symbol} name={x.name} /> },
           { key: "q", header: "Quarter", cell: (x) => x.of }, { key: "s", header: "Revenue", numeric: true, cell: (x) => chg(x.sales) }, { key: "p", header: "Net profit", numeric: true, cell: (x) => chg(x.profit) },
-        ]} rows={s.quarter.companies} rowKey={(x) => x.symbol} empty="No company in the theme has a latest quarter stored against a year before."
-          foot={s.quarter.companies.length ? { c: `${s.quarter.sales_up} up, ${s.quarter.sales_down} down on revenue; ${s.quarter.profit_up} up, ${s.quarter.profit_down} down on profit`, q: "Median", s: chg(s.quarter.sales?.median), p: chg(s.quarter.profit?.median) } : undefined} />
+        ]} rows={shownQ} rowKey={(x) => x.symbol} empty="No company in the theme has a latest quarter stored against a year before."
+          foot={s.quarter.companies.length ? { c: `${s.quarter.sales_up} up, ${s.quarter.sales_down} down on revenue; ${s.quarter.profit_up} up, ${s.quarter.profit_down} down on profit`, q: "Median", s: chg(s.quarter.sales?.median), p: chg(s.quarter.profit?.median) } : undefined} />}</Fold>
       </Card>
 
       <Card id="numbers-balance" label="Balance sheet and cash">
         <CardHead title="Balance sheet and cash" info="Debt to equity is borrowings over shareholders' equity (not for lenders). Cash from operations over profit is the latest year's." />
-        <KVTable t={kv("Balance sheet and cash of the theme's companies", ["Median", "Range", "Companies"], [
+        <KVTable t={kv("Balance sheet and cash of the theme's companies", ["Median", "Range", "Companies"], said([
           { key: "de", measure: "Debt to equity", a: med(bal.debt_equity, (v) => `${ratio(v)}x`), b: span(bal.debt_equity, (v) => `${ratio(v)}x`), c: bal.with_debt_equity },
           { key: "ic", measure: "Interest cover (profit before interest and tax over interest)", a: med(bal.interest_cover, (v) => times(v)), b: span(bal.interest_cover, (v) => times(v)), c: bal.interest_cover?.n ?? dash },
           { key: "cfo", measure: "Cash from operations as a multiple of net profit", a: med(bal.cfo_to_profit, (v) => times(v, 2)), b: span(bal.cfo_to_profit, (v) => times(v, 2)), c: bal.cfo_n || dash },
-        ])} />
+        ]))} />
         <p className="k-note">{bal.with_debt_equity > 0 ? `${bal.above_1} of ${bal.with_debt_equity} companies have borrowings above their equity. ` : ""}{bal.interest_cover ? `${bal.cover_under_2} of ${bal.interest_cover.n} cover their interest less than twice. ` : ""}A company with no interest cost has no interest cover.</p>
       </Card>
 
       <PriceCards dive={dive} prices={prices} busy={pricesBusy} />
 
       <Card id="numbers-ownership" label="Ownership">
-        <CardHead title="Ownership" info="From each company's latest shareholding filing with the exchange: the promoter group's named holders added up, and the funds, insurers and foreign investors the filing names above 1%. Change is against the quarter before, in percentage points." />
-        <DataTable label="Promoter and named institutional holdings" columns={[
+        <CardHead title="Ownership" info={r === "IN" ? "From each company's latest shareholding filing with the exchange: the promoter group's named holders added up, and the funds, insurers and foreign investors the filing names above 1%. Change is against the quarter before, in percentage points." : "Insider purchases filed in the last 90 days."} />
+        {/* promoters are an Indian filing's group: a US theme has no promoter column (LIVE6-017) */}
+        {r === "IN" && <>
+        <h3 className="k-sub">Promoter and named institutional holdings</h3>
+        <Fold rows={own.holdings} n={12} what="companies">{(shownH) => <DataTable label="Promoter and named institutional holdings" columns={[
           { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (x: (typeof own.holdings)[number]) => <Name r={r} sym={x.symbol} name={x.name} /> },
           { key: "p", header: "Promoters", numeric: true, cell: (x) => pc(x.promoter) }, { key: "pc", header: "Change", numeric: true, cell: (x) => <Signed value={x.promoter_change}>{points(x.promoter_change)}</Signed> },
           { key: "i", header: "Named institutions", numeric: true, cell: (x) => pc(x.institutions) }, { key: "ic", header: "Change", numeric: true, cell: (x) => <Signed value={x.institutions_change}>{points(x.institutions_change)}</Signed> },
           { key: "q", header: "Quarter", cell: (x) => x.quarter },
-        ]} rows={own.holdings} rowKey={(x) => x.symbol} empty="No shareholding filings are stored for these companies yet." />
+        ]} rows={shownH} rowKey={(x) => x.symbol} empty="No shareholding filings are stored for these companies yet." />}</Fold>
+        </>}
+        <h3 className="k-sub">{r === "IN" ? "Promoter and insider purchases and pledges, last 90 days" : "Insider purchases, last 90 days"}</h3>
         <DataTable label="Promoter and insider purchases, last 90 days, and pledges" columns={[
           { key: "k", header: "What", rowHeader: true, cell: (x: { key: string; what: string; name: string; sym: string; at: string; url?: string | null }) => x.what },
           { key: "c", header: "Company", wrap: true, cell: (x) => <Name r={r} sym={x.sym} name={x.name} /> }, { key: "d", header: "Filed", cell: (x) => fmtDate(x.at) },
           { key: "f", header: "Filing", cell: (x) => (x.url ? <a className="link" href={safeHref(x.url)} target="_blank" rel="noopener noreferrer">Open ↗</a> : dash) },
         ]} rows={[
-          ...own.insider_buys.map((b) => ({ key: `b${b.symbol}`, what: "Promoter or insider bought", name: b.name, sym: b.symbol, at: b.at, url: null as string | null })),
+          ...own.insider_buys.map((b) => ({ key: `b${b.symbol}`, what: r === "IN" ? "Promoter or insider bought" : "Insider bought", name: b.name, sym: b.symbol, at: b.at, url: null as string | null })),
           ...own.pledges.map((p, i) => ({ key: `p${i}${p.symbol}`, what: p.label, name: p.name, sym: p.symbol, at: p.at, url: p.url ?? null })),
         ]} rowKey={(x) => x.key} empty="No promoter or insider purchases and no pledge filings in the last 90 days." />
-        {own.holdings.length > 0 && <p className="k-note">Promoters' stake rose at {own.promoter_up} and fell at {own.promoter_down} of the {own.holdings.length} companies with a filing stored.</p>}
+        {r === "IN" && own.holdings.length > 0 && <p className="k-note">Promoters' stake rose at {own.promoter_up} and fell at {own.promoter_down} of the {own.holdings.length} companies with a filing stored.</p>}
       </Card>
 
       <Card id="numbers-events" label="Events">
         <CardHead title="Events" info="Results dates as the companies announced them, results filings with the numbers as filed, ex-dates of dividends and other corporate actions, and red-flag filings of the last 90 days." />
+        <h3 className="k-sub">Results due in the next four weeks</h3>
         <DataTable label="Results due in the next four weeks" columns={[
           { key: "d", header: "Date", rowHeader: true, cell: (x: (typeof ev.results_due)[number]) => fmtDate(x.date) }, { key: "c", header: "Company", wrap: true, cell: (x) => <Name r={r} sym={x.symbol} name={x.name} /> },
           { key: "p", header: "Purpose", wrap: true, cell: (x) => x.purpose ?? dash },
         ]} rows={ev.results_due} rowKey={(x) => x.symbol + x.date} empty="No results dates are announced for these companies in the next four weeks." />
+        <h3 className="k-sub">Results filed in the last 30 days</h3>
         <DataTable label="Results filed in the last 30 days" columns={[
           { key: "d", header: "Filed", rowHeader: true, cell: (x: (typeof ev.results_filed)[number]) => fmtDate(x.date) }, { key: "c", header: "Company", wrap: true, cell: (x) => <Name r={r} sym={x.symbol} name={x.name} /> },
-          { key: "n", header: "Numbers as filed", wrap: true, cell: (x) => (x.numbers.length ? x.numbers.map((n) => `${n.label} ${n.value}`).join(" · ") : dash) },
+          ...(ev.results_filed.some((x) => x.numbers.length) ? [{ key: "n", header: "Numbers as filed", wrap: true, cell: (x: (typeof ev.results_filed)[number]) => (x.numbers.length ? x.numbers.map((n) => `${n.label} ${n.value}`).join(" · ") : dash) }] : []),
           { key: "f", header: "Filing", cell: (x) => (x.url ? <a className="link" href={safeHref(x.url)} target="_blank" rel="noopener noreferrer">Open ↗</a> : dash) },
         ]} rows={ev.results_filed} rowKey={(x) => x.symbol + x.date} empty="No results were filed by these companies in the last 30 days." />
+        <h3 className="k-sub">Dividends, splits and other actions, 30 days back to 60 ahead</h3>
         <DataTable label="Dividends, splits and other corporate actions, from 30 days ago to 60 days ahead" columns={[
           { key: "d", header: "Ex-date", rowHeader: true, cell: (x: (typeof ev.actions)[number]) => fmtDate(x.date) }, { key: "c", header: "Company", wrap: true, cell: (x) => <Name r={r} sym={x.symbol} name={x.name} /> },
           { key: "a", header: "Action", wrap: true, cell: (x) => (x.text ? `${x.label}: ${x.text}` : x.label) },
         ]} rows={ev.actions} rowKey={(x) => x.symbol + x.date + x.label} empty="No dividends, splits or other corporate actions in that window." />
+        <h3 className="k-sub">Red-flag filings, last 90 days</h3>
         <DataTable label="Red-flag filings, last 90 days" columns={[
           { key: "d", header: "Filed", rowHeader: true, cell: (x: (typeof own.red_flags)[number]) => fmtDate(x.at) }, { key: "c", header: "Company", wrap: true, cell: (x) => <Name r={r} sym={x.symbol} name={x.name} /> },
           { key: "l", header: "Kind", wrap: true, cell: (x) => x.label }, { key: "f", header: "Filing", cell: (x) => (x.url ? <a className="link" href={safeHref(x.url)} target="_blank" rel="noopener noreferrer">Open ↗</a> : dash) },
@@ -469,11 +507,11 @@ export function NumbersCards({ dive, prices, pricesBusy }: { dive: Dive; prices:
 
       <Card id="numbers-management" label="Management">
         <CardHead title="Management report cards" info="What management said it would deliver on earnings calls, set against the reported years. Only annual targets are settled here; each company's own page has the rest." />
-        <DataTable label="Management targets met and missed" columns={[
+        <Fold rows={mg.companies} n={12} what="companies">{(shownM) => <DataTable label="Management targets met and missed" columns={[
           { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (x: (typeof mg.companies)[number]) => <Name r={r} sym={x.symbol} name={x.name} /> },
           { key: "m", header: "Targets met", numeric: true, cell: (x) => x.met }, { key: "x", header: "Missed", numeric: true, cell: (x) => x.missed },
-        ]} rows={mg.companies} rowKey={(x) => x.symbol} foot={{ c: `${mg.with_card} compan${mg.with_card === 1 ? "y" : "ies"} with a stored report card`, m: mg.met, x: mg.missed }}
-          empty="No stored management report cards for these companies yet." />
+        ]} rows={shownM} rowKey={(x) => x.symbol} foot={{ c: `${mg.with_card} compan${mg.with_card === 1 ? "y" : "ies"} with a stored report card`, m: mg.met, x: mg.missed }}
+          empty="No stored management report cards for these companies yet." />}</Fold>
       </Card>
 
       <LeadersCard dive={dive} prices={prices} />
@@ -517,6 +555,7 @@ function PriceCards({ dive, prices, busy }: { dive: Dive; prices: Prices | null;
   return (
     <Card id="numbers-price" label="Price">
       <CardHead title="Price" info="Price change over calendar periods to the last close: one month is from the close on or before the same day a month earlier. Median: the middle company. Equal-weighted: the companies' weekly changes averaged, so each counts the same. Stage and Supertrend are from each company's stored page." />
+      <h3 className="k-sub">Price change against {prices?.benchmark || "the market's index"}</h3>
       <DataTable label="The theme's price change against the market's index" columns={[
         { key: "m", header: prices?.returns_to ? `Over, to ${fmtDate(prices.returns_to)}` : "Over", rowHeader: true, cell: (x: KV) => x.measure }, { key: "a", header: "Median company", numeric: true, cell: (x) => x.a },
         { key: "b", header: "Theme, equal-weighted", numeric: true, cell: (x) => x.b }, { key: "c", header: prices?.benchmark || "Index", numeric: true, cell: (x) => x.c },
@@ -532,9 +571,10 @@ function PriceCards({ dive, prices, busy }: { dive: Dive; prices: Prices | null;
               { label: "Relative strength (theme over index)", short: "Rel. strength", color: "var(--orange)", values: prices.line.rs, dash: "4 3" }]} legend baseline={100} />
         </>
       )}
+      <h3 className="k-sub">Breadth inside the theme</h3>
       <DataTable label="Breadth inside the theme" columns={[
         { key: "m", header: "Companies that are", rowHeader: true, cell: (x: KV) => x.measure }, { key: "a", header: "Count", numeric: true, cell: (x) => x.a }, { key: "b", header: "Share", numeric: true, cell: (x) => x.b },
-      ]} rows={rows} rowKey={(x) => x.key} />
+      ]} rows={said(rows)} rowKey={(x) => x.key} empty="No company has a stored price stage yet." />
     </Card>
   );
 }
@@ -574,7 +614,7 @@ function LeadersCard({ dive, prices }: { dive: Dive; prices: Prices | null }) {
       <CardHead title="Every company, sortable" info="Click a column to sort. Sorted by the figure you pick, not ranked: nothing here says which to own."
         actions={phone ? <><Select label="Sort by" small value={sort.key} onChange={(v) => setSort({ key: v, desc: v !== "name" })} options={cols.filter((c) => c.sortable).map((c) => ({ value: c.key, label: typeof c.header === "string" ? c.header : c.key }))} />
           <button type="button" className="btn quiet sm" onClick={() => setSort((x) => ({ ...x, desc: !x.desc }))}>{sort.desc ? "High to low" : "Low to high"}</button></> : undefined} />
-      <DataTable label="Every company in the theme with its figures" columns={cols} rows={sorted} rowKey={(x) => x.symbol} sort={{ ...sort, onSort }} />
+      <Fold rows={sorted} n={20} what="companies">{(shown) => <DataTable label="Every company in the theme with its figures" columns={cols} rows={shown} rowKey={(x) => x.symbol} sort={{ ...sort, onSort }} />}</Fold>
     </Card>
   );
 }

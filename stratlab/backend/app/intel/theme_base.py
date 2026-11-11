@@ -1292,6 +1292,35 @@ def one_line(about: str) -> str:
     return cut[:cut.rfind(" ")].rstrip(" ,;:") + "…"
 
 
+# LIVE6-007 (the live Cybersecurity page: "From its own filings: Annual report (20-F)", "Fortinet, Inc." alone, encyclopedia lead sentences
+# such as "... is an American multinational corporation headquartered in Sunnyvale, California"): a line is shown as a company's own words
+# only when it says what the company does
+NO_WORDS = "No description in its own words yet"
+_WORK = re.compile(r"\b(?:provid\w*|produc(?:es|ers?|ing|ts?|tion)|manufactur\w*|makes?|making|makers?|sells?|selling|suppl(?:y|ies|ying|iers?)|"
+                   r"designs?|designing|develop(?:s|ing|ers?)|operat(?:es|ing|ors?)|offers?|offering|distribut\w*|retail\w*|services?|servic(?:es|ing)|"
+                   r"foundr(?:y|ies)|licens\w*|leases?|leasing|lend(?:s|ing|ers?)|insur\w*|earns?|revenues?|customers?|clients?|subscri\w*|platforms?|"
+                   r"stores?|brands?|engag(?:ed|es)|build(?:s|ing|ers?)|construct\w*|mines?|mining|miners?|refin\w*|generat(?:es|ing|ors?)|transmi\w*|"
+                   r"explor(?:es|ing|ation)|invest(?:s|ing|ments?)|manag(?:es|ing)|deliver\w*|software|hardware|solutions?|products?|systems?|"
+                   r"equipment|devices?|vehicles?|drugs?|medicines?|banking|bank|loans?|chemicals?|steel|cement|power|electricity|"
+                   r"specializ\w*|specialis\w*|focus(?:es|ed) on|helps?|enables?|protect\w*|secur(?:es|ing))\b", re.I)
+_FILING_TITLE = re.compile(r"^(?:annual|quarterly|current|interim|half[- ]yearly)\s+report\b|^(?:form\s+)?(?:10-[kq]|20-f|40-f|8-k|6-k|def\s*14a)\b|"
+                           r"^(?:press release|investor presentation|board meeting|outcome of board meeting|shareholding pattern|financial results)\b", re.I)
+_LEGAL_WORDS = re.compile(r"\b(?:inc|incorporated|corp|corporation|co|company|ltd|limited|plc|llc|lp|nv|sa|ag|the|holdings?|group)\b\.?", re.I)
+
+
+def own_words(text, name: str = "") -> str:
+    """A company's line as its own words on a page, a CSV or a slide, or "" when it isn't one (LIVE6-007): the titles of its filings (the
+    "From its own filings:" lines stand in for a missing description in the checks, never as one), its name alone, or a sentence that says
+    where it is and what it is called but not what it does (says no work: provides, makes, sells, operates; its software, its customers)."""
+    t = " ".join(str(text or "").split()).strip(" “”\"'")
+    if not t or t.startswith("From its own filings:") or _FILING_TITLE.match(t):
+        return ""
+    words = lambda x: [w for w in re.findall(r"[a-z0-9]+", _LEGAL_WORDS.sub(" ", x.lower()))]        # noqa: E731
+    if name and not [w for w in words(t) if w not in set(words(name))]:
+        return ""
+    return t if _WORK.search(t) else ""
+
+
 def described(m: dict, about_of) -> dict:
     """The map with each official layer's company carrying `what`: the first sentence of its own description, from `about_of(symbol)`
     (the description or None; it never reads more than the caller allows). A company with none keeps "", which the page shows as not yet

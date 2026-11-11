@@ -541,7 +541,9 @@ def with_caps(m: dict, rows: list[dict]) -> dict:
     """The map's market values as the index has them now (LIVE3-003: a map kept for a day showed BDL at the 3 Nov close beside its own
     page's 4 Nov one): the index takes each page's newest close as the price job moves it (screens.note_price)."""
     caps = {r["symbol"]: r.get("market_cap") for r in rows or [] if r.get("symbol")}
-    fix = lambda cos: [{**c, "cap": caps[c["ticker"]]} if c.get("ticker") in caps else c for c in cos or []]      # noqa: E731
+    # LIVE6-007: a line that isn't the company's own words about its work (a filing's title, its name alone) is never served as them
+    own = lambda c: {**c, "what": theme_base.own_words(c.get("what"), c.get("name") or "")} if c.get("what") else c      # noqa: E731
+    fix = lambda cos: [own({**c, "cap": caps[c["ticker"]]} if c.get("ticker") in caps else c) for c in cos or []]      # noqa: E731
     return {**m, "value_chain": [{**v, "companies": fix(v.get("companies"))} for v in m.get("value_chain") or []],
             "sub_themes": [{**x, "companies": fix(x.get("companies"))} for x in m.get("sub_themes") or []]}
 
@@ -919,8 +921,8 @@ def members_of(m: dict, dive: dict) -> list[dict]:
         for c in cos:
             f = figs.get(c["ticker"]) or {}
             out.append({"symbol": c["ticker"], "name": c.get("name") or f.get("name") or c["ticker"], "layer": layer, "official": official.get(layer, False),
-                        "industry": c.get("industry") or None, "what": c.get("what") or f.get("what") or None,
-                        "cap": c.get("cap") if c.get("cap") is not None else f.get("cap"), "revenue": f.get("revenue"), "ebitda": f.get("ebitda"),
+                        "industry": c.get("industry") or None, "what": theme_base.own_words(c.get("what") or f.get("what"), c.get("name") or f.get("name") or "") or None,
+                        "cap": f.get("cap") if f.get("cap") is not None else c.get("cap"),        # LIVE6-006: the dive's, on its one price date "revenue": f.get("revenue"), "ebitda": f.get("ebitda"),
                         "net": f.get("net"), "roce": f.get("roce"), "year": f.get("year"), "by": by_of(c)})
     return out
 
