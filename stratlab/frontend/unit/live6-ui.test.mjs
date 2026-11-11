@@ -47,7 +47,7 @@ test("LIVE6-013: a docked panel takes its column at 1440 and goes with every pag
   assert.equal(L.showsOn({ ...float, at: null }, 1440, "/x"), true);  // kept before pages were kept: shown as it was
   assert.equal(L.showsOn({ ...float, open: false }, 1440, "/breadth"), false);
   assert.equal(L.clampLayout({ ...float }, 1440, 900).at, "/breadth");
-  assert.equal(L.clampLayout({ ...float, at: "javascript:x" }, 1440, 900).at, null);
+  assert.equal(L.clampLayout({ ...float, at: "javascript:x" }, 1440, 900).at, undefined);
   const launcher = src("components/watch/Launcher.tsx");
   assert.match(launcher, /showsOn\(layout, vw, pathname\)/);
   assert.match(launcher, /at: window\.location\.pathname/);
@@ -73,4 +73,11 @@ test("LIVE6-013: the panel opens on the prices last seen on this device, per per
   assert.deepEqual(Q.keptQuotes("u1", now, store), {});
   const panel = src("components/watch/WatchPanel.tsx");
   assert.match(panel, /useState<Record<string, WatchQuote \| null>>\(\(\) => keptQuotes\(/);
+});
+
+test("LIVE6-014: signed in, the analytics question is an overlay along the foot that never moves the app", () => {
+  const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+  assert.match(css, /body:has\(\.shell\) \.consent \{ position: fixed; \}/);
+  assert.doesNotMatch(css, /\.consent \{ position: relative/);
+  assert.doesNotMatch(css, /body:has\(\.shell\) \.mw-launch \{ bottom: calc\(16px \+ env/);   // the Markets button rises above the bar again
 });

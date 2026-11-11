@@ -19,7 +19,7 @@ export interface PanelLayout {
 
 export { LAYOUT_KEY, isSheet };
 export const MIN_W = 300, MAX_W = 720, MIN_H = 320;
-export const DEFAULT_LAYOUT: PanelLayout = { open: false, mode: "dock", w: 380, h: 560, x: null, y: null, list: null, sort: "custom", chart: null, at: null };
+export const DEFAULT_LAYOUT: PanelLayout = { open: false, mode: "dock", w: 380, h: 560, x: null, y: null, list: null, sort: "custom", chart: null };
 
 
 const num = (v: unknown, lo: number, hi: number, d: number): number => (typeof v === "number" && Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.round(v))) : d);
@@ -38,7 +38,7 @@ export function clampLayout(raw: unknown, vw: number, vh: number): PanelLayout {
     list: typeof r.list === "string" && r.list.length <= 60 ? r.list : null,
     sort: r.sort === "change_desc" || r.sort === "change_asc" || r.sort === "name" ? r.sort : "custom",
     chart: typeof r.chart === "string" && /^[A-Z]{2,6}:[A-Za-z0-9^&._=-]{1,40}$/.test(r.chart) ? r.chart : null,
-    at: typeof r.at === "string" && r.at.startsWith("/") && r.at.length <= 300 ? r.at : null,
+    ...(typeof r.at === "string" && r.at.startsWith("/") && r.at.length <= 300 ? { at: r.at } : {}),
   };
 }
 
