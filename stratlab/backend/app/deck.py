@@ -639,6 +639,13 @@ def whole_lines(items: list[dict], box: tuple, cols: int, bullets: bool = False)
     for it in items:
         while len(it["lines"]) > 1 and card_height(it, cw, bullets, BODY_MIN) > room:
             it["lines"].pop()
+        # n1 (the outside review of the live R33 decks: three findings cards of one sentence still ended "…"): a card's one line that still
+        # doesn't fit loses whole parts from its end (a sentence, a "; " clause, a part after ", " or " and "), never part of a word
+        while it["lines"] and card_height(it, cw, bullets, BODY_MIN) > room:
+            got = _shorter(it["lines"][-1])
+            if not got:
+                break
+            it["lines"][-1] = got
     return items
 
 
@@ -2046,7 +2053,7 @@ def shown_label(cos: list, k: int) -> str:
 ROLL_TITLE = "Who is in each layer's calculations"
 ROLL_LINES = 2                    # a layer page names every company in and left out when that takes no more lines than this
 ROLL_NAMES = 6                    # else this many names of each group; the rest are counted there and named in the appendix
-ROLL_FULL = 40                    # the names of one group in the appendix's table (a row taller than a page would be left off it)
+ROLL_FULL = 40                    # a layer page names every company when the line stays short (roll_line); the appendix names every one (roll_rows)
 from .intel.theme_data import CALC_WHY as ROLL_WHY, in_calc      # noqa: E402 (why a listed company is left out, in this order: one list, theme_data.calc_record)
 ROLL_TAG = {"other business": "other business", "way of earning not shown": "left out", "not confirmed": "not confirmed",
             "no revenue figure": "no figures"}                # the mark on a left-out company's own row, each with its note under the table
@@ -2065,7 +2072,7 @@ def layer_roll(layer: dict, cos: list, keys: tuple = ("ebitda", "net")) -> tuple
     apart = layer.get("stats_over") != "all"
     ins, outs = [], []
     for c in cos:
-        nm = _LEGAL.sub("", str(c.get("name") or c.get("symbol") or "")).strip(" ,.") or str(c.get("symbol") or "")
+        nm = _LEGAL.sub("", clean_name(c.get("name") or c.get("symbol") or "")).strip(" ,.") or str(c.get("symbol") or "")
         rec = calc_of(c)                  # lane m1: the company's kept record (theme_data.calc_record), never worked out again here
         if not rec["in"]:
             outs.append((nm, rec["why"]))
@@ -2091,6 +2098,40 @@ def roll_words(ins: list, outs: list, limit: int = ROLL_NAMES) -> tuple[str, str
     in_ = "; ".join(x for x in (some(plain), some(noted)) if x)
     out_ = "; ".join(f"{why}: {some([n for n, w in outs if w == why])}" for why in ROLL_WHY if any(w == why for _, w in outs))
     return in_, out_, cut
+
+
+ROLL_HEAD, ROLL_WIDTHS = ["Layer", "In its calculations", "Left out, and why"], [2.6, 4.7, 5.0]
+ROLL_MORE = " (continued)"        # a layer's appendix row that goes on naming its companies after the row before it
+
+
+def roll_rows(name: str, ins: list, outs: list, h: float, w: float = CW) -> list[list]:
+    """A layer's rows in the appendix's roll, every company named (n1, the outside review of the live R33 decks: a layer's single row taller
+    than a page was left off it, and Retail's and Real Estate's rolls printed an empty page): one row when it fits a w x h table under the
+    head, else the names cut evenly into as few rows as fit, each later one "<layer> (continued)", each left-out reason before its names in
+    every row it reaches."""
+    rank = {why: i for i, why in enumerate(ROLL_WHY)}
+    ins_ = [x for x in ins if not x[1]] + [x for x in ins if x[1]]
+    outs_ = sorted(outs, key=lambda x: rank.get(x[1], len(rank)))
+    total = len(ins) + len(outs)
+
+    def fits(r):
+        return len(table_layout({"head": ROLL_HEAD, "rows": [r], "widths": ROLL_WIDTHS, "numeric": [False] * 3}, w, h)["rows"]) == 1
+    rows: list[list] = []
+    for k in range(1, max(1, len(ins_), len(outs_)) + 1):
+        a, b = -(-len(ins_) // k), -(-len(outs_) // k)
+        rows = []
+        for j in range(k):
+            pi, po = ins_[j * a:(j + 1) * a], outs_[j * b:(j + 1) * b]
+            if j and not pi and not po:
+                continue
+            in_, out_, _ = roll_words(pi, po, total + 1)
+            if j == 0:
+                rows.append([name, f"{len(ins)} of {total}: {in_}" if in_ else f"0 of {total}", f"{len(outs)}: {out_}"])
+            else:
+                rows.append([name + ROLL_MORE, in_, out_])
+        if all(fits(r) for r in rows):
+            break
+    return rows
 
 
 def roll_line(ins: list, outs: list) -> tuple[str, bool]:
@@ -2813,7 +2854,10 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
                                                     else "No company meets the rules today."], "note": f"⟦{UPDATES_TITLE}⟧" if watch else ""})
     if len(cards) > 6:            # two short cards share one so the page keeps two rows of three
         a_, b_ = cards[-2], cards.pop()
-        cards[-1] = {"title": f"{a_['title']}; {b_['title'].lower()}", "lines": a_["lines"] + b_["lines"], "note": ", ".join(x for x in (a_["note"], b_["note"]) if x)}
+        # n1 (the live R33 Private Banks deck: the merged card's updates line gave way to fit, so the deck said nothing of dated updates):
+        # one line of each first, so a line that gives way is never the only one of its card
+        first = (b_, a_) if b_["title"] == UPDATES_TITLE and not watch else (a_, b_)      # "no dated update" is the shorter: it goes first
+        cards[-1] = {"title": f"{a_['title']}; {b_['title'].lower()}", "lines": first[0]["lines"][:1] + first[1]["lines"][:1] + first[0]["lines"][1:] + first[1]["lines"][1:], "note": ", ".join(x for x in (a_["note"], b_["note"]) if x)}
     s = Slide("Key findings", "What the reported figures show, each with the slide it comes from; findings, not advice", eyebrow=eyebrow)
     ccols = 3 if len(cards) != 4 else 2
     s.add("cards", (M, TOP, CW, BOT - TOP), cols=ccols, items=whole_lines(cards, (M, TOP, CW, BOT - TOP), ccols), fill=True, size=13)
@@ -2880,7 +2924,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 45                  # R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 46                  # n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -3100,6 +3144,24 @@ def unranked_words(chain: dict) -> str:
     return ("Shown, not ranked: " + "; ".join(f"{join(xs)}, {why}" for why, xs in by.items()) + ".") if by else ""
 
 
+def intensity_note(chain: dict) -> str:
+    """Why the value chain's layers are not ranked when their capital for each unit of revenue differs (n1, the outside review of the live
+    R33 Chemicals deck: "more than threefold", the figures nowhere): each such layer's median company's capital (book equity plus debt)
+    over its revenue, how many times the lowest the highest is, and the threshold (theme_data.INTENSITY_FACTOR); "" when that is not why."""
+    from .intel.theme_data import INTENSITY_FACTOR, INTENSITY_WORD
+    if INTENSITY_WORD not in str(chain.get("line") or ""):
+        return ""
+    names = set(chain.get("not_ranked") or [])
+    rows = [r for r in chain.get("rows") or [] if r.get("layer") in names and (r.get("intensity") or 0) > 0]
+    if len(rows) < 2:
+        return ""
+    lo, hi = min(rows, key=lambda r: r["intensity"]), max(rows, key=lambda r: r["intensity"])
+    each = "; ".join(f"{r['layer']} {r['intensity']:.2f}" for r in rows)
+    return (f"Capital for each unit of revenue (book equity plus debt over the latest year's revenue, the layer's median company): {each}. "
+            f"{hi['layer']}'s is {hi['intensity'] / lo['intensity']:.1f} times {lo['layer']}'s; layers are ranked only where the highest is "
+            f"at most {INTENSITY_FACTOR:g} times the lowest.")
+
+
 def compare_note(chain: dict, key: str) -> str:
     """The value chain's footnote on how layers are compared: the one floor of a ranking (theme_data.HEADLINE_MIN: the headline's and the
     marks', m2: the footnote said 3 while the headline ranked on 5), each shown layer that is not ranked with why, and the floor a median
@@ -3277,6 +3339,23 @@ PLACEHOLDER = re.compile(r"\{[a-z_]+\}|(?<![A-Za-z] )\bNone\b(?! of| is| has| sh
 # a doubled word ("outside the the theme"), doubled punctuation ("Inc.. Revenue"), a space before punctuation ("metals , alloys") and a
 # hyphen broken off its word ("aero -engines") are repaired on every slide, whatever wrote the sentence (a template, a company's own
 # description, a headline), and each repair is logged and counted in the gate. Generic: fixed patterns, no list of sentences.
+# n1 (the outside review of the live R33 decks: "Diodes Inc /del/" on a slide): a filer's state or editing token ("/DE/", "/del/", "/NEW/",
+# "\\MD\\"), a double space and a trailing comma are taken out of every name, and so of every text a slide shows (tidy_text, clean_name)
+NAME_FIXES = (
+    (re.compile(r"\s*[/\\][A-Za-z]{2,5}[/\\](?=[\s,.;:)]|$)|^[/\\][A-Za-z]{2,5}[/\\]\s*"), "", "filing token in a name"),
+    (re.compile(r"(?<=\S) {2,}(?=\S)"), " ", "double space"),
+    (re.compile(r"\s*,\s*$"), "", "trailing comma"),
+)
+
+
+def clean_name(name) -> str:
+    """A company's name as a slide shows it: no filer's state or editing token, double space or trailing comma (NAME_FIXES)."""
+    t = str(name or "").strip()
+    for rx, to, _ in NAME_FIXES:
+        t = rx.sub(to, t)
+    return t.strip()
+
+
 _JOIN_WORDS = {"the", "a", "an", "of", "in", "on", "at", "to", "for", "and", "or", "with", "by", "from", "is", "are", "was", "were", "its",
                "their", "this", "these", "than", "as", "be", "it"}
 _DOUBLE_OK = {"had", "that", "very", "so", "no", "bye", "more", "many", "much", "far", "long"}       # doubled in ordinary English
@@ -3293,7 +3372,7 @@ _TEXT_FIXES = (
     (re.compile(r"(?<=\S) +\)"), ")", "space inside a bracket"),
     (re.compile(r"(?<=[a-z]) -(?=[a-z])"), "-", "hyphen broken off its word"),                  # "aero -engines"
     (re.compile(r"(?<=[a-z])- (?=[a-z])(?!(?:and|or|to|as|than|but|nor)\b)"), "-", "hyphen broken off its word"),   # "aero- engines"; "pre- and post" stays
-)
+) + NAME_FIXES
 
 
 def _undouble(m) -> str:
@@ -3325,6 +3404,38 @@ def tidy_text(text) -> tuple[str, list[str]]:
 def text_flags(text) -> list[str]:
     """The mechanical defects a text holds (tidy_text's names); [] for a clean one."""
     return tidy_text(text)[1]
+
+
+_TOKENS = (
+    (re.compile(r"(?:^|(?<=\s))[/\\][A-Za-z]{2,5}[/\\](?=[\s,.;:)]|$)"), "a filing token"),
+    (re.compile(r"\{[^{}\n]{0,40}\}"), "a template field"),
+    (re.compile(r"^\s*(?:None|none|null|nan|NaN|undefined)\s*$|(?<![.!?]\s)(?<!^)\bNone\b(?! of| is| has| shows| was| were| are)|\bnan\b|\bNaN\b"), "a missing value printed as a word"),
+    (re.compile(r"\bTBD\b|\blorem\b", re.I), "placeholder text"),
+)
+
+
+def token_flags(text) -> list[str]:
+    """What a slide's text holds that was never filled in (n1): a filing token ("/DE/"), a template field ("{name}"), a missing value
+    printed as a word ("None", "nan"; "None of them…" opening a sentence is English) or placeholder text ("TBD", "lorem")."""
+    t = str(text or "")
+    return [why for rx, why in _TOKENS if rx.search(t)]
+
+
+def slide_texts(s) -> list[str]:
+    """Every text one slide prints: its title, headline, paragraphs, table cells and headings, card titles, values and lines, tiles, chart
+    labels."""
+    out = [s.title, s.subtitle]
+    for b in s.blocks:
+        out += list(b.get("paras") or []) + list(b.get("head") or []) + list(b.get("cats") or [])
+        out += [r["group"] if isinstance(r, dict) else _cell_text(c) for r in b.get("rows") or [] for c in ([r] if isinstance(r, dict) else r)]
+        if isinstance(b.get("title"), str):
+            out.append(b["title"])
+        for it in b.get("items") or []:
+            if isinstance(it, (tuple, list)):
+                out += [str(x) for x in it]
+            elif isinstance(it, dict):
+                out += [it.get(k) for k in ("title", "value", "note", "text", "sub")] + list(it.get("lines") or [])
+    return [str(x) for x in out if isinstance(x, str) and x]
 
 
 def tidy_deck(slides: list) -> list[dict]:
@@ -3431,9 +3542,16 @@ def check_deck(slides: list) -> list[dict]:
 # (pass or fail per item, what was dropped) is stored with the deck and shown in Admin -> Library (the owner's outside review of the R26 decks)
 CAUSE_WORDS = re.compile(r"\b(?:because|driven by|due to|owing to|thanks to|as a result of|caused by|on the back of|led by|attributable to|"
                          r"explained by|reflects?|reflecting|one-off gains?|boosted by|dragged by|weighed (?:on|down) by)\b", re.I)
-# a business that buys or sells goods is a fact, not advice: only "buy" or "sell" of shares, a stake or a rating, or "buy now", is
-_TRADE_VERBS = re.compile(r"\b(?:buy|sell)(?:s|ing|ers?)\b|\bbuy-?backs?\b|\bsold\b|\b(?:buy|sell)\b(?!\s+(?:(?:the|its|this|these|their|more)\s+)?"
-                          r"(?:shares?|stocks?|stakes?|positions?|rating|calls?|signals?|now|on dips|into)\b)", re.I)
+# a business that buys or sells goods is a fact, not advice. n1 (the outside review of the live R33 Metals deck: "turning metal they buy into
+# pipes" dropped as advice): "buy", "sell" and "accumulate" are advice only as a recommendation ("buy the stock", "a buy", "should sell",
+# "accumulate on dips", "buy now"); every other use of them is a company's own trade and is read past
+_TRADE_ADVICE = re.compile(
+    r"\b(?:should|must|to consider|consider|a|strong|rated|rating|upgraded to|downgraded to|time to)"
+    r"\s+(?:not\s+)?(?:buy|sell|accumulate)\b(?!-)"
+    r"|\b(?:buy|sell|accumulate)\s+(?:(?:the|its|this|these|their|more|some|our)\s+)?(?:shares?|stocks?|stakes?|positions?|rating|calls?|signals?|"
+    r"now|on (?:dips|weakness|strength|declines)|the dips?|the rally|for the long term)\b"
+    r"|^\W*(?:buy|sell|accumulate)\b(?!-|s\b)", re.I)
+_TRADE_VERBS = re.compile(r"\b(?:buy|sell)(?:s|ing|ers?|-?backs?)?\b|\bsold\b|\baccumulat\w*", re.I)
 _BARE_SHARE = re.compile(r"\b\d+(?:\.\d+)?% of (?:the (?:theme's )?)?(?:market |combined )?value\b(?! of)", re.I)
 _PERIOD = re.compile(r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{4}\b")
 _RANKING = re.compile(r"\b(?:highest|lowest|fastest|slowest)\b", re.I)
@@ -3460,6 +3578,9 @@ def prose_flag(text: str) -> str | None:
     if m:
         return f"cause: {m.group(0)}"
     from .blog_research import advice_words
+    m = _TRADE_ADVICE.search(text or "")
+    if m:
+        return f"advice or forecast: {m.group(0).strip()}"
     bad = advice_words({"title": _TRADE_VERBS.sub("", text or "")})
     return f"advice or forecast: {bad}" if bad else None
 
@@ -3743,6 +3864,19 @@ def _shorter(text: str) -> str | None:
     if "; " in t:
         head = t[:t.rfind("; ")].rstrip(" ,;:")
         return head + ("." if t.endswith(".") and not head.endswith(".") else "")
+    # n1 (the outside review of the live R33 decks: three findings cards still ended "…, 7…"): one clause still too long loses its last
+    # part, joined by ", " or " and " right after a bracket or a figure ("(13.5%) and slowest in…", "4.1%, a gap of…"), outside any
+    # bracket and before a small word (never inside a name: "Chlor-alkali, soda ash and bulk inorganics"), keeping at least half of itself
+    depth, cut = 0, None
+    for i, ch in enumerate(t):
+        depth += (ch == "(") - (ch == ")")
+        if depth == 0 and i >= len(t) // 2 and i and (t[i - 1] in ")%x" or t[i - 1].isdigit()) and (t.startswith(", ", i) or t.startswith(" and ", i)):
+            nxt = t[i:].lstrip(", ").removeprefix("and ").lstrip()
+            if nxt[:1].islower():
+                cut = i
+    if cut is not None and cut >= 24:
+        head = t[:cut].rstrip(" ,;:")
+        return head + ("." if t.endswith(".") and not head.endswith(".") else "")
     return None
 
 
@@ -3864,6 +3998,82 @@ def fit_slide(sl) -> tuple[list[dict], list[dict]]:
     return refit, failed
 
 
+_PAGED = re.compile(r"^(.*) \((\d+) of (\d+)\)$")
+_DECLARED = re.compile(r"^(\d[\d,]*) (?:[a-z]+ )?(layers?|compan(?:y|ies)|banks?|insurers?)\b")
+
+
+def _block_shows(b: dict) -> bool:
+    """Whether a block puts anything on its page (a table a data row, a text a sentence, a chart a bar)."""
+    k = b["kind"]
+    if k == "table":
+        return any(not isinstance(r, dict) for r in b.get("rows") or [])
+    if k == "text":
+        return any(str(p).strip() for p in b.get("paras") or [])
+    if k in ("cards", "stats", "flow"):
+        return bool(b.get("items"))
+    if k in ("hbars", "columns", "lines", "stack"):
+        return bool(b.get("cats")) or bool(b.get("series"))
+    return True
+
+
+def complete_flags(slides: list) -> list[dict]:
+    """What the finished pages leave out (n1, the outside review of the live R33 decks: Retail's appendix said 3 layers had companies left
+    out and its pages named 2 over a table with no row; Real Estate's first roll page was an empty table): a table page that prints no data
+    row, a content page with nothing on it, a run of pages "(k of n)" with a page missing, a heading's count ("3 layers with…", "97
+    confirmed companies with figures, one row each") that the rows across its pages don't make, and a row printed twice. Each
+    {"slide", "text", "why", "rule"}: "layout" for a page, "reconcile" for a count."""
+    out = []
+
+    def flag(s, text, why, rule="layout"):
+        out.append({"slide": s.title, "text": text, "why": why, "rule": rule})
+    runs: dict = {}
+    for s in slides:
+        if s.kind != "content":
+            continue
+        if s.blocks and not any(_block_shows(b) for b in s.blocks):          # its blocks all empty (a headline alone is a page's own choice)
+            flag(s, s.title, "a page with nothing on it")
+        for b in s.blocks:
+            if b["kind"] != "table":
+                continue
+            x, y, w, h = b["box"]
+            lay = table_layout(b, w, h)
+            if not any(not isinstance(r, dict) for r in lay["rows"]):
+                flag(s, s.title, "a table page that prints no data row")
+        m = _PAGED.match(s.title or "")
+        base, k, n = (m.group(1), int(m.group(2)), int(m.group(3))) if m else (s.title, 1, 1)
+        if any(b["kind"] == "table" for b in s.blocks):
+            runs.setdefault(base, []).append((k, n, s))
+    for base, pages in runs.items():
+        ks, ns = [k for k, _, _ in pages], {n for _, n, _ in pages}
+        if len(ns) > 1 or sorted(ks) != list(range(1, max(ns) + 1)):
+            flag(pages[0][2], base, f"its pages run {', '.join(f'{k} of {n}' for k, n, _ in pages)}")
+        tabs = [b for _, _, s in pages for b in s.blocks if b["kind"] == "table"]
+        if len(tabs) != len(pages):              # a run's count is of its one table across its pages
+            continue
+        data = [r for b in tabs for r in b.get("rows") or [] if not isinstance(r, dict)]
+        seen = set()
+        for r in data:
+            key = tuple(_cell_text(c) for c in r)
+            if key in seen and len(key) > 2:
+                flag(pages[0][2], " | ".join(key)[:160], "a row printed twice", "reconcile")
+            seen.add(key)
+        said = pages[0][2].subtitle or ""
+        d = _DECLARED.match(said)
+        if not d:
+            continue
+        want, what = int(d.group(1).replace(",", "")), d.group(2)
+        head = tabs[0].get("head") or []
+        if what.startswith("layer") and head and head[0] == "Layer":
+            got = len({_cell_text(r[0]).removesuffix(ROLL_MORE) for r in data})
+        elif "one row each" in said:
+            got = len(data)
+        else:
+            continue
+        if got != want:
+            flag(pages[0][2], said, f"says {want} {what}, its pages show {got}", "reconcile")
+    return out
+
+
 def layout_gate(slides: list) -> dict:
     """The publication gate's layout item (R35), run on the finished pages (after the page references and whole figures are set, so each
     text is as long as it will print): every slide is re-fitted (fit_slide), each change logged, and what could not be put right fails
@@ -3875,10 +4085,11 @@ def layout_gate(slides: list) -> dict:
         a, b = fit_slide(sl)
         refit += a
         failed += b
+    failed += complete_flags(slides)          # n1: and nothing the pages declare is missing from them
     for d in refit:
         log.info("deck layout: re-fitted on %r (%s): %s", d["slide"], d["why"], d["text"][:200])
     for d in failed:
-        log.warning("deck gate: layout: on %r (%s): %s", d["slide"], d["why"], d["text"][:200])
+        log.warning("deck gate: %s: on %r (%s): %s", d["rule"], d["slide"], d["why"], d["text"][:200])
     return {"refit": refit, "failed": failed}
 
 
@@ -3886,8 +4097,11 @@ def with_layout(gate: dict, lay: dict) -> dict:
     """The gate's result with its layout item filled from the finished pages (layout_gate): what failed counts as dropped, what was
     re-fitted is kept beside it ("refit", "refit_n")."""
     cut = lambda d: {"rule": d["rule"], "slide": d["slide"], "text": str(d["text"])[:200], "why": str(d.get("why") or "")[:120]}      # noqa: E731
-    items = [({**x, "ok": not lay["failed"], "dropped": len(lay["failed"]),
-               "note": f"{_n(len(lay['refit']), 'text')} re-fitted to show whole" if lay["refit"] else ""} if x["id"] == "layout" else x) for x in gate["items"]]
+    of = lambda key: [d for d in lay["failed"] if d["rule"] == key or (key == "layout" and d["rule"] not in ids)]      # noqa: E731
+    ids = {x["id"] for x in gate["items"]}
+    items = [({**x, "ok": not of("layout"), "dropped": len(of("layout")),
+               "note": f"{_n(len(lay['refit']), 'text')} re-fitted to show whole" if lay["refit"] else ""} if x["id"] == "layout"
+              else {**x, "ok": False, "dropped": x["dropped"] + len(of(x["id"]))} if of(x["id"]) else x) for x in gate["items"]]
     dropped = (list(gate.get("dropped") or []) + [cut(d) for d in lay["failed"]])[:GATE_KEEP]
     return {**gate, "items": items, "passed": sum(1 for x in items if x["ok"]), "dropped": dropped,
             "dropped_n": (gate.get("dropped_n") or 0) + len(lay["failed"]), "refit": [cut(d) for d in lay["refit"][:GATE_KEEP]], "refit_n": len(lay["refit"])}
@@ -3977,6 +4191,10 @@ def publication_gate(slides: list, v: dict, reproduced: list | None = None) -> d
             why = text_flags(txt)
             if why:
                 dropped["prose"].append({"slide": s_.title, "text": txt, "why": "text: " + ", ".join(why), "rule": "prose"})
+        for txt in slide_texts(s_):           # n1: and nothing left unfilled anywhere on the page, a table's cell or a card's line too
+            why = token_flags(txt)
+            if why:
+                dropped["prose"].append({"slide": s_.title, "text": txt, "why": "unfilled: " + ", ".join(why), "rule": "prose"})
     marks_noted = any(b["kind"] == "cards" and any(MARKS_LINE in (it.get("lines") or []) for it in b.get("items") or []) for s in slides for b in s.blocks)
     if not marks_noted and len(slides) > 2:
         dropped["marks"].append({"slide": "How to read this deck", "text": "the key to the three marks", "why": "not in the deck", "rule": "marks"})
@@ -4052,6 +4270,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         parts.append([title, line, len(slides)])
 
     def name_of(sym, nm):
+        nm = clean_name(nm)
         return f"{nm} (whole company)" if sym in wide else f"{nm} (not confirmed)" if status.get(sym) == "unverified" else nm
 
     for m in members:                       # what a company does, as one business sentence (headings, glued words, results lines left off)
@@ -4172,6 +4391,8 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         foot = [f"Each company's latest full year, in {unit}; how each figure is built: ⟦{NOTES_TITLE}⟧.",
                 "Layer revenue: its companies added together; margins and returns: its median company."]
         foot.append(compare_note(chain, key))
+        if intensity_note(chain):                 # n1: the figures behind "not ranked", so the suppression can be reproduced
+            foot.append(intensity_note(chain))
         if any((r.get("listed") or 0) > r["n"] for r in rows_c):          # lane m1: the two scopes named where a layer's counts differ
             foot.append(COMPANIES_NOTE)
         # R34 (GPT review of R31.7, Defence: "No listed company is shown for x."): a layer name with no word in it is no layer to name
@@ -4426,6 +4647,15 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     confirmed_ = [x for x in sec.get("leaders") or [] if status.get(x["symbol"]) != "unverified"]
     bare = [x for x in confirmed_ if not figs_of(x)]           # a stored page with no key figure isn't "with figures" (R20)
     lead = sorted((x for x in confirmed_ if figs_of(x)), key=lambda x: -(x.get("cap") or 0))
+    # R36 (GPT review of the live R33 Retail deck: "Leslie's, Inc." on two identical rows): one company listed under two symbols is one row
+    seen_, once_ = set(), []
+    for x in lead:
+        key_ = (clean_name(str(x.get("name") or "")).lower(), x.get("cap"), x.get("revenue"))
+        if key_[0] and key_ in seen_:
+            continue
+        seen_.add(key_)
+        once_.append(x)
+    lead = once_
     if lead:
         # short headings on one line, so 20 or more rows fit a page (R20: 8 rows a page)
         lcols = [("revenue", "Revenue", 1.15), ("sales_1y", "Growth", 0.95), ("ebitda", "EBITDA", 0.95), ("net", "Net", 0.9), ("roce", "ROCE", 0.85)]
@@ -4470,11 +4700,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             later_slides.append(s)
     fig_pages = len(later_slides)
     if any(cut for _, _, _, cut in rolls):       # R35: a layer's page left names off: every layer's full roll, one row each, in the appendix
-        rhead, rwidths = ["Layer", "In its calculations", "Left out, and why"], [2.6, 4.7, 5.0]
-        rrows = []
-        for name, r_in, r_out, _ in rolls:
-            in_, out_, _ = roll_words(r_in, r_out, ROLL_FULL)
-            rrows.append([name, f"{len(r_in)} of {len(r_in) + len(r_out)}: {in_}" if in_ else f"0 of {len(r_out)}", f"{len(r_out)}: {out_}"])
+        rhead, rwidths = ROLL_HEAD, ROLL_WIDTHS
         rnote = ("In a layer's calculations: confirmed by its own description, how it earns shown and of the layer's kind, with a revenue figure. "
                  "(whole company: revenue only): in the layer's revenue total, not its medians. (figures in part): a margin is missing or left out "
                  "of its median. Left out, each reason before the companies it is of: other business, it earns another way than most of the "
@@ -4482,6 +4708,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
                  "this work; no revenue figure, none is stored.")
         rnh = note_h(rnote)
         rth = BOT - TOP - rnh - 0.1
+        rrows = [r for name, r_in, r_out, _ in rolls for r in roll_rows(name, r_in, r_out, rth)]
         rpages = table_pages(rhead, rrows, rwidths, CW, rth)
         for k, chunk in enumerate(rpages):
             s = Slide(ROLL_TITLE + (f" ({k + 1} of {len(rpages)})" if len(rpages) > 1 else ""),

@@ -189,8 +189,12 @@ def test_every_rule_holds_on_every_synthetic_theme(name, v, slides):
     # no "of 0", no ".0" figure, no advice word
     assert not re.search(r"\bof 0\b", t), re.findall(r".{40}\bof 0\b.{10}", t)
     assert not re.search(r"(?<![\w.,])\d[\d,]*\.0(?:%|x\b| pts| points)", t), re.findall(r".{20}\d\.0(?:%|x| pts).{10}", t)[:3]
-    for word in ("buy", "sell", "avoid", "attractive", "undervalued", "overvalued", "recommend", "target price", "outlook", "implication"):
+    for word in ("avoid", "attractive", "undervalued", "overvalued", "recommend", "target price", "outlook", "implication"):
         assert not re.search(rf"\b{word}\b", t.lower()), word
+    # lane n1 (changed on purpose): "buy" and "sell" only as a recommendation ("buy the stock", "a buy", "should sell"); a company
+    # turning metal it buys into pipes is a fact
+    for line in t.splitlines():
+        assert not deck._TRADE_ADVICE.search(line), line
     # no column that is "–" in every row
     for s in slides:
         for b in s.blocks:
