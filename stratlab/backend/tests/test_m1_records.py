@@ -313,3 +313,131 @@ def test_a_company_with_no_figures_carries_its_reason_on_its_row():
 
 def test_the_versions_moved_with_the_records():
     assert D.DIVE_TEXT == 7 and deck.THEME_DECK_VERSION == 45
+
+
+# ---------- 4. only layers of one way of earning are ranked together ----------
+from tests.synth_structures_r27class import build                               # noqa: E402
+
+RANKING = re.compile(r"\b(?:highest|lowest|fastest|slowest)\b", re.I)
+
+
+def _mk(prefix, n, name, what, ind, model):
+    return [(f"{prefix}{i}", f"{name} {i} Ltd", what, ind, model, (), "high") for i in range(n)]
+
+
+def realty_live_shape():
+    """The live R32 Real estate deck's layers: developers, contractors, landlords and lenders, each with enough companies to be ranked."""
+    return build("IN", "Real estate", [
+        ("Residential developers", "Sell homes.", _mk("DEV", 8, "Homecrest", "develops and sells residential apartments", "Residential, Commercial Projects",
+                                                     "property_development")),
+        ("Engineering and construction contracts", "Build for clients.", _mk("EPC", 7, "Buildco", "builds buildings under EPC contracts for clients",
+                                                                              "Civil Construction", "construction")),
+        ("Office and mall landlords", "Rent.", _mk("LSE", 6, "Mallhold", "owns malls and office space and earns rent on leases", "Realty", "property")),
+        ("Home loan lenders", "Lend.", _mk("HFC", 6, "Homeloan", "provides home loans to salaried buyers", "Housing Finance Company", "lending")),
+    ], [])
+
+
+def utilities_live_shape():
+    """The live R32 Utilities deck's layers: generators, a regulated network, and two layers of makers (equipment, cables)."""
+    return build("IN", "Utilities", [
+        ("Thermal and hydro generation", "Generate.", _mk("GEN", 7, "Voltgen", "generates electricity at its thermal plants and sells power", "Power Generation",
+                                                           "power_generation")),
+        ("Integrated power distribution", "Distribute.", _mk("DIS", 6, "Gridco", "distributes electricity over its network at regulated tariffs",
+                                                              "Power Distribution", "regulated_utility")),
+        ("Power and grid equipment makers", "Equipment.", _mk("HEQ", 8, "Transfo", "manufactures transformers and switchgear in its plants",
+                                                               "Heavy Electrical Equipment", "manufacturing")),
+        ("Cables and wires makers", "Cables.", _mk("CAB", 6, "Wirewell", "manufactures power cables and wires in its plants", "Cables - Electricals",
+                                                    "manufacturing")),
+    ], [])
+
+
+def _rankings(v, slides):
+    """[(slide title, sentence, the layers it names)] for every sentence, headline or card line that names a highest, lowest, fastest or slowest."""
+    fams = deck.layer_families(v)
+    out = []
+    for s in slides[1:]:
+        texts = [s.subtitle or ""] if s.title != "Contents" else []
+        for b in s.blocks:
+            if b["kind"] == "cards":
+                texts += [ln for it in b.get("items") or [] for ln in it.get("lines") or [] if isinstance(ln, str)]
+            elif b["kind"] == "text":
+                texts += [p for p in b.get("paras") or [] if isinstance(p, str)]
+        for t in texts:
+            if RANKING.search(t):
+                out.append((s.title, t, deck.layers_named(t, fams)))
+    return out
+
+
+def _one_kind_only(name, v, slides):
+    fams = deck.layer_families(v)
+    for title, text, named in _rankings(v, slides):
+        assert len({fams[n] for n in named}) <= 1, (name, title, text, {n: fams[n] for n in named})
+
+
+def test_real_estate_ranks_no_developer_against_a_contractor_a_landlord_or_a_lender():
+    v, slides = _split_deck(realty_live_shape())
+    fams = deck.layer_families(v)
+    assert len(set(fams.values())) == 4, fams                                     # four ways of earning, one layer each
+    side = next(s for s in slides if s.title.startswith("Layers side by side"))
+    assert not RANKING.search(side.subtitle or ""), side.subtitle                  # live: "highest median ROCE in Engineering and construction contracts"
+    assert (v.get("chain") or {}).get("highest") is None
+    assert [r for r in _rankings(v, slides) if r[2]] == []
+    _one_kind_only("real estate", v, slides)
+    assert next(x for x in slides[0].gate["items"] if x["id"] == "headline")["ok"]
+
+
+def test_utilities_rank_only_the_layers_of_makers_against_each_other_and_say_so():
+    v, slides = _split_deck(utilities_live_shape())
+    fams = deck.layer_families(v)
+    makers = {n for n, f in fams.items() if f == "making"}
+    assert makers == {"Power and grid equipment makers", "Cables and wires makers"} and len(set(fams.values())) == 3
+    side = next(s for s in slides if s.title.startswith("Layers side by side"))
+    named = deck.layers_named(side.subtitle, fams)
+    assert named and set(named) <= makers, side.subtitle                           # never a generator or a network beside a maker
+    assert "among the 2 layers of one kind of business" in side.subtitle
+    _one_kind_only("utilities", v, slides)
+
+
+def test_the_one_rule_is_behind_the_side_by_side_headline():
+    rows = [{"layer": "A", "roce": 10.0, "n": 8, "k": 8, "model": {"family": "making"}, "basis": "full", "intensity": 1.0},
+            {"layer": "B", "roce": 30.0, "n": 8, "k": 8, "model": {"family": "generation"}, "basis": "full", "intensity": 1.0},
+            {"layer": "C", "roce": 20.0, "n": 8, "k": 8, "model": {"family": "making"}, "basis": "full", "intensity": 1.2}]
+    kw = dict(of=lambda r: r["n"], model=lambda r: r["model"], basis=lambda r: r["basis"], intensity=lambda r: r["intensity"])
+    top, among = D.rank_top(rows, lambda r: r["roce"], lambda r: r["k"], **kw)
+    assert top["layer"] == "C" and [r["layer"] for r in among] == ["A", "C"]      # B earns another way: not ranked, though its figure is highest
+    assert D.rank_top(rows[:2], lambda r: r["roce"], lambda r: r["k"], **kw) is None           # one of each family: nothing to rank
+    few = [{**r, "k": 4} for r in rows]
+    assert D.rank_top(few, lambda r: r["roce"], lambda r: r["k"], **kw) is None                 # under the headline floor of 5
+    far = [rows[0], {**rows[2], "intensity": 9.0}]
+    assert D.rank_top(far, lambda r: r["roce"], lambda r: r["k"], **kw) is None                 # unlike in asset intensity
+    assert D.rank_pair(rows, lambda r: r["roce"], lambda r: r["k"], **kw) == (rows[2], rows[0])  # the pair's rule is the same one
+
+
+def test_the_gate_drops_a_ranking_across_kinds_of_business():
+    fams = {"Residential developers": "development", "Engineering and construction contracts": "construction", "Office landlords": "property",
+            "Plain layer": ""}
+    bad = "Median ROCE is highest in Engineering and construction contracts (10.7%) and lowest in Residential developers (7.7%)"
+    assert "different kinds of business" in deck.family_flag(bad, fams)
+    assert deck.family_flag("highest median ROCE in Engineering and construction contracts (10.7%)", fams) is None        # one layer named
+    assert deck.family_flag("Residential developers and Office landlords both report in March", fams) is None           # no ranking
+    assert deck.family_flag("highest in Plain layer, lowest in Office landlords", fams)                                 # no family beside one
+    v, slides = _split_deck(realty_live_shape())
+    side = next(s for s in slides if s.title.startswith("Layers side by side"))
+    side.subtitle = ("Medians by layer: highest median ROCE in Engineering and construction contracts (10.7%); fastest median revenue growth in "
+                     "Residential developers (+25%)")
+    gate = deck.publication_gate(slides, v)
+    assert not next(x for x in gate["items"] if x["id"] == "headline")["ok"]
+    assert not RANKING.search(side.subtitle or "")                                 # dropped, never shipped
+    assert any("different kinds of business" in d["why"] for d in gate["dropped"])
+
+
+@pytest.mark.parametrize("name,theme", STRUCTURES, ids=[n for n, _ in STRUCTURES])
+def test_no_structure_ranks_layers_of_different_kinds_of_business(name, theme):
+    v, slides = _split_deck(theme)
+    _one_kind_only(name, v, slides)
+    assert not [d for d in slides[0].gate["dropped"] if "different kinds of business" in d.get("why", "")]
+
+
+@pytest.mark.parametrize("name,v,slides", EVERY, ids=IDS)
+def test_no_synthetic_theme_ranks_layers_of_different_kinds_of_business(name, v, slides):
+    _one_kind_only(name, v, slides)

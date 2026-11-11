@@ -3336,6 +3336,49 @@ def headline_flag(text: str) -> str | None:
     return None
 
 
+def layer_families(v: dict) -> dict:
+    """{layer: its business-model family, "" when it has none} for the map's own layers (theme_base.by_model's `model`)."""
+    return {str(x.get("layer")): ((x.get("model") or {}).get("family") or "") if isinstance(x.get("model"), dict) else ""
+            for x in v.get("layers") or [] if isinstance(x, dict) and x.get("layer") and not x.get("official")}
+
+
+def layers_named(text: str, names) -> list[str]:
+    """The layers a sentence names, the longest names first so "Power generation" is never read inside "Renewable power generation"."""
+    found, rest = [], str(text or "")
+    for nm in sorted(names, key=len, reverse=True):
+        rx = re.compile(r"(?<![A-Za-z0-9])" + re.escape(nm) + r"(?![A-Za-z0-9])")
+        if rx.search(rest):
+            found.append(nm)
+            rest = rx.sub(" ", rest)
+    return found
+
+
+def family_flag(text: str, families: dict) -> str | None:
+    """Why a ranking sentence can't ship (lane m1, the live R32 Real estate and Utilities decks: contractors ranked against developers,
+    equipment makers against generators): its highest, lowest, fastest or slowest names layers of different kinds of business (their
+    business-model families; a layer with none beside one that has). None when it names one layer, or layers of one family."""
+    if not _RANKING.search(text or ""):
+        return None
+    named = layers_named(text, families)
+    if len(named) >= 2 and len({families[n] for n in named}) > 1:
+        return "ranks layers of different kinds of business: " + ", ".join(named)
+    return None
+
+
+def family_sweep(slides: list, v: dict) -> list[dict]:
+    """Drop every ranking that sets layers of different kinds of business against each other (family_flag): a sentence, a card line, or the
+    ranking parts of a headline whose parts together name such layers (each part of "highest ROCE in A; fastest growth in B" names one)."""
+    fams = layer_families(v)
+    if len(set(fams.values())) < 2:
+        return []
+    whole = {}
+    for s in slides[1:]:
+        why = family_flag(s.subtitle, fams) if s.subtitle and s.kind == "content" else None
+        if why:
+            whole.update({part: why for part in s.subtitle.split("; ") if _RANKING.search(part)})
+    return _sweep(slides, lambda t: whole.get(t) or family_flag(t, fams), "headline", claims_only=True)
+
+
 def _sweep(slides: list, judge, rule: str, claims_only: bool = False, text: bool = False) -> list[dict]:
     """Drop every headline part, card line (and, `text`, sentence of a text block) that `judge(text)` faults; the dropped, with the rule. A
     headline that loses its lead part says nothing (check_deck's rule); a card left with no line goes; the contents follow."""
@@ -3626,6 +3669,7 @@ def publication_gate(slides: list, v: dict, reproduced: list | None = None) -> d
                 items.append(it)
             b["items"] = items
     dropped["headline"] = _sweep(slides, headline_flag, "headline", claims_only=True)
+    dropped["headline"] += family_sweep(slides, v)           # lane m1: no ranking across layers of different kinds of business
     dropped["prose"] = _sweep(slides, prose_flag, "prose", text=True)
     dropped["marks"] = _marks(slides)
     notes = {}
@@ -4408,7 +4452,9 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
         pe = [c["pe"] for c in cos if c.get("pe") and c["pe"] > 0]
         # a median of fewer than MIN_BASE companies is no median here (R20): no value, its count kept for the cell
         med = lambda k: (st.get(k) or {}).get("median") if ((st.get(k) or {}).get("n") or 0) >= MIN_BASE else None      # noqa: E731
-        lay.append({"layer": x["layer"], "n": len(every), "listed": len(x.get("companies") or []), "rest": x.get("basis") == "rest", "ebitda": med("ebitda"), "roce": med("roce"),
+        from .intel.theme_data import period_basis
+        lay.append({"layer": x["layer"], "n": len(every), "listed": len(x.get("companies") or []), "rest": x.get("basis") == "rest",
+                    "model": x.get("model"), "basis": period_basis(cos), "intensity": x.get("intensity"), "ebitda": med("ebitda"), "roce": med("roce"),
                     "growth": _m(g) if len(g) >= MIN_BASE else None, "growth_n": len(g), "pe": _m(pe) if len(pe) >= MIN_BASE else None, "pe_n": len(pe),
                     **{k: med(k) for k in ("net", "roe", "nii_assets", "gnpa", "pb")}, **{f"{k}_n": (st.get(k) or {}).get("n") or 0 for k in STATS_SHOWN}})
     lay = [x for x in lay if x["n"]]
@@ -4442,13 +4488,24 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
         tw = 7.6 if beside else CW
         rk, rname = ("roe", "ROE") if lender else ("roce", "ROCE")
         cmp_ = [x for x in lay if not x.get("rest")]            # the "Other" group is never called highest or fastest (R22)
-        best_r = top_of(cmp_, lambda x: x[rk], lambda x: x[f"{rk}_n"])
-        fast = top_of(cmp_, lambda x: x["growth"], lambda x: x["growth_n"])
+        # lane m1 (the live R32 Real estate and Utilities decks: contractors ranked against developers, equipment makers against generators
+        # and distributors): a highest or a fastest is said only among layers of one kind of business, by the rule of every other ranking
+        # (theme_data.comparable_rows: one business-model family and sub-basis, the headline floor and coverage, one period basis, alike
+        # in asset intensity); the headline says how many layers that is when it isn't all of them
+        from .intel.theme_data import rank_top
+        same = dict(of=lambda x: x["n"], model=lambda x: x["model"], basis=lambda x: x["basis"], intensity=lambda x: x["intensity"])
+        got_r = rank_top(cmp_, lambda x: x[rk], lambda x: x[f"{rk}_n"], **same)
+        got_g = rank_top(cmp_, lambda x: x["growth"], lambda x: x["growth_n"], **same)
+        best_r, fast = (got_r[0] if got_r else None), (got_g[0] if got_g else None)
+        sizes = {len(g[1]) for g in (got_r, got_g) if g}
+        scope = lambda g: f" among the {len(g[1])} layers of one kind of business" if len(sizes) > 1 and len(g[1]) < len(cmp_) else ""      # noqa: E731
         bits = []
         if best_r:
-            bits.append(f"highest median {rname} in {best_r['layer']} ({_pc(best_r[rk])})")
+            bits.append(f"highest median {rname} in {best_r['layer']} ({_pc(best_r[rk])})" + scope(got_r))
         if fast:
-            bits.append(f"fastest median revenue growth in {fast['layer']} ({_chg(fast['growth'])})")
+            bits.append(f"fastest median revenue growth in {fast['layer']} ({_chg(fast['growth'])})" + scope(got_g))
+        if len(sizes) == 1 and min(sizes) < len(cmp_):
+            bits.append(f"among the {min(sizes)} layers of one kind of business")
         msg = ("Medians by layer: " + "; ".join(bits) + ("; the \"Other\" group left out" if len(cmp_) < len(lay) else "")) if bits else \
             f"{_n(len(lay), 'layer')}: its median company's margins, returns, growth and P/E"
         note = ("Medians of each layer's confirmed companies (whole-company figures left out where the layer has its own); a median of fewer companies "

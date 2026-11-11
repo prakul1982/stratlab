@@ -651,17 +651,37 @@ def rank_pair(rows: list, value, count, floor: int | None = None, of=None, model
     """(highest, lowest) of `rows` by `value(row)` among those whose figure is of at least `floor` companies (`count(row)`) (R25: one floor for
     every comparison of layers) and, given `of`, `model` and `basis` (each a function of the row), passes headline_ok and shares one period
     basis (R27), and given `intensity`, are alike in asset intensity (R30); None when fewer than two qualify, or when the highest or the lowest is tied (no layer is named for a tie)."""
+    have = comparable_rows(rows, value, count, floor, of, model, basis, intensity)
+    if len(have) < 2 or value(have[-1]) == value(have[-2]) or value(have[0]) == value(have[1]):
+        return None
+    return have[-1], have[0]
+
+
+def comparable_rows(rows: list, value, count, floor: int | None = None, of=None, model=None, basis=None, intensity=None) -> list:
+    """The rows a sentence may rank against each other, lowest `value(row)` first: the one rule of "one kind of business" behind every
+    ranking (the chain's line, the findings, the questions and, lane m1, the "Layers side by side" headline, which ranked contractors
+    against developers and equipment makers against generators on the live R32 Real estate and Utilities decks). Each has the figure for
+    at least `floor` companies (HEADLINE_MIN) and COVERAGE_MIN of its own, and is of one business model (headline_ok); all are of one
+    business-model family and, where it declares one, one sub-basis (one_basis); on one period basis; alike in asset intensity. [] when the
+    period bases or the asset intensities differ."""
     have = sorted((r for r in rows if value(r) is not None and headline_ok(count(r) or 0, of(r) if of else None, model(r) if model else None, floor)),
                   key=value)
     if model:                       # R29: one business-model family only; R31: and one sub-basis (a commodity) where the family has one
         have = one_basis(have, model)
     if basis and not same_basis([basis(r) for r in have]):
-        return None
+        return []
     if intensity and not comparable_intensity(have, intensity):         # R30: alike in asset intensity
+        return []
+    return have
+
+
+def rank_top(rows: list, value, count, floor: int | None = None, of=None, model=None, basis=None, intensity=None):
+    """(the row with the highest `value(row)`, the rows it was ranked among) under comparable_rows' rule; None when fewer than two qualify
+    or the highest is tied."""
+    have = comparable_rows(rows, value, count, floor, of, model, basis, intensity)
+    if len(have) < 2 or value(have[-1]) == value(have[-2]):
         return None
-    if len(have) < 2 or value(have[-1]) == value(have[-2]) or value(have[0]) == value(have[1]):
-        return None
-    return have[-1], have[0]
+    return have[-1], have
 
 
 def layer_history(rows: list[dict]) -> dict | None:
