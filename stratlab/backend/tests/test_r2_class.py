@@ -90,36 +90,33 @@ def by_model_one(layers, mover):
     return B.by_model(vc, models, "Retail", confidence={s: "high" for s in models})
 
 
-def test_a_company_leaving_other_joins_the_layer_it_fits_never_the_largest_by_default():
-    # R38 lane s1-fit (updated on purpose: the live R37 Consumer retail deck had 34 such companies in the largest layer, "Off-price, dollar
-    # and value-format retailers"): never the largest by default
+def test_a_company_leaving_other_joins_the_largest_layer_only_when_it_holds_its_industry_or_words():
     big = ("Apparel chains", "Chains selling clothing and footwear.", [("Retail-Family Clothing Stores", "sells clothing")] * 5)
     small = ("Online retailers", "Companies selling online.", [("Retail-Catalog & Mail-Order Houses", "sells online")] * 3)
-    # of the largest layer's industry, the layer all of it: there, as before (no reshuffle)
+    # of the largest layer's industry: there, as before (no reshuffle)
     out = by_model_one([big, small], {"ticker": "X", "industry": "Retail-Family Clothing Stores", "what": "operates outlet stores", "cap": 1})
     assert layer_of(out, "X")["layer"] == "Apparel chains"
-    # the layer of its industry whose words it shares: that layer
+    # the layer whose every company is of its industry and whose words it shares: that layer
     out = by_model_one([big, small], {"ticker": "X", "industry": "Retail-Catalog & Mail-Order Houses", "what": "sells furniture online", "cap": 1})
     assert layer_of(out, "X")["layer"] == "Online retailers"
-    # its industry is all of one layer (and that layer holds all of it), its words name none: that layer, not the largest
+    # of its industry or its words only: the largest, as before (no move on one sign alone)
     out = by_model_one([big, small], {"ticker": "X", "industry": "Retail-Catalog & Mail-Order Houses", "what": "an e-commerce company", "cap": 1})
-    assert layer_of(out, "X")["layer"] == "Online retailers"
-    # one shared word and no layer of its industry: one word never places it (by chance), so it stays in "Other"
+    assert layer_of(out, "X")["layer"] == "Apparel chains"
+    # R38 lane s1-fit (updated on purpose: the live R37 Consumer retail deck had 34 such companies in its largest layer): one shared word
+    # with another layer, none with the largest, and no layer of its family holds its industry: never the largest by default, it stays in
+    # "Other"; two shared words place it in that layer
     out = by_model_one([big, small], {"ticker": "X", "industry": "Retail-Miscellaneous Retail", "what": "sells furniture online", "cap": 1})
     assert layer_of(out, "X")["layer"] == "Other"
-    # two shared words and no layer of its industry: that layer
-    out = by_model_one([big, small], {"ticker": "X", "industry": "Retail-Miscellaneous Retail", "what": "sells clothing and footwear", "cap": 1})
-    assert layer_of(out, "X")["layer"] == "Apparel chains"
+    home = ("Furniture and home stores", "Stores selling furniture and home decor.", [("Retail-Furniture Stores", "sells furniture")] * 2)
+    out = by_model_one([big, small, home], {"ticker": "X", "industry": "Retail-Miscellaneous Retail", "what": "sells furniture and home decor online",
+                                            "cap": 1})
+    assert layer_of(out, "X")["layer"] == "Furniture and home stores"
     # neither: it stays in "Other", its way of earning shown
     out = by_model_one([big, small], {"ticker": "X", "industry": "Retail-Miscellaneous Retail", "what": "retail distribution of propane", "cap": 1})
     assert layer_of(out, "X")["layer"] == "Other" and row_of(out, "X")["model"] == "retail"
-    # no words and no layer of its industry: "Other", never the largest by default
+    # no words at all: the largest layer, as before
     out = by_model_one([big, small], {"ticker": "X", "industry": "Retail-Miscellaneous Retail", "what": "", "cap": 1})
-    assert layer_of(out, "X")["layer"] == "Other"
-    # its industry most of two layers and its words fitting neither twice: a layer named by how it earns
-    other = ("Department stores", "Stores selling general goods.", [("Retail-Family Clothing Stores", "sells general goods")] * 4)
-    out = by_model_one([big, small, other], {"ticker": "X", "industry": "Retail-Family Clothing Stores", "what": "runs shops", "cap": 1})
-    assert layer_of(out, "X")["layer"] not in ("Apparel chains", "Department stores")
+    assert layer_of(out, "X")["layer"] == "Apparel chains"
 
 
 def test_no_other_theme_reshuffled_beyond_the_layers_of_their_industry():

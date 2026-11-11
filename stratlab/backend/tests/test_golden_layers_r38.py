@@ -19,103 +19,40 @@ LIVE = pathlib.Path(__file__).parent / "fixtures" / "themes_live"
 LAYERS = json.loads((LIVE / "layers_r38.json").read_text())
 _HALF = re.compile(r"( \((?:larger|smaller)\))+$")
 
-_AGRO = ("an agrochemical maker: the one layer holding its industry, \"Custom synthesis manufacturers\", is named for contract making, and "
-         "\"Specialty and performance chemicals\" (additives, surfactants, dyes) holds neither its industry nor its words: stays in Other")
-_PHARMA = ("its industry (Pharmaceuticals) is most of three of the map's layers and its words name none of them (not export generics): a "
-           "layer named by how it earns, not the largest by default")
-_OFFPRICE = "no layer of its family holds its industry and shares its words (not an off-price, dollar or variety format): stays in Other"
+_OTHER = ("no layer of its family holds its industry, the largest (\"Off-price, dollar and value-format retailers\") shares none of its "
+          "words and no other layer shares two: stays in Other, never the largest by default")
+_KIN = ("an auto parts maker the answer read as a maker of its own products: \"Tyre manufacturers\" (the largest makers' layer) holds none "
+        "of its industry; the component suppliers' layer is all of it (listed there, left out of its figures as another way of earning)")
 
 # "theme:symbol" -> (its layer now, why it moved)
 APPROVED = {
-    "auto:ASAHIINDIA": ("Component and systems suppliers", "an automotive glass maker, not a tyre maker: no makers' layer holds its industry or its words; the component suppliers' layer is all of its industry (left out of its figures as another way of earning)"),
-    "auto:BOSCHLTD": ("Component and systems suppliers", "fuel injection systems and auto parts, not tyres: no makers' layer holds its industry or its words; the component suppliers' layer is all of its industry (left out of its figures as another way of earning)"),
-    "auto:STUDDS": ("Other", "a helmet and motorcycle accessories maker: its words name two-wheelers but its industry is another layer's, so not a two-wheeler maker"),
-    "auto:VELJAN": ("Component and systems suppliers", "hydraulic pumps, motors and valves, not tyres: the component suppliers' layer is all of its industry (left out of its figures as another way of earning)"),
-    "chem:ADVANCE": ("Other", _AGRO),
-    "chem:ANDHRSUGAR": ("Chlor-alkali and soda ash producers", "its words name chlor-alkali products, and that layer holds its industry"),
-    "chem:ASTEC": ("Other", _AGRO),
-    "chem:BAYERCROP": ("Other", _AGRO),
-    "chem:BEPL": ("Other", "ABS and other engineering resins: no layer holds its industry and shares its words (not niche additives or dyes)"),
-    "chem:BESTAGRO": ("Other", _AGRO),
-    "chem:BHAGCHEM": ("Other", _AGRO),
-    "chem:BHARATRAS": ("Other", _AGRO),
-    "chem:DEEPAKFERT": ("Basic organic intermediates", "fertilisers and petrochemicals: that layer converts petrochemical feedstocks and holds its industry"),
-    "chem:DHANUKA": ("Other", _AGRO),
-    "chem:DHARMAJ": ("Other", _AGRO),
-    "chem:ELLEN": ("Fluorochemicals and refrigerants", "an industrial gases maker: the layer where the map keeps the industrial gas makers, sharing its words (gases)"),
-    "chem:GNFC": ("Other", "its words say nothing of what it makes and its industry (Commodity Chemicals) is spread over the map: no layer by default"),
-    "chem:GSPCROP": ("Other", _AGRO),
-    "chem:HERANBA": ("Other", _AGRO),
-    "chem:INSECTICID": ("Other", _AGRO),
-    "chem:IPL": ("Other", _AGRO),
-    "chem:KOTHARIPET": ("Basic organic intermediates", "a petrochemical maker (polyisobutylene): that layer converts petrochemical feedstocks and holds its industry"),
-    "chem:LINDEINDIA": ("Fluorochemicals and refrigerants", "an industrial and medical gases maker: the layer where the map keeps the industrial gas makers, sharing its words (gases)"),
-    "chem:MOL": ("Other", _AGRO),
-    "chem:PASUPTAC": ("Other", "acrylic fibre and film: no layer holds its industry and shares its words (not niche additives or dyes)"),
-    "chem:RAIN": ("Other", "carbon, cement and advanced materials: no layer holds its industry and shares its words; its industry is most of none"),
-    "chem:RALLIS": ("Other", _AGRO),
-    "chem:SHIVALIK": ("Other", _AGRO),
-    "chem:SPLPETRO": ("Basic organic intermediates", "a petrochemical maker (polystyrene): that layer converts petrochemical feedstocks and holds its industry"),
-    "chem:SUMICHEM": ("Other", _AGRO),
-    "chem:TNPETRO": ("Basic organic intermediates", "a petrochemical products maker: that layer converts petrochemical feedstocks and holds its industry"),
-    "chem:UPL": ("Other", _AGRO),
-    "cyber:GEN": ("Other", "its words say only \"software company\" and its industry is most of several layers: no layer by default (alone in a layer of its way of earning, so Other)"),
-    "it:ACESOFT": ("Digital engineering and consulting projects", "document management, digital publishing, data conversion and technology consulting: that layer's words"),
-    "it:MCLOUD": ("Project and consulting services", "IT services, surveillance and drones: its industry is most of several layers and its words fit none: a layer named by how it earns"),
-    "it:TREJHARA": ("Project and consulting services", "software services and licences: its industry is most of several layers and its words fit none: a layer named by how it earns"),
-    "metals:20MICRONS": ("Coal, iron ore and mineral mining", "industrial minerals: that layer holds its industry and shares its words (industrial minerals), not ferro alloys"),
-    "metals:ARFIN": ("Other", "non-ferrous metals: its industry (Aluminium) is no makers' layer's and its words fit none"),
-    "metals:GOACARBON": ("Coal, iron ore and mineral mining", "calcined petroleum coke: its industry (Industrial Minerals) is most of that layer's companies; not ferro alloys"),
-    "metals:HINDALUMI": ("Other", "aluminium products and power: one shared word, its industry (Aluminium) not that layer's: stays in Other"),
-    "metals:JAINREC": ("Other", "a scrap recycler: no metal processors' layer holds its industry and shares its words"),
-    "metals:MMP": ("Other", "aluminium powder: one shared word, its industry (Aluminium) not that layer's: stays in Other, as the live map has it"),
-    "pharma:AARTIPHARM": ("Makers of their own products", _PHARMA),
-    "pharma:AMBALALSA": ("Makers of their own products", _PHARMA),
-    "pharma:AMRUTANJAN": ("Makers of their own products", _PHARMA + "; an ayurvedic balm maker"),
-    "pharma:ANUHPHR": ("Makers of their own products", _PHARMA + "; a bulk drug maker"),
-    "pharma:BALPHARMA": ("Makers of their own products", _PHARMA + "; no words"),
-    "pharma:HESTERBIO": ("Makers of their own products", _PHARMA + "; an animal vaccine maker"),
-    "pharma:KOPRAN": ("Makers of their own products", _PHARMA + "; formulations and ingredients, sold globally"),
-    "pharma:MAKERSL": ("Makers of their own products", _PHARMA),
-    "pharma:NATCAPSUQ": ("Makers of their own products", _PHARMA + "; no words"),
-    "pharma:PANCHSHEEL": ("Makers of their own products", _PHARMA + "; no words"),
-    "pharma:SAKAR": ("Makers of their own products", _PHARMA),
-    "pharma:SIGACHI": ("Makers of their own products", _PHARMA + "; an excipient maker"),
-    "pharma:VIYASH": ("Makers of their own products", _PHARMA + "; an animal health company"),
-    "retail:AKA": ("Other", "a fashion brand: " + _OFFPRICE),
-    "retail:BLMH": ("Other", "a cannabis products company: one shared word only: " + _OFFPRICE),
-    "retail:BWMX": ("Other", "a consumer products brand company: " + _OFFPRICE),
-    "retail:CHWY": ("Niche specialty and category retailers", "an online pet retailer: that layer's words (pets, online)"),
-    "retail:CIMG": ("Other", "a food distributor in Asia: " + _OFFPRICE + ", as the live map has it"),
-    "retail:CPNG": ("Other", "an online retailer: one shared word (online) only: " + _OFFPRICE),
-    "retail:CURV": ("Other", "a women's apparel chain: " + _OFFPRICE),
-    "retail:DDL": ("Other", "an online fresh grocery seller: " + _OFFPRICE),
-    "retail:DDS": ("Other", "a department store chain: " + _OFFPRICE),
-    "retail:DLTH": ("Other", "a workwear and apparel brand: " + _OFFPRICE),
-    "retail:HEPS": ("Other", "an online marketplace retailer: " + _OFFPRICE),
-    "retail:HOUR": ("Resale, rental and small digital commerce", "an online e-commerce retailer: that layer's words (online commerce)"),
-    "retail:JD": ("Retail", "an e-commerce retailer: its industry is most of three layers and its words fit none twice: a layer named by how it earns"),
-    "retail:JL": ("Other", "a garment trims distributor: " + _OFFPRICE),
-    "retail:KSS": ("Other", "a department store chain: " + _OFFPRICE),
-    "retail:LITB": ("Other", "an online clothing seller: " + _OFFPRICE),
-    "retail:LULU": ("Other", "an athletic apparel brand: " + _OFFPRICE),
-    "retail:LUXE": ("Other", "an online luxury fashion seller: " + _OFFPRICE),
-    "retail:LVLU": ("Other", "a women's clothing brand (\"accessible prices\" is no accessory): " + _OFFPRICE),
-    "retail:M": ("Other", "a department store chain: " + _OFFPRICE),
-    "retail:NEXR": ("Other", "an e-commerce seller on Amazon: " + _OFFPRICE),
-    "retail:NXH": ("Other", "an e-commerce brand owner: " + _OFFPRICE),
-    "retail:PLBY": ("Resale, rental and small digital commerce", "licensing, digital subscriptions and online: that layer's words (digital, online)"),
-    "retail:RVLV": ("Other", "an online fashion seller (\"discovery\" is no discount): " + _OFFPRICE),
-    "retail:SFIX": ("Other", "an online styling service: " + _OFFPRICE),
-    "retail:SVV": ("Other", "a thrift store operator: " + _OFFPRICE),
-    "retail:TLYS": ("Other", "an apparel store chain: " + _OFFPRICE),
-    "retail:VIPS": ("Resale, rental and small digital commerce", "an e-commerce site for online discount sales: that layer's words (online commerce)"),
-    "retail:W": ("Resale, rental and small digital commerce", "an e-commerce company selling home goods online: that layer's words (online commerce)"),
-    "retail:YJ": ("Retail", "a membership shopping app: its industry is most of three layers and its words fit none: a layer named by how it earns"),
-    "retail:ZUMZ": ("Other", "a specialty clothing store: " + _OFFPRICE),
-    "telecom:PACEDIGITK": ("Tower infrastructure", "telecom infrastructure: no makers' layer holds its industry or its words; the tower layer is all of its industry (left out of its figures as another way of earning)"),
-    "utilities:INA": ("Other", "a solar panel maker: its industry (Power Generation) is no equipment layer's and its words fit none"),
-    "utilities:NAVA": ("Other", "ferro alloys, metals and power abroad: its words fit no generation layer twice; alone in a layer of its way of earning, so Other"),
+    "auto:ASAHIINDIA": ("Component and systems suppliers", "automotive and architectural glass: " + _KIN),
+    "auto:BOSCHLTD": ("Component and systems suppliers", "fuel injection systems and automotive aftermarket products: " + _KIN),
+    "auto:STUDDS": ("Component and systems suppliers", "two-wheeler helmets and accessories, filed as auto components: " + _KIN),
+    "auto:VELJAN": ("Component and systems suppliers", "hydraulic pumps, motors and valves, filed as auto components: " + _KIN),
+    "retail:BLMH": ("Other", "a cannabis products company: " + _OTHER),
+    "retail:BWMX": ("Other", "a consumer products brand company (catalogue seller): " + _OTHER),
+    "retail:CHWY": ("Other", "an online pet retailer: " + _OTHER),
+    "retail:CPNG": ("Other", "an online retailer (South Korea): " + _OTHER),
+    "retail:DDL": ("Other", "an online fresh grocery seller: " + _OTHER),
+    "retail:HEPS": ("Other", "an online retailer (Turkey): " + _OTHER),
+    "retail:HOUR": ("Resale, rental and small digital commerce", "\"an online retailer engaged in e-commerce\": that layer's words (online, commerce)"),
+    "retail:LITB": ("Other", "an online clothing seller: " + _OTHER),
+    "retail:LULU": ("Other", "an athletic apparel brand: " + _OTHER),
+    "retail:LUXE": ("Other", "an online luxury fashion seller: " + _OTHER),
+    "retail:LVLU": ("Other", "a women's clothing brand: " + _OTHER),
+    "retail:NEXR": ("Other", "an e-commerce seller on Amazon: " + _OTHER),
+    "retail:PLBY": ("Resale, rental and small digital commerce", "licensing, digital subscriptions and online entertainment: that layer's words (digital, online)"),
+    "retail:SFIX": ("Other", "an online personal styling service: " + _OTHER),
+    "retail:W": ("Resale, rental and small digital commerce", "\"an e-commerce company that sells furniture and home goods online\": that layer's words (online, commerce)"),
+}
+
+# moves an earlier review rejected (and this lane's first pass made): these companies keep the layer the Release 37 rules give them
+KEEP = {
+    "pharma": None,                                           # every company: excipient, animal-health and OTC groups as they are
+    "chem": None,                                             # agrochemical, gas and petrochemical makers stay as Release 37 has them
+    "cyber": None,
+    "metals": {"ARFIN", "HINDALUMI", "MMP", "JAINREC", "20MICRONS", "GOACARBON"},
 }
 
 
@@ -214,14 +151,32 @@ def test_the_moves_are_the_intended_ones_only():
     by_theme = {}
     for k in APPROVED:
         by_theme.setdefault(k.split(":")[0], set()).add(k.split(":")[1])
-    assert sorted(by_theme) == ["auto", "chem", "cyber", "it", "metals", "pharma", "retail", "telecom", "utilities"]
-    assert len(APPROVED) == 89
+    assert sorted(by_theme) == ["auto", "retail"] and len(APPROVED) == 19
     every = {f"{t['key']}:{c['s']}": c for t in LAYERS["themes"] for c in t["companies"]}
-    # nothing moves into the off-price layer or the equipment layer; every off-price move leaves it
+    # nothing moves into the off-price layer or the equipment layer; every retail move leaves the off-price layer, every auto move tyres
     assert not any(layer.startswith("Off-price") or layer == "Semiconductor equipment" for layer, _ in APPROVED.values())
-    assert all(every[f"retail:{s}"]["e"].startswith("Off-price") for s in by_theme["retail"] - {"JD", "YJ"})
-    # every company leaving a layer it reached as the largest of its family, never a company the map placed in its layer itself
+    assert all(every[f"retail:{s}"]["e"].startswith("Off-price") for s in by_theme["retail"])
+    assert all(every[f"auto:{s}"]["e"] == "Tyre manufacturers" for s in by_theme["auto"])
+    # every company leaving a layer it reached by the split, never a company the map placed in its layer itself
     assert all(every[k].get("mv") or t_layer_official(k) for k in APPROVED), [k for k in APPROVED if not every[k].get("mv") and not t_layer_official(k)]
+
+
+def test_the_rejected_moves_do_not_happen():
+    """The coordinator's review of this lane's first pass: pharma's excipient, animal-health and OTC makers, the aluminium product makers,
+    Gen Digital and every chemicals company keep the layer the Release 37 rules give them, and no new layer named by how its companies earn
+    appears in a theme whose family already has map layers ("Retail" beside four retail layers)."""
+    for key, syms in KEEP.items():
+        t = _theme(key)
+        got = layer_of(replay_vc(t))
+        for c in t["companies"]:
+            if syms is None or c["s"] in syms:
+                assert got[c["s"]] == c["e"], (key, c["s"], c["e"], got[c["s"]])
+    for key in ("retail", "pharma", "chem", "it", "auto", "metals"):
+        t = _theme(key)
+        before = {c["e"] for c in t["companies"]}
+        after = set(layer_of(replay_vc(t)).values())
+        assert after <= before | {"Other"}, (key, after - before)
+    assert "Retail" not in set(layer_of(replay_vc(_theme("retail"))).values())
 
 
 def t_layer_official(k):
@@ -234,11 +189,12 @@ def t_layer_official(k):
 
 def test_the_review_items_hold_on_the_live_maps():
     retail = layer_of(replay_vc(_theme("retail")))
-    for s in ("CPNG", "W", "VIPS", "CHWY", "LULU", "M", "KSS", "DDS"):
+    # Vipshop ("online discount sales") shares "discount" with the off-price layer's own words, so the largest stands for it, as before
+    for s in ("CPNG", "W", "CHWY", "LULU", "JD"):
         assert not retail[s].startswith("Off-price"), s
     for s in ("SPH", "FCFS", "EZPW", "FGPR"):
         assert retail[s] == "Other", s
-    assert not retail["JD"].startswith("Niche")         # a broad online retailer (its own layer of retailers: no layer fits it twice)
+    assert retail["JD"] == "Resale, rental and small digital commerce"     # a broad online retailer, out of "Niche": the online commerce layer
     semis = layer_of(replay_vc(_theme("semis")))
     for s in ("MU", "INTC", "SKHY", "QRVO", "IPGP", "LASR", "LEDS", "KOPN", "AAOI", "PLAB"):
         assert semis[s] != "Semiconductor equipment", s
@@ -261,8 +217,12 @@ def test_the_live_split_no_longer_joins_chip_makers_to_the_equipment_layer():
     for s in ("ASML", "AMAT", "LRCX", "KLAC", "TER"):
         assert semis[s] == "Semiconductor equipment", s
     retail = live_split(_theme("retail"))
-    for s in ("CPNG", "W", "VIPS", "CHWY", "LULU", "M", "KSS", "DDS", "FCFS", "EZPW", "SPH"):
+    for s in ("CPNG", "W", "CHWY", "LULU", "JD", "FCFS", "EZPW", "SPH"):
         assert not retail[s].startswith("Off-price"), s
+    auto = live_split(_theme("auto"))
+    for s in ("BOSCHLTD", "ASAHIINDIA", "VELJAN"):
+        assert auto[s] == "Component and systems suppliers", s
+    assert auto["VSTTILLERS"] == "Batteries and tractor makers"
     for s in ("TJX", "ROST", "BURL", "DG", "DLTR", "FIVE", "OLLI"):
         assert retail[s].startswith("Off-price"), s
 

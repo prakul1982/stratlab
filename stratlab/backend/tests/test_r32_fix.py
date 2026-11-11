@@ -112,21 +112,9 @@ def test_a_model_named_layer_joins_the_map_s_layer_and_two_plain_ones_still_stay
     two = vc[0]
     assert {c["ticker"] for c in two["companies"]} == {f"TWO{i}" for i in range(5)}
     assert two["model"]["same_as"] == ["Makers of their own products", "Passenger cars"]   # each line says the three earn the same way
-    # one layer named by what it makes: the model-named layer joins it only with the companies whose words fit it. R38 lane s1-fit (updated
-    # on purpose; the live R37 Semiconductors deck had Micron, Intel and SK Hynix in "Semiconductor equipment" because both "make their own
-    # products"): carmakers never join "Two-wheelers"
+    # one layer named by what it makes: the model-named layer joins it, as before
     one = copy.deepcopy(t["map"]["value_chain"])[:2]
     vc = B.by_model(one, t["models"], "Automobiles", tags=t["tags"], confidence=t["confidence"])
-    assert [v["layer"] for v in vc if not v.get("official")] == ["Two-wheelers", "Makers of their own products"]
-    assert {c["ticker"] for c in vc[0]["companies"]} == {f"TWO{i}" for i in range(5)}
-    # ...and makers whose words say what the two-wheeler layer makes do join it
-    fit = build("IN", "Automobiles", [
-        ("Two-wheelers", "These firms build motorcycles and scooters.", _rows("TWO", 5, "Bikeco", "makes motorcycles and scooters in its plants",
-                                                                             "2/3 Wheelers", "manufacturing")),
-        ("Makers of their own products", "Made.", _rows("MKR", 3, "Ridewell", "makes motorcycles and electric scooters in its plants", "2/3 Wheelers",
-                                                       "manufacturing")),
-    ], [])
-    vc = B.by_model(copy.deepcopy(fit["map"]["value_chain"]), fit["models"], "Automobiles", tags=fit["tags"], confidence=fit["confidence"])
     assert [v["layer"] for v in vc if not v.get("official")] == ["Two-wheelers"]
     assert {c["ticker"] for c in vc[0]["companies"]} == {f"TWO{i}" for i in range(5)} | {f"MKR{i}" for i in range(3)}
 

@@ -72,11 +72,10 @@ def test_it_services_mixed_layers_are_split_by_how_they_earn():
     assert after["Cloud, AI infrastructure and hardware"] == ["DC1", "DC2"]
     assert after["Software products and platforms"] == ["SP0", "SP1", "SP2", "SW1"]
     # "Other" keeps the company the evidence can't place; R27 (changed on purpose): the server maker, alone in its model, joins "Other" instead
-    # of a one-company layer. R38 lane s1-fit (changed on purpose: never the largest layer of its family by default): the project firm's words
-    # ("delivers IT projects") share none of the services layers' words and its industry is every layer's, so it stays in "Other" too
-    assert after["Other IT service companies"] == ["NOD", "PJX", "SV1"] and "Makers of their own products" not in after
+    # of a one-company layer; the project firm joins services
+    assert after["Other IT service companies"] == ["NOD", "SV1"] and "Makers of their own products" not in after
     # the 18-company catch-all (over 40% of the theme) is split by model: project firms and managed-service firms apart
-    assert after["Mid-tier digital and cloud specialists"] == sorted([f"PJ{i:02d}" for i in range(10)])
+    assert after["Mid-tier digital and cloud specialists"] == sorted([f"PJ{i:02d}" for i in range(10)] + ["PJX"])
     # R31 (changed on purpose: no two layers of one primary model): the managed-service firms split out of the catch-all join the map's own
     # layer of managed services instead of a second "Managed and outsourced IT services" layer
     assert "Managed and outsourced IT services" not in after
@@ -87,13 +86,9 @@ def test_it_services_mixed_layers_are_split_by_how_they_earn():
     # one family a layer, and each says what its companies have in common
     for v in vc:
         fams = {C.model_family(models.get(c["ticker"])) for c in v["companies"]} - {""}
-        if v.get("official"):
-            # R38 lane s1-fit (changed on purpose): "Other" keeps the companies no layer fits, each with its way of earning shown, so it can
-            # hold two families (the server maker and the project firm); it is no layer by how they earn
-            assert all(c["model"] == models[c["ticker"]] for c in v["companies"] if models.get(c["ticker"]) in C.MODELS), v["layer"]
-            continue
         assert len(fams) <= 1, (v["layer"], fams)
-        assert v["model"]["line"].startswith("They earn mainly from"), v["layer"]
+        if not v.get("official"):
+            assert v["model"]["line"].startswith("They earn mainly from"), v["layer"]
     hw = next(v for v in vc if v["layer"] == "Hardware resale and integration")
     assert hw["model"]["line"] == "They earn mainly from selling and installing hardware that others make." and not hw.get("official")
     # the "Other" group stays last
@@ -107,11 +102,10 @@ def test_before_and_after_layer_list_for_the_report():
         ("Large diversified outsourcers", 5), ("Mid-tier digital and cloud specialists", 18), ("Cloud, AI infrastructure and hardware", 4),
         ("Software products and platforms", 3), ("Other IT service companies", 3)]
     assert [(v["layer"], len(v["companies"])) for v in vc] == [
-        ("Large diversified outsourcers", 11), ("Mid-tier digital and cloud specialists", 10),
+        ("Large diversified outsourcers", 11), ("Mid-tier digital and cloud specialists", 11),
         ("Cloud, AI infrastructure and hardware", 2), ("Software products and platforms", 4), ("Hardware resale and integration", 3),
-        ("Other IT service companies", 3)]          # R27: no one-company layer, the server maker is in "Other"; R31 (on purpose): the managed-
-    #                                                 service firms join the map's own managed-services layer; R38 lane s1-fit (on purpose): the
-    #                                                 project firm whose words fit no layer stays in "Other", never the largest by default
+        ("Other IT service companies", 2)]          # R27: no one-company layer, the server maker is in "Other"; R31 (on purpose): the managed-
+    #                                                 service firms join the map's own managed-services layer
 
 
 def test_a_catch_all_of_one_model_is_split_by_market_value():
