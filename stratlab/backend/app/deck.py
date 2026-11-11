@@ -3607,10 +3607,20 @@ def layers_named(text: str, names) -> list[str]:
     return found
 
 
+_NOT_RANKED = re.compile(r"Shown, not ranked:.*?(?:\.(?=\s|$)|$)")          # to the sentence's end ("20.0%" is no end)
+
+
+def ranked_part(text: str) -> str:
+    """A sentence without its "Shown, not ranked: ..." clause (R36): the layers named there are said to be outside the ranking, so they
+    never count as ranked against the others."""
+    return _NOT_RANKED.sub("", text or "")
+
+
 def family_flag(text: str, families: dict) -> str | None:
     """Why a ranking sentence can't ship (lane m1, the live R32 Real estate and Utilities decks: contractors ranked against developers,
     equipment makers against generators): its highest, lowest, fastest or slowest names layers of different kinds of business (their
     business-model families; a layer with none beside one that has). None when it names one layer, or layers of one family."""
+    text = ranked_part(text)
     if not _RANKING.search(text or ""):
         return None
     named = layers_named(text, families)

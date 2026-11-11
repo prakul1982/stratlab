@@ -363,6 +363,7 @@ def _rankings(v, slides):
             elif b["kind"] == "text":
                 texts += [p for p in b.get("paras") or [] if isinstance(p, str)]
         for t in texts:
+            t = deck.ranked_part(t)              # the layers a "Shown, not ranked" clause names are said to be outside the ranking
             if RANKING.search(t):
                 out.append((s.title, t, deck.layers_named(t, fams)))
     return out
@@ -441,3 +442,14 @@ def test_no_structure_ranks_layers_of_different_kinds_of_business(name, theme):
 @pytest.mark.parametrize("name,v,slides", EVERY, ids=IDS)
 def test_no_synthetic_theme_ranks_layers_of_different_kinds_of_business(name, v, slides):
     _one_kind_only(name, v, slides)
+
+
+def test_a_layer_said_to_be_shown_not_ranked_never_counts_as_ranked():
+    fams = {"Cables and wires makers": "making", "Power and grid equipment makers": "making", "Thermal and hydro generation": "generation"}
+    ok = ("Among the 2 layers with at least 5 companies with the figure and one kind of business, median EBITDA margin is highest in Cables and "
+          "wires makers (26.3%) and lowest in Power and grid equipment makers (23.8%). Shown, not ranked: Thermal and hydro generation (20.0%), "
+          "a different kind of business.")
+    assert deck.family_flag(ok, fams) is None
+    bad = "Median EBITDA margin is highest in Thermal and hydro generation (20%) and lowest in Cables and wires makers (18%)."
+    assert deck.family_flag(bad, fams)
+    assert "Thermal" not in deck.ranked_part(ok) and deck.ranked_part(bad) == bad
