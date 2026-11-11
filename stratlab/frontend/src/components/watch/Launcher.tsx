@@ -6,7 +6,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type
 import { useLocation, useNavigationType } from "react-router-dom";
 import { usePersisted } from "../../lib/persist";
 import { importWithRetry } from "../../lib/lazyRetry";
-import { clampLayout, cornerCover, dockWidth, DEFAULT_LAYOUT, isSheet, LAYOUT_KEY, shapeOf, type PanelLayout } from "../../lib/watchLayout";
+import { clampLayout, cornerCover, dockWidth, DEFAULT_LAYOUT, isSheet, LAYOUT_KEY, shapeOf, showsOn, type PanelLayout } from "../../lib/watchLayout";
 import { useConsentLift } from "../../lib/consentLift";
 import { Markets } from "../Icons";
 import "./launcher.css";
@@ -38,7 +38,12 @@ export function MarketsLauncher({ mode, userId, button = mode, autoOpen }: { mod
   const [raw, setRaw] = usePersisted<PanelLayout>(`${LAYOUT_KEY}.${mode === "app" ? userId ?? "guest" : "visitor"}`, DEFAULT_LAYOUT);
   const [vw, vh] = useViewport();
   const layout = useMemo(() => clampLayout(raw, vw, vh), [raw, vw, vh]);
-  const patch = useCallback((p: Partial<PanelLayout>) => setRaw((o) => ({ ...clampLayout(o, window.innerWidth, window.innerHeight), ...p })), [setRaw]);
+  // any change made while the panel is open is made on this page: a floating panel belongs to the page it was last used on (LIVE6-013)
+  const patch = useCallback((p: Partial<PanelLayout>) => setRaw((o) => {
+    const n = { ...clampLayout(o, window.innerWidth, window.innerHeight), ...p };
+    return n.open ? { ...n, at: window.location.pathname } : n;
+  }), [setRaw]);
+  const { pathname } = useLocation();
   const [opened, setOpened] = useState(false);          // the panel's code has been asked for: it stays mounted after that, so a re-open is instant
   const btn = useRef<HTMLButtonElement>(null);
   const had = useRef(false);
@@ -64,14 +69,18 @@ export function MarketsLauncher({ mode, userId, button = mode, autoOpen }: { mod
       const d = ((e as CustomEvent).detail ?? {}) as { open?: boolean | "toggle"; chart?: string };
       // "toggle" goes by what is on screen: a phone's sheet kept as open but not drawn (a sheet is never open at page load) opens
       // on the first press, where it used to take two (the first only marked it shut)
-      const open = d.open === "toggle" ? !(layout.open && asked.current) : d.open !== false;
+      const open = d.open === "toggle" ? !shownNow.current : d.open !== false;
       if (open) openIt(d.chart ? { chart: d.chart } : {}); else patch({ open: false });
     };
     window.addEventListener("stratlab:markets", on);
     return () => window.removeEventListener("stratlab:markets", on);
-  }, [patch, openIt, layout.open]);
+  }, [patch, openIt]);
 
-  const shown = layout.open && asked.current;
+  // a docked panel kept open is on every page; one floating over a page only on the page it was opened on, however the person got to
+  // another (LIVE6-013: opened on Breadth, it stood over Sector rotation reached by its address)
+  const shown = showsOn(layout, vw, pathname) && asked.current;
+  const shownNow = useRef(shown);
+  shownNow.current = shown;
   useEffect(() => { if (shown) setOpened(true); }, [shown]);
   // the page makes room for a docked panel, and the question about cookies moves out from under it
   const dock = shown ? dockWidth(layout, vw) : 0;
@@ -101,13 +110,15 @@ export function MarketsLauncher({ mode, userId, button = mode, autoOpen }: { mod
   // page's controls (LIVE5-006: it stayed open across pages over Sector rotation's Trail and Animate); a docked panel takes its width
   // from the page and stays
   // a redirect (a replace: "/" to the person's own home) is the page they asked for, not another one, so a panel open at load stays
-  const { pathname } = useLocation();
+  // (LIVE6-013: the same on a page reached by its address, through showsOn); a redirect keeps it, moved to the page redirected to
   const how = useNavigationType();
   const lastPath = useRef(pathname);
   useEffect(() => {
-    if (lastPath.current === pathname) return;
+    const from = lastPath.current;
+    if (from === pathname) return;
     lastPath.current = pathname;
-    if (how !== "REPLACE" && shown && shapeOf(layout, window.innerWidth) !== "dock") close();
+    if (!layout.open || shapeOf(layout, window.innerWidth) === "dock" || !asked.current) return;
+    if (how === "REPLACE") { if (!layout.at || layout.at === from) patch({}); } else close();
   }, [pathname]);    // eslint-disable-line react-hooks/exhaustive-deps -- only a change of page
   const Panel = mode === "app" ? AppPanel : PublicPanel;
   return (
