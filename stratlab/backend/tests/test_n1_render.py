@@ -232,14 +232,16 @@ def test_with_no_dated_update_the_findings_say_so_in_a_line_that_stays(monkeypat
     cards = next(b for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards")["items"]
     assert not any(s.title == deck.UPDATES_TITLE for s in slides)
     assert next(c for c in cards if c["title"] == deck.UPDATES_TITLE)["lines"] == ["No company meets the rules today."]
-    # seven cards (a ranked return card too): the last two share one, and its "no dated update" line comes first, so it never gives way
-    # (the live Private Banks deck's merged card had lost it)
+    # seven cards (a ranked return card too): q1 (changed on purpose; the live R34 Private Banks deck's merged card kept only "No company
+    # meets the rules today", its coverage line given way): the coverage card keeps its lines, and no dated update is a line of its own
     monkeypatch.setattr("app.intel.theme_data.HEADLINE_MIN", 3)
     v, slides = deck_of(region, m, f)
-    cards = next(b for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards")["items"]
+    page = next(s for s in slides if s.title == "Key findings")
+    cards = next(b for b in page.blocks if b["kind"] == "cards")["items"]
     card = cards[-1]
-    assert len(cards) == 6 and card["title"] == "How far the figures go; dated company updates"
-    assert card["lines"][0] == "No company meets the rules today." and card["lines"][1].startswith("Considered 8 · confirmed 8")
+    assert len(cards) == 6 and card["title"] == "How far the figures go" and card["lines"][0].startswith("Considered 8 · confirmed 8")
+    assert [p for b in page.blocks if b["kind"] == "text" for p in b.get("paras") or []] == ["Dated company updates: no company meets the rules today."]
+    assert not any("No company meets the rules today." in ln for c in cards for ln in c["lines"])
 
 
 def test_one_company_listed_under_two_symbols_is_one_row_in_every_companys_figures():
