@@ -27,13 +27,14 @@ test("the theme figures are written the app's way: Indian money, one-decimal per
 
 test("a layer's table is its companies, then the median and the range as rows; a layer with no company has no table", async () => {
   const { layerLines } = await import("../src/lib/themeFormat.ts");
-  const layer = (companies, over = "own") => ({ layer: "L", companies, stats: { ebitda: { n: companies.length, median: 1, min: 1, max: 2 }, net: null, roce: null }, stats_over: over });
-  const lines = layerLines(layer([{ symbol: "A" }, { symbol: "B" }]));
-  assert.deepEqual(lines.map((l) => l.kind), ["company", "company", "median", "range"]);
-  assert.equal(lines[2].label, "Median of 2 companies");
-  assert.equal(layerLines(layer([{ symbol: "A" }], "all"))[1].label, "Median of 1 company (company-wide figures)");
+  // LIVE6-001 (updated on purpose): the median is of the companies in the layer's calculations, and a range only beside a median of 3 or more
+  const layer = (companies, over = "own") => ({ layer: "L", companies, n: companies.length, stats: { ebitda: { n: companies.length, median: 1, min: 1, max: 2 }, net: null, roce: null }, stats_over: over });
+  const lines = layerLines(layer([{ symbol: "A" }, { symbol: "B" }, { symbol: "C" }]));
+  assert.deepEqual(lines.map((l) => l.kind), ["company", "company", "company", "median", "range"]);
+  assert.equal(lines[3].label, "Median of the 3 in the layer's calculations");
+  assert.equal(layerLines(layer([{ symbol: "A" }], "all"))[1].label, "Median of the 1 in the layer's calculations (company-wide figures)");
   assert.deepEqual(layerLines(layer([])), []);
-  assert.deepEqual(layerLines(layer([{ symbol: "A" }])).map((l) => l.kind), ["company", "median"]);        // one company: no range
+  assert.deepEqual(layerLines(layer([{ symbol: "A" }, { symbol: "B" }])).map((l) => l.kind), ["company", "company", "median"]);        // under 3: no range
 });
 
 test("the page is made of tables: no stat tiles, no chips, the kit's DataTable, and the company links go to the company page", () => {
@@ -67,7 +68,7 @@ test("THEMES: every company of the theme's official industries is listed by laye
   assert.match(dive, /export function MembersCard/);
   for (const h of ["Company", "Industry", "Market value", "What it does, in its own words", "In the theme by"]) assert.match(dive, new RegExp(`header: "${h}"`));
   assert.match(dive, /from the official industry list, \{named > 0 && `\$\{named\.toLocaleString\("en-IN"\)\} named in the theme's list, `\}\{added\.toLocaleString\("en-IN"\)\} added/);
-  assert.match(dive, /Not yet confirmed from its own description/);
+  assert.match(dive, /NO_WORDS/);           // LIVE6-007 (updated on purpose): "No description in its own words yet"
   assert.match(dive, /c\.base \? \(c\.basis === "list" \? "Named in the theme's list" : "Official industry"\)/);
   assert.match(dive, /named in the theme's list, /);
   assert.match(dive, /matched by the theme's own words/);                       // the page says which industries a typed theme used, and how
