@@ -1,0 +1,9 @@
+/* Import a watchlist (owner, 12 Nov): the drop area for a file, under the pasted symbols. */
+.wl-drop { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 14px 16px;
+  border: 1.5px dashed var(--dash); border-radius: 10px; background: var(--paper-2); }
+.wl-drop.over { border-color: var(--blue); background: var(--blue-soft); }
+.wl-import .k-textarea { width: 100%; font-family: var(--mono, monospace); }
+@media (max-width: 640px) { .wl-drop { flex-direction: column; align-items: stretch; } .wl-drop .k-upload { justify-content: center; } }
+.wl-results .k-table th:first-child { width: 34%; }
+.wl-results .wl-q { overflow-wrap: anywhere; }
+.wl-results select { width: 100%; max-width: 100%; }

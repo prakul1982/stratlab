@@ -30,7 +30,7 @@ export const LIMITS: Record<PlanId, Limits> = {
       "biz_updates", "holders",
       "stock_futures", "mtf",
       "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
-      "ipo_summary", "ipo_alerts"] },
+      "ipo_summary", "ipo_alerts", "watchlist_import"] },
   pro: { backtests_per_month: null, ai_builds_per_month: null, live_limit: 10, group_size: 50, deepdives_per_month: null, decks_per_month: null,
     stock_alerts: 100, screens: 25, holdings: 300, networth_items: null, mf_schemes: null, journal_trades: null,
     watchlists: null, watchlist_symbols: null, chart_saves: null, chart_indicators: null, ai_reads_per_day: null,
@@ -43,7 +43,7 @@ export const LIMITS: Record<PlanId, Limits> = {
       "assistant",
       "stock_futures", "mtf",
       "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
-      "ipo_summary", "ipo_alerts"] },
+      "ipo_summary", "ipo_alerts", "watchlist_import"] },
 };
 
 // Free has every market and the core tools, not every tool: Replay, Forward test, the scans and the full journal are paid (DP1-021)
@@ -129,7 +129,8 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in 
   ["rates_slab", "Fixed-income rates after tax at the rate from your own tax estimate"],
   ["loan_check", "Floating-rate loans: is your rate following its benchmark, and what each change did"],
   ["ipo_summary", "IPO offer document summaries: what the company does, its figures, what the money is for, the main risk factors and the promoters"],
-  ["ipo_alerts", "IPO alerts: when an issue opens, closes, is allotted or lists"]];
+  ["ipo_alerts", "IPO alerts: when an issue opens, closes, is allotted or lists"],
+  ["watchlist_import", "Watchlist import from a CSV or Excel file"]];
 export const EVERYONE = ["Every market, and your own CSV",
   "Price charts: candles, Heikin-Ashi or bars, indicators, drawings kept on your account, and compare",
   "Market Watch on every page: lists across every market we cover, live prices, and charts from 1 minute to 1 month with drawings",

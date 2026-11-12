@@ -8,7 +8,14 @@ account's own email for a signed-in person (looked up here, never sent by the pa
 
 Each new report is emailed to the admins (ADMIN_EMAILS, the same addresses as every owner-only alert) through the app's mail
 path, at most FEEDBACK_EMAILS_PER_DAY a day; past that the reports wait in the inbox and the next day's first email says how
-many did. Mail is sent after the report is saved, off the request, and a failure never loses or blocks the report."""
+many did. Mail is sent after the report is saved, off the request, and a failure never loses or blocks the report.
+
+"Report an error in this figure" (owner, 12 Nov): a signed-in person flags one figure from the control beside it in the app's
+tables and key-number cards. It is a report like any other, of the type "data_error", kept in the same store with the figure
+it was sent from (the page's section, the figure's name, its value, period and source as the page showed them) and listed in
+Admin → Feedback as a data error. Throttled per person (FIGURE_HOUR an hour, FIGURE_DAY a day). When the admin marks it fixed
+the reporter gets a one-line note in the app (NOTE_KEY<uid>, the last NOTES_KEPT, read with /me), and an email only through
+the alert emails they already get (an alert address set in Settings and alert emails on)."""
 import json
 import re
 import secrets
@@ -29,7 +36,11 @@ KEY = "feedback"                    # the reports, newest last
 MAIL_KEY = "feedback_mail"          # {"day", "sent", "held"}: today's emails and the reports past the cap
 MAX_KEPT = 1000                     # a report is at most ~2.5 KB, so the store stays small
 MAX_TEXT = 2000
-TYPES = {"broken": "Something's broken", "not_working": "A feature isn't working", "idea": "Idea for a new feature"}
+TYPES = {"broken": "Something's broken", "not_working": "A feature isn't working", "idea": "Idea for a new feature",
+         "data_error": "Data error"}     # data_error: sent from a figure's own control (/feedback/figure), never the form
+FIGURE_HOUR, FIGURE_DAY = 10, 30    # figure reports a person may send an hour and a day
+NOTE_KEY = "feedback_note:"         # feedback_note:<uid>: the one-line notes of fixed figure reports, not yet shown
+NOTES_KEPT = 5
 STATUSES = ("new", "seen", "fixed")
 SIGNED_IN_HOUR, SIGNED_OUT_HOUR = 10, 3   # reports an hour: a person, and (stricter) an address with nobody signed in
 SEND_IN_BACKGROUND = True           # tests send in line, to read what went out
@@ -54,6 +65,24 @@ class Report(BaseModel):
     version: str = Field("", max_length=40)
     browser: str = Field("", max_length=120)                  # "Chrome 130 on Android": a few words, not the full user agent
     screen: str = Field("", max_length=20)                    # "390×844"
+
+
+class FigureReq(BaseModel):
+    """One figure, as the page showed it, and what the person says is wrong with it."""
+    text: str = Field(..., min_length=1, max_length=MAX_TEXT)
+    path: str = Field("/", max_length=300)
+    section: str = Field("", max_length=120)                 # "Key numbers", "Results", "Theme layers"
+    label: str = Field(..., min_length=1, max_length=160)    # the figure's name: "ROE", "Sales · FY26"
+    value: str = Field("", max_length=80)                    # as shown: "18.4%"
+    period: str = Field("", max_length=60)
+    source: str = Field("", max_length=160)
+    version: str = Field("", max_length=40)
+    browser: str = Field("", max_length=120)
+    screen: str = Field("", max_length=20)
+
+
+class SeenReq(BaseModel):
+    ids: list[str] = Field(default_factory=list, max_length=NOTES_KEPT * 2)
 
 
 class StatusReq(BaseModel):
@@ -92,7 +121,9 @@ def mail_text(r: dict) -> tuple[str, str]:
     words = " ".join(r["text"].split())
     first = words[:60] + ("…" if len(words) > 60 else "")
     subject = f"[StratLab feedback] {TYPES[r['type']]}: {first}"
-    body = "\n".join([f"Type: {TYPES[r['type']]}", f"Page: {r['path']}", f"Plan: {r['plan']}",
+    f = r.get("figure") or {}
+    figure = [f"Figure: {figure_line(r)}"] + ([f"Source: {f['source']}"] if f.get("source") else []) if f else []
+    body = "\n".join([f"Type: {TYPES[r['type']]}", *figure, f"Page: {r['path']}", f"Plan: {r['plan']}",
                       f"Signed in: {'yes' if r['signed_in'] else 'no'}", f"Reply wanted: {'yes' if r['reply'] else 'no'}", "",
                       r["text"], "", "Every report is in Admin → Feedback."])
     return subject, body
@@ -171,6 +202,84 @@ def send_feedback(req: Report, request: Request, authorization: str | None = Hea
     return {"ok": True, "id": r["id"]}
 
 
+@router.post("/feedback/figure")
+def report_figure(req: FigureReq, profile=Depends(current_profile)):
+    """A figure reported as wrong, from the control beside it: signed in only (a visitor's control says to sign in), throttled per
+    person. Kept as a "data_error" report with the figure's context; the admins are emailed as for any report."""
+    text = _plain(req.text, MAX_TEXT)
+    if len(text) < 3:                                # checked first: a note too short to send doesn't use up the allowance
+        err(400, "too_short", "Say what looks wrong, in a few words.")
+    m = _m()
+    m.throttle(profile, "figure_report", FIGURE_HOUR, 3600, "That's a lot of figures reported in an hour. Try again later.")
+    m.throttle(profile, "figure_report_day", FIGURE_DAY, 86400, f"That's {FIGURE_DAY} figures reported today, the most for a day. Try again tomorrow.")
+    from . import plans
+    figure = {"section": _plain(req.section, 120), "label": _plain(req.label, 160), "value": _plain(req.value, 80),
+              "period": _plain(req.period, 60), "source": _plain(req.source, 160)}
+    r = {"id": secrets.token_urlsafe(8), "at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "type": "data_error", "text": text,
+         "path": _clean_path(req.path)[:200], "version": _plain(req.version, 40), "browser": _plain(req.browser, 120), "screen": _plain(req.screen, 20),
+         "plan": plans.plan_of(profile), "signed_in": True, "reply": False, "reply_to": None, "user_id": profile["id"], "status": "new",
+         "figure": figure}
+    with _lock:
+        rows = _load()
+        rows.append(r)
+        _save(rows)
+    if SEND_IN_BACKGROUND:
+        threading.Thread(target=_mail, args=(r,), daemon=True, name="feedback-mail").start()
+    else:
+        _mail(r)
+    return {"ok": True, "id": r["id"]}
+
+
+def figure_line(r: dict) -> str:
+    """"EBITDA margin (FY26, 18.4%) in Key numbers": the figure as the note and the email name it."""
+    f = r.get("figure") or {}
+    extra = ", ".join(x for x in (f.get("period"), f.get("value")) if x)
+    where = f.get("section") or ""
+    return f"{f.get('label') or 'a figure'}" + (f" ({extra})" if extra else "") + (f" in {where}" if where else "")
+
+
+def notes_for(uid: str) -> list[dict]:
+    """The person's notes of fixed figure reports not yet shown, newest last."""
+    try:
+        rows = json.loads(db.get_setting(NOTE_KEY + uid) or "[]")
+        return rows if isinstance(rows, list) else []
+    except Exception:
+        return []
+
+
+def _note_fixed(r: dict) -> None:
+    """Tell the reporter their figure was fixed: a note in the app, and an email only through the alert emails they already get.
+    Called once per report (the caller marks it `noted` first), off the store's lock. Never raises: marking the report is what matters."""
+    uid = r.get("user_id")
+    if not uid:
+        return
+    line = f"Fixed: {figure_line(r)}, which you reported. Thanks for telling us."
+    try:
+        note = {"id": r["id"], "at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "path": r.get("path") or "/", "text": line}
+        notes = [n for n in notes_for(uid) if n.get("id") != r["id"]] + [note]
+        db.set_setting(NOTE_KEY + uid, json.dumps(notes[-NOTES_KEPT:], ensure_ascii=False))
+    except Exception as e:
+        print("feedback note failed:", e)
+    try:
+        from . import alerts
+        p = db.find_profile(uid)
+        to = alerts.email_for(p) if p else None
+        if to and alerts.alert_emails_on(uid) and alerts.email_ready():
+            alerts.send_message(to, "A figure you reported was fixed", line, path=r.get("path") or "/", label="Data fix",
+                                why="You get this because you reported this figure in StratLab.", uid=uid)
+    except Exception as e:
+        print("feedback fix email failed:", e)
+
+
+@router.post("/feedback/notes/seen")
+def notes_seen(req: SeenReq, profile=Depends(current_profile)):
+    """The notes the app has shown: they are not shown again."""
+    uid = profile["id"]
+    left = [n for n in notes_for(uid) if n.get("id") not in set(req.ids)]
+    db.set_setting(NOTE_KEY + uid, json.dumps(left, ensure_ascii=False))
+    return {"ok": True, "notes": left}
+
+
 @router.get("/admin/feedback")
 def list_feedback(type: str = "", status: str = "", profile=Depends(admin.admin_profile)):
     rows = list(reversed(_load()))
@@ -191,5 +300,11 @@ def set_feedback_status(fid: str, req: StatusReq, profile=Depends(admin.admin_pr
         if hit is None:
             err(404, "not_found", "That report isn't there any more.")
         hit["status"] = req.status
+        fixed = req.status == "fixed" and hit.get("type") == "data_error" and not hit.get("noted")
+        if fixed:
+            hit["noted"] = True                      # once: marking it fixed again tells nobody twice
         _save(rows)
+        told = dict(hit) if fixed else None
+    if told:
+        _note_fixed(told)
     return {"ok": True, "status": req.status}

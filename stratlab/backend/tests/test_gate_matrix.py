@@ -89,6 +89,7 @@ ROUTES = [
     ("journal", "get", "/trade/journal/compare?tag=x&session=s1", None),
     ("ipo_alerts", "put", "/invest/ipos/alerts", {"on": True, "events": ["open"], "markets": ["IN"], "sme": False}),
     ("ipo_summary", "post", "/invest/ipos/in-none/summary", None),
+    ("watchlist_import", "post", "/watch/import/file", {"data": "U3ltYm9sClRDUwo=", "filename": "list.csv"}),
 ]
 
 

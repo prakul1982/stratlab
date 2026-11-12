@@ -5,16 +5,19 @@
  * MW-2 (owner, 9 Nov: "only extendable from one top corner ... very cluttered, we need to redesign it"): a floating panel is sized
  * from every edge and corner and dragged by its header; one search field adds a symbol; a row is one line under column heads
  * (Symbol, Last, Change, Change %) that also sort the list; the tabs say their lists' names in words. */
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import { Link } from "react-router-dom";
 import { ChartWorkspace } from "./ChartWorkspace";
 import { AddField, AddResults, AddSaid, useAddSearch } from "./AddSymbol";
 import { WatchRow } from "./WatchRow";
 import { useWatch } from "./useWatch";
 import { ConfirmDialog } from "../kit/ConfirmDialog";
+import { PlanNote } from "../kit/Notice";
+import { FILE_LOCK } from "../../lib/watchImport";
 import { useDialogFocus, usePopover } from "../kit/Dialog";
 import { EmptyState, ErrorState, Skeleton } from "../kit/States";
-import { Chevron, Close, Download, Plus } from "../Icons";
+import { Chevron, Close, Download, Plus, Upload } from "../Icons";
+import { importWithRetry } from "../../lib/lazyRetry";
 import { downloadCsv } from "../../lib/csvDownload";
 import { csvName } from "../../lib/csv";
 import { istToday } from "../../lib/format";
@@ -31,6 +34,9 @@ import {
 } from "../../lib/watch";
 import { dockedW, dragged, DOCK_FROM, drawnHeight, EDGES, isSheet, MAX_W, MIN_H, MIN_W, resized, shapeOf, type Edge, type PanelLayout } from "../../lib/watchLayout";
 import "./watch.css";
+
+// Import a watchlist (owner, 12 Nov): downloaded only when it is opened
+const ImportWatchlist = lazy(() => importWithRetry(() => import("./ImportWatchlist")));
 
 export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout: PanelLayout; patch: (p: Partial<PanelLayout>) => void; vw: number; vh: number; onClose: () => void }) {
   const { markets, me, notify } = useApp();
@@ -194,6 +200,7 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
   const [naming, setNaming] = useState<null | "new" | "rename">(null);
   const [name, setName] = useState("");
   const [askDelete, setAskDelete] = useState(false);
+  const [importing, setImporting] = useState(false);
   const submitName = async () => {
     const n = name.trim();
     if (!n) { setNaming(null); return; }
@@ -325,6 +332,10 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
           )}
           <div className="mw-bar">
             <AddField s={search} disabled={!list} />
+            {/* Import a watchlist: pasted symbols or a file's column (owner, 12 Nov) */}
+            <button type="button" className="mw-ic" aria-label="Import symbols into a list" title="Import symbols: paste them, or a CSV or Excel file" disabled={!list} onClick={() => setImporting(true)}>
+              <Upload size={16} />
+            </button>
             {/* EXPORT: the list as a CSV, in its order, with the prices it shows now */}
             {list && list.items.length > 0 && (
               <button type="button" className="mw-ic" data-csv={`watchlist ${list.name}`} aria-label={`Download CSV: the list ${named}`} title="Download this list as a CSV file"
@@ -403,6 +414,7 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
           </div>
         </>
       )}
+      {importing && <Suspense fallback={null}><ImportWatchlist initialList={listId} onClose={() => setImporting(false)} onDone={() => void w.reload()} lock={<PlanNote plan="basic">{FILE_LOCK}</PlanNote>} /></Suspense>}
       {askDelete && list && (
         <ConfirmDialog title={`Delete the list ${named}?`} confirmLabel="Delete the list" onClose={() => setAskDelete(false)}
           onConfirm={() => { setAskDelete(false); patch({ list: null }); void w.delete(list.id); }}>

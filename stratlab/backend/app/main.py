@@ -495,6 +495,8 @@ app.include_router(saved_routes.router)       # /me/saved: saved searches and AI
 app.include_router(saved_routes.admin_router)  # /admin/saved-searches: their counts by kind
 app.include_router(watch_routes.router)       # /watch: Market Watch lists, prices and the live stream (MW-1)
 app.include_router(watch_routes.public_router)  # /public/markets/watch: the visitor's fixed board
+from . import watch_import                     # noqa: E402  /watch/import: a watchlist pasted or from a file (owner, 12 Nov)
+app.include_router(watch_import.router)
 app.include_router(money_us_routes.router)     # /money/us-tax
 app.include_router(money_itr.router)           # /money/itr
 app.include_router(etf_nav.router)             # /invest/etf-gaps
@@ -968,7 +970,7 @@ def me(profile=Depends(current_profile)):
     uid = profile["id"]
     # the person's settings read below one by one, in one database call (R11E: 11 to 18 round trips on a cold /me)
     db.prefetch_settings([alerts.ALERT_OFF + uid, daily_report.PREFS + uid, holdings.KEY + uid, user_data.WATCHLIST + uid,
-                          push.KEYS])
+                          push.KEYS, feedback.NOTE_KEY + uid])
     try:
         lifecycle.seen(profile)       # remembers the visit; welcomes a brand-new account
     except Exception as e:
@@ -1023,6 +1025,7 @@ def me(profile=Depends(current_profile)):
         "billing_enabled": billing.enabled(), "yearly_enabled": billing.yearly_enabled(), "plans": public_plans(),
         "offer": offer_state(promo=not seen),
         "onboarding": onboarding_of(profile["id"]),
+        "notes": feedback.notes_for(uid),          # one-line notes for the person: a figure they reported was fixed
         "established": established_of(profile["id"]),
         # whether My Holdings has any stock, so the Money space's main button says "Update holdings", not "Add your holdings" (LIVE1C-055)
         "has_holdings": has_holdings(profile["id"]),

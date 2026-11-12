@@ -7,6 +7,7 @@ import { scrollToEnd } from "../../lib/phoneFit";
 import { columnOf, csvName, type CsvValue } from "../../lib/csv";
 import { downloadCsv } from "../../lib/csvDownload";
 import { Download } from "../Icons";
+import { ReportFigure, useReportScope } from "./ReportFigure";
 
 export type Column<R> = {
   key: string;
@@ -201,6 +202,13 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
       {withText && <span>{selectAll.label ?? "Select all"}</span>}
     </label>);
   const cardsNow = stack && phone;
+  // "Report an error in this figure" (owner, 12 Nov): inside a ReportScope each row's name carries the flag, with the row's figures to pick from
+  const scope = useReportScope();
+  const figureCols = columns.filter((c) => !c.rowHeader && !c.action && c.numeric);
+  const report = (r: R, name: ReactNode) => scope && (
+    <ReportFigure label={cellText(name)} choices={() => (figureCols.length ? figureCols : columns.filter((c) => !c.rowHeader && !c.action))
+      .map((c): [string, string] => [c.cardLabel ?? (typeof c.header === "string" ? c.header : textOf(c.header).trim()), cellText(c.cell(r)).trim()])
+      .filter(([, v]) => v !== "" && !dashOnly(v))} />);
   return (
     <>
     {((file && file.rows.length > 0) || (cardsNow && selectAll && allRows.length > 0)) && (
@@ -242,7 +250,7 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
                   // TABLE-SWEEP: an empty cell is marked, so a phone card leaves it out instead of a label over nothing; a compact phone row
                   // leaves out a lone dash too
                   const blank = v == null || v === "" || v === false || (cardsNow && !!compact && !c.rowHeader && dashOnly(cellText(v)));
-                  return c.rowHeader ? <th key={c.key} scope="row" role={stack ? "rowheader" : undefined} className={cls(c)}>{v}{more}</th>
+                  return c.rowHeader ? <th key={c.key} scope="row" role={stack ? "rowheader" : undefined} className={cls(c)}>{v}{more}{report(r, v)}</th>
                     : <td key={c.key} role={stack ? "cell" : undefined} data-label={label} data-blank={blank ? "" : undefined} className={cls(c)}>{v}</td>;
                 })}
               </tr>

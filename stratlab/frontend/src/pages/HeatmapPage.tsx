@@ -7,6 +7,7 @@ import { researchApi, useRegion, type Region } from "../lib/research";
 import { PERIODS, PERIOD_LABEL, PERIOD_SHORT, closesNote, colorValue, isPeriod, matches, type ColorBy, type GroupBy, type HeatView, type Period, type Placed, type SizeBy, type Tile } from "../lib/heatmap";
 import { Treemap, TreemapLegend } from "../components/chart/Treemap";
 import { Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, Field, FieldGroup, PageHeader, Seg, Select, Signed, Working, type Column } from "../components/kit";
+import { ReportScope } from "../components/kit/ReportFigure";
 
 /* /invest/heatmap (L4): a market as one picture. Every company of a group is a tile, sized by its market value (or equally, or by the
  * value traded) and coloured by its change over a period (or that change against the index, or its volume against its average),
@@ -124,6 +125,8 @@ export function HeatmapPage() {
           <dt>Market value</dt><dd>{capText(t.cap)}</dd>
           <dt>Volume vs average</dt><dd>{figureText(t.vx, "volume")}</dd>
         </dl>
+        {/* the tooltip follows the pointer, so nothing in it can be pressed: the same figures carry the report flag in the Table view (owner, 12 Nov) */}
+        <div className="hm-tip-sub hm-tip-report">A figure looks wrong? Report it from the Table view.</div>
       </>
     );
   };
@@ -199,9 +202,11 @@ export function HeatmapPage() {
             {busy && <Working small label="Reading the new settings" />}
             {noIndex && <p className="k-note">The index has no figure for this period yet, so there is nothing to set the changes against. Pick Change, or another period.</p>}
             {table ? (
+              <ReportScope section={`Heatmap: ${name}`} source={`Daily closing prices${asOf ? `, the latest ${asOf}` : ""}`}>
               <DataTable csv={`heatmap ${name} ${PERIOD_SHORT[period]}`} label={`${name}: every company`} columns={cols} rows={shown} rowKey={(t) => t.s} stack compact phonePage={40} pageDesktop
                 sort={{ key: sort.key, desc: sort.desc, onSort: (k) => setSort((s) => ({ key: k, desc: s.key === k ? !s.desc : true })) }}
                 empty="No company matches what you typed." />
+              </ReportScope>
             ) : (
               <>
                 <Treemap tiles={tiles} size={size} color={color} period={period} group={group} index={index} query={query} href={href}

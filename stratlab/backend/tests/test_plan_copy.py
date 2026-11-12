@@ -87,6 +87,7 @@ CARD_WORDS = {
     "loan_check": "floating-rate loan check",
     "ipo_summary": "IPO offer document summaries",
     "ipo_alerts": "IPO alerts",
+    "watchlist_import": "watchlist import from a file",
 }
 
 

@@ -25,7 +25,7 @@ export const FEATURES: Record<PlanId, string[]> = {
     `${L.basic.deepdives_per_month} company deep dives and ${L.basic.decks_per_month} slide decks of companies or themes a month, business updates in numbers, named-holder search and IPO offer document summaries`,
     "Scans and watchlist: the Stage 2 scan and every other trend scan, watchlist red flags (and each holding's filings and results date), Watchlist at a glance, market breadth charts, margin funding history",
     "Money: every mutual fund and net worth entry, fund capital gains, fund costs in rupees, fund behaviour, dividends with TDS, deposit rates after your own tax, a floating-rate loan check",
-    `${L.basic.stock_alerts} stock alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings, ${L.basic.watchlists} Market Watch lists of ${L.basic.watchlist_symbols}, drawings kept on every chart`],
+    `${L.basic.stock_alerts} stock alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings, ${L.basic.watchlists} Market Watch lists of ${L.basic.watchlist_symbols} (watchlist import from a file), drawings kept on every chart`],
   pro: ["Everything in Basic, plus:", `Unlimited backtests, deep dives and decks; up to ${AI_BUILDS_PER_DAY} AI builds a day`,
     `Paper trade ${L.pro.live_limit} strategies at a time; group tests of up to ${L.pro.group_size}, with faster entries and a spread limit`,
     "Indian F&O contracts (futures and options on stocks and indices) in notebooks, each backtested on its own past prices; the stocks themselves are on every plan",
