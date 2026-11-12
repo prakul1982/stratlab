@@ -32,8 +32,14 @@ test("the command palette keeps focus inside, Esc closes it and focus goes back 
 test("the welcome tour keeps focus inside and gives it back when it closes", async ({ page }) => {
   // the tour shows once per account, so the test opens it the way Help does (an account that has seen it would not show it)
   const errors = await open(page, "/mine");
+  // (updated on purpose, R42 i1: "Take the tour" opens the list of tours first, itself a note that keeps focus; then a tour)
   await page.evaluate(() => window.dispatchEvent(new Event("stratlab:tour")));
-  const dialog = page.getByRole("dialog", { name: "A quick tour" });
+  const list = page.getByRole("dialog", { name: "Take a tour" });
+  await expect(list).toBeVisible();
+  await expect(list.getByRole("button", { name: /^Getting around/ })).toBeFocused();
+  expect(await staysIn(page, "[role=dialog]")).toBe(true);
+  await list.getByRole("button", { name: /^Getting around/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Tour: Getting around" });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Next" })).toBeFocused();
   expect(await staysIn(page, "[role=dialog]")).toBe(true);

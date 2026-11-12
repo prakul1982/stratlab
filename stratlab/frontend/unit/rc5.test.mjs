@@ -19,7 +19,8 @@ test("on a phone the tour waits for the menu to slide away before it points at t
   // the step after the menu's own steps: the ring was placed where the menu's search button still was (on the page's heading)
   assert.match(src, /const \[sliding, setSliding\] = useState\(false\)/);
   assert.match(src, /const wasInMenu = useRef\(false\)/);
-  assert.match(src, /if \(\(inMenu && !menuShown\) \|\| sliding\) return null;/);
+  // (updated on purpose, R42 i1: it also waits while the step's own page opens)
+  assert.match(src, /if \(\(inMenu && !menuShown\) \|\| sliding \|\| !onPage\) return null;/);
   // it waits as long as the menu takes to come in
   assert.equal([...src.matchAll(/window\.setTimeout\(\(\) => set(MenuShown|Sliding)\((true|false)\), 320\)/g)].length, 2);
 });

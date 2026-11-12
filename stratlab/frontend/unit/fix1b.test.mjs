@@ -330,7 +330,8 @@ test("LIVE1B-043: Help is at the page's width and its explanations are in groups
 
 test("LIVE1B-044, 045, 041, 087: the alerts page has no second 'space', the tour names the Account button, one sentence for the newsletter email, the delete line once", () => {
   assert.doesNotMatch(read("src/pages/AlertsPage.tsx"), /eyebrow=\{eyebrowOf/);
-  assert.match(read("src/components/Tour.tsx"), /The Account button opens your plan, Settings and Help\./);
+  // (updated on purpose, R42 i1: the tours' steps moved to lib/intro.ts, the Account step's words kept)
+  assert.match(read("src/lib/intro.ts"), /The Account button opens your plan, Settings and Help\./);
   assert.match(read("src/components/NewslettersCard.tsx"), /\{!prefs\.confirmed && "\. Newsletters start once you've confirmed it\."\}/);
   assert.equal((read("src/pages/AccountPage.tsx").replace(/^\s*\/\/.*$/gm, "").match(/Delete them on that page/g) ?? []).length, 0);
 });
