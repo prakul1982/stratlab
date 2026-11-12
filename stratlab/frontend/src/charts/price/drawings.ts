@@ -3,7 +3,7 @@
  * scale modes. Painting, picking and the tool list live here; the maths is in drawGeo.ts and the engine owns state. */
 import {
   channelShift, distToSegment, FIB_LEVELS, fibPrice, levelText, measureStats, rayEnd, statsOf,
-  type ColorKey, type Drawing, type DrawingKind, type XY,
+  type Drawing, type DrawingKind, type XY,
 } from "./drawGeo";
 
 export type { ColorKey, DashStyle, Drawing, DrawingKind, Pt as DrawPoint } from "./drawGeo";
@@ -123,11 +123,6 @@ export function colorOf(d: Drawing, th: DrawTheme): string {
     case "grey": return th.muted;
     default: return th.ink;
   }
-}
-
-/** The palette a person picks from, in the chart's own colours. */
-export function swatch(key: ColorKey, th: DrawTheme): string {
-  return colorOf({ id: "", kind: "trend", points: [], color: key }, th);
 }
 
 const DASH: Record<string, number[]> = { solid: [], dashed: [7, 5], dotted: [2, 4] };

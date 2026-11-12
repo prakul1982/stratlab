@@ -8,7 +8,6 @@ import { pricesStop, testedRange } from "../lib/libraryText";
 import { checksOf, headTone, trails, unseenLabel } from "../lib/tradeUi";
 import { VERDICT_FACT, VerdictBadge } from "./ui";
 import { Signed } from "./kit/Signed";
-import { Badge } from "./kit/Badge";
 import { DataTable, type Column } from "./kit/DataTable";
 import { ShowLess } from "./kit/ShowLess";
 
@@ -73,13 +72,6 @@ export { checksOf, headTone, trails, unseenLabel } from "../lib/tradeUi";
 export { holdResult, libMeta, libraryTally, liveOptions, marketChoices, marketName, strategyName } from "../lib/libraryList";
 
 /** The return beside buy and hold, as the notebook's verdict says it (R5O-014). */
-/** A plain badge beside the checks badge when the strategy trails buy and hold, so "Passed" never reads as "beat the market". */
-export function BehindHold({ e }: { e: LibEntry }) {
-  const h = e.vs_hold;
-  if (!h || h.gap > -0.05) return null;
-  return <Badge tone="plain" dot={false}>Behind buy and hold by {num(Math.abs(h.gap), 1)} points</Badge>;
-}
-
 export function HoldLine({ e }: { e: LibEntry }) {
   const h = e.vs_hold;
   if (!h) return null;

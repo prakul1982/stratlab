@@ -41,7 +41,7 @@ The dark values are written twice in `styles.css` (explicit dark and "follow the
 |---|---|---|
 | Top of a page | `PageHeader` (eyebrow "Space · Group", title, one-line lede, "Data up to" badge + (i)) | a bare `h1.page-title` |
 | A box of content | `Card` + `CardHead` (title, (i), actions on the right in the same row); `compact` when it has little to say | `section.card` + `h2.h3` |
-| A headline number | `Stat` in a `StatRow` (sans, with note, optional `Delta`; a signed value gets `tone={signTone(v)}`) | `Fig` / `.space-fig` (mono) |
+| A headline number | `Stat` in a `StatRow` (sans, with note, optional `Delta`; a signed value gets `tone={signTone(v)}`) | a hand-made mono figure |
 | A change | `Delta` (▲/▼ pill, green or red). `tone="neutral"` where a rise is not good news by nature | a grey change |
 | A signed figure inside a sentence, table cell or readout | `Signed` (`<Signed value={v} fmt={signed} />`, or the finished text as children): green above zero, red below, plain at zero | a hand-made `k-up` / `k-down` span, or a plain `signed(v)` |
 | A service or feed's health | `HealthGrid` + `HealthTile` (green, amber or red light, always with its word OK / Check / Problem); `StatusList` + `StatusRow` for a card's own rows | colour-only dots |
@@ -51,14 +51,14 @@ The dark values are written twice in `styles.css` (explicit dark and "follow the
 | A form | `FormGrid` + `Field` + `FormActions` | `.field` inside ad-hoc flex rows |
 | A time of day | `TimeInput` (24-hour, `zone="IST"` beside it; `small` inside a sentence) | `<input type="time">` |
 | A slider | `Range` (kit track and thumb, its value in words beside it) | a bare `<input type="range">` |
-| A stock / company box | `StockPicker` (`value`, `onPick(symbol, region)`) | a bare text input; `CompanyCombobox` in new code |
+| A stock / company box | `StockPicker` (`value`, `onPick(symbol, region)`) | a bare text input |
 | A choice among types | `TilePicker` | long `<select>`s |
 | A table | `DataTable`. A long table scrolls with the page (never in a box of its own); `stack` turns each row into a card on a phone (give it to a table whose figures all matter, like Positions); `pinHead` keeps the header of a table that fits its card in view | a raw `<table>`, a table in a `max-height` box |
 | A long page | `PageNav` (jump links to the main cards, which carry an `id`) and the detail behind `Disclosure` | a page of ten cards with no way round it |
 | A chart | `ChartFrame` (title, range, Table switch in the header row) around `LineChart`/`XYChart` with `ranges={false} table={false}` | a chart in a bare card |
 | Nothing / failed / loading | `EmptyState`, `ErrorState`, `Skeleton` (each can carry one action button) | `Empty`, `Loading` spinner, a bare `.banner` |
 | Anything that floats over the page | `Dialog` (or `ConfirmDialog`) for a modal; `useDialogFocus` on your own modal box (the palette, the phone menu); `usePopover` for a menu or an editor that opens from a button | a hand-made focus trap or Esc handler |
-| A calculator's answer | `ResultBlock` | a row of `Fig`s |
+| A calculator's answer | `ResultBlock` | a row of loose figures |
 | Money and percentages | `lib/format.ts` | `toLocaleString` and per-file `inr` copies |
 
 If nothing fits, add the piece to the kit and to `/dev/kit` first; do not build it inside a page.

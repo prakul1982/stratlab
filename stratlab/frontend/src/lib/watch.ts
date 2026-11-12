@@ -201,7 +201,6 @@ export function chartsSaid(limit: number | null, count: number, saved: boolean, 
   return null;
 }
 
-export const planName = (plan: string | undefined): string => PLAN_NAME[(plan ?? "free") as PlanId] ?? "Free";
 
 /** A price in the item's own currency, with the decimals its size calls for (forex in 5, crypto by size, the rest in 2). */
 export function priceText(v: number | null | undefined, currency: string | null | undefined, market: string, symbol: string): string {

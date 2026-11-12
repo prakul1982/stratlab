@@ -88,7 +88,5 @@ export const themeApi = {
   draft: (r: Region, theme: string) => api<{ result: string; slug: string | null; problem?: string }>("/admin/blog/theme", { method: "POST", body: { q: theme, region: r } }),
 };
 
-/** The theme's words in a file name, as the server writes them (theme_data.slug): "India defence" is "india-defence". */
-export const themeSlug = (theme: string) => theme.split(/\s+/).filter(Boolean).join(" ").slice(0, 80).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
 
 export { amount, pc, times, points, span, layerLines, medCell, calcOf, CALC_WORDS, MIN_BASE, NO_WORDS, ownWords, libraryLabel, LIBRARY_HEAD, type LayerLine } from "./themeFormat";

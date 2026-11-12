@@ -9,7 +9,6 @@ row's line of closes is kept half an hour. Both caches are bounded.
 
 Facts only: a price, what it changed by since the previous close, and when it was read."""
 import threading
-import time
 from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo

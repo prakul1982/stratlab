@@ -214,12 +214,6 @@ def mf_limit(plan: str) -> int | None:
     return PLANS[plan]["mf_schemes"]
 
 
-def watch_limit(plan: str, key: str) -> int | None:
-    """Market Watch's limits on a plan (None: no limit): "watchlists", "watchlist_symbols", "chart_saves" (charts whose
-    drawings are kept on the account) and "chart_indicators" (on one chart)."""
-    return PLANS[plan][key]
-
-
 def journal_limit(plan: str) -> int | None:
     """How many closed trades the trade journal keeps and counts (None: no limit)."""
     return PLANS[plan]["journal_trades"]

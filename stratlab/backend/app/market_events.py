@@ -977,7 +977,6 @@ def expiry_events(today: date, listed=None, frm: date | None = None, to: date | 
     """The monthly F&O expiry (the listed contracts' when the app has them, else the exchange's rule) and NIFTY's
     weekly ones, from `frm` to `to`. `listed(exchange, name)` gives the listed option expiries (ISO), or nothing."""
     from .fo_changes import rule_expiry
-    from .data.calendar import is_trading_day
     frm, to = frm or today - timedelta(days=VIEW_BACK), to or today + timedelta(days=VIEW_AHEAD)
     to = min(to, today + timedelta(days=120))           # expiries further out than the listed contracts would be guesses
     got = []

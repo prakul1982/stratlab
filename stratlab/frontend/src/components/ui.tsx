@@ -73,23 +73,6 @@ export function Info({ children, label = "What does this mean?" }: { children: R
   );
 }
 
-/** One labelled figure in a row of them (`.k-stats`): the label, the number, and a note under it. The row is one grid,
- * so the numbers sit on one line however the labels wrap. A missing number says why in words (`missing`), never a
- * bare dash. */
-export function Fig({ label, value, note, tone = "", missing = "Not available yet", missingId, noteTone = "" }:
-  { label: ReactNode; value: ReactNode; note?: ReactNode; noteTone?: string; tone?: string; missing?: string; missingId?: string }) {
-  const none = value == null || value === false || (typeof value === "string" && /^\s*[-–—]?\s*$/.test(value));
-  const dirOf = (t: string) => (/\bup\b|\bpos\b|\bk-up\b/.test(t) ? " k-up" : /\bdown\b|\bneg\b|\bk-down\b/.test(t) ? " k-down" : "");
-  const dir = dirOf(tone);
-  return (
-    <div className="k-stat">
-      <span className="k-stat-k">{label}</span>
-      {none ? <span className="k-stat-d" data-testid={missingId}>{missing}</span> : <span className={`k-stat-v${dir}`}>{value}</span>}
-      {note ? <span className="k-stat-d"><span className={dirOf(noteTone).trim() || undefined}>{note}</span></span> : null}
-    </div>
-  );
-}
-
 /** A small "as of" line, so people know how fresh the numbers next to it are. Each part shows only when known. Times
  * are in the market's zone with its name (India's unless `tz` says otherwise). */
 export function AsOf({ parts, tz }: { parts: [string, string | null | undefined][]; tz?: string }) {

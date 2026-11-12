@@ -391,9 +391,6 @@ def email_confirmed(profile: dict) -> bool:
         return False
 
 
-EMAIL_PATHS = ("/unsubscribe", "/email/confirm")      # the site forwards these to the API (frontend/vercel.json)
-
-
 def email_link_base() -> str:
     """Where links the server answers itself (unsubscribe, confirm an address) point: the public site, which forwards
     them to the API, so a reader sees stratlab.studio, never the API's own host (R6V-016)."""

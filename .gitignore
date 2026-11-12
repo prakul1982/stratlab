@@ -1,5 +1,4 @@
 .env
-backend/.env
 __pycache__/
 *.pyc
 .venv/
@@ -8,6 +7,12 @@ venv/
 .vscode/
 .idea/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage/
+*.swp
 node_modules/
 dist/
 *.log

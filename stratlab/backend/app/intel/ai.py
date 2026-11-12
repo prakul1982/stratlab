@@ -432,10 +432,6 @@ def theme_served(out: dict) -> dict:
     return out
 
 
-def theme_list(x, n: int, length: int = 400) -> list:
-    return [t for t in (theme_text(i, length) for i in _clip(x, n, 2000)) if t]
-
-
 def ask(system: str, text: str, ai, max_tokens: int = 6000) -> dict:          # R25: the placement answer carries every company's revenue model
     """A JSON answer to a check the theme map's claims go through (theme_check.py): the same providers as every other read."""
     return _ask(system, text, ai, max_tokens)

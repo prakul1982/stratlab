@@ -13,7 +13,6 @@ def main() -> None:
     data = sys.stdin.buffer.read()
     try:
         import casparser
-        from casparser.exceptions import CASParseError, IncorrectPasswordError
         res = {"ok": casparser.read_cas_pdf(io.BytesIO(data), pw, output="json")}
     except MemoryError:
         res = {"err": "limit"}

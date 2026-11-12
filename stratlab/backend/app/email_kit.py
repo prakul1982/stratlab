@@ -403,7 +403,7 @@ def table(headers: list[str], rows: list[list[str]], right: tuple[int, ...] = ()
 _TONE = {"up": ("c-up", "up"), "down": ("c-down", "down"), "flat": ("c-muted", "muted")}
 
 
-def _cell(c, link_cls: str = "c-blue") -> tuple[str, str]:
+def _cell(c) -> tuple[str, str]:
     """(html, text) of one table cell: a string, or {"t", "href", "tone", "sub", "lines": [{"t", "href"}]}."""
     if not isinstance(c, dict):
         return escape(str(c or "")), _t(c or "")
