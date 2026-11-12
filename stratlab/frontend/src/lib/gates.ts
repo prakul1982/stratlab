@@ -40,6 +40,15 @@ export const PAGE_GATES: Record<string, Gate> = {
   "/options": { feature: "options", whole: false },
 };
 
+/** The paid part as a page holds it, where the plan's row names more than that page has (LIVE7A-018: Flows' lock named "derivatives
+ * positioning history and IV percentiles", neither of which is on that page). */
+export const PAGE_WHAT: Record<string, string> = {
+  "/invest/flows": "Each recorded day's FII and DII net buying, as a table and a chart",
+};
+
+/** What a page's lock names: its own part (PAGE_WHAT), else the plan's row for the feature. */
+export const lockWhat = (path: string, feature: string): string => PAGE_WHAT[path.split(/[?#]/)[0].replace(/(.)\/$/, "$1")] ?? featureName(feature);
+
 /** The paid part of a page that is free in the main, in a few words for its card's tag: "Pro for advance tax" (LIVE1B-022: "Pro for
  * part" did not say which part). */
 export const PART_WORDS: Record<string, string> = {

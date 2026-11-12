@@ -14,8 +14,17 @@ from .screener import summary
 STAGE = {1: "Stage 1 (basing)", 2: "Stage 2 (advancing)", 3: "Stage 3 (topping)", 4: "Stage 4 (declining)"}
 
 
+MINUS = "−"
+
+
+def minus(text: str | None) -> str | None:
+    """A figure's sign as the page writes it: the minus sign, never a hyphen (LIVE7B-004: "1-year price change -22%")."""
+    import re
+    return re.sub(r"(?<![\w\-−])-(?=\d)", MINUS, text) if isinstance(text, str) else text
+
+
 def _pct(v, signed: bool = False) -> str:
-    return f"{v:+.1f}%" if signed else f"{v:.1f}%"
+    return minus(f"{v:+.1f}%" if signed else f"{v:.1f}%")
 
 
 def _item(label: str, text: str | None) -> dict | None:
@@ -62,6 +71,29 @@ def _a_year(v, nm: dict | None = None, unit: str = "") -> str | None:
     return f"{_pct(v)} a year" if v is not None else None
 
 
+def top_line(lender: bool) -> str:
+    """The top line's name: a bank's or lender's is its revenue (interest and other income), never "sales" (LIVE7B-004)."""
+    return "Revenue" if lender else "Sales"
+
+
+def lender_labels(rows: list, lender: bool) -> list:
+    """Key-fact rows as they go out: a lender's top line named as such and every sign a minus (for a read kept from before)."""
+    out = []
+    for r in rows or []:
+        if not isinstance(r, dict):
+            continue
+        items = []
+        for i in r.get("items") or []:
+            if not isinstance(i, dict):
+                continue
+            label = str(i.get("label") or "")
+            if lender and label.startswith("Sales, "):
+                label = top_line(True) + label[len("Sales"):]
+            items.append({**i, "label": label, "text": minus(i.get("text"))})
+        out.append({**r, "items": items})
+    return out
+
+
 # ---------- growth ----------
 def growth(c: dict, nums: dict | None) -> dict | None:
     """Sales and profit growth, compounded over three and five reported years."""
@@ -75,8 +107,9 @@ def growth(c: dict, nums: dict | None) -> dict | None:
     # five years (R10C-005, the R10V-001 gap); the deep dive's sums keep each blank year as a gap
     profit3 = _first(g.get("profit_cagr_3y"), _metric(c, "Profit growth", "3Y CAGR"))
     profit5 = _first(g.get("profit_cagr_5y"), _metric(c, "Profit growth", "5Y CAGR"))
+    top = top_line(bool((nums or {}).get("bank") or c.get("bank")))
     return _row("growth", "Growth",
-                _item("Sales, 3 years", a(sales3, "sales_cagr_3y")), _item("Sales, 5 years", a(sales5, "sales_cagr_5y")),
+                _item(f"{top}, 3 years", a(sales3, "sales_cagr_3y")), _item(f"{top}, 5 years", a(sales5, "sales_cagr_5y")),
                 _item("Net profit, 3 years", a(profit3, "profit_cagr_3y")), _item("Net profit, 5 years", a(profit5, "profit_cagr_5y")))
 
 
@@ -127,7 +160,7 @@ def price_trend(bars: list[dict], page_1y: float | None = None, page_1y_dp: int 
         return f"{_pct(abs(d))} {'above' if d >= 0 else 'below'}"
     ago = _year_ago(bars)
     # the year's change to the page's own decimals: a whole-percent figure stays whole, never "-17.0%" beside "-17%" (DD-017)
-    year = (f"{page_1y:+.{page_1y_dp}f}%" if page_1y_dp is not None else _pct(page_1y, True)) if page_1y is not None \
+    year = (minus(f"{page_1y:+.{page_1y_dp}f}%") if page_1y_dp is not None else _pct(page_1y, True)) if page_1y is not None \
         else _pct((last / ago - 1) * 100, True) if ago else None
     return _row("price", "Price trend",
                 _item("Price vs 50-day average", vs(50)), _item("Price vs 200-day average", vs(200)),

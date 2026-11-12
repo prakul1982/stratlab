@@ -104,11 +104,14 @@ for (const width of [1440, 390]) {
     const errors = await open(page, "/invest", "Invest", FREE);
     const ask = page.getByTestId("consent");
     await expect(ask).toBeVisible({ timeout: 30_000 });
-    expect(await ask.evaluate((e) => getComputedStyle(e).position)).toBe("fixed");
+    // (updated on purpose, LIVE7B-006: as a bar along the window's foot it covered the page's tiles) the first row of the page column, in the
+    // page's flow: the app and its side menu still start at the top of the window, and the page starts under the question
+    expect(await ask.evaluate((e) => getComputedStyle(e).position)).not.toBe("fixed");
     const shell = (await page.locator(".shell").boundingBox())!;
     expect(Math.round(shell.y), "the app starts at the top of the window").toBe(0);
+    if (width > 900) expect(Math.round((await page.locator(".sidebar").boundingBox())!.y), "the side menu starts at the top of the window").toBe(0);
     const box = (await ask.boundingBox())!;
-    expect(Math.round(box.y + box.height), "along the window's foot").toBeGreaterThanOrEqual(page.viewportSize()!.height - 17);
+    expect((await page.locator("#main .crumb-row").boundingBox())!.y, "the page starts under the question").toBeGreaterThanOrEqual(box.y + box.height - 1);
     await shot(page, "consent", info);
     if (width < 500) { await sane(page, errors); return; }
     // the panel: docked at 1440 in its own column, the full window high; the page and the question make room

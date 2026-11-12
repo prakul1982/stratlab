@@ -243,13 +243,15 @@ function Routed() {
   // the page's own title from the first frame, while the sign-in is read and the page's code downloads (R8O-009: the tab
   // had no useful title for 2 s on /research/rotation and /admin/system); a visitor's pages set their own
   useLayoutEffect(() => { if (!everyone && (!ready || session)) document.title = titleFor(loc.pathname); }, [everyone, ready, session, loc.pathname]);
-  if (everyone) return <VisitorApp userId={session?.user.id} />;
-  if (!ready) return <main><h1 className="sr-only">Opening StratLab</h1><Opening label="Opening StratLab" /></main>;
+  // the analytics question comes first in the page's order, so the keyboard and a screen reader meet it before a hundred controls
+  // (A11Y-2: it was the 127th Tab stop); signed in, the Shell draws it in the first row of its page column (LIVE7B-006)
+  if (everyone) return <><Tracking /><VisitorApp userId={session?.user.id} /></>;
+  if (!ready) return <><Tracking /><main><h1 className="sr-only">Opening StratLab</h1><Opening label="Opening StratLab" /></main></>;
   // a saved sign-in the sign-in service didn't answer for is not "signed out": say it couldn't load, offer Reload (R20-002)
-  if (!session && sessionUnconfirmed(ready, session)) return <main><LoadFailed what="your account" /></main>;
-  if (!session) return <VisitorApp />;
+  if (!session && sessionUnconfirmed(ready, session)) return <><Tracking /><main><LoadFailed what="your account" /></main></>;
+  if (!session) return <><Tracking /><VisitorApp /></>;
   return (
-    <Shell>
+    <Shell ask={<Tracking />}>
       <ViewAsBanner />{/* the owner is viewing the app as another plan: on every page until it is turned off */}
       {meError && <div className="banner" role="alert"><span>StratLab couldn't load your account: {meError}</span><AccountRetry /></div>}
       {dataOffline && !meError && <DataBanner note={me?.data_note ?? null} market={markets.find((m) => m.id === "IN")} />}
@@ -375,9 +377,6 @@ function App() {
   const goToPlans = useCallback(() => nav("/plans"), [nav]);
   return (
     <AppProvider goToPlans={goToPlans}>
-      {/* first in the page's order, so the keyboard and a screen reader meet the question before a hundred controls, not after them (it stands
-          over the corner of the page either way; A11Y-2: it was the 127th Tab stop) */}
-      <Tracking />
       <Routed />
       {/* Help & feedback: one dialog for every page, signed in or not (owner, 4 Nov) */}
       <AppFeedback />

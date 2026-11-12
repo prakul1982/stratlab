@@ -399,6 +399,12 @@ export function NetWorthPage() {
   const shown = whole.slice(rng.from);
   const marked = shown.flatMap((h, i) => (h.partial?.length ? [{ i, kind: "dot" as const, color: "var(--orange)" }] : []));
   const last = hist[hist.length - 1], move = t ? netWorthDelta(t.net, t.partial, hist, undefined, view?.valuation) : null;
+  // LIVE7B-011: the chart is placed by date (the gap between two snapshots is the time between them, not one step each) and ends today, at
+  // the total above, not at the last snapshot days ago; today's point is marked as the current total, not a snapshot
+  const today = istToday();
+  const nowPt = t && last && today > last.d.slice(0, 10) ? { d: today, net: t.net, partial: t.partial ?? null } : null;
+  const line = nowPt ? [...shown.map((h) => ({ d: h.d, net: h.net, partial: h.partial ?? null })), nowPt] : shown.map((h) => ({ d: h.d, net: h.net, partial: h.partial ?? null }));
+  const lineMarks = nowPt ? [...marked, { i: line.length - 1, kind: "dot" as const, color: "var(--series-1)" }] : marked;
 
   // R15 #3 (owner, 7 Nov, picked from two designs): "Where you stand" is a headline (the figure large, its change beside it) on the left
   // half and what you own, owe and are worth as a small table on the right, so the card is balanced edge to edge. History is the
@@ -522,7 +528,8 @@ export function NetWorthPage() {
             <CardHead title="Where you stand" info={t.oldest_as_of ? `The oldest value you entered is as of ${day(t.oldest_as_of)}.` : undefined}
               actions={view.history_allowed && hist.length > 0 ? (
                 <button type="button" className="btn quiet sm" onClick={toHistory} aria-expanded={whole.length < 3 ? snapsOpen || !!empty : undefined}
-                  aria-controls={whole.length < 3 ? "nw-snaps-list" : undefined}>History · {hist.length} snapshot{hist.length === 1 ? "" : "s"}</button>) : undefined} />
+                  aria-controls={whole.length < 3 ? "nw-snaps-list" : undefined}>{/* LIVE7B-011: with a chart the count is said once, on the snapshots list under it */}
+                  {whole.length < 3 ? `History · ${hist.length} snapshot${hist.length === 1 ? "" : "s"}` : "History"}</button>) : undefined} />
             {standHead()}
             {/* a source that couldn't be read or valued: named; snapshots of such a total are marked partial */}
             {/* DG-016: something with no price yet is a routine note; a source that couldn't be read is the warning */}
@@ -566,12 +573,12 @@ export function NetWorthPage() {
 
           {view.history_allowed && whole.length >= 3 && (
             <ChartFrame id="nw-history" title="History" info="Net worth at each snapshot: the 1st of each month and the days you changed an entry." ranges={rng.options} range={rng.value} onRange={rng.pick} rangeFor={{ chart: "networth", times: days }}
-              footer={<><p className="k-note">Last snapshot {day(last.d)}.{marked.length > 0 && " Marked points are partial: something wasn't counted that day (named in the snapshots below)."}</p>{snapsList("nw-snaps")}</>}
+              footer={<><p className="k-note">Last snapshot {day(last.d)}{nowPt ? "; the line ends today at the total above" : ""}.{marked.length > 0 && " Marked points are partial: something wasn't counted that day (named in the snapshots below)."}</p>{snapsList("nw-snaps")}</>}
               table={{ label: "Net worth at each snapshot", rows: [...shown].reverse(), rowKey: (h) => h.d,
                 columns: [{ key: "d", header: "Day", rowHeader: true, cell: (h) => dateOnly(h.d) }, { key: "net", header: "Net worth", numeric: true, cell: (h) => <>{inr(h.net)}{h.partial?.length ? <span className="k-sub-line">partial</span> : null}</> },
                   { key: "a", header: "Assets", numeric: true, cell: (h) => inr(h.assets) }, { key: "l", header: "Loans", numeric: true, cell: (h) => inr(h.liabilities) }] }}>
-              <XYChart series={[{ values: shown.map((h) => h.net), color: "var(--series-1)", label: "Net worth", area: { color: "var(--series-1)", base: 0 } }]}
-                times={shown.map((h) => h.d)} points={marked} format={(v) => inr(v)} axisFormat={(v) => axisInr(v)} ariaLabel="Net worth over time" height={220} testId="networth-chart" ranges={false} table={false} />
+              <XYChart series={[{ values: line.map((h) => h.net), color: "var(--series-1)", label: "Net worth", area: { color: "var(--series-1)", base: 0 } }]}
+                times={line.map((h) => h.d)} x={line.map((h) => Date.parse(h.d))} labels={nowPt ? line.map((h, i) => (i === line.length - 1 ? `${dateOnly(h.d)} · now (not a snapshot)` : dateOnly(h.d))) : undefined} points={lineMarks} format={(v) => inr(v)} axisFormat={(v) => axisInr(v)} ariaLabel="Net worth over time" height={220} testId="networth-chart" ranges={false} table={false} />
             </ChartFrame>
           )}
 

@@ -299,8 +299,14 @@ def quote_rows(spec: list[tuple], got: dict[str, dict | None], today: str) -> li
                 day = at.astimezone(zone).date().isoformat()
             except Exception:
                 day = None
-        rows.append({"label": label, "symbol": sym, "tag": tag, "price": num(q["price"]), "change_pct": round(num(q.get("change_pct")), 2) if num(q.get("change_pct")) is not None else None,
-                     "day": day, "same_day": day == today if day else None})
+        c = num(q.get("change_pct"))
+        row = {"label": label, "symbol": sym, "tag": tag, "price": num(q["price"]), "change_pct": round(c, 2) if c is not None else None,
+               "day": day, "same_day": day == today if day else None}
+        if tag == "yield" and c is not None and c > -100:
+            # a yield's move is in basis points, not a percent of the yield (LIVE7A-023: "4.98% +2.45%" was a 12 bp rise)
+            prev = num(q.get("prev_close")) or row["price"] / (1 + c / 100)
+            row["change_bp"] = round((row["price"] - prev) * 100)
+        rows.append(row)
     return rows
 
 
@@ -427,6 +433,15 @@ def verify(p: dict) -> list[str]:
             if "led (" in t and (s["rows"][0]["label"] not in t or s["rows"][-1]["label"] not in t):
                 problems.append(f"\"{t}\" doesn't name the table's leader and laggard")
     return problems
+
+
+def session_of(levels: list[dict], name: str) -> str | None:
+    """The session a market's index levels are of: the main index's own day, else the newest day among them."""
+    lvl = next((i for i in levels if i.get("name") == name and i.get("day")), None)
+    if lvl:
+        return str(lvl["day"])[:10]
+    days = [str(i["day"])[:10] for i in levels if i.get("day")]
+    return max(days) if days else None
 
 
 # ---------- the data, read ----------
@@ -738,7 +753,9 @@ class Mood:
             cal = f_cal.result(timeout=30)
         except Exception:
             cal = {"results": [], "ipos": [], "events": []}
-        p = {"region": region, "is_open": market_open(region), "today": today_s,
+        # the session the figures are of: the index's own day (LIVE7A-001: read before the open, every table was the last session's
+        # figures under the new day's date; the page labels each block with this, never with the calendar day)
+        p = {"region": region, "is_open": market_open(region), "today": today_s, "session": session_of(levels, name),
              "levels_at": max((i["at"] for i in levels if i.get("at")), default=None),
              "compare": cmp, "breadth": b, "sectors": sectors, "movers": movers, "flows": flows,
              "risk": {"rows": risk} if risk else None, "global": {"rows": glob} if glob else None,
@@ -751,12 +768,27 @@ class Mood:
             p["headline"], p["lines"] = "", []
         return p
 
+    def _session_now(self, region: str) -> str | None:
+        """The session the index levels are of now (from memory: no read is waited on), or None."""
+        try:
+            levels, _ = self.hub.indices_now(region, wait=0.0)
+        except Exception:
+            return None
+        return session_of(levels or [], INDEX_SYMBOL[region][0])
+
     def get(self, region: str, wait: float = 20.0) -> tuple[dict | None, float | None]:
         from .company import market_open
         open_now = market_open(region)
         self.payloads.fresh_for = FRESH_OPEN if open_now else FRESH_SHUT
         self._seed(region)
         hit = self.payloads.kept(region)
+        now_day = self._session_now(region) if hit else None
+        was = (hit[1] or {}).get("session") or (hit[1] or {}).get("today") if hit else None
+        if hit and now_day and was and was < now_day:
+            # LIVE7A-001: a newer session has closed (or opened) since this copy was read: it is answered with its own session's date,
+            # marked as being read again, and the fresh read starts behind it
+            self.payloads._start(region, lambda: self._build_kept(region))
+            return {**hit[1], "session": was, "is_open": open_now, "refreshing": True, "behind": now_day}, hit[0]
         if hit and bool((hit[1] or {}).get("is_open")) != open_now:
             # a copy from the other side of the open or the close (the first visit after a quiet spell got a market-hours copy
             # saying "live" at 17:13 IST): answered at once, never as live once the market has shut (its `is_open` is the market's

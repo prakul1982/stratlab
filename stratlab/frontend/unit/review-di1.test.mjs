@@ -182,9 +182,11 @@ test("DI-021, DI-023: the phone's top button and the tour follow the space; on a
   assert.match(shell, /aria-label=\{main\.label\} title=\{main\.label\} onClick=\{goMain\}/);
   assert.match(shell, /if \(path !== main\.to\) \{ nav\(main\.to\); return; \}/);
   assert.match(shell, /useDialogFocus\(aside, open && !tourMenu,/);
-  const tour = read("src/components/Tour.tsx");
-  assert.match(tour, /`\.topbar \[aria-label='\$\{main\}'\]`/);
-  assert.match(tour, /\{ title: "Four spaces", at: \[".sidebar .space-switch"\], menu: true,/);
+  // (updated on purpose, R42 i1: the steps are in lib/intro.ts; the step on the main button is gone, each space's tour opens the
+  // pages themselves; menu steps still open the menu on a phone)
+  const tour = read("src/lib/intro.ts");
+  assert.match(read("src/components/Tour.tsx"), /const inMenu = phone && !!step\?\.menu;/);
+  assert.match(tour, /\{ id: "spaces", title: "Four spaces", at: \[".sidebar .space-switch"\], menu: true,/);
   assert.match(tour, /Dark mode is in Settings, under Experience\./);          // LIVE1B-045: and "Take the tour" is in the account menu
   assert.doesNotMatch(tour, /your name at the bottom opens your plan, settings and dark mode/);
 });

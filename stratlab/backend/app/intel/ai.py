@@ -235,7 +235,13 @@ def results_status(c: dict, today) -> dict | None:
             # the quarter before the results day is already in the table: those results are out
             if d and d <= today and 0 <= (d - end_day).days <= 75:
                 nxt = None
-    if nxt and str(nxt)[:10] >= today.isoformat():
+    if nxt and str(nxt)[:10] <= today.isoformat() and results_filed(c, str(nxt)[:10]):
+        # LIVE7B-003: filed on its results day (the calendar found the filing, or the day's headlines report the results) while the page's
+        # table still ends a quarter earlier: never "scheduled", and the read says their figures aren't in it yet
+        out["status"], out["filed_on"] = "filed_not_read", str(nxt)[:10]
+        out["note"] = (f"Results after {out.get('latest_quarter') or 'the latest quarter reported'} were filed on {str(nxt)[:10]}; their "
+                       "figures are not in these facts yet. Do not call those results scheduled, due, upcoming or expected.")
+    elif nxt and str(nxt)[:10] >= today.isoformat():
         out["status"], out["next_results_date"] = "upcoming", str(nxt)[:10]
         out["note"] = f"The next results are on {str(nxt)[:10]}; the latest quarter reported is {out.get('latest_quarter') or 'not known'}."
     elif end:
@@ -245,6 +251,35 @@ def results_status(c: dict, today) -> dict | None:
         out["note"] = (f"The results for {out['latest_quarter']} are already filed. No later results date is known: "
                        "do not call any results due, upcoming or today.")
     return out or None
+
+
+_RESULT_WORDS = re.compile(r"\b(?:results?|earnings|q[1-4])\b", re.I)
+_REPORTED = re.compile(r"\b(?:results?|earnings|net profit|profit|loss|revenue|sales|pat)\b", re.I)
+_AHEAD = re.compile(r"\b(?:schedul\w*|due|upcoming|expected|will|to be (?:announced|declared|held)|next)\b", re.I)
+
+
+def results_filed(c: dict, day: str) -> bool:
+    """Whether a company's results due on `day` are out: the results calendar found the filing, or a headline of that day reports them."""
+    nxt = (c.get("results_calendar") or {}).get("next") or {}
+    if str(nxt.get("date") or "")[:10] == day and nxt.get("out"):
+        return True
+    for n in c.get("news") or []:
+        h = str(n.get("headline") or "")
+        if str(n.get("at") or "")[:10] == day and _RESULT_WORDS.search(h) and _REPORTED.search(h) and not _AHEAD.search(h):
+            return True
+    return False
+
+
+def filed_watch(read: dict, cal: dict | None, today) -> dict:
+    """A read whose "what to watch" calls results scheduled that the calendar has as filed (a read kept from earlier the same day):
+    that line dropped, and one saying they are filed and not in the read yet (LIVE7B-003)."""
+    nxt = (cal or {}).get("next") or {}
+    day = str(nxt.get("date") or "")[:10]
+    if not day or day > today.isoformat() or not nxt.get("out") or not isinstance(read.get("watch"), list):
+        return read
+    keep = [w for w in read["watch"] if not (_RESULT_WORDS.search(str(w)) and _AHEAD.search(str(w)))]
+    line = f"Results filed on {day}: their figures are not in this read yet."
+    return {**read, "watch": ([line] if line not in keep else []) + keep}
 
 
 # a "what to watch" line about results already out ("Jun 2026 (Q1 FY2027) results filed on 2026-06") is not ahead (R47-005)
@@ -319,6 +354,9 @@ FACTS write them. Leave out anything the FACTS don't state rather than saying it
     # lender, ideas named for their rule (R7O-001, R7O-002)
     out = {**grounding.polish_company(out, c.get("region") or "IN", bool(c.get("bank"))), "lender": bool(c.get("bank")),
            "region": c.get("region") or "IN", "checks": READ_CHECKS}
+    status = facts.get("results") or {}
+    if status.get("status") == "filed_not_read":       # LIVE7B-003: filed on its day, not in the page's table yet
+        out = filed_watch(out, {"next": {"date": status["filed_on"], "out": True}}, ist_date())
     if not out["summary"] and not out["bull"] and not out["bear"]:
         raise AIError("The AI's read didn't hold up against the company's numbers. Press Refresh to try again.")
     return out
@@ -337,6 +375,8 @@ def clean_company(read: dict) -> dict:
     still carry them), and an empty list of fact rows when it has none."""
     out = {k: v for k, v in read.items() if k not in SCORE_FIELDS}
     out["facts"] = out.get("facts") if isinstance(out.get("facts"), list) else []
+    from .key_facts import lender_labels
+    out["facts"] = lender_labels(out["facts"], bool(out.get("lender")))           # LIVE7B-004: a kept read too
     out["segments"] = []                        # a read stored with the model's unsourced revenue split shows none
     out["bull"], out["bear"] = figures_only(out.get("bull")), figures_only(out.get("bear"))      # a kept read too (DD-016)
     # a read kept from before today's checks gets them as it is served (R7O-001): the same pass a fresh read had

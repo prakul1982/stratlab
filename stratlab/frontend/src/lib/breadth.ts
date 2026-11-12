@@ -14,7 +14,9 @@ export type Group = { id: GroupId; name: string; region: "IN" | "US"; index_name
 export type Figure = { value: number | null; prev: number | null; change: number | null };
 export type Headline = "adv" | "dec" | "unch" | "ad_ratio" | "pct20" | "pct50" | "pct200" | "highs" | "lows" | "up4" | "down4"
   | "stage2" | "mcclellan" | "summation" | "thrust" | "trin" | "stocks";
-export type Today = { day: string; prev_day: string | null } & Record<Headline, Figure>;
+export type Today = { day: string; prev_day: string | null } & Record<Headline, Figure> & {
+  /** the group's index close on the day and the day before, on every plan (LIVE7A-024); older servers send none */
+  index?: Figure };
 export type History = {
   days: string[]; adv: number[]; dec: number[]; unch: number[]; stocks: number[]; net: number[]; ad_line: number[];
   ad_ratio: (number | null)[]; pct20: (number | null)[]; pct50: (number | null)[]; pct200: (number | null)[];

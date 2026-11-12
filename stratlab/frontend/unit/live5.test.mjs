@@ -167,7 +167,8 @@ test("LIVE5 partial, then LIVE6-014: signed in, the analytics question never mov
   const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
   assert.doesNotMatch(css, /body:has\(\.shell\) \.consent \{ position: relative;/);
   assert.doesNotMatch(css, /body:has\(\.shell\) \.shell \{ padding-bottom: 0; \}/);
-  assert.match(css, /\.shell \{ padding-bottom: var\(--consent-h, 0px\); \}/);          // the page's end clears the bar
+  // (updated on purpose, LIVE7B-006) the band is back in the flow, but in the page column only: the side menu spans both rows, so it never moves
+  assert.match(css, /\.shell > \.sidebar \{ grid-column: 1; grid-row: 1 \/ -1; \}/);
 });
 
 test("LIVE5-002 globally: a list table wider than its box on a desktop wraps its words (k-fit) instead of hiding columns past the edge", () => {

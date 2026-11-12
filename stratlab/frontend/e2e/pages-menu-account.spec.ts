@@ -385,13 +385,13 @@ test("the account menu: Account, Settings, Plan, Invite, Get the app, Admin, All
   await expect(acct.getByRole("menuitem", { name: /mode$/ })).toHaveCount(0);
   await page.keyboard.press("Escape");
 
-  // Take the tour opens the tour
+  // Take the tour opens the list of tours, one per space (Release 42 lane i1; e2e/intro.spec.ts walks each tour; updated on purpose)
   await btn.click();
   await acct.getByRole("menuitem", { name: "Take the tour" }).click();
-  await expect(page.getByRole("tablist", { name: "Tour steps" })).toBeVisible();
+  const tours = page.getByRole("dialog", { name: "Take a tour" });
+  await expect(tours).toBeVisible();
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: /^(Close|Skip|Done)/ }).first().click({ timeout: 2000 }).catch(() => undefined);
-  await expect(page.getByRole("tablist", { name: "Tour steps" })).toHaveCount(0);
+  await expect(tours).toHaveCount(0);
 
   // Account and Admin open their pages (and close the drawer on a phone)
   side = await menu(page, phone);

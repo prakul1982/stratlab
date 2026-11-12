@@ -205,17 +205,46 @@ def special_days(market: str) -> set:
         days = {e["date"] for e in market_events.special_sessions(today, today - timedelta(days=400), today + timedelta(days=40))}
     except Exception:                 # no database (tests, an outage): only the sessions noted in this process
         days = hit[1] if hit else set()
+    days = days | _stored_sessions(key)
     _special[key] = (time.time(), days)
     return days | _noted.get(key, set())
 
 
+SESSIONS_KEY = "calendar:sessions:"     # calendar:sessions:<market> = [ISO days of special sessions seen on the exchange's own candles]
+
+
+def _stored_sessions(key: str) -> set:
+    """The special sessions seen on the exchange's candles, kept in the database for every process (LIVE7A-019: a session noted only
+    in the process that read the candles was unknown to the one that built the next day's brief, which measured 9 Nov from 6 Nov)."""
+    import json
+    try:
+        from .. import db
+        got = json.loads(db.get_setting(SESSIONS_KEY + key) or "[]")
+    except Exception:
+        return set()
+    return {str(d)[:10] for d in got if isinstance(d, str)} if isinstance(got, list) else set()
+
+
 def note_session(market: str, day: date | str) -> None:
-    """Record a special session seen on the exchange's own candles (kept for the process; a handful a year)."""
+    """Record a special session seen on the exchange's own candles: for this process at once and in the database for every other (a
+    handful a year; the last 30 are kept)."""
+    import json
     key = "IN" if market in SESSION_MARKETS else market
+    iso = str(day)[:10]
     got = _noted.setdefault(key, set())
     if len(got) > 50:
         got.clear()
-    got.add(str(day)[:10])
+    if iso in got:
+        return
+    got.add(iso)
+    try:
+        from .. import db
+        kept = _stored_sessions(key)
+        if iso not in kept:
+            db.set_setting(SESSIONS_KEY + key, json.dumps(sorted(kept | {iso})[-30:]))
+            _special.pop(key, None)
+    except Exception as e:            # no database: this process still knows it
+        print("calendar: special session not stored:", str(e)[:100])
 
 
 def had_session(market: str, day: date) -> bool:

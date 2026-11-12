@@ -35,6 +35,10 @@ export function movedYearNote(from: number, to: number, current: number, what: s
   return `No ${what} in ${fyLabel(from)}, ${which}, so this is ${fyLabel(to)}, the latest year with ${what}.`;
 }
 
+/** What a year is to the person now, beside its name: "this year", or "being filed" for the year before, whose return is filed now
+ * (LIVE7B-018: the Money home and Tax tools opened on FY 2025-26 in FY 2026-27 with nothing saying why). */
+export const fyRole = (fy: number, current: number): string => (fy === current ? "this year" : fy === current - 1 ? "being filed" : "");
+
 /** "FY 2025-26". */
 export const fyLabel = (fy: number) => `FY ${fy}-${String(fy + 1).slice(2)}`;
 

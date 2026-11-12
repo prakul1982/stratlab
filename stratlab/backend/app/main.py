@@ -1051,7 +1051,8 @@ def my_limits(profile=Depends(current_profile)):
     return ok({"plan": PLANS[plan]["name"], "rows": rows})
 
 
-USAGE_LABELS = {"refresh": "Refreshes of stored reads", "research_ai": "Fresh AI reads", "backtest": "Backtests", "ai": "AI strategy builds",
+# LIVE7B-002: a Refresh of a stored read is a fresh AI read, held to that one daily count (no separate refresh count)
+USAGE_LABELS = {"research_ai": "Fresh AI reads, refreshes included", "backtest": "Backtests", "ai": "AI strategy builds",
                 "deepdive": "Company deep dives", "deck": "Decks (PDF or PowerPoint)", "stock_alerts": "Active stock alerts",
                 "screens": "Saved screens", "holdings": "Stocks in My Holdings", "mf_schemes": "Mutual fund schemes",
                 "networth_items": "Net worth entries", "journal_trades": "Journal trades kept"}
@@ -1062,11 +1063,8 @@ def my_usage(profile=Depends(current_profile)):
     """Every per-person limit the app enforces, each with what's used, the limit (None: no limit) and when it starts again ("day":
     midnight India time, "month": the 1st, None: a kept count that goes down when something is removed). R19 (owner, 7 Nov: "tell them
     about their daily quota left"): Settings' "Your usage" table and the note beside every Refresh button read this one call."""
-    from . import computed
-    from .plans import refreshes_per_day
     plan, uid = profile["_plan"], profile["id"]
     info = plan_info(plan)
-    is_admin = admin.is_admin(profile)
 
     def n(fn):
         try:
@@ -1074,13 +1072,12 @@ def my_usage(profile=Depends(current_profile)):
         except Exception:
             return None
     day, month = research_routes.ai_day_start(), month_start_iso()
-    counts = {"refresh": _usage_pool.submit(n, lambda: db.count_usage(uid, "refresh", day)),
-              "research_ai": _usage_pool.submit(n, lambda: research_routes.ai_reads_today(profile)),
+    counts = {"research_ai": _usage_pool.submit(n, lambda: research_routes.ai_reads_today(profile)),
               **{k: _usage_pool.submit(n, lambda k=k: db.count_usage(uid, k, month)) for k in ("backtest", "ai", "deepdive", "deck")}}
-    limits = {"refresh": None if is_admin else refreshes_per_day(computed.plan_word(profile)), "research_ai": research_routes.ai_cap(profile),
+    limits = {"research_ai": research_routes.ai_cap(profile),
               "backtest": info["backtests_per_month"], "ai": info["ai_builds_per_month"], "deepdive": info["deepdives_per_month"],
               "deck": info["decks_per_month"]}
-    resets = {"refresh": "day", "research_ai": "day", "backtest": "month", "ai": "month", "deepdive": "month", "deck": "month"}
+    resets = {"research_ai": "day", "backtest": "month", "ai": "month", "deepdive": "month", "deck": "month"}
     rows = [{"key": k, "label": USAGE_LABELS[k], "used": counts[k].result(), "limit": limits[k], "resets": resets[k]} for k in counts]
     try:
         kept = json.loads(my_limits(profile).body)["rows"]

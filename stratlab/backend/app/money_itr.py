@@ -634,7 +634,7 @@ def summary(g: dict) -> list[tuple[str, str]]:
            ("Section 112A exemption used", money(y["exemption"]["used"])),
            ("Intraday result", money(y["intraday"]["pnl"])), ("F&O, commodity and currency result after charges", money(y["business"]["net"])),
            # (LIVE1C-059: the total left the dividends out, as Tax tools' switch had them, and this list did not say so)
-           ("Dividends in the year (India)" + ("" if g.get("div_in_total", True) or not g["div_lines"] else ", not in the total tax estimate below"),
+           ("Dividends in the year (India)" + ("" if g.get("div_in_total", True) or not g["div_lines"] else ", not in the total tax estimate"),   # LIVE7B-017: no "below": where the total sits depends on the page
             money(sum(r["amount"] for r in g["div_lines"])))]
     if g["us_div"]:
         out.append(("US dividends in rupees (Rule 115)", money(g["us_div"]["inr"])))

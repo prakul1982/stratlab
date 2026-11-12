@@ -223,8 +223,8 @@ def test_notable_figures_are_lines_with_a_figure():
 def test_the_one_year_change_is_written_with_the_pages_decimals():
     bars = [{"t": f"2025-{1 + i // 28:02d}-{1 + i % 28:02d}", "c": 100.0 + i} for i in range(300)]
     whole = key_facts.price_trend(bars, -17.0, 0)
-    assert {i["label"]: i["text"] for i in whole["items"]}["1-year price change"] == "-17%"
-    assert {i["label"]: i["text"] for i in key_facts.price_trend(bars, -17.3)["items"]}["1-year price change"] == "-17.3%"
+    assert {i["label"]: i["text"] for i in whole["items"]}["1-year price change"] == "−17%"      # (updated on purpose, LIVE7B-004: the minus sign)
+    assert {i["label"]: i["text"] for i in key_facts.price_trend(bars, -17.3)["items"]}["1-year price change"] == "−17.3%"      # (updated on purpose, LIVE7B-004: the minus sign)
 
 
 # ---------- DD-018: growth off a tiny base ----------

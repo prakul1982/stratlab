@@ -34,7 +34,9 @@ test("Instinct #11: a dialog is drawn at the end of the page and above Market Wa
   const css = read("src/styles.css");
   const z = (sel) => Number(css.match(new RegExp(`\\n${sel.replace(".", "\\.")} \\{[^}]*z-index: (\\d+)`))[1]);
   const mw = Number(read("src/components/watch/watch.css").match(/\.mw \{[^}]*z-index: (\d+)/)[1]);
-  assert.ok(z(".modal-back") > mw && z(".modal-back") > z(".consent") && z(".modal-back") < z(".toast"));
+  // (updated on purpose, LIVE7B-006: the cookie question is in the page's flow now, with no z-index of its own, so nothing to rise above)
+  assert.ok(z(".modal-back") > mw && z(".modal-back") < z(".toast"));
+  assert.doesNotMatch(css, /\n\.consent \{[^}]*z-index/);
 });
 
 test("Instinct #11: a docked panel floating on a laptop is at most half the window high, and the page's end clears it", async () => {

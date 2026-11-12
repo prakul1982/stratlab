@@ -748,6 +748,12 @@ def today(s: dict) -> dict | None:
         cur, prev = s[k][i], s[k][i - 1] if i else None
         out[k] = {"value": cur, "prev": prev,
                   "change": round(cur - prev, 3) if isinstance(cur, (int, float)) and isinstance(prev, (int, float)) else None}
+    # the index's close on the latest day, for every plan: the live card sets its level against it (LIVE7A-024: on Free, whose view
+    # carries no history, "NIFTY 500 23,839.45 · – · –" where Pro saw the previous close)
+    idx = s.get("index") or []
+    cur, prev = (idx[i] if i < len(idx) else None), (idx[i - 1] if i and i - 1 < len(idx) else None)
+    out["index"] = {"value": cur, "prev": prev,
+                    "change": round(cur - prev, 3) if isinstance(cur, (int, float)) and isinstance(prev, (int, float)) else None}
     return out
 
 

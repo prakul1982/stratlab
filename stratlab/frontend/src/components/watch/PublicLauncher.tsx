@@ -3,7 +3,6 @@
  * board) comes with the first press, or at once when the panel was left open on this device. */
 import { lazy, Suspense, useCallback, useState, type ComponentType } from "react";
 import { importWithRetry } from "../../lib/lazyRetry";
-import { useConsentLift } from "../../lib/consentLift";
 import { LAYOUT_KEY, isSheet } from "../../lib/watchKey";
 import { Markets } from "../Icons";
 import "./launcher.css";
@@ -19,7 +18,6 @@ function leftOpen(key: string): boolean {
 export function PublicMarkets({ userId }: { userId?: string }) {
   const mode = userId ? "app" : "public";
   const [full, setFull] = useState<"no" | "left" | "pressed">(() => (leftOpen(`${LAYOUT_KEY}.${userId ?? "visitor"}`) ? "left" : "no"));
-  useConsentLift(full === "no");
   const ahead = useCallback(() => void load().catch(() => undefined), []);
   if (full !== "no") return <Suspense fallback={null}><Full mode={mode} userId={userId} button="public" autoOpen={full === "pressed"} /></Suspense>;
   return (

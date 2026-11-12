@@ -44,8 +44,9 @@ JOB_DAYS = 45                   # the daily job reads updates filed this recentl
 RUN_AT = "19:30"                # India time: after the day's monthly updates (the 1st of the month, mostly by noon)
 # how filings are read now: a read made by an older reader is read again, newest first, as the day's budget allows. 2: the
 # period's own column (DF-009), sales over production and the company's own business (DF-010, DF-011), the quarterly
-# updates and the press releases that weren't recognised (DF-012). 3: the year-ago figure is the year-ago column's (R17-005)
-READER = 3
+# updates and the press releases that weren't recognised (DF-012). 3: the year-ago figure is the year-ago column's (R17-005).
+# 4: a year-to-date column is a column of its own, never the year-ago month (LIVE7B-001)
+READER = 4
 SYMBOL = re.compile(r"^[A-Z0-9][A-Z0-9&\-_.]{0,19}$")
 NOTE = ("Figures as the company filed them with the exchange, copied from its own document; each one links to the filing "
         "with the page and the line it's on. Changes are arithmetic on those filed figures. Facts, not advice.")
@@ -270,17 +271,30 @@ def header_periods(page: str, period: str) -> list[str]:
     return []
 
 
+# a year-to-date or cumulative column heading: "Year to Date", "YTD", "Cumulative", "Apr-Oct 26", "April to October 2026"
+_TO_DATE = re.compile(rf"\byear[\s-]*to[\s-]*date\b|\bytd\b|\bcumulative\b|\bprogressive\b|"
+                      rf"\b{MONTHS}\s*['’]?\s*(?:\d{{2,4}})?\s*(?:[-–]|\bto\b)\s*{MONTHS}(?:\s*['’\-]?\s*(?:\d{{4}}|\d{{2}})\b)?", re.I)
+_HEADING = re.compile(rf"(?P<todate>{_TO_DATE.pattern})|{_LABEL.pattern}", re.I)
+TO_DATE = "to date"
+
+
 def column_periods(page: str, period: str) -> list[str]:
-    """The month columns of the first line on the page that heads columns for `period` and at least one other month, in their order
+    """The columns of the first line on the page that heads columns for `period` and at least one other month, in their order
     ("Oct-26 Sep-26" → ["2026-10", "2026-09"]; "Sep-25 Sep-26 Sep-25 Sep-26" → ["2025-09", "2026-09", "2025-09", "2026-09"]); [] when
-    no line does. Wider than header_periods: a table whose other column is the month before, not the year before, is read too (R17-005)."""
+    no line does. Wider than header_periods: a table whose other column is the month before, not the year before, is read too (R17-005).
+    A year-to-date column is a column too ("October -26 Year to Date October - 25 Year to Date" → ["2026-10", "to date", "2025-10",
+    "to date"]): LIVE7B-001, a row "3519 33103 4664 32069" had its year-to-date 33,103 read as October 2025's."""
     for line in (page or "").splitlines():
         got = []
-        for m in _LABEL.finditer(line):
-            y = int(m.group(2))
+        for m in _HEADING.finditer(line):
+            if m.group("todate"):
+                got.append(TO_DATE)
+                continue
+            y = int(m.group(3))              # the month heading's groups follow the year-to-date one
             y = y + 2000 if y < 100 else y
-            got.append(f"{y:04d}-{_MON[m.group(1)[:3].lower()]:02d}")
-        if len(got) >= 2 and period in got and len(set(got)) >= 2:
+            got.append(f"{y:04d}-{_MON[m.group(2)[:3].lower()]:02d}")
+        months = {g for g in got if g != TO_DATE}
+        if len(got) >= 2 and period in months and len(months) >= 2:
             return got
     return []
 
@@ -456,9 +470,9 @@ def clean_figures(d: dict, pages: list[str], filed: str, own: bool = True, produ
             value, prior = own_column(value, prior, quote, pages[page - 1], period)
         if production and not PRODUCTION.search(name):
             name = f"Production: {name}"[:80]
-        unit = " ".join(str(f.get("unit") or "").split())[:30] or "units"
+        unit = unit_word(" ".join(str(f.get("unit") or "").split())[:30])
         unit = re.sub(r"^(?:rs\.?|inr|₹)\s*", "₹ ", unit, flags=re.I)
-        segment = " ".join(str(f.get("segment") or "").split())[:60] or None
+        segment = own_segment(name, " ".join(str(f.get("segment") or "").split())[:60] or None)
         k = metric_key(name, segment, unit, basis)
         if k in seen:
             continue
@@ -620,8 +634,23 @@ def _squeeze(s: str | None) -> str:
     return re.sub(r"[^a-z0-9%]+", " ", str(s or "").lower()).strip()
 
 
+# a count's unit as filings write it: "Nos.", "in Nos", "numbers", "units": all one unit (LIVE7B-001: "nos" and "units" rows of one figure)
+_COUNT_UNIT = re.compile(r"^(?:in\s+)?(?:nos?\.?|numbers?|units?|unit\(s\))$", re.I)
+
+
+def unit_word(unit: str | None) -> str:
+    u = " ".join(str(unit or "").split())
+    return "units" if not u or _COUNT_UNIT.match(u) else u
+
+
+def own_segment(name: str, segment: str | None) -> str | None:
+    """The segment, unless it only repeats the measure's name (LIVE7B-001: "Power tiller (Power Tiller)", "Tractor (Tractor)")."""
+    seg = _squeeze(segment)
+    return None if not seg or seg == _squeeze(name) or f" {seg} " in f" {_squeeze(name)} " else segment
+
+
 def metric_key(name: str, segment: str | None, unit: str, basis: str) -> str:
-    return "|".join((_squeeze(name), _squeeze(segment), _squeeze(unit), basis))
+    return "|".join((_squeeze(name), _squeeze(own_segment(name, segment)), _squeeze(unit_word(unit)), basis))
 
 
 def change(now: float | None, before: float | None, unit: str) -> float | None:
@@ -664,11 +693,12 @@ def tidy_figure(f: dict) -> dict:
     name = _NOTE_IN_NAME.sub("", f["metric"]).strip() or f["metric"]
     if re.fullmatch(r"[A-Z][a-z]+(?: [A-Z][a-z]+)+", name):
         name = name[0] + name[1:].lower()
-    unit = f["unit"]
+    unit = unit_word(f["unit"])
     head, _, rest = unit.partition(" ") if unit.startswith("₹") else ("", "", unit)
     if re.fullmatch(r"[A-Z][a-z]{2,}(?: [a-z]+)*", rest):
         unit = (f"{head} " if head else "") + rest.lower()
-    return f if (name, unit) == (f["metric"], f["unit"]) else {**f, "metric": name, "unit": unit}
+    segment = own_segment(name, f.get("segment"))
+    return f if (name, unit, segment) == (f["metric"], f["unit"], f.get("segment")) else {**f, "metric": name, "unit": unit, "segment": segment}
 
 
 _FY = re.compile(r"\b(?:(Q[1-4]|H[12])\s*)?FY\s*'?(\d{2}|\d{4})(?:\s*[-/]\s*(\d{2}|\d{4}))?\b", re.I)
@@ -732,7 +762,11 @@ def series(reads: dict) -> list[dict]:
         before = [x for x in pts if x["period"] < latest["period"]]
         prev = before[-1] if before else None
         year = m["points"].get(shift(latest["period"], -12))
-        step = "quarter" if m["span"] == "quarter" or (prev and shift(prev["period"], 3) == latest["period"]) else "month"
+        # a figure filed month by month (two of its own points a month apart) has no "previous quarter": a three-month gap there is months
+        # not read, not a quarter (LIVE7B-001: a monthly count's "+0.3% vs Jun 2026" on the previous)
+        own_months = [x["period"] for x in pts if not x["filed_later"]]
+        monthly = any(shift(a, 1) == b for a, b in zip(own_months, own_months[1:]))
+        step = "quarter" if m["span"] == "quarter" or (prev and shift(prev["period"], 3) == latest["period"] and not monthly) else "month"
         # "the previous" is the period just before (last month, or last quarter for a quarterly figure). A point further back, such as
         # the year-ago figure a filing states, is not it: with no previous period there is no change on it
         if prev and shift(prev["period"], 1) != latest["period"] and not (step == "quarter" and shift(prev["period"], 3) == latest["period"]):

@@ -7,14 +7,11 @@ const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
 // R15 (owner's screenshots of 7 Nov): page fixes. Each test names its item.
 
 test("R15 #1: More in Money starts open, and still folds", async ({ page }) => {
-  const errors = await open(page, "/money", "More in Money");
-  const more = page.getByTestId("more-tools");
-  const btn = more.getByRole("button", { name: /^More in Money/ });
-  await expect(btn).toHaveAttribute("aria-expanded", "true");
-  await expect(more.getByRole("table").first()).toBeVisible();
-  await btn.click();
-  await expect(btn).toHaveAttribute("aria-expanded", "false");
-  await expect(more.getByRole("table").first()).toBeHidden();
+  // (updated on purpose, LIVE7B-014: "More in Money" listed the side menu's Money entries again; Money home is its two summaries, the
+  // menu reaches every Money page)
+  const errors = await open(page, "/money", "Your money");
+  await expect(page.getByTestId("more-tools")).toHaveCount(0);
+  if (page.viewportSize()!.width > 900) await expect(page.locator(".sidebar").getByRole("link", { name: /Portfolio|Tax|Plan/ }).first()).toBeVisible();
   await sane(page, errors);
 });
 

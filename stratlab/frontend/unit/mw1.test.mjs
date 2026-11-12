@@ -404,7 +404,7 @@ test("Market Watch is drawn once in the Shell, outside the page, and never insid
   assert.doesNotMatch(routes, /MarketsLauncher/, "not inside the page, which changes with the route");
   assert.match(shell, /openMarkets\(\{ open: "toggle" \}\)/, "the phone's top bar has its button");
   const app = read("src/main.tsx");
-  assert.match(app, /<Shell>/);
+  assert.match(app, /<Shell ask=\{<Tracking \/>\}>/);          // (updated on purpose, LIVE7B-006: the Shell draws the analytics question in its page column)
   assert.doesNotMatch(app.slice(app.indexOf("<Routes>"), app.indexOf("</Routes>")), /Shell|MarketsLauncher/);
   assert.match(app, /\/chart\/:market\/:symbol/);
 });

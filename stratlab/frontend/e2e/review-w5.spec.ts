@@ -59,7 +59,9 @@ test("/tour opens the tour on Home (it was Page not found)", async ({ page }, in
   const errors = await signIn(page, u, "/tour", "");
   const note = page.locator(".k-coach-note");
   await expect(note).toBeVisible({ timeout: 30_000 });
-  await expect(note).toContainText("Four spaces");
+  // (updated on purpose, R42 i1: /tour opens the list of tours, one per space)
+  await expect(note).toContainText("Take a tour");
+  for (const t of ["Getting around", "Trade", "Invest", "Money"]) await expect(note.getByRole("button", { name: new RegExp(`^${t}`) })).toBeVisible();
   await expect(page).not.toHaveURL(/\/tour$/);
   await expect(page.getByText("Page not found")).toHaveCount(0);
   expect(errors).toEqual([]);

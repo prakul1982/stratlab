@@ -3,9 +3,10 @@
 export type UsageRow = { key: string; label: string; used: number | null; limit: number | null; left: number | null; resets: "day" | "month" | null };
 export type Usage = { plan: string; rows: UsageRow[] };
 
-/** Refreshes left today, or null when there's no limit (or it isn't known yet). */
+/** Refreshes left today: the fresh AI reads left, the one daily count Plans and Account state (LIVE7B-002: a separate "30 left today"
+ * on Pro, whose Plans row says Unlimited), or null when there's no limit (or it isn't known yet). */
 export function refreshesLeft(u: Usage | null): number | null {
-  const r = u?.rows.find((x) => x.key === "refresh");
+  const r = u?.rows.find((x) => x.key === "research_ai");
   return r ? r.left : null;
 }
 

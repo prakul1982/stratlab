@@ -256,7 +256,7 @@ def _cr(v) -> str:
         if rest:
             parts.insert(0, rest)
         digits = ",".join(parts + [last3])
-    return ("-" if v < 0 and digits.strip("0,") else "") + digits      # a tiny loss rounds to 0, never "-0"
+    return (MINUS if v < 0 and digits.strip("0,") else "") + digits      # a tiny loss rounds to 0, never "-0"; the real minus (LIVE7A-014)
 
 
 # a spreadsheet number format for Indian grouping: 1,23,45,678 from a crore, 1,23,456 from a lakh (DD-053)
@@ -268,7 +268,7 @@ def _plain(x, k: int, dp: int) -> str:
     if x is None:
         return "–"
     text = f"{x / k:,.{dp}f}"
-    return text.lstrip("-") if float(text.replace(",", "")) == 0 else text
+    return text.lstrip("-") if float(text.replace(",", "")) == 0 else text.replace("-", MINUS)
 
 
 def cap_inr(cr: float) -> str:
@@ -315,11 +315,11 @@ def _pts(v) -> str:
     return f"{'' if float(text) == 0 else '+' if v > 0 else MINUS}{text} pts"
 
 
-def _med(s, f=lambda v: f"{v:.1f}%") -> str:
+def _med(s, f=lambda v: _pc(v)) -> str:
     return f(s["median"]) if s else "–"
 
 
-def _span(s, f=lambda v: f"{v:.1f}%") -> str:
+def _span(s, f=lambda v: _pc(v)) -> str:            # LIVE7A-014: the real minus ("-14.1% to 23.6%" beside "−11% to 25%")
     return "–" if not s else f(s["min"]) if s["min"] == s["max"] else f"{f(s['min'])} to {f(s['max'])}"
 
 
@@ -1416,7 +1416,10 @@ def _fmt(kind: str):
             # the theme deck's one formatter (R18): a whole value prints whole (15%, 43x), any other with one decimal; its values come rounded
             # to one decimal, so the spreadsheet's General prints them the same way
             "pct1": (lambda v: whole_figures(_pc(v)), 'General"%"'), "chg1": (lambda v: whole_figures(_chg(v)), '+General"%";-General"%";General"%"'),
-            "x1": (lambda v: whole_figures(f"{v:.1f}x"), 'General"x"'), "num1t": (lambda v: whole_figures(f"{v:,.1f}"), "General")}.get(kind, (lambda v: f"{v:,.0f}", "#,##0"))
+            "x1": (lambda v: whole_figures(f"{v:.1f}x"), 'General"x"'), "num1t": (lambda v: whole_figures(f"{v:,.1f}"), "General"),
+            # LIVE7A-014: a chart one of whose values has a decimal prints every value with one
+            "pctk1": (lambda v: _pc(v), '0.0"%"'), "chgk1": (lambda v: _chg(v), '+0.0"%";-0.0"%";0.0"%"'),
+            "xk1": (lambda v: f"{v:.1f}x", '0.0"x"'), "numk1": (lambda v: f"{v:,.1f}", "#,##0.0")}.get(kind, (lambda v: f"{v:,.0f}", "#,##0"))
 
 
 # ---------- PowerPoint ----------
@@ -2069,7 +2072,7 @@ ROLL_TITLE = "Who is in each layer's calculations"
 ROLL_LINES = 2                    # a layer page names every company in and left out when that takes no more lines than this
 ROLL_NAMES = 6                    # else this many names of each group; the rest are counted there and named in the appendix
 ROLL_FULL = 40                    # a layer page names every company when the line stays short (roll_line); the appendix names every one (roll_rows)
-from .intel.theme_data import CALC_WHY as ROLL_WHY, in_calc      # noqa: E402 (why a listed company is left out, in this order: one list, theme_data.calc_record)
+from .intel.theme_data import CALC_WHY as ROLL_WHY, in_calc, mostly_whole      # noqa: E402 (why a listed company is left out, in this order: one list, theme_data.calc_record)
 ROLL_TAG = {"other business": "other business", "way of earning not shown": "left out", "not confirmed": "not confirmed",
             "no revenue figure": "no figures"}                # the mark on a left-out company's own row, each with its note under the table
 _LEGAL = re.compile(r"[,.]?\s+(?:inc|incorporated|corp|corporation|co|company|ltd|limited|plc|llc|lp|n\.?v|s\.?a|ag)\.?$", re.I)
@@ -2620,8 +2623,11 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> li
         rows.append(["Currency", (said + "." if done else "") + (f" No rate for {names5(none)}: their revenue and other money figures are left out." if none else ""),
                      f"Every money figure in {home}; the app keeps today's rate, not each period's, so a year's figures use it too. Margins, growth and returns "
                      "don't depend on the currency."])
-    if ch.get("with_ebitda") and ch.get("whole_points") == ch.get("with_ebitda"):
-        rows.append(["Precision", "EBITDA margins are filed in whole points.", "Printed as whole points; a gap of a point or less between medians is not called a difference."])
+    if mostly_whole(ch.get("whole_points"), ch.get("with_ebitda")):          # LIVE7A-009: most of them, not only every one
+        filed = ("EBITDA margins are filed in whole points." if ch.get("whole_points") == ch.get("with_ebitda") else
+                 f"{ch.get('whole_points')} of the {ch.get('with_ebitda')} EBITDA margins are filed in whole points.")
+        rows.append(["Precision", filed, "Printed as filed; medians and gaps built on them are printed in whole points; a gap of a point or less "
+                     "between medians is not called a difference."])
     n = ch.get("n") or {}
     keys = (("ebitda", "EBITDA margin"), ("net", "net margin"), ("roce", "ROCE")) + ((("roe", "ROE"),) if ch.get("lenders") else ())
     counts = ", ".join(f"{label} {n[k]}" for k, label in keys if n.get(k))
@@ -2996,7 +3002,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 51                  # R41: a coloured table cell (the highest and lowest layer, drawn bold) measured bold, so its row holds it whole; a cut paragraph never ends on a joining word; R40: the peer set said as "this theme" (no "the the" on a wrap), a repeated word said once on the finished pages and counted, a layer named only by how its companies earn shown and never ranked, a market-value half with fewer than 3 companies in its figures undone, the coverage table's "In no layer" and "Another business" rows; R38: foreign legal endings left off a label before any of it is cut, no word of a table cell broken inside; LIVE6: calendar price periods, own words only, one market value per company, short charts and empty tables dropped; q1: the appendix counts "with figures" by the dive's rule, a layer's cohort that fell against the run before on the data-confidence page; n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 52                  # LIVE7A (lane t1): the real minus in every range and median, one precision a column, text or chart, layer parts that add up to the change shown, a row's mark its kept reason and a mark's note only with a row that carries it, the tailwinds' contents line in the page's own counts, medians of whole-point margins printed whole; R41: a coloured table cell (the highest and lowest layer, drawn bold) measured bold, so its row holds it whole; a cut paragraph never ends on a joining word; R40: the peer set said as "this theme" (no "the the" on a wrap), a repeated word said once on the finished pages and counted, a layer named only by how its companies earn shown and never ranked, a market-value half with fewer than 3 companies in its figures undone, the coverage table's "In no layer" and "Another business" rows; R38: foreign legal endings left off a label before any of it is cut, no word of a table cell broken inside; LIVE6: calendar price periods, own words only, one market value per company, short charts and empty tables dropped; q1: the appendix counts "with figures" by the dive's rule, a layer's cohort that fell against the run before on the data-confidence page; n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -3012,19 +3018,59 @@ def _big_bn(m) -> str:
     return f"{int(v):,}"
 
 
-def whole_figures(text):
+# LIVE7A-014 (the live Automotive deck: "36%" beside "35.9%", "27x" beside "27.8x"): a whole figure keeps its ".0" where a figure of the same
+# unit beside it (in the same text, the same table column or the same chart) has a decimal, so one place never mixes the two precisions
+_DECIMAL = re.compile(r"(?<![\w.,])\d[\d,]*\.(?:[1-9]\d*|0\d*[1-9]\d*)(%|x\b| ?(?:pts|points)\b)")
+
+
+def _unit(u: str) -> str:
+    u = u.strip()
+    return "pts" if u in ("pts", "points") else u
+
+
+def decimal_units(*texts) -> set:
+    """The units ("%", "x", "pts") that some figure of these texts prints with a decimal other than ".0"."""
+    out = set()
+    for t in texts:
+        if isinstance(t, dict):
+            t = t.get("text") or t.get("group") or ""
+        if isinstance(t, str):
+            out |= {_unit(m.group(1)) for m in _DECIMAL.finditer(t)}
+    return out
+
+
+def whole_figures(text, keep=None):
     """A text with every whole figure printed whole (the owner, 7 Nov: 149 "15.0%"-like figures in one deck) and every amount of 1,000 bn or
-    more with no decimal; anything else as it is."""
-    return _WHOLE.sub(r"\1", _BIG_BN.sub(_big_bn, text)) if isinstance(text, str) else text
+    more with no decimal; anything else as it is. LIVE7A-014: not a figure whose unit (%, x, pts) has a figure with a decimal in the same text
+    or in `keep` (the units its table column or chart print with one), so "19.6% to 20.0%" stays as it is."""
+    if not isinstance(text, str):
+        return text
+    text = _BIG_BN.sub(_big_bn, text)
+    held = decimal_units(text) | set(keep or ())
+
+    def one(m):
+        tail = text[m.end():m.end() + 7].lstrip()
+        u = "%" if tail.startswith("%") else "x" if re.match(r"x\b", tail) else "pts" if re.match(r"(?:pts|points)\b", tail) else ""
+        return m.group(0) if u and u in held else m.group(1)
+    return _WHOLE.sub(one, text)
 
 
 CHART_FMT = {"pct": "pct1", "chg": "chg1", "x": "x1", "num1": "num1t"}
+CHART_FMT_DEC = {"pct": "pctk1", "chg": "chgk1", "x": "xk1", "num1": "numk1"}      # LIVE7A-014: a chart with a decimal value keeps every value's
 
 
-def _whole_cell(x):
+def _whole_cell(x, keep=None):
     if isinstance(x, dict):
-        return {**x, **({"text": whole_figures(x["text"])} if "text" in x else {}), **({"group": whole_figures(x["group"])} if "group" in x else {})}
-    return whole_figures(x)
+        return {**x, **({"text": whole_figures(x["text"], keep)} if "text" in x else {}), **({"group": whole_figures(x["group"])} if "group" in x else {})}
+    return whole_figures(x, keep)
+
+
+def _whole_rows(rows: list) -> list:
+    """A table's rows through whole_figures, each column printing its figures with one precision (LIVE7A-014)."""
+    lists = [r for r in rows if isinstance(r, list)]
+    cols = max((len(r) for r in lists), default=0)
+    keep = [decimal_units(*[r[j] for r in lists if j < len(r)]) for j in range(cols)]
+    return [_whole_cell(r) if isinstance(r, dict) else [_whole_cell(x, keep[j] if j < len(keep) else None) for j, x in enumerate(r)] for r in rows]
 
 
 def _round1(xs):
@@ -3041,7 +3087,7 @@ def whole_deck(slides: list) -> None:
             if b.get("paras"):
                 b["paras"] = [whole_figures(x) for x in b["paras"]]
             if b.get("rows"):
-                b["rows"] = [_whole_cell(r) if isinstance(r, dict) else [_whole_cell(x) for x in r] for r in b["rows"]]
+                b["rows"] = _whole_rows(b["rows"])
             if b.get("head"):
                 b["head"] = [whole_figures(x) for x in b["head"]]
             if b["kind"] == "stats":
@@ -3050,20 +3096,50 @@ def whole_deck(slides: list) -> None:
                 b["items"] = [{k: ([whole_figures(x) for x in val] if k == "lines" else whole_figures(val) if isinstance(val, str) else val)
                                for k, val in it.items()} for it in b["items"]]
             if b["kind"] in ("hbars", "columns", "lines"):
-                b["fmt"] = CHART_FMT.get(b.get("fmt") or ("pct" if b["kind"] != "columns" else ""), b.get("fmt"))
                 if b.get("vals"):
                     b["vals"] = _round1(b["vals"])
                 if b.get("series"):
                     b["series"] = [(x[0], _round1(x[1]), *x[2:]) for x in b["series"]]
+                vals = list(b.get("vals") or []) + [v for x in b.get("series") or [] for v in (x[1] or [])]
+                dec = any(isinstance(v, float) and not float(v).is_integer() for v in vals)
+                b["fmt"] = (CHART_FMT_DEC if dec else CHART_FMT).get(b.get("fmt") or ("pct" if b["kind"] != "columns" else ""), b.get("fmt"))
                 if b.get("title"):
                     b["title"] = whole_figures(b["title"])
+
+
+def precision_problems(slides: list) -> list[str]:
+    """The texts of finished slides with a whole figure printed with ".0" where nothing beside it (in the same text, table column or chart)
+    has a decimal of that unit: what whole_deck prints whole (R18, LIVE7A-014). [] when there is none."""
+    out = []
+
+    def one(t, keep=None):
+        if isinstance(t, dict):
+            t = t.get("text")
+        if isinstance(t, str) and whole_figures(t, keep) != t:
+            out.append(t)
+    for s in slides:
+        for t in [s.title, s.subtitle] + [x for x, _ in s.contents]:
+            one(t)
+        for b in s.blocks:
+            for t in (b.get("paras") or []) + (b.get("head") or []) + [b.get("title")]:
+                one(t)
+            lists = [r for r in b.get("rows") or [] if isinstance(r, list)]
+            cols = max((len(r) for r in lists), default=0)
+            keep = [decimal_units(*[r[j] for r in lists if j < len(r)]) for j in range(cols)]
+            for r in lists:
+                for j, x in enumerate(r):
+                    one(x, keep[j])
+            for it in b.get("items") or []:
+                for x in (it if isinstance(it, tuple) else [v for k, v in it.items() if k != "lines"] + list(it.get("lines") or []) if isinstance(it, dict) else []):
+                    one(x)
+    return out
 
 
 STATS_SHOWN = ("ebitda", "roce", "net", "roe", "nii_assets", "gnpa", "pb")
 MIN_BASE = 3                     # companies a median needs to be shown as one (R20: "median of 2" is two values, shown as they are)
 
 
-def _medn(st, of: int | None = None, f=lambda v: f"{v:.1f}%", n: int | None = None, value=None) -> str:
+def _medn(st, of: int | None = None, f=lambda v: _pc(v), n: int | None = None, value=None) -> str:
     """A median with its base (R20): "–" when no company has the figure; "– (2 of 6)" when fewer than MIN_BASE do (the companies' own values
     are beside it); the median with "(5 of 6)" when it is of fewer companies than the `of` it stands for (R25: "N of M" wherever a count is
     shown beside the group's own, never "6" beside "15% (5)")."""
@@ -3113,7 +3189,7 @@ def co_cols(cos: list) -> list[tuple]:
 
 def col_fmt(key: str, rng: bool = False):
     """How a figure column's median (or range) prints: a solvency ratio in times, every other share or change in %."""
-    return (lambda x: _times(x, 2)) if key == "solvency" else (lambda x: f"{x:.1f}%") if rng else _pc
+    return (lambda x: _times(x, 2)) if key == "solvency" else _pc          # LIVE7A-014: a range's figures with the real minus too
 
 
 def co_cell(c: dict, key: str, amt) -> str:
@@ -4420,7 +4496,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
 
     checks = v.get("checks") or {}
     status = v.get("status") or {}
-    whole = bool(checks.get("with_ebitda")) and checks.get("whole_points") == checks.get("with_ebitda")     # every EBITDA margin filed in whole points
+    whole = mostly_whole(checks.get("whole_points"), checks.get("with_ebitda"))     # EBITDA margins mostly filed in whole points (LIVE7A-009)
     ebm = lambda x: _pcw(x, whole)      # noqa: E731
     parts: list[list] = []                  # [title, line, the part's first slide]: the contents page (R18: no divider slide in the core)
 
@@ -4623,10 +4699,20 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         cols = co_cols(cos)
         if not layer.get("official") and len({c.get("official_industry") for c in cos if c.get("official_industry")}) >= 2:
             cols = [("official_industry", "Industry", 1.7)] + cols        # an AI layer: the exchange's industry is a column, not a layer (R20)
-        body = [[(f"{c['name']} (whole company)" if c["symbol"] in lwide else f"{c['name']} (not confirmed)" if c["symbol"] in unsure
-                  else f"{c['name']} (other business)" if c["symbol"] in unmodelled and c.get("model_out") == "other"
-                  else f"{c['name']} (left out)" if c["symbol"] in unmodelled
-                  else f"{c['name']} ({ROLL_TAG['no revenue figure']})" if c["symbol"] in nofig else c["name"])]
+        # LIVE7A-005/014: a row's mark is its one reason, in the order of its kept record (theme_data.calc_record: not confirmed, how it earns,
+        # no revenue figure), then the whole company's figures, so the deck gives the reason the page gives (the live Automotive deck marked
+        # Mahindra & Mahindra "(whole company)" where its page said its evidence doesn't show how it earns); each mark's note is said only
+        # when a row carries it
+        def tag(c):
+            if c["symbol"] in unsure:
+                return "not confirmed"
+            if c["symbol"] in unmodelled:
+                return "other business" if c.get("model_out") == "other" else "left out"
+            if c["symbol"] in nofig:
+                return ROLL_TAG["no revenue figure"]
+            return "whole company" if c["symbol"] in lwide else ""
+        tags = {c["symbol"]: tag(c) for c in cos}
+        body = [[f"{c['name']} ({tags[c['symbol']]})" if tags[c["symbol"]] else c["name"]]
                 + [co_cell(c, k, amt) for k, _, _ in cols] + [c.get("year") or "–"] for c in cos]
         ns = [(st.get(k) or {}).get("n") or 0 for k, _, _ in cols if k not in ("revenue", "official_industry")]
         n_st = max(ns or [0])
@@ -4668,13 +4754,14 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         fparts = []
         r_in, r_out = layer_roll(layer, cos, ("roe", "net") if lend else ("ebitda", "net"))
         rline = ""             # R35: who the "(4 in the layer's calculations)" are and why each other is not, where the rows can't say it (below)
-        if any(c["symbol"] in lwide for c in cos):
+        shown_tags = set(tags.values())
+        if "whole company" in shown_tags:
             fparts.append("(whole company): it runs other businesses too, so its figures are the whole company's and left out of the medians.")
         if unsure:
             fparts.append("(not confirmed): its own words don't show this work, so it is left out of the medians and the revenue total.")
         lo_note = "(left out): its evidence doesn't show clearly how it earns, so it is left out of this layer's figures and rankings."
         other = {c["symbol"] for c in cos if c["symbol"] in unmodelled and c.get("model_out") == "other"}
-        if unmodelled - other:
+        if "left out" in shown_tags:
             fparts.append(lo_note)
         if other:      # R34 (GPT review of R31.5, IT: 13 with records, 4 in the layer's calculations, no reason given for the other 9)
             fparts.append("(other business): it earns another way than most of this layer's companies, so it is left out of this layer's "
@@ -4719,11 +4806,13 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             if chart and fits(CW) > k_fit:
                 chart, tw, k_fit = None, CW, fits(CW)
         on_page = {c["symbol"] for c in cos[:k_fit]}
-        drop = ([lo_note] if not (unmodelled - other) & on_page else []) + [p for p in fparts if p.startswith("(other business)") and not other & on_page]
+        on_tags = {tags[x] for x in on_page}
+        drop = ([lo_note] if "left out" not in on_tags else []) + [p for p in fparts if p.startswith("(other business)") and not other & on_page]
+        drop += [p for p in fparts if p.startswith("(whole company)") and "whole company" not in on_tags]
         drop += [nf_note] if not nofig & on_page else []
         if rline and not unsure & on_page:          # R35: the roll's line says who isn't confirmed, so the mark's own note goes with its rows
             drop += [p for p in fparts if p.startswith("(not confirmed)")]
-        if (unmodelled or rline or nofig) and any(p in fparts for p in drop):       # no "(left out)" / "(other business)" row shown: its note isn't either
+        if (unmodelled or rline or nofig or lwide) and any(p in fparts for p in drop):       # no "(left out)" / "(other business)" row shown: its note isn't either
             fparts = [p for p in fparts if p not in drop]
             fnote, fh2 = foot(fparts)
             if rline and fh2 < fh:          # R35: the roll's line took room from the table: the room the dropped notes leave goes back to its rows,
@@ -4885,10 +4974,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     # 7. tailwinds and risks, on one page (R19); the headlines and new listings stay on the theme's page
     tw_, rk_ = v.get("tailwinds") or [], v.get("risks") or []
     claims = [("Tailwind", c) for c in tw_] + [("Risk", c) for c in rk_]
-    n_checked = sum(1 for _, c in claims if c.get("status") == "current" and c.get("source"))
     if claims:
-        section("", "Tailwinds and risks", f"{_n(len(tw_), 'tailwind')} and {_n(len(rk_), 'risk')}; {n_checked} with a dated headline from the last 18 months "
-                "that shows it is still current.")
         items = []
         dated = lambda c: c.get("status") == "current" and bool(c.get("source"))      # noqa: E731
         # tailwinds and risks evenly (R21): the same number of each at most, those with a dated source first, one of each in turn
@@ -4923,6 +5009,10 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             sub_line += f"; the map names fewer tailwinds ({len(tw_)}) than risks ({len(rk_)})"
         if len(first) < len(claims):
             sub_line += "; the rest are on the theme's page"
+        # LIVE7A-014: the contents line says what this page shows, with the page's own counts and words (the live Automotive deck's contents
+        # said "4 tailwinds and 4 risks; 5 with a dated headline ... that shows it is still current" over a page of 2 and 2, "not a check")
+        section("", "Tailwinds and risks", f"{_n(nt, 'tailwind')} and {_n(nr, 'risk')} shown, {dated_n} with a dated source"
+                + ("; the rest are on the theme's page." if len(first) < len(claims) else "."))
         s = Slide("Tailwinds and risks", sub_line, eyebrow=eb("Tailwinds and risks"))
         s.add("flow", box, cols=cols, items=first)
         s.add("text", (M, BOT - cnh, CW, cnh), paras=[cnote], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
@@ -5667,7 +5757,7 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
     if agg or gmed or meds:
         grow = [[label, _chg((agg.get(f"{k}_1y") or {}).get("value")), _chg((agg.get(f"{k}_3y") or {}).get("value")),
                  _chg((gmed.get(f"{k}_1y") or {}).get("median")), _chg((gmed.get(f"{k}_3y") or {}).get("median"))] for k, label in (("revenue", "Revenue"), ("profit", "Net profit"))]
-        whole = (v.get("checks") or {}).get("whole_points") and (v.get("checks") or {}).get("whole_points") == (v.get("checks") or {}).get("with_ebitda")
+        whole = mostly_whole((v.get("checks") or {}).get("whole_points"), (v.get("checks") or {}).get("with_ebitda"))
         vs = [["EBITDA margin", _pcw((meds.get("ebitda") or {}).get("median"), bool(whole)), str((meds.get("ebitda") or {}).get("n", "–")), _pcw((mk.get("opm") or {}).get("median"), bool(whole))],
               ["Net margin", _med(meds.get("net")), str((meds.get("net") or {}).get("n", "–")), _med(mk.get("net_margin"))],
               ["ROCE", _med(meds.get("roce")), str((meds.get("roce") or {}).get("n", "–")), _med(mk.get("roce"))],
@@ -5882,7 +5972,7 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
             lw = 6.6
             # LIVE6-002: calendar periods to one last close, said in the table's head
             over = f"Over, to {_day(prices['returns_to'])}" if prices.get("returns_to") else "Over"
-            s.add("table", (M, TOP, lw, 2.3), head=[over, "Median company", "Theme, equal-weighted", bench, "Companies"], rows=rows, widths=[1.2, 1.4, 1.6, 1.3, 1.1])
+            s.add("table", (M, TOP, lw, 2.3), head=[over, "Median company", "Average company", bench, "Companies"], rows=rows, widths=[1.2, 1.4, 1.6, 1.3, 1.1])
             if breadth:
                 s.add("table", (M, TOP + 2.55, lw, BOT - TOP - 2.55), head=["Companies that are", "Count", "Share"],
                       rows=[[lbl, f"{x['count']} of {x['n']}", f"{x['share']}%" if x.get("share") is not None else "–"] for lbl, x in breadth], widths=[3.6, 1.3, 1.0])

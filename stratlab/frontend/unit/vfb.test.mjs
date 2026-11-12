@@ -121,7 +121,8 @@ test("VR1-140, VR1-149, VR1-150, VR1-151: Money home's figures and tiles, label 
   assert.match(read("src/pages/SpaceHomes.tsx"), /grid2 space-panels money-panels/);
   assert.match(css, /\.money-panels \.k-stats \{ grid-template-columns: repeat\(auto-fit, minmax\(96px, 1fr\)\);/);
   // Money's other tools are rows of one table in a fold since 5 Nov (owner), not tiles in rows of four
-  assert.match(read("src/pages/SpaceHomes.tsx"), /<MoreTools id="money-tools" title="More in Money" rows=\{tools\} \/>/);
+  // (updated on purpose, LIVE7B-014: no "More in Money" table: it was the side menu's Money entries again)
+  assert.doesNotMatch(read("src/pages/SpaceHomes.tsx"), /More in Money/);
   assert.match(css, /\.k-stat-k \.info \{ margin-block: -4px; \}/);
   // R15 #19 (owner, 7 Nov, changed on purpose): a solid muted button, not a dashed ghost
   assert.match(css, /\.btn:disabled:not\(\.quiet\):not\(\.blue\):not\(\.outline\) \{ opacity: 1; background: var\(--chip\); border: 1px solid var\(--line-2\); color: var\(--muted\); \}/);

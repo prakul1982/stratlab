@@ -314,4 +314,4 @@ def test_the_page_of_what_moved_the_margin_keeps_its_total_row_whatever_the_name
 
 
 def test_the_deck_version_is_44_so_kept_files_are_made_again():
-    assert deck.THEME_DECK_VERSION == 51          # R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)
+    assert deck.THEME_DECK_VERSION == 52          # lane t1: deck 52, dive text 11 (LIVE7A, updated on purpose); R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)

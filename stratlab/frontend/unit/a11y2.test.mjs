@@ -20,13 +20,15 @@ test("A11Y-2: each fund's sales table is named after the fund, so open folds do 
 });
 
 test("A11Y-2: the cookie banner comes first in the page's order and keeps what has focus clear of it", () => {
-  const card = read("src/components/Tracking.tsx"), app = read("src/main.tsx"), visitor = read("src/visitor/visitorMain.tsx");
+  const card = read("src/components/Tracking.tsx"), app = read("src/main.tsx"), visitor = read("src/visitor/visitorMain.tsx"), shell = read("src/components/Shell.tsx");
   // before the page in both halves of the site, so the keyboard and a screen reader meet the question first
-  assert.ok(app.indexOf("<Tracking />") < app.indexOf("<Routed />"));
+  // (updated on purpose, LIVE7B-006: signed in, the Shell draws it after its skip links and before the menu; every other branch before the page)
+  assert.match(app, /<Shell ask=\{<Tracking \/>\}>/);
+  assert.match(app, /return <><Tracking \/><VisitorApp \/><\/>;/);
+  assert.ok(shell.indexOf("{ask}") > shell.indexOf("Skip to the menu") && shell.indexOf("{ask}") < shell.indexOf("{sidebar}"));
   assert.ok(visitor.indexOf("<Tracking />") < visitor.indexOf("<VisitorApp />"));
-  // while it stands over the bottom of the page the page's scroll padding is its height, and goes when it does
-  assert.match(card, /root\.style\.setProperty\("scroll-padding-bottom", `\$\{el\.offsetHeight \+ 24\}px`\)/);
-  assert.match(card, /root\.style\.removeProperty\("scroll-padding-bottom"\)/);
+  // (updated on purpose, LIVE7B-006) it is in the page's own flow, so nothing can be under it: no scroll padding is needed any more
+  assert.doesNotMatch(card, /scroll-padding-bottom/);
   assert.match(card, /role="dialog" aria-modal="false" aria-label=\{`\$\{title\} on StratLab`\} aria-describedby=\{text\}/);
 });
 

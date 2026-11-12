@@ -145,7 +145,8 @@ def test_company_ai_is_cleaned_cached_and_counted(api, monkeypatch):
     from app import computed
     monkeypatch.setattr(computed, "DEFAULT_GUARD", 0)                  # past the window: written again, for everyone
     r = api.get("/research/company/US/NVDA/ai?refresh=true").json()
-    assert r["refresh_state"] == "done" and len(api.calls) == 2 and api.usage == ["research_ai", "refresh", "research_ai"]
+    # (updated on purpose, LIVE7B-002: the Refresh is one fresh AI read, counted once, with no separate refresh count)
+    assert r["refresh_state"] == "done" and len(api.calls) == 2 and api.usage == ["research_ai", "research_ai"]
 
 
 def test_daily_ai_allowance(api, monkeypatch):

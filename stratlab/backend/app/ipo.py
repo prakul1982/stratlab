@@ -647,6 +647,19 @@ def refresh_india(feed, sebi, today: date, now: datetime | None = None, details:
     return rows, problems
 
 
+def unpriced_listing(r: dict, now: datetime) -> bool:
+    """A listed Indian issue whose stock has no symbol its prices can be read under (no NSE symbol, no BSE scrip code, no trading symbol),
+    listed at most LISTING_CHECK_DAYS ago (LIVE7A-020: a BSE SME issue listed with a day from a list, never looked for in the broker's)."""
+    if r.get("market") != "IN" or not r.get("listing") or r.get("symbol") or r.get("bse_scrip") or r.get("listed_as") or not r.get("close"):
+        return False
+    try:
+        listed = date.fromisoformat(r["listing"])
+    except ValueError:
+        return False
+    today = now.astimezone(IST).date()
+    return listed <= today and (today - listed).days <= LISTING_CHECK_DAYS
+
+
 def awaiting_listing(r: dict, now: datetime) -> bool:
     """A closed Indian issue with no listing day from any list, its timetable listing day (T+3) come, at most LISTING_CHECK_DAYS ago."""
     if r.get("market") != "IN" or r.get("listing") or not r.get("close") or stage_of(r, now) != "closed":
@@ -673,14 +686,16 @@ def confirm_listings(rows: list[dict], now: datetime, problems: list[str], looku
     for r in rows:
         if tried >= limit:
             break
-        if not awaiting_listing(r, now):
+        listed = unpriced_listing(r, now)
+        if not listed and not awaiting_listing(r, now):
             continue
         tried += 1
         got = _try(problems, f"the listing of {r.get('name')}", lambda r=r: lookup(r))
         first = (got or {}).get("first")
         if not first or first <= r["close"] or first > today.isoformat():
             continue
-        r["listing"] = first
+        if not listed:
+            r["listing"] = first
         if got.get("code") and not r.get("symbol"):
             r["bse_scrip"] = str(got["code"])
         if got.get("symbol"):
@@ -962,24 +977,25 @@ def performance(row: dict, yahoo, today: date | None = None, now: datetime | Non
     bars, first = _settle(row, bars, first, now or _now())
     bse = row.get("bse_perf") or {}
     issue = issue or bse.get("issue_price")
-    if not issue:
-        return None
+    # LIVE7A-020: an issue whose final price no list has given yet (a BSE SME issue shown with its band) still has its listing price and
+    # closes, each without a change against an issue price it doesn't have (it showed "– · – · –" though its stock had traded two days)
+    pct = (lambda v: round((v / issue - 1) * 100, 2)) if issue else (lambda v: None)      # noqa: E731
     if first is None and opening is not None and opening["t"][:10] == listed and opening.get("o"):
         # its listing day, the session still going on (LIVE6-010: Antala Industries traded from 11 Nov's open while the list kept it in a
         # fold of issues with no prices): the listing price is a fact from the open; the day's close and the latest wait for the close
         if not bars or bars[-1]["t"][:10] < opening["t"][:10]:
-            return {"issue_price": issue, "listing_price": opening["o"], "listing_change_pct": round((opening["o"] / issue - 1) * 100, 2),
+            return {"issue_price": issue, "listing_price": opening["o"], "listing_change_pct": pct(opening["o"]),
                     "day_close": None, "day_change_pct": None, "latest": None, "latest_date": None, "change_pct": None,
                     "listed": opening["t"][:10], "basis": "prices"}
     if not first or (date.fromisoformat(first["t"][:10]) - date.fromisoformat(listed)).days > 5:
         # the prices couldn't be read: BSE's own table of its listed issues, when it has this one
-        if bse.get("day_close") and bse.get("latest"):
-            return {"issue_price": issue, "listing_price": None, "listing_change_pct": None, "day_close": bse["day_close"],
-                    "day_change_pct": round((bse["day_close"] / issue - 1) * 100, 2), "latest": bse["latest"], "latest_date": None,
-                    "change_pct": round((bse["latest"] / issue - 1) * 100, 2), "listed": listed, "basis": "exchange"}
+        if bse.get("day_close") or bse.get("latest"):
+            dc, lt = bse.get("day_close"), bse.get("latest")
+            return {"issue_price": issue, "listing_price": None, "listing_change_pct": None, "day_close": dc,
+                    "day_change_pct": pct(dc) if dc else None, "latest": lt, "latest_date": None,
+                    "change_pct": pct(lt) if lt else None, "listed": listed, "basis": "exchange"}
         return None
     last = bars[-1]
-    pct = lambda v: round((v / issue - 1) * 100, 2)      # noqa: E731
     return {"issue_price": issue, "listing_price": first["o"], "listing_change_pct": pct(first["o"]), "day_close": first["c"],
             "day_change_pct": pct(first["c"]), "latest": last["c"], "latest_date": last["t"][:10], "change_pct": pct(last["c"]),
             "listed": first["t"][:10], "basis": "prices"}

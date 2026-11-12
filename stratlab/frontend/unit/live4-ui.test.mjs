@@ -148,9 +148,9 @@ test("LIVE4-008: the breadth card is a table of two days, each column headed wit
   assert.doesNotMatch(homes, /more on the calendar/);
   assert.match(homes, /\{more \? `All \$\{rows!\.total\.toLocaleString\("en-IN"\)\} →` : "Calendar →"\}/);
   assert.match(homes, /setRows\(\{ today, total: Math\.max\(counted, today\.length\), next \}\)/);
-  // the consent question is a slim bar along the foot of the page column in the app too, and the page's foot clears it
-  assert.match(css, /body:has\(\.shell\) \.consent \{ left: calc\(248px \+ 16px\); right: 16px; width: auto; flex-direction: row;/);
-  assert.match(css, /\.shell \{ padding-bottom: var\(--consent-h, 0px\); \}\n\}/);
+  // the consent question is a slim bar in the page column in the app too, never over the side menu
+  // (updated on purpose, LIVE7B-006: the first row of the page column, in the page's flow, not a bar over the page's foot)
+  assert.match(css, /\.shell > \.consent \{ grid-column: -2 \/ -1; grid-row: 1;/);
 });
 
 test("LIVE4-009: Market Watch says when its prices are from, and draws no arrow on 0.00%", async () => {
