@@ -128,6 +128,8 @@ def test_every_paid_feature_is_refused_somewhere_on_the_server():
                  "journal": "journal view and /trade/journal/compare", "mf_costs": "fund costs view", "etf_gaps": "ETF gap alerts",
                  "biz_updates": "business update views and alert", "holders": "holder search", "stock_futures": "history views and MWPL alert",
                  "mtf": "history views and alert", "mf_behaviour": "fund behaviour view", "sip_luck": "dip rules in the SIP test",
-                 "rates_slab": "rates at your own slab", "loan_check": "loan check view"}
+                 "rates_slab": "rates at your own slab", "loan_check": "loan check view",
+                 # (updated on purpose: a new feature) Free gets the movers' top 5 rather than a refusal (tests/test_movers.py)
+                 "movers": "the movers' full lists and filters"}
     covered = {r[0] for r in ROUTES} | set(elsewhere)
     assert covered == set(FEATURES), set(FEATURES) ^ covered

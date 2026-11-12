@@ -85,6 +85,9 @@ const CALENDAR: NavGroup = {
   ],
 };
 
+// said once: the Themes entry's blurb and its one tab's line (the same words twice cost the first download, which carries this file)
+const THEMES_LINE = "Map a sector or trend and see the listed companies linked to it.";
+
 export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGroup[] }> = {
   trade: {
     label: "Trade", home: "/trade", groups: [
@@ -140,17 +143,19 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
         page("/research/filings", "Filings", "bell", "red flags filings announcements qip fund raise preferential rights issue pledge resignation auditor default sebi rating downgrade",
           { was: "Red flags", line: "Fund raises, pledges, resignations and defaults your held and watched companies filed." }),
       ] },
-      { id: "themes", label: "Themes", icon: "compass", blurb: "Map a sector or trend and see the listed companies linked to it.", pages: [
-        page("/research/themes", "Themes", "compass", "themes sector industry shortlist ev defence banks trend map listed companies value chain", { line: "Map a sector or trend and see the listed companies linked to it." }),
+      { id: "themes", label: "Themes", icon: "compass", blurb: THEMES_LINE, pages: [
+        page("/research/themes", "Themes", "compass", "themes sector industry shortlist ev defence banks trend map listed companies value chain", { line: THEMES_LINE }),
       ] },
       { id: "market-today", label: "Market today", icon: "pulse", was: ["market-view"],
         blurb: "The market as a whole today: its mood, how many stocks rise and fall, which sectors lead, where the institutions' money went, and today's brief.", pages: [
         page("/research/pulse", "Mood", "pulse", "market pulse today news mood indices nifty sensex headlines index levels", { was: "Market pulse", line: "Index levels, headlines and today's mood." }),
         page("/invest/breadth", "Breadth", "pulse", "market breadth advance decline advances declines a/d line ad ratio mcclellan oscillator summation index new highs lows 52 week dma moving average trin arms thrust sector breadth nifty 500 midcap smallcap",
           { was: "Market breadth" }),
-        page("/invest/heatmap", "Heatmap", "layers", "heatmap heat map treemap tiles sector map gainers losers movers market cap",
+        page("/invest/heatmap", "Heatmap", "layers", "heatmap heat map treemap tiles sector map market cap",
           { line: "A market as tiles: each company sized by its market value and coloured by what its price did.",
             blurb: "Every company of an index as a tile, sized by market value, coloured by its change, grouped by sector. India and the US." }),
+        page("/invest/movers", "Movers", "pulse", "movers top gainers losers most active traded volume spikes shockers 52 week high low",
+          { line: "The day's gainers, losers, most traded, volume spikes and 52-week highs and lows." }),
         page("/research/rotation", "Sectors", "compass", "sector rotation relative strength momentum quadrant leading lagging improving weakening rrg sectors", { was: "Sector rotation", line: "Which sectors lead, weaken, lag or improve against the market." }),
         page("/invest/flows", "Flows", "wallet", "flows fii dii fpi foreign institutional domestic institutional cash market net buying selling crore money flow",
           { line: "What foreign and domestic institutions bought and sold in India's cash market, day by day.",
@@ -177,7 +182,7 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
         page("/money/net-worth", "Net worth", "wallet", "net worth networth assets liabilities epf ppf nps fd rd fixed deposit recurring gold sgb sovereign gold bond property cash crypto loan emi prepay prepayment home loan insurance policy premium money wealth"),
         page("/holdings", "Holdings", "book", "holdings portfolio my stocks import upload broker zerodha groww upstox angel one icici direct hdfc securities csv excel xlsx pnl p&l profit loss value sector allocation connect account demat",
           // each stock's red flags, recent filings and results date are the filings feature (Basic), said on its card (DP2-009)
-          { line: "Your stocks from your broker's file: value, gain or loss, sectors, dividends and filings.", blurb: "Your stocks from your broker's file: value, gain or loss, sectors, dividends and each stock's filings.",
+          { line: "Your stocks from your broker's file: value, gain or loss, sectors, dividends and filings.",
             flag: "filings", part: true }),
         page("/money/mutual-funds", "Mutual funds", "layers", "mutual funds cas cams kfintech statement xirr sip fund returns category allocation capital gains"),
       ] },

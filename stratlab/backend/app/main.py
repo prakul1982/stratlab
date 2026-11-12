@@ -109,6 +109,7 @@ from . import corp_actions
 from . import surveillance
 from . import etf_nav
 from . import heatmap
+from . import data_status, movers
 from . import vix
 from . import biz_updates, library_seed, shareholders
 from . import positioning
@@ -509,6 +510,9 @@ app.include_router(stock_futures.router)       # /trade/stock-futures
 app.include_router(slb.router)                 # /invest/stock-lending
 app.include_router(mtf.router)                 # /invest/margin-funding
 app.include_router(heatmap.router)             # /invest/heatmap: the stock heatmap's tiles, from the daily run's stored rows
+app.include_router(movers.router)              # /invest/movers: gainers, losers, most traded, volume spikes, 52-week highs and lows
+app.include_router(movers.public_router)       # /stocks/<in|us>/movers: the same lists as a public page (before /stocks/<region>/<symbol>)
+app.include_router(data_status.router)         # /status and /public/data-status: each dataset's last update and next due time, for anyone
 app.include_router(stock_desks.admin_router)   # /admin/stock-desks
 app.include_router(ai_admin.router)            # /admin/ai: the AI panel
 app.include_router(library_admin.router)       # /admin/stored: everything kept once for every user (R19)
@@ -620,7 +624,7 @@ app.add_middleware(CORSMiddleware, allow_origins=settings.FRONTEND_ORIGINS,
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=6)   # outermost: JSON and pages go compressed (a chart is 5x smaller)
 
 
-HEAD_PATHS = re.compile(r"^/(?:stocks(?:/.*)?|blog(?:/.*)?|sitemap\.xml|sitemaps/[^/]+|robots\.txt)$")
+HEAD_PATHS = re.compile(r"^/(?:stocks(?:/.*)?|blog(?:/.*)?|status|sitemap\.xml|sitemaps/[^/]+|robots\.txt)$")
 
 
 class HeadAsGet:

@@ -25,6 +25,7 @@ export const PAGE_GATES: Record<string, Gate> = {
   "/invest/etf-gaps": { feature: "etf_gaps", whole: false },
   "/invest/margin-funding": { feature: "mtf", whole: false },
   "/invest/ipos": { feature: "ipo_alerts", whole: false },
+  "/invest/movers": { feature: "movers", whole: false },
   // on Free these pages hold nothing else (each company's own updates and holders are on its company page), so the menu
   // marks them locked like the scan (DP1-019: no badge, then a page blank under its banner)
   "/invest/business-updates": { feature: "biz_updates", whole: true },
