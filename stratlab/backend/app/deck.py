@@ -146,7 +146,9 @@ def fit_paras(paras: list[str], size: float, width: float, height: float, bold=F
         last = got[-1]
         while last and _width(last + "…", size, bold, head) > width:
             last = last[:last.rfind(" ")] if " " in last else last[:-1]
-        return " ".join(got[:-1] + [last.rstrip(",;:. ") + "…"])
+        # R40: never on a joining word ("Online retailers / and…"), while a word is left on its line
+        cut = " ".join(got[:-1] + [last])
+        return (_no_joiner(cut) or cut).rstrip(",;:. ") + "…"
 
     for k, p in enumerate(paras):
         got = wrap(p, size, width, bold, head)
@@ -931,6 +933,7 @@ def table_layout(b: dict, w: float, h: float) -> dict:
     plain = [r for r in b["rows"] if not isinstance(r, dict)]
     numeric = b.get("numeric") or [all(_numeric(r[c]) or r[c] == "" for r in plain if not isinstance(r[c], dict)) for c in range(len(b["head"]))]
     strong = set(b.get("strong") or ())
+    colors = b.get("colors") or {}
 
     widths = _whole_words(b, widths, numeric)
     compact = bool(b.get("compact"))
@@ -964,9 +967,11 @@ def table_layout(b: dict, w: float, h: float) -> dict:
             if isinstance(r, dict):
                 hs.append(len(wrap(r["group"], size, w - 0.2, True)) * line + pad + 0.04)
             else:
-                # a compact table's counted cell is measured bold (a median row is drawn bold, and its page was chosen without `strong`)
-                hs.append(max(len(wrap(_cell_text(v), size, cw - 0.2, i in strong or (compact and counted_cell(_cell_text(v)))))
-                              for v, cw in zip(r, widths)) * line + pad)
+                # a compact table's counted cell is measured bold (a median row is drawn bold, and its page was chosen without `strong`).
+                # R40 (live Consumer retail deck: "Online retailers / and…"): a coloured cell (the highest and lowest layer) is drawn bold
+                # too, so it is measured bold: measured plain, its row had a line too few and the name was cut
+                hs.append(max(len(wrap(_cell_text(v), size, cw - 0.2, i in strong or (i, c) in colors or (compact and counted_cell(_cell_text(v)))))
+                              for c, (v, cw) in enumerate(zip(r, widths))) * line + pad)
         return [max(floor_h, x) for x in hs]
 
     def lines_at(size):
@@ -2991,7 +2996,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 50                  # R40: the peer set said as "this theme" (no "the the" on a wrap), a repeated word said once on the finished pages and counted, a layer named only by how its companies earn shown and never ranked, a market-value half with fewer than 3 companies in its figures undone, the coverage table's "In no layer" and "Another business" rows; R38: foreign legal endings left off a label before any of it is cut, no word of a table cell broken inside; LIVE6: calendar price periods, own words only, one market value per company, short charts and empty tables dropped; q1: the appendix counts "with figures" by the dive's rule, a layer's cohort that fell against the run before on the data-confidence page; n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 51                  # R41: a coloured table cell (the highest and lowest layer, drawn bold) measured bold, so its row holds it whole; a cut paragraph never ends on a joining word; R40: the peer set said as "this theme" (no "the the" on a wrap), a repeated word said once on the finished pages and counted, a layer named only by how its companies earn shown and never ranked, a market-value half with fewer than 3 companies in its figures undone, the coverage table's "In no layer" and "Another business" rows; R38: foreign legal endings left off a label before any of it is cut, no word of a table cell broken inside; LIVE6: calendar price periods, own words only, one market value per company, short charts and empty tables dropped; q1: the appendix counts "with figures" by the dive's rule, a layer's cohort that fell against the run before on the data-confidence page; n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
