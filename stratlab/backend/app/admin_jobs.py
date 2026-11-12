@@ -592,6 +592,11 @@ def rows() -> list[dict]:
                     running=m._seeding.locked(), note="Runs StratLab's own strategies through the backtest and verdict, which takes a few minutes.")
     add("Library seed", library_seed)
 
+    def supply_links():
+        from . import supply_links as S
+        return S.admin_row()
+    add("Customer and supplier map", supply_links)
+
     import contextvars
     from concurrent.futures import ThreadPoolExecutor
 

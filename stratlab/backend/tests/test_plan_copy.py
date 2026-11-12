@@ -87,6 +87,9 @@ CARD_WORDS = {
     "loan_check": "floating-rate loan check",
     "ipo_summary": "IPO offer document summaries",
     "ipo_alerts": "IPO alerts",
+    # (updated on purpose: lane b2's new features)
+    "supply": "customers and suppliers named in filings",
+    "supply_pro": "links across a theme's companies",
 }
 
 
@@ -99,3 +102,10 @@ def test_every_paid_feature_is_on_its_plan_card():
         for other in ("free", "basic", "pro"):
             if other != plan:
                 assert words not in _plan(cards, other), f"{f} ({words!r}) is on the {other} card too"
+
+
+def test_supply_free_rows_match_the_free_card():
+    """(lane b2) The Free card's number of customer and supplier links is the server's own (supply_links.FREE_ROWS)."""
+    from app.supply_links import FREE_ROWS
+    m = re.search(r"latest (\d+) customer and supplier links", _plan(_block("FEATURES"), "free"))
+    assert m and int(m.group(1)) == FREE_ROWS

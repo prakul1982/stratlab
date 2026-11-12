@@ -34,6 +34,7 @@ import { SaveButton } from "../components/SavedSearches";
 import { readSnap } from "../lib/savedSnap";
 import { BizUpdatesPanel } from "../components/BizUpdates";
 import { NamedHoldersPanel } from "../components/NamedHolders";
+import { CompanyLinksCard } from "../components/CompanyLinks";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge, EtfGapDetailView } from "../components/EtfGap";
 import { typingFirst } from "../lib/typingFirst";
@@ -465,6 +466,8 @@ function CompanyView() {
 
       {region === "IN" && <NamedHoldersPanel symbol={c.symbol} wrap={wrap("Named holders", "named-holders",
         "From the latest quarterly shareholding pattern: the promoter group's members and every public holder above 1%, with the change since the quarter before.")} />}
+
+      {!c.delisted && <CompanyLinksCard region={region} symbol={c.symbol} />}
 
       {region === "IN" && <Card id="deals"><CardHead title="Deals and insider trades"
         info="Who bought or sold, from exchange disclosures: promoters', directors' and key staff's own trades and pledges, holders crossing 5% and moving 2% at a time (substantial acquisitions), and bulk and block deals with the named client." /><DealsPanel symbol={c.symbol} /></Card>}

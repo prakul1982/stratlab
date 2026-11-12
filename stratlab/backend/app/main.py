@@ -293,6 +293,9 @@ vix_job = vix.Job(lambda: filings_feed)
 rules_watch_job = rules_watch.Job(lambda: filings_feed, lambda subject, text: tell_admins(subject, text))   # official rate sources, daily
 # monthly and quarterly business updates read into numbers, and named holders above 1% (the exchange's filings)
 biz_updates.setup(lambda: filings_feed, lambda: deep_docs, lambda: (_gemini, _anthropic))
+# the customer and supplier map: links named in filings, read each night (off until Admin turns it on) with the same sources
+from . import supply_links  # noqa: E402
+supply_links.setup(lambda: filings_feed, lambda: sec_feed, lambda: deep_docs)
 biz_job = biz_updates.Job(lambda rows, now: stock_alerts.fire_events(rows, now, _alert_limit, kind_ok=_alert_kind_ok),
                           biz_updates.alert_symbols)
 # IPOs: India's from the exchanges' public-issue pages and SEBI's lists, the US's from the public IPO calendar and the SEC's filings
@@ -445,6 +448,7 @@ def start_jobs():
     _start("vix_job", vix_job.start)
     _start("biz_job", biz_job.start)
     _start("holders_job", holders_job.start)
+    _start("supply_links.job", supply_links.job.start)    # the customer and supplier map, once a night when switched on
     _start("ipo.job", ipo.job.start)                    # IPOs: the exchanges' and regulators' pages, the bids through the day, the alerts
     _start("ai_providers.job", ai_providers.job.start)          # measures the AI models every 6 hours
     _start("memory-janitor", lambda: threading.Thread(target=memguard.janitor, daemon=True, name="memory-janitor").start())   # expired cache entries out, the heap trimmed (MEM-001)
@@ -513,6 +517,8 @@ app.include_router(stock_desks.admin_router)   # /admin/stock-desks
 app.include_router(ai_admin.router)            # /admin/ai: the AI panel
 app.include_router(library_admin.router)       # /admin/stored: everything kept once for every user (R19)
 app.include_router(mcp_server.router)          # /mcp and /me/assistant: StratLab in your AI assistant
+app.include_router(supply_links.router)        # /research/links: customers and suppliers named in filings
+app.include_router(supply_links.admin_router)  # /admin/supply-links: the nightly job's switch, AI cap and review queue
 
 
 RECENT_ERRORS: list[dict] = []   # the last crashes, shown on the admin page

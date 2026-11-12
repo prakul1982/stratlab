@@ -7,6 +7,7 @@ import { THEME_IDEAS, researchApi, useRegion, type SectorAI } from "../lib/resea
 import { LIBRARY_HEAD, libraryLabel, themeApi, type Business, type Dive, type LibraryTheme, type Listing, type NewsRow, type Prices } from "../lib/theme";
 import { StoredNote, StoredStamp, useStoredRefresh } from "../components/StoredStamp";
 import { RegionSwitch } from "../components/Research";
+import { ThemeLinksCard } from "../components/ThemeLinks";
 import { ChainCard, ClaimsCard, LayerCard, ListingsCard, MembersCard, NewsCard, NumbersCards, SubThemesCard, ThemeDownloads } from "../components/ThemeDive";
 import { SaveButton, SavedList } from "../components/SavedSearches";
 import { themeReady, themeSnap } from "../lib/savedSnap";
@@ -206,6 +207,7 @@ export function ThemesPage() {
               {biz && !biz.allowed && dive.region === "IN" && <p className="k-note">Operating figures that companies file between results (monthly sales, output, traffic) are on the Basic plan.</p>}
               {dive.layers.map((l, i) => <LayerCard key={l.layer} layer={l} i={i} region={dive.region} business={biz?.layers[i]?.rows} />)}
               <SubThemesCard dive={dive} business={biz} />
+              <ThemeLinksCard region={dive.region} theme={q} />
             </>
           )}
           <ClaimsCard tailwinds={r.tailwinds} risks={r.risks} />

@@ -9,6 +9,7 @@ import { useAdmin, type JobRow } from "./AdminContext";
 import { plainError, runningFor, services } from "./attention";
 import { BizCoveragePanel } from "./BizCoveragePanel";
 import { IpoQueuePanel } from "./IpoQueuePanel";
+import { SupplyQueuePanel } from "./SupplyQueuePanel";
 import { BlogPanel } from "./BlogPanel";
 import { HolidaysPanel } from "./HolidaysPanel";
 import { StoragePanel } from "./StoragePanel";
@@ -149,6 +150,7 @@ export function DataSection() {
       <BlogPanel />
       <BizCoveragePanel />
       <IpoQueuePanel />
+      <SupplyQueuePanel />
       <StoragePanel />
       {open && <JobLog job={open} mine={mine[open.id] ?? []} onClose={() => setLog(null)} />}
     </>

@@ -279,6 +279,25 @@ def flagged_rows(raw: list[dict]) -> list[dict]:
     return one_per_filing(out)
 
 
+def order_rows(raw: list[dict]) -> list[dict]:
+    """The order-win announcements ("order" rule) in the exchange's list for the whole market, each with its company's symbol
+    and name: {id, symbol, company, at, subject, text, url}. They are "info", so flagged_rows leaves them out (supply_links)."""
+    import zlib
+    out, seen = [], set()
+    for r in raw if isinstance(raw, list) else []:
+        sym = str((r or {}).get("symbol") or "").strip().upper() if isinstance(r, dict) else ""
+        if not re.fullmatch(r"[A-Z0-9&\-._]{1,20}", sym):
+            continue
+        for it in normalise([r]):
+            fid = f"{sym}|{it['at']}|{zlib.crc32(it['subject'].encode()):08x}"
+            if it["category"] != "order" or fid in seen:
+                continue
+            seen.add(fid)
+            out.append({"id": fid, "symbol": sym, "company": str(r.get("sm_name") or r.get("comp") or "").strip()[:80] or None,
+                        "at": it["at"], "subject": it["subject"], "text": it["text"], "url": it["url"]})
+    return out
+
+
 def _same_filing_key(i: dict) -> tuple:
     """What makes two rows one filing: the company, the day, the rule and the words (the subject, and the summary
     when it was kept). The exchange lists a filing again when it is revised or re-sent, with a new time and number."""
@@ -985,6 +1004,22 @@ class NSEFilings:
         if not isinstance(rows, list):
             raise SourceError(self.name, "The exchange's announcements list wasn't in the expected shape.")
         out = flagged_rows(rows)
+        self.cache.set(key, out, 900)
+        return out
+
+    def market_orders(self, day) -> list[dict]:
+        """The order-win filings of every NSE company on one day (order_rows), from the same whole-market list as market_flags."""
+        key = ("orders", day.isoformat())
+        hit = self.cache.get(key)
+        if hit is not None:
+            return hit
+        text = day.strftime("%d-%m-%Y")
+        data = self._get("/api/corporate-announcements", {"index": "equities", "from_date": text, "to_date": text},
+                         referer="https://www.nseindia.com/companies-listing/corporate-filings-announcements")
+        rows = data.get("data") if isinstance(data, dict) else data
+        if not isinstance(rows, list):
+            raise SourceError(self.name, "The exchange's announcements list wasn't in the expected shape.")
+        out = order_rows(rows)
         self.cache.set(key, out, 900)
         return out
 

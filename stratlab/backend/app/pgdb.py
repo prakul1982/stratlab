@@ -125,11 +125,49 @@ create table if not exists app.watchlists (
   updated_at timestamptz not null default now()
 );
 create index if not exists watchlists_user on app.watchlists (user_id, position);
+create table if not exists app.supply_links (
+  id text primary key default gen_random_uuid()::text,
+  region text not null,
+  stated_by text not null,
+  stated_name text,
+  direction text not null,
+  counterparty text not null,
+  cp_norm text not null,
+  cp_region text,
+  cp_symbol text,
+  state text not null default 'auto',
+  candidates jsonb,
+  basis text not null,
+  share_pct double precision,
+  amount text,
+  quote text not null,
+  doc_url text not null,
+  doc_title text,
+  said_on text,
+  method text not null default 'rule',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists supply_links_by on app.supply_links (region, stated_by);
+create index if not exists supply_links_cp on app.supply_links (cp_region, cp_symbol);
+create index if not exists supply_links_state on app.supply_links (state);
+create table if not exists app.supply_docs (
+  id text primary key default gen_random_uuid()::text,
+  doc_url text not null unique,
+  region text not null,
+  symbol text not null,
+  kind text,
+  said_on text,
+  links integer not null default 0,
+  method text,
+  error text,
+  read_at timestamptz not null default now()
+);
 """
 
-TABLES = ("profiles", "usage_events", "strategies", "live_sessions", "live_orders", "app_settings", "option_snapshots", "blog_posts", "watchlists")
+TABLES = ("profiles", "usage_events", "strategies", "live_sessions", "live_orders", "app_settings", "option_snapshots", "blog_posts", "watchlists", "supply_links", "supply_docs")
 KEY = {"app_settings": "key", "blog_posts": "slug"}                       # each table's primary key (the rest: id)
-JSON_COLS = {"strategies": {"body"}, "live_sessions": {"strategy", "instrument", "state"}, "option_snapshots": {"chain"}, "blog_posts": {"body"}, "watchlists": {"items", "order_ids"}}
+JSON_COLS = {"strategies": {"body"}, "live_sessions": {"strategy", "instrument", "state"}, "option_snapshots": {"chain"}, "blog_posts": {"body"}, "watchlists": {"items", "order_ids"}, "supply_links": {"candidates"}}
 
 # The size readout (storage.report): the same shape as Supabase's stratlab_db_usage, for the app schema.
 USAGE_SQL = """
