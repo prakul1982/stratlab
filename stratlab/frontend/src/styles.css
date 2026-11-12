@@ -2362,6 +2362,12 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 @media (max-width: 520px) { .mine-markets { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .mine-mkt { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: var(--s3); border: 1px solid var(--line); border-radius: 12px; }
 .mine-mkt-v { font-size: 20px; font-weight: 600; letter-spacing: -.01em; }
+/* LIVE7B-012: a tile still being read is as tall as a read one: the value's line (a bar in it), the change line's space, the month line's space */
+.mine-mkt-hold { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.mine-mkt-hold .mine-mkt-v { display: flex; align-items: center; min-height: 30px; }
+.mine-hold-ghost .k-note { display: block; }   /* the day under the change, as it wraps in a tile a sixth of the card wide */
+.mine-hold-ghost { visibility: hidden; }
+.mine-spark-hold { display: block; height: 36px; margin-top: auto; }
 .mine-tl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .mine-tl-i { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: var(--s3); align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .mine-tl-i:last-child { border-bottom: 0; }
@@ -2856,6 +2862,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .fs-compact .k-row { justify-content: space-between; flex-wrap: wrap; }
 /* LIVE7B-027: the one line of first steps is as wide as its words and its button, not a full-width card with half of it empty */
 .fs-compact { width: fit-content; max-width: 100%; }
+.fs-wait { visibility: hidden; }   /* LIVE7B-012: the line's place kept while it is read, nothing shown in it */
 
 /* the Help page's explanations, one line each until opened (DI-014) */
 .help-topics { display: flex; flex-direction: column; }

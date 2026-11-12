@@ -227,3 +227,43 @@ test("Holdings shows the person's own figures first, the import after them, and 
   expect(b.y + b.height / 2, "the CSV button is in the header row").toBeLessThan(head.y + head.height + 2);
   await sane(page, errors);
 });
+
+// LIVE7B-012: layout shift on load was 0.30 on /trade, 0.28 /options, 0.25 /library, 0.23-0.26 /mine (cards and tiles arriving late and
+// moving what was under them). The server's answers arrive late and out of order here, as on the live site; each page stays under 0.1, and
+// My space's market tiles hold their height while their levels are read (a 64px tile grew to 167px and moved every card under it)
+test("pages hold still while late answers arrive: layout shift under 0.1, market tiles at their final height (LIVE7B-012)", async ({ page }) => {
+  test.setTimeout(300_000);
+  const API = new URL(process.env.E2E_API ?? "http://127.0.0.1:8765");
+  const over: string[] = [];
+  for (const path of ["/trade", "/options", "/library", "/mine"]) {
+    const p = await page.context().newPage();
+    await p.setViewportSize({ width: 1440, height: 900 });
+    let n = 0;
+    await p.route("**/*", (r) => {
+      const u = new URL(r.request().url());
+      if (u.host === API.host) return new Promise((ok) => setTimeout(ok, /\/chart\//.test(u.pathname) ? 3000 : 300 + ((n++ * 700) % 2600))).then(() => r.fallback());
+      return u.hostname === "127.0.0.1" || u.hostname === "localhost" ? r.fallback() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" });
+    });
+    await p.addInitScript((s) => {
+      try { localStorage.clear(); localStorage.setItem("stratlab.tour.v1", "1"); localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); } catch { /* none */ }
+      const w = window as unknown as { __cls: number };
+      w.__cls = 0;
+      new PerformanceObserver((l) => { for (const e of l.getEntries() as unknown as { value: number; hadRecentInput: boolean }[]) if (!e.hadRecentInput) w.__cls += e.value; }).observe({ type: "layout-shift", buffered: true });
+    }, BASIC);
+    await p.goto(path);
+    let tiles: number[] = [];
+    if (path === "/mine") {
+      await p.locator(".mine-mkt").first().waitFor({ timeout: 30_000 });
+      tiles = await p.locator(".mine-mkt").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().height)));
+    }
+    await p.waitForTimeout(8000);
+    if (path === "/mine") {
+      const after = await p.locator(".mine-mkt").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().height)));
+      expect(Math.abs(Math.max(...after) - Math.max(...tiles)), `tiles ${tiles} while read, ${after} once read`).toBeLessThanOrEqual(4);
+    }
+    const cls = await p.evaluate(() => (window as unknown as { __cls: number }).__cls);
+    if (cls >= 0.1) over.push(`${path}: ${cls.toFixed(3)}`);
+    await p.close();
+  }
+  expect(over, over.join("\n")).toEqual([]);
+});
