@@ -116,11 +116,11 @@ PROVIDERS: dict[str, Provider] = {p.name: p for p in [
              note="Added 4 Nov 2026. The free plan's limits aren't published; Admin shows when it stops answering."),
     Provider("anthropic", "Anthropic", "anthropic", "https://api.anthropic.com/v1", "ANTHROPIC_API_KEY", "https://console.anthropic.com/settings/keys",
              "Paid from the owner's $100 monthly credit; StratLab stops using it at $99 a month. An optional second key "
-             "(ANTHROPIC_API_KEY_2) adds its own $100 a month, used first.", "paid",
+             "(ANTHROPIC_API_KEY_2) adds its own monthly credit, used first.", "paid",
              ("claude-sonnet-5-5", "claude-haiku-5-5"), models_url=None, ctx=200000, probe_max=1, probe_every_h=0, prior=(99, 99, 99),
              alt_key_env="ANTHROPIC_API_KEY_2",
              note="With ANTHROPIC_API_KEY_2 set, every Claude request uses that key first, Sonnet 5.5 first for research reads "
-                  "and long documents, until ANTHROPIC_2_CREDIT_USD ($100) is spent on it this month or the API says its "
+                  "and long documents, until its own credit (ANTHROPIC_2_CREDIT_USD) is spent on it this month or the API says its "
                   "credit is gone; its spend doesn't count toward the first key's limits. Then (and without a second key) "
                   "ANTHROPIC_API_KEY: research reads and long documents ask Claude Sonnet 5.5 first until $75 is spent this "
                   "month, then Claude Haiku 5.5 until $99; quick jobs ask Haiku 5.5 after Groq. From $99 Claude is skipped "
