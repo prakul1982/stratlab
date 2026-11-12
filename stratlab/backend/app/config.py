@@ -101,6 +101,10 @@ class Settings:
     ANTHROPIC_MODEL = _env("ANTHROPIC_MODEL", "auto")               # "auto": this month's spend picks Sonnet 5.5 or Haiku 5.5
     ANTHROPIC_MONTHLY_CAP_USD = float(_env("ANTHROPIC_MONTHLY_CAP_USD", "99") or 99)     # Claude is skipped from here until the month turns
     ANTHROPIC_SONNET_UNTIL_USD = float(_env("ANTHROPIC_SONNET_UNTIL_USD", "75") or 75)   # research/long use Sonnet 5.5 below this, Haiku 5.5 above
+    # a second Claude key with its own monthly credit: asked first, until ANTHROPIC_2_CREDIT_USD is spent this month or the API says its
+    # credit is gone, then ANTHROPIC_API_KEY under the rules above (ai_spend). Unset: one key, exactly as before
+    ANTHROPIC_API_KEY_2 = _env("ANTHROPIC_API_KEY_2")
+    ANTHROPIC_2_CREDIT_USD = float(_env("ANTHROPIC_2_CREDIT_USD", "100") or 100)
     AI_QUICK_BEFORE_CLAUDE = _env("AI_QUICK_BEFORE_CLAUDE", "groq")  # free providers quick jobs ask before Claude Haiku
     OLLAMA_API_KEY = _env("OLLAMA_API_KEY")                         # Ollama Cloud: a light free plan
     OLLAMA_MODEL = _env("OLLAMA_MODEL", "auto")
