@@ -94,6 +94,7 @@ CARD_WORDS = {
     # (updated on purpose, lane b1: two new paid features, the filings search on Basic and its every-year archive and CSV on Pro)
     "doc_search": "search inside filings and call transcripts",
     "doc_search_all": "every year of a company's filings",
+    "tables": "ten years of statements and shareholding",
 }
 
 

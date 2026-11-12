@@ -1,0 +1,15 @@
+/* Lane c-f2: a company's Peers, Financial statements and Shareholding history cards (CompanyPeers, CompanyStatements,
+   ShareholdingHistory). Loaded with those components, never on the landing page. Tokens only. */
+.ct-peers tr.ct-own > th, .ct-peers tr.ct-own > td { font-weight: 600; background: var(--paper-2); }
+.ct-worked { color: var(--muted); }
+.ct-statement table th[scope="row"] { min-width: 11rem; }
+.ct-bars { margin: 0 0 var(--s3); }
+.ct-bars svg { display: block; width: 100%; height: 120px; }
+.ct-bars-x { display: flex; justify-content: space-between; font-size: var(--t-note); color: var(--muted); margin: var(--s1) 0 var(--s2); }
+.ct-h-promoters { fill: var(--series-1); background: var(--series-1); }
+.ct-h-fiis { fill: var(--series-2); background: var(--series-2); }
+.ct-h-diis { fill: var(--series-3); background: var(--series-3); }
+.ct-h-public { fill: var(--series-4); background: var(--series-4); }
+.ct-h-government { fill: var(--muted); background: var(--muted); }
+.ct-h-others { fill: var(--line-2); background: var(--line-2); }
+@media (max-width: 640px) { .ct-statement table th[scope="row"] { min-width: 8.5rem; } }

@@ -4950,6 +4950,11 @@ def stock_page_older_facts(region: str, symbol: str, f: dict | None) -> dict | N
 stock_page_store = stock_pages.Pages(stock_page_facts, settings.STOCK_PAGE_BUILDS_PER_MINUTE, older=stock_page_older_facts)
 stock_page_store.adjust = lambda r, s, f: stock_pages.with_week52_report(f, official_close.ranges(), s) if r == "IN" else f   # R10O-007
 research_routes.public_facts = lambda r, s: stock_page_store.peek(r, s)    # the app's US P/E on the public page's EPS (R7O-004)
+# lane c-f2: a company's peers, statements and shareholding by quarter (company_tables.py), from the same stored readers
+from . import company_tables  # noqa: E402
+company_tables.setup(screener=lambda: research_hub.screener, sec=lambda: sec_feed, facts=lambda r, s: stock_page_store.peek(r, s),
+                     bse_code=lambda s: bse_code(s))
+app.include_router(company_tables.router)
 research_routes.filed_numbers = lambda s: sec_feed.company(s)               # a page stored before its quarterly EPS was kept (RC1 DD-030)
 SEO_HEADERS = {"Cache-Control": stock_pages.FEED_CACHE}           # robots, the sitemaps and search results: kept minutes
 PAGE_HEADERS = {"Cache-Control": stock_pages.CACHE_CONTROL}       # the lists of companies and the directories: kept a day by the site's cache (SEO-1)

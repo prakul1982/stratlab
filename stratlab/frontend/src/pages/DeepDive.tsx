@@ -11,6 +11,7 @@ import { eyebrowOf } from "../lib/eyebrow";
 import { marginText, millionsOf, scaleFor, usdAmount } from "../lib/research";
 import { Panel, TrendBars } from "../components/Research";
 import { BizUpdatesPanel } from "../components/BizUpdates";
+import { CompanyTables } from "../components/CompanyTables";
 import { Badge, Card, CardHead, CsvButton, DataTable, ErrorState, Meter, PageHeader, PlanNote, Select, Signed, Skeleton, Stat, StatRow, type Column } from "../components/kit";
 import { AlertButton } from "../components/AlertForm";
 import { SaveButton } from "../components/SavedSearches";
@@ -335,6 +336,9 @@ export function DeepDivePage() {
               <p className="k-note">{v.valuation.why} A number to compare with similar companies, not a verdict on the price.</p>
             </Panel>
           )}
+
+          {/* lane c-f2: the same peers, statements and shareholding cards as the company page */}
+          <CompanyTables region={region} symbol={v.symbol} ids="dd" />
 
           {v.checklist && <ChecklistPanel c={v.checklist} />}
 

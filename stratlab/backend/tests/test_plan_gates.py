@@ -48,7 +48,8 @@ def test_features_per_plan_once_payments_are_live(paid):
     assert not any(plan_info("free")["features"].values())
     basic = {"indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning", "journal", "mf_costs", "etf_gaps", "fo_alerts", "cas_history", "vix_filter", "chart_replay", "event_reminders", "biz_updates", "holders", "stock_futures", "mtf", "mf_behaviour", "sip_luck", "rates_slab", "loan_check", "ipo_summary", "ipo_alerts", "movers",  # (updated on purpose: movers is a new Basic feature)
              "earnings_calls", "group_figures",       # (updated on purpose, f5: two new Basic features)
-             "doc_search"}       # (updated on purpose, lane b1: the filings search, and its every-year archive and CSV on Pro below)
+             "doc_search",       # (updated on purpose, lane b1: the filings search, and its every-year archive and CSV on Pro below)
+             "tables"}   # (updated on purpose: lane c-f2's company tables in full are Basic)
     assert {f for f, on in plan_info("basic")["features"].items() if on} == basic
     assert all(plan_info("pro")["features"].values()) and set(FEATURES) == basic | {"fno", "options_signal", "fast_entries", "export", "tax_tools", "itr_export", "us_tax", "options_whatif", "strike_rules", "signal_webhooks", "assistant", "doc_search_all"}
     assert {f: FEATURE_PLAN[f] for f in ("indicators", "alerts", "scans", "fno", "export")} == {

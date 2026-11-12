@@ -95,6 +95,9 @@ ROUTES = [
     # (updated on purpose, lane b1: the filings search's filters are Basic, its CSV of hits Pro; Free still searches, by company only)
     ("doc_search", "get", "/research/docs/search?q=order&sector=Banks", None),
     ("doc_search_all", "get", "/research/docs/export?q=order", None),
+    # (updated on purpose: lane c-f2's downloads of a company's tables)
+    ("export", "get", "/research/company/IN/TCS/peers.csv", None),
+    ("export", "get", "/research/company/IN/TCS/statements.xlsx", None),
 ]
 
 
@@ -138,6 +141,8 @@ def test_every_paid_feature_is_refused_somewhere_on_the_server():
                  # (updated on purpose: a new feature) Free gets the movers' top 5 rather than a refusal (tests/test_movers.py)
                  "movers": "the movers' full lists and filters",
                  # (updated on purpose, f5) the groups' figures are held back from the answer, not refused (test_f5_groups.py)
-                 "group_figures": "group pages' figures"}
+                 "group_figures": "group pages' figures",
+                 # (updated on purpose) trimmed rather than refused: tests/test_company_tables.py
+                 "tables": "peers, statements and shareholding views"}
     covered = {r[0] for r in ROUTES} | set(elsewhere)
     assert covered == set(FEATURES), set(FEATURES) ^ covered

@@ -68,11 +68,12 @@ export const IPO_PAGE_GATE: Gate = { feature: "ipo_summary", whole: false };
 /** Paid features that live inside other pages, not a page of their own (where to find them, for the test's sake). */
 export const ELSEWHERE: Record<string, string> = {
   indicators: "the rules editor", fno: "Indian F&O instruments", group_live: "paper trading a group", options_signal: "the options builder",
-  fast_entries: "group paper trading", alerts: "Settings", daily_report: "Settings", export: "a notebook's More menu",
+  fast_entries: "group paper trading", alerts: "Settings", daily_report: "Settings", export: "a notebook's More menu (and a company page's tables)",
   newsletter: "Settings", dividends: "Tax tools (by company)", mf_costs: "Mutual funds", mf_behaviour: "Mutual funds", options_whatif: "the options builder",
   vix_filter: "the options builder", strike_rules: "the options builder", loan_check: "Net worth",
   assistant: "Connect an AI assistant (its own plan note)", ipo_summary: "an IPO's own page (its gate is below)",
   doc_search_all: "Search filings (every year, and the CSV)",
+  tables: "a company page's Peers, Financial statements and Shareholding history",
 };
 
 export const featureName = (feature: string) => FLAGS.find(([f]) => f === feature)?.[1] ?? feature;

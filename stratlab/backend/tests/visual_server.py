@@ -133,6 +133,7 @@ def build():
     fx_rates.seed()
     blog_posts()
     theme_pages(mp)
+    company_tables_world(mp)
     # the AI builder's answers Instinct saw for two sentences, for the parser's browser test (57.1); any other finds no AI
     from app import ai_writer
     from tests import fake_ai_writer
@@ -637,6 +638,34 @@ def screen_index():
         if region == "IN":          # the stored purchase dates reach back 120 days: the 30 and 90 day windows are covered, 180 and 365 not (RC3M-009)
             index["insider_from"] = (date.today() - timedelta(days=120)).isoformat()
         db.set_setting(screens.INDEX_KEY + region, json.dumps(index))
+
+
+def company_tables_world(mp):
+    """Lane c-f2 (e2e/company-tables.spec.ts): the peers read the screens' index plus three more Indian companies the demo world has pages
+    for (UltraTech, Ambuja and the made-up Orion Polymers), built the same way, so a Commodities company has six peers and a Free account
+    sees three of them and the lock. The screens and every other page keep the index as it is."""
+    from app import company_tables, screens
+    from app.intel.company import at_live_price
+    from app.intel.screener import summary
+    from app import deepdive
+    from tests import fake_prices as P
+    extra = []
+    for sym in ("ULTRACEMCO", "AMBUJACEM", "ORIONPOLY"):
+        page = main.research_hub.screener.company(sym)
+        price = P.last(sym)
+        s = at_live_price(summary(page), price)
+        g = deepdive.numbers(page).get("growth") or {}
+        f = {"region": "IN", "symbol": sym, "name": P.name_of(sym), "industry": [P.sector_of(sym)], "price": price,
+             "market_cap": s["market_cap_cr"], "pe": s["pe"], "roe": s["roe"], "roce": s["roce"], "net_margin": s["net_margin"], "opm": s["opm"],
+             "debt_equity": s["debt_equity"], "bank": False, "growth": {"sales_cagr_3y": g.get("sales_cagr_3y")}}
+        r = screens.row("IN", sym, f)
+        if r:
+            extra.append(r)
+
+    def index(region):
+        ix = screens.load_index(region)
+        return {**ix, "rows": (ix.get("rows") or []) + extra} if region == "IN" else ix
+    mp.setitem(company_tables._wire, "index", index)
 
 
 def results_calendar(mp):

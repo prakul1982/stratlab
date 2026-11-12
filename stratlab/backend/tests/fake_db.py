@@ -26,6 +26,8 @@ USERS = {
     **{f"b1-{i}": (f"u-b1-{i}", f"b1{i}@example.com", ("free", "basic", "pro")[i % 3]) for i in range(18)},
     # the B3 lane's e2e (e2e/b3-share.spec.ts): its own Pro accounts, one per test and project (share links are counted per person)
     **{f"b3-{i}": (f"u-b3-{i}", f"b3{i}@example.com", "pro") for i in range(12)},
+    # lane c-f2's e2e (e2e/company-tables.spec.ts): its own accounts, Free, Basic and Pro, one per test and project
+    **{f"cf2-{i}": (f"u-cf2-{i}", f"cf2{i}@example.com", ("free", "basic", "pro")[i // 8]) for i in range(24)},
     "free-token": ("u-free", "free@example.com", "free"),
     "basic-token": ("u-basic", "basic@example.com", "basic"),
     "pro-token": ("u-pro", "pro@example.com", "pro"),
