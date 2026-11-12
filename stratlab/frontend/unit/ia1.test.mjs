@@ -113,7 +113,9 @@ test("IA-1: the plan locks are the ones they were, now on the tabs", () => {
   for (const [to, [feature, whole]] of Object.entries(before)) assert.deepEqual(PAGE_GATES[to], { feature, whole }, to);
   // the only new gate: Flows is Positioning's cash card and history, on Positioning's plan
   assert.deepEqual(PAGE_GATES["/invest/flows"], { feature: "positioning", whole: false });
-  assert.equal(Object.keys(PAGE_GATES).length, Object.keys(before).length + 1);
+  // (updated on purpose, lane b1: the filings search's own page gate, a new page, not a moved one)
+  assert.deepEqual(PAGE_GATES["/research/search"], { feature: "doc_search", whole: false });
+  assert.equal(Object.keys(PAGE_GATES).length, Object.keys(before).length + 2);
   const tabs = read("src/components/HubTabs.tsx");
   assert.match(tabs, /const locked = off && gate!\.whole;/);
   assert.match(tabs, /<span className="side-lock" data-plan=\{plan\} aria-hidden="true" \/>/);

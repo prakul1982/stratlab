@@ -131,8 +131,8 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
         // IA-1 item 4: each company's own updates and holders are on its page and in Themes; the lists across companies stay here
         page("/invest/business-updates", "Business updates", "calendar", "business updates monthly sales automakers vehicle sales lenders quarterly figures advances deposits", { flag: "biz_updates" }),
         page("/invest/holders", "Named holders", "layers", "named holders shareholders promoter fund fii dii mutual fund shareholding pattern above 1% who owns", { flag: "holders" }),
-        page("/research/search", "Search filings", "search", "search filings transcripts concall call transcript investor presentation annual report 10-k earnings release full text words phrase what management said",
-          { line: "Find words and phrases inside companies' call transcripts, presentations, annual reports and earnings releases.", flag: "doc_search", part: true }),
+        // kept short: this map is in the visitor's first download (e2e/review-r5.spec.ts's budget)
+        page("/research/search", "Search filings", "search", "transcripts concall", { flag: "doc_search" }),
       ] },
       { id: "find-stocks", label: "Find stocks", icon: "search", blurb: "Find companies by their figures, by what their charts do, or by what they filed.", pages: [
         page("/research/screens", "Figures", "search", "screener screen filter companies growth debt returns roe pe fundamentals ratios",

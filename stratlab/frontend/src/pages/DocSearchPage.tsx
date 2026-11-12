@@ -128,12 +128,12 @@ export function DocSearchPage() {
           </FieldGroup>
           {filters && kinds.length > 0 && (
             <FieldGroup label="Kind of document">
-              <ChipSet label="Kind of document" options={kinds.map((k) => ({ value: k.id, label: k.label }))} on={draft.kinds} onToggle={(v) => toggle("kinds", v)} />
+              <ChipSet label="Kinds of document to search" options={kinds.map((k) => ({ value: k.id, label: k.label }))} on={draft.kinds} onToggle={(v) => toggle("kinds", v)} />
             </FieldGroup>
           )}
           {filters && sectors.length > 0 && (
             <FieldGroup label="Sector">
-              <ChipSet label="Sector" options={sectors.map((s) => ({ value: s, label: s }))} on={draft.sectors} onToggle={(v) => toggle("sectors", v)} />
+              <ChipSet label="Sectors to search" options={sectors.map((s) => ({ value: s, label: s }))} on={draft.sectors} onToggle={(v) => toggle("sectors", v)} />
             </FieldGroup>
           )}
           {filters && (
@@ -146,12 +146,12 @@ export function DocSearchPage() {
           {filters && <DateField label="Filed to" optional value={draft.to} onChange={(v) => set("to", v)} min={draft.from || undefined} />}
           <FormActions>
             <button className="btn" type="submit" disabled={!draft.q.trim()}>Search</button>
-            {(draft.symbols.length > 0 || draft.kinds.length > 0 || draft.sectors.length > 0 || draft.theme || draft.from || draft.to) && (
+            {(draft.symbols.length > 0 || (filters && (draft.kinds.length > 0 || draft.sectors.length > 0 || draft.theme || draft.from || draft.to))) && (
               <button className="btn quiet" type="button" onClick={() => setDraft((d) => ({ ...d, symbols: [], kinds: [], sectors: [], theme: "", from: "", to: "" }))}>Clear filters</button>
             )}
           </FormActions>
         </FormGrid>
-        {!filters && me && <PlanNote>Filters by sector, theme, kind of document and date, and every result, are on the Basic plan. Free searches by company and shows the first 3 results.</PlanNote>}
+        {!filters && me && !(ans?.locked) && <PlanNote>Filters by sector, theme, kind of document and date, and every result, are on the Basic plan. Free searches by company and shows the first 3 results.</PlanNote>}
         {dropped.length > 0 && <p className="k-small k-muted" role="status">Searched without the {dropped.join(", ")} filter{dropped.length > 1 ? "s" : ""}: filters beyond the company are on the Basic plan.</p>}
       </Card>
 

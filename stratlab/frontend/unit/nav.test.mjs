@@ -20,7 +20,8 @@ test("the map has the owner's menu entries, in order (IA-1: 42 entries became 14
   assert.deepEqual(NAV.invest.groups.find((g) => g.id === "market-today").pages.map((p) => p.label), ["Mood", "Breadth", "Heatmap", "Sectors", "Flows", "Today's brief"]);
   assert.deepEqual(NAV.invest.groups.find((g) => g.id === "market-data").pages.map((p) => p.label), ["ETF vs NAV", "Margin funding", "Stock lending fees"]);
   // nothing removed: the 42 pages the menu had, plus Flows, the Calendar's All dates and the Heatmap (L4)
-  assert.equal(ALL_PAGES.length, 45);
+  // (updated on purpose, lane b1: plus Search filings, a new page under Companies)
+  assert.equal(ALL_PAGES.length, 46);
 });
 
 test("each page has one address, a one-liner and a place", () => {

@@ -133,8 +133,7 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in 
   ["ipo_summary", "IPO offer document summaries: what the company does, its figures, what the money is for, the main risk factors and the promoters"],
   ["ipo_alerts", "IPO alerts: when an issue opens, closes, is allotted or lists"],
   // the filings search (doc_search.py): Free sees the first 3 results of a search, filtered by company only (plans.DOC_SEARCH)
-  ["doc_search", "Search inside filings and call transcripts: every result, with sector, theme, document and date filters (Free sees the first 3)"],
-  ["doc_search_all", "Filings search across every year stored, a company's whole archive from its page, and the results as a CSV"]];
+  ["doc_search", "Search filings: all results"], ["doc_search_all", "Search filings: all years, CSV"]];
 export const EVERYONE = ["Every market, and your own CSV",
   "Price charts: candles, Heikin-Ashi or bars, indicators, drawings kept on your account, and compare",
   "Market Watch on every page: lists across every market we cover, live prices, and charts from 1 minute to 1 month with drawings",
@@ -152,8 +151,7 @@ export const EVERYONE = ["Every market, and your own CSV",
   "Named holders above 1% and the business-update filings on every company page",
   "Stock futures today: OI buildup, rollover, basis and MWPL use for every F&O stock", "Stock lending fees that traded for your holdings",
   "Margin-funded positions per stock today, and your own MTF cost worked out",
-  "IPOs in India and the US: dates, price bands, lot sizes, the bids by category while an issue is open, the offer documents' key facts, and listings against the issue price",
-  "The first 3 results of a search inside companies' filed documents and call transcripts, by company"];
+  "IPOs in India and the US: dates, price bands, lot sizes, the bids by category while an issue is open, the offer documents' key facts, and listings against the issue price"];
 
 /** The cheapest plan that includes a feature flag ("free" when neither paid list names it). */
 export function planOf(feature: string): PlanId {

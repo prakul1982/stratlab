@@ -11,7 +11,7 @@ export const APP_ROUTES = [
   "/notebooks", "/new", "/n/:id", "/n/:id/market", "/n/:id/compare", "/n/:id/e/:v", "/import", "/library", "/options",
   "/trade/positioning", "/trade/positioning/stocks", "/options/s/:sid", "/paper", "/paper/:sid", "/trade/journal",
   "/trade/fo-changes", "/trade/closing-auction", "/trade/replay", "/trade/signals", "/trade/signals/:sid", "/trade/events",
-  "/plans", "/pricing", "/upgrade", "/help", "/faq", "/tour", "/account", "/settings", "/assistant", "/app", "/invite", "/admin/*", "/news",
+  "/research/search", "/plans", "/pricing", "/upgrade", "/help", "/faq", "/tour", "/account", "/settings", "/assistant", "/app", "/invite", "/admin/*", "/news",
   "/holdings", "/tax-report", "/money/net-worth", "/money/mutual-funds", "/money/tax-tools", "/money/calendar",
   "/money/us-tax", "/money/itr", "/money/sip-test", "/money/rates", "/alerts", "/research", "/research/themes",
   "/research/pulse", "/research/compare", "/research/watchlist", "/research/scan", "/research/scans", "/scans",
