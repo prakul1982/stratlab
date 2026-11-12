@@ -7,7 +7,9 @@ from app.plans import FEATURE_PLAN, FEATURES, PLANS
 
 _LIB = Path(__file__).resolve().parents[2] / "frontend" / "src" / "lib"
 # LIVE4-020: the full feature lists (FEATURES) moved to planFeatures.ts, loaded with the landing page's fold; read with plans.ts as one text
-TS = (_LIB / "plans.ts").read_text(encoding="utf-8") + "\n" + (_LIB / "planFeatures.ts").read_text(encoding="utf-8")
+# (updated on purpose, Release 43) the cards' part (PRICE, LIMITS, WHO, KEY) moved to planCore.ts, the only plan file the landing page
+# downloads; plans.ts keeps the comparison table's rows: all three are read as one text
+TS = "\n".join((_LIB / f).read_text(encoding="utf-8") for f in ("planCore.ts", "plans.ts", "planFeatures.ts"))
 
 
 def _block(name: str) -> str:

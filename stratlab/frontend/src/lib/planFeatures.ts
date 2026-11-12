@@ -1,7 +1,7 @@
 // Every plan's features in full, each a topic with its items (DK-003), built from the limits in plans.ts so no list says a different
 // number. The cards show plans.ts KEY's five lines; these are the landing page's "Every feature, plan by plan" fold, loaded when it is
 // opened (LIVE4-020), and backend/tests/test_plan_copy.py checks that each paid feature is named on the list of the plan that adds it.
-import { AI_BUILDS_PER_DAY, LIMITS, type PlanId } from "./plans";
+import { AI_BUILDS_PER_DAY, LIMITS, type PlanId } from "./planCore";
 
 const L = LIMITS;
 

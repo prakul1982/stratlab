@@ -3,6 +3,7 @@
 // Run: npm run test:unit
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { register } from "node:module";
 import { readFileSync } from "node:fs";
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
@@ -62,6 +63,9 @@ test("the page is reachable: its route, the menu, the palette's \"Search filings
 });
 
 test("the plan copy names the filings search on Basic and its every-year archive and CSV on Pro", async () => {
+  // (updated on purpose, Release 43) plans.ts now imports ./planCore (the landing page's plan file): resolve it as the bundler does
+  register("data:text/javascript," + encodeURIComponent(`export async function resolve(s, c, next) {
+  try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
   const { LIMITS, FLAGS, planOf } = await import("../src/lib/plans.ts");
   const features = read("src/lib/planFeatures.ts");             // read as text: its import of ./plans needs the bundler's resolution
   const [f, b, p] = ["  free: [", "  basic: [", "  pro: ["].map((m) => features.indexOf(m));

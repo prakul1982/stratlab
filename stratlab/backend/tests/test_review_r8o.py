@@ -226,7 +226,8 @@ def test_account_shows_the_days_reads_against_the_cap(monkeypatch):
 
 def test_plans_page_copy_says_the_cap():
     import re
-    ts = (ROOT / "frontend" / "src" / "lib" / "plans.ts").read_text(encoding="utf-8")
+    # (updated on purpose, Release 43) LIMITS is in planCore.ts (the landing page's plan file), the rows in plans.ts
+    ts = "\n".join((ROOT / "frontend" / "src" / "lib" / f).read_text(encoding="utf-8") for f in ("planCore.ts", "plans.ts"))
     limits = ts[ts.index("export const LIMITS"):ts.index("export const WHO")]
     shown = dict(re.findall(r"\b(free|basic|pro): \{[^}]*?ai_reads_per_day: (null|\d+)", limits, re.S))
     want = {p: plans.ai_reads_per_day(p) for p in plans.PLANS}

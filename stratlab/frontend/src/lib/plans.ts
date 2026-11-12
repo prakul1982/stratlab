@@ -2,64 +2,10 @@
  * The server's plans.py is the source of truth: tests/test_plan_copy.py fails when these numbers drift from it, and
  * the same amounts must be set on the Razorpay plans. */
 
-export type PlanId = "free" | "basic" | "pro";
-export const PLAN_IDS: PlanId[] = ["free", "basic", "pro"];
-export const PLAN_NAME: Record<PlanId, string> = { free: "Free", basic: "Basic", pro: "Pro" };
-
-/** Rupee prices including GST: [a month, a year]. */
-export const PRICE: Record<PlanId, [number, number]> = { free: [0, 0], basic: [699, 6999], pro: [1999, 19999] };
-
-export type Limits = { backtests_per_month: number | null; ai_builds_per_month: number | null; live_limit: number; group_size: number;
-  deepdives_per_month: number | null; decks_per_month: number | null; stock_alerts: number; screens: number; holdings: number;
-  networth_items: number | null; mf_schemes: number | null; journal_trades: number | null;
-  /** Market Watch (MW-1): lists, symbols in one list, charts whose drawings are kept, indicators on one chart. null: no limit. */
-  watchlists: number | null; watchlist_symbols: number | null; chart_saves: number | null; chart_indicators: number | null;
-  /** Fresh AI reads a day (plans.ai_reads_per_day): a company's read already written today and the market mood never count. */
-  ai_reads_per_day: number | null; features: string[] };
-
-export const LIMITS: Record<PlanId, Limits> = {
-  free: { backtests_per_month: 10, ai_builds_per_month: 10, live_limit: 1, group_size: 10, deepdives_per_month: 2, decks_per_month: 1,
-    stock_alerts: 5, screens: 2, holdings: 30, networth_items: 5, mf_schemes: 5, journal_trades: 50,
-    watchlists: 1, watchlist_symbols: 20, chart_saves: 3, chart_indicators: 3, ai_reads_per_day: 60, features: [] },
-  basic: { backtests_per_month: 100, ai_builds_per_month: 100, live_limit: 2, group_size: 25, deepdives_per_month: 15, decks_per_month: 5,
-    stock_alerts: 25, screens: 10, holdings: 100, networth_items: null, mf_schemes: null, journal_trades: null,
-    watchlists: 10, watchlist_symbols: 100, chart_saves: null, chart_indicators: 10, ai_reads_per_day: 60,
-    features: ["indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning", "journal", "mf_costs", "etf_gaps", "fo_alerts", "cas_history", "vix_filter",
-      "chart_replay",
-      "event_reminders",
-      "biz_updates", "holders",
-      "stock_futures", "mtf",
-      "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
-      "ipo_summary", "ipo_alerts", "movers",
-      "earnings_calls", "group_figures",
-      "doc_search",
-      "tables",
-      "watchlist_import"] },
-  pro: { backtests_per_month: null, ai_builds_per_month: null, live_limit: 10, group_size: 50, deepdives_per_month: null, decks_per_month: null,
-    stock_alerts: 100, screens: 25, holdings: 300, networth_items: null, mf_schemes: null, journal_trades: null,
-    watchlists: null, watchlist_symbols: null, chart_saves: null, chart_indicators: null, ai_reads_per_day: null,
-    features: ["indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "newsletter",
-      "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders", "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif", "cas_history",
-      "vix_filter", "strike_rules",
-      "chart_replay", "signal_webhooks",
-      "event_reminders",
-      "biz_updates", "holders",
-      "assistant",
-      "stock_futures", "mtf",
-      "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
-      "ipo_summary", "ipo_alerts", "movers",
-      "earnings_calls", "group_figures",
-      "doc_search", "doc_search_all",
-      "tables",
-      "watchlist_import"] },
-};
-
-// Free has every market and the core tools, not every tool: Replay, Forward test, the scans and the full journal are paid (DP1-021)
-export const WHO: Record<PlanId, string> = { free: "Every market and the core tools, free", basic: "For investors and part-time traders", pro: "For active traders and heavy research" };
-
-const L = LIMITS;
-/** The daily safety cap on Pro's unlimited AI builds (the server's AI_BUILDS_PER_DAY). */
-export const AI_BUILDS_PER_DAY = 200;
+// The cards' part (names, prices, LIMITS, WHO, KEY) is in planCore.ts, the only plan file the landing page downloads; this file adds
+// the comparison table's rows and is loaded by the app, the Plans page and the landing page's comparison fold.
+export * from "./planCore";
+import { AI_BUILDS_PER_DAY, LIMITS, type Limits, type PlanId } from "./planCore";
 
 /** The comparison table's cell for a limit that has none: Pro's AI builds still have a daily safety cap. */
 export const unlimitedLabel = (p: PlanId, k: keyof Limits) => (p === "pro" && k === "ai_builds_per_month" ? `Unlimited (up to ${AI_BUILDS_PER_DAY} a day)` : "Unlimited");
@@ -67,27 +13,6 @@ export const unlimitedLabel = (p: PlanId, k: keyof Limits) => (p === "pro" && k 
 // LIVE4-020: every plan's features in full are in planFeatures.ts (FEATURES), loaded only when someone opens "Every feature, plan by
 // plan" on the landing page, so its JavaScript stays under 450 KB (R5V-020)
 
-
-/** R11 (owner, 5 Nov: the Plans page was "bad UI"); LIVE4-020: every plan card, on the Plans page and the landing page alike, shows five short lines, the plan's main points, and the full
- * comparison is the table under the cards (PlanCompare): the cards are level, short, and say no number the table doesn't. Built from LIMITS. */
-export const KEY: Record<PlanId, string[]> = {
-  free: ["Every market, price charts, screens and the options builder",
-    `${L.free.backtests_per_month} backtests and ${L.free.ai_builds_per_month} AI strategy builds a month`,
-    `Paper trading trial: ${L.free.live_limit} strategy for 5 market days`,
-    `${L.free.deepdives_per_month} company deep dives and ${L.free.decks_per_month} slide deck a month`,
-    `${L.free.stock_alerts} stock alerts, ${L.free.screens} saved screens, ${L.free.holdings} holdings`],
-  basic: ["Everything in Free, with no ads",
-    `${L.basic.backtests_per_month} backtests and ${L.basic.ai_builds_per_month} AI builds a month, all 20+ indicators`,
-    `Paper trade ${L.basic.live_limit} strategies at a time, with options and whole groups`,
-    "Full trade journal, alerts and the daily Market Brief by email",
-    `${L.basic.deepdives_per_month} deep dives and ${L.basic.decks_per_month} slide decks a month`],
-  pro: ["Everything in Basic",
-    `Unlimited backtests, deep dives and decks; up to ${AI_BUILDS_PER_DAY} AI builds a day`,
-    `Paper trade ${L.pro.live_limit} strategies at a time, groups of up to ${L.pro.group_size}`,
-    "Indian F&O in notebooks, and options on your own rules' signals",
-    // LIVE7B-026: Basic has Tax tools' dividends; what Pro adds there is the advance tax and the long-term exemption
-    "Advance tax, long-term exemption, ITR export, StratLab in your AI app"],
-};
 
 /** Ads (ADS-1), one row of the comparison table: Free accounts and signed-out pages may show Google ads, only after the visitor allows
  * them (lib/ads.ts); Basic and Pro never do. The cards say it once, on the plan that adds it (Basic; Pro includes Basic). */
