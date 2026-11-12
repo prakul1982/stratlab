@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -49,7 +49,8 @@ export function Onboarding({ main: _main }: { main?: string }) {
   }, [me]);
 
   useEffect(() => { if (autoTour(welcomed, seen) && !ask) setTour({ tour: tourForFocus(picked ?? focus), step: 0 }); }, [welcomed, seen, ask]);   // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
+  // listening before the page is drawn: a "Take the tour" the moment a page shows (useEffect runs after the paint) is never lost
+  useLayoutEffect(() => {
     const open = (e: Event) => {
       const t = (e as CustomEvent<{ tour?: TourId }>).detail?.tour;
       setOffer(null);
