@@ -144,6 +144,10 @@ def test_a_us_theme_deck_writes_dollars():
 
 def test_the_deck_route_downloads_both_formats_as_one_deck_and_stops_at_the_plan_limit(api):
     from app.intel import routes
+    from app import main as _main
+    # (updated on purpose, FREE-TIER: Free has no decks of its own now, so the deck's route and its monthly count are shown on Basic, 5 a
+    # month; Free's refusal is in tests/test_free_tier.py)
+    _main.app.dependency_overrides[_main.current_profile] = lambda: {"id": "u1", "_plan": "basic", "plan": "basic"}
     routes_pf = routes.public_facts
     try:
         routes.public_facts = lambda region, sym: None
@@ -174,15 +178,16 @@ def test_the_deck_route_downloads_both_formats_as_one_deck_and_stops_at_the_plan
         r = api.get("/research/theme-dive/deck?q=AI%20data%20centers&region=US&format=pptx")      # the same theme's other format: free
         assert r.status_code == 200 and r.content[:2] == b"PK" and r.headers["content-disposition"].endswith('.pptx"')
         assert api.usage.count("deck") == 1
-        r = api.get("/research/theme-dive/deck?q=AI%20chips&region=US&format=pdf")                # Free: one deck a month
+        api.usage.extend(["deck"] * 4)                                                             # Basic: five decks a month
+        r = api.get("/research/theme-dive/deck?q=AI%20chips&region=US&format=pdf")
         assert r.status_code == 402 and r.json()["detail"]["code"] == "deck_limit"
         msg = r.json()["detail"]["message"]
-        assert msg.startswith("You've made 1 slide deck this month.") and "A company's or a theme's PDF and PowerPoint count as one deck" in msg
+        assert msg.startswith("You've made 5 slide decks this month.") and "A company's or a theme's PDF and PowerPoint count as one deck" in msg
         import pytest
         from fastapi import HTTPException
         from app import main
         with pytest.raises(HTTPException) as e:                                                    # a company's deck shares the count
-            main.check_deep({"id": "u1", "_plan": "free", "plan": "free"}, "deck", "TCS", "IN")
+            main.check_deep({"id": "u1", "_plan": "basic", "plan": "basic"}, "deck", "TCS", "IN")
         assert e.value.status_code == 402
         assert api.get("/research/theme-dive/deck?q=AI%20data%20centers&region=US&format=doc").status_code == 400
     finally:

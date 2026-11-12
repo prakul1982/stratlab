@@ -106,7 +106,7 @@ def test_usage_limits_show_as_that_plans(w):
             PLANS[view]["deepdives_per_month"], PLANS[view]["decks_per_month"], PLANS[view]["backtests_per_month"], PLANS[view]["ai_builds_per_month"])
         assert (u["deepdive_plan_limit"], u["deck_plan_limit"]) == (PLANS[view]["deepdives_per_month"], PLANS[view]["decks_per_month"])
     m = me(c, OWNER, "free")
-    assert (m["live_limit"], m["plan_info"]["holdings"], m["plan_info"]["screens"]) == (1, 30, 2)
+    assert (m["live_limit"], m["plan_info"]["holdings"], m["plan_info"]["screens"]) == (1, 30, 1)      # (updated on purpose, FREE-TIER: 1 screen)
     assert m["trial"] is not None                                          # Free's paper-trading trial shows
 
 

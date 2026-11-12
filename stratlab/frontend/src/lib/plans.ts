@@ -20,11 +20,11 @@ export const ADS: Record<PlanId, string> = { free: "After you allow them", basic
 
 export const NUMBERS: [keyof Limits, string][] = [["backtests_per_month", "Backtests a month, each with a verdict"], ["ai_builds_per_month", "AI strategy builds a month"],
   ["live_limit", "Paper trading sessions at a time"], ["group_size", "Instruments in a group test"], ["deepdives_per_month", "Company deep dives a month"],
-  ["decks_per_month", "Slide decks a month, of a company or a theme (its PDF and PowerPoint are one deck)"], ["stock_alerts", "Stock alerts on at a time"], ["screens", "Saved screens"], ["holdings", "Holdings kept"],
+  ["decks_per_month", "Slide decks a month, of a company or a theme (its PDF and PowerPoint are one deck)"], ["themes_per_month", "New themes mapped a month"], ["stock_alerts", "Stock alerts on at a time"], ["screens", "Saved screens"], ["holdings", "Holdings kept"],
   ["mf_schemes", "Mutual fund schemes kept"], ["networth_items", "Net worth entries"], ["journal_trades", "Trades the journal keeps"],
   ["watchlists", "Market Watch lists (the first is your Research watchlist)"], ["watchlist_symbols", "Symbols in one Market Watch list"],
   ["chart_saves", "Charts that keep your drawings and indicators"], ["chart_indicators", "Indicators on one chart"],
-  ["ai_reads_per_day", "Fresh AI reads a day, refreshes included (a company's read already written today, and the market mood, never count)"]];
+  ["ai_reads_per_day", "Fresh AI reads a day, refreshes included (Free has no refreshes; reads already written, and the market mood, never count)"]];
 export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in strategy rules"], ["group_live", "Paper trade a whole group (on 5-minute, 15-minute or 1-hour candles)"], ["options", "Options paper trading at set times"],
   ["alerts", "Trade notifications"], ["daily_report", "Daily report after the close"], ["newsletter", "Daily Market Brief and My Stocks by email"],
   ["scans", "Stage 2 + Supertrend scan, with a daily alert"],
@@ -42,7 +42,7 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in 
   ["breadth", "Market breadth history, charts and sector table"],
   ["positioning", "Positioning and FII/DII flow history, IV percentiles"],
   ["journal", "Trade journal: every trade, the honesty checks, breakdowns and paper vs real"],
-  ["itr_export", "ITR-ready schedules and a PDF pack for your CA"], ["us_tax", "US stocks in Indian tax sale by sale: each sale's gain in rupees, the foreign tax credit and Schedule FA"],
+  ["tax_export", "Tax report downloads: CSV and PDF"], ["itr_export", "ITR-ready schedules and a PDF pack for your CA"], ["us_tax", "US stocks in Indian tax sale by sale: each sale's gain in rupees, the foreign tax credit and Schedule FA"],
   ["etf_gaps", "Alerts on an ETF's price against its NAV"],
 
 ["fo_alerts", "Alerts when an F&O exit, lot size or expiry change touches your watchlist or paper sessions"],
@@ -71,26 +71,8 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in 
   ["doc_search", "Search filings: all results"], ["doc_search_all", "Search filings: all years, CSV"],
   ["tables", "All company tables"],
   ["watchlist_import", "Watchlist import from a CSV or Excel file"]];
-export const EVERYONE = ["Every market, and your own CSV",
-  "Price charts: candles, Heikin-Ashi or bars, indicators, drawings kept on your account, and compare",
-  "Market Watch on every page: lists across every market we cover, live prices, and charts from 1 minute to 1 month with drawings",
-  "Options builder: charges to open and close, breakevens and the most it can make or lose after them", "Screens (unlimited runs), sector rotation and the results calendar", "Red flags on every company page",
-  "Corporate actions, deals and surveillance lists", "Today's market breadth numbers", "Derivatives positioning today: participant OI, FII/DII flows, PCR and the option chain facts",
-  "F&O contract changes: stocks entering and leaving F&O, lot sizes and expiry days",
-  "Closing auction, live: each F&O stock's reference and indicative price, the indices and the expiry settlement",
-  "Market events calendar: RBI policy, data releases, the Fed, index changes, expiries and holidays",
-  "Option Greeks for every strike and your position, and the payoff today beside the one at expiry (model estimates)",
-  "A trade journal with the basic stats", "My Holdings, the tax report and the year's total tax estimate", "Money calendar and its calendar feed",
-  // what Free sees on these pages, in the words the pages use (DP2-010: Holdings' dividends, US tax's year totals, the ITR preview)
-  "Each holding's dividends on My Holdings; the year's dividend total, and each year's US share gains in rupees, on Tax tools and US stocks tax",
-  "Advance tax due dates and the exemption used", "A preview of the ITR-ready export: each schedule's totals and line counts",
-  "Weekly Market Brief and My Stocks emails", "Public company pages, share cards and invite links", "ETF prices against their NAV, with 30 days of history",
-  "Named holders above 1% and the business-update filings on every company page",
-  "Stock futures today: OI buildup, rollover, basis and MWPL use for every F&O stock", "Stock lending fees that traded for your holdings",
-  "Margin-funded positions per stock today, and your own MTF cost worked out",
-  "IPOs in India and the US: dates, price bands, lot sizes, the bids by category while an issue is open, the offer documents' key facts, and listings against the issue price",
-  "This week's earnings calls and analyst meets, each with its notice and webcast or dial-in link",
-  "Business group pages: each group's listed companies, their market value and the day's change"];
+// EVERYONE (what every plan has, the comparison table's last fold) is in planFeatures.ts: only the lazy table reads it, so the landing
+// page's JavaScript doesn't carry it (FREE-TIER kept that page's budget)
 
 /** The cheapest plan that includes a feature flag ("free" when neither paid list names it). */
 export function planOf(feature: string): PlanId {
@@ -107,5 +89,5 @@ export const FLAG_GROUP: Record<string, "trade" | "research" | "money"> = {
   vix_filter: "trade", strike_rules: "trade", chart_replay: "trade", signal_webhooks: "trade", event_reminders: "trade", stock_futures: "trade",
   mtf: "trade", assistant: "trade",
   networth: "money", mf_gains: "money", dividends: "money", tax_tools: "money", money_reminders: "money", mf_costs: "money", itr_export: "money",
-  us_tax: "money", mf_behaviour: "money", sip_luck: "money", rates_slab: "money", loan_check: "money",
+  us_tax: "money", tax_export: "money", mf_behaviour: "money", sip_luck: "money", rates_slab: "money", loan_check: "money",
 };

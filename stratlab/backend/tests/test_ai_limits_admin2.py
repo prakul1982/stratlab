@@ -23,7 +23,8 @@ def usage(monkeypatch):
 
 
 def test_search_ai_has_its_own_cap_and_falls_back(usage, monkeypatch):
-    monkeypatch.setattr(routes, "SEARCH_AI_PER_DAY", 2)
+    # (updated on purpose, FREE-TIER: the search box's cap is per plan now, routes.search_cap; Free's 10, Basic's and Pro's 40)
+    monkeypatch.setattr(routes, "search_cap", lambda profile: 2)
     monkeypatch.setattr(main.ideas, "build", lambda ask_json, q: {"ideas": [{"title": q}]})
     monkeypatch.setattr(main.ask, "build", lambda ask_json, q: {"action": "answer", "answer": q, "title": "t"})
     assert main.search_ideas(main.IdeasReq(q="gold one"), FREE)["fallback"] is False
@@ -53,7 +54,8 @@ def test_the_daily_ai_build_message_says_when_it_comes_back(monkeypatch):
 
 
 def test_at_the_search_limit_the_reader_gets_the_real_message(usage, monkeypatch):
-    monkeypatch.setattr(routes, "SEARCH_AI_PER_DAY", 1)
+    # (updated on purpose, FREE-TIER: the search box's cap is per plan now, routes.search_cap; Free's 10, Basic's and Pro's 40)
+    monkeypatch.setattr(routes, "search_cap", lambda profile: 1)
     monkeypatch.setattr(main.ideas, "build", lambda ask_json, q: {"ideas": [{"title": q}]})
     monkeypatch.setattr(main.ask, "build", lambda ask_json, q: {"action": "answer", "answer": q, "title": "t"})
     main.ask_route(main.IdeasReq(q="what is one"), FREE)

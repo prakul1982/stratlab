@@ -111,22 +111,20 @@ test("themes: Slides (PDF), Slides (PowerPoint) and the companies' CSV each save
   expect(errors).toEqual([]);
 });
 
-test("a Free account's second theme deck in a month is stopped with the plan's words", async ({ page }, info) => {
+// (updated on purpose, FREE-TIER: Free has no slide decks of its own now; a Free account's deck button is locked, says where decks are and
+// sits beside the sample deck, instead of a first deck and a stopped second one)
+test("a Free account's theme deck button is locked and says decks are on Basic", async ({ page }, info) => {
   test.setTimeout(180_000);
   const i = 20 + (info.project.name === "phone" ? 1 : 0);
   const who = sessionAs(`export-${i}`, `u-export-${i}`, `export${i}@example.com`);
   const errors = await open(page, THEME, "The whole chain in one table", who);
   const box = page.getByTestId("theme-downloads");
-  const [pdf] = await Promise.all([page.waitForEvent("download"), box.getByRole("button", { name: "Slides (PDF)" }).click()]);
-  expect(pdf.suggestedFilename()).toMatch(/\.pdf$/);
-  const [again] = await Promise.all([page.waitForEvent("download"), box.getByRole("button", { name: "Slides (PowerPoint)" }).click()]);     // the same deck: free
-  expect(again.suggestedFilename()).toMatch(/\.pptx$/);
-  await page.goto("/research/themes?region=IN&q=" + encodeURIComponent("India railways"));
-  await expect(page.getByTestId("theme-downloads")).toBeVisible({ timeout: 90_000 });
-  const pdf2 = page.getByTestId("theme-downloads").getByRole("button", { name: "Slides (PDF)" });
-  await expect(pdf2).toBeEnabled({ timeout: 90_000 });
-  await pdf2.click();
-  await expect(page.getByText(/You've made 1 slide deck this month/).first()).toBeVisible({ timeout: 30_000 });
+  const lock = box.getByTestId("deck-locked");
+  await expect(lock).toHaveText("🔒 Slides: on Basic", { timeout: 30_000 });
+  await expect(lock).toHaveAttribute("href", "/plans");
+  await expect(lock).toHaveAttribute("title", "Slide decks are on Basic: 5 a month. The sample deck on the Plans page shows what one holds.");
+  await expect(box.getByRole("button", { name: "Slides (PDF)" })).toHaveCount(0);
+  await expect(box.getByRole("button", { name: /^CSV/ })).toBeVisible();          // the companies' CSV stays on every plan
   expect(errors).toEqual([]);
 });
 

@@ -5,7 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { deepDiveLimitLine } from "../lib/account";
+import { deckLock, deepDiveLimitLine } from "../lib/account";
+import { SampleDeckLink } from "../components/SampleDeck";
 import { asOf, CRORE, inrCompact, marketTz, pct, safeHref, fmtDate } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { marginText, millionsOf, scaleFor, usdAmount } from "../lib/research";
@@ -273,8 +274,14 @@ export function DeepDivePage() {
         </>} />
       <div className="k-row">
         {v && <>
+          {/* FREE-TIER: no decks on Free: a locked button that says where they are, and the sample deck beside it */}
+          {u?.deck_limit === 0 ? <>
+            <Link className="btn quiet sm" to="/plans" title={deckLock()} data-testid="deck-locked">🔒 Slides: on Basic</Link>
+            <SampleDeckLink className="btn quiet sm" label="Sample deck" />
+          </> : <>
           <button className="btn quiet sm" disabled={!!decking} onClick={() => downloadDeck("pptx")} title="Numbers, business, plans, report card and checklist as slides, with sources">{decking === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button>
           <button className="btn quiet sm" disabled={!!decking} onClick={() => downloadDeck("pdf")} title="The same slides as a PDF, to read or share anywhere">{decking === "pdf" ? "Making the PDF…" : "Slides (PDF)"}</button>
+          </>}
           {/* EXPORT: every reported year's figures, as numbers in the reporting unit (the company page's 10 years) */}
           {(n?.years.length ?? 0) > 0 && <CsvButton name={`${sym} figures by year`} label="every reported year's figures" text="Figures (CSV)" rows={n!.years}
             columns={yearCsv(n!.unit)} />}

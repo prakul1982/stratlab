@@ -164,16 +164,18 @@ and the landing page's e2e test checks the plans it shows against the server's.
 | | Free | Basic | Pro |
 |---|---|---|---|
 | Price (rupee prices include 18% GST) | ₹0 | ₹699 a month (₹6,999 a year) · $8 | ₹1,999 a month (₹19,999 a year) · $20 |
-| Backtests, each with a verdict | 10 a month | 100 a month | Unlimited |
-| AI strategy builds | 10 a month | 100 a month | Unlimited (a daily safety cap applies) |
+| Backtests, each with a verdict | 5 a month | 100 a month | Unlimited |
+| AI strategy builds | 5 a month | 100 a month | Unlimited (a daily safety cap applies) |
 | Paper trading | 1 session, for 5 market days | 2 at a time | 10 at a time |
-| Instruments in a group test | 10 | 25 | 50 |
-| Company deep dives (each company counted once a month) | 2 a month | 15 a month | Unlimited |
-| Slide decks, of a company or a theme (its PDF and PowerPoint are one deck) | 1 a month | 5 a month | Unlimited |
-| Fresh AI reads a day (a read already written today never counts) | 60 | 60 | Unlimited |
-| Refreshes of a stored result a day (a theme, its figures, an AI read) | 3 | 10 | 30 |
+| Instruments in a group test | 5 | 25 | 50 |
+| Company deep dives (each company counted once a month) | 1 a month | 15 a month | Unlimited |
+| Slide decks, of a company or a theme (its PDF and PowerPoint are one deck) | None (a sample deck to download) | 5 a month | Unlimited |
+| New themes mapped (every theme already in the library opens on every plan) | 1 a month | 10 a month | Unlimited |
+| Fresh AI reads a day, refreshes included (a read already written never counts; Free gets the Basic/Pro read when there is one) | 5 | 60 | Unlimited |
+| AI answers in the search box a day | 10 | 40 | 40 |
+| Refresh of a stored result (a theme, its figures, an AI read): each Refresh is one fresh AI read | None | ✓ | ✓ |
 | Market Watch lists / symbols in a list / charts that keep drawings / indicators on a chart | 1 / 20 / 3 / 3 | 10 / 100 / Unlimited / 10 | Unlimited |
-| Stock alerts on at once / saved screens / holdings kept | 5 / 2 / 30 | 25 / 10 / 100 | 100 / 25 / 300 |
+| Stock alerts on at once / saved screens (running a screen has no limit) / holdings kept | 3 / 1 / 30 | 25 / 10 / 100 | 100 / 25 / 300 |
 | Mutual fund schemes / Net worth entries / trades the journal keeps | 5 / 5 / 50 | Unlimited | Unlimited |
 | All 20+ indicators in strategy rules (Free: price, SMA, EMA, RSI; price charts show every indicator on every plan) | – | ✓ | ✓ |
 | Group and options paper trading, trade notifications, daily report | – | ✓ | ✓ |
@@ -181,6 +183,7 @@ and the landing page's e2e test checks the plans it shows against the server's.
 | Daily Market Brief and My Stocks (weekly for everyone) | – | ✓ | ✓ |
 | Trade journal in full (honesty checks, breakdowns, paper vs real); positioning and market breadth history | – | ✓ | ✓ |
 | Mutual fund capital gains, fund costs in rupees (parts, both plans, changes), Net worth history, dividends by company with TDS, money calendar reminders | – | ✓ | ✓ |
+| The tax report's CSV and PDF downloads (the report on screen is for everyone) | – | ✓ | ✓ |
 | F&O change alerts, ETF gap alerts | – | ✓ | ✓ |
 | IPO offer-document summaries and IPO alerts; business updates in numbers and named holders search; chart replay; market event reminders | – | ✓ | ✓ |
 | Stock futures and margin-funding history with their alerts; closing auction history; the India VIX filter on options sessions | – | ✓ | ✓ |
@@ -188,7 +191,13 @@ and the landing page's e2e test checks the plans it shows against the server's.
 | Indian F&O, options on your own signals, options what-if sliders and roll preview, strikes picked by delta or premium, faster group entries, export | – | – | ✓ |
 | Forward test from TradingView or Chartink alerts; StratLab in your AI assistant | – | – | ✓ |
 | Advance tax amounts and the long-term exemption lot by lot, US stocks in Indian tax, the ITR-ready export | – | – | ✓ |
-| Every market, company pages and price charts, themes and the heatmap, the options builder with Greeks, the payoff today and breakevens after charges, F&O changes, ETF vs NAV, IPO lists, pages and bids, the events calendar, today's closing auction, stock futures and margin funding, each fund's TER in rupees, a plain SIP test, rates, screens, rotation, results, corporate actions, deals, surveillance, red flags on any company, today's positioning and breadth, My Holdings, the tax report and total tax estimate, the money calendar and its feed, share cards, invites | ✓ | ✓ | ✓ |
+| Every market, company pages and price charts, every theme already mapped and the heatmap, the options builder with Greeks, the payoff today and breakevens after charges, F&O changes, ETF vs NAV, IPO lists, pages and bids, the events calendar, today's closing auction, stock futures and margin funding, each fund's TER in rupees, a plain SIP test, rates, screens, rotation, results, corporate actions, deals, surveillance, red flags on any company, today's positioning and breadth, My Holdings, the tax report on screen and total tax estimate, the money calendar and its feed, share cards, invites | ✓ | ✓ | ✓ |
+
+Free is a teaser: the public pages and everything already written (company reads, themes in the library) are for everyone, and the
+counts above are kept small. Accounts made before the change (`FREE_TIER_CHANGE_AT` in
+[`config.py`](stratlab/backend/app/config.py)) keep Free's earlier counts (10 backtests and AI builds, 2 deep dives, 1 deck, 60 AI
+reads with Refresh, 40 search answers, 5 alerts, 2 screens, groups of 10, the tax report downloads) for 14 days after it, and see a
+one-time notice on Account and My space saying what changes and when; no email is sent.
 
 Invite rewards give free months of Basic. Visitors outside India see prices in their own currency; every payment gets a
 GST invoice.

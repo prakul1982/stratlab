@@ -8,6 +8,8 @@ import { Badge, Card, CardHead, CsvButton, DataTable, ShowLess, Select, Spark, S
 import { Download } from "./Icons";
 import { useApp } from "../lib/app";
 import { download } from "../lib/share";
+import { deckLock } from "../lib/account";
+import { SampleDeckLink } from "./SampleDeck";
 import { LineChart } from "./Charts";
 import { bizChange, bizValue, periodName } from "../lib/biz";
 import { filedOn } from "./BizUpdates";
@@ -177,7 +179,8 @@ export function memberColumns(region: Region, unit: string | null): Column<Membe
 /** EXPORT (owner, 4 Nov: "you forgot to put an export PDF or slides option in themes"): the theme as slides, PDF or PowerPoint, made by the
  * deep dive's deck builder and counted against the same monthly decks; and every company as a CSV. Each file goes through lib/share.ts. */
 export function ThemeDownloads({ r, dive, region, theme }: { r: SectorAI; dive: Dive | null; region: Region; theme: string }) {
-  const { fail, refreshMe } = useApp();
+  const { fail, refreshMe, me } = useApp();
+  const locked = me?.usage?.deck_limit === 0;      // FREE-TIER: no decks on Free: a locked button and the sample deck
   const [making, setMaking] = useState<"pptx" | "pdf" | null>(null);
   const [preparing, setPreparing] = useState<string | null>(null);
   const rows = useMemo(() => memberRows(r, dive), [r, dive]);
@@ -193,8 +196,10 @@ export function ThemeDownloads({ r, dive, region, theme }: { r: SectorAI; dive: 
   return (
     <div className="k-row" role="group" aria-label="Download this theme" data-testid="theme-downloads">
       <span className="k-small k-muted">Download</span>
+      {locked ? <><Link className="btn quiet sm" to="/plans" title={deckLock()} data-testid="deck-locked">🔒 Slides: on Basic</Link>
+        <SampleDeckLink className="btn quiet sm" label="Sample deck" /></> : <>
       <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pdf")} title="The whole theme as slides in a PDF: the chain and each layer, every company with its figures, the tailwinds and risks with their sources, the news and the theme in numbers"><Download size={16} />{making === "pdf" ? "Making the PDF…" : "Slides (PDF)"}</button>
-      <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pptx")} title="The same slides as PowerPoint"><Download size={16} />{making === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button>
+      <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pptx")} title="The same slides as PowerPoint"><Download size={16} />{making === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button></>}
       {preparing && <Working small label={preparing} />}
       {rows.length > 0 && <CsvButton name={`theme ${theme} ${region} companies`} label="every company in this theme" columns={memberColumns(region, dive?.unit ?? null)} rows={rows} text="CSV" />}
     </div>

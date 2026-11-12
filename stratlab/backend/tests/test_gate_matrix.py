@@ -145,6 +145,8 @@ def test_every_paid_feature_is_refused_somewhere_on_the_server():
                  # (updated on purpose, f5) the groups' figures are held back from the answer, not refused (test_f5_groups.py)
                  "group_figures": "group pages' figures",
                  # (updated on purpose) trimmed rather than refused: tests/test_company_tables.py
-                 "tables": "peers, statements and shareholding views"}
+                 "tables": "peers, statements and shareholding views",
+                 # (updated on purpose, FREE-TIER) the tax report's downloads: tests/test_free_tier.py checks the 402
+                 "tax_export": "GET /tax/export"}
     covered = {r[0] for r in ROUTES} | set(elsewhere)
     assert covered == set(FEATURES), set(FEATURES) ^ covered

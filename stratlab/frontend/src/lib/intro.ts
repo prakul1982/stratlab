@@ -88,7 +88,8 @@ export const TOURS: Record<TourId, IntroTour> = {
         body: "Type any Indian or US company by its name or symbol, or open one of the suggestions under the box.",
         act: { label: "Open one", kind: "follow", sel: SUGGESTED } },
       { id: "company", title: "One company, in depth", via: { page: "/research", sel: SUGGESTED }, here: COMPANY, at: ["main a.btn[href$='/deep']"], or: "main h1",
-        free: `On Free: ${LIMITS.free.deepdives_per_month} deep dives and ${LIMITS.free.decks_per_month} slide download a month.`,
+        // FREE-TIER: 1 deep dive a month and no slide decks (the sample deck on Plans shows one)
+        free: `On Free: ${LIMITS.free.deepdives_per_month} deep dive a month; slide decks are on Basic.`,
         body: "Its price chart, key numbers, results, who owns it, filings, deals and an AI read of the figures. Deep dive adds ten years of figures, the business and its plans read from the company's own documents, an investor checklist, and slides to download." },
       { id: "themes", title: "Themes, company by company", go: "/research/themes", at: ["main form"], or: "main h1",
         body: "Type a sector or a trend. StratLab lists the listed companies in it, places each in a layer of the value chain with that layer's figures, and turns the whole theme into slides (PowerPoint or PDF) to download." },
@@ -103,7 +104,7 @@ export const TOURS: Record<TourId, IntroTour> = {
     steps: [
       { id: "holdings", title: "Your holdings, from your broker's file", go: "/holdings", at: ["main [data-main-action]", "main label.k-upload"], or: "main h1", flag: "filings",
         body: "Upload the holdings file your broker gives you, or add stocks by hand, to see their value, gain or loss, sectors and dividends in one place." },
-      { id: "tax", title: "Capital gains, worked out", go: "/tax-report", at: ["main label.k-upload"], or: "main h1",
+      { id: "tax", title: "Capital gains, worked out", go: "/tax-report", at: ["main label.k-upload"], or: "main h1", flag: "tax_export",
         body: "Upload tradebooks or your broker's tax P&L: each sale is matched to its purchase, split into short and long term at the rates for its date, with the exemption and set-off, year by year. An estimate to check with your CA." },
       { id: "networth", title: "Everything you own and owe", go: "/money/net-worth", at: ["main button.btn:not(.quiet)"], or: "main h1", flag: "networth",
         body: "Add deposits, EPF, PPF, NPS, gold, property and loans beside your holdings and funds; each is valued by its own rule, with its date." },

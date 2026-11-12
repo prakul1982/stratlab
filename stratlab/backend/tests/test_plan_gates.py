@@ -28,10 +28,12 @@ def test_prices_and_limits():
     assert (PLANS["basic"]["price"], PLANS["pro"]["price"]) == (699, 1999)            # rupees, GST included
     assert (PLANS["basic"]["price_year"], PLANS["pro"]["price_year"]) == (6999, 19999)    # about two months free
     row = lambda k: [PLANS[p][k] for p in ("free", "basic", "pro")]  # noqa: E731
-    assert row("backtests_per_month") == [10, 100, None] and row("ai_builds_per_month") == [10, 100, None]
-    assert row("live_limit") == [1, 2, 10] and row("group_size") == [10, 25, 50]
-    assert row("holdings") == [30, 100, 300] and row("stock_alerts") == [5, 25, 100] and row("screens") == [2, 10, 25]
-    assert row("deepdives_per_month") == [2, 15, None] and row("decks_per_month") == [1, 5, None]
+    # (updated on purpose, FREE-TIER: Free's counts are the teaser ones; Basic's and Pro's are unchanged)
+    assert row("backtests_per_month") == [5, 100, None] and row("ai_builds_per_month") == [5, 100, None]
+    assert row("live_limit") == [1, 2, 10] and row("group_size") == [5, 25, 50]
+    assert row("holdings") == [30, 100, 300] and row("stock_alerts") == [3, 25, 100] and row("screens") == [1, 10, 25]
+    assert row("deepdives_per_month") == [1, 15, None] and row("decks_per_month") == [0, 5, None]
+    assert row("themes_per_month") == [1, 10, None]
     assert PLANS["free"]["live_trial_days"] == 5
 
 
@@ -39,8 +41,9 @@ def test_plans_gate_even_before_payments_are_set_up(monkeypatch):
     """The owner's decision (7 Oct): each plan gets exactly what Pricing lists, payments on or not. (This test used to
     check that everything was open during early access.)"""
     monkeypatch.setattr(settings, "RAZORPAY_KEY_ID", "")
-    assert not any(plan_info("free")["features"].values()) and group_size("free") == 10
-    assert plan_info("free")["deepdives_per_month"] == 2 and plan_info("free")["holdings"] == 30
+    # (updated on purpose, FREE-TIER: groups of 5 and 1 deep dive on Free)
+    assert not any(plan_info("free")["features"].values()) and group_size("free") == 5
+    assert plan_info("free")["deepdives_per_month"] == 1 and plan_info("free")["holdings"] == 30
     assert all(plan_info("pro")["features"].values())
 
 
@@ -50,16 +53,17 @@ def test_features_per_plan_once_payments_are_live(paid):
              "earnings_calls", "group_figures",       # (updated on purpose, f5: two new Basic features)
              "doc_search",       # (updated on purpose, lane b1: the filings search, and its every-year archive and CSV on Pro below)
              "tables",   # (updated on purpose: lane c-f2's company tables in full are Basic)
-             "watchlist_import"}   # (updated on purpose, f3: the watchlist import from a file is Basic)
+             "watchlist_import",   # (updated on purpose, f3: the watchlist import from a file is Basic)
+             "tax_export"}             # (updated on purpose, FREE-TIER: the tax report's downloads are Basic's)
     assert {f for f, on in plan_info("basic")["features"].items() if on} == basic
     assert all(plan_info("pro")["features"].values()) and set(FEATURES) == basic | {"fno", "options_signal", "fast_entries", "export", "tax_tools", "itr_export", "us_tax", "options_whatif", "strike_rules", "signal_webhooks", "assistant", "doc_search_all"}
     assert {f: FEATURE_PLAN[f] for f in ("indicators", "alerts", "scans", "fno", "export")} == {
         "indicators": "basic", "alerts": "basic", "scans": "basic", "fno": "pro", "export": "pro"}
-    assert group_size("free") == 10 and group_size("basic") == 25
+    assert group_size("free") == 5 and group_size("basic") == 25          # (updated on purpose, FREE-TIER)
     assert (has_indicators("free"), has_indicators("basic"), has_fno("basic"), has_fno("pro")) == (False, True, False, True)
-    assert [deepdives(p) for p in ("free", "basic", "pro")] == [2, 15, None] and [decks(p) for p in ("free", "basic", "pro")] == [1, 5, None]
+    assert [deepdives(p) for p in ("free", "basic", "pro")] == [1, 15, None] and [decks(p) for p in ("free", "basic", "pro")] == [0, 5, None]
     info = plan_info("free")
-    assert (info["indicators"], info["fno"], info["deepdives_per_month"], info["decks_per_month"]) == (False, False, 2, 1)
+    assert (info["indicators"], info["fno"], info["deepdives_per_month"], info["decks_per_month"]) == (False, False, 1, 0)
     assert "pro_features" not in info
 
 
@@ -96,7 +100,8 @@ def test_server_refuses_what_the_plan_lacks(paid, monkeypatch):
 def test_group_size_is_checked_before_counting_an_experiment(paid):
     with pytest.raises(Exception) as e:
         main.check_group_size({"_plan": "free"}, 11)
-    assert "up to 10" in str(e.value.detail["message"]) and "Basic goes up to 25" in str(e.value.detail["message"])
+    # (updated on purpose, FREE-TIER: Free tests groups of up to 5)
+    assert "up to 5" in str(e.value.detail["message"]) and "Basic goes up to 25" in str(e.value.detail["message"])
     main.check_group_size({"_plan": "basic"}, 25)
 
 
@@ -168,11 +173,11 @@ def test_research_open_to_every_plan(paid, monkeypatch):
 def test_each_limit_says_which_plan_lifts_it(paid, monkeypatch):
     used = {"n": 0}
     monkeypatch.setattr(main.db, "count_usage", lambda uid, kind, since: used["n"])
-    used["n"] = 10
+    used["n"] = 5
     with pytest.raises(Exception) as e:
         main.ai_allowance({"id": "u1", "_plan": "free"})
-    # the one lock wording (DP2-022, DP1-018): with when the month's count starts again
-    assert stop_reason(e) == f"You've used all 10 AI builds this month. The count starts again on {resets_on()}. Basic gives 100 a month."
+    # the one lock wording (DP2-022, DP1-018): with when the month's count starts again ((updated on purpose, FREE-TIER: Free's 5)
+    assert stop_reason(e) == f"You've used all 5 AI builds this month. The count starts again on {resets_on()}. Basic gives 100 a month."
     used["n"] = 100
     with pytest.raises(Exception) as e:
         main.use_backtest({"id": "u1", "_plan": "basic"})

@@ -17,7 +17,7 @@ const mem = new Map();
 globalThis.localStorage ??= { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
 const L = await import("../src/lib/lockText.ts");
 const plans = await import("../src/lib/plans.ts");
-const { FEATURES: FEATURES_ALL } = await import("../src/lib/planFeatures.ts");          // LIVE4-020: the full lists, apart
+const { FEATURES: FEATURES_ALL, EVERYONE } = await import("../src/lib/planFeatures.ts");          // LIVE4-020: the full lists, apart
 const offer = await import("../src/lib/offer.ts");
 const { farLevel } = await import("../src/lib/alerts.ts");
 const acct = await import("../src/lib/account.ts");
@@ -96,7 +96,8 @@ test("DP2-009, DP2-010: Plans says what the Money pages lock and what they show 
   assert.match(flag("filings"), /each holding's red flags, recent filings and results date on My Holdings/);
   assert.match(flag("dividends"), /^Dividends by company on Tax tools/);
   assert.match(flag("us_tax"), /sale by sale/);
-  const every = plans.EVERYONE.join(" | ");
+  // (updated on purpose, FREE-TIER: EVERYONE moved to planFeatures.ts, out of the landing page's JavaScript; the same checks)
+  const every = EVERYONE.join(" | ");
   assert.match(every, /Each holding's dividends on My Holdings/);
   assert.match(every, /each year's US share gains in rupees/);
   assert.match(every, /A preview of the ITR-ready export: each schedule's totals and line counts/);

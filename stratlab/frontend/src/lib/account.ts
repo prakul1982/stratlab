@@ -54,6 +54,12 @@ export function monthlyUse(used: number, limit: number | null | undefined, planL
   return `${used} (unlimited)`;
 }
 
+/** FREE-TIER: a monthly count the plan has none of (Free's decks): "None on Free: on Basic, 5 a month. The sample deck is on Plans." in
+ * place of "0 of 0 (limit reached)". */
+export function noneOnPlan(plan: string, next: string, cap: number | null | undefined, extra = ""): string {
+  return `None on ${plan}: on ${next}, ${cap == null ? "with no limit" : `${cap} a month`}.${extra ? ` ${extra}` : ""}`;
+}
+
 /** "2 of 2 (limit reached)" once the count is at the limit. A count past it (the owner's own use, viewed as a smaller plan)
  * never reads "8 of 2" (R17-004, R22-001), and still gives the real count: "2 of 2 (limit reached; 8 used)" (R48-013).
  * The one form Account and the deep dive both use. */
@@ -66,7 +72,15 @@ export function countOf(used: number, limit: number): string {
  * reached). Opening a company again this month doesn't count." (R22-002). A deck is a company's: its PDF and its PowerPoint
  * count as one, so the line says so (DP1-026). */
 export function deepDiveLimitLine(deepdiveUsed: number, deepdiveLimit: number, deckUsed: number, deckLimit: number | null | undefined): string {
-  return `Companies opened this month: ${countOf(deepdiveUsed, deepdiveLimit)}.${deckLimit != null ? ` Decks: ${countOf(deckUsed, deckLimit)}; a company's or a theme's PDF and PowerPoint are one deck.` : ""} Opening a company again this month doesn't count.`;
+  // FREE-TIER: a plan with no decks (Free) says where they are, never "Decks: 0 of 0 (limit reached)"
+  const decks = deckLimit === 0 ? ` ${deckLock()}` : deckLimit != null ? ` Decks: ${countOf(deckUsed, deckLimit)}; a company's or a theme's PDF and PowerPoint are one deck.` : "";
+  return `Companies opened this month: ${countOf(deepdiveUsed, deepdiveLimit)}.${decks} Opening a company again this month doesn't count.`;
+}
+
+/** FREE-TIER: the locked deck button's words on a plan with no decks, as the server's (plans.not_on_plan): "Slide decks are on Basic: 5 a
+ * month. The sample deck on the Plans page shows what one holds." */
+export function deckLock(next = "Basic", cap: number | null = 5): string {
+  return `Slide decks are on ${next}${cap == null ? ", with no limit" : `: ${cap} a month`}. The sample deck on the Plans page shows what one holds.`;
 }
 
 /** AI builds this month: "5 of 100", or on a plan with no monthly limit "5 (unlimited; up to 200 a day)", the daily safety cap

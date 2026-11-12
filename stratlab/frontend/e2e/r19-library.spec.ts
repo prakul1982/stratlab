@@ -29,6 +29,8 @@ test("a theme read is offered as already read, says when it was updated, and Ref
     const d = await res.json();
     // (updated on purpose, LIVE7B-002: the count beside Refresh is the fresh AI reads, the one Plans and Account state)
     d.rows = d.rows.map((x: { key: string }) => (x.key === "research_ai" ? { ...x, used: 3 - left, limit: 3, left } : x));
+    // (updated on purpose, FREE-TIER: this user is on Free, which has no Refresh (refresh_off); the count beside it is a paid plan's here)
+    d.refresh_off = false;
     await r.fulfill({ response: res, json: d });
   });
   const errors = await open(page, url, "The whole chain in one table", me.session);
@@ -66,7 +68,9 @@ test("Settings' Your usage lists every limit as the server counts it", async ({ 
   await expect(table).toBeVisible();
   const server = await usageOf(page, me.token);
   expect(server.rows.find((r) => r.key === "refresh")).toBeUndefined();            // (updated on purpose, LIVE7B-002: one daily count)
-  expect(server.rows.find((r) => r.key === "research_ai")?.limit).toBe(60);
+  // (updated on purpose, FREE-TIER: this user is on Free: 5 fresh AI reads a day and no Refresh)
+  expect(server.rows.find((r) => r.key === "research_ai")?.limit).toBe(5);
+  expect((server as { refresh_off?: boolean }).refresh_off).toBe(true);
   await expect(table.getByRole("row")).toHaveCount(server.rows.length + 1);
   for (const r of server.rows) {
     const row = table.getByRole("row").filter({ hasText: r.label });

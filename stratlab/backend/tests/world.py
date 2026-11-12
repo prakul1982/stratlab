@@ -396,6 +396,10 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     db._profiles.clear()
     from app import invite_rewards, plans, pricing
     plans.forget_free_basic()                   # free Basic time another test gave
+    # FREE-TIER: the smaller Free plan started before this world's accounts were made (fake_db dates them 1 Sep), so they have Free's
+    # new limits; the grace for older accounts is tested in tests/test_free_tier.py with its own dates
+    from app.config import settings as _settings
+    monkeypatch.setattr(_settings, "FREE_TIER_CHANGE_AT", "2026-08-20T00:00:00+05:30")
     plans._promo.update(read_at=0.0, until=None)   # a launch offer another test started (the stress tests post /admin/promo)
     pricing.forget()                            # prices another test saved
     from app import invoices

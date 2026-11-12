@@ -325,11 +325,12 @@ def test_email_goes_only_to_a_confirmed_address(monkeypatch):
 
 # ---------- plans ----------
 def test_plan_limits(monkeypatch):
-    assert (PLANS["free"]["stock_alerts"], PLANS["basic"]["stock_alerts"], PLANS["pro"]["stock_alerts"]) == (5, 25, 100)
+    # (updated on purpose, FREE-TIER: Free keeps 3 alerts on at once; Basic and Pro unchanged)
+    assert (PLANS["free"]["stock_alerts"], PLANS["basic"]["stock_alerts"], PLANS["pro"]["stock_alerts"]) == (3, 25, 100)
     monkeypatch.setattr(settings, "RAZORPAY_KEY_ID", "")
-    assert plan_info("free")["stock_alerts"] == 5                            # Free's own limit, payments on or not (7 Oct)
+    assert plan_info("free")["stock_alerts"] == 3                            # Free's own limit, payments on or not (7 Oct)
     paid(monkeypatch)
-    assert [plan_info(p)["stock_alerts"] for p in ("free", "basic", "pro")] == [5, 25, 100]
+    assert [plan_info(p)["stock_alerts"] for p in ("free", "basic", "pro")] == [3, 25, 100]
 
 
 def paid(monkeypatch):
@@ -368,17 +369,18 @@ def test_create_edit_delete_through_the_api(w):
 
 
 def test_the_free_plan_has_five_alerts(w, monkeypatch):
+    # (updated on purpose, FREE-TIER: Free keeps 3 alerts on at once now; the name is kept so the history reads)
     paid(monkeypatch)
     c, h = w["client"], headers("free-token")
     body = {"region": "IN", "symbol": "TCS", "kind": "move", "op": "either", "value": 5}
-    for i in range(5):
+    for i in range(3):
         assert c.post("/alerts", headers=h, json={**body, "value": 5 + i}).status_code == 200
     r = c.post("/alerts", headers=h, json=body)
     # the one lock wording (DP2-022): the plan, its count, what the next plan gives; the page adds the price
-    assert r.status_code == 402 and r.json()["detail"]["message"].startswith("Your Free plan has 5 alerts on at a time. Delete one to add another. Basic gives 25.")
+    assert r.status_code == 402 and r.json()["detail"]["message"].startswith("Your Free plan has 3 alerts on at a time. Delete one to add another. Basic gives 25.")
     assert r.json()["detail"]["plan"] == "basic"
-    assert c.get("/alerts", headers=h).json()["limit"] == 5
-    assert c.get("/me", headers=h).json()["plan_info"]["stock_alerts"] == 5
+    assert c.get("/alerts", headers=h).json()["limit"] == 3
+    assert c.get("/me", headers=h).json()["plan_info"]["stock_alerts"] == 3
 
 
 def test_the_watchlist_job_runs_the_stock_alert_check(monkeypatch):

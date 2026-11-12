@@ -9,6 +9,7 @@ import { dateOnly } from "../lib/format";
 import { aboutUsd, usdNote, usePricing } from "../lib/currency";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { PlanCompare } from "../components/PlanCompare";
+import { SampleDeckLink } from "../components/SampleDeck";
 import { PlanInterestButton } from "../components/PlanInterest";
 import { track } from "../lib/analytics";
 import { LIMITS, PRICE, WHO, type Limits, type PlanId } from "../lib/plans";
@@ -157,6 +158,8 @@ export function PlansPage() {
           );
         })}
       </div>
+      {/* FREE-TIER: Free has no slide decks of its own: one real theme deck to download, so a Free reader or a visitor sees what one holds */}
+      <p className="k-small k-muted" data-testid="sample-deck-line">Slide decks are on Basic and Pro. <SampleDeckLink label="Download a sample deck" /></p>
       {me && paid !== "free" && me.billing.renews_or_ends && (
         <p className="k-small k-muted">{me.billing.cancel_at_period_end ? "Ends" : "Renews"} on {dateOnly(me.billing.renews_or_ends)}.</p>
       )}
