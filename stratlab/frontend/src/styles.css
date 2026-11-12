@@ -3114,3 +3114,6 @@ body:has(.shell) .consent { position: fixed; }
   .nw-head { grid-template-columns: 1fr; gap: 16px; }
   .nw-head-figure { font-size: 28px; }
 }
+
+/* f4: the workbook's plan note on its own line under the theme's download buttons (components/ThemeChanges.tsx) */
+.theme-wb-lock { flex-basis: 100%; order: 1; }

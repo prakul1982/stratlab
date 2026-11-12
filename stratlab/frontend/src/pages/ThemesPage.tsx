@@ -8,6 +8,7 @@ import { bizFor, LIBRARY_HEAD, libraryLabel, themeApi, type Business, type Dive,
 import { StoredNote, StoredStamp, useStoredRefresh } from "../components/StoredStamp";
 import { RegionSwitch } from "../components/Research";
 import { ChainCard, ClaimsCard, LayerCard, ListingsCard, MembersCard, NewsCard, NumbersCards, SubThemesCard, ThemeDownloads } from "../components/ThemeDive";
+import { ChangesCard } from "../components/ThemeChanges";
 import { SaveButton, SavedList } from "../components/SavedSearches";
 import { themeReady, themeSnap } from "../lib/savedSnap";
 import { Card, CardHead, DataTable, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PageNav, Skeleton, Working } from "../components/kit";
@@ -218,6 +219,7 @@ export function ThemesPage() {
           )}
           <ClaimsCard tailwinds={r.tailwinds} risks={r.risks} />
           {dive && <NewsCard items={news} loading={newsBusy} />}
+          {dive && <ChangesCard dive={dive} />}
           {dive && dive.members > 0 && (
             <>
               <h2 className="k-section-title" id="theme-numbers">The theme in numbers</h2>

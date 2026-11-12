@@ -24,7 +24,7 @@ from ..auth import current_profile
 from ..guard import Window
 from ..responses import err
 from . import ai as A
-from . import grounding, theme_base, theme_check, theme_data, theme_library, theme_prices
+from . import grounding, theme_base, theme_changes, theme_check, theme_data, theme_library, theme_prices
 from . import sector_metrics
 from .net import SourceError, TTLCache
 from .news import aggregator_url, company_headline, company_text, fits_company, plain_headline, publisher_url
@@ -868,9 +868,9 @@ def theme_dive(q: str, region: str = "IN", refresh: bool = False, profile=Depend
         kept = computed.get(theme_library.DIVE, dive_key(r, theme, m), count=False)
         state = "go" if kept is None else computed.refresh_gate(profile, "theme:dive", kept.get("at"))
         if state != "go":
-            return R.ok({**kept["value"]["dive"], "refresh_state": state})
+            return R.ok(theme_changes.served(r, m.get("_library") or theme, {**kept["value"]["dive"], "refresh_state": state}, profile))
         by = computed.plan_word(profile)
-    out = dive_of(r, theme, m, refresh, by=by)
+    out = theme_changes.served(r, m.get("_library") or theme, dive_of(r, theme, m, refresh, by=by), profile)
     return R.ok({**out, "refresh_state": "done"} if refresh else out)
 
 
@@ -981,6 +981,7 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
         pieces = getattr(src, "pieces", None) or {}
         computed.put(theme_library.DIVE, key, {"dive": hit, "pieces": pieces, "priced": priced_mark(r, list(pieces))}, label=m.get("sector") or theme,
                      region=r, by=by)
+        theme_changes.record(r, m.get("_library") or theme, hit, _map_names(fm), m.get("generated_at"), theme_base.RULES, refresh)   # f4: "What changed"
         auto_post(r, theme, hit)
     return hit
 
@@ -1239,6 +1240,32 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
     from fastapi.responses import Response
     return Response(body, media_type="application/pdf" if format == "pdf" else "application/vnd.openxmlformats-officedocument.presentationml.presentation",
                     headers={"Content-Disposition": f'attachment; filename="{deck_file_name(theme, r, format, today)}"'})
+
+
+@router.get("/theme-dive/workbook")
+def theme_dive_workbook(q: str, region: str = "IN", profile=Depends(current_profile)):
+    """f4: the theme as an Excel workbook, every table of its page and deck (theme_workbook.py). Basic and up (plans.py "theme_workbook");
+    counted as the theme's deck of the month, so a theme's PDF, PowerPoint and workbook are one deck (Basic 5 a month, Pro unlimited)."""
+    from .. import main
+    from . import theme_workbook
+    main.need(profile, "theme_workbook", "A theme's workbook (Excel)")
+    R = _routes()
+    pending: list = []
+    r, theme, m = map_for_deck(R, profile, region, q, pending=pending)
+    mark = main.check_deep(profile, "deck", "", r, mark=f"deck:theme:{r}:{theme_data.slug(theme)}")
+    if pending and pending[0]:
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"preparing": True, "retry_after": DECK_RETRY,
+                             "message": "Preparing the workbook: the AI map is being written."}, status_code=202)
+    today = datetime.now(R.IST).date()
+    dive = dive_of(r, theme, m)
+    body = theme_workbook.build(dive, r, m.get("sector") or theme, theme_changes.view(r, m.get("_library") or theme, True), today)
+    if mark:
+        db.add_usage(profile["id"], "deck")
+        db.add_usage(profile["id"], mark)
+    from fastapi.responses import Response
+    return Response(body, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="{deck_file_name(theme, r, "xlsx", today)}"'})
 
 
 # ---------- business updates ----------

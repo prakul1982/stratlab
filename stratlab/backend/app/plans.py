@@ -51,7 +51,8 @@ PLANS = {
                      "biz_updates", "holders",
                      "stock_futures", "mtf",
                      "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
-                     "ipo_summary", "ipo_alerts"},
+                     "ipo_summary", "ipo_alerts",
+                     "theme_changes", "theme_workbook"},
     },
     "pro": {
         "name": "Pro", "price": 1999, "price_year": 19999,
@@ -82,7 +83,8 @@ PLANS = {
                      "assistant",
                      "stock_futures", "mtf",
                      "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
-                     "ipo_summary", "ipo_alerts"},
+                     "ipo_summary", "ipo_alerts",
+                     "theme_changes", "theme_workbook"},
     },
 }
 # indicators: every indicator beyond price, SMA, EMA and RSI; fno: Indian futures and options;
@@ -118,7 +120,10 @@ FEATURES = ("indicators", "fno", "group_live", "options", "options_signal", "fas
             "assistant",
             "stock_futures", "mtf",
             "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
-            "ipo_summary", "ipo_alerts")
+            "ipo_summary", "ipo_alerts",
+            "theme_changes", "theme_workbook")
+# theme_changes: a theme's whole change log, "What changed" (the latest refresh's counts and first 5 rows are on Free);
+# theme_workbook: a theme as an Excel workbook, counted as that theme's deck of the month (its PDF, PowerPoint and workbook are one deck)
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 

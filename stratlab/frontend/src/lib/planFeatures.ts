@@ -22,7 +22,8 @@ export const FEATURES: Record<PlanId, string[]> = {
     `Paper trade ${L.basic.live_limit} strategies at a time, whole groups on intraday candles and options at set times, with trade notifications and a daily report`,
     "Trading tools: full trade journal, positioning history, stock futures history, closing auction history, chart replay practice, an India VIX entry filter, SIP dip rules",
     "Alerts: F&O change alerts, ETF gap alerts, IPO alerts and market event reminders and money reminders; the daily Market Brief and My Stocks by email",
-    `${L.basic.deepdives_per_month} company deep dives and ${L.basic.decks_per_month} slide decks of companies or themes a month, business updates in numbers, named-holder search and IPO offer document summaries`,
+    // f4: a theme's workbook counts as its deck of the month; the full change log ("What changed") is Basic (Free sees the latest refresh's summary)
+    `${L.basic.deepdives_per_month} company deep dives and ${L.basic.decks_per_month} slide decks a month (a theme's workbook in Excel counts as its deck), theme change logs, business updates in numbers, named-holder search and IPO offer document summaries`,
     "Scans and watchlist: the Stage 2 scan and every other trend scan, watchlist red flags (and each holding's filings and results date), Watchlist at a glance, market breadth charts, margin funding history",
     "Money: every mutual fund and net worth entry, fund capital gains, fund costs in rupees, fund behaviour, dividends with TDS, deposit rates after your own tax, a floating-rate loan check",
     `${L.basic.stock_alerts} stock alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings, ${L.basic.watchlists} Market Watch lists of ${L.basic.watchlist_symbols}, drawings kept on every chart`],
@@ -35,3 +36,15 @@ export const FEATURES: Record<PlanId, string[]> = {
     "US stocks in Indian tax sale by sale, and ITR-ready schedules with a PDF pack for your CA",
     `${L.pro.stock_alerts} stock alerts, ${L.pro.screens} saved screens, ${L.pro.holdings} holdings, unlimited Market Watch lists and indicators`],
 };
+
+/** Paid features added after plans.ts's lists were held for the landing page's JavaScript budget (f4): [flag, its row in the comparison
+ * table, the cheapest plan that has it]; every plan above has it too. plans.py says the same, and backend/tests/test_plan_copy.py reads
+ * these with plans.ts's LIMITS and FLAGS. */
+export const MORE_FLAGS: [string, string, PlanId][] = [
+  ["theme_changes", "A theme's full change log: companies added, removed and moved between layers, layers renamed, split or merged, figures restated (Free: the latest refresh's summary)", "basic"],
+  ["theme_workbook", "A theme as an Excel workbook: every table of its page and deck, with sources and method (counts as the theme's deck of the month)", "basic"],
+];
+
+const RANK: Record<PlanId, number> = { free: 0, basic: 1, pro: 2 };
+/** Whether a plan has one of MORE_FLAGS. */
+export const hasMore = (plan: PlanId, flag: string) => MORE_FLAGS.some(([f, , p]) => f === flag && RANK[plan] >= RANK[p]);

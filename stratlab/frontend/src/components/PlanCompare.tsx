@@ -4,6 +4,7 @@ import { Disclosure } from "./kit/Disclosure";
 import type { ReactNode } from "react";
 import { Info } from "./ui";
 import { ADS, EVERYONE, FLAG_GROUP, FLAG_GROUPS, FLAGS, LIMITS, NUMBERS, unlimitedLabel, type Limits, type PlanId } from "../lib/plans";
+import { hasMore, MORE_FLAGS } from "../lib/planFeatures";
 
 /** Every limit and feature side by side, from the server's plans when signed in; signed out, the
  * same tables from the app's own copy of the limits (R60-012: a visitor comparing plans saw less than a signed-in user). */
@@ -24,7 +25,8 @@ export function PlanCompare({ plans }: { plans?: Record<string, Partial<Limits>>
   const nameOf = (v: string): ReactNode => { const m = /^(.+?) \((.{20,})\)$/.exec(v); return m ? <>{m[1]}<Info label={`About ${m[1].toLowerCase()}`}>{m[2].charAt(0).toUpperCase() + m[2].slice(1)}.</Info></> : v; };
   // "What each plan adds" in three parts under subheadings (DI-032: 40-odd rows mixing trading, research and money)
   const flagRows = (g: string) => FLAGS.filter(([f]) => (FLAG_GROUP[f] ?? "research") === g)
-    .map(([f, label]) => ({ id: String(f), label, cell: (p: PlanId) => (lim(p).features.includes(f) ? "✓" : "–") }));
+    .map(([f, label]) => ({ id: String(f), label, cell: (p: PlanId) => (lim(p).features.includes(f) ? "✓" : "–") }))
+    .concat(g === "research" ? MORE_FLAGS.map(([f, label]) => ({ id: f, label, cell: (p: PlanId) => (hasMore(p, f) ? "✓" : "–") })) : []);
   const groups: { id: string; title: string; sub?: string; rows: Row[] }[] = [
     // "Ads" closes the limits: a fact about the plan like the numbers above it (ADS-1)
     { id: "limits", title: "How much", rows: [...NUMBERS.map(([k, label]) => ({ id: String(k), label, cell: (p: PlanId) => num(p, k) })),

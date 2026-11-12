@@ -48,12 +48,26 @@ def test_limits_and_features_match():
         for k in keys:
             assert _num(text, k) == p[k], f"{plan}.{k}"
         shown = set(re.findall(r'"(\w+)"', re.search(r"features:\s*\[(.*?)\]", text, re.S).group(1)))
+        # (updated on purpose, f4) plus the features planFeatures.ts adds (MORE_FLAGS): plans.ts is held for the landing page's budget
+        shown |= {f for f, need in _more() if RANK[plan] >= RANK[need]}
         assert shown == set(p["features"]), plan
+
+
+RANK = {"free": 0, "basic": 1, "pro": 2}
+
+
+def _more() -> list[tuple[str, str]]:
+    """planFeatures.ts MORE_FLAGS: (flag, the cheapest plan that has it) (f4)."""
+    block = TS[TS.index("export const MORE_FLAGS"):]
+    block = block[:block.index("];")]
+    return re.findall(r'\["(\w+)",\s*".*?",\s*"(free|basic|pro)"\]', block, re.S)
 
 
 def test_every_paid_feature_has_a_row():
     rows = set(re.findall(r'\["(\w+)",', TS[TS.index("export const FLAGS"):TS.index("export const EVERYONE")]))
+    rows |= {f for f, _ in _more()}                   # (updated on purpose, f4) the comparison table's rows from planFeatures.ts too
     assert rows == set(FEATURES)
+    assert all(FEATURE_PLAN[f] == need for f, need in _more())
 
 
 # the words on a plan card (FEATURES in plans.ts) that name each paid feature; a new feature fails here until the card of
@@ -87,6 +101,8 @@ CARD_WORDS = {
     "loan_check": "floating-rate loan check",
     "ipo_summary": "IPO offer document summaries",
     "ipo_alerts": "IPO alerts",
+    "theme_changes": "theme change logs",
+    "theme_workbook": "theme's workbook in Excel",
 }
 
 
