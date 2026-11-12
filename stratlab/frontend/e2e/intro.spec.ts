@@ -24,10 +24,13 @@ async function signIn(page: Page, path: string, who: typeof session = session, o
     let answered = false;
     page.on("request", (q) => { if (q.method() === "PUT" && /\/me\/prefs$/.test(q.url())) answered = true; });
     await page.route(/\/me$/, async (r) => {
-      const res = await r.fetch();
-      const j = await res.json();
-      if (!answered) { j.prefs = {}; j.onboarding = {}; j.established = false; }
-      await r.fulfill({ response: res, json: j });
+      if (answered) return r.fallback();
+      try {
+        const res = await r.fetch();
+        const j = await res.json();
+        j.prefs = {}; j.onboarding = {}; j.established = false;
+        await r.fulfill({ response: res, json: j });
+      } catch { await r.fallback().catch(() => undefined); }      // the page moved on mid-read (a reload)
     });
   }
   await page.addInitScript(([s, fresh]) => {
@@ -62,9 +65,10 @@ test("every tour, step by step: its page opens, the ring is on a real thing on s
       // the menu is open for a step in it on a phone, shut otherwise
       if (phone) await expect(page.locator("aside.sidebar.open"), `${step.id}: the phone's menu`).toHaveCount(step.menu ? 1 : 0);
       await page.waitForTimeout(450);           // the ring's glide, the page settling
-      const ring = page.locator(".k-coach-ring");
+      const ring = page.locator(".k-coach[data-placed] .k-coach-ring");
       await expect(ring, `${step.id}: the ring is on something`).not.toHaveAttribute("data-off", /./);
-      const r = await box(page, ".k-coach-ring"), n = await box(page, ".k-coach-note");
+      await expect.poll(async () => (await box(page, ".k-coach[data-placed] .k-coach-ring")).w, `${step.id}: the ring has landed`).toBeGreaterThan(8);
+      const r = await box(page, ".k-coach[data-placed] .k-coach-ring"), n = await box(page, ".k-coach[data-placed] .k-coach-note");
       expect(r.w > 8 && r.h > 8 && r.y >= -6 && r.y + 8 < vh && r.x >= -6 && r.x + r.w <= vw + 6, `${step.id}: the ring ${JSON.stringify(r)} is on screen`).toBe(true);
       expect(n.y >= 0 && n.y + n.h <= vh + 1 && n.x >= 0 && n.x + n.w <= vw + 1, `${step.id}: the note ${JSON.stringify(n)} fits the window`).toBe(true);
       // the note never covers the middle of what it points at

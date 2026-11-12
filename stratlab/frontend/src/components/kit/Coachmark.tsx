@@ -66,6 +66,8 @@ export function Coachmark({ anchor, or, label, labelledBy, describedBy, announce
       }
       const r = el.getBoundingClientRect();
       delete hole.dataset.off;
+      // the first time it lands it is put there, not glided in from the middle of the window
+      if (!hole.dataset.landed) { hole.style.transition = "none"; requestAnimationFrame(() => requestAnimationFrame(() => { hole.style.transition = ""; })); hole.dataset.landed = "1"; }
       // a thing taller than the window is ringed where it shows
       // a thing taller than about half the window (a whole table, the heatmap) is ringed at its top, so the note has room under it
       const top = Math.max(r.top, 0), bottom = Math.min(r.bottom, vh, r.height > vh * TALL ? top + vh * CAP : Infinity);
