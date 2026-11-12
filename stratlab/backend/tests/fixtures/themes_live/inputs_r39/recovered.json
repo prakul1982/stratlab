@@ -1,0 +1,57 @@
+{
+ "note": "What the live placement read that GET /research/theme-dive/placement-inputs does not return (Release 39a), recovered so the replay is exact. origin: the AI map's layer of each company the map named itself and the split moved (the endpoint shows only where it ended); each is the only layer for which the replayed placement's layer-name signature equals the kept answer's names_for. description: the map's own description of a layer the split renamed afterwards (by_model saw it before the rename), from the Release 32/35 fixtures of the same map (layers_r36.json, semis_us_r32.json). facts: a company's stored official industry path (theme:evidence 'industry', read by theme_routes._facts_reader), where it decides the evidence's 420 characters. evidence: a company whose stored description was read after the served map was worked out (the map was still being re-checked). unexplained: a difference no returned input explains, with the input it needs.",
+ "origin": {
+  "auto": {
+   "BOSCHLTD": "Component and systems suppliers"
+  },
+  "semis": {
+   "MU": "Foundry and memory manufacturing",
+   "ARM": "Design software and IP licensing"
+  },
+  "cyber": {
+   "FTNT": "Network security appliances and subscriptions",
+   "AKAM": "Cloud-delivered security and edge networks"
+  },
+  "telecom": {
+   "ROUTE": "Enterprise connectivity and messaging"
+  },
+  "utilities": {
+   "TATAPOWER": "Integrated power distribution",
+   "TORNTPOWER": "Integrated power distribution"
+  },
+  "metals": {
+   "JSL": "Specialty steel and fabricated steel products"
+  }
+ },
+ "description": {
+  "pharma": {
+   "Export generic formulation makers": "Margins depend on the number of competitors per product, the scale of first-to-market launches and regulatory inspection outcomes. Heavy buyer concentration in the US limits pricing power."
+  },
+  "telecom": {
+   "Enterprise connectivity and messaging": "These companies sell managed connectivity, international capacity and messaging platforms to businesses. They earn from contracts and traffic volumes. Margin depends on competition, value-added services and the cost of buying capacity from carriers."
+  },
+  "retail": {
+   "Off-price and dollar stores": "Margin depends on opportunistic buying from brands, low store costs and, for dollar stores, shipping and labor costs and exposure to lower-income customers."
+  },
+  "semis": {
+   "Foundry and memory manufacturing": "These companies run fabs producing logic for others or their own DRAM and NAND. They earn from wafer or chip sales. Margins are set by process leadership and utilization, and the heavy capital spending makes memory especially cyclical."
+  }
+ },
+ "facts": {
+  "it": {
+   "DIGISPICE": {
+    "industry": "Information Technology > Information Technology > IT - Services > IT Enabled Services"
+   }
+  }
+ },
+ "evidence": {
+  "realty": {
+   "SHRADHA": null
+  }
+ },
+ "unexplained": {
+  "metals": {
+   "HINDALUMI": "live: 'Pipe, tube and aluminium product makers', moved there from Other; leaving Other, a company of an industry the largest layer of its family does not hold joins it only when its own words share a word of that layer's name or description, and its stored description shares none: the live evidence held words this endpoint does not return (its stored business read, segments or filing lines, theme_routes._facts_reader). The two layers the split renamed keep their names only on the same members (model_names signature), so in the replay they keep their names from before the split."
+  }
+ }
+}
