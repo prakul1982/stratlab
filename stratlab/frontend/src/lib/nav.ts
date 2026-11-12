@@ -79,6 +79,9 @@ const CALENDAR: NavGroup = {
       { flag: "ipo_alerts", also: /^\/invest\/ipos\/[^/]+$/, space: "invest",
         line: "India's and the US's IPOs: dates, price band, lot, bids and how a listing has traded against its issue price.",
         blurb: "Upcoming, open, closed and recently listed IPOs for India and the US, each with its price band, lot, size, bids by category and the facts in its offer document." }),
+    page("/research/earnings-calls", "Earnings calls", "calendar", "earnings call calls concall con call conference call analyst meet investor meet analysts institutional investors webcast dial in transcript transcripts recording audio presentation results call schedule of meet",
+      { flag: "earnings_calls", part: true, space: "invest", line: "Results calls and analyst meets coming up, with the notice and webcast link, and transcripts after.",
+        blurb: "Every results call and meeting with analysts or investors in India, from the companies' own notices, and US results sessions; after a call, its transcript, recording and presentation once filed." }),
     page("/trade/events", "Market events", "calendar", "market events calendar rbi policy fed data releases budget index changes expiry expiries weekly monthly f&o expiry holidays results dates", { space: "trade" }),
     page("/money/calendar", "My money dates", "calendar", "money calendar tax due dates advance tax itr results dividends maturities premiums emi expiries own dates feed reminders",
       { was: "Money calendar", space: "money" }),
@@ -133,6 +136,9 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
         page("/research/compare", "Compare", "layers", "compare companies versus vs side by side two stocks", { line: "Two companies side by side, with an AI read of the differences." }),
         // IA-1 item 4: each company's own updates and holders are on its page and in Themes; the lists across companies stay here
         page("/invest/business-updates", "Business updates", "calendar", "business updates monthly sales automakers vehicle sales lenders quarterly figures advances deposits", { flag: "biz_updates" }),
+        page("/invest/groups", "Business groups", "layers", "business group groups conglomerate family promoter group group companies listed companies of a group combined market value",
+          { flag: "group_figures", part: true, also: /^\/invest\/groups\/[^/]+$/, line: "India's business groups from the promoters companies name: members, combined value and moves.",
+            blurb: "Each business group the companies' own shareholding filings make out: its listed companies, their combined market value, how each moved and its promoter holding." }),
         page("/invest/holders", "Named holders", "layers", "named holders shareholders promoter fund fii dii mutual fund shareholding pattern above 1% who owns", { flag: "holders" }),
       ] },
       { id: "find-stocks", label: "Find stocks", icon: "search", blurb: "Find companies by their figures, by what their charts do, or by what they filed.", pages: [

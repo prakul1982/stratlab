@@ -506,6 +506,8 @@ app.include_router(shareholders.router)        # /research/holders, /invest/hold
 app.include_router(ipo.router)                 # /invest/ipos
 app.include_router(ipo_history.router)         # /admin/ipos/history
 app.include_router(redflags_routes.router)     # /research/redflags, /research/holders-us
+from . import concalls_routes  # noqa: E402
+app.include_router(concalls_routes.router)     # /research/earnings-calls, /invest/groups (f5)
 app.include_router(stock_futures.router)       # /trade/stock-futures
 app.include_router(slb.router)                 # /invest/stock-lending
 app.include_router(mtf.router)                 # /invest/margin-funding

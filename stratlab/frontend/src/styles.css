@@ -3113,3 +3113,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .nw-head { grid-template-columns: 1fr; gap: 16px; }
   .nw-head-figure { font-size: 28px; }
 }
+
+/* f5: the Calendar's earnings calls (pages/EarningsCallsPage.tsx) and the business groups (pages/BusinessGroupsPage.tsx) */
+.calls-links { display: inline-flex; flex-wrap: wrap; gap: var(--s1) var(--s3); }
+.calls-when { display: inline-flex; flex-direction: column; }
+.groups-rule { margin: 0 0 var(--s2); padding-left: var(--s5); display: grid; gap: var(--s1); }

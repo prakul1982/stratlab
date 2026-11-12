@@ -23,6 +23,8 @@ export const APP_ROUTES = [
   "/calendar", "/invest/flows", "/invest/heatmap", "/invest/movers",
   // R15: the ad landing; signed in, it is home
   "/start",
+  // f5: the Calendar's earnings calls and Invest's business groups
+  "/research/earnings-calls", "/invest/groups", "/invest/groups/:slug",
 ];
 
 const PATTERNS = APP_ROUTES.map((r) => new RegExp("^" + r.replace(/\/\*$/, "(/.*)?").replace(/:[A-Za-z]+/g, "[^/]+") + "/?$"));

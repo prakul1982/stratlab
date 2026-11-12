@@ -231,6 +231,11 @@ class Runner:
         done = {"rules": filings.RULES_VERSION} if not rebuild or day > today else \
             {"rebuild_at": day.isoformat(), "rebuild_rules": filings.RULES_VERSION}
         _set_state("IN", through=through, at=_now(), last_error=last_error, days_read=got, new=new, **done)
+        try:                                            # the same lists' call and meeting notices: the earnings-call calendar
+            from . import concalls
+            concalls.after_india(feed, today, sleep=self.sleep if self.pause else None)
+        except Exception as e:
+            print("earnings calls:", str(e)[:160])
         return {"ok": True, "region": "IN", "through": through, "days": got, "new": new, "error": last_error}
 
     def run_us(self, today: date | None = None) -> dict:

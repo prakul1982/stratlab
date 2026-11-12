@@ -122,6 +122,8 @@ def build():
     closing_auction(mp)
     vix_history(mp)
     holders_and_updates(mp)
+    from tests import fake_f5
+    fake_f5.seed()                           # the earnings-call calendar and the business groups (f5)
     deep_reads()
     live_breadth(mp, sizes)
     library_seeds()

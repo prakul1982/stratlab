@@ -117,6 +117,9 @@ const HeatmapPage = page(() => import("./pages/HeatmapPage"), "HeatmapPage");
 const MoversPage = page(() => import("./pages/MoversPage"), "MoversPage");
 const EtfGapsPage = page(() => import("./pages/EtfGapsPage"), "EtfGapsPage");
 const HoldersPage = page(() => import("./pages/HoldersPage"), "HoldersPage");
+const EarningsCallsPage = page(() => import("./pages/EarningsCallsPage"), "EarningsCallsPage");
+const BusinessGroupsPage = page(() => import("./pages/BusinessGroupsPage"), "BusinessGroupsPage");
+const BusinessGroupPage = page(() => import("./pages/BusinessGroupsPage"), "BusinessGroupPage");
 const BizUpdatesPage = page(() => import("./pages/BizUpdatesPage"), "BizUpdatesPage");
 const netWorth = () => import("./pages/money/NetWorthPage");
 const NetWorthPage = page(netWorth, "NetWorthPage");
@@ -342,6 +345,8 @@ function Routed() {
         <Route path="/invest/movers" element={<MoversPage />} />
         <Route path="/invest/etf-gaps" element={<EtfGapsPage />} />
         <Route path="/invest/holders" element={<HoldersPage />} />
+        <Route path="/invest/groups" element={<BusinessGroupsPage />} />
+        <Route path="/invest/groups/:slug" element={<BusinessGroupPage />} />
         <Route path="/invest/business-updates" element={<BizUpdatesPage />} />
         <Route path="/invest/stock-lending" element={<StockLendingPage />} />
         <Route path="/invest/margin-funding" element={<MarginFundingPage />} />
@@ -354,6 +359,7 @@ function Routed() {
         <Route path="/research/filings" element={<FilingsPage />} />
         <Route path="/research/results" element={<ResultsPage />} />
         <Route path="/research/corporate-actions" element={<CorpActionsPage />} />
+        <Route path="/research/earnings-calls" element={<EarningsCallsPage />} />
         <Route path="/research/IN/:symbol/deep" element={<DeepDivePage />} />
         <Route path="/research/US/:symbol/deep" element={<DeepDivePage />} />
         <Route path="/research/investor" element={<InvestorHomePage />} />

@@ -88,6 +88,9 @@ CARD_WORDS = {
     "ipo_summary": "IPO offer document summaries",
     "ipo_alerts": "IPO alerts",
     "movers": "market movers in full",
+    # (updated on purpose: two new Basic features, the earnings-call calendar in full and business group figures, f5)
+    "earnings_calls": "earnings-call calendar in full",
+    "group_figures": "business group figures",
 }
 
 

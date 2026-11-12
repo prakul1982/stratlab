@@ -51,7 +51,8 @@ PLANS = {
                      "biz_updates", "holders",
                      "stock_futures", "mtf",
                      "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
-                     "ipo_summary", "ipo_alerts", "movers"},
+                     "ipo_summary", "ipo_alerts", "movers",
+                     "earnings_calls", "group_figures"},
     },
     "pro": {
         "name": "Pro", "price": 1999, "price_year": 19999,
@@ -82,7 +83,8 @@ PLANS = {
                      "assistant",
                      "stock_futures", "mtf",
                      "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
-                     "ipo_summary", "ipo_alerts", "movers"},
+                     "ipo_summary", "ipo_alerts", "movers",
+                     "earnings_calls", "group_figures"},
     },
 }
 # indicators: every indicator beyond price, SMA, EMA and RSI; fno: Indian futures and options;
@@ -109,7 +111,7 @@ PLANS = {
 # strike_rules: options legs whose strike is picked by model delta, a delta range, premium or a share of the ATM straddle
 # (the builder's preview of what a rule picks is for everyone); chart_replay: chart replay practice, logged to the trade journal; signal_webhooks: a secret webhook URL that moves paper sessions from outside alerts (TradingView, Chartink), with the signal log and the verdict's checks on the forward test; event_reminders: reminders of market events (RBI, data releases, the Fed, index changes, expiries) by phone, Telegram or email (the events calendar, its index badges and adding the events to your Money calendar are for everyone); biz_updates: monthly and quarterly business updates read into numbers on company pages, the sector view and the "new business update" alert (the list of update filings is for everyone); holders: searching named holders above 1% across companies and following one (each company's named holders are for everyone); assistant: StratLab in your AI assistant (the MCP server, mcp_server.py): read-only tools and paper orders in your own paper sessions, with keys made on Account; stock_futures: each F&O stock's stored history (OI, buildup, rollover, basis, MWPL use) and the alert on MWPL use crossing 80% (today's table is for everyone); mtf: a stock's and the market's margin-funding history and the alert on a funded level (today's numbers and the MTF cost calculator are for everyone); mf_behaviour: fund behaviour, i.e. the gap to each fund's own return in rupees, the SIP record, redemptions after a fall and holding periods (your XIRR beside the fund's NAV return is for everyone); sip_luck: the SIP test's dip rules and the spread of results over every start month (a plain SIP test with charges and the lump sum is for everyone); rates_slab: fixed-income rates after tax at the marginal rate from your own tax estimate (after tax at a slab you pick is for everyone); loan_check: each floating-rate loan against its benchmark, the gap to your statement's rate and what each change did (the benchmark, spread and reset fields and the reset dates in the calendar are for everyone); ipo_summary: the summary of an IPO's offer document (what the company does, its figures, what the money is for, the main risk factors and the promoters, each statement checked against a quote from the document); ipo_alerts: an alert when an IPO opens, closes, is allotted or lists (the IPO lists, each issue's page and facts, its bids by category and its trading since listing are for everyone); movers: the market movers in full, i.e. every row of each list (gainers, losers, most traded,
 # volume spikes, 52-week highs and lows), the index and smallest-market-value filters and the CSV (the top 5 of each list for the
-# default index, and the public page's same top 5, are for everyone)
+# default index, and the public page's same top 5, are for everyone); earnings_calls: the earnings-call calendar in full, i.e. every week ahead, the calls already held, the transcript, recording and presentation links filed after a call, the filters (your stocks, type, a company) and the calls of your stocks in the money calendar's feed (this week's calls, each with its notice and webcast or dial-in link, are for everyone); group_figures: business group figures, i.e. each member's 1-month and 1-year change, its promoter holding, the members' heatmap and the group's own longer changes (the groups, their members, market values and the day's change are for everyone)
 FEATURES = ("indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export",
             "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders",
             "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif",
@@ -120,7 +122,8 @@ FEATURES = ("indicators", "fno", "group_live", "options", "options_signal", "fas
             "assistant",
             "stock_futures", "mtf",
             "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
-            "ipo_summary", "ipo_alerts", "movers")
+            "ipo_summary", "ipo_alerts", "movers",
+            "earnings_calls", "group_figures")
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 
