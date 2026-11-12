@@ -267,3 +267,30 @@ test("pages hold still while late answers arrive: layout shift under 0.1, market
   }
   expect(over, over.join("\n")).toEqual([]);
 });
+
+// The low ones: LIVE7A-021 (a visitor's plan cards 48px in from the phone's gutter), LIVE7B-021 (the screen results and Download CSV flush to
+// the card's edge), LIVE7B-017 (a one-line download note centred beside two-line ones), LIVE7B-026 (Pro listed "Tax tools" though Basic has
+// its dividends)
+test("plan cards on a phone use the gutter, screens keep the card's padding, download notes start at the top, Pro names what it adds (LIVE7A-021, LIVE7B-017, 021, 026)", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route("**/*", (r) => { const h = new URL(r.request().url()).hostname; return h === "127.0.0.1" || h === "localhost" ? r.fallback() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" }); });
+  await page.goto("/plans");
+  const card = page.locator(".lp-price").first();
+  await expect(card).toBeVisible({ timeout: 30_000 });
+  expect(Math.round((await card.boundingBox())!.x), "the plan card on the 16px gutter").toBeLessThanOrEqual(17);
+  await expect(page.locator(".lp-price").filter({ hasText: "Pro" }).last()).toContainText("Advance tax, long-term exemption");
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const errors = await open(page, "/research/screens", "companies match");
+  const res = page.locator("section.k-card").filter({ has: page.getByRole("heading", { name: /companies match/ }) });
+  const csv = res.locator("[data-csv]");
+  await expect(csv).toBeVisible({ timeout: 30_000 });
+  const [c, b] = [(await res.boundingBox())!, (await csv.boundingBox())!];
+  expect(c.x + c.width - (b.x + b.width), "the CSV button keeps the card's padding").toBeGreaterThanOrEqual(16);
+  await page.goto("/money/itr");
+  const dl = page.locator(".k-downloads .btn > span");
+  await expect(dl.first()).toBeVisible({ timeout: 30_000 });
+  const tops = await dl.evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+  expect(Math.max(...tops) - Math.min(...tops), `download labels start level ${tops}`).toBeLessThanOrEqual(2);
+  await sane(page, errors);
+});

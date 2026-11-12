@@ -795,7 +795,7 @@ td.num, .num { font-family: var(--sans); }
 }
 @media (max-width: 600px) {
   .lp-steps, .lp-checks, .lp-tools, .lp-markets { grid-template-columns: minmax(0, 1fr); }
-  .lp-prices { grid-template-columns: minmax(0, 1fr); max-width: 560px; margin-inline: auto; }
+  .lp-prices { grid-template-columns: minmax(0, 1fr); width: 100%; max-width: 560px; margin-inline: auto; }   /* LIVE7A-021: the full column on a phone (as a flex item it shrank to its content, 48px in from the gutter) */
   .lp-price { padding: 20px 18px; }
 
   .lp-tool { padding-right: 0; }
@@ -1137,8 +1137,9 @@ label.btn.disabled { opacity: .5; }
 .screens-filters-wait { min-height: min(70vh, 640px); }   /* the filter card keeps its height while it loads, so the page does not jump beside the 70vh results (LIVE1A-035) */
 /* LIVE2-020: a page showing its own "Try again" for the same failure leaves the account banner's Retry out: one retry, not two */
 body:has(main .k-state.error button, main .k-state.error a.btn) .banner .account-retry { display: none; }
-.screens-table { margin: 0 -24px; }
-@media (max-width: 640px) { .screens-table { margin: 0 -16px; } }
+/* LIVE7B-021: the results table and its Download CSV keep the card's inner padding, as the Filters card beside it does (it ran to the card's
+   edges, "vs 52-week high" and the CSV button touching the border) */
+.screens-table { margin: 0; }
 .screens-table td:first-child { white-space: normal; min-width: 180px; }
 .screens-table th[scope="row"] { min-width: 200px; }
 .screens-table td { white-space: normal; }
@@ -2167,6 +2168,8 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-downloads { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); grid-auto-rows: 1fr; gap: var(--s2); }   /* every download the same height, whatever its note (VR3-024) */
 .k-downloads .btn { height: auto; min-height: 52px; padding-block: var(--s2); text-align: left; justify-content: flex-start; white-space: normal; min-width: 0; }
 .k-downloads .btn small { display: block; font-weight: 400; opacity: .75; font-size: var(--t-note); }
+.k-downloads .btn { align-items: flex-start; }   /* LIVE7B-017: a one-line note starts at the top like its two-line neighbours, not centred beside them */
+.k-downloads .btn > svg { margin-top: 2px; }
 .k-fold { background: none; border: 0; padding: 0; width: 100%; min-height: 32px; cursor: pointer; color: inherit; display: flex; justify-content: space-between; align-items: center; gap: var(--s3); text-align: left; flex-wrap: wrap; }
 .k-fold .k-card-title { font-size: var(--t-card); }
 /* TABLE-SWEEP: an ITR schedule with nothing this year, a row of the same list that opens nothing */
