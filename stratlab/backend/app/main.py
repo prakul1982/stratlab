@@ -71,7 +71,7 @@ from .errors import report
 from . import errors as error_alerts           # Admin → System: is Sentry on, and its test message
 from . import feedback                          # Help & feedback: the reports and Admin's inbox
 from .responses import err, ok
-from .guard import Guard, HeavyGate, Window, address as caller_address
+from .guard import UPLOADS, Guard, HeavyGate, Window, address as caller_address
 from . import research
 from .engine import walkforward
 from . import rule_check
@@ -613,6 +613,7 @@ def _load_errors():
 app.add_middleware(RequestWaits)      # innermost: a request's source calls don't sleep long on the rate limit
 app.add_middleware(db.SettingsMemo)   # each request reads a setting from the database once
 app.add_middleware(HeavyGate)   # inside the guard: heavy work takes turns, ordinary pages don't wait behind it
+app.add_middleware(HeavyGate, routes=UPLOADS, slots_env="UPLOAD_SLOTS")   # file imports take turns too, in their own gate
 app.add_middleware(Guard)   # size cap, rate limit, security headers; inside CORS so its replies stay readable
 app.add_middleware(CORSMiddleware, allow_origins=settings.FRONTEND_ORIGINS,
                    allow_methods=["*"], allow_headers=["*"], max_age=7200)   # a browser asks before each call only every 2 h, not 10 min
