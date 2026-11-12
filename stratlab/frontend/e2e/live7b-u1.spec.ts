@@ -209,3 +209,21 @@ test("the homes don't repeat the side menu; the first steps are one short line (
   }
   await expect(page.locator(".sidebar").getByRole("link").first()).toBeVisible();
 });
+
+// LIVE7B-013: with holdings, "Import from your broker" and "Pick your broker" (about 420px) came before the person's own figures, and
+// "Download CSV" sat alone on a line under the Positions header
+test("Holdings shows the person's own figures first, the import after them, and the CSV in the Positions header (LIVE7B-013)", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const errors = await open(page, "/holdings", "Where your stocks stand");
+  const summary = page.locator("#h-summary");
+  const importCard = page.locator("#h-import");
+  await expect(importCard).toBeVisible({ timeout: 30_000 });
+  expect((await summary.boundingBox())!.y, "the figures come before the import").toBeLessThan((await importCard.boundingBox())!.y);
+  expect((await summary.boundingBox())!.y, "the figures start on the first screen").toBeLessThan(700);
+  const pos = page.locator("#h-positions");
+  const csv = pos.locator("[data-csv]");
+  await expect(csv).toHaveCount(1);
+  const head = (await pos.locator(".k-card-head, .card-head").first().boundingBox())!, b = (await csv.boundingBox())!;
+  expect(b.y + b.height / 2, "the CSV button is in the header row").toBeLessThan(head.y + head.height + 2);
+  await sane(page, errors);
+});
