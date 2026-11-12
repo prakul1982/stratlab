@@ -127,7 +127,7 @@ test("landing: the plans match the server's plans exactly", async ({ page, reque
   await expect(all.locator('[data-plan="free"]')).toContainText(`your last ${plans.free.journal_trades} trades`);
   await expect(all.locator('[data-plan="basic"]')).toContainText("full trade journal");
   await expect(page.locator('.lp-price[data-plan="basic"]')).toContainText("Full trade journal");
-  await expect(page.locator('.lp-price[data-plan="pro"]')).toContainText("ITR-ready");
+  await expect(page.locator('.lp-price[data-plan="pro"]')).toContainText("ITR export");   // LIVE7B-026: the Pro card names advance tax, long-term exemption and ITR export (updated on purpose)
   for (const card of await page.locator(".lp-price").all()) expect(await card.locator("li").count()).toBe(5);            // the Plans page's five lines
 });
 
