@@ -125,8 +125,10 @@ test("MONEY-6b/6c: tax tools › dividends: a file over two years uploads, shows
   await page.getByLabel("Dividend file").setInputFiles({ name: "again.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
   await expect(page.getByText("again.csv: 0 dividends added, 2 already there from an earlier file (skipped).")).toBeVisible({ timeout: 30_000 });
   await expect(year.getByText("Saved from dividends.csv.")).toBeVisible();
-  // another year and back, then the delete
-  await year.getByLabel("Financial year").selectOption({ label: "FY 2025-26" });
+  // another year and back, then the delete (each year says what it is beside its name since Release 42; updated on purpose)
+  await year.getByLabel("Financial year").selectOption({ label: "FY 2026-27 (this year)" });
+  await expect(year.getByLabel("Dividend income")).toHaveText("₹250");
+  await year.getByLabel("Financial year").selectOption({ label: "FY 2025-26 (being filed)" });
   await expect(year.getByLabel("Dividend income")).toHaveText("₹55");
   await expect(page.getByText(/ran into a problem/)).toHaveCount(0);
   await year.getByRole("button", { name: "Delete uploaded dividends" }).click();
