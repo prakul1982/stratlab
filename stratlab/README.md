@@ -40,11 +40,15 @@ npm run dev                  # then open http://localhost:5500
 The frontend reads `public/config.js` at runtime (the API address and the Supabase public key). Set `FRONTEND_ORIGIN` in
 `.env` to the frontend's address, for CORS.
 
+The hosted backend is built from `backend/Dockerfile` (Python 3.11 and PyPI packages only); `docker build` in `backend/`
+gives the same image, which reads the same `.env` settings.
+
 Run the checks with:
 ```bash
 cd backend && pip install pytest pytest-xdist && pytest -n auto    # backend tests (synthetic data only)
 cd frontend && npm run build                                       # typecheck and production build
 cd frontend && npm run test:unit                                   # unit tests
+cd frontend && npx playwright test                                 # browser tests against the backend's fake world
 cd frontend && npm run ui-lint                                     # the layout checker, after a build
 ```
 The layout checker's rules are in [docs/UI_CHECKER.md](../docs/UI_CHECKER.md).
@@ -55,6 +59,5 @@ The layout checker's rules are in [docs/UI_CHECKER.md](../docs/UI_CHECKER.md).
 - Backtests don't model intra-candle order (if stop and target fall in the same candle, the stop is assumed to hit first).
 - European costs cover your brokerage only (no local transaction taxes such as France's), and Japanese costs likewise.
 - Tax figures are estimates to check with a chartered accountant, not tax advice: they cover only the income entered or imported, and StratLab files no return.
-- The broker's Python client (even its latest release) pins `autobahn==19.11.2`, which has known advisories, so security scanners will keep flagging it until the broker updates the package. StratLab only uses it for the outgoing connection to the broker's price feed, not to serve anything. Replacing its live-feed client with our own is the way to clear it if needed.
 - Options run as live paper trading only: backtesting them needs historical prices for every strike, which the broker doesn't provide for expired contracts. Group paper trading exits on closed candles; only Indian groups with faster entries enter between candles.
 - This is a paper trading tool: no real orders are placed. If you add live execution later, review SEBI's retail algo trading framework first.

@@ -6590,10 +6590,12 @@ _overview_lock = threading.Lock()
 
 def revenue_since(days: int = 30) -> dict:
     """The invoices of the last `days` days (DJ-004), by currency: {"INR": 6990.0, ...}, and how many there were. Read
-    from this financial year's invoices and, near its start, last year's."""
+    from this financial year's invoices and, near its start, last year's. The days are India days, today included: `days` dates in all
+    (lane upd1: the window started `days` days before today, so "the last 30 days" summed 31 dates)."""
     now = datetime.now(timezone.utc)
-    since = (now - timedelta(days=days)).astimezone(IST).date().isoformat()
-    years = {invoices.fy(now), invoices.fy(now - timedelta(days=days))}
+    start = now.astimezone(IST).date() - timedelta(days=days - 1)
+    since = start.isoformat()
+    years = {invoices.fy(now), invoices.fy(datetime(start.year, start.month, start.day, 12, tzinfo=IST))}
     rows = [i for y in sorted(years) for i in invoices.of_year(y) if str(i.get("date") or "") >= since]
     by: dict[str, float] = {}
     for i in rows:

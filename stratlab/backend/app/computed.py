@@ -5,7 +5,8 @@ A result (an AI read, a theme's read, a theme's dive, a company's figures as a t
 every user: `get(kind, key)` gives it back, `put(kind, key, value)` keeps it. Nothing expires on its own (owner, 7 Nov: "dont do
 automatically ... data doesn't change that often so we can reuse it"): a stored result is served, however old, until someone presses
 Refresh (`refresh_gate`: a guard window per kind and a daily cap per person) or the owner refreshes or removes it in Admin → Library.
-A rules change is a new key (the caller puts its rules version in the key), so nothing worked out under old rules is served.
+A rules change is a new key (the caller puts its rules version in the key, and VERSIONS below adds the code versions a kind's caller
+doesn't name), so nothing worked out under old rules is served.
 
 Where: app_settings under "cres:" (a market prefix: on Railway's market database once MARKET_DATABASE_URL is set, else the main one),
 one row a result and one index row a kind ("cres:idx:<kind>": each entry's label, market, size, when, hits and refreshes, and the kind's
@@ -55,6 +56,32 @@ def _row(kind: str, hk: str) -> str:
     return f"{PREFIX}{kind}:{hk}"
 
 
+def _deck_versions() -> list:
+    """What a kept theme deck is made from, by version: the membership rules, the deck's own layout and words, the dive's sentences and the
+    sector figures' rules."""
+    from . import deck
+    from .intel import sector_metrics, theme_base, theme_data
+    return [theme_base.RULES, deck.THEME_DECK_VERSION, theme_data.DIVE_TEXT, sector_metrics.VERSION]
+
+
+# A kind whose result depends on code versions its caller's key doesn't all name: those versions are put in the key here, so nothing worked
+# out under older code is served after a deploy (lane upd1: a theme deck's key named the rules' and the deck's versions but not the dive's
+# sentences or the sector figures' rules, so a deploy that changed only those served the day's deck made before it, from the store, all day).
+# Each entry also keeps the versions it was made under (meta "versions"), for Admin -> Library's "not served" note.
+VERSIONS = {"deck:theme": _deck_versions}
+
+
+def versions(kind: str) -> list | None:
+    """The code versions a kind's results are kept under now (VERSIONS), or None for a kind whose caller's key says it all."""
+    fn = VERSIONS.get(kind)
+    return fn() if fn else None
+
+
+def _keyed(kind: str, key):
+    v = versions(kind)
+    return key if v is None else {"key": key, "versions": v}
+
+
 def _now() -> float:
     return time.time()
 
@@ -72,7 +99,7 @@ def _count(kind: str, hk: str | None) -> None:
 
 def get(kind: str, key, count: bool = True) -> dict | None:
     """The stored entry ({"value", "at", "label", "region", "meta"}) or None. Never raises: an unreachable store is a miss."""
-    hk = hkey(key)
+    hk = hkey(_keyed(kind, key))
     try:
         e = db.json_value(db.get_setting(_row(kind, hk)), {})
     except Exception as ex:
@@ -146,7 +173,10 @@ def _merged(cur, p) -> dict:
 def put(kind: str, key, value, label: str = "", region: str = "", meta: dict | None = None, by: str | None = None) -> dict | None:
     """Keep `value` for everyone under (kind, key), replacing what was there. `by`: a Refresh asked by someone on this plan
     ("free", "basic", "pro", "admin"), counted (in aggregate) in the index. Returns the index entry, or None when not kept."""
-    hk, at = hkey(key), _now()
+    hk, at = hkey(_keyed(kind, key)), _now()
+    v = versions(kind)
+    if v is not None:
+        meta = {**(meta or {}), "versions": v}
     try:
         text = json.dumps({"value": value, "at": at, "label": str(label)[:120], "region": region, "meta": meta or {}},
                           ensure_ascii=False, default=str, separators=(",", ":"))
@@ -165,7 +195,7 @@ def put(kind: str, key, value, label: str = "", region: str = "", meta: dict | N
         old = ix["entries"].get(hk) or {}
         entry = {"label": str(label)[:120], "region": region, "size": len(text), "at": at, "first": old.get("first") or at,
                  "hits": old.get("hits", 0), "last": old.get("last") or at, "refreshes": old.get("refreshes", 0) + (1 if by else 0),
-                 "meta": {k: v for k, v in (meta or {}).items() if k in ("aliases", "members", "q", "searched", "rules", "gate")}}
+                 "meta": {k: v for k, v in (meta or {}).items() if k in ("aliases", "members", "q", "searched", "rules", "gate", "versions")}}
         ix["entries"][hk] = entry
         if by:
             ix["refreshes"] += 1

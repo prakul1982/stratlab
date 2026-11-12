@@ -132,6 +132,12 @@ def admin_rows(limit: int = 200) -> list[dict]:
     return _t().select(LIST_COLS).order("published_at", desc=True).limit(limit).execute().data or []
 
 
+def theme_sources(limit: int = 500) -> dict[str, dict]:
+    """{slug: the figures a theme post is written from (body.src)} of the stored theme posts, in one read (Admin's list, lane upd1)."""
+    rows = _t().select("slug,body").like("slug", "theme-%").limit(limit).execute().data or []
+    return {r["slug"]: (r.get("body") or {}).get("src") for r in rows if isinstance((r.get("body") or {}).get("src"), dict)}
+
+
 def set_published(slug: str, on: bool, now: datetime | None = None) -> dict | None:
     """Show or hide a post (a hidden one answers 404 and leaves the list, the sitemap and the feed). The post is kept."""
     if not valid_slug(slug) or not get(slug):
