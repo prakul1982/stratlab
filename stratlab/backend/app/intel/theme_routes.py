@@ -1304,7 +1304,7 @@ def theme_dive_companies_csv(q: str, region: str = "IN", profile=Depends(current
     body = companies_csv(m, dive_of(r, theme, m), r)
     today = datetime.now(R.IST).date()
     from fastapi.responses import Response
-    name = deck_file_name(theme, r, "csv", today).replace(" theme (", " theme companies (", 1)
+    name = f"stratlab-theme-{theme_data.slug(theme)}-{r.lower()}-companies-{today.isoformat()}.csv"      # as every table CSV is named (lib/csv.ts csvName)
     return Response(body, media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "private, no-store"})
 

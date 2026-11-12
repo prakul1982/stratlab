@@ -5,7 +5,8 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { deckDay } from "../lib/deckName";
 import { deckWhenReady } from "../lib/deckReady";
-import { fmtDate } from "../lib/format";
+import { csvName } from "../lib/csv";
+import { fmtDate, istToday } from "../lib/format";
 import { REGION_NAME, type Region } from "../lib/research";
 import { download } from "../lib/share";
 import type { Dive } from "../lib/theme";
@@ -88,7 +89,7 @@ export function ThemeCsvButton({ region, theme, dive }: { region: Region; theme:
     try {
       const url = `/research/theme-dive/companies.csv?region=${region}&q=${encodeURIComponent(theme)}`;
       const blob = await deckWhenReady(() => api<Response>(url, { raw: true }), {});
-      download(blob, `StratLab - ${`${theme} theme companies (${REGION_NAME[region]})`.normalize("NFKD").replace(/[^\x20-\x7e]+/g, " ").replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120)} - ${deckDay()}.csv`);
+      download(blob, csvName(`theme ${theme} ${region} companies`, istToday()));          // the name every table CSV has
     } catch (e) { fail(e); } finally { setMaking(false); }
   };
   return (

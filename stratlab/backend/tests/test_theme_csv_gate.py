@@ -26,7 +26,7 @@ def test_basic_gets_every_company_of_the_page_with_its_figures_and_no_deck_is_co
     r = api.get(URL)
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/csv")
     disp = r.headers["content-disposition"]
-    assert disp.startswith('attachment; filename="StratLab - AI data centers theme companies (US) - ') and disp.endswith('.csv"')
+    assert disp.startswith('attachment; filename="stratlab-theme-ai-data-centers-us-companies-') and disp.endswith('.csv"')
     rows = list(csv.reader(io.StringIO(r.content.decode("utf-8-sig"))))
     assert rows[0] == ["Company", "Symbol", "Layer", "Industry", "Market value ($ million)", rows[0][5], "EBITDA margin (%)", "Net margin (%)",
                        "ROCE (%)", "Year of the figures", "In the theme by", "What it does, in its own words"]

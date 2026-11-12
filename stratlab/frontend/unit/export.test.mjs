@@ -119,7 +119,7 @@ test("the audit as a class: every page whose main content is a table offers its 
   for (const [f, re] of [["src/pages/TaxReportPage.tsx", /saveFile\(await r\.blob\(\), `stratlab-tax-FY-/], ["src/pages/money/NetWorthPage.tsx", /saveFile\(await r\.blob\(\), `stratlab-net-worth-/],
     ["src/pages/money/UsTaxPage.tsx", /saveFile\(await r\.blob\(\), `stratlab-schedule-FA-CY/], ["src/pages/money/ItrExportPage.tsx", /saveFile\(await r\.blob\(\)/],
     ["src/pages/ExperimentPage.tsx", /download\(await r\.blob\(\), `.*-trades\.csv`\)/], ["src/pages/DeepDive.tsx", /download\(await r\.blob\(\), deckFileName\(/],
-    ["src/components/ThemeChanges.tsx", /\/research\/theme-dive\/companies\.csv\?[^\n]*\n[^\n]*deckWhenReady[^\n]*\n\s*download\(blob, `StratLab - [^\n]*\.csv`\);/]])
+    ["src/components/ThemeChanges.tsx", /\/research\/theme-dive\/companies\.csv\?[^\n]*\n[^\n]*deckWhenReady[^\n]*\n\s*download\(blob, csvName\(`theme \$\{theme\} \$\{region\} companies`, istToday\(\)\)\);/]])
     assert.match(read(f), re, f);
 });
 
