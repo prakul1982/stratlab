@@ -58,7 +58,7 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           # the thread as Claude sees it: the owner's comments and apps' (its own progress notes, previews)
           include_comments_by_actor: "${{ github.repository_owner }},*[bot]"
-          show_full_output: true
+          show_full_output: false
           claude_args: >-
             --model claude-sonnet-5-5
             --max-turns 120
