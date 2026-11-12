@@ -2461,7 +2461,7 @@ INSTAGRAM = "https://www.instagram.com/stratlab.studio/"      # the same address
 
 def _foot() -> str:
     site = settings.PUBLIC_SITE_URL
-    explore = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/library", "Strategy library"), ("/stocks", "Companies"), ("/blog", "Blog"), ("/pricing", "Plans"),
+    explore = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/library", "Strategy library"), ("/stocks", "Companies"), ("/themes", "Themes"), ("/blog", "Blog"), ("/pricing", "Plans"),
                                                                 ("/status", "Data status")))
     policies = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/terms", "Terms of service"), ("/privacy", "Privacy policy"),
                                                                    ("/refunds", "Cancellation and refunds"), ("/contact", "Contact us")))
@@ -3726,7 +3726,7 @@ def robots() -> str:
 
 def sitemap_index() -> str:
     site = settings.PUBLIC_SITE_URL
-    names = ["pages", "blog", "directory"] + [f"stocks-{r}-{i + 1}" for r, R in REGIONS.items() for i in range(max(1, -(-len(companies(R)) // CHUNK)))]
+    names = ["pages", "blog", "directory", "themes"] + [f"stocks-{r}-{i + 1}" for r, R in REGIONS.items() for i in range(max(1, -(-len(companies(R)) // CHUNK)))]
     def day(n: str) -> str:
         if n == "pages":
             return max(d for _, d in site_pages.PAGES)
@@ -3735,6 +3735,13 @@ def sitemap_index() -> str:
                 return blog.latest_day()
             except Exception as ex:
                 print("sitemap: the blog's day couldn't be read:", str(ex)[:120])
+                return ""
+        if n == "themes":                 # the public theme pages (public_themes.py): the newest stored map's day
+            try:
+                from . import public_themes
+                return public_themes.latest_day()
+            except Exception as ex:
+                print("sitemap: the themes' day couldn't be read:", str(ex)[:120])
                 return ""
         if n == "directory":              # the A-Z and index lists change with the companies list (SEO-1)
             return max((str(((_setting(f"stocks:list:{R}") or {}).get("at")) or "")[:10] for R in REGIONS.values()), default="")
@@ -3766,6 +3773,9 @@ def sitemap(name: str) -> str | None:
         return _urlset(blog.sitemap_urls(site))
     if name == "directory":              # the A-Z and index lists that link every company page (SEO-1)
         return _urlset(directory_urls())
+    if name == "themes":                 # the theme directory and the theme pages offered to search engines (public_themes.py)
+        from . import public_themes
+        return _urlset(public_themes.sitemap_rows(site))
     bits = name.split("-")
     if len(bits) != 3 or bits[0] != "stocks" or bits[1] not in REGIONS or not bits[2].isdigit() or len(bits[2]) > 6:
         return None

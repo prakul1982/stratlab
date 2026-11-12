@@ -194,6 +194,16 @@ def _cards(uid: str) -> int:
     return len(rows)
 
 
+def _research_shares(uid: str) -> int:
+    """Share links to deep dives and themes (share.py): public links, taken down."""
+    from . import share
+    rows = share.mine(uid)
+    for r in rows:
+        share.turn_off(uid, r["token"])
+    db.delete_setting(f"rshares:user:{uid}")
+    return len(rows)
+
+
 def _live(uid: str) -> int:
     """Paper and live sessions with their orders: the running ones are stopped here first."""
     import sys
@@ -250,6 +260,7 @@ STEPS: list[Step] = [
     ("referrals", "Invite link and invites", _referrals),
     ("free_basic", "Free Basic time", _free_basic),
     ("cards", "Shared company cards", _cards),
+    ("research_shares", "Shared research links", _research_shares),
     ("live", "Paper and live sessions and their orders", _live),
     ("profile_alerts", "Alert channels (Telegram chat, alert email)", _profile_alerts),
 ]
@@ -410,6 +421,7 @@ EXPORT: list[tuple[str, str, Callable[[str], object]]] = [
     ("billing", "Billing details (name, address, GSTIN)", _settings_of("billing:")),
     ("invoices", "Tax invoices", _x_invoices),
     ("company_cards", "Shared company cards", _settings_of("cards:user:")),
+    ("research_shares", "Shared research links", _settings_of("rshares:user:")),
 ]
 
 

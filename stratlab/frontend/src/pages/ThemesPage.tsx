@@ -7,6 +7,7 @@ import { THEME_IDEAS, researchApi, useRegion, type SectorAI } from "../lib/resea
 import { bizFor, LIBRARY_HEAD, libraryLabel, themeApi, type Business, type Dive, type LibraryTheme, type Listing, type NewsRow, type Prices } from "../lib/theme";
 import { StoredNote, StoredStamp, useStoredRefresh } from "../components/StoredStamp";
 import { RegionSwitch } from "../components/Research";
+import { ShareResearchButton } from "../components/ShareResearch";
 import { ChainCard, ClaimsCard, LayerCard, ListingsCard, MembersCard, NewsCard, NumbersCards, SubThemesCard, ThemeDownloads } from "../components/ThemeDive";
 import { SaveButton, SavedList } from "../components/SavedSearches";
 import { themeReady, themeSnap } from "../lib/savedSnap";
@@ -161,7 +162,8 @@ export function ThemesPage() {
         <>
           <Card>
             <CardHead title={r.sector} actions={<><StoredStamp at={r.generated_at > 0 ? r.generated_at : null} tz={marketTz(region)} busy={busy || rf.busy} onRefresh={refresh} />
-              <SaveButton kind="theme" label="Save theme" name={r.sector || q} params={{ q, region }} snap={() => (themeReady(r) ? themeSnap(r) : null)} /></>} />
+              <SaveButton kind="theme" label="Save theme" name={r.sector || q} params={{ q, region }} snap={() => (themeReady(r) ? themeSnap(r) : null)} />
+              {themeReady(r) && <ShareResearchButton kind="theme" region={region} target={q} label="this theme" />}</>} />
             <StoredNote busy={rf.busy} state={rf.state} at={r.generated_at > 0 ? r.generated_at : null} tz={marketTz(region)} />
             {r.summary && <p className="k-lede">{r.summary}</p>}
             {r.core && <p className="k-small">Everything converges on <b>{r.core}</b>.</p>}

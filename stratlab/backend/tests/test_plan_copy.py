@@ -106,3 +106,16 @@ def test_every_paid_feature_is_on_its_plan_card():
         for other in ("free", "basic", "pro"):
             if other != plan:
                 assert words not in _plan(cards, other), f"{f} ({words!r}) is on the {other} card too"
+
+
+def test_share_links_match_and_each_plan_names_them():
+    """Bet 3: the public share links a month (plans.py share_links_per_month) as planFeatures.ts says them (SHARE_LINKS), and each
+    plan's full feature list names them with that number."""
+    m = re.search(r"export const SHARE_LINKS\b[^=]*=\s*\{([^}]*)\}", TS)
+    assert m, "SHARE_LINKS not found in planFeatures.ts"
+    for plan, p in PLANS.items():
+        assert _num(m.group(1), plan) == p["share_links_per_month"], plan
+    cards = _block("FEATURES")
+    assert "${SHARE_LINKS.free} share link" in _plan(cards, "free")
+    assert "${SHARE_LINKS.basic} public share links" in _plan(cards, "basic")
+    assert "with unlimited share links" in _plan(cards, "pro")

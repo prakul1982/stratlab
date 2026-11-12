@@ -14,6 +14,7 @@ PLANS = {
         "screens": 2,                 # saved stock screens
         "deepdives_per_month": 2,     # companies opened in the deep dive (each counted once a month)
         "decks_per_month": 1,         # slide decks of a company or a theme (PowerPoint or PDF)
+        "share_links_per_month": 1,   # public share links (/r/<token>) to a deep dive or a theme made this month (share.py)
         "networth_items": 5,          # typed-in entries in Net worth (assets, loans and policies)
         "mf_schemes": 5,              # mutual fund schemes kept (Money: mutual funds)
         "journal_trades": 50,         # closed trades the trade journal keeps and counts (Trade: journal)
@@ -36,6 +37,7 @@ PLANS = {
         "screens": 10,
         "deepdives_per_month": 15,
         "decks_per_month": 5,
+        "share_links_per_month": 30,
         "networth_items": None,
         "mf_schemes": None,       # unlimited
         "journal_trades": None,
@@ -67,6 +69,7 @@ PLANS = {
         "screens": 25,
         "deepdives_per_month": None,  # unlimited (and no daily cap on fresh AI reads: ai_reads_per_day)
         "decks_per_month": None,
+        "share_links_per_month": None,  # unlimited
         "networth_items": None,
         "mf_schemes": None,
         "journal_trades": None,
@@ -215,6 +218,11 @@ def deepdives(plan: str) -> int | None:
 def decks(plan: str) -> int | None:
     """How many slide decks (a company's or a theme's) a month (None: unlimited)."""
     return PLANS[plan]["decks_per_month"]
+
+
+def share_links(plan: str) -> int | None:
+    """How many public share links (a deep dive's or a theme's dated snapshot) a month (None: unlimited)."""
+    return PLANS[plan]["share_links_per_month"]
 
 
 def networth_items(plan: str) -> int | None:

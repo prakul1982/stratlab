@@ -15,6 +15,7 @@ import { Badge, Card, CardHead, CsvButton, DataTable, ErrorState, Meter, PageHea
 import { AlertButton } from "../components/AlertForm";
 import { SaveButton } from "../components/SavedSearches";
 import { ShareCompanyButton } from "../components/ShareCompany";
+import { ShareResearchButton } from "../components/ShareResearch";
 import { track } from "../lib/analytics";
 import { CHECK_BADGE, checkCountsLine } from "../lib/checklistText";
 
@@ -278,6 +279,7 @@ export function DeepDivePage() {
         </>}
         <AlertButton region={region} symbol={sym} />
         <ShareCompanyButton region={region} symbol={sym} />
+        {v && <ShareResearchButton kind="deep" region={region} target={sym} label="this deep dive" />}
         {v && <Link className="btn quiet sm" to="/research/investor">Watchlist at a glance →</Link>}
       </div>
       {limited && <PlanNote>{error}</PlanNote>}

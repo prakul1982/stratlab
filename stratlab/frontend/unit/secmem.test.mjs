@@ -11,7 +11,10 @@ register("data:text/javascript," + encodeURIComponent(`export async function res
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
 test("SECMEM 1a: every page is sent with HSTS (a year, subdomains, no preload yet) beside the unchanged CSP", () => {
-  const all = JSON.parse(read("vercel.json")).headers.find((h) => h.source === "/(.*)").headers;
+  // (updated on purpose, bet 3) the site-wide rule leaves out /embed/*, the one place another site may frame; that rule sends HSTS too
+  const rules = JSON.parse(read("vercel.json")).headers;
+  const all = rules.find((h) => h.source === "/((?!embed/).*)").headers;
+  assert.equal(rules.find((h) => h.source === "/embed/(.*)").headers.find((h) => h.key === "Strict-Transport-Security")?.value, "max-age=31536000; includeSubDomains");
   const v = (k) => all.find((h) => h.key === k)?.value;
   assert.equal(v("Strict-Transport-Security"), "max-age=31536000; includeSubDomains");
   assert.match(v("Content-Security-Policy"), /^default-src 'self'; script-src 'self' /);
