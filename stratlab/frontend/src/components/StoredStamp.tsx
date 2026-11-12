@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { writtenAt } from "../lib/format";
-import { refreshesLeft, resetsWord, usageChanged, usedWord, useUsage, type RefreshState, type UsageRow } from "../lib/usage";
+import { refreshesLeft, refreshNotOnPlan, REFRESH_ON_BASIC, resetsWord, usageChanged, usedWord, useUsage, type RefreshState, type UsageRow } from "../lib/usage";
 import { DataTable, Skeleton, Working } from "./kit";
 
 /* One way every stored shared read says how old it is and lets a person read it again (R19, owner 7 Nov: "tell the user exactly like
@@ -17,13 +17,14 @@ export function StoredStamp({ at, tz, busy, onRefresh }: { at: number | null | u
   const { usage } = useUsage();
   const left = refreshesLeft(usage);
   const none = left === 0;
+  const off = refreshNotOnPlan(usage);           // FREE-TIER: none on the plan at all
   return (
     <span className="stored-stamp" data-testid="stored-stamp">
       {at ? <span className="k-note" data-testid="stored-at">Last updated {writtenAt(at, tz)}</span> : null}
-      <button type="button" className="btn quiet sm" disabled={busy || none} title={none ? NO_REFRESH_LEFT : undefined} onClick={onRefresh}>
+      <button type="button" className="btn quiet sm" disabled={busy || none} title={off ? REFRESH_ON_BASIC : none ? NO_REFRESH_LEFT : undefined} onClick={onRefresh}>
         {busy ? "Refreshing…" : "Refresh"}
       </button>
-      {left != null && <span className="k-note" data-testid="refresh-left">{none ? "None left today" : `${left} left today`}</span>}
+      {left != null && <span className="k-note" data-testid="refresh-left">{off ? "On Basic" : none ? "None left today" : `${left} left today`}</span>}
     </span>
   );
 }
@@ -35,11 +36,11 @@ export function StoredNote({ busy, state, at, tz }: { busy: boolean; state: Refr
   const when = at ? writtenAt(at, tz) : "";
   const left = refreshesLeft(usage);
   const msg = state === "fresh" ? `Updated ${when} – already fresh.`
-    : state === "capped" ? `${NO_REFRESH_LEFT}. Showing the read from ${when}.`
+    : state === "capped" ? `${refreshNotOnPlan(usage) ? REFRESH_ON_BASIC : NO_REFRESH_LEFT}. Showing the read from ${when}.`
     : state === "failed" ? `Couldn't refresh just now. Still showing the read from ${when}.`
     : state === "started" ? "Refreshing for everyone. It fills in here on its own."
     : state === "done" ? "Updated now, for everyone who opens it."
-    : left === 0 ? `${NO_REFRESH_LEFT}.` : null;
+    : left === 0 ? `${refreshNotOnPlan(usage) ? REFRESH_ON_BASIC : NO_REFRESH_LEFT}.` : null;
   return msg ? <p className="k-note stored-note" role="status" data-testid="stored-note">{msg}</p> : null;
 }
 

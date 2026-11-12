@@ -34,6 +34,8 @@ export const PAGE_GATES: Record<string, Gate> = {
   "/money/tax-tools": { feature: "tax_tools", whole: false },
   "/money/us-tax": { feature: "us_tax", whole: false },
   "/money/itr": { feature: "itr_export", whole: false },
+  // FREE-TIER: the tax report on screen is for everyone; its CSV and PDF downloads are Basic's
+  "/tax-report": { feature: "tax_export", whole: false },
   "/money/sip-test": { feature: "sip_luck", whole: false },
   "/money/rates": { feature: "rates_slab", whole: false },
   "/money/calendar": { feature: "money_reminders", whole: false },
@@ -43,7 +45,7 @@ export const PAGE_GATES: Record<string, Gate> = {
 /** The paid part of a page that is free in the main, in a few words for its card's tag: "Pro for advance tax" (LIVE1B-022: "Pro for
  * part" did not say which part). */
 export const PART_WORDS: Record<string, string> = {
-  tax_tools: "advance tax", us_tax: "rupee workings", itr_export: "the downloads", networth: "history", mf_gains: "gains by year", journal: "the checks",
+  tax_tools: "advance tax", us_tax: "rupee workings", itr_export: "the downloads", tax_export: "the downloads", networth: "history", mf_gains: "gains by year", journal: "the checks",
 };
 
 /** An IPO's own page holds the summary of its offer document (Basic); the rest of the page is for everyone. */

@@ -115,7 +115,9 @@ function bestYear(r: Report, cur: number | null, asked: number | null): { fy: nu
 }
 
 export function TaxReportPage() {
-  const { fail, notify } = useApp();
+  const { fail, notify, me } = useApp();
+  // FREE-TIER: the report on screen is for everyone; its CSV and PDF downloads are Basic's (a Free account in its grace still has them)
+  const canExport = me?.plan_info?.features?.tax_export !== false;
   const [rep, setRep] = useState<Report | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fy, setFy] = useState<number | null>(null);
@@ -342,10 +344,10 @@ export function TaxReportPage() {
               <Select small label="Financial year" value={fy ?? ""} onChange={(x) => { setFy(Number(x)); setMovedFrom(null); setAllSales(false); }}
                 options={rep.years.map((x) => ({ value: x.fy, label: `${x.label}${x.fy === rep.current_fy ? " (this year)" : ""}${hasTrades(x) ? "" : " · no trades"}` }))} />
               {/* LIVE1B-069: the two downloads are one pair of equal buttons (two widths on a phone) */}
-              <span className="k-btn-pair">
+              {!canExport ? <Link className="btn quiet sm" to="/plans" data-testid="tax-export-locked" title="The tax report's CSV and PDF downloads are on Basic. The report on screen stays free.">🔒 Downloads: on Basic</Link> : <span className="k-btn-pair">
                 <button type="button" className="btn quiet sm" disabled={!!getting} onClick={() => download("csv")}><Download size={16} />{getting === "csv" ? "Making the CSV…" : "Download CSV"}</button>
                 <button type="button" className="btn quiet sm" disabled={!!getting} onClick={() => download("pdf")}><Download size={16} />{getting === "pdf" ? "Making the PDF…" : "Download PDF summary"}</button>
-              </span>
+              </span>}
             </>} />
             {movedFrom != null && movedFrom !== y.fy && <p className="k-small k-muted" data-testid="tax-moved-year">{movedYearNote(movedFrom, y.fy, rep.current_fy, "trades")}</p>}
           </Card>

@@ -3,7 +3,8 @@ import { DataTable, type Column } from "./kit/DataTable";
 import { Disclosure } from "./kit/Disclosure";
 import type { ReactNode } from "react";
 import { Info } from "./ui";
-import { ADS, EVERYONE, FLAG_GROUP, FLAG_GROUPS, FLAGS, LIMITS, NUMBERS, unlimitedLabel, type Limits, type PlanId } from "../lib/plans";
+import { ADS, FLAG_GROUP, FLAG_GROUPS, FLAGS, LIMITS, NUMBERS, unlimitedLabel, type Limits, type PlanId } from "../lib/plans";
+import { EVERYONE } from "../lib/planFeatures";
 
 /** Every limit and feature side by side, from the server's plans when signed in; signed out, the
  * same tables from the app's own copy of the limits (R60-012: a visitor comparing plans saw less than a signed-in user). */
@@ -12,7 +13,8 @@ export function PlanCompare({ plans }: { plans?: Record<string, Partial<Limits>>
   const num = (p: PlanId, k: keyof Limits) => {
     const v = lim(p)[k] as number | null;
     // Free's one session is a trial of 5 market days: said as a trial in the cell (DK-005)
-    return v == null ? unlimitedLabel(p, k) : p === "free" && k === "live_limit" ? `${v} (5-market-day trial)` : v.toLocaleString("en-IN");
+    // FREE-TIER: no decks of its own on Free: the sample deck (Plans page) shows what one holds
+    return v == null ? unlimitedLabel(p, k) : p === "free" && k === "live_limit" ? `${v} (5-market-day trial)` : v === 0 && k === "decks_per_month" ? "0 (a sample deck to download)" : v.toLocaleString("en-IN");
   };
   const ids: PlanId[] = ["free", "basic", "pro"];
   const names = { free: "Free", basic: "Basic", pro: "Pro" };

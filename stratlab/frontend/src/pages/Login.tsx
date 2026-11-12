@@ -76,7 +76,7 @@ const RESEARCH: [string, string][] = [
   ["Deep dive", "Ten years of numbers, then the business and its plans in its own words."],
   ["Report card and checklist", "What management promised on past calls, against what followed."],
   ["Themes", "Any theme's listed companies and their numbers, as a deck too."],
-  ["Company decks", "A deep dive as slides, PowerPoint or PDF."],
+  ["Company decks", "A deep dive as slides (Basic and Pro)."],
   ["Market mood", "The day in one page: breadth, sectors, flows."],
   ["Heatmap", "An index's companies as tiles, coloured by their move."],
   ["Flows", "FII and DII buying and selling, day by day."],

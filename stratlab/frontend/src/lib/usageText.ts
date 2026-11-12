@@ -9,6 +9,12 @@ export function refreshesLeft(u: Usage | null): number | null {
   return r ? r.left : null;
 }
 
+/** FREE-TIER: the plan has no refreshes at all (Free's limit 0): the button says where they are, never "back at midnight". */
+export function refreshNotOnPlan(u: Usage | null): boolean {
+  return u?.rows.find((x) => x.key === "refresh")?.limit === 0;
+}
+export const REFRESH_ON_BASIC = "Refreshing a stored read is on Basic and Pro";
+
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** When a limit starts again, in words: "Midnight India time", "1 Dec", or "When you remove one" for a kept count. */

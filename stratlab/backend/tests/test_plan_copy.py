@@ -42,7 +42,9 @@ def test_limits_and_features_match():
     limits = _block("LIMITS")
     keys = ("backtests_per_month", "ai_builds_per_month", "live_limit", "group_size", "deepdives_per_month", "decks_per_month",
             "stock_alerts", "screens", "holdings", "networth_items", "mf_schemes", "journal_trades",
-            "watchlists", "watchlist_symbols", "chart_saves", "chart_indicators")
+            "watchlists", "watchlist_symbols", "chart_saves", "chart_indicators",
+            # (updated on purpose, FREE-TIER: the new theme limit and the per-plan daily AI reads are in both copies too)
+            "themes_per_month", "ai_reads_per_day")
     for plan, p in PLANS.items():
         text = _plan(limits, plan)
         for k in keys:
@@ -87,6 +89,7 @@ CARD_WORDS = {
     "loan_check": "floating-rate loan check",
     "ipo_summary": "IPO offer document summaries",
     "ipo_alerts": "IPO alerts",
+    "tax_export": "tax report downloads",          # (updated on purpose, FREE-TIER: the tax report's CSV and PDF move to Basic)
 }
 
 
@@ -99,3 +102,42 @@ def test_every_paid_feature_is_on_its_plan_card():
         for other in ("free", "basic", "pro"):
             if other != plan:
                 assert words not in _plan(cards, other), f"{f} ({words!r}) is on the {other} card too"
+
+
+# ---------- FREE-TIER: every place that states Free's limits says the server's numbers ----------
+_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _readme_row(start: str) -> list[str]:
+    text = (_ROOT / "README.md").read_text(encoding="utf-8")
+    line = next(x for x in text.splitlines() if x.startswith(f"| {start}"))
+    return [c.strip() for c in line.strip("|").split("|")]
+
+
+def test_readme_plan_table_says_the_free_tier():
+    f = PLANS["free"]
+    from app.plans import REFRESHES_PER_DAY
+    assert _readme_row("Backtests")[1] == f"{f['backtests_per_month']} a month"
+    assert _readme_row("AI strategy builds")[1] == f"{f['ai_builds_per_month']} a month"
+    assert _readme_row("Instruments in a group test")[1:3] == [str(f["group_size"]), str(PLANS["basic"]["group_size"])]
+    assert _readme_row("Company deep dives")[1] == f"{f['deepdives_per_month']} a month"
+    assert f["decks_per_month"] == 0 and _readme_row("Slide decks")[1].startswith("None (a sample deck")
+    assert _readme_row("New themes mapped")[1:4] == [f"{f['themes_per_month']} a month", f"{PLANS['basic']['themes_per_month']} a month", "Unlimited"]
+    assert _readme_row("Fresh AI reads a day")[1:4] == [str(f["ai_reads_per_day"]), str(PLANS["basic"]["ai_reads_per_day"]), "Unlimited"]
+    assert _readme_row("AI answers in the search box")[1:4] == [str(PLANS[p]["search_ai_per_day"]) for p in ("free", "basic", "pro")]
+    assert REFRESHES_PER_DAY["free"] == 0 and _readme_row("Refreshes of a stored result")[1] == "None"
+    assert _readme_row("Stock alerts on at once")[1] == f"{f['stock_alerts']} / {f['screens']} / {f['holdings']}"
+    assert _readme_row("The tax report's CSV and PDF downloads")[1:4] == ["–", "✓", "✓"]
+
+
+def test_features_doc_and_cards_say_the_free_tier():
+    f = PLANS["free"]
+    doc = (_ROOT / "docs" / "FEATURES.md").read_text(encoding="utf-8")
+    assert f"{f['ai_reads_per_day']} fresh AI reads and {f['search_ai_per_day']} search answers a day, no refreshes" in doc
+    assert f"{f['themes_per_month']} new theme, {f['deepdives_per_month']} deep dive, {f['backtests_per_month']} backtests and {f['ai_builds_per_month']} AI builds a month" in doc
+    assert "sample deck" in doc and "14 days" in doc
+    # the cards (plans.ts KEY) never say "0 slide deck"; Free's card says its deep dive and daily reads from LIMITS
+    key = _block("KEY")
+    assert "slide deck a month" not in _plan(key, "free")
+    assert "${L.free.deepdives_per_month} company deep dive a month, ${L.free.ai_reads_per_day} fresh AI reads a day" in _plan(key, "free")
+    assert "${L.free.screens} saved screen," in _plan(key, "free")

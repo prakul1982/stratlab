@@ -36,7 +36,7 @@ test("R8O-002: the daily cap is said plainly, with no Ask again beside it", asyn
 test("R8O-002: Plans lists the fresh AI reads a day, from the same numbers as the server", async () => {
   const { LIMITS, NUMBERS } = await import("../src/lib/plans.ts");
   const { FEATURES } = await import("../src/lib/planFeatures.ts");          // LIVE4-020: the full lists, apart
-  assert.equal(LIMITS.free.ai_reads_per_day, 60);
+  assert.equal(LIMITS.free.ai_reads_per_day, 5);          // (updated on purpose, FREE-TIER: Free's fresh AI reads went from 60 to 5 a day)
   assert.equal(LIMITS.basic.ai_reads_per_day, 60);
   assert.equal(LIMITS.pro.ai_reads_per_day, null);
   assert.ok(NUMBERS.some(([k, label]) => k === "ai_reads_per_day" && /market mood, never count/.test(label)));

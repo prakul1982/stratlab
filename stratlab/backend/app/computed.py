@@ -321,7 +321,7 @@ def refresh_gate(profile: dict | None, kind: str, at: float | None, guard: float
     if word == "admin" or not profile or not profile.get("id"):
         return "go"
     from .plans import refreshes_per_day
-    cap = refreshes_per_day(word)
+    cap = refreshes_per_day(word, profile)     # FREE-TIER: Free 0, 3 for a Free account in its grace
     try:
         if cap is not None and db.count_usage(profile["id"], "refresh", day_start()) >= cap:
             return "capped"

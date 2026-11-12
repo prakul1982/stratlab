@@ -134,12 +134,16 @@ export interface PlanInfo {
   fno: boolean;
   price_year?: number; group_size?: number; holdings?: number; stock_alerts?: number; screens?: number;
   deepdives_per_month?: number | null; decks_per_month?: number | null; features?: Record<string, boolean>;
+  /** FREE-TIER: new themes mapped a month, and the daily AI caps (null: none). */
+  themes_per_month?: number | null; ai_reads_per_day?: number | null; search_ai_per_day?: number | null;
   /** Market Watch (MW-1): lists, symbols in a list, charts that keep drawings, indicators on a chart. null: no limit. */
   watchlists?: number | null; watchlist_symbols?: number | null; chart_saves?: number | null; chart_indicators?: number | null;
 }
 /** Experience: only changes defaults (what starts open, which tools are suggested), never what's allowed. */
 export type Level = "new" | "some" | "pro";
 export type Focus = "invest" | "trade" | "money" | "both";
+
+export type FreeChange = { on: string; rows: { key: string; label: string; before: number | null; after: number | null }[]; moves: string[] };
 
 export interface Me {
   id: string; email: string | null; plan: "free" | "basic" | "pro"; plan_info: PlanInfo;
@@ -149,6 +153,8 @@ export interface Me {
   signed_in_with?: string | null;
   usage: { backtests_used: number; backtests_limit: number | null; ai_used: number; ai_limit: number | null;
     deepdive_used?: number; deepdive_limit?: number | null; deck_used?: number; deck_limit?: number | null;
+    /** FREE-TIER: new themes mapped this month and the plan's limit (null: none). */
+    theme_used?: number; theme_limit?: number | null;
     /** The plan's own limits (what the Plans page lists), and what lifts them now ("early access", "the launch offer"). */
     deepdive_plan_limit?: number | null; deck_plan_limit?: number | null; lifted_by?: string | null;
     /** Fresh AI reads today (India's day) against the daily cap; a null limit is no cap (Pro, the site's admins). */
@@ -167,6 +173,8 @@ export interface Me {
   /** The site owner is viewing the app as this plan (lib/viewAs.ts); the server sends it for the owner only, null when it is off. */
   view_as?: "free" | "basic" | "pro" | null;
   promo?: { until: string } | null; free_basic_until?: string | null;
+  /** FREE-TIER: an account made before the smaller Free plan keeps the old counts until `on`; the notice lists each change (lib/freeChange.ts). */
+  free_change?: FreeChange | null;
   prefs?: { level: Level | null; focus?: Focus | null; space?: "trade" | "invest" | "money" | "all" | null; mine?: { order: string[]; hidden: string[] } | null; broker?: string | null;
     /** Which companies the calendars and Invest home open on: every company (the default) or only the person's own stocks (owner, 5 Nov). */
     companies?: "all" | "mine" | null };

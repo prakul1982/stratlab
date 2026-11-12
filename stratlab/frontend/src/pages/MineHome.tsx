@@ -21,6 +21,7 @@ import type { LiveRow } from "../lib/types";
 import { Badge, Card, CardHead, Delta, EmptyState, ErrorState, PageHeader, Signed, Skeleton, Spark, Stat } from "../components/kit";
 import { FirstSteps } from "../components/FirstSteps";
 import { PromoCountdown } from "../components/PromoCountdown";
+import { FreeChangeNotice } from "../components/FreeChangeNotice";
 import { PlanInline } from "../components/PlanInterest";
 import { notRunning } from "../lib/tradeUi";
 import { SavedList } from "../components/SavedSearches";
@@ -105,7 +106,7 @@ export function MineHome() {
         requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('[aria-controls="mine-customise"]')?.focus());
       }} />}
       {/* one line with the next step, so the first screen holds the person's own numbers (LIVE1B-086: a 375px checklist came first); the whole list is on each space's home */}
-      <PromoCountdown /><FirstSteps compact />
+      <FreeChangeNotice /><PromoCountdown /><FirstSteps compact />
       {shown.length === 0 ? (
         <EmptyState title="Every card is hidden" action={{ label: "Show the cards", onClick: () => { change(DEFAULT_LAYOUT); } }}>Use Customise to choose what My space shows.</EmptyState>
       ) : (

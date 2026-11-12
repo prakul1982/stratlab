@@ -111,7 +111,10 @@ class Settings:
 
     # Research: US company data (free key at finnhub.io). India uses Screener.in, Yahoo and Kite, no key needed.
     FINNHUB_API_KEY = _env("FINNHUB_API_KEY")
-    RESEARCH_AI_PER_DAY = int(_env("RESEARCH_AI_PER_DAY", "60") or 60)   # fresh AI analyses per user per day
+    RESEARCH_AI_PER_DAY = int(_env("RESEARCH_AI_PER_DAY", "60") or 60)   # Basic's fresh AI analyses per user per day (Free's: plans.py)
+    # FREE-TIER: when the smaller Free plan starts (the deploy that brings it; the coordinator sets it at deploy). Accounts made before it
+    # keep Free's old counts for 14 days after it (plans.free_grace_until); accounts made after get the new ones at once
+    FREE_TIER_CHANGE_AT = _env("FREE_TIER_CHANGE_AT", "2026-11-16T00:00:00+05:30")
 
     TELEGRAM_BOT_TOKEN = _env("TELEGRAM_BOT_TOKEN")
     SMTP_HOST = _env("SMTP_HOST")

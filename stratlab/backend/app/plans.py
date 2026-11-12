@@ -4,16 +4,21 @@ from datetime import datetime, timedelta, timezone
 PLANS = {
     "free": {
         "name": "Free", "price": 0, "price_year": 0,
-        "backtests_per_month": 10,
-        "ai_builds_per_month": 10,
+        # FREE-TIER (owner, Nov: Free is a teaser; the public pages are what attracts people): the counts below are Free's from
+        # FREE_TIER_CHANGE_AT; accounts made before it keep FREE_BEFORE's for FREE_GRACE_DAYS (free_grace_until)
+        "backtests_per_month": 5,
+        "ai_builds_per_month": 5,
         "live_limit": 1,              # only during the trial
         "live_trial_days": 5,         # Indian trading days (no weekends or holidays), counted from the first start
-        "group_size": 10,             # instruments in one group test
+        "group_size": 5,              # instruments in one group test
         "holdings": 30,               # stocks in My Holdings
-        "stock_alerts": 5,            # active price and indicator alerts on stocks
-        "screens": 2,                 # saved stock screens
-        "deepdives_per_month": 2,     # companies opened in the deep dive (each counted once a month)
-        "decks_per_month": 1,         # slide decks of a company or a theme (PowerPoint or PDF)
+        "stock_alerts": 3,            # active price and indicator alerts on stocks
+        "screens": 1,                 # saved stock screens (running a screen has no limit on any plan)
+        "deepdives_per_month": 1,     # companies opened in the deep dive (each counted once a month)
+        "decks_per_month": 0,         # slide decks of a company or a theme (PowerPoint or PDF); Free gets the sample deck (sample_deck)
+        "themes_per_month": 1,        # NEW themes mapped a month (a theme already in the library opens on every plan)
+        "ai_reads_per_day": 5,        # fresh AI reads a day, refreshes included (ai_reads_per_day)
+        "search_ai_per_day": 10,      # the search box's AI answers a day
         "networth_items": 5,          # typed-in entries in Net worth (assets, loans and policies)
         "mf_schemes": 5,              # mutual fund schemes kept (Money: mutual funds)
         "journal_trades": 50,         # closed trades the trade journal keeps and counts (Trade: journal)
@@ -36,6 +41,9 @@ PLANS = {
         "screens": 10,
         "deepdives_per_month": 15,
         "decks_per_month": 5,
+        "themes_per_month": 10,
+        "ai_reads_per_day": 60,       # settings.RESEARCH_AI_PER_DAY, when set, is Basic's (ai_reads_per_day)
+        "search_ai_per_day": 40,
         "networth_items": None,
         "mf_schemes": None,       # unlimited
         "journal_trades": None,
@@ -51,7 +59,8 @@ PLANS = {
                      "biz_updates", "holders",
                      "stock_futures", "mtf",
                      "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
-                     "ipo_summary", "ipo_alerts"},
+                     "ipo_summary", "ipo_alerts",
+                     "tax_export"},
     },
     "pro": {
         "name": "Pro", "price": 1999, "price_year": 19999,
@@ -65,6 +74,9 @@ PLANS = {
         "screens": 25,
         "deepdives_per_month": None,  # unlimited (and no daily cap on fresh AI reads: ai_reads_per_day)
         "decks_per_month": None,
+        "themes_per_month": None,
+        "ai_reads_per_day": None,
+        "search_ai_per_day": 40,
         "networth_items": None,
         "mf_schemes": None,
         "journal_trades": None,
@@ -82,7 +94,8 @@ PLANS = {
                      "assistant",
                      "stock_futures", "mtf",
                      "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
-                     "ipo_summary", "ipo_alerts"},
+                     "ipo_summary", "ipo_alerts",
+                     "tax_export"},
     },
 }
 # indicators: every indicator beyond price, SMA, EMA and RSI; fno: Indian futures and options;
@@ -118,7 +131,9 @@ FEATURES = ("indicators", "fno", "group_live", "options", "options_signal", "fas
             "assistant",
             "stock_futures", "mtf",
             "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
-            "ipo_summary", "ipo_alerts")
+            "ipo_summary", "ipo_alerts",
+            "tax_export")
+# tax_export: the tax report's CSV and PDF downloads (the report on screen is for everyone)
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 
@@ -175,8 +190,71 @@ def bigger_plan(plan: str, key: str) -> str | None:
     return None
 
 
-def group_size(plan: str) -> int:
-    return PLANS[plan]["group_size"]
+# ---------- FREE-TIER: the smaller Free plan, and the accounts that keep the old one for a while ----------
+# Free's counts before FREE_TIER_CHANGE_AT (config): an account made before then keeps these for FREE_GRACE_DAYS after it, and sees a
+# one-time notice on Account and My space saying what changes and when (free_change_notice). New accounts get PLANS["free"] at once.
+FREE_BEFORE = {"backtests_per_month": 10, "ai_builds_per_month": 10, "group_size": 10, "stock_alerts": 5, "screens": 2,
+               "deepdives_per_month": 2, "decks_per_month": 1, "themes_per_month": None, "ai_reads_per_day": 60,
+               "search_ai_per_day": 40, "refreshes_per_day": 3}
+FREE_BEFORE_FEATURES = {"tax_export"}           # what Free had before that it loses with the change
+FREE_GRACE_DAYS = 14
+# what the notice lists, in order: (the key, its words)
+FREE_CHANGE_WORDS = (("ai_reads_per_day", "Fresh AI reads a day"), ("refreshes_per_day", "Refreshes of a stored read a day"),
+                     ("search_ai_per_day", "AI answers in the search box a day"), ("themes_per_month", "New themes mapped a month"),
+                     ("backtests_per_month", "Backtests a month"), ("ai_builds_per_month", "AI strategy builds a month"),
+                     ("deepdives_per_month", "Company deep dives a month"), ("decks_per_month", "Slide decks a month"),
+                     ("stock_alerts", "Stock alerts on at a time"), ("screens", "Saved screens"), ("group_size", "Instruments in a group test"))
+
+
+def free_change_at() -> datetime:
+    """When the smaller Free plan started (config.FREE_TIER_CHANGE_AT, set at the deploy that brought it)."""
+    from .config import settings
+    t = _dt(settings.FREE_TIER_CHANGE_AT)
+    return t if t.tzinfo else t.replace(tzinfo=IST)
+
+
+def free_grace_until(profile: dict | None, now: datetime | None = None) -> datetime | None:
+    """When an account made before the change stops having Free's old counts, or None (made after it, the grace is over, or a
+    "View as" plan, which shows the plan as it is). Only the counts of the Free plan: a paid plan is never touched."""
+    if not profile or view_as_of(profile.get("_view_as")):
+        return None
+    made = profile.get("created_at")
+    if not made:
+        return None
+    try:
+        made = _dt(made)
+    except (TypeError, ValueError):
+        return None
+    made = made if made.tzinfo else made.replace(tzinfo=timezone.utc)
+    at = free_change_at()
+    end = at + timedelta(days=FREE_GRACE_DAYS)
+    return end if made < at and (now or datetime.now(timezone.utc)) < end else None
+
+
+def _limit(who, key: str):
+    """A plan's count `key`: `who` is a plan ("free") or a profile, whose plan (plan_of) is read and, on Free, an account in its grace
+    keeps FREE_BEFORE's count."""
+    if isinstance(who, dict):
+        plan = plan_of(who)
+        if plan == "free" and key in FREE_BEFORE and free_grace_until(who):
+            return FREE_BEFORE[key]
+        return PLANS[plan][key]
+    return PLANS[who][key]
+
+
+def limit_of(who, key: str):
+    """The count `key` for a plan or a profile (see _limit): the one place a request reads a changed Free count."""
+    return _limit(who, key)
+
+
+def allows_for(profile: dict, feature: str) -> bool:
+    """allows() for a person: on Free in the grace, what Free had before the change (FREE_BEFORE_FEATURES) still works."""
+    plan = plan_of(profile)
+    return allows(plan, feature) or (plan == "free" and feature in FREE_BEFORE_FEATURES and free_grace_until(profile) is not None)
+
+
+def group_size(plan) -> int:
+    return _limit(plan, "group_size")
 
 
 def holdings_limit(plan: str) -> int:
@@ -184,24 +262,29 @@ def holdings_limit(plan: str) -> int:
     return PLANS[plan]["holdings"]
 
 
-def stock_alerts(plan: str) -> int:
-    """How many stock alerts can be on at once."""
-    return PLANS[plan]["stock_alerts"]
+def stock_alerts(plan) -> int:
+    """How many stock alerts can be on at once (a plan, or a profile: _limit)."""
+    return _limit(plan, "stock_alerts")
 
 
-def screens(plan: str) -> int:
-    """How many stock screens can be saved."""
-    return PLANS[plan]["screens"]
+def screens(plan) -> int:
+    """How many stock screens can be saved (a plan, or a profile: _limit). Running a screen has no limit."""
+    return _limit(plan, "screens")
 
 
-def deepdives(plan: str) -> int | None:
+def deepdives(plan) -> int | None:
     """How many companies a month the deep dive opens (None: unlimited). Each company counts once a month."""
-    return PLANS[plan]["deepdives_per_month"]
+    return _limit(plan, "deepdives_per_month")
 
 
-def decks(plan: str) -> int | None:
-    """How many slide decks (a company's or a theme's) a month (None: unlimited)."""
-    return PLANS[plan]["decks_per_month"]
+def decks(plan) -> int | None:
+    """How many slide decks (a company's or a theme's) a month (None: unlimited; 0 on Free, which has the sample deck)."""
+    return _limit(plan, "decks_per_month")
+
+
+def themes(plan) -> int | None:
+    """How many NEW themes a month a person's search may have mapped (None: unlimited). A theme already in the library never counts."""
+    return _limit(plan, "themes_per_month")
 
 
 def networth_items(plan: str) -> int | None:
@@ -219,34 +302,63 @@ def journal_limit(plan: str) -> int | None:
     return PLANS[plan]["journal_trades"]
 
 
-def ai_reads_per_day(plan: str) -> int | None:
-    """Fresh AI reads a day on a plan (Plans says it): none on Pro, RESEARCH_AI_PER_DAY on Basic and Free. Reads already
-    written for a company or a market, and the market mood, never count (intel/routes.ai_call)."""
+def ai_reads_per_day(plan) -> int | None:
+    """Fresh AI reads a day on a plan (Plans says it): none on Pro, RESEARCH_AI_PER_DAY on Basic, Free's own (5) on Free; a profile on
+    Free in the grace keeps the old 60. Reads already written for a company or a market, and the market mood, never count
+    (intel/routes.ai_call); a Free reader's company read is the Basic/Pro one when it is written (intel/routes.company_ai)."""
     from .config import settings
-    return None if plan == "pro" else settings.RESEARCH_AI_PER_DAY
+    plan_name = plan_of(plan) if isinstance(plan, dict) else plan
+    if plan_name == "basic":
+        return settings.RESEARCH_AI_PER_DAY
+    return _limit(plan, "ai_reads_per_day")
 
 
-REFRESHES_PER_DAY = {"free": 3, "basic": 10, "pro": 30}
+def search_ai_per_day(plan) -> int | None:
+    """The search box's AI answers (ideas, ask) a day: Free 10, Basic and Pro 40 (a plan, or a profile: _limit)."""
+    return _limit(plan, "search_ai_per_day")
 
 
-def refreshes_per_day(plan: str) -> int | None:
+REFRESHES_PER_DAY = {"free": 0, "basic": 10, "pro": 30}
+
+
+def refreshes_per_day(plan: str, profile: dict | None = None) -> int | None:
     """Refreshes of a stored shared result (an AI read, a theme's read) a person may ask for in a day (computed.refresh_gate). A
-    refresh within a few hours of the last one gives the stored result and isn't counted."""
+    refresh within a few hours of the last one gives the stored result and isn't counted. None on Free (a teaser): a Free account in
+    the grace keeps its old 3."""
+    if plan == "free" and profile is not None and free_grace_until(profile):
+        return FREE_BEFORE["refreshes_per_day"]
     return REFRESHES_PER_DAY.get(plan, REFRESHES_PER_DAY["free"])
 
 
-def plan_info(plan: str) -> dict:
+def free_change_notice(profile: dict | None, now: datetime | None = None) -> dict | None:
+    """The one-time notice on Account and My space for an account in the grace: when its Free counts change and exactly what changes
+    (old and new for each), and the downloads that move to Basic. None for everyone else. No email is sent about it."""
+    end = free_grace_until(profile, now)
+    if end is None or plan_of(profile) != "free":
+        return None
+    new = {**{k: PLANS["free"].get(k) for k, _ in FREE_CHANGE_WORDS}, "refreshes_per_day": REFRESHES_PER_DAY["free"]}
+    return {"on": end.isoformat(), "rows": [{"key": k, "label": label, "before": FREE_BEFORE[k], "after": new[k]} for k, label in FREE_CHANGE_WORDS],
+            "moves": ["The tax report's CSV and PDF downloads move to Basic (the report on screen stays free)"]}
+
+
+def plan_info(plan: str, profile: dict | None = None) -> dict:
+    """What a plan includes, for /me; with the `profile`, the counts as that account has them (a Free account in the grace: FREE_BEFORE)."""
+    who = profile if profile is not None and plan_of(profile) == plan else plan
     info = {k: v for k, v in PLANS[plan].items() if k != "features"}
-    return {**info, "group_size": group_size(plan), "holdings": holdings_limit(plan), "stock_alerts": stock_alerts(plan),
-            "screens": screens(plan), "deepdives_per_month": deepdives(plan), "decks_per_month": decks(plan),
-            "networth_items": networth_items(plan), "mf_schemes": mf_limit(plan), "journal_trades": journal_limit(plan), "indicators": has_indicators(plan), "fno": has_fno(plan),
-            "ai_reads_per_day": ai_reads_per_day(plan),
-            "features": {f: allows(plan, f) for f in FEATURES}}
+    out = {**info, "group_size": group_size(who), "holdings": holdings_limit(plan), "stock_alerts": stock_alerts(who),
+           "screens": screens(who), "deepdives_per_month": deepdives(who), "decks_per_month": decks(who), "themes_per_month": themes(who),
+           "networth_items": networth_items(plan), "mf_schemes": mf_limit(plan), "journal_trades": journal_limit(plan), "indicators": has_indicators(plan), "fno": has_fno(plan),
+           "ai_reads_per_day": ai_reads_per_day(who), "search_ai_per_day": search_ai_per_day(who),
+           "features": {f: allows(plan, f) or (isinstance(who, dict) and allows_for(who, f)) for f in FEATURES}}
+    for k in ("backtests_per_month", "ai_builds_per_month"):
+        out[k] = _limit(who, k)
+    return out
 
 
 def public_plans() -> dict:
     """What each plan includes, for the Plans page (independent of early access)."""
-    return {k: {**{x: v for x, v in p.items() if x != "features"}, "ai_reads_per_day": ai_reads_per_day(k), "features": sorted(p["features"])}
+    return {k: {**{x: v for x, v in p.items() if x != "features"}, "ai_reads_per_day": ai_reads_per_day(k), "refreshes_per_day": REFRESHES_PER_DAY[k],
+                "features": sorted(p["features"])}
             for k, p in PLANS.items()}
 
 
@@ -446,7 +558,8 @@ def access_plan(profile: dict) -> str:
 
 
 LIMIT_KEYS = ("backtests_per_month", "ai_builds_per_month", "live_limit", "group_size", "deepdives_per_month", "decks_per_month",
-              "stock_alerts", "screens", "holdings", "networth_items", "mf_schemes", "journal_trades")
+              "themes_per_month", "stock_alerts", "screens", "holdings", "networth_items", "mf_schemes", "journal_trades",
+              "ai_reads_per_day", "search_ai_per_day")
 
 
 def offer_state(now: datetime | None = None, promo: bool = True) -> dict:
@@ -553,6 +666,15 @@ def limit_message(plan: str, key: str, used_words: str, what: str, monthly: bool
         cap = PLANS[nxt.lower()][key]
         more = f" {nxt} has no limit on {what}." if cap is None else f" {nxt} gives {cap}{' a month' if monthly else ''}."
     return f"{used_words.rstrip('.')}." + (resets_note() if monthly else "") + (f" {after.strip()}" if after.strip() else "") + more
+
+
+def not_on_plan(plan: str, key: str, what: str, monthly: bool = True, after: str = "") -> str:
+    """A limit of 0 (Free's decks) in the one wording: "Slide decks are on Basic: 5 a month." (or "...on Pro, with no limit."), never
+    "You've made 0 decks this month"; `after` follows it (what still works)."""
+    nxt = bigger_plan(plan, key) or "Pro"
+    cap = PLANS[nxt.lower()][key]
+    head = f"{what} are on {nxt}, with no limit." if cap is None else f"{what} are on {nxt}: {cap}{' a month' if monthly else ''}."
+    return head + (f" {after.strip()}" if after.strip() else "")
 
 
 def named_plan(message: str) -> str | None:

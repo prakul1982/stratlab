@@ -85,14 +85,26 @@ def source_call(fn):
 
 def ai_cap(profile) -> int | None:
     """A person's daily cap on fresh AI reads (the Plans page and Account say it): none for the site's admins and for
-    a Pro plan they pay for; RESEARCH_AI_PER_DAY a day (India's day) for Basic and Free, Free's an abuse guard. The plan
-    paid for, never the launch offer's Pro or a "View as" plan (R8O-002: a hidden 60 a day stopped the owner's market
-    mood and company reads while Plans said Pro was unlimited)."""
+    a Pro plan they pay for; RESEARCH_AI_PER_DAY a day (India's day) for Basic, Free's own (5: FREE-TIER) for Free, 60 for a Free
+    account in its grace (plans.free_grace_until). The plan paid for, never the launch offer's Pro or a "View as" plan (R8O-002: a
+    hidden 60 a day stopped the owner's market mood and company reads while Plans said Pro was unlimited)."""
     from .. import admin
-    from ..plans import ai_reads_per_day, effective_plan
     if admin.is_admin(profile):
         return None
-    return ai_reads_per_day(profile.get("_paid_plan") or effective_plan(profile))
+    return paid_limit(profile, "ai")
+
+
+def paid_limit(profile, which: str) -> int | None:
+    """A daily AI cap ("ai": fresh reads, "search": the search box's answers) of the plan the person pays for, with Free's grace."""
+    from ..plans import ai_reads_per_day, effective_plan, search_ai_per_day
+    paid = profile.get("_paid_plan") or effective_plan(profile)
+    who = {**profile, "_plan": paid} if paid in ("free", "basic", "pro") else paid
+    return ai_reads_per_day(who) if which == "ai" else search_ai_per_day(who)
+
+
+def search_cap(profile) -> int | None:
+    """The search box's AI answers (ideas, ask) a day: Free 10 (40 in the grace), Basic and Pro 40 (plans.PLANS search_ai_per_day)."""
+    return paid_limit(profile, "search")
 
 
 def ai_auto_counts(profile) -> bool:
@@ -114,7 +126,7 @@ def ai_reads_today(profile) -> int:
 LIMIT_CODE = "research_ai_limit"
 
 
-SEARCH_AI_PER_DAY = 40         # the search box's AI calls (ideas, ask) a day, every plan; apart from the company reads' cap
+SEARCH_AI_PER_DAY = 40         # Basic's and Pro's search box AI calls (ideas, ask) a day; Free's is 10 (search_cap, plans.PLANS)
 SEARCH_KIND = "search_ai"
 
 
@@ -127,9 +139,21 @@ def read_slot(profile, limit: int | None, kind: str = "research_ai"):
         if db.count_usage(profile["id"], kind, ai_day_start()) + held >= limit:
             if kind == SEARCH_KIND:
                 err(429, "search_ai_limit", f"You've used today's {limit} AI answers in the search box. "
-                    "The count starts again at midnight India time.")
-            err(429, LIMIT_CODE, limit_words(limit))
+                    "The count starts again at midnight India time." + more_words(profile, "search"))
+            err(429, LIMIT_CODE, limit_words(limit) + more_words(profile, "ai"))
     return usage_slots.hold(profile["id"], kind, check)
+
+
+def more_words(profile, which: str) -> str:
+    """FREE-TIER: what the next plan gives, after a daily AI cap's words, for a Free account (" Basic gives 60 a day."); "" otherwise."""
+    from ..plans import effective_plan
+    try:
+        if (profile.get("_paid_plan") or effective_plan(profile)) != "free":
+            return ""
+        cap = paid_limit({**profile, "_paid_plan": "basic", "_plan": "basic"}, which)
+    except Exception:
+        return ""
+    return f" Basic gives {cap} a day." if cap else ""
 
 
 def limit_words(limit: int) -> str:
@@ -713,6 +737,8 @@ def company_ai(region: str, symbol: str, refresh: bool = False, background: bool
     r = region_of(region)
     s = symbol_of(symbol, r)
     pro = has_indicators(profile["_plan"])       # which indicators the read may mention; the facts are the same
+    key = company_read_key(r, s, pro)
+    pro = key[2]
 
     def build():
         # the same figures as the page (its dividend yield) and the results calendar, so the read can tell a
@@ -725,7 +751,6 @@ def company_ai(region: str, symbol: str, refresh: bool = False, background: bool
             pass
         return A.company(c, _ai, pro, company_key_facts(r, c))
     # R19: one read per company, kept for everyone until someone presses Refresh (owner, 7 Nov: no automatic re-reads)
-    key = (r, s, pro)
     counted = refresh or ai_auto_counts(profile)
     if background and not refresh and not A.peek("company", key):
         # within the cap the read is written behind the page; past it, the page hears so now, not after a wait
@@ -749,6 +774,17 @@ def company_ai(region: str, symbol: str, refresh: bool = False, background: bool
             return ok({"unavailable": True, "code": d["code"], "message": d.get("message") or "No AI read right now."})
         raise
     return ok(A.clean_company(read))
+
+
+def company_read_key(r: str, s: str, pro: bool) -> tuple:
+    """The stored company read a reader gets (FREE-TIER): Basic and Pro readers the (r, s, True) read; a Free reader the same read when
+    it is written, else a Free read written before the change (reads already written stay open), else a new read written as the shared
+    (r, s, True) one: no separate Free copy is written any more, so a Free reader's fresh read is one Basic and Pro readers get too."""
+    shared = (r, s, True)
+    if pro:
+        return shared
+    old = (r, s, False)
+    return old if not A.peek("company", shared) and A.peek("company", old) else shared
 
 
 def company_key_facts(region: str, c: dict) -> list[dict]:
@@ -880,6 +916,8 @@ def sector_map(profile, region: str, q: str, refresh: bool = False):
         if A.map_due(got):            # R21: a map from the older prompt with under 4 layers is written again once, in the background
             theme_routes.later(("map",) + key, lambda: ai_call(profile, "sector", key, 24 * 3600, True, build, gated=True))
     else:
+        if not refresh and A.get("sector", key) is None:
+            use_theme(profile, r, theme, key)      # FREE-TIER: a NEW theme counts against the plan's month (Free 1, Basic 10)
         # LIVE3-001: the AI's map is written in the background, never while the request waits; until it is in, the page has the theme's
         # official-industry base (theme_routes.quick) and the map kept from before, if any
         # a Refresh here has passed computed.refresh_gate already (GET /sector)
@@ -894,6 +932,37 @@ def blank_map(theme: str) -> dict:
     """A theme map with nothing from the AI yet (LIVE3-001): the page lists the official-industry base under it."""
     return {"sector": theme[:1].upper() + theme[1:], "summary": "", "core": "", "market_size": "", "cagr": None, "cagr_note": "", "etfs": [],
             "sub_themes": [], "clusters": [], "screen": [], "value_chain": [], "tailwinds": [], "risks": [], "generated_at": 0}
+
+
+THEME_LIMIT_CODE = "theme_limit"
+
+
+def use_theme(profile, r: str, theme: str, key: tuple) -> None:
+    """Count a NEW theme (no stored map, not in the theme library) against the plan's month (plans.themes: Free 1, Basic 10, Pro and the
+    site's admins none) when its map is started, and stop with the one lock wording past it. The same theme again this month, however
+    it's written, and a map someone else's search is already writing never count; every theme already stored opens on every plan."""
+    from .. import admin
+    from ..plans import limit_message, plan_of, themes
+    from . import theme_library
+    if not profile or not profile.get("id") or admin.is_admin(profile):
+        return
+    limit = themes(profile)
+    if limit is None:
+        return
+    j = theme_routes.job_of(("map",) + key)
+    if j and j.get("state") == "running":
+        return
+    from ..main import month_start_iso, upgrade
+    since = month_start_iso()
+    mark = f"theme:{r}:{theme_library.normalise(theme, r) or theme.lower()}"
+    if db.count_usage(profile["id"], mark, since):
+        return
+    if db.count_usage(profile["id"], "theme", since) >= limit:
+        plan = plan_of(profile)
+        upgrade(limit_message(plan, "themes_per_month", f"You've had {limit} new theme{'' if limit == 1 else 's'} mapped this month",
+                              "new themes", monthly=True, after="Every theme already in the library still opens."), THEME_LIMIT_CODE)
+    db.add_usage(profile["id"], "theme")
+    db.add_usage(profile["id"], mark)
 
 
 def theme_map(profile, region: str, q: str):

@@ -11,9 +11,11 @@ import { HELP } from "../lib/help";
 import { LegalLinks } from "../components/LegalLinks";
 import { InvoicesCard } from "../components/InvoicesCard";
 import { Badge, Card, CardHead, ConfirmDialog, Field, FormActions, FormGrid, LinkCard, PageHeader } from "../components/kit";
+import { FreeChangeNotice } from "../components/FreeChangeNotice";
+import { LIMITS } from "../lib/plans";
 import { AccountWait } from "../components/AccountWait";
 import { Modal } from "../components/ui";
-import { aiBuildsUse, confirmMatches, keptRow, monthlyUse, planLabel, planRow, planRun, sessionsRunning, signedInWith, trialUse, usageSpans, type KeptLimit } from "../lib/account";
+import { aiBuildsUse, confirmMatches, keptRow, monthlyUse, noneOnPlan, planLabel, planRow, planRun, sessionsRunning, signedInWith, trialUse, usageSpans, type KeptLimit } from "../lib/account";
 import { aiReadsUse } from "../lib/aiReason";
 import { TileGrid } from "../components/TileGrid";
 
@@ -83,7 +85,10 @@ export function AccountPage() {
     ["AI builds this month", aiBuildsUse(u.ai_used, u.ai_limit, u.ai_builds_per_day, !!me.is_admin)],
     // the plan's own limits are the Plans page's; when early access or the launch offer lifts them, it says so
     ...(u.deepdive_used != null ? [["Deep dives this month", monthlyUse(u.deepdive_used, u.deepdive_limit, u.deepdive_plan_limit, u.lifted_by, planName)] as [string, string]] : []),
-    ...(u.deck_used != null ? [["Slide decks this month", monthlyUse(u.deck_used, u.deck_limit, u.deck_plan_limit, u.lifted_by, planName)] as [string, string]] : []),
+    ...(u.deck_used != null ? [["Slide decks this month", u.deck_limit === 0 ? noneOnPlan(planName, "Basic", LIMITS.basic.decks_per_month, "The sample deck is on Plans.")
+      : monthlyUse(u.deck_used, u.deck_limit, u.deck_plan_limit, u.lifted_by, planName)] as [string, string]] : []),
+    // FREE-TIER: new themes mapped this month (every theme already in the library opens on every plan)
+    ...(u.theme_used != null && u.theme_limit !== undefined ? [["New themes this month", monthlyUse(u.theme_used, u.theme_limit)] as [string, string]] : []),
     // the daily cap on fresh AI reads, said plainly with today's count (R8O-002); a company's read already written today
     // and the market mood never count
     ...(u.ai_reads_today != null ? [["Fresh AI reads today", aiReadsUse(u.ai_reads_today, u.ai_reads_limit ?? null, u.ai_reads_cap_for ?? null, u.ai_reads_plan_limit)] as [string, string]] : []),
@@ -96,6 +101,7 @@ export function AccountPage() {
     <div className="k-page">
       <PageHeader title="Account" lede="Who you are, your plan and invoices, how you sign in, and where your data lives. Alerts, emails and what you see first are in Settings."
         actions={<Link to="/settings" className="btn outline sm">Settings</Link>} />
+      <FreeChangeNotice />
 
       <Card id="profile" label="Profile">
         <CardHead title="Profile" />
