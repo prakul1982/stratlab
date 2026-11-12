@@ -75,6 +75,8 @@ export const FEATURES: Feature[] = [
     words: "market breadth advance decline advances declines a/d line ad ratio mcclellan oscillator summation index new highs lows 52 week dma moving average stage 2 trin arms thrust sector breadth nifty 500 midcap smallcap" },
   { id: "heatmap", title: "Heatmap", what: "A market as tiles: each company sized by its market value and coloured by its change over a day to a year, grouped by sector. India and the US, or one theme's companies.", to: "/invest/heatmap",
     words: "heatmap heat map treemap tiles sector map gainers losers movers market cap" },
+  { id: "movers", title: "Market movers", what: "The day's biggest gainers and losers, the most traded, volume spikes and new 52-week highs and lows, India and the US. The top 5 of each list on every plan; every row, any index and the CSV on Basic.", to: "/invest/movers",
+    words: "movers top gainers losers most active traded volume spikes shockers 52 week high low" },
   { id: "filings", title: "Filings and red flags", what: "Fund raises (QIP), pledges, resignations and defaults your watchlist companies filed, with an evening alert.", to: "/research/filings",
     words: "filings announcements red flags qip fund raise preferential rights issue pledge resignation auditor default sebi rating downgrade nse bse alert", home: true, goal: "find", flag: "filings" },
   { id: "deepdive", title: "Company deep dive", what: "Open any Indian or US company, then Deep dive: 10 years of numbers, its business, capex plans and whether management delivered.", to: "/research",

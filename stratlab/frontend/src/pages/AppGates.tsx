@@ -46,6 +46,8 @@ export function HelpPage() {
         <LinkCard to="/contact" title="Contact us">Questions reach a person.</LinkCard>
         <LinkCard to="/settings#check" title="Connection check">If prices or the idea builder look stuck.</LinkCard>
         <LinkCard to="/plans" title="Plans">What each plan includes, and what is open today.</LinkCard>
+        {/* a page of the API (like the blog), so a plain link: when each dataset was last updated and is next due */}
+        <a className="k-linkcard" href="/status"><b>Data status</b><span className="k-sub-line">When each dataset was last updated, and when it is next due.</span></a>
       </div>
       <Card label="A quick tour">
         <CardHead title="A quick tour" actions={<button type="button" className="btn sm" onClick={openTour}>Start the tour</button>} />

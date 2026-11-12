@@ -2461,7 +2461,8 @@ INSTAGRAM = "https://www.instagram.com/stratlab.studio/"      # the same address
 
 def _foot() -> str:
     site = settings.PUBLIC_SITE_URL
-    explore = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/library", "Strategy library"), ("/stocks", "Companies"), ("/blog", "Blog"), ("/pricing", "Plans")))
+    explore = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/library", "Strategy library"), ("/stocks", "Companies"), ("/blog", "Blog"), ("/pricing", "Plans"),
+                                                                ("/status", "Data status")))
     policies = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/terms", "Terms of service"), ("/privacy", "Privacy policy"),
                                                                    ("/refunds", "Cancellation and refunds"), ("/contact", "Contact us")))
     policies += f'<a href="{INSTAGRAM}" rel="me noopener">Instagram</a>'
@@ -3760,7 +3761,7 @@ def sitemap(name: str) -> str | None:
         # /stocks is the API's own list of company pages, not one of the site's pages: it changes with the companies list
         listed = max((str(((_setting(f"stocks:list:{R}") or {}).get("at")) or "")[:10] for R in REGIONS.values()), default="")
         return _urlset([(site + p, d) for p, d in site_pages.PAGES] + [(site + p, listed or max(d for _, d in site_pages.PAGES)) for p in ["/stocks"] + [f"/stocks/{r}" for r in REGIONS]]
-                       + [(site + p, d) for p, d in site_pages.library_pages()])
+                       + [(site + p, d) for p, d in site_pages.library_pages()] + _market_pages(site, listed or max(d for _, d in site_pages.PAGES)))
     if name == "blog":                   # the blog's lists and posts (BLOG-1), each with the day it last changed
         return _urlset(blog.sitemap_urls(site))
     if name == "directory":              # the A-Z and index lists that link every company page (SEO-1)
@@ -3776,6 +3777,18 @@ def sitemap(name: str) -> str | None:
     day = str(((_setting(f"stocks:list:{region}") or {}).get("at")) or "")[:10] or None
     known = listing(region)
     return _urlset([(site + path(bits[1], s), day) for s in syms[i * CHUNK:(i + 1) * CHUNK] if listable(region, s, known)])
+
+
+def _market_pages(site: str, day: str) -> list[tuple[str, str]]:
+    """The public market pages beside the companies: each market's movers (with the day of their closes, else `day`) and the data status
+    page (whose figures change all day: `day`, the companies list's)."""
+    from . import movers
+    try:
+        rows = [(u, d or day) for u, d in movers.sitemap_urls(site)]
+    except Exception as ex:              # the stored closes can't be read: the pages are still listed, without a day
+        print("sitemap: the movers' day couldn't be read:", str(ex)[:120])
+        rows = [(f"{site}/stocks/{r}/movers", day) for r in REGIONS]
+    return rows + [(site + "/status", day)]
 
 
 def directory_urls() -> list[tuple[str, str | None]]:

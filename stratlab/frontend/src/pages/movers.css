@@ -1,0 +1,5 @@
+/* Market movers (/invest/movers): the settings row and the facts line over the list. Loaded with the page only, never with the first download. */
+.mv-controls { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--s4) var(--s5); min-width: 0; }
+.mv-controls > .k-field { flex: 0 0 auto; max-width: 100%; margin: 0; }
+.mv-facts { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s4); font-size: var(--t-label); color: var(--muted); margin: var(--s3) 0; }
+.mv-facts b { color: var(--ink); font-weight: 600; }

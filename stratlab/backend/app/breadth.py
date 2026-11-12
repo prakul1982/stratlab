@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 
-from . import db, heatmap, job_status, memguard, official_close, rotation, scan_presets, sector_members, universes
+from . import db, heatmap, job_status, memguard, movers, official_close, rotation, scan_presets, sector_members, universes
 from .engine.indicators import stage
 from .data import calendar
 from . import deals  # noqa: F401  (before the newsletter job, which imports it back while loading)
@@ -546,6 +546,7 @@ class Runner:
         bases: dict[str, list] = {}                              # each stock's finished days, for the intraday view
         heats: dict[str, list] = {}                              # each stock's changes over six periods, for the heatmap
         heat_index: dict[str, list] = {}                         # group -> its index over the same periods
+        marks: dict[str, list] = {}                              # each stock's last day and 52-week marks, for the market movers
         scans: dict[str, dict[str, dict | None]] = {}            # group -> {symbol: scan_presets.evaluate answer}
         scan_secs, scan_groups = 0.0, set(scan_presets.STORED.values())
         for i, (sym, gs) in enumerate(sorted(by_stock.items())):
@@ -578,6 +579,9 @@ class Runner:
                 print("breadth heatmap:", sym, str(e)[:120])
             if heat:
                 heats[sym] = heat
+            mark = movers.mark_row(flags, base)  # the market movers' 52-week marks, from the flags and base just worked out
+            if mark:
+                marks[sym] = mark
             for g in gs:
                 tally.add(g, flags, sec.get(sym), sector_from)
             mine = [g for g in gs if g in scan_groups]
@@ -634,6 +638,11 @@ class Runner:
                 heatmap.save(region, last_trading(region, through), heats, heat_index)
             except Exception as e:      # the heatmap keeps the day before's rows
                 print("breadth heatmap save:", region, str(e)[:120])
+        if marks:
+            try:
+                movers.save_marks(region, last_trading(region, through), marks)
+            except Exception as e:      # the movers' 52-week lists wait for the next run
+                print("breadth movers save:", region, str(e)[:120])
         for g, found in scans.items():
             try:
                 scan_presets.save(g, scan_presets.build(found))

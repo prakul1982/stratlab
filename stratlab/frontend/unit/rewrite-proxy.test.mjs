@@ -15,7 +15,8 @@ test("the forwarded paths are exactly vercel.json's rewrites to the API", () => 
   // brief's headline in the plain-text email, a short address that forwards to the story (R13-003, added on purpose)
   // /blog: the blog's lists, posts and feed, pages of the API like the company pages (BLOG-1)
   // /money/calendar/feed: the Money calendar's private link, on the site's own address (LIVE1B-071: it was the hosting provider's)
-  assert.deepEqual(forwardedPaths().sort(), ["/blog/:path*", "/c/:token", "/email/confirm", "/money/calendar/feed/:token", "/news-link/:issue/:n", "/sitemap.xml", "/sitemaps/:path*", "/stocks/:path*", "/unsubscribe", "/v/:token"]);
+  // /status: the public data status page, a page of the API like the company pages (updated on purpose: the page is new)
+  assert.deepEqual(forwardedPaths().sort(), ["/blog/:path*", "/c/:token", "/email/confirm", "/money/calendar/feed/:token", "/news-link/:issue/:n", "/sitemap.xml", "/sitemaps/:path*", "/status", "/stocks/:path*", "/unsubscribe", "/v/:token"]);
   assert.deepEqual(forwardedPaths(), vercel.rewrites.filter(external).map((r) => r.source));
   // the only other rewrite is the app's own catch-all
   assert.deepEqual(vercel.rewrites.filter((r) => !external(r)).map((r) => r.destination), ["/index.html"]);
@@ -32,7 +33,7 @@ test("the proxy sends each of them to the API, for the dev server and for previe
 test("a pattern matches the whole path the site's host would forward, and nothing else of the app's", () => {
   const hits = (path) => forwardedPaths().some((s) => new RegExp(sourceRegex(s)).test(path));
   for (const yes of ["/stocks/in/TCS", "/stocks/us/AAPL", "/stocks", "/stocks?q=tcs&m=in", "/stocks/in/TCS?ref=abc", "/v/abc123", "/c/abc123", "/sitemap.xml", "/sitemaps/in-1.xml",
-    "/blog", "/blog/briefs", "/blog/feed.xml", "/blog/india-market-brief-2026-10-27", "/blog?page=2"]) assert.ok(hits(yes), yes);
+    "/blog", "/blog/briefs", "/blog/feed.xml", "/blog/india-market-brief-2026-10-27", "/blog?page=2", "/status", "/stocks/in/movers"]) assert.ok(hits(yes), yes);
   // the app's own files and pages that only start with the same letters
-  for (const no of ["/config.js", "/charts", "/c", "/verdict/abc", "/v", "/stockss/in", "/sitemap.xml.js", "/research/IN/TCS", "/assets/c/x.js", "/blogs", "/blogger/x"]) assert.ok(!hits(no), no);
+  for (const no of ["/config.js", "/charts", "/c", "/verdict/abc", "/v", "/stockss/in", "/sitemap.xml.js", "/research/IN/TCS", "/assets/c/x.js", "/blogs", "/blogger/x", "/statuses", "/status/x"]) assert.ok(!hits(no), no);
 });

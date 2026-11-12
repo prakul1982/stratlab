@@ -17,10 +17,11 @@ test("the map has the owner's menu entries, in order (IA-1: 42 entries became 14
   assert.deepEqual(NAV.invest.groups.map((g) => g.label), ["Companies", "Find stocks", "Themes", "Market today", "Market data", "Calendar", "Watchlist"]);
   assert.deepEqual(NAV.money.groups.map((g) => g.label), ["Portfolio", "Tax", "Plan", "Calendar"]);
   assert.deepEqual(NAV.invest.groups.find((g) => g.id === "find-stocks").pages.map((p) => p.label), ["Figures", "Chart rules", "Filings"]);
-  assert.deepEqual(NAV.invest.groups.find((g) => g.id === "market-today").pages.map((p) => p.label), ["Mood", "Breadth", "Heatmap", "Sectors", "Flows", "Today's brief"]);
+  assert.deepEqual(NAV.invest.groups.find((g) => g.id === "market-today").pages.map((p) => p.label), ["Mood", "Breadth", "Heatmap", "Movers", "Sectors", "Flows", "Today's brief"]);
   assert.deepEqual(NAV.invest.groups.find((g) => g.id === "market-data").pages.map((p) => p.label), ["ETF vs NAV", "Margin funding", "Stock lending fees"]);
-  // nothing removed: the 42 pages the menu had, plus Flows, the Calendar's All dates and the Heatmap (L4)
-  assert.equal(ALL_PAGES.length, 45);
+  // nothing removed: the 42 pages the menu had, plus Flows, the Calendar's All dates, the Heatmap (L4) and Movers beside it
+  // (updated on purpose: Movers is a new page)
+  assert.equal(ALL_PAGES.length, 46);
 });
 
 test("each page has one address, a one-liner and a place", () => {

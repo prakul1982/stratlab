@@ -20,7 +20,7 @@ export const APP_ROUTES = [
   "/research/results", "/research/corporate-actions", "/research/IN/:symbol/deep", "/research/US/:symbol/deep",
   "/research/investor", "/chart/:market/:symbol", "/research/:region/:symbol", "/login", "/signup", "/about",
   // IA-1: the one Calendar's own page and Market today's Flows tab
-  "/calendar", "/invest/flows", "/invest/heatmap",
+  "/calendar", "/invest/flows", "/invest/heatmap", "/invest/movers",
   // R15: the ad landing; signed in, it is home
   "/start",
 ];

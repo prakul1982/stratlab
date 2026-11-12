@@ -28,7 +28,9 @@ PUBLIC = {"/health", "/version", "/plans", "/pricing", "/markets", "/public/v/{t
           "/inbound/email/{provider}",              # the mail provider's inbound hook (signature-checked)
           "/mcp",                                   # the AI-assistant endpoint: its own key in the request
           "/money/calendar/feed/{token}.ics",       # a personal calendar feed: the secret token in the address is the key
-          "/public/markets/watch"}                  # the visitor's fixed Market Watch board
+          "/public/markets/watch",                  # the visitor's fixed Market Watch board
+          # (updated on purpose: new public pages) each market's movers (their top 5) and the data status page with its JSON
+          "/stocks/{region}/movers", "/status", "/public/data-status"}
 
 
 def _deps(d) -> set:
