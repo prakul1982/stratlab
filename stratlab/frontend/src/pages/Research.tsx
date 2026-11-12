@@ -37,7 +37,7 @@ import { NamedHoldersPanel } from "../components/NamedHolders";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge, EtfGapDetailView } from "../components/EtfGap";
 import { typingFirst } from "../lib/typingFirst";
-import { companyRows } from "../lib/pulseMood";
+import { companyRows, moodBehindNote, moodDay } from "../lib/pulseMood";
 import { BreadthTable, CalendarTable, FlowsTable, GlobalTable, HeadlinesTable, HotTable, IndexTable, MoodCard, MoodSkeleton, MoversTable, Pair, RiskTable, SectorsTable, ThemesTable, TopicsTable, usePulseMood } from "./PulseMood";
 import { FoBadges } from "../components/FoBadges";
 import { IndexBadges } from "../components/IndexBadges";
@@ -528,7 +528,7 @@ export function PulsePage() {
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
       <Card><CardHead title={`${REGION_NAME[region]} index levels`} /><PulseLevels p={levels} /></Card>
       {/* the mood and every table under it come from one read of the figures (mood.py): a line and its table cannot disagree (MOOD-1) */}
-      {mood ? <MoodCard m={mood} region={region} updating={moodUpdating} /> : moodErr
+      {mood ? <MoodCard m={mood} region={region} updating={moodUpdating} behindNote={moodBehindNote(mood, pulseClosedDay(data?.indices), (d) => fmtDate(d, { year: false }))} /> : moodErr
         ? <Card><ErrorState title="The market's figures couldn't be read" action={{ label: "Try again", onClick: moodRetry }}>{moodErr}</ErrorState></Card> : <MoodSkeleton />}
       {/* R15 #17 (owner, 7 Nov): what the headlines say sits with the mood, at the top, not under every table */}
       <Card>
@@ -550,12 +550,13 @@ export function PulsePage() {
             </>
           )}
       </Card>
-      {mood?.breadth && <BreadthTable b={mood.breadth} open={mood.is_open !== false} />}
-      {mood?.sectors && <SectorsTable s={mood.sectors} closedDay={pulseClosedDay(data?.indices)} />}
-      {mood?.movers?.map((m) => <MoversTable key={m.index} m={m} closedDay={pulseClosedDay(data?.indices)} />)}
+      {/* each block is labelled with the session its figures are of, never the new day's date before Mood's read of it (LIVE7A-001) */}
+      {mood?.breadth && <BreadthTable b={mood.breadth} open={mood.is_open !== false} behind={!!moodBehindNote(mood, pulseClosedDay(data?.indices), String)} />}
+      {mood?.sectors && <SectorsTable s={mood.sectors} closedDay={moodDay(mood, pulseClosedDay(data?.indices))} />}
+      {mood?.movers?.map((m) => <MoversTable key={m.index} m={m} closedDay={moodDay(mood, pulseClosedDay(data?.indices))} />)}
       {mood && <Pair nl={mood.flows?.rows.length ? mood.flows.rows.length + 1 : 0} nr={mood.risk?.rows.length ?? 0}
         left={mood.flows ? <FlowsTable f={mood.flows} source={ai?.flows_source} /> : null} right={mood.risk ? <RiskTable r={mood.risk} /> : null} />}
-      {mood?.global && <GlobalTable g={mood.global} region={region} />}
+      {mood?.global && <GlobalTable g={mood.global} region={region} today={dayIn(new Date(), marketTz(region))} />}
       {mood?.calendar && <CalendarTable c={mood.calendar} />}
       {ai && companyRows(ai.hot).length > 0 && <HotTable ai={ai} region={region} />}
       {ai && ai.flows.length > 0 && <TopicsTable ai={ai} />}

@@ -1,0 +1,57 @@
+// Release 42, lane m1 (LIVE7A/LIVE7B live review of Release 41): market-page fixes. Each test names its finding. Run: npm run test:unit
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { register } from "node:module";
+
+register("data:text/javascript," + encodeURIComponent(`export async function resolve(s, c, next) {
+  try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
+globalThis.window ??= { STRATLAB_CONFIG: { API_BASE: "", SUPABASE_URL: "", SUPABASE_ANON_KEY: "" } };
+const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
+const dayText = (d) => ({ "2026-11-10": "10 Nov", "2026-11-11": "11 Nov", "2026-11-12": "12 Nov" })[d] ?? d;
+
+test("LIVE7A-001: Mood's tables carry their own session's date when the read is behind the index levels", async () => {
+  const { moodDay, moodBehindNote, sessionWord } = await import("../src/lib/pulseMood.ts");
+  // US at 06:42 ET, 12 Nov: levels are the 11 Nov close, the read is of 10 Nov
+  assert.equal(moodDay({ session: "2026-11-10", behind: "2026-11-11" }, "2026-11-11"), "2026-11-10");
+  assert.equal(moodDay({ session: "2026-11-10" }, "2026-11-11"), "2026-11-10");
+  assert.equal(moodBehindNote({ session: "2026-11-10", behind: "2026-11-11" }, "2026-11-11", dayText),
+    "These figures are of the 10 Nov session; the 11 Nov session's are being read.");
+  // an up-to-date read: the levels' day, and no note
+  assert.equal(moodDay({ session: "2026-11-11" }, "2026-11-11"), "2026-11-11");
+  assert.equal(moodBehindNote({ session: "2026-11-11" }, "2026-11-11", dayText), null);
+  // while the market trades (no closed day) the read of today stays "Today"
+  assert.equal(moodDay({ session: "2026-11-12" }, null), null);
+  assert.equal(moodDay(null, "2026-11-11"), "2026-11-11");
+  // another market's row says "today" only when its session is today's now, not when the read was made
+  assert.equal(sessionWord("2026-11-11", "2026-11-12", dayText), "on 11 Nov");
+  assert.equal(sessionWord("2026-11-12", "2026-11-12", dayText), "today");
+  const page = read("src/pages/Research.tsx");
+  assert.match(page, /closedDay=\{moodDay\(mood, pulseClosedDay\(data\?\.indices\)\)\}/);
+  assert.match(page, /behindNote=\{moodBehindNote\(/);
+  assert.match(read("src/pages/PulseMood.tsx"), /const liveHead = behind \?/);
+});
+
+test("LIVE7A-023: a yield's move is in basis points, the rest in percent", async () => {
+  const { quoteMove } = await import("../src/lib/pulseMood.ts");
+  assert.deepEqual(quoteMove({ change_pct: 2.45, change_bp: 12 }), { value: 12, text: "+12 bp" });
+  assert.deepEqual(quoteMove({ change_pct: -1.2, change_bp: -6 }), { value: -6, text: "−6 bp" });
+  assert.deepEqual(quoteMove({ change_pct: 0.38 }), { value: 0.38, text: "+0.38%" });
+  assert.deepEqual(quoteMove({ change_pct: null }), { value: null, text: "–" });
+});
+
+test("LIVE7A-015 / LIVE7A-024: after the bell the count is the day's; the index's last close is there on every plan", async () => {
+  const { liveRows } = await import("../src/lib/breadthTable.ts");
+  const { liveTitle } = await import("../src/lib/breadthLive.ts");
+  const f = (value, prev) => ({ value, prev, change: null });
+  const t = { day: "2026-11-11", prev_day: "2026-11-10", adv: f(357, 300), dec: f(142, 190), pct20: f(50, 48), pct50: f(55, 54), pct200: f(60, 60), index: f(23779.3, 23600) };
+  const l = { adv: 305, dec: 191, pct20: 51, pct50: 56, pct200: 61, idx: 23865.8 };
+  const idx = liveRows(l, t, "NIFTY 500", null).find((r) => r.key === "idx");
+  assert.equal(idx.parts[0].before, 23779.3);                                       // Free: no history, the close from today's numbers
+  assert.equal(liveRows(l, t, "NIFTY 500", 23779.3).find((r) => r.key === "idx").parts[0].before, 23779.3);
+  assert.match(liveRows(l, t, "NIFTY 500", null, true)[0].means, /on the day/);
+  assert.match(liveRows(l, t, "NIFTY 500", null)[0].means, /so far today/);
+  assert.equal(liveTitle({ as_of: "15:30", state: "final", close: true }), "Today, at the close");
+  assert.equal(liveTitle({ as_of: "15:15", state: "final" }), "Today, final at 15:15");
+  assert.match(read("src/pages/BreadthPage.tsx"), /header: final \? \(live\.close \? "Close" : `At \$\{live\.as_of\}`\) : "Now"/);
+});

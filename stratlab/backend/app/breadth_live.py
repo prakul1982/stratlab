@@ -31,6 +31,9 @@ PAUSE = 0.6                          # seconds between quote calls
 KEEP_POINTS = 60                     # a day has 25 quarter hours; the cap only guards a runaway clock
 IST = ZoneInfo("Asia/Kolkata")
 OPEN_AT, CLOSE_AT = "09:15", "15:30"
+# LIVE7A-015: the day's last round was the 15:15 one (the 15:30 round runs in the closing minute, if at all, on prices before the
+# closing session), so the "final" count was 15:15's. Once the closing session's prices are in, one more round is counted as the close.
+CLOSE_ROUND_FROM, CLOSE_ROUND_UNTIL = "15:40", "18:00"
 COUNTS = ("adv", "dec", "unch", "a20", "n20", "a50", "n50", "a200", "n200")
 # a point: [HH:MM, *COUNTS, the index level, the group's size, its stocks with no price today] (R24-003: the last two say
 # why rose + fell + unchanged is short of the group: 2,344 of 2,563 on All NSE)
@@ -180,6 +183,10 @@ class Live:
             pass
         return res
 
+    def close_done(self, region: str, day: str) -> bool:
+        """Whether the day's close round (counted from the closing session's prices) is stored."""
+        return (status().get(region) or {}).get("close_day") == day
+
     def done_slot(self, region: str, day: str) -> str | None:
         """The quarter hour of the day's last stored round (kept in the database, so a restart doesn't run it again and
         doesn't wait a quarter hour from its own start either)."""
@@ -194,7 +201,9 @@ class Live:
         if not self.ready():
             _set_status(region, error="Live prices aren't available (the data login has lapsed).", failed_at=breadth._now())
             return {"ok": False, "error": "not ready"}
-        expect = breadth.last_trading(region, breadth.last_complete(region, now))
+        # the base is the last finished day before today's: the same as the last complete one during the session, and still that one for
+        # the close round after the bell (when today counts as complete)
+        expect = breadth.last_trading(region, (local.date() - timedelta(days=1)).isoformat())
         base = breadth.load_base(region)
         if (not base or base.get("day") != expect) and self.rebuild:
             try:
@@ -238,8 +247,9 @@ class Live:
             pts = [p for p in load(g, day)["points"] if p[0] != slot] + [row]
             save(g, day, pts)
         self.last_round[region] = time.time()
+        closing = hhmm >= CLOSE_ROUND_FROM
         _set_status(region, at=breadth._now(), day=day, time=hhmm, quoted=got, stocks=len(symbols), error=None,
-                    base_day=(base or {}).get("day"), calls=-(-len(asked) // BATCH))
+                    base_day=(base or {}).get("day"), calls=-(-len(asked) // BATCH), **({"close_day": day} if closing else {}))
         return {"ok": True, "region": region, "time": hhmm, "quoted": got, "stocks": len(symbols)}
 
 
@@ -283,9 +293,27 @@ class LiveJob:
             return None
         return slot
 
+    def close_due(self, region: str, now: datetime) -> bool:
+        """The close round is due: the market shut today after rounds ran, the closing session's prices are in, and it isn't
+        stored yet (nor failed under RETRY seconds ago)."""
+        local = now.astimezone(IST)
+        day, hhmm = local.date().isoformat(), local.strftime("%H:%M")
+        if is_open(region, now) or not CLOSE_ROUND_FROM <= hhmm < CLOSE_ROUND_UNTIL or self.live.close_done(region, day):
+            return False
+        if not any(load(g, day)["points"] for g, v in breadth.GROUPS.items() if v["region"] == region):
+            return False
+        failed = self.live.failed.get(region)
+        return not (failed and failed[:2] == (day, slot_of(now)) and time.time() - failed[2] < RETRY)
+
     def tick(self, now: datetime) -> int:
         ran = 0
         for region in LIVE_REGIONS:
+            if self.close_due(region, now):
+                with memguard.heavy("breadth-live", force_release=True):
+                    res = self.live.round(region, now)          # stored as the 15:30 point: the close
+                self.status.update(last_tick=now.isoformat(timespec="seconds"), last_slot="close", last_ok=bool(res.get("ok")))
+                ran += 1 if res.get("ok") else 0
+                continue
             slot = self.due(region, now)
             if slot is None:
                 if region == "IN" and not is_open(region, now):
@@ -348,7 +376,9 @@ def view(group: str, now: datetime | None = None, ready: bool = True) -> dict | 
     if not is_open(g["region"], now):
         if not pts or local.strftime("%H:%M") < "15:30":
             return None
-        out = {"state": "final", "day": day, "fields": list(FIELDS), "points": pts, "as_of": pts[-1][0], "latest": dict(zip(FIELDS, pts[-1][1:])),
+        # `close`: the last point is the close round's, counted from the closing session's prices (LIVE7A-015)
+        close = (status().get(g["region"]) or {}).get("close_day") == day and pts[-1][0] == CLOSE_AT
+        out = {"state": "final", "close": close, "day": day, "fields": list(FIELDS), "points": pts, "as_of": pts[-1][0], "latest": dict(zip(FIELDS, pts[-1][1:])),
                "message": None, "every_minutes": EVERY // 60, "age_minutes": None, "late": False}
         # LIVE3-025: the final level is the exchange's closing value once it is in, never the last round's tick
         off = official_close.index_close(g["index"], day)

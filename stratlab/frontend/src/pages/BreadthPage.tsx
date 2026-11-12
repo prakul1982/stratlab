@@ -185,10 +185,12 @@ function LiveCard({ live, group, today, lastLevel, help }: { live: LiveView; gro
   const tag = liveTag(live), read = liveReadLine(l);
   const several = s.times.length > 1;
   const at = (i: number) => `${group.name}, ${s.times[i]}`;
-  const rows = today ? liveRows(l, today, group.index_name, lastLevel) : [];
+  const final = live.state === "final";
+  const rows = today ? liveRows(l, today, group.index_name, lastLevel, final) : [];
   const cols: Column<MeasureRow>[] = [
     { key: "m", header: "Measure", rowHeader: true, wrap: true, cell: (r) => <MeasureName r={r} help={help} /> },
-    { key: "now", header: "Now", numeric: true, cell: (r) => <Parts parts={r.parts} of={(p) => figCell(p, p.now)} /> },
+    // after the bell the column is the day's count, never "Now" (LIVE7A-015)
+    { key: "now", header: final ? (live.close ? "Close" : `At ${live.as_of}`) : "Now", numeric: true, cell: (r) => <Parts parts={r.parts} of={(p) => figCell(p, p.now)} /> },
     { key: "prev", header: today ? `Close, ${shortDay(today.day)}` : "Last close", numeric: true, cell: (r) => <Parts parts={r.parts} of={(p) => figCell(p, p.before)} /> },
     { key: "chg", header: "Change", numeric: true, cell: (r) => <Changes parts={r.parts} /> },
   ];
@@ -198,7 +200,7 @@ function LiveCard({ live, group, today, lastLevel, help }: { live: LiveView; gro
         <CardHead title={liveTitle(live)} info={LIVE_INFO} infoLabel="About the live numbers" actions={<span data-testid="breadth-live-tag"><Badge tone={tag.tone}>{tag.text}</Badge></span>} />
         {live.late && <Notice tone="warn" role="status">The newest live point is {live.age_minutes} minutes old. A point is added every {live.every_minutes} minutes while the market is open; the next one comes when live prices are read again.</Notice>}
         {rows.length > 0
-          ? <DataTable csv="breadth today" stack label="Breadth so far today against the last close" columns={cols} rows={rows} rowKey={(r) => r.key} />
+          ? <DataTable csv="breadth today" stack label={final ? "Breadth on the day against the last close" : "Breadth so far today against the last close"} columns={cols} rows={rows} rowKey={(r) => r.key} />
           : <StatRow>
               <Stat label="Rose / fell" value={<><span className="k-up">{count(l.adv)}</span> <span className="k-muted">/</span> <span className="k-down">{count(l.dec)}</span></>} note={`${count(l.unch)} unchanged · against the previous close`} />
               <Stat label="Above 20-day average" value={share(l.pct20)} />

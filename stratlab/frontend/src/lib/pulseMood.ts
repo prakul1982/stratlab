@@ -69,3 +69,27 @@ export function companyRows<T extends { name: string }>(hot: T[]): T[] {
 /** The column over the day's figures: "Today" while the market's session is today's, else that session's day (LIVE4-007: a
  * "Today" column on a page titled "How the market felt at the last close"). */
 export const sessionHeader = (closedDay: string | null | undefined, dayText: (iso: string) => string): string => (closedDay ? dayText(closedDay) : "Today");
+
+/** The session Mood's tables are of, for their headers: the read's own session when it is behind the index levels (LIVE7A-001: between
+ * the close and Mood's next read, the tables below the levels were the last session's figures under the new day's date), else the
+ * levels' closed day (null while they trade). */
+export function moodDay(m: Pick<PulseMood, "session" | "behind"> | null | undefined, closedDay: string | null): string | null {
+  if (m?.session && (m.behind || (closedDay && m.session < closedDay))) return m.session;
+  return closedDay;
+}
+
+/** The line that says a read is of an earlier session than the index levels above it, or null. */
+export function moodBehindNote(m: Pick<PulseMood, "session" | "behind"> | null | undefined, closedDay: string | null, dayText: (iso: string) => string): string | null {
+  const own = moodDay(m, closedDay);
+  if (!m?.session || own !== m.session || own === closedDay) return null;
+  const newer = m.behind ?? closedDay;
+  return `These figures are of the ${dayText(m.session)} session${newer ? `; the ${dayText(newer)} session's are being read` : ""}.`;
+}
+
+/** A row's move: a yield's in basis points ("+12 bp"), every other one in percent (LIVE7A-023: "4.98% +2.45%" was a 12 bp rise). */
+export const quoteMove = (r: Pick<MoodQuoteRow, "change_pct" | "change_bp">): { value: number | null; text: string } =>
+  r.change_bp != null ? { value: r.change_bp, text: `${r.change_bp > 0 ? "+" : r.change_bp < 0 ? "−" : ""}${Math.abs(r.change_bp)} bp` }
+    : { value: r.change_pct, text: r.change_pct == null ? "–" : `${r.change_pct > 0 ? "+" : r.change_pct < 0 ? "−" : ""}${Math.abs(r.change_pct).toFixed(2)}%` };
+
+/** "today", or the session's day when a market's latest session isn't today's (worked out now, not when the read was made). */
+export const sessionWord = (day: string | null | undefined, today: string, dayText: (iso: string) => string): string => (day && day !== today ? `on ${dayText(day)}` : "today");
