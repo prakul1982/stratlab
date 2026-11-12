@@ -153,3 +153,34 @@ test("a company page's quarters and Key numbers fit a phone: no sideways table, 
   await expect(page.locator(".inv-mt thead th").first()).toBeVisible();
   await expect(page.locator(".inv-mt-title").first()).toBeHidden();
 });
+
+// LIVE7B-011: Net worth's history: no negative label though the line went to −₹7.7 L; the points one step apart whatever the dates; the
+// line stopping at the last snapshot, not today; "5 snapshots" said three times
+test("Net worth's history is placed by date, names its negative side, ends today, and says the snapshot count once (LIVE7B-011)", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const H = [["2026-09-01", 2_100_000], ["2026-09-03", 1_800_000], ["2026-09-28", -400_000], ["2026-10-01", -770_000], ["2026-10-05", -600_000]] as const;
+  await page.route(/\/money\/net-worth(\?.*)?$/, async (r) => {
+    if (r.request().method() !== "GET" || r.request().url().includes("live=") || r.request().resourceType() === "document") return r.fallback();
+    const real = await (await r.fetch()).json();
+    real.history = H.map(([d, net]) => ({ d, net, assets: Math.max(net, 0) + 4_000_000, liabilities: 4_000_000 - Math.min(net, 0), why: "change" }));
+    real.history_allowed = true; real.history_count = H.length;
+    real.totals = { ...real.totals, net: -650_000 };
+    await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(real) });
+  });
+  const errors = await open(page, "/money/net-worth", "Where you stand");
+  const chart = page.getByTestId("networth-chart");
+  await chart.scrollIntoViewIfNeeded();
+  await expect(chart).toBeVisible({ timeout: 30_000 });
+  const ticks = await chart.locator("text.ch-tick").allTextContents();
+  expect(ticks.some((t) => /^[−-]₹/.test(t)), `a negative label among ${ticks}`).toBe(true);
+  // the line's points: placed by date, and one more than the snapshots (today's total)
+  const xs = await chart.locator("path.ch-line").first().evaluate((e) => (e.getAttribute("d") ?? "").split(/[ML]/).filter(Boolean).map((p) => Number(p.split(",")[0])));
+  expect(xs.length).toBe(H.length + 1);
+  const days = [...H.map(([d]) => Date.parse(d)), Date.parse(await page.evaluate(() => new Date().toISOString().slice(0, 10)))];
+  const per = (xs[xs.length - 1] - xs[0]) / (days[days.length - 1] - days[0]);
+  for (let i = 1; i < xs.length; i++) expect(Math.abs((xs[i] - xs[i - 1]) - (days[i] - days[i - 1]) * per), `gap ${i}`).toBeLessThan(3);
+  await expect(page.getByText("the line ends today at the total above")).toBeVisible();
+  const text = await page.locator("main").innerText();
+  expect(text.match(/\b5 snapshots\b/g)?.length ?? 0, "the count said once").toBe(1);
+  await sane(page, errors);
+});

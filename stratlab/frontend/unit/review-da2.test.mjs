@@ -56,7 +56,8 @@ test("DA-031: each run's line on the dates of both, read off its own points, not
   assert.equal(T.checksCell(2, 4), "2 of 4");
   assert.equal(T.badgeLabel({ verdict: "edge", passed: 2, total: 4 }), "Passed 2 of 4 checks");
   // the axis's ticks are found by position in the window, so a numeric x with times still gets its dates
-  assert.match(read("src/components/chart/XYChart.tsx"), /const ta = T\[Math\.max\(0, Math\.min\(n - 1, in0\)\)\], tb = T\[Math\.max\(0, Math\.min\(n - 1, in1\)\)\];/);
+  // (updated on purpose, LIVE7B-011: with a numeric x of times the axis runs over the window itself, its dates at their own places)
+  assert.match(read("src/components/chart/XYChart.tsx"), /const ta = byDate \? a : T\[Math\.max\(0, Math\.min\(n - 1, in0\)\)\], tb = byDate \? b : T\[Math\.max\(0, Math\.min\(n - 1, in1\)\)\];/);
 });
 
 // TABLES EVERYWHERE (owner, 4 Nov): the notebooks are one table now, a row a notebook; each row keeps what DA-032 asked of a card
