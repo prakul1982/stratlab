@@ -184,3 +184,28 @@ test("Net worth's history is placed by date, names its negative side, ends today
   expect(text.match(/\b5 snapshots\b/g)?.length ?? 0, "the count said once").toBe(1);
   await sane(page, errors);
 });
+
+// LIVE7B-014: the Trade, Invest, Money and notebooks homes repeated the side menu as tables at their foot ("More you can do · 13 tools",
+// "Elsewhere in StratLab", "9 tools", "19 tools"), and Trade home said the first steps again as a 380px checklist. LIVE7B-027: the one line
+// of first steps was a full-width card with half of it empty
+test("the homes don't repeat the side menu; the first steps are one short line (LIVE7B-014, LIVE7B-027)", async ({ page, request }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
+  const auth = { Authorization: "Bearer basic-token" };
+  await request.put(`${API}/me/prefs`, { headers: auth, data: { level: "some", focus: "both" } });
+  await request.put(`${API}/me/first-steps`, { headers: auth, data: { dismissed: false } });
+  for (const [path, ready] of [["/trade", "Test an idea"], ["/invest", "Invest home"], ["/money", "Your money"], ["/notebooks", "Your notebooks"]]) {
+    await open(page, path, ready, BASIC);
+    await page.waitForTimeout(800);
+    await expect(page.getByTestId("more-tools"), path).toHaveCount(0);
+    await expect(page.getByText("Elsewhere in StratLab"), path).toHaveCount(0);
+    const steps = page.locator(".first-steps");
+    if (await steps.count()) {
+      await expect(steps, path).toHaveClass(/fs-compact/);
+      await expect(steps.locator("ol, progress"), `${path}: no checklist`).toHaveCount(0);
+      const [s, m] = [(await steps.boundingBox())!, (await page.locator("#main .page").boundingBox())!];
+      expect(s.width, `${path}: the line is as wide as its words`).toBeLessThan(m.width * 0.85);
+    }
+  }
+  await expect(page.locator(".sidebar").getByRole("link").first()).toBeVisible();
+});

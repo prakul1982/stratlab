@@ -2854,6 +2854,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .space-panels.even { align-items: stretch; }
 .space-panels > :only-child { grid-column: 1 / -1; }      /* the other card is not there (no market events): this one takes the row */
 .fs-compact .k-row { justify-content: space-between; flex-wrap: wrap; }
+/* LIVE7B-027: the one line of first steps is as wide as its words and its button, not a full-width card with half of it empty */
+.fs-compact { width: fit-content; max-width: 100%; }
 
 /* the Help page's explanations, one line each until opened (DI-014) */
 .help-topics { display: flex; flex-direction: column; }
