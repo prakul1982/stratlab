@@ -25,6 +25,7 @@ export function useNoOrphan<T extends HTMLElement>(fill = false): RefObject<T | 
     let width = -1;
     const fix = () => {
       el.style.removeProperty("grid-template-columns");
+      for (const c of Array.from(el.children) as HTMLElement[]) if (c.dataset.noOrphan) { c.style.removeProperty("grid-column"); delete c.dataset.noOrphan; }
       const tracks = getComputedStyle(el).gridTemplateColumns;
       if (!tracks || tracks === "none") return;
       const fit = tracks.split(" ").filter(Boolean).length;
@@ -35,6 +36,12 @@ export function useNoOrphan<T extends HTMLElement>(fill = false): RefObject<T | 
       // `fill`: two or more cards in a row that has room for more share the row, so a two-card page does not leave its right third empty (VR3-001)
       const c = fill && kids.length >= 2 && kids.length < fit ? kids.length : fillCols(kids.length, fit);
       if (c !== fit) el.style.gridTemplateColumns = `repeat(${c}, minmax(0, 1fr))`;
+      // 7 (or 13) tiles three wide have no column count that leaves two on the last line: the last four take two lines of two,
+      // each one and a half columns wide (3 + 2 + 2), on a grid of six half columns (Release 43: the Calendar's seven cards)
+      else if (fit === 3 && kids.length > 4 && kids.length % 3 === 1) {
+        el.style.gridTemplateColumns = "repeat(6, minmax(0, 1fr))";
+        kids.forEach((k, i) => { const h = k as HTMLElement; h.dataset.noOrphan = "1"; h.style.gridColumn = `span ${i >= kids.length - 4 ? 3 : 2}`; });
+      }
     };
     const ro = new ResizeObserver(() => { const w = el.clientWidth; if (w !== width) { width = w; fix(); } });
     const mo = new MutationObserver(fix);

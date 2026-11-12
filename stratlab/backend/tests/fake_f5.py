@@ -11,7 +11,9 @@ JOIN = "https://services.choruscall.in/DiamondPassRegistration/register?confirma
 # (symbol, name) of the world's companies the groups are made of (all have daily prices in the world)
 GROUPS = [
     ("Northwind Holdings Private Limited", ["TCS", "TATASTEEL", "INFY", "WIPRO", "HCLTECH"]),
-    ("Riverbend Family Trust", ["RELIANCE", "ONGC", "ITC"]),
+    # (not RELIANCE: its page shows the named holders' own sample, quarter to 30 Jun 2026, which a newer made-up quarter here hid:
+    # e2e/holders-updates.spec.ts)
+    ("Riverbend Family Trust", ["NTPC", "ONGC", "ITC"]),
     ("Lakeside Investments Limited", ["JSWSTEEL", "SAIL", "VEDL"]),
 ]
 

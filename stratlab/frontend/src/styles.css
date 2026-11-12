@@ -1270,6 +1270,8 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .mc-ev { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 10px; align-items: start; }
 .mc-ev.past { opacity: .6; }
 .mc-ev-title { font-weight: 500; overflow-wrap: anywhere; }
+/* an earnings call's line ends with the webcast address from its filing, one long word: it breaks rather than push a phone's page sideways (ui-lint R10) */
+.mc-ev-body > .k-note { overflow-wrap: anywhere; }
 .mc-amount { color: var(--muted); font-weight: 400; }
 .mc-cat { justify-self: start; font-size: 11.5px; padding: 2px 8px; }
 .mc-tax { background: var(--orange-soft); color: var(--orange-ink); }
@@ -2290,10 +2292,11 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
   color: var(--ink-2); font-size: var(--t-label); font-weight: 500; text-decoration: none; white-space: nowrap; }
 .hub-tab:hover { border-color: var(--ink); color: var(--ink); }
 .hub-tab.active { background: var(--ink); border-color: var(--ink); color: var(--on-ink); font-weight: 600; }
-/* a laptop's row is ~930px: the Calendar's six tabs and its longest breadcrumb ("Invest › Calendar › Corporate actions") left
+/* a laptop's row is ~900px: the Calendar's six tabs and its longest breadcrumb ("Invest › Calendar › Corporate actions") left
    22px, so a hair's difference in text width put the tabs on a second line and the title 40px lower (CI, 30 Oct). Slimmer
-   tabs leave them ~70px */
-@media (min-width: 901px) and (max-width: 1440px) { .hub-tabs { gap: 4px; } .hub-tab { padding: 0 11px; } }
+   tabs left them ~70px. Release 43 gave the Calendar a seventh tab and Companies a fifth and sixth (90px and 135px over):
+   the tabs where the entry's name says the rest have a shorter name (NavPage.tab) and the tabs are a little slimmer still */
+@media (min-width: 901px) and (max-width: 1440px) { .hub-tabs { gap: 4px; } .hub-tab { padding: 0 9px; } }
 .hub-tab .side-lock { margin-left: 0; }
 .hub-tab.active .side-lock { background: transparent; color: inherit; }
 
@@ -3132,7 +3135,9 @@ tr:hover .k-report, tr:focus-within .k-report, .k-stat:hover .k-report, .k-stat:
 /* in a table the flag sits at the right end of the row's name cell, so it never wraps a short name ("Div yield") onto two lines */
 .k-tbl-wrap .k-table th[scope="row"]:has(> .k-report) { position: relative; padding-right: 34px; }   /* (a phone's sticky first column stays sticky: its rule is stronger) */
 th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
-@media (hover: none) { .k-report { opacity: .55; } }
+/* a touch screen's flag is 32px tall like every other control on a phone (stale.spec's tap check); its width and place beside the name are
+   the same, and its margins keep the row's height */
+@media (hover: none) { .k-report { opacity: .55; height: 32px; margin: -8px 0 -8px 2px; } th > .k-report { margin: -16px 0 0; } }
 @media print { .k-report { display: none; } }
 /* f4: the workbook's plan note on its own line under the theme's download buttons (components/ThemeChanges.tsx) */
 .theme-wb-lock { flex-basis: 100%; order: 1; }

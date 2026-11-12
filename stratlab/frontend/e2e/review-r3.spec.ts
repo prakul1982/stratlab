@@ -28,7 +28,9 @@ test("a company page is about its own company, in one unit, and says when its pr
   const main = page.locator("main");
   await expect(main.getByText("Tata Consultancy Services provides IT services").first()).toBeVisible({ timeout: 30_000 });
   await expect(page.locator("#co-news")).toContainText("TCS shares");
-  const text = await main.innerText();
+  // (updated on purpose, SUPPLY-LINKS: the "Customers and suppliers" card names the companies TCS's filings name, Reliance among
+  // them, by design; every other part of the page is still read for another company's text)
+  const text = await main.evaluate((m) => { const c = m.cloneNode(true) as HTMLElement; c.querySelector("#customers-suppliers")?.remove(); return c.textContent ?? ""; });
   expect(text, "another company's text on TCS's page").not.toMatch(/Reliance|Jio|hydrocarbon/);
   // the sales and the profit charts read in the same unit
   const units = await page.locator(".tbars").evaluateAll((els) => els.map((el) => el.parentElement?.querySelector(".inv-plain")?.textContent ?? ""));

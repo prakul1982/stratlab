@@ -13,8 +13,11 @@ export type SpaceId = "trade" | "invest" | "money";
 export interface NavPage {
   /** The page's own address; its tab links here. */
   to: string;
-  /** Its name as a tab (and in the breadcrumb). */
+  /** Its name in the breadcrumb, the menu and its card, and as a tab unless `tab` gives a shorter one. */
   label: string;
+  /** A shorter name for its tab, where the entry's name says the rest ("Updates" under Companies): a laptop's row of tabs
+   * shares one line with the breadcrumb, and a second line would put every title of the entry 40px lower (ui-lint R17). */
+  tab?: string;
   /** One line on what it is for (a card on the entry's page, the line on "All features"). */
   line: string;
   /** A fuller line for its card on the entry's page. */
@@ -51,12 +54,12 @@ const fromData = (to: string): NavEntry | undefined =>
   [...NAV_GROUPS.Trade, ...NAV_GROUPS.Invest, ...NAV_GROUPS.Money].find((e) => e.to === to);
 
 /** A page whose texts are already written for its card on a space's home (NAV_GROUPS) reuses them. */
-function page(to: string, label: string, icon: string, words: string, o: { line?: string; blurb?: string; also?: RegExp; flag?: string; part?: boolean; was?: string; space?: SpaceId } = {}): NavPage {
+function page(to: string, label: string, icon: string, words: string, o: { line?: string; blurb?: string; also?: RegExp; flag?: string; part?: boolean; was?: string; space?: SpaceId; tab?: string } = {}): NavPage {
   const d = fromData(to);
   const line = o.line ?? d?.title ?? o.blurb ?? d?.blurb ?? label;
   // the old name is one of the words search looks through, so "Screener" still finds Find stocks' Figures
   return { to, label, icon, words: o.was ? `${o.was.toLowerCase()} ${words}` : words, line, blurb: o.blurb ?? d?.blurb ?? line,
-    also: o.also, flag: o.flag, part: o.part, was: o.was, space: o.space };
+    also: o.also, flag: o.flag, part: o.part, was: o.was, space: o.space, tab: o.tab };
 }
 
 /** One Calendar (IA-1 item 3): results, corporate actions, IPO dates, market events and the person's own money dates, in
@@ -80,11 +83,11 @@ const CALENDAR: NavGroup = {
         line: "India's and the US's IPOs: dates, price band, lot, bids and how a listing has traded against its issue price.",
         blurb: "Upcoming, open, closed and recently listed IPOs for India and the US, each with its price band, lot, size, bids by category and the facts in its offer document." }),
     page("/research/earnings-calls", "Earnings calls", "calendar", "earnings call calls concall con call conference call analyst meet investor meet analysts institutional investors webcast dial in transcript transcripts recording audio presentation results call schedule of meet",
-      { flag: "earnings_calls", part: true, space: "invest", line: "Results calls and analyst meets coming up, with the notice and webcast link, and transcripts after.",
+      { flag: "earnings_calls", part: true, space: "invest", tab: "Calls", line: "Results calls and analyst meets coming up, with the notice and webcast link, and transcripts after.",
         blurb: "Every results call and meeting with analysts or investors in India, from the companies' own notices, and US results sessions; after a call, its transcript, recording and presentation once filed." }),
-    page("/trade/events", "Market events", "calendar", "market events calendar rbi policy fed data releases budget index changes expiry expiries weekly monthly f&o expiry holidays results dates", { space: "trade" }),
+    page("/trade/events", "Market events", "calendar", "market events calendar rbi policy fed data releases budget index changes expiry expiries weekly monthly f&o expiry holidays results dates", { space: "trade", tab: "Events" }),
     page("/money/calendar", "My money dates", "calendar", "money calendar tax due dates advance tax itr results dividends maturities premiums emi expiries own dates feed reminders",
-      { was: "Money calendar", space: "money" }),
+      { was: "Money calendar", space: "money", tab: "My dates" }),
   ],
 };
 
@@ -132,16 +135,17 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
       { id: "companies", label: "Companies", icon: "lens",
         blurb: "Look up any Indian or US company, put two side by side, read the monthly and quarterly updates companies file, or find where a holder is named.", pages: [
         page("/research", "Look up a company", "lens", "company stock fundamentals analysis ai read valuation news research search ticker deep dive business model capex growth margins cash flow management report card concall presentation",
-          { line: "Any Indian or US company: price, key numbers, results, news, and a deep dive.", blurb: "Price, valuation, growth, news and an AI read for any Indian or US company, and a deep dive into 10 years of its numbers and its business.", also: /^\/research\/(IN|US)\/.*$/ }),
+          { line: "Any Indian or US company: price, key numbers, results, news, and a deep dive.", blurb: "Price, valuation, growth, news and an AI read for any Indian or US company, and a deep dive into 10 years of its numbers and its business.", tab: "Look up", also: /^\/research\/(IN|US)\/.*$/ }),
         page("/research/compare", "Compare", "layers", "compare companies versus vs side by side two stocks", { line: "Two companies side by side, with an AI read of the differences." }),
         // IA-1 item 4: each company's own updates and holders are on its page and in Themes; the lists across companies stay here
-        page("/invest/business-updates", "Business updates", "calendar", "business updates monthly sales automakers vehicle sales lenders quarterly figures advances deposits", { flag: "biz_updates" }),
+        page("/invest/business-updates", "Business updates", "calendar", "business updates monthly sales automakers vehicle sales lenders quarterly figures advances deposits", { flag: "biz_updates", tab: "Updates" }),
         page("/invest/groups", "Business groups", "layers", "business group groups conglomerate family promoter group group companies listed companies of a group combined market value",
-          { flag: "group_figures", part: true, also: /^\/invest\/groups\/[^/]+$/, line: "India's business groups from the promoters companies name: members, combined value and moves.",
+          { flag: "group_figures", part: true, tab: "Groups", also: /^\/invest\/groups\/[^/]+$/, line: "India's business groups from the promoters companies name: members, combined value and moves.",
             blurb: "Each business group the companies' own shareholding filings make out: its listed companies, their combined market value, how each moved and its promoter holding." }),
         page("/invest/holders", "Named holders", "layers", "named holders shareholders promoter fund fii dii mutual fund shareholding pattern above 1% who owns", { flag: "holders" }),
         // kept short: this map is in the visitor's first download (e2e/review-r5.spec.ts's budget)
-        page("/research/search", "Search filings", "search", "transcripts concall", { flag: "doc_search" }),
+        // its card said only its name, a 90px hole in it on the Companies page (ui-lint R13)
+        page("/research/search", "Search filings", "search", "transcripts concall", { blurb: "Words and phrases inside call transcripts, investor presentations, annual reports and earnings releases, each linked to the filed copy.", flag: "doc_search" }),
       ] },
       { id: "find-stocks", label: "Find stocks", icon: "search", blurb: "Find companies by their figures, by what their charts do, or by what they filed.", pages: [
         page("/research/screens", "Figures", "search", "screener screen filter companies growth debt returns roe pe fundamentals ratios",

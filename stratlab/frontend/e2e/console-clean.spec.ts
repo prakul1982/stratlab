@@ -41,7 +41,9 @@ for (const path of PATHS) {
   test(`${path}: no console errors, no 500s, no dead links`, async ({ page }) => {
     const problems = await visit(page, path);
     const hrefs = await page.evaluate(() => [...new Set(Array.from(document.querySelectorAll("a[href^='/']")).map((a) => (a as HTMLAnchorElement).getAttribute("href") || ""))]);
-    const dead = hrefs.map((h) => h.split(/[?#]/)[0]).filter((h) => h && h !== "/" && !/^\/(api|assets|v|c|stocks|blog|sitemaps?)(\/|$)/.test(h) && !opens(h));
+    // (updated on purpose, R43 data status: /status is a page the server draws, forwarded like /stocks and /blog (vercel.json), so
+    // Movers' "When each dataset was last updated" opens it; it is no app route)
+    const dead = hrefs.map((h) => h.split(/[?#]/)[0]).filter((h) => h && h !== "/" && !/^\/(api|assets|v|c|stocks|blog|sitemaps?|status)(\/|$)/.test(h) && !opens(h));
     expect(problems, "errors while the page loaded").toEqual([]);
     expect(dead, "links that open no page").toEqual([]);
   });

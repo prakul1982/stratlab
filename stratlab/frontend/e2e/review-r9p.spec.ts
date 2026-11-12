@@ -63,7 +63,8 @@ test("R9P-006 and R9P-007: the confirm step says what the rupee charge is in dol
 test("R9P-005: the owner viewing as Free sees the AI-reads cap of the viewed plan on Account", async ({ page }) => {
   const errors = await open(page, "/account", owner, { "stratlab.viewas.v1": "free" });
   const reads = page.locator(".k-rows > div", { hasText: "Fresh AI reads today" });
-  await expect(reads).toContainText(/\d+ of 60 \(not enforced for you as an admin\)/, { timeout: 30_000 });
+  // (updated on purpose, FREE-TIER: the viewed plan, Free, has 5 fresh AI reads a day now, no longer Basic's 60)
+  await expect(reads).toContainText(/\d+ of 5 \(not enforced for you as an admin\)/, { timeout: 30_000 });
   expect(errors).toEqual([]);
 });
 
