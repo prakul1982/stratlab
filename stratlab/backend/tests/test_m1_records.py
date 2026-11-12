@@ -312,7 +312,7 @@ def test_a_company_with_no_figures_carries_its_reason_on_its_row():
 
 
 def test_the_versions_moved_with_the_records():
-    assert D.DIVE_TEXT == 10 and deck.THEME_DECK_VERSION == 51          # R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)
+    assert D.DIVE_TEXT == 11 and deck.THEME_DECK_VERSION == 52          # lane t1: deck 52, dive text 11 (LIVE7A, updated on purpose); R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)
 
 
 # ---------- 4. only layers of one way of earning are ranked together ----------

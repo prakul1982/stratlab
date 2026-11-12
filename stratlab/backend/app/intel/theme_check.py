@@ -1209,6 +1209,33 @@ Reply with ONLY this JSON: {"claims": [{"id": "", "status": "current" | "outdate
 RECENT_DAYS = 550
 
 
+def source_fits(claim: str, headline: str, anchor: str = "") -> bool:
+    """Whether a dated headline is about what a claim rests on (LIVE7A-013: a claim on the CHIPS Act's grants to four named chipmakers was
+    shown beside "Bosch begins production at Roseville chip fab", a headline about none of them): it shares a distinctive word with the
+    claim, and, when the claim names the programme or rule it rests on (`anchor`: its policy or search words), with that too (two of them
+    when the anchor has more than two)."""
+    h = stems(headline)
+    if not h or not (stems(claim) & h):
+        return False
+    a = stems(anchor)
+    return not a or len(a & h) >= (1 if len(a) <= 2 else 2)
+
+
+def claims_fit(out: dict) -> dict:
+    """The map with each tailwind or risk whose dated headline isn't about it (source_fits) shown as general background, as served (a map
+    checked before LIVE7A-013 kept such a pairing)."""
+    out = dict(out)
+    for key in ("tailwinds", "risks"):
+        items = []
+        for c in out.get(key) or []:
+            if isinstance(c, dict) and c.get("status") == "current" and isinstance(c.get("source"), dict) \
+                    and not source_fits(c.get("text") or "", c["source"].get("headline") or "", c.get("anchor") or ""):
+                c = {"text": c.get("text") or "", "status": "general", "source": None}
+            items.append(c)
+        out[key] = items
+    return out
+
+
 def claims_of(out: dict) -> list[dict]:
     """[{id, kind, text, search}] the map's tailwinds and risks (objects {"text", "policy", "search"}, or plain texts)."""
     claims = []
@@ -1266,8 +1293,9 @@ def check_claims(out: dict, search, ask, today: date | None = None) -> dict:
         status = str(v.get("status") or "")
         if status == "outdated" and h:
             return False, None
-        if status == "current" and h and (today - _day(h["at"])).days <= RECENT_DAYS:
-            return True, {"text": c["text"], "status": "current",
+        anchor = c["policy"] or c["search"]
+        if status == "current" and h and (today - _day(h["at"])).days <= RECENT_DAYS and source_fits(c["text"], h["headline"], anchor):
+            return True, {"text": c["text"], "status": "current", "anchor": anchor,
                           "source": {"headline": h["headline"], "at": str(h["at"])[:10], "outlet": h.get("source") or "", "url": h.get("url") or ""}}
         return True, {"text": c["text"], "status": "general", "source": None}
     out = dict(out)

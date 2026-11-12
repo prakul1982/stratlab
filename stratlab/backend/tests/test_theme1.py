@@ -141,9 +141,14 @@ def test_business_updates_are_read_through_one_function():
     row = {"metric": "Total sales", "unit": "units", "span": "month", "period": "2026-09", "value": 1200, "prev": 1000, "year_ago": 800, "change_prev": 20.0, "change_year": 50.0,
           "filed": "2026-10-01", "url": "https://f", "points": [{"period": "2026-08", "value": 1000}, {"period": "2026-09", "value": 1200}]}
     blocks = [{"layer": "Cells", "companies": [{"symbol": "CELLA"}, {"symbol": "CELLB"}]}]
-    out = D.business_section(blocks, [{"name": "Cell making", "companies": [{"symbol": "CELLA"}]}], {"CELLA": "Cell A"}, lambda s: row if s == "CELLA" else None)
+    out = D.business_section(blocks, [{"name": "Cell making", "companies": [{"symbol": "CELLA"}]}], {"CELLA": "Cell A"}, lambda s: row if s == "CELLA" else None,
+                             today=TODAY)
     assert out["layers"][0]["rows"][0]["name"] == "Cell A" and out["layers"][0]["rows"][0]["change_year"] == 50.0
-    assert out["companies"] == 1 and out["of"] == 2 and out["subs"][0]["rows"][0]["symbol"] == "CELLA"
+    # changed on purpose (lane t1, LIVE7A-010): a company's figure is listed once, under its layer; a sub-theme lists only the ones no layer does
+    assert out["companies"] == 1 and out["of"] == 2 and out["subs"][0]["rows"] == []
+    out = D.business_section([], [{"name": "Cell making", "companies": [{"symbol": "CELLA"}]}], {"CELLA": "Cell A"}, lambda s: row if s == "CELLA" else None,
+                             today=TODAY)
+    assert out["subs"][0]["rows"][0]["symbol"] == "CELLA"
 
 
 # ---------- item 2: a company is placed only where its own words put it ----------

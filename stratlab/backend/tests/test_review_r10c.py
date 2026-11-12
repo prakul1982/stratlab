@@ -158,8 +158,9 @@ def test_grounding_crore_as_the_page_writes_it():
 
 
 def test_deck_never_prints_minus_zero():
-    assert deck._cr(-0.3) == "0" and deck._cr(-1234567) == "-12,34,567"
-    assert deck._plain(-0.3, 1, 0) == "0" and deck._plain(-1.6, 1, 0) == "-2" and deck._plain(None, 1, 0) == "–"
+    # changed on purpose (lane t1, LIVE7A-014): a negative amount with the real minus, as every other figure of the deck
+    assert deck._cr(-0.3) == "0" and deck._cr(-1234567) == "−12,34,567"
+    assert deck._plain(-0.3, 1, 0) == "0" and deck._plain(-1.6, 1, 0) == "−2" and deck._plain(None, 1, 0) == "–"
 
 
 def test_ayr_share_count_blanks_cap_and_yield():

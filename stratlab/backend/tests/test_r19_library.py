@@ -296,4 +296,5 @@ def test_live6_012_the_search_box_list_is_one_shared_library_with_no_ones_readin
     main.app.dependency_overrides[main.current_profile] = lambda: U2          # someone who never opened it
     theirs = theme_library_suggest(lib, "data")
     assert mine and theirs == mine
-    assert set(theirs[0]) == {"name", "q", "region", "at", "members", "searched"}
+    # changed on purpose (lane t1, LIVE7A-008): "day", the stored map's own day in the market's time zone, the date its page says
+    assert set(theirs[0]) == {"name", "q", "region", "at", "day", "members", "searched"}

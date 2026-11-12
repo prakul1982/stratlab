@@ -11,8 +11,10 @@ Failures (the exit code is 1 when any deck has one):
   count        "N of M" where N is larger than M
   repeated     a word said twice in a row ("outside the the theme", "Of of"), whatever the case, on one line or across a line break
                (a name such as "Bora Bora" or "R R Kabel", and "had had", are English)
+  hyphen minus a figure's minus sign printed as a hyphen ("-14.1%" beside "−11%"; LIVE7A-014): the deck prints the real minus
 Reported, and a failure only with --strict:
   cut text     every other text ending in "…" (a label or a sentence cut to its box)
+  mixed range  a range with one end whole and the other with a decimal ("19.6% to 20%"; LIVE7A-014)
   other>40%    a theme whose "Other" group holds over 40% of the companies placed, as its coverage says ("50 of 100 companies fit none
                of the map's layers"): a map that places too few of its companies
 
@@ -25,8 +27,11 @@ import shutil
 import subprocess
 import sys
 
-FAIL = ("headline", "mid-word", "placeholder", "joining word", "count", "repeated")
-WARN = ("cut text", "other>40%")
+FAIL = ("headline", "mid-word", "placeholder", "joining word", "count", "repeated", "hyphen minus")
+WARN = ("cut text", "other>40%", "mixed range")
+# LIVE7A-014: a minus sign as a hyphen before a figure with its unit (never a date's or a range's dash: it follows a space or a bracket)
+_HYPHEN_MINUS = re.compile(r"(?:(?<=\s)|(?<=[(\[])|^)-\d[\d,]*(?:\.\d+)?(?:%|x\b| ?pts\b| ?points\b)")
+_RANGE = re.compile(r"(?<![\w.,])[−-]?\d[\d,]*(\.\d+)?(%|x\b) to [−-]?\d[\d,]*(\.\d+)?(%|x\b)")
 OTHER_MAX = 0.40                # R40: the share of the companies placed that "Other" may hold before the deck is flagged
 HEAD_LINES = 6                  # a slide's title and headline are among its first lines (the part's name, the title, up to three lines under it)
 
@@ -94,6 +99,11 @@ def check_pages(pages: list[str]) -> dict:
                 add("repeated", n, f"{w!r} in: {flat}" + (f" / {nxt}" if w in repeated(pair) else ""))
             for m in _PLACEHOLDER.finditer(flat):
                 add("placeholder", n, f"{m.group(0)!r} in: {flat}")
+            for m in _HYPHEN_MINUS.finditer(flat):
+                add("hyphen minus", n, f"{m.group(0)!r} in: {flat}")
+            for m in _RANGE.finditer(flat):
+                if m.group(2) == m.group(4) and bool(m.group(1)) != bool(m.group(3)):
+                    add("mixed range", n, f"{m.group(0)!r} in: {flat}")
             for m in _N_OF_M.finditer(flat):
                 a, b = int(m.group(1).replace(",", "")), int(m.group(2).replace(",", ""))
                 if a > b:

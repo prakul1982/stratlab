@@ -12,6 +12,8 @@ export interface DiveRow {
   sales_1y: number | null; sales_3y: number | null; profit_1y: number | null; stage: number | null; from_high: number | null;
   pb: number | null; interest_cover: number | null; ev_ebitda: number | null; quarter: { of: string; sales: number | null; profit: number | null } | null;
   what?: string | null; company_wide?: boolean; years?: YearRow[];
+  /** 0 when its EBITDA margin is filed in whole points (LIVE7A-009: printed 12%, not 12.0%) */
+  ebitda_dp?: number;
   /** its place in its layer's calculations, kept by the server (theme_data.calc_record; LIVE6-001: the page says what the deck says) */
   calc?: { in: boolean; why: string } | null; one_off?: boolean;
 }
@@ -28,13 +30,17 @@ export interface Layer {
   listed?: number;
   /** one official industry's companies the AI didn't place in a layer (THEMES) */
   official?: boolean; basis?: "industry" | "list";
+  /** the layer's EBITDA margins are mostly filed in whole points: its median and range print whole (LIVE7A-009) */
+  ebitda_whole?: boolean;
 }
 export interface ChainRow { layer: string; n: number; listed?: number; revenue: number | null; ebitda: number | null; net: number | null; roce: number | null; ebitda_n: number; net_n?: number; roce_n?: number }
-export interface SubCompany { symbol: string; name: string; what: string | null; cap: number | null; sales_1y: number | null; ebitda: number | null; company_wide: boolean; year: string | null }
+export interface SubCompany { symbol: string; name: string; what: string | null; cap: number | null; sales_1y: number | null; ebitda: number | null; ebitda_dp?: number; company_wide: boolean; year: string | null }
 export interface Holding { symbol: string; name: string; quarter: string; promoter: number | null; institutions: number | null; promoter_change: number | null; institutions_change: number | null }
 export interface Flag { symbol: string; name: string; at: string; label: string; severity?: string; subject?: string; url?: string | null }
 export interface Dive {
-  region: Region; sector: string; as_of: string | null; unit: string | null; basis: string; members: number; company_wide: string[];
+  region: Region; sector: string; as_of: string | null; /** how many companies are at an earlier close than `as_of` (LIVE7A-003) */ as_of_older?: number; unit: string | null; basis: string; members: number; company_wide: string[];
+  /** the theme's EBITDA margins are mostly filed in whole points: its medians print whole (LIVE7A-009) */
+  ebitda_whole?: boolean;
   layers: Layer[]; chain: { rows: ChainRow[]; line: string | null; highest: string | null; lowest: string | null };
   subs: { name: string; detail: string; companies: SubCompany[] }[];
   placements?: { checked: boolean; pending: number; left_out: number; placed: number; unconfirmed?: number } | null;
@@ -61,7 +67,9 @@ export interface Dive {
 }
 export interface PriceRow { symbol: string; name: string; ret: Record<"1M" | "3M" | "1Y" | "3Y", number | null>; date: string; above200: boolean | null; near_high: boolean | null; near_low: boolean | null }
 export interface Prices {
-  companies: PriceRow[]; median: Record<string, { median: number; n: number } | null>; pending: number; benchmark: string; as_of: string | null;
+  companies: PriceRow[]; median: Record<string, { median: number; n: number } | null>; pending: number;
+  /** companies with no price shown at all; the rest of `pending` are shown from their stored daily row until their candles are read (LIVE7A-002) */
+  missing?: number; benchmark: string; as_of: string | null;
   above200: { n: number; count: number; share: number | null }; near_high: { n: number; count: number; share: number | null }; near_low: { n: number; count: number; share: number | null };
   line: { weeks: string[]; theme: number[]; bench: number[]; rs: number[] } | null;
   returns: Record<string, { theme: number | null; bench: number | null }> | null;
@@ -73,13 +81,13 @@ export interface Listing { id: string; name: string; symbol: string | null; stag
 export interface Business { allowed: boolean; layers: { layer: string; rows: BizRow[] }[]; subs: { name: string; rows: BizRow[] }[]; companies: number; of: number }
 
 const q = (r: Region, theme: string) => `region=${r}&q=${encodeURIComponent(theme)}`;
-export type LibraryTheme = { name: string; q: string; region: Region; at: string | null; members: number | null; searched: number };
+export type LibraryTheme = { name: string; q: string; region: Region; at: string | null; day?: string | null; members: number | null; searched: number };
 
 export const themeApi = {
   dive: (r: Region, theme: string, refresh = false) => api<Dive>(`/research/theme-dive?${q(r, theme)}${refresh ? "&refresh=true" : ""}`),
   prices: (r: Region, theme: string) => api<Prices>(`/research/theme-dive/prices?${q(r, theme)}`),
   news: (r: Region, theme: string) => api<{ items: NewsRow[]; as_of: string }>(`/research/theme-dive/news?${q(r, theme)}`),
-  listings: (r: Region, theme: string) => api<{ items: Listing[]; checked: boolean }>(`/research/theme-dive/listings?${q(r, theme)}`),
+  listings: (r: Region, theme: string) => api<{ items: Listing[]; checked: boolean; pending?: boolean }>(`/research/theme-dive/listings?${q(r, theme)}`),
   business: (r: Region, theme: string) => api<Business>(`/research/theme-dive/business?${q(r, theme)}`),
   /** EXPORT: the theme's deck, PowerPoint or PDF (counted against the plan's monthly decks, as a company's deck is) */
   deck: (r: Region, theme: string, format: "pptx" | "pdf") => api<Response>(`/research/theme-dive/deck?${q(r, theme)}&format=${format}`, { raw: true }),
@@ -89,4 +97,4 @@ export const themeApi = {
 };
 
 
-export { amount, pc, times, points, span, layerLines, medCell, calcOf, CALC_WORDS, MIN_BASE, NO_WORDS, ownWords, libraryLabel, LIBRARY_HEAD, type LayerLine } from "./themeFormat";
+export { amount, pc, pcw, times, points, span, layerLines, medCell, calcOf, CALC_WORDS, MIN_BASE, NO_WORDS, ownWords, libraryLabel, LIBRARY_HEAD, bizFor, plainIndustry, type LayerLine } from "./themeFormat";

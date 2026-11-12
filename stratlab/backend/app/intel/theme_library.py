@@ -15,6 +15,7 @@ import re
 import threading
 import time
 import unicodedata
+from datetime import datetime
 from difflib import SequenceMatcher
 
 from .. import computed
@@ -160,7 +161,8 @@ def keep(region: str, q: str, payload: dict, by: str | None = None) -> bool:
     aliases.discard("")
     body = {k: v for k, v in payload.items() if k not in ("ai", "refresh_state")}
     kept = computed.put(KIND, key_of(region, name), {"payload": body, "q": q}, label=payload.get("sector") or q, region=region,
-                        meta={"q": name, "aliases": sorted(aliases), "members": members(payload), "rules": theme_base.RULES}, by=by)
+                        meta={"q": name, "aliases": sorted(aliases), "members": members(payload), "rules": theme_base.RULES,
+                              "generated_at": float(payload.get("generated_at") or 0) or None}, by=by)
     mark_refreshing(region, name, False)
     return kept is not None
 
@@ -180,6 +182,24 @@ def suggest(region: str, q: str, limit: int = 5) -> list[dict]:
         if rank is None:
             continue
         rows.append((rank, -(e.get("hits") or 0), {"name": e.get("label") or m.get("q"), "q": m.get("q"), "region": region,
-                                                   "at": computed._iso(e.get("at")), "members": m.get("members"), "searched": e.get("hits") or 0}))
+                                                   "at": m.get("generated_at"), "members": m.get("members"), "searched": e.get("hits") or 0}))
     rows.sort(key=lambda x: (x[0], x[1]))
-    return [r for _, _, r in rows[:limit]]
+    out = [r for _, _, r in rows[:limit]]
+    for r in out:
+        r["at"], r["day"] = updated_at(region, r)
+    return out
+
+
+def updated_at(region: str, row: dict) -> tuple[str | None, str | None]:
+    """(when the stored map was written, its day in the market's own time zone): the date the theme's page says "Last updated" (LIVE7A-008:
+    the list said "updated 12 Nov", when the entry was last kept again, for a map its page said was written on 7 Nov). An entry kept before
+    the map's time was noted with it is read once for it."""
+    t = row.get("at")
+    if not t:
+        got = computed.get(KIND, key_of(region, row.get("q") or ""), count=False) or {}
+        t = float(((got.get("value") or {}).get("payload") or {}).get("generated_at") or 0) or None
+    if not t:
+        return None, None
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo("Asia/Kolkata" if region == "IN" else "America/New_York")
+    return computed._iso(t), datetime.fromtimestamp(float(t), tz).date().isoformat()
