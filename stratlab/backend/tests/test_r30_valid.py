@@ -262,9 +262,9 @@ def test_a_placement_is_carried_back_past_versions_that_kept_none_of_their_own(m
     monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None, carried=False:
                         (got.update(kept=kept, carried=carried), (out, kept))[1])
     T.placed("IN", "Utilities", {"generated_at": 1.0}, {"value_chain": []}, ask=None)
-    # lane s2-exact bumped RULES to 41, carrying 40 (updated on purpose)
-    assert B.RULES == 41 and T.PLACE_CARRY[41] == 40 and T.PLACE_CARRY[40] == 38 and 39 not in seen
-    assert seen == [41, 40, 38] and got["kept"]["assign"]["X"]["layer"] == "L" and got["carried"] is True
+    # lane s2-exact bumped RULES to 41, carrying 40; lane s3-r40 to 42, carrying 41: found at 40 (updated on purpose)
+    assert B.RULES == 42 and T.PLACE_CARRY[42] == 41 and T.PLACE_CARRY[41] == 40 and T.PLACE_CARRY[40] == 38 and 39 not in seen          # lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)
+    assert seen == [42, 41, 40] and got["kept"]["assign"]["X"]["layer"] == "L" and got["carried"] is True
 
 
 def test_the_carry_back_stops_when_no_version_kept_a_placement(monkeypatch):

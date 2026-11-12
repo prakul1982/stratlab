@@ -123,12 +123,28 @@ _ASKED = ("the AI's placement answer put it in \"{}\" with no model; its model, 
 # "theme:symbol" -> (its layer now, why it moved), against the exact replay of Release 39's code (RULES 41 = the live layer); halves as one
 # layer. Release 39's own moves (lane s2-exact: Bosch, Asahi India Glass, Qorvo, Netlist, ASE, Hikal, Brooks, 17 retailers to "Other") are
 # live since, so are in the inputs.
-APPROVED: dict = {}
-# the owner's review of Release 38: these companies' layers (or "Other") on the exact replay, whatever a later rule changes
+_ONLINE = ("leaving \"Other\" (R41: the online layer's map name \"Online marketplaces\" states a platform's way of earning, so it took no "
+           "retailer): \"Online retailers and marketplaces\" now states both ways of earning, holds its industry (catalogue and mail-order "
+           "houses) and its own words say \"online\" or \"e-commerce\", what the layer's name says (R40)")
+APPROVED: dict = {
+    **{f"retail:{s_}": ("Online retailers and marketplaces", f"{what}, {_ONLINE}") for s_, what in (
+        ("CHWY", "an online pet retailer"), ("RVLV", "an online fashion retailer"), ("SFIX", "an online personal styling service"),
+        ("DDL", "a fresh grocery e-commerce company"), ("NXH", "an e-commerce-focused retailer"), ("AKA", "a fashion brand selling online"),
+        ("HOUR", "an online retailer"), ("LITB", "an online clothing seller"), ("QVCG", "a video retailing and e-commerce group"))},
+}
+# R40: "theme:symbol" -> why it is no longer in the theme (theme_base.without_off_industry): a company the theme's official industry brought
+# in whose own words describe another business is dropped, never placed in "Other", and named on the theme's coverage (placements.off_industry)
+_SOLAR = "filed under semiconductors, its own words describe solar {} and no chips: another business"
+_FUEL = "filed under retail, its own words describe propane distribution and no stores, apparel or merchandise: another business"
+DROPPED = {"semis:DQ": _SOLAR.format("polysilicon"), "semis:TE": _SOLAR.format("modules"), "semis:TYGO": _SOLAR.format("power electronics"),
+           "semis:FTCI": _SOLAR.format("trackers"), "semis:SUNE": _SOLAR.format("installations"), "semis:ASTI": _SOLAR.format("panels"),
+           "semis:MAXNQ": _SOLAR.format("panels"), "retail:SPH": _FUEL, "retail:FGPR": _FUEL}
+# the owner's review of Release 38: these companies' layers (or "Other") on the exact replay, whatever a later rule changes; R40 (the owner's
+# review of Release 39, updated on purpose): Chewy into the online layer; Ferrellgas, Suburban Propane and T1 Energy out of the theme (None)
 REGRESSION = {"auto:BOSCHLTD": "Component and systems suppliers", "auto:ASAHIINDIA": "Component and systems suppliers",
-              "retail:CHWY": "Other", "retail:FGPR": "Other", "retail:SPH": "Other",
+              "retail:CHWY": "Online retailers and marketplaces", "retail:FGPR": None, "retail:SPH": None,
               "semis:MU": "Makers of their own products", "semis:INTC": "Makers of their own products",
-              "semis:QRVO": "Makers of their own products", "semis:GFS": "Contract chip foundries", "semis:TE": "Other"}
+              "semis:QRVO": "Makers of their own products", "semis:GFS": "Contract chip foundries", "semis:TE": None}
 
 
 def joined(name: str, v: dict | None = None) -> str:
@@ -148,8 +164,8 @@ def name_only(d: dict) -> dict:
 
 
 def now_layers(key: str) -> dict:
-    """{symbol: layer, or "Other"} on the exact replay under the rules as they are now (RULES 41 carries every live kept answer, kept under
-    40 or before), the halves of a layer split by market value as one."""
+    """{symbol: layer, or "Other"} on the exact replay under the rules as they are now (RULES 42 carries every live kept answer, kept under
+    41 or before), the halves of a layer split by market value as one."""
     out, _ = replay(key, carried=live(key)["kept_version"] != B.RULES)
     return {c["ticker"]: joined(v["layer"], v) for v in out["value_chain"] for c in v["companies"]}
 
@@ -167,16 +183,18 @@ def test_the_replay_reproduces_the_live_layer_of_every_company_but_the_approved_
         d = live(key)
         want = {c["ticker"]: joined(v["layer"], v) for v in d["value_chain"] for c in v["companies"]}
         got = now_layers(key)
-        assert set(want) == set(got), key
+        gone = {k.split(":")[1] for k in DROPPED if k.startswith(f"{key}:")}
+        assert set(want) - gone == set(got) and gone <= set(want), key
         odd = RECOVERED["unexplained"].get(key) or {}
         back = name_only(d) if odd else {}
-        for s_ in want:
+        for s_ in set(want) - gone:
             ok = APPROVED.get(f"{key}:{s_}", (want[s_],))[0]
             if got[s_] != ok and s_ not in odd and back.get(ok) != got[s_]:
                 diffs[f"{key}:{s_}"] = (want[s_], got[s_])
         for s_ in odd:
             assert got[s_] != want[s_]          # still unexplained by the returned inputs: kept listed, never silently matched
         out, _ = replay(key, carried=d["kept_version"] != B.RULES)
+        assert {x["ticker"] for x in (out.get("placements") or {}).get("off_industry") or []} == gone, key      # named on the coverage
         names = {joined(v["layer"]) for v in out["value_chain"] if v["companies"]}
         was = {joined(v["layer"]) for v in d["value_chain"] if v["companies"]}
         allowed = (was | {back[x] for x in was if x in back}) - RENAMED.get(key, set()) | ADDED.get(key, set())
@@ -190,7 +208,7 @@ def test_the_replay_reproduces_the_live_layer_of_every_company_but_the_approved_
 def test_the_owners_regression_list_holds_on_the_exact_replay():
     for k, layer in REGRESSION.items():
         key, s_ = k.split(":")
-        assert now_layers(key)[s_] == layer, k
+        assert now_layers(key).get(s_) == layer, k
     semis = now_layers("semis")
     assert not {"MU", "INTC", "SKHY", "QRVO"} & {s_ for s_, x in semis.items() if x == "Semiconductor equipment"}
 

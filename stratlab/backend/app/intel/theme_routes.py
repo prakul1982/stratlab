@@ -364,7 +364,7 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
 def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
@@ -1022,10 +1022,12 @@ def members_of(m: dict, dive: dict) -> list[dict]:
         groups.append(("Named in a sub-theme only", list(only.values())))
     out = []
     official = {v.get("layer") or "": bool(v.get("official")) and v.get("basis") != "list" for v in m.get("value_chain") or []}
+    rest = {v.get("layer") or "" for v in m.get("value_chain") or [] if v.get("official") and v.get("basis") == "rest"}      # R40: "Other"
     for layer, cos in groups:
         for c in cos:
             f = figs.get(c["ticker"]) or {}
             out.append({"symbol": c["ticker"], "name": c.get("name") or f.get("name") or c["ticker"], "layer": layer, "official": official.get(layer, False),
+                        **({"rest": True} if layer in rest else {}),
                         "industry": c.get("industry") or None, "what": theme_base.own_words(c.get("what") or f.get("what"), c.get("name") or f.get("name") or "") or None,
                         # LIVE6-006: the dive's market value, on its one price date
                         "cap": f.get("cap") if f.get("cap") is not None else c.get("cap"), "revenue": f.get("revenue"), "ebitda": f.get("ebitda"),
@@ -1128,6 +1130,15 @@ def map_for_deck(R, profile, region: str, q: str, wait: float = DECK_MAP_WAIT, p
     return r, theme, with_descriptions(r, c)
 
 
+def deck_key(r: str, theme: str, format: str, today, stamp: int, biz: bool, seen, waiting) -> tuple:
+    """The key a theme's deck file is kept under (DECK_CACHE and the shared store): the read of the theme, the day, the format, and every
+    version its slides rest on. R40 (another lane's finding): the dive's own sentences (theme_data.DIVE_TEXT) and the sector figures' rules
+    (sector_metrics.VERSION) too, so a deploy changing only those never serves that day's older file from memory."""
+    from .. import deck
+    return (r, theme.lower(), format, today.isoformat(), stamp, biz, seen, theme_base.RULES, deck.THEME_DECK_VERSION,
+            f"td{theme_data.DIVE_TEXT}", f"sm{sector_metrics.VERSION}", waiting)          # what the dive still waits for: last, as before
+
+
 @router.get("/theme-dive/deck")
 def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=Depends(current_profile)):
     """The theme deep dive as slides, PowerPoint or PDF (EXPORT): the cover, the value chain, every company with its figures, the
@@ -1155,7 +1166,7 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
     # still waits for; a deck made while they are read is kept under that count and made again from the fuller dive once they are in
     dive = dive_of(r, theme, m)
     waiting = figures_waiting(dive)
-    key = (r, theme.lower(), format, today.isoformat(), stamp, biz, seen, theme_base.RULES, deck.THEME_DECK_VERSION, waiting)
+    key = deck_key(r, theme, format, today, stamp, biz, seen, waiting)
     body = DECK_CACHE.get(key)
     if body is None:                           # R20: the file is kept in the shared store too, so a restart or a deploy doesn't rebuild it
         import base64

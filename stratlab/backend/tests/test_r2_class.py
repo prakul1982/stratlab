@@ -14,7 +14,7 @@ from app.intel import theme_base as B
 from app.intel import theme_check as C
 from app.intel import theme_routes as TR
 from tests import test_golden_classification as G
-from tests.test_r1_semis import layer_of, replay, row_of
+from tests.test_r1_semis import DROPPED, layer_of, replay, row_of
 
 SEMI = "Industry: Semiconductors & Related Devices. "
 
@@ -75,8 +75,9 @@ def test_live_retail_fuel_distributors_and_online_sellers_leave_the_apparel_chai
     for sym in ("CPNG", "W", "VIPS"):                         # online sellers: the online retailers, the layer of their own industry
         assert layer_of(vc, sym)["layer"] == "Online direct-to-consumer retailers", sym
     other = next(v for v in vc if v.get("official") and v.get("basis") == "rest")
-    assert {"CIMG", "FGPR", "SPH"} <= {c["ticker"] for c in other["companies"]}     # propane: no layer of the map sells fuel
-    assert row_of(vc, "FGPR")["model"] == "distribution"                           # its way of earning still shown
+    assert "CIMG" in {c["ticker"] for c in other["companies"]}
+    # R40 (lane s3-r40, updated on purpose): propane distributors are another business than retail, dropped from the theme
+    assert {"FGPR", "SPH"} <= DROPPED["retail_us_r35.json"] and not {"FGPR", "SPH"} & {c["ticker"] for v in vc for c in v["companies"]}
     # the chains the map put there stay, and Amazon keeps its R36 place
     assert {"GAP", "M", "DDS", "ANF", "AEO", "URBN"} <= names
     assert layer_of(vc, "AMZN")["layer"] == "Online direct-to-consumer retailers"
@@ -309,4 +310,4 @@ def test_unknown_models_fall_in_every_theme_and_rise_in_none():
 
 
 def test_the_rules_version_moved_with_its_carry():
-    assert B.RULES == 41 and TR.PLACE_CARRY[41] == 40 and TR.PLACE_CARRY[38] == 37 and TR.PLACE_CARRY[39] == 38   # lane s2-exact and lane s1-fit bumped RULES (updated on purpose)
+    assert B.RULES == 42 and TR.PLACE_CARRY[42] == 41 and TR.PLACE_CARRY[41] == 40 and TR.PLACE_CARRY[38] == 37 and TR.PLACE_CARRY[39] == 38   # lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); lane s2-exact and lane s1-fit bumped RULES (updated on purpose)

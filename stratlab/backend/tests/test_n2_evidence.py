@@ -119,7 +119,7 @@ def test_a_kept_model_of_low_confidence_rises_with_the_evidence_read_since():
     models, conf = B.refine_kept({"TSM": "manufacturing", "X": "manufacturing"}, {"TSM": "low", "X": "low"}, lambda s_: ev[s_], ["TSM", "X"])
     # q1 (changed on purpose): foundry words make TSMC a contract maker, its confidence read from its own words, never above "medium"
     assert models["TSM"] == "contract_manufacturing" and conf["TSM"] == "medium" and conf["X"] == "low"      # lifted, never above "medium"
-    assert B.RULES == 41 and TR.PLACE_CARRY[41] == 40 and TR.PLACE_CARRY[35] == 34 and TR.PLACE_CARRY[36] == 35 and TR.PLACE_CARRY[38] == 37 and TR.PLACE_CARRY[39] == 38     # lane s2-exact, lane s1-fit, lane r2, lane r1 and q1 bumped RULES (updated on purpose)
+    assert B.RULES == 42 and TR.PLACE_CARRY[42] == 41 and TR.PLACE_CARRY[41] == 40 and TR.PLACE_CARRY[35] == 34 and TR.PLACE_CARRY[36] == 35 and TR.PLACE_CARRY[38] == 37 and TR.PLACE_CARRY[39] == 38     # lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); lane s2-exact, lane s1-fit, lane r2, lane r1 and q1 bumped RULES (updated on purpose)
 
 
 # ---------- 2. a services company's family ----------

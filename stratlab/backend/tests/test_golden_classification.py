@@ -27,6 +27,11 @@ APPROVED = {
     "semis:TYGO": ("manufacturing", "other"),
     "semis:MAXNQ": ("manufacturing", "other"),
     "semis:ASTI": ("manufacturing", "other"),
+    # R40 (lane s3-r40, the owner's review of the live Release 39 Consumer retail deck, on purpose): propane distributors filed as retail
+    # ("retail distribution of propane", "retail marketer of propane") with no stores, apparel or merchandise are another business
+    # (theme_check.OFF_INDUSTRY); on a live map they are dropped from the theme and named on its coverage (theme_base.without_off_industry)
+    "retail:SPH": ("retail", "other"),
+    "retail:FGPR": ("distribution", "other"),
     # R36 fix 4: Amazon sells goods it owns ("products to be sold by us and by third parties"): a retailer with a marketplace beside it
     "retail:AMZN": ("retail", ""),
     # ---- R37 lane r2 (the owner: the remaining misclassifications across all themes) ----

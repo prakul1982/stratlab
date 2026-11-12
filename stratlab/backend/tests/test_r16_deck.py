@@ -210,8 +210,8 @@ def test_valuation_is_set_beside_listed_companies_of_similar_market_value_with_g
     # changed on purpose (R27): the peer set is said and is the companies' own sector of similar value; never the whole market
     # changed on purpose (R35): the line names the close its prices are of (the peers' and the companies' own latest price day)
     assert pp["as_of"] == "2026-10-05" and pp["symbols_n"] == 10 and pp["symbols"] == sorted(f"P{i}" for i in range(10))
-    assert sub == w(f"Median P/E {pp['theme']:.1f}x for the {pp['n']} companies with comparable peers (own sector, similar market value, outside the "
-                    f"theme), {pp['premium']:.1f}% above their peers' median of 10.0x (prices at the 05 Oct 2026 close); 1 with no comparable peer set (left out)")       # LIVE6-006: one date format (updated on purpose)
+    assert sub == w(f"Median P/E {pp['theme']:.1f}x for the {pp['n']} companies with comparable peers (own sector, similar market value, outside this "
+                    f"theme), {pp['premium']:.1f}% above their peers' median of 10.0x (prices at the 05 Oct 2026 close); 1 with no comparable peer set (left out)")       # LIVE6-006: one date format; lane s3-r40: "this theme" (updated on purpose)
     row = next(r for r in val["rows"] if r[0].startswith("P/E, companies with comparable peers"))
     assert row[1] == w(f"{pp['theme']:.1f}x") and row[4] == "10x" and row[2] == w(f"{pp['premium']:.1f}% above peers")
     assert pp["premium"] == round((pp["theme"] / pp["peers"] - 1) * 100, 1)        # the ratio of the two medians the table shows
