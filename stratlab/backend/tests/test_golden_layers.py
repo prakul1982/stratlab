@@ -110,6 +110,12 @@ APPROVED_LAYER = {
     "retail:PLBY": ('Other', 'R39 (lane s1-fit): no words of its own in this fixture, and "Apparel and fashion retail chains", the largest, holds none of its industry (Miscellaneous Retail): it stays in Other (licensing, digital content, lingerie: not an apparel chain)'),
 }
 
+# R40 (lane s3-r40, the owner's review of the live Release 39 decks, on purpose): companies the theme's official industry brought in whose own
+# words describe another business are dropped from the theme, never placed in "Other" (theme_base.without_off_industry): solar makers filed
+# as semiconductors, propane distributors filed as retail. "theme:symbol" -> why
+DROPPED = {**{f"semis:{s_}": "solar products and no chips, filed as semiconductors: another business" for s_ in ("TE", "TYGO", "FTCI", "MAXNQ", "DQ", "ASTI")},
+           **{f"retail:{s_}": "propane distribution and no stores, filed as retail: another business" for s_ in ("SPH", "FGPR")}}
+
 
 def replay_theme(t) -> dict:
     """{symbol: its layer, or "Other"} when the live map is placed again from its kept answer (theme_base.place_rest, no AI): the map's own
@@ -150,9 +156,9 @@ def test_no_company_in_any_theme_changes_its_layer_unless_approved():
         got = replay_theme(t)
         for c in t["companies"]:
             k = f"{t['key']}:{c['s']}"
-            want = APPROVED_LAYER[k][0] if k in APPROVED_LAYER else c["e"]
-            if got[c["s"]] != want:
-                moved.append(f"{k} ({c['n']}): expected {want!r}, got {got[c['s']]!r}")
+            want = None if k in DROPPED else APPROVED_LAYER[k][0] if k in APPROVED_LAYER else c["e"]
+            if got.get(c["s"]) != want:
+                moved.append(f"{k} ({c['n']}): expected {want!r}, got {got.get(c['s'])!r}")
     assert not moved, "a rule change moved these companies to another layer (edit APPROVED_LAYER, with the reason, if on purpose):\n" + "\n".join(moved)
 
 

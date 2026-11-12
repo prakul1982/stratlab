@@ -2421,16 +2421,19 @@ def no_peer_words(pp: dict) -> str:
 
 def peer_set_words(pp: dict) -> str:
     """Which companies the peers are (R27, the owner's outside review: business model and sector first, then size, never the whole market):
-    their own sector outside the theme, or the sector with the theme's other companies counted, each of similar market value."""
+    their own sector outside the theme, or the sector with the theme's other companies counted, each of similar market value.
+    R40 (the owner's review of the live Release 39 decks: "outside the the theme" read in 13 decks, where "outside the theme for 93, the
+    theme's other companies counted for 1" wraps after "the"): said as "this theme", so no wrap of the sentence puts one "the" beside
+    another."""
     sets = {k: n for k, n in (pp.get("sets") or {}).items() if k != "none" and n}
     sec_n, th_n = sets.get("sector", 0), sets.get("sector_theme", 0)
     if not sets:
         return "(no comparable peer set)"
     if not th_n:
-        return "(own sector, similar market value, outside the theme)"
+        return "(own sector, similar market value, outside this theme)"
     if not sec_n:
-        return "(own sector, similar market value, the theme's other companies counted)"
-    return f"(own sector, similar market value: outside the theme for {sec_n}, the theme's other companies counted for {th_n})"
+        return "(own sector, similar market value, this theme's other companies counted)"
+    return f"(own sector, similar market value: outside this theme for {sec_n}, with this theme's other companies counted for {th_n})"
 
 
 PEER_MIN = 10                     # theme_data.PEER_MIN: comparable peers a company needs for its relative comparison
@@ -2641,7 +2644,8 @@ def cohort_words(drops) -> list[str]:
 
 HELD_WORDS = {"net": "net margin", "ebitda": "EBITDA margin", "roe": "return on equity", "pb": "price to book"}
 COVERAGE_HEAD = ["Coverage", "Covered", "Of what"]
-COVERAGE_KINDS = ("Companies, by count", "Market value", "Each figure", "Each layer", "Partly read", "Not in the sources")
+COVERAGE_KINDS = ("Companies, by count", "Market value", "Each figure", "Each layer", "Partly read", "Not in the sources", "In no layer",
+                  "Another business")
 # R31 (the owner's review of the live R30 Insurance and Real estate decks): the model-specific figures the app's sources don't hold, and why,
 # by business-model family (theme_check.MODELS); said once, on the coverage table (an insurer's, when the sector table doesn't say it)
 NOT_IN_SOURCES = {
@@ -2723,7 +2727,38 @@ def coverage_table(v: dict, cov: dict) -> list[list[str]]:
     gone = not_in_sources(v)
     if gone:                       # R31: model-specific figures the sources don't hold, and why
         rows.append([COVERAGE_KINDS[5], "", gone])
+    rest = rest_count(v)
+    if rest:                       # R40: how many of the companies placed fit none of the map's layers
+        rows.append([COVERAGE_KINDS[6], f"{rest[0]:,} of {rest[1]:,}", f"companies fit none of the map's layers (in “{rest[2]}”: listed, never compared)"])
+    off = off_industry_line(v)
+    if off:                        # R40: companies of the theme's industries in another business, left out of the theme
+        rows.append([COVERAGE_KINDS[7], str(len((v.get("placements") or {}).get("off_industry") or [])), off])
     return rows
+
+
+def rest_count(v: dict) -> tuple[int, int, str] | None:
+    """(companies in the "Other" group, companies placed in the map's layers and "Other", its name) (R40, the owner: "50 of 100 companies
+    fit none of the map's layers"), each company once; None when the map has no "Other" group."""
+    placed, rest, name = set(), set(), ""
+    for mb in v.get("members") or []:
+        if not mb.get("symbol") or mb.get("layer") == "Named in a sub-theme only":
+            continue
+        placed.add(mb["symbol"])
+        if mb.get("rest"):
+            rest.add(mb["symbol"])
+            name = name or mb.get("layer") or ""
+    return (len(rest), len(placed), name) if rest and placed else None
+
+
+def off_industry_line(v: dict) -> str:
+    """"Filed under Retail-Miscellaneous Retail but in another business: Ferrellgas Partners, Suburban Propane Partners." (R40): the companies
+    an official industry of the theme files there whose own words describe another business, left out of the theme (theme_base.
+    without_off_industry), by the industry they are filed under; "" when there are none."""
+    by: dict = {}
+    for x in (v.get("placements") or {}).get("off_industry") or []:
+        if isinstance(x, dict) and x.get("ticker"):
+            by.setdefault(x.get("industry") or "the theme's industries", []).append(clean_name(x.get("name") or x["ticker"]))
+    return " ".join(f"Filed under {ind} but in another business: {', '.join(names)}." for ind, names in by.items())
 
 
 _COV_OF = re.compile(r"(\d[\d,]*) of (\d[\d,]*)")
@@ -2956,7 +2991,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 49                  # R38: foreign legal endings left off a label before any of it is cut, no word of a table cell broken inside; LIVE6: calendar price periods, own words only, one market value per company, short charts and empty tables dropped; q1: the appendix counts "with figures" by the dive's rule, a layer's cohort that fell against the run before on the data-confidence page; n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 50                  # R40: the peer set said as "this theme" (no "the the" on a wrap), a repeated word said once on the finished pages and counted, a layer named only by how its companies earn shown and never ranked, a market-value half with fewer than 3 companies in its figures undone, the coverage table's "In no layer" and "Another business" rows; R38: foreign legal endings left off a label before any of it is cut, no word of a table cell broken inside; LIVE6: calendar price periods, own words only, one market value per company, short charts and empty tables dropped; q1: the appendix counts "with figures" by the dive's rule, a layer's cohort that fell against the run before on the data-confidence page; n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -3438,6 +3473,16 @@ def text_flags(text) -> list[str]:
     return tidy_text(text)[1]
 
 
+def untwin(text) -> tuple[str, list[str]]:
+    """(the text with an immediately repeated word said once, ["repeated word"] or []) (R40, the owner's review of the live Release 39
+    decks: "outside the the theme"): "the the", "Of of", "companies companies", whatever the case; a name ("Bora Bora", "R R Kabel") and
+    "had had" stay (tidy_text's own rule for a doubled word). Run again on the finished pages, after the last text is fitted (layout_gate)."""
+    if not isinstance(text, str) or len(text) < 3:
+        return text, []
+    got = _DOUBLED.sub(_undouble, text)
+    return (got, ["repeated word"]) if got != text else (text, [])
+
+
 _TOKENS = (
     (re.compile(r"(?:^|(?<=\s))[/\\][A-Za-z]{2,5}[/\\](?=[\s,.;:)]|$)"), "a filing token"),
     (re.compile(r"\{[^{}\n]{0,40}\}"), "a template field"),
@@ -3470,15 +3515,16 @@ def slide_texts(s) -> list[str]:
     return [str(x) for x in out if isinstance(x, str) and x]
 
 
-def tidy_deck(slides: list) -> list[dict]:
+def tidy_deck(slides: list, repair=None) -> list[dict]:
     """Every sentence, label and cell of every slide through tidy_text (m2), as whole_deck sends every figure through one formatter; the
-    repairs made: [{"slide", "text" (as it was), "fixed", "why"}], logged."""
+    repairs made: [{"slide", "text" (as it was), "fixed", "why"}], logged. `repair`: another repair of the same shape (R40: untwin)."""
     import logging
     log = logging.getLogger("stratlab.deck")
     done: list[dict] = []
+    repair = repair or tidy_text
 
     def fix(x, where):
-        got, why = tidy_text(x)
+        got, why = repair(x)
         if why:
             done.append({"slide": where, "text": x, "fixed": got, "why": ", ".join(why)})
         return got
@@ -3592,7 +3638,7 @@ _SENT = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9⟦(†–])")
 MISSING_MARKS = {"None", "none", "nan", "NaN", "N/A", "NA", "-", "—", "null"}     # printed as "–" (missing); "n/a" and "not comparable" are their own
 MARKS_LINE = ("Three marks, never one: – not filed or not stored; n/a the measure doesn't apply to that kind of business; not comparable no "
               "comparable peer set.")
-PEERS_ROW = ["Comparable peers", f"Same sector and accounts, then half to twice the market value, outside the theme; under {PEER_MIN}, no set",
+PEERS_ROW = ["Comparable peers", f"Same sector and accounts, then half to twice the market value, outside this theme; under {PEER_MIN}, no set",
              "Last close", "Only the company's own sector"]
 NOTES_POINTER = "⟦How the figures are built⟧"
 GATE_ITEMS = (("sourced", "Figures have a period, source and formula"), ("reproduce", "Headlines reproduce from the tables"),
@@ -4168,6 +4214,12 @@ def complete_flags(slides: list) -> list[dict]:
     return out
 
 
+def prose_note(tidied: list[dict]) -> str:
+    """The prose item's note: how many texts were repaired, and how many of them held a repeated word (R40)."""
+    twins = sum(1 for d in tidied if "doubled word" in d.get("why", "") or "repeated word" in d.get("why", ""))
+    return f"{_n(len(tidied), 'text repair')} (doubled words, punctuation, hyphens)" + (f"; {_n(twins, 'repeated word')} said once" if twins else "")
+
+
 def layout_gate(slides: list) -> dict:
     """The publication gate's layout item (R35), run on the finished pages (after the page references and whole figures are set, so each
     text is as long as it will print): every slide is re-fitted (fit_slide), each change logged, and what could not be put right fails
@@ -4179,12 +4231,16 @@ def layout_gate(slides: list) -> dict:
         a, b = fit_slide(sl)
         refit += a
         failed += b
+    # R40: a word repeated by a text fitted or filled in since the text was repaired is said once before the deck is stored
+    twins = tidy_deck(slides, untwin) if slides else []
+    if twins:
+        slides[0].tidied = list(getattr(slides[0], "tidied", None) or []) + twins
     failed += complete_flags(slides)          # n1: and nothing the pages declare is missing from them
     for d in refit:
         log.info("deck layout: re-fitted on %r (%s): %s", d["slide"], d["why"], d["text"][:200])
     for d in failed:
         log.warning("deck gate: %s: on %r (%s): %s", d["rule"], d["slide"], d["why"], d["text"][:200])
-    return {"refit": refit, "failed": failed}
+    return {"refit": refit, "failed": failed, "twins": twins}
 
 
 def with_layout(gate: dict, lay: dict) -> dict:
@@ -4196,6 +4252,8 @@ def with_layout(gate: dict, lay: dict) -> dict:
     items = [({**x, "ok": not of("layout"), "dropped": len(of("layout")),
                "note": f"{_n(len(lay['refit']), 'text')} re-fitted to show whole" if lay["refit"] else ""} if x["id"] == "layout"
               else {**x, "ok": False, "dropped": x["dropped"] + len(of(x["id"]))} if of(x["id"]) else x) for x in gate["items"]]
+    if lay.get("twins"):          # R40: the repeated words said once on the finished pages counted with the text's other repairs
+        items = [{**x, "note": prose_note(lay["all_tidied"])} if x["id"] == "prose" else x for x in items]
     dropped = (list(gate.get("dropped") or []) + [cut(d) for d in lay["failed"]])[:GATE_KEEP]
     return {**gate, "items": items, "passed": sum(1 for x in items if x["ok"]), "dropped": dropped,
             "dropped_n": (gate.get("dropped_n") or 0) + len(lay["failed"]), "refit": [cut(d) for d in lay["refit"][:GATE_KEEP]], "refit_n": len(lay["refit"])}
@@ -4279,9 +4337,10 @@ def publication_gate(slides: list, v: dict, reproduced: list | None = None) -> d
     # in a sentence after the repair fails the prose item and the sentence is listed
     tidied = getattr(slides[0], "tidied", None) if slides else None
     if tidied:
-        notes["prose"] = f"{_n(len(tidied), 'text repair')} (doubled words, punctuation, hyphens)"
+        notes["prose"] = prose_note(tidied)
     for s_ in slides:
-        for txt in [s_.title, s_.subtitle] + [p for b in s_.blocks for p in b.get("paras") or []]:
+        said = [s_.title, s_.subtitle] + [p for b in s_.blocks for p in b.get("paras") or []]
+        for txt in said:
             why = text_flags(txt)
             if why:
                 dropped["prose"].append({"slide": s_.title, "text": txt, "why": "text: " + ", ".join(why), "rule": "prose"})
@@ -4289,6 +4348,8 @@ def publication_gate(slides: list, v: dict, reproduced: list | None = None) -> d
             why = token_flags(txt)
             if why:
                 dropped["prose"].append({"slide": s_.title, "text": txt, "why": "unfilled: " + ", ".join(why), "rule": "prose"})
+            if txt not in said and untwin(txt)[1]:          # R40: and no repeated word left in a label or a cell
+                dropped["prose"].append({"slide": s_.title, "text": txt, "why": "text: repeated word", "rule": "prose"})
     marks_noted = any(b["kind"] == "cards" and any(MARKS_LINE in (it.get("lines") or []) for it in b.get("items") or []) for s in slides for b in s.blocks)
     if not marks_noted and len(slides) > 2:
         dropped["marks"].append({"slide": "How to read this deck", "text": "the key to the three marks", "why": "not in the deck", "rule": "marks"})
@@ -4943,7 +5004,8 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             if b["kind"] == "table" and "Slide" in b["head"]:
                 b["head"], b["rows"], b["widths"], b["numeric"] = drop_empty(b["head"], b["rows"], b["widths"], b.get("numeric"), keep=tuple(range(len(b["head"]) - 1)))
     whole_deck(slides)
-    slides[0].gate = with_layout(slides[0].gate, layout_gate(slides))       # R35: nothing cut short, checked on the pages as they will print
+    lay = layout_gate(slides)
+    slides[0].gate = with_layout(slides[0].gate, {**lay, "all_tidied": getattr(slides[0], "tidied", None) or []})       # R35: nothing cut short, checked on the pages as they will print
     return slides, footer
 
 

@@ -37,7 +37,7 @@ FEW_BASE = 4                  # a highest or lowest median on this many companie
 COMPARE_MIN = MIN_BASE
 # R31 (the owner's review of the live R30 decks): a layer-vs-layer headline (the value chain's line, findings, questions) needs at least this
 # many companies with the figure in each layer it compares; tables still show every layer and mark (green, red) those of COMPARE_MIN or more
-DIVE_TEXT = 9          # LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
+DIVE_TEXT = 10         # R40: a layer the split named only by how its companies earn is never ranked ("a group by how they earn, of different businesses"), a market-value half with fewer than 3 companies in its figures undone; LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
 HEADLINE_MIN = 5
 # R27 (headline eligibility): a comparison is said as a headline only on a figure for at least this share of the companies of each group it
 # compares (a layer, a family); one with less is shown as data, never ranked (the live R26 Semis deck: "RPO growth -3.9%" of 21 of 53)
@@ -589,13 +589,13 @@ def chain_table(blocks: list[dict]) -> dict:
 RANK_WHY = {"cover": "the figure for under half its companies",
             "sparse": "how most of its companies earn is not shown", "family": "a different kind of business", "sub": "a different commodity",
             "official": "an exchange industry, not one of the map's layers", "rest": "companies outside the map's layers",
-            "other": "not comparable with the ranked layers"}
+            "how": "a group by how they earn, of different businesses", "other": "not comparable with the ranked layers"}
 
 
 def rank_scope(n: int, out: list | None = None) -> str:
     """How a ranking headline opens (m2): "Among the 4 layers with at least 5 companies with the figure", and " and one kind of business"
     when a layer shown beside them is left out for how it earns. Said in the headline's own sentence, wherever the headline is shown."""
-    kind = any(r.get("why") in (RANK_WHY["family"], RANK_WHY["sub"], RANK_WHY["sparse"]) for r in out or [])
+    kind = any(r.get("why") in (RANK_WHY["family"], RANK_WHY["sub"], RANK_WHY["sparse"], RANK_WHY["how"]) for r in out or [])
     return f"Among the {n} layers with at least {HEADLINE_MIN} companies with the figure" + (" and one kind of business" if kind else "")
 
 
@@ -622,6 +622,8 @@ def unranked_rows(rows: list, have: list, key: str) -> list[dict]:
             why = "cover"
         elif isinstance(m, dict) and m.get("sparse"):
             why = "sparse"
+        elif isinstance(m, dict) and m.get("by_how"):
+            why = "how"
         elif fam and model_family_of(m) != fam[0][0]:
             why = "family"
         elif sub and sub_of(m) != sub[0][0]:
@@ -671,12 +673,14 @@ def of_words(n: int, of: int | None, one: str = "company", many: str = "companie
 def headline_ok(n: int, of: int | None = None, model: dict | None = None, floor: int | None = None) -> bool:
     """Whether one group's figure may be ranked in a headline (R27): its sample is at least `floor` companies (HEADLINE_MIN, R31), it covers at least
     COVERAGE_MIN of the group's `of` companies, and the group is of one business model (theme_base.by_model's `model`: a layer whose companies'
-    models are mostly unknown, "sparse", is not; no model read at all says nothing either way). A failing group is shown, never ranked."""
+    models are mostly unknown, "sparse", is not; no model read at all says nothing either way). A failing group is shown, never ranked.
+    R40: nor a layer the split made and named only by how its companies earn ("by_how": "Makers of their own products"), a group of
+    different businesses."""
     if (n or 0) < (HEADLINE_MIN if floor is None else floor):
         return False
     if of and n < of * COVERAGE_MIN:
         return False
-    return not (isinstance(model, dict) and model.get("sparse"))
+    return not (isinstance(model, dict) and (model.get("sparse") or model.get("by_how")))
 
 
 def period_basis(rows: list[dict]) -> str:

@@ -228,7 +228,7 @@ def test_the_deck_labels_each_peer_figure_with_its_set_and_counts_the_companies_
     slides = deck.theme_plan(v)[0]
     val = table_of(slides, "Valuation")
     rows = {r[0]: r for r in plain(val["rows"])}
-    assert "P/E, companies with comparable peers (own sector, similar market value, outside the theme)" in rows
+    assert "P/E, companies with comparable peers (own sector, similar market value, outside this theme)" in rows          # lane s3-r40: "this theme", no "the the" on a wrap (updated on purpose)
     none = rows["P/E, companies with no comparable peer set"]
     assert none[val["head"].index("Companies")] == "2" and "not comparable" in none
     t = texts(slides)

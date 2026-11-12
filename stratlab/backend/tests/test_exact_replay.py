@@ -2,10 +2,12 @@
 did not hold on the live site, whose placement read stored descriptions and a kept answer the replays did not have).
 
 The inputs are what GET /research/theme-dive/placement-inputs (Release 39a) returned for the 14 benchmark themes on 12 Nov 2026 under the
-Release 38.1 rules (RULES 40): tests/fixtures/themes_live/inputs_r39/<theme>.json, each the checked map as served (every company's layer,
+Release 39 rules (RULES 41; refreshed by lane s3-r40 from the first read, under Release 38.1, RULES 40): tests/fixtures/themes_live/inputs_r39/<theme>.json, each the checked map as served (every company's layer,
 model and whether the split moved it), the kept placement answer and the rules version it was kept under, and each company's stored
 description as theme_routes.placed reads it (None: no words). Real estate and Telecom were still being re-checked when read
-(placements.checked False); they are replayed like the others.
+(placements.checked False); they are replayed like the others. The replay of Release 39's code on them gave every company its exact live
+layer, but Hind Aluminium (still unexplained, recovered.json) and the three layer names the split's renames hold in Metals (name-only
+knock-ons of it: the answer kept under RULES 41 is not carried, and its renames are keyed by the layers' members).
 
 The replay feeds theme_base.place_rest exactly what theme_routes.placed fed it on live: the AI map's own layers (their names and descriptions
 before any rename) with the companies the map named itself, every company of the theme's official industries in its official group (with
@@ -118,63 +120,85 @@ _SPLIT = ("placed with the chip designers, moved out by the split by model into 
 _ASKED = ("the AI's placement answer put it in \"{}\" with no model; its model, asked apart from the placement afterwards (\"reasked\"), "
           "no longer moves it out: it stays, left out of the layer's figures as another way of earning")
 
-# "theme:symbol" -> (its layer now, why it moved), against the exact replay of Release 38.1's code (= the live layer); halves as one layer
-APPROVED = {
-    "auto:BOSCHLTD": ("Component and systems suppliers", "fuel injection systems and automotive aftermarket products: " + _KIN),
-    "auto:ASAHIINDIA": ("Component and systems suppliers", "automotive and architectural glass: " + _KIN),
-    "semis:QRVO": ("Makers of their own products", "RF, analog and power chips: " + _SPLIT),
-    "semis:NLST": ("Makers of their own products", "SSDs and memory subsystems: " + _SPLIT),
-    "semis:ASX": ("Outsourced packaging and test", "the largest packaging and test provider: " + _ASKED.format("Outsourced packaging and test")),
-    "pharma:HIKAL": ("Contract research and manufacturing services", "research services, active ingredients and intermediates for customers: "
-                     + _ASKED.format("Contract research and manufacturing services")),
-    "pharma:BROOKS": ("Contract research and manufacturing services", "a pharmaceutical company working on contract basis: "
-                      + _ASKED.format("Contract research and manufacturing services")),
-    **{f"retail:{s_}": ("Other", f"{what}: " + _OFF) for s_, what in (
-        ("CHWY", "an online pet retailer"), ("LUXE", "a digital luxury retail group"), ("QVCG", "a video and online shopping group"),
-        ("RVLV", "an online fashion retailer"), ("SFIX", "an online personal styling service"), ("DDL", "an online fresh grocery seller"),
-        ("AKA", "an online fashion brand"), ("HOUR", "an online retailer"), ("LITB", "an online retailer"), ("LVLU", "a women's clothing brand sold online"),
-        ("NXH", "an e-commerce-focused retailer"), ("BWMX", "a consumer products company selling direct"), ("FCFS", "a pawn store operator"),
-        ("EZPW", "a pawn shop operator"), ("SVV", "a thrift store operator"), ("FGPR", "a propane distributor"), ("CIMG", "a renamed consumer products company"))},
+# "theme:symbol" -> (its layer now, why it moved), against the exact replay of Release 39's code (RULES 41 = the live layer); halves as one
+# layer. Release 39's own moves (lane s2-exact: Bosch, Asahi India Glass, Qorvo, Netlist, ASE, Hikal, Brooks, 17 retailers to "Other") are
+# live since, so are in the inputs.
+_ONLINE = ("leaving \"Other\" (R41: the online layer's map name \"Online marketplaces\" states a platform's way of earning, so it took no "
+           "retailer): \"Online retailers and marketplaces\" now states both ways of earning, holds its industry (catalogue and mail-order "
+           "houses) and its own words say \"online\" or \"e-commerce\", what the layer's name says (R40)")
+APPROVED: dict = {
+    **{f"retail:{s_}": ("Online retailers and marketplaces", f"{what}, {_ONLINE}") for s_, what in (
+        ("CHWY", "an online pet retailer"), ("RVLV", "an online fashion retailer"), ("SFIX", "an online personal styling service"),
+        ("DDL", "a fresh grocery e-commerce company"), ("NXH", "an e-commerce-focused retailer"), ("AKA", "a fashion brand selling online"),
+        ("HOUR", "an online retailer"), ("LITB", "an online clothing seller"), ("QVCG", "a video retailing and e-commerce group"))},
 }
-# the owner's review of Release 38: these companies' layers (or "Other") on the exact replay, whatever a later rule changes
+# R40: "theme:symbol" -> why it is no longer in the theme (theme_base.without_off_industry): a company the theme's official industry brought
+# in whose own words describe another business is dropped, never placed in "Other", and named on the theme's coverage (placements.off_industry)
+_SOLAR = "filed under semiconductors, its own words describe solar {} and no chips: another business"
+_FUEL = "filed under retail, its own words describe propane distribution and no stores, apparel or merchandise: another business"
+DROPPED = {"semis:DQ": _SOLAR.format("polysilicon"), "semis:TE": _SOLAR.format("modules"), "semis:TYGO": _SOLAR.format("power electronics"),
+           "semis:FTCI": _SOLAR.format("trackers"), "semis:SUNE": _SOLAR.format("installations"), "semis:ASTI": _SOLAR.format("panels"),
+           "semis:MAXNQ": _SOLAR.format("panels"), "retail:SPH": _FUEL, "retail:FGPR": _FUEL}
+# the owner's review of Release 38: these companies' layers (or "Other") on the exact replay, whatever a later rule changes; R40 (the owner's
+# review of Release 39, updated on purpose): Chewy into the online layer; Ferrellgas, Suburban Propane and T1 Energy out of the theme (None)
 REGRESSION = {"auto:BOSCHLTD": "Component and systems suppliers", "auto:ASAHIINDIA": "Component and systems suppliers",
-              "retail:CHWY": "Other", "retail:FGPR": "Other", "retail:SPH": "Other",
+              "retail:CHWY": "Online retailers and marketplaces", "retail:FGPR": None, "retail:SPH": None,
               "semis:MU": "Makers of their own products", "semis:INTC": "Makers of their own products",
-              "semis:QRVO": "Makers of their own products", "semis:GFS": "Contract chip foundries", "semis:TE": "Other"}
+              "semis:QRVO": "Makers of their own products", "semis:GFS": "Contract chip foundries", "semis:TE": None}
 
 
 def joined(name: str, v: dict | None = None) -> str:
     return "Other" if (v or {}).get("official") else _HALF.sub("", name)
 
 
+# live layer names a change approved here takes away, and those it adds (halves as one), by theme
+RENAMED: dict = {}
+ADDED: dict = {}
+
+
+def name_only(d: dict) -> dict:
+    """{a live layer's name: the name it had before the split renamed it}: in a theme where one company's live layer is unexplained by the
+    returned inputs (recovered.json), the split's renames, keyed by the layers' members, are lost with it on a replay whose answer is not
+    carried: name-only knock-ons, never a company's move."""
+    return {x["name"]: k for k, x in ((d["kept"].get("model_names") or {}).get("rename") or {}).items() if x.get("name")}
+
+
 def now_layers(key: str) -> dict:
-    """{symbol: layer, or "Other"} on the exact replay under the rules as they are now (RULES 41 carries every live kept answer, kept under
-    40 or before), the halves of a layer split by market value as one."""
+    """{symbol: layer, or "Other"} on the exact replay under the rules as they are now (RULES 42 carries every live kept answer, kept under
+    41 or before), the halves of a layer split by market value as one."""
     out, _ = replay(key, carried=live(key)["kept_version"] != B.RULES)
     return {c["ticker"]: joined(v["layer"], v) for v in out["value_chain"] for c in v["companies"]}
 
 
 def test_the_replay_reproduces_the_live_layer_of_every_company_but_the_approved_moves():
-    """Step 1 (lane s2-exact): Release 38.1's code (RULES 40) on these inputs gave every company of the 14 themes its live layer by its exact
-    name (halves and the split's renames included), but Hind Aluminium (recovered.json "unexplained"). Since RULES 41, every company still
-    has its live layer (the halves as one) but the moves in APPROVED, each with its reason; a rule change that moves any other company
-    fails here, and is made on purpose by editing APPROVED with its reason, never by loosening the check. Every live layer name is kept
-    (the split's renames carried with the answer)."""
+    """Step 1 (lane s2-exact): Release 38.1's code (RULES 40) on the first inputs gave every company of the 14 themes its live layer by its
+    exact name (halves and the split's renames included), but Hind Aluminium (recovered.json "unexplained"). Step 1 (lane s3-r40): Release
+    39's code (RULES 41) on the refreshed inputs did the same, but Hind Aluminium and, in Metals, the split's three renames lost with it
+    (`name_only`: the answer kept under 41 is not carried there). Since, every company still has its live layer (the halves as one) but the
+    moves in APPROVED, each with its reason; a rule change that moves any other company fails here, and is made on purpose by editing
+    APPROVED with its reason, never by loosening the check. Every live layer name is kept but those an approved change takes away
+    (RENAMED) or adds (ADDED)."""
     diffs = {}
     for key in THEMES:
         d = live(key)
         want = {c["ticker"]: joined(v["layer"], v) for v in d["value_chain"] for c in v["companies"]}
         got = now_layers(key)
-        assert set(want) == set(got), key
+        gone = {k.split(":")[1] for k in DROPPED if k.startswith(f"{key}:")}
+        assert set(want) - gone == set(got) and gone <= set(want), key
         odd = RECOVERED["unexplained"].get(key) or {}
-        for s_ in want:
+        back = name_only(d) if odd else {}
+        for s_ in set(want) - gone:
             ok = APPROVED.get(f"{key}:{s_}", (want[s_],))[0]
-            if got[s_] != ok and s_ not in odd:
+            if got[s_] != ok and s_ not in odd and back.get(ok) != got[s_]:
                 diffs[f"{key}:{s_}"] = (want[s_], got[s_])
         for s_ in odd:
             assert got[s_] != want[s_]          # still unexplained by the returned inputs: kept listed, never silently matched
         out, _ = replay(key, carried=d["kept_version"] != B.RULES)
-        assert {v["layer"] for v in out["value_chain"] if v["companies"]} == {v["layer"] for v in d["value_chain"] if v["companies"]}, key
+        assert {x["ticker"] for x in (out.get("placements") or {}).get("off_industry") or []} == gone, key      # named on the coverage
+        names = {joined(v["layer"]) for v in out["value_chain"] if v["companies"]}
+        was = {joined(v["layer"]) for v in d["value_chain"] if v["companies"]}
+        allowed = (was | {back[x] for x in was if x in back}) - RENAMED.get(key, set()) | ADDED.get(key, set())
+        assert was - set(back) - RENAMED.get(key, set()) <= names <= allowed, key
     assert diffs == {}
     for k, (layer, why) in APPROVED.items():
         key, s_ = k.split(":")
@@ -184,7 +208,7 @@ def test_the_replay_reproduces_the_live_layer_of_every_company_but_the_approved_
 def test_the_owners_regression_list_holds_on_the_exact_replay():
     for k, layer in REGRESSION.items():
         key, s_ = k.split(":")
-        assert now_layers(key)[s_] == layer, k
+        assert now_layers(key).get(s_) == layer, k
     semis = now_layers("semis")
     assert not {"MU", "INTC", "SKHY", "QRVO"} & {s_ for s_, x in semis.items() if x == "Semiconductor equipment"}
 
@@ -193,10 +217,13 @@ def test_a_carried_answer_keeps_the_split_s_names_and_none_is_asked_again():
     """R41: the live answers kept under RULES 40 or before are carried as they are; the layers the split renamed keep the answer's names when
     the split reshapes them again (with no AI, as a page waiting reads it, and in the background check: only a reshaped layer the answer
     never named is asked)."""
-    out, _ = replay("retail", carried=True)
+    d = live("retail")
+    stale = {**d["kept"], "model_names": {**d["kept"]["model_names"], "sig": "stale"}}      # the split reshaped its layers again
+    m = pre_map(d, RECOVERED["origin"].get("retail"), RECOVERED["description"].get("retail"))
+    out, _ = B.place_rest(m, d["theme"], lambda s: d["evidence"].get(s), ask=None, kept=stale, carried=True)
     names = {v["layer"] for v in out["value_chain"]}
     assert "Off-price, dollar and discount store chains" in names and "Off-price and dollar stores" not in names
-    plain, _ = replay("retail", carried=False)
+    plain, _ = B.place_rest(m, d["theme"], lambda s: d["evidence"].get(s), ask=None, kept=stale, carried=False)
     assert "Off-price and dollar stores" in {v["layer"] for v in plain["value_chain"]}          # not carried: renamed only on the same members
 
 

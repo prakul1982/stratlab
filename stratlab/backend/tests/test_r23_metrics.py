@@ -339,8 +339,8 @@ def test_peers_are_of_similar_value_in_the_same_sector_outside_the_theme_else_wi
     got = D.peers_section(rows, fin + other + huge)
     # A: ten financial companies of similar value outside the theme; B: too few metal companies: no comparable peer set, left out
     assert got["pe"]["sets"] == {"sector": 1, "none": 1} and got["pe"]["peers"] == 15.0 and got["pe"]["n"] == 1 and got["pe"]["none"] == 1
-    assert deck.peer_set_words(got["pe"]) == "(own sector, similar market value, outside the theme)"
-    assert "with comparable peers (own sector, similar market value, outside the theme)" in deck.pe_peer_line(got["pe"])
+    assert deck.peer_set_words(got["pe"]) == "(own sector, similar market value, outside this theme)"          # lane s3-r40: "this theme", no "the the" on a wrap (updated on purpose)
+    assert "with comparable peers (own sector, similar market value, outside this theme)" in deck.pe_peer_line(got["pe"])
     assert deck.pe_peer_line(got["pe"]).endswith("; 1 with no comparable peer set (left out)")
     # nine outside the theme and one of the theme's own of the same sector: the theme's other companies are counted
     theme_mate = {"symbol": "T", "cap": 9000, "pe": 15.0, "sector": "Financial Services"}

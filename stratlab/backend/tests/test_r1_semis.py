@@ -35,7 +35,11 @@ def replay(name: str):
     m = {"sector": d["theme"], "value_chain": own + [{"layer": "Official", "official": True, "basis": "industry", "companies": rest}]}
     kept = {"assign": {c["ticker"]: {"layer": "", "by": "ai"} for c in rest}, "models": models, "model_confidence": conf, "model_tags": tags}
     out, _ = B.place_rest(m, d["theme"], lambda s: words.get(s) or "", ask=None, kept=kept)
+    DROPPED[name] = {x["ticker"] for x in (out.get("placements") or {}).get("off_industry") or []}
     return out["value_chain"]
+
+
+DROPPED: dict = {}          # R40: the companies of another business each replay dropped from the theme (theme_base.without_off_industry)
 
 
 def layer_of(vc, sym):
@@ -126,13 +130,12 @@ def test_solar_words_and_no_chips_under_a_chip_industry_are_another_business():
 
 def test_live_semis_solar_makers_stay_in_other_and_out_of_chip_layers():
     vc = replay("semis_us_r35.json")
-    other = next(v for v in vc if v.get("official") and v.get("basis") == "rest")
-    names = {c["ticker"] for c in other["companies"]}
-    assert {"FTCI", "TE", "TYGO", "MAXNQ", "ASTI"} <= names
+    # R40 (lane s3-r40, updated on purpose): another business filed under the theme's industry is dropped from the theme, never placed in
+    # "Other", and named on its coverage
+    names = {"FTCI", "TE", "TYGO", "MAXNQ", "ASTI"}
+    assert names <= DROPPED["semis_us_r35.json"]
     for v in vc:
-        if not v.get("official"):
-            assert not names & {c["ticker"] for c in v["companies"]}
-    assert row_of(vc, "FTCI")["model"] == "manufacturing"                   # how it earns is still shown; it is simply not a chip company
+        assert not names & {c["ticker"] for c in v["companies"]}
 
 
 def test_an_off_industry_company_the_map_placed_in_a_layer_is_left_out_as_another_business():

@@ -136,15 +136,22 @@ def test_the_fixture_holds_the_fourteen_benchmark_maps():
     assert "Release 37" in LAYERS["note"]
 
 
+# R40 (lane s3-r40, the owner's review of the live Release 39 decks, on purpose): companies the theme's official industry brought in whose own
+# words describe another business are dropped from the theme, never placed in "Other" (theme_base.without_off_industry): solar makers filed
+# as semiconductors, propane distributors filed as retail. "theme:symbol" -> why
+DROPPED = {**{f"semis:{s_}": "solar products and no chips, filed as semiconductors: another business" for s_ in ("TE", "TYGO", "FTCI", "MAXNQ", "DQ", "ASTI")},
+           **{f"retail:{s_}": "propane distribution and no stores, filed as retail: another business" for s_ in ("SPH", "FGPR")}}
+
+
 def test_no_company_in_any_theme_changes_its_layer_unless_approved():
     moved = []
     for t in LAYERS["themes"]:
         got = layer_of(replay_vc(t))
         for c in t["companies"]:
             k = f"{t['key']}:{c['s']}"
-            want = APPROVED[k][0] if k in APPROVED else c["e"]
-            if got[c["s"]] != want:
-                moved.append(f"{k} ({c['n']}): expected {want!r}, got {got[c['s']]!r}")
+            want = None if k in DROPPED else APPROVED[k][0] if k in APPROVED else c["e"]
+            if got.get(c["s"]) != want:
+                moved.append(f"{k} ({c['n']}): expected {want!r}, got {got.get(c['s'])!r}")
     assert not moved, "a rule change moved these companies to another layer (edit APPROVED, with the reason, if on purpose):\n" + "\n".join(moved)
 
 
@@ -208,8 +215,10 @@ def test_the_review_items_hold_on_the_live_maps():
     # Vipshop ("online discount sales") shares "discount" with the off-price layer's own words, so the largest stands for it, as before
     for s in ("CPNG", "W", "CHWY", "LULU", "JD"):
         assert not retail[s].startswith("Off-price"), s
-    for s in ("SPH", "FCFS", "EZPW", "FGPR"):
+    for s in ("FCFS", "EZPW"):
         assert retail[s] == "Other", s
+    for s in ("SPH", "FGPR"):            # lane s3-r40: another business, dropped from the theme (updated on purpose)
+        assert s not in retail, s
     assert retail["JD"] == "Resale, rental and small digital commerce"     # a broad online retailer, out of "Niche": the online commerce layer
     semis = layer_of(replay_vc(_theme("semis")))
     for s in ("MU", "INTC", "SKHY", "QRVO", "IPGP", "LASR", "LEDS", "KOPN", "AAOI", "PLAB"):

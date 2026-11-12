@@ -1,9 +1,6 @@
 {
  "note": "What the live placement read that GET /research/theme-dive/placement-inputs does not return (Release 39a), recovered so the replay is exact. origin: the AI map's layer of each company the map named itself and the split moved (the endpoint shows only where it ended); each is the only layer for which the replayed placement's layer-name signature equals the kept answer's names_for. description: the map's own description of a layer the split renamed afterwards (by_model saw it before the rename), from the Release 32/35 fixtures of the same map (layers_r36.json, semis_us_r32.json). facts: a company's stored official industry path (theme:evidence 'industry', read by theme_routes._facts_reader), where it decides the evidence's 420 characters. evidence: a company whose stored description was read after the served map was worked out (the map was still being re-checked). unexplained: a difference no returned input explains, with the input it needs.",
  "origin": {
-  "auto": {
-   "BOSCHLTD": "Component and systems suppliers"
-  },
   "semis": {
    "MU": "Foundry and memory manufacturing",
    "ARM": "Design software and IP licensing"
@@ -51,7 +48,7 @@
  },
  "unexplained": {
   "metals": {
-   "HINDALUMI": "live: 'Pipe, tube and aluminium product makers', moved there from Other; leaving Other, a company of an industry the largest layer of its family does not hold joins it only when its own words share a word of that layer's name or description, and its stored description shares none: the live evidence held words this endpoint does not return (its stored business read, segments or filing lines, theme_routes._facts_reader). The two layers the split renamed keep their names only on the same members (model_names signature), so in the replay they keep their names from before the split."
+   "HINDALUMI": "live: 'Pipe, tube and aluminium product makers', moved there from Other; leaving Other, a company of an industry the largest layer of its family does not hold joins it only when its own words share a word of that layer's name or description, and its stored description shares none: the live evidence held words this endpoint does not return (its stored business read, segments or filing lines, theme_routes._facts_reader). The two layers the split renamed keep their names only on the same members (model_names signature), so in the replay they keep their names from before the split. Since the refresh (its answer kept under RULES 41, so not carried), the split's three renames (\"Integrated steelmaking\", \"Stainless steel and steel pipe makers\", \"Lead and metal scrap recyclers\") are likewise lost on the replay: name-only knock-ons of this one company (with it in the pipe layer the replay is exact, names included)."
   }
  }
 }

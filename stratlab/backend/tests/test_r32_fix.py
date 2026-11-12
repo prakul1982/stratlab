@@ -147,7 +147,7 @@ def test_a_split_half_with_no_shown_company_is_undone():
     assert "Residential developers" in lays and not any("(larger)" in x or "(smaller)" in x for x in lays)
     text = " ".join(str(x) for s in slides for b in s.blocks for x in (b.get("paras") or []) + [s.title or ""])
     assert "(smaller)" not in text and "(larger)" not in text
-    assert deck.THEME_DECK_VERSION == 49 and B.RULES == 41          # lane s2-exact: RULES 41 (updated on purpose); lane s1-fit: RULES 39 (updated on purpose); lane r2: RULES 38 (updated on purpose); lane r1: RULES 37 (updated on purpose); q1: RULES 36 (updated on purpose); lane m1 bumped RULES (updated on purpose; lane n2: RULES 35)
+    assert deck.THEME_DECK_VERSION == 50 and B.RULES == 42          # lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); lane s2-exact: RULES 41 (updated on purpose); lane s1-fit: RULES 39 (updated on purpose); lane r2: RULES 38 (updated on purpose); lane r1: RULES 37 (updated on purpose); q1: RULES 36 (updated on purpose); lane m1 bumped RULES (updated on purpose; lane n2: RULES 35)
 
 
 def test_a_company_with_no_model_takes_the_one_its_map_layers_name_states():

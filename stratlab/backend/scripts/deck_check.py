@@ -9,8 +9,12 @@ Failures (the exit code is 1 when any deck has one):
   placeholder  an unfilled field or a missing value printed as text ("{name}", "None", "nan", "undefined", "shown for x.")
   joining word text cut on a joining word ("Component and…")
   count        "N of M" where N is larger than M
+  repeated     a word said twice in a row ("outside the the theme", "Of of"), whatever the case, on one line or across a line break
+               (a name such as "Bora Bora" or "R R Kabel", and "had had", are English)
 Reported, and a failure only with --strict:
   cut text     every other text ending in "…" (a label or a sentence cut to its box)
+  other>40%    a theme whose "Other" group holds over 40% of the companies placed, as its coverage says ("50 of 100 companies fit none
+               of the map's layers"): a map that places too few of its companies
 
 A PDF that can't be read is a failure of its own (UNREADABLE). A folder with no PDF is read from its .txt files (pdftotext -layout output, pages separated by form feeds), so a saved extract can be
 checked again. Standalone: nothing of the app is imported; pdftotext (poppler) must be on the PATH to read PDFs. Exit 2: nothing to read."""
@@ -21,8 +25,9 @@ import shutil
 import subprocess
 import sys
 
-FAIL = ("headline", "mid-word", "placeholder", "joining word", "count")
-WARN = ("cut text",)
+FAIL = ("headline", "mid-word", "placeholder", "joining word", "count", "repeated")
+WARN = ("cut text", "other>40%")
+OTHER_MAX = 0.40                # R40: the share of the companies placed that "Other" may hold before the deck is flagged
 HEAD_LINES = 6                  # a slide's title and headline are among its first lines (the part's name, the title, up to three lines under it)
 
 _WORD = re.compile(r"[A-Za-z][A-Za-z'’-]*")
@@ -35,6 +40,25 @@ _N_OF_M = re.compile(r"(?<![\d.,₹$])(\d[\d,]*) of (?:the |its |their |all |the
 # "Consumer…" beside "consumers" or "consumer-facing", "Electric…" beside "electrical": a whole word, not a cut one
 _ENDINGS = ("", "s", "es", "'s", "’s", "al", "ally", "ity", "ian", "ians", "ic", "ics", "ing", "ed", "er", "ers", "ly")
 _COLUMNS = re.compile(r"\S {3,}\S")     # a table's row or two blocks side by side, in pdftotext's layout
+_OTHER = re.compile(r"(\d[\d,]*) of (\d[\d,]*)\s+companies fit none of the map's layers")
+# R40: a word said twice in a row; repeated when the second is lower case or it is a joining word ("The the"), never a name ("Bora Bora")
+_TWICE = re.compile(r"\b([A-Za-z]+)(?: (?! )|\n)\1\b", re.I)
+_TWICE_JOIN = _JOINING | {"is", "are", "was", "were", "its", "their", "this", "these", "than", "as", "be", "it"}
+_TWICE_OK = {"had", "that", "very", "so", "no", "bye", "more", "many", "much", "far", "long"}
+
+
+def _indent(line: str) -> int:
+    return len(line) - len(line.lstrip())
+
+
+def repeated(text: str) -> list[str]:
+    """The words a text says twice in a row (R40): "the the" in any case, one line or two joined by a line break."""
+    out = []
+    for m in _TWICE.finditer(text):
+        w, second = m.group(1), m.group(0)[len(m.group(1)) + 1:]
+        if w.lower() in _TWICE_JOIN or (second.islower() and len(w) >= 3 and w.lower() not in _TWICE_OK):
+            out.append(m.group(0).replace("\n", " "))
+    return out
 
 
 def pages_of(path: str) -> list[str]:
@@ -61,6 +85,13 @@ def check_pages(pages: list[str]) -> dict:
         lines = [ln for ln in page.split("\n") if ln.strip()]
         for i, ln in enumerate(lines):
             flat = ln.strip()
+            # R40: on the line, and across the break to the next when both are one block of running text (starting where it starts; not a
+            # table's row, columns side by side or another column's cell further along)
+            nxt = lines[i + 1].strip() if i + 1 < len(lines) else ""
+            run = nxt and not _COLUMNS.search(ln) and not _COLUMNS.search(lines[i + 1]) and abs(_indent(ln) - _indent(lines[i + 1])) <= 2
+            pair = f"{_WORD_END.search(flat).group(0)}\n{nxt.split(' ', 1)[0]}" if run and _WORD_END.search(flat) else ""
+            for w in repeated(flat) + repeated(pair):
+                add("repeated", n, f"{w!r} in: {flat}" + (f" / {nxt}" if w in repeated(pair) else ""))
             for m in _PLACEHOLDER.finditer(flat):
                 add("placeholder", n, f"{m.group(0)!r} in: {flat}")
             for m in _N_OF_M.finditer(flat):
@@ -81,6 +112,13 @@ def check_pages(pages: list[str]) -> dict:
                     add("mid-word", n, f"{m.group(0)!r} in: {flat}")
                 elif not (head and m.end() == len(flat)):
                     add("cut text", n, flat)
+    for n, page in enumerate(pages, 1):           # R40: the coverage's count of the "Other" group, once a deck
+        m = _OTHER.search(page)
+        if m:
+            a, b = int(m.group(1).replace(",", "")), int(m.group(2).replace(",", ""))
+            if b and a > OTHER_MAX * b:
+                add("other>40%", n, f"{m.group(0)} ({round(a / b * 100)}%)")
+            break
     counts = {k: sum(1 for f in findings if f["kind"] == k) for k in FAIL + WARN}
     return {"pages": len(pages), "counts": counts, "findings": findings}
 
@@ -113,7 +151,7 @@ def report(results: dict, strict: bool = False, show: int = 8) -> str:
     for name, r in results.items():
         for k in kinds:
             got = [f for f in r["findings"] if f["kind"] == k]
-            if not got or (k in WARN and not strict):
+            if not got or (k == "cut text" and not strict):        # R40: a theme mostly in "Other" is listed whatever the mode
                 continue
             out.append(f"\n{name}: {k} ({len(got)})")
             out += [f"  p.{f['page']}: {f['text']}" for f in got[:show]]

@@ -594,6 +594,20 @@ def stated_model(evidence) -> str:
     return ""
 
 
+# R40 (the owner's review of the live Release 39 Consumer retail deck: "Online retailers and marketplaces" took no online seller, its map name
+# "Online marketplaces" stating a platform's way of earning): the ways of earning a layer's own name states in so many words, a retailer's
+# and a platform's beside the words of stated_model
+NAME_STATES = {"retail": r"\bretail(?:ers?|ing)?\b|\bstores?\b|\bshops?\b", "platform": r"\bmarketplaces?\b|\bplatforms?\b"}
+
+
+def name_models(name) -> set[str]:
+    """The ways of earning a layer's name states (R40): the one stated_model reads in it, and each of NAME_STATES it names
+    ("Online retailers and marketplaces": retail and platform)."""
+    got = {m_ for m_, rx in NAME_STATES.items() if re.search(rx, str(name or ""), re.I)}
+    one = stated_model(name)
+    return got | ({one} if one else set())
+
+
 # ---------- q1: a network operator's subscriptions are for a service it runs, not software (the GPT review of the live R34 Telecom deck) ----------
 # Its customers named are never what it is: a tower company leases "to wireless telecom operators", a messaging platform caters "to mobile network
 # operators (MNOs)"
@@ -880,7 +894,12 @@ SELLS_OWN = (r"\bsold by us\b|\bwe sell (?!services|advertising|ads\b)|\bsells? 
 OFF_INDUSTRY = ((r"semiconductor|\bchips?\b|integrated circuits?",
                  r"\bsolar\b|photovoltaic|\bpv\b (?:modules?|panels?|cells?|industry|systems?)",
                  r"integrated circuits?|\bchips?\b|chipsets?|microcontrollers?|(?:micro)?processors?|\bics\b|\basics?\b|\bgpus?\b|"
-                 r"wafer fab|semiconductor (?:devices|chips|equipment|manufacturing)|power semiconductors?|\bleds?\b|lasers?"),)
+                 r"wafer fab|semiconductor (?:devices|chips|equipment|manufacturing)|power semiconductors?|\bleds?\b|lasers?"),
+                # R40 (the owner's review of the live Release 39 Consumer retail deck: Ferrellgas and Suburban Propane, propane distributors,
+                # filed as retail): fuel distribution to homes and businesses with no shop, apparel or merchandise of its own is another business
+                (r"\bretail",
+                 r"\bpropane\b|heating oil|\bfuel oil\b|\blpg\b|liquefied petroleum gas|natural gas distribution",
+                 r"\bstores?\b|\bshops?\b|apparel|clothing|merchandise|grocer|supermarket|e-?commerce|department"))
 
 
 def off_industry(evidence) -> bool:
