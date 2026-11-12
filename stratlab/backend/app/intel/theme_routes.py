@@ -367,23 +367,30 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
 PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own): the one before carries, and the one before that when it kept none (placed)
 
 
+def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
+    """The placement answer kept for this map, and the rules version it was kept under (None: none kept). R30: the placement kept under
+    the rules before, whose answers still hold. R40 (the live Release 38 Utilities map: the rules before had kept no placement of their own,
+    theirs carried from the ones before them, so the placement was asked again from nothing and lost the layers its earlier answers had
+    added): back through every carried version until one kept a placement."""
+    key = ["place", region, theme.lower(), int(float(m.get("generated_at") or 0))]
+    r, seen = theme_base.RULES, set()
+    try:
+        kept = (computed.get("theme:place", key + [r]) or {}).get("value") or {}
+        while not kept and r in PLACE_CARRY and r not in seen:
+            seen.add(r)
+            r = PLACE_CARRY[r]
+            kept = (computed.get("theme:place", key + [r]) or {}).get("value") or {}
+    except Exception:
+        return {}, None
+    return kept, (r if kept else None)
+
+
 def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
     """The checked map with every company of the theme's industries in one of the map's own layers (theme_base.place_rest, R21): the AI's
     answer is asked once a map and kept in the shared store with it (app/computed.py), so it is never asked again for that map."""
     from .. import computed
     key = ["place", region, theme.lower(), int(float(m.get("generated_at") or 0)), theme_base.RULES]
-    try:
-        kept = (computed.get("theme:place", key) or {}).get("value") or {}
-        # R30: the placement kept under the rules before, whose answers still hold. R40 (the live Release 38 Utilities map: the rules before
-        # had kept no placement of their own, theirs carried from the ones before them, so the placement was asked again from nothing and lost
-        # the layers its earlier answers had added): back through every carried version until one kept a placement
-        r, seen = theme_base.RULES, set()
-        while not kept and r in PLACE_CARRY and r not in seen:
-            seen.add(r)
-            r = PLACE_CARRY[r]
-            kept = (computed.get("theme:place", key[:-1] + [r]) or {}).get("value") or {}
-    except Exception:
-        kept = {}
+    kept, _ = kept_placement(region, theme, m)
     names = {c["ticker"]: c.get("name") for v in out.get("value_chain") or [] for c in v.get("companies") or []}
     if ask is not None:                       # the background check, about to ask the AI: the companies it places carry their own words
         describe_unplaced(region, out, names, kept)
@@ -854,6 +861,27 @@ def theme_dive(q: str, region: str = "IN", refresh: bool = False, profile=Depend
         by = computed.plan_word(profile)
     out = dive_of(r, theme, m, refresh, by=by)
     return R.ok({**out, "refresh_state": "done"} if refresh else out)
+
+
+@router.get("/theme-dive/placement-inputs")
+def placement_inputs(q: str, region: str = "IN", profile=Depends(current_profile)):
+    """R39 (the owner, after Releases 37-38: fixes proven on replays of the live maps did not hold on the live site, whose placement reads
+    stored descriptions and a kept answer the replays did not have): for the owner only, what the placement of a theme's checked map reads,
+    as stored, so a rule change can be replayed on exactly that. The checked map (its layers and companies, each with its model and whether
+    the split moved it), the kept answer and the rules version it was kept under, and each company's stored description as the placement
+    reads it. Read-only: nothing is asked of the AI and nothing is read from a page."""
+    from .. import admin
+    if not admin.is_admin(profile):
+        err(403, "forbidden", "This is for the site's owner.")
+    R = _routes()
+    r, theme, m, _ = R.theme_map(profile, region, q)
+    hit = checked(r, theme, m)
+    names = {c["ticker"]: c.get("name") for v in hit.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}
+    about = _about_reader(r, names, 0)                    # stored descriptions only, as placed() reads them
+    kept, version = kept_placement(r, theme, m)
+    return R.ok({"region": r, "theme": theme, "rules": theme_base.RULES, "generated_at": m.get("generated_at"), "kept_version": version,
+                 "kept": kept, "placements": hit.get("placements"), "value_chain": hit.get("value_chain") or [],
+                 "evidence": {s_: about(s_) for s_ in sorted(names)}})
 
 
 def dive_key(r: str, theme: str, m: dict) -> list:
