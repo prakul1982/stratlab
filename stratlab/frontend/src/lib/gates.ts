@@ -5,9 +5,7 @@
  * entry in ELSEWHERE. */
 import { FLAGS, planOf, type PlanId } from "./plans";
 
-/** `what`: the paid part as this page holds it, when the plan's row names more than the page has (LIVE7A-018: Flows' lock named
- * "derivatives positioning history and IV percentiles", neither of which is on that page) */
-export type Gate = { feature: string; whole: boolean; what?: string };
+export type Gate = { feature: string; whole: boolean };
 
 export const PAGE_GATES: Record<string, Gate> = {
   "/trade/signals": { feature: "signal_webhooks", whole: true },
@@ -18,7 +16,7 @@ export const PAGE_GATES: Record<string, Gate> = {
   "/invest/breadth": { feature: "breadth", whole: false },
   "/trade/positioning": { feature: "positioning", whole: false },
   // Market today's Flows: Positioning's cash card and its history, on the same plan as there (IA-1)
-  "/invest/flows": { feature: "positioning", whole: false, what: "Each recorded day's FII and DII net buying, as a table and a chart" },
+  "/invest/flows": { feature: "positioning", whole: false },
   "/trade/positioning/stocks": { feature: "stock_futures", whole: false },
   "/trade/journal": { feature: "journal", whole: false },
   "/trade/closing-auction": { feature: "cas_history", whole: false },
@@ -41,6 +39,15 @@ export const PAGE_GATES: Record<string, Gate> = {
   "/money/calendar": { feature: "money_reminders", whole: false },
   "/options": { feature: "options", whole: false },
 };
+
+/** The paid part as a page holds it, where the plan's row names more than that page has (LIVE7A-018: Flows' lock named "derivatives
+ * positioning history and IV percentiles", neither of which is on that page). */
+export const PAGE_WHAT: Record<string, string> = {
+  "/invest/flows": "Each recorded day's FII and DII net buying, as a table and a chart",
+};
+
+/** What a page's lock names: its own part (PAGE_WHAT), else the plan's row for the feature. */
+export const lockWhat = (path: string, feature: string): string => PAGE_WHAT[path.split(/[?#]/)[0].replace(/(.)\/$/, "$1")] ?? featureName(feature);
 
 /** The paid part of a page that is free in the main, in a few words for its card's tag: "Pro for advance tax" (LIVE1B-022: "Pro for
  * part" did not say which part). */

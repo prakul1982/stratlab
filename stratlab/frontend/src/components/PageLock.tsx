@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useLocation } from "react-router-dom";
 import { CFG } from "../lib/api";
 import { useApp } from "../lib/app";
-import { featureName, gateFor, gatePlan } from "../lib/gates";
+import { gateFor, gatePlan, lockWhat } from "../lib/gates";
 import { unlockHint, EARLY_ACCESS_EMAIL } from "../lib/offer";
 import { PLAN_NAME } from "../lib/plans";
 import { lockWords } from "../lib/lockText";
@@ -56,7 +56,7 @@ export function PageLock() {
   if (!gate.whole && !(slot && slot.isConnected)) return null;          // the page itself still opening (its title not drawn yet)
   const plan = PLAN_NAME[gatePlan(gate)];
   const yours = PLAN_NAME[(me.plan ?? "free") as "free" | "basic" | "pro"] ?? "Free";
-  const what = gate.what ?? featureName(gate.feature);
+  const what = lockWhat(pathname, gate.feature);
   const hint = unlockHint(me.offer, CFG.CONTACT_EMAIL || EARLY_ACCESS_EMAIL, price);
   const note = (
     <Notice className="page-lock plan-note" label={`${plan} feature`} actions={<PlanActions source="lock" />}>

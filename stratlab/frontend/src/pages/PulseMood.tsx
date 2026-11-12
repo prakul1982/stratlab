@@ -68,12 +68,13 @@ export function MoodCard({ m, region, updating = false, behindNote }: { m: Pulse
   );
 }
 
-export function BreadthTable({ b, open = true, behind = false }: { b: NonNullable<PulseMood["breadth"]>; /** the market trades now */ open?: boolean;
+export function BreadthTable({ b: given, open = true, behind = false }: { b: NonNullable<PulseMood["breadth"]>; /** the market trades now */ open?: boolean;
   /** the read is of an earlier session than the levels: its live count is labelled with its own day, never "Today" (LIVE7A-001) */
   behind?: boolean }) {
+  // a read behind the levels: its count is that day's, headed with its day, never "Today" (LIVE7A-001)
+  const b = behind && given.live ? { ...given, live: false } : given;
   // after the close the live round is the day's final count: "on 6 Nov", not "so far today" (LIVE5-009)
-  const when = b.live && open && !behind ? "so far today" : `on ${day(b.day)}`;
-  const liveHead = behind ? `${day(b.day)}${b.at ? `, ${b.at}` : ""}` : b.at ? `Today, ${b.at}` : "Today";
+  const when = b.live && open ? "so far today" : `on ${day(b.day)}`;
   // a 52-week cell without a count: while the market trades it comes with the close; after it, with the evening's count (LIVE5-003:
   // "At the close" stood 56 minutes after the close)
   const waiting = open ? "At the close" : "This evening";
@@ -81,7 +82,7 @@ export function BreadthTable({ b, open = true, behind = false }: { b: NonNullabl
     { key: "m", header: "Measure", rowHeader: true, wrap: true, cell: (r) => <><b>{r.label}</b><span className="k-sub-line">{r.means}</span></> },
     // live, the 52-week highs and lows are counted at the close: their cell says so rather than standing empty (owner, 5 Nov)
     // the live count's own quarter-hour in its header, so Mood's count and Breadth's are each labelled with their round (LIVE4-005)
-    { key: "now", header: b.live ? liveHead : day(b.day), numeric: true, brief: true, cell: (r) => (r.now == null ? (b.live ? <span className="k-muted" title="Counted from the exchange's evening price file">{waiting}</span> : "–") : r.kind === "share" ? `${r.now.toFixed(1)}%` : whole(r.now)) },
+    { key: "now", header: b.live ? (b.at ? `Today, ${b.at}` : "Today") : day(b.day), numeric: true, brief: true, cell: (r) => (r.now == null ? (b.live ? <span className="k-muted" title="Counted from the exchange's evening price file">{waiting}</span> : "–") : r.kind === "share" ? `${r.now.toFixed(1)}%` : whole(r.now)) },
     { key: "prev", header: day(b.prev_day) || "Day before", numeric: true, cell: (r) => (r.before == null ? "–" : r.kind === "share" ? `${r.before.toFixed(1)}%` : whole(r.before)) },
     { key: "chg", header: "Change", numeric: true, cell: (r) => (r.change == null ? "–" : <Delta value={r.change}>{r.kind === "share" ? signedPts(r.change) : signedWhole(r.change)}</Delta>) },
   ];

@@ -29,7 +29,7 @@ test("LIVE7A-001: Mood's tables carry their own session's date when the read is 
   const page = read("src/pages/Research.tsx");
   assert.match(page, /closedDay=\{moodDay\(mood, pulseClosedDay\(data\?\.indices\)\)\}/);
   assert.match(page, /behindNote=\{moodBehindNote\(/);
-  assert.match(read("src/pages/PulseMood.tsx"), /const liveHead = behind \?/);
+  assert.match(read("src/pages/PulseMood.tsx"), /const b = behind && given\.live \? \{ \.\.\.given, live: false \} : given;/);
 });
 
 test("LIVE7A-023: a yield's move is in basis points, the rest in percent", async () => {
@@ -70,14 +70,14 @@ test("LIVE7B-002 / LIVE7A-016: one daily count beside Refresh, the fresh AI read
 });
 
 test("LIVE7A-018: Flows' lock names what that page locks; Plans names the flow history", async () => {
-  const { gateFor, featureName } = await import("../src/lib/gates.ts");
+  const { gateFor, featureName, lockWhat } = await import("../src/lib/gates.ts");
   const { lockWords } = await import("../src/lib/lockText.ts");
   const g = gateFor("/invest/flows");
-  assert.equal(lockWords(g.what ?? featureName(g.feature), "Basic", "Free", g.whole),
+  assert.equal(lockWords(lockWhat("/invest/flows", g.feature), "Basic", "Free", g.whole),
     "Basic adds each recorded day's FII and DII net buying, as a table and a chart. Everything else here is on your Free plan.");
   assert.match(featureName("positioning"), /FII\/DII flow history/);
-  assert.equal(gateFor("/trade/positioning").what, undefined);                     // Positioning's own lock keeps the plan's row
-  assert.match(read("src/components/PageLock.tsx"), /const what = gate\.what \?\? featureName\(gate\.feature\);/);
+  assert.equal(lockWhat("/trade/positioning", "positioning"), featureName("positioning"));       // Positioning's own lock keeps the plan's row
+  assert.match(read("src/components/PageLock.tsx"), /const what = lockWhat\(pathname, gate\.feature\);/);
 });
 
 test("LIVE7B-016: Next and Monthly are one choice when they are the same contract", async () => {
@@ -103,7 +103,7 @@ test("LIVE7B-018: the year a Money page opens on says what it is", async () => {
   assert.equal(fyRole(2025, 2026), "being filed");
   assert.equal(fyRole(2024, 2026), "");
   assert.match(read("src/pages/money/TaxToolsPage.tsx"), /fyRole\(x\.fy, current\) \? ` \(\$\{fyRole\(x\.fy, current\)\}\)` : ""/);
-  assert.match(read("src/pages/SpaceHomes.tsx"), /, the year being filed/);
+  assert.match(read("src/pages/SpaceHomes.tsx"), /\$\{year\.label\} is the year being filed\./);
 });
 
 test("LIVE7B-019: an upload's day is India's day wherever it is read", async () => {

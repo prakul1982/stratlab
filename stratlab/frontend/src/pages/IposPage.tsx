@@ -54,10 +54,10 @@ function perfCell(r: IpoRow, which: "listing" | "now") {
   if (which === "now" && px == null && p?.listing_price != null) return <span className="k-muted" data-testid="ipo-first-close">After its first close</span>;
   if (px == null) return <span className="k-muted">–</span>;
   // the latest close is dated: it is the last session's close, not a live price (RC2A-002)
-  const day = which === "now" && p?.latest_date ? `Close ${fmtDate(p.latest_date, { year: false })}` : "";
+  const day = which === "now" && p?.latest_date ? `Close ${fmtDate(p.latest_date, { year: false })} · ` : "";
   // no final issue price published yet: the price stands without a change against it (LIVE7A-020: "– · – · –" for a stock that had traded)
-  if (v == null) return <>{price(px, r.currency, 2)}<span className="k-sub-line">{day ? `${day} · ` : ""}issue price not published</span></>;
-  return <>{price(px, r.currency, 2)}<span className="k-sub-line">{day ? `${day} · ` : ""}<Signed value={v} fmt={(x) => pct(x, 1)} /> on the issue price</span></>;
+  if (v == null) return <>{price(px, r.currency, 2)}<span className="k-sub-line">{day}issue price not published</span></>;
+  return <>{price(px, r.currency, 2)}<span className="k-sub-line">{day}<Signed value={v} fmt={(x) => pct(x, 1)} /> on the issue price</span></>;
 }
 
 /** "2026-10-28 19:00" (the exchange's stamp, India time) as "28 Oct, 19:00". */
