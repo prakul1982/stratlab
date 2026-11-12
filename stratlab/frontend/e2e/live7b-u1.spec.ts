@@ -101,3 +101,21 @@ test("the Markets button never takes focus as a page loads; the first Tab is the
   await page.getByTestId("market-watch").getByRole("button", { name: "Close Market Watch" }).click();
   await expect(page.getByTestId("markets-launch")).toBeFocused();
 });
+
+// LIVE7B-008: /login opened a dialog "Sign in to StratLab" over a page with the same h1 and a subtitle saying it again, and a lower band with a
+// third Google button: one sign-in panel now, the heading said once, one button
+for (const width of [1440, 390]) {
+  test(`/login and /signup are one sign-in panel with one Google button at ${width}px (LIVE7B-008)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: width < 500 ? 844 : 900 });
+    for (const [path, h] of [["/login", "Sign in to StratLab"], ["/signup", "Sign up for StratLab"]]) {
+      await page.goto(path);
+      await expect(page.getByRole("heading", { level: 1, name: h })).toBeVisible({ timeout: 30_000 });
+      await page.waitForTimeout(600);
+      await expect(page.getByRole("dialog"), path).toHaveCount(0);
+      await expect(page.getByRole("button", { name: /Continue with Google|Sign in/ }).filter({ visible: true }), path).toHaveCount(1);
+      const text = await page.locator("main").innerText();
+      expect(text.split(h).length - 1, `${path}: the heading said once`).toBe(1);
+      await expect(page.getByRole("link", { name: "Privacy policy" }).first()).toBeVisible();
+    }
+  });
+}
