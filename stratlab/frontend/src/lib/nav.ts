@@ -13,8 +13,11 @@ export type SpaceId = "trade" | "invest" | "money";
 export interface NavPage {
   /** The page's own address; its tab links here. */
   to: string;
-  /** Its name as a tab (and in the breadcrumb). */
+  /** Its name in the breadcrumb, the menu and its card, and as a tab unless `tab` gives a shorter one. */
   label: string;
+  /** A shorter name for its tab, where the entry's name says the rest ("Updates" under Companies): a laptop's row of tabs
+   * shares one line with the breadcrumb, and a second line would put every title of the entry 40px lower (ui-lint R17). */
+  tab?: string;
   /** One line on what it is for (a card on the entry's page, the line on "All features"). */
   line: string;
   /** A fuller line for its card on the entry's page. */
@@ -51,12 +54,12 @@ const fromData = (to: string): NavEntry | undefined =>
   [...NAV_GROUPS.Trade, ...NAV_GROUPS.Invest, ...NAV_GROUPS.Money].find((e) => e.to === to);
 
 /** A page whose texts are already written for its card on a space's home (NAV_GROUPS) reuses them. */
-function page(to: string, label: string, icon: string, words: string, o: { line?: string; blurb?: string; also?: RegExp; flag?: string; part?: boolean; was?: string; space?: SpaceId } = {}): NavPage {
+function page(to: string, label: string, icon: string, words: string, o: { line?: string; blurb?: string; also?: RegExp; flag?: string; part?: boolean; was?: string; space?: SpaceId; tab?: string } = {}): NavPage {
   const d = fromData(to);
   const line = o.line ?? d?.title ?? o.blurb ?? d?.blurb ?? label;
   // the old name is one of the words search looks through, so "Screener" still finds Find stocks' Figures
   return { to, label, icon, words: o.was ? `${o.was.toLowerCase()} ${words}` : words, line, blurb: o.blurb ?? d?.blurb ?? line,
-    also: o.also, flag: o.flag, part: o.part, was: o.was, space: o.space };
+    also: o.also, flag: o.flag, part: o.part, was: o.was, space: o.space, tab: o.tab };
 }
 
 /** One Calendar (IA-1 item 3): results, corporate actions, IPO dates, market events and the person's own money dates, in
@@ -79,11 +82,17 @@ const CALENDAR: NavGroup = {
       { flag: "ipo_alerts", also: /^\/invest\/ipos\/[^/]+$/, space: "invest",
         line: "India's and the US's IPOs: dates, price band, lot, bids and how a listing has traded against its issue price.",
         blurb: "Upcoming, open, closed and recently listed IPOs for India and the US, each with its price band, lot, size, bids by category and the facts in its offer document." }),
-    page("/trade/events", "Market events", "calendar", "market events calendar rbi policy fed data releases budget index changes expiry expiries weekly monthly f&o expiry holidays results dates", { space: "trade" }),
+    page("/research/earnings-calls", "Earnings calls", "calendar", "earnings call calls concall con call conference call analyst meet investor meet analysts institutional investors webcast dial in transcript transcripts recording audio presentation results call schedule of meet",
+      { flag: "earnings_calls", part: true, space: "invest", tab: "Calls", line: "Results calls and analyst meets coming up, with the notice and webcast link, and transcripts after.",
+        blurb: "Every results call and meeting with analysts or investors in India, from the companies' own notices, and US results sessions; after a call, its transcript, recording and presentation once filed." }),
+    page("/trade/events", "Market events", "calendar", "market events calendar rbi policy fed data releases budget index changes expiry expiries weekly monthly f&o expiry holidays results dates", { space: "trade", tab: "Events" }),
     page("/money/calendar", "My money dates", "calendar", "money calendar tax due dates advance tax itr results dividends maturities premiums emi expiries own dates feed reminders",
-      { was: "Money calendar", space: "money" }),
+      { was: "Money calendar", space: "money", tab: "My dates" }),
   ],
 };
+
+// said once: the Themes entry's blurb and its one tab's line (the same words twice cost the first download, which carries this file)
+const THEMES_LINE = "Map a sector or trend and see the listed companies linked to it.";
 
 export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGroup[] }> = {
   trade: {
@@ -126,11 +135,17 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
       { id: "companies", label: "Companies", icon: "lens",
         blurb: "Look up any Indian or US company, put two side by side, read the monthly and quarterly updates companies file, or find where a holder is named.", pages: [
         page("/research", "Look up a company", "lens", "company stock fundamentals analysis ai read valuation news research search ticker deep dive business model capex growth margins cash flow management report card concall presentation",
-          { line: "Any Indian or US company: price, key numbers, results, news, and a deep dive.", blurb: "Price, valuation, growth, news and an AI read for any Indian or US company, and a deep dive into 10 years of its numbers and its business.", also: /^\/research\/(IN|US)\/.*$/ }),
+          { line: "Any Indian or US company: price, key numbers, results, news, and a deep dive.", blurb: "Price, valuation, growth, news and an AI read for any Indian or US company, and a deep dive into 10 years of its numbers and its business.", tab: "Look up", also: /^\/research\/(IN|US)\/.*$/ }),
         page("/research/compare", "Compare", "layers", "compare companies versus vs side by side two stocks", { line: "Two companies side by side, with an AI read of the differences." }),
         // IA-1 item 4: each company's own updates and holders are on its page and in Themes; the lists across companies stay here
-        page("/invest/business-updates", "Business updates", "calendar", "business updates monthly sales automakers vehicle sales lenders quarterly figures advances deposits", { flag: "biz_updates" }),
+        page("/invest/business-updates", "Business updates", "calendar", "business updates monthly sales automakers vehicle sales lenders quarterly figures advances deposits", { flag: "biz_updates", tab: "Updates" }),
+        page("/invest/groups", "Business groups", "layers", "business group groups conglomerate family promoter group group companies listed companies of a group combined market value",
+          { flag: "group_figures", part: true, tab: "Groups", also: /^\/invest\/groups\/[^/]+$/, line: "India's business groups from the promoters companies name: members, combined value and moves.",
+            blurb: "Each business group the companies' own shareholding filings make out: its listed companies, their combined market value, how each moved and its promoter holding." }),
         page("/invest/holders", "Named holders", "layers", "named holders shareholders promoter fund fii dii mutual fund shareholding pattern above 1% who owns", { flag: "holders" }),
+        // kept short: this map is in the visitor's first download (e2e/review-r5.spec.ts's budget)
+        // its card said only its name, a 90px hole in it on the Companies page (ui-lint R13)
+        page("/research/search", "Search filings", "search", "transcripts concall", { blurb: "Words and phrases inside call transcripts, investor presentations, annual reports and earnings releases, each linked to the filed copy.", flag: "doc_search" }),
       ] },
       { id: "find-stocks", label: "Find stocks", icon: "search", blurb: "Find companies by their figures, by what their charts do, or by what they filed.", pages: [
         page("/research/screens", "Figures", "search", "screener screen filter companies growth debt returns roe pe fundamentals ratios",
@@ -140,17 +155,19 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
         page("/research/filings", "Filings", "bell", "red flags filings announcements qip fund raise preferential rights issue pledge resignation auditor default sebi rating downgrade",
           { was: "Red flags", line: "Fund raises, pledges, resignations and defaults your held and watched companies filed." }),
       ] },
-      { id: "themes", label: "Themes", icon: "compass", blurb: "Map a sector or trend and see the listed companies linked to it.", pages: [
-        page("/research/themes", "Themes", "compass", "themes sector industry shortlist ev defence banks trend map listed companies value chain", { line: "Map a sector or trend and see the listed companies linked to it." }),
+      { id: "themes", label: "Themes", icon: "compass", blurb: THEMES_LINE, pages: [
+        page("/research/themes", "Themes", "compass", "themes sector industry shortlist ev defence banks trend map listed companies value chain", { line: THEMES_LINE }),
       ] },
       { id: "market-today", label: "Market today", icon: "pulse", was: ["market-view"],
         blurb: "The market as a whole today: its mood, how many stocks rise and fall, which sectors lead, where the institutions' money went, and today's brief.", pages: [
         page("/research/pulse", "Mood", "pulse", "market pulse today news mood indices nifty sensex headlines index levels", { was: "Market pulse", line: "Index levels, headlines and today's mood." }),
         page("/invest/breadth", "Breadth", "pulse", "market breadth advance decline advances declines a/d line ad ratio mcclellan oscillator summation index new highs lows 52 week dma moving average trin arms thrust sector breadth nifty 500 midcap smallcap",
           { was: "Market breadth" }),
-        page("/invest/heatmap", "Heatmap", "layers", "heatmap heat map treemap tiles sector map gainers losers movers market cap",
+        page("/invest/heatmap", "Heatmap", "layers", "heatmap heat map treemap tiles sector map market cap",
           { line: "A market as tiles: each company sized by its market value and coloured by what its price did.",
             blurb: "Every company of an index as a tile, sized by market value, coloured by its change, grouped by sector. India and the US." }),
+        page("/invest/movers", "Movers", "pulse", "movers top gainers losers most active traded volume spikes shockers 52 week high low",
+          { line: "The day's gainers, losers, most traded, volume spikes and 52-week highs and lows." }),
         page("/research/rotation", "Sectors", "compass", "sector rotation relative strength momentum quadrant leading lagging improving weakening rrg sectors", { was: "Sector rotation", line: "Which sectors lead, weaken, lag or improve against the market." }),
         page("/invest/flows", "Flows", "wallet", "flows fii dii fpi foreign institutional domestic institutional cash market net buying selling crore money flow",
           { line: "What foreign and domestic institutions bought and sold in India's cash market, day by day.",
@@ -177,7 +194,7 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
         page("/money/net-worth", "Net worth", "wallet", "net worth networth assets liabilities epf ppf nps fd rd fixed deposit recurring gold sgb sovereign gold bond property cash crypto loan emi prepay prepayment home loan insurance policy premium money wealth"),
         page("/holdings", "Holdings", "book", "holdings portfolio my stocks import upload broker zerodha groww upstox angel one icici direct hdfc securities csv excel xlsx pnl p&l profit loss value sector allocation connect account demat",
           // each stock's red flags, recent filings and results date are the filings feature (Basic), said on its card (DP2-009)
-          { line: "Your stocks from your broker's file: value, gain or loss, sectors, dividends and filings.", blurb: "Your stocks from your broker's file: value, gain or loss, sectors, dividends and each stock's filings.",
+          { line: "Your stocks from your broker's file: value, gain or loss, sectors, dividends and filings.",
             flag: "filings", part: true }),
         page("/money/mutual-funds", "Mutual funds", "layers", "mutual funds cas cams kfintech statement xirr sip fund returns category allocation capital gains"),
       ] },

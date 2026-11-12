@@ -85,7 +85,8 @@ def test_endpoint_reads_calls_once_and_counts_toward_the_limit(api, monkeypatch)
         seen.append(text)
         return json.dumps({"guidance": [{"metric": "margin", "low": 20, "period": "FY27", "what": "20% margin", "quote": "capex of Rs 500 crore", "source": "S1"}]})
     monkeypatch.setattr(rc, "complete", complete)
-    who["p"] = {"id": "u1", "plan": "pro", "_plan": "pro"}
+    # (updated on purpose, FREE-TIER: the test's daily cap of 2 is RESEARCH_AI_PER_DAY, Basic's now; Free has its own 5)
+    who["p"] = {"id": "u1", "plan": "pro", "_plan": "pro", "_paid_plan": "basic"}
     assert c.get("/research/deep/ACME").json()["card"] is None
     v = c.post("/research/deep/ACME/card").json()
     row = v["card"]["rows"][0]

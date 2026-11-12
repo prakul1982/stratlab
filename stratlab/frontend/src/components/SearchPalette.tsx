@@ -281,6 +281,9 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
         act.push({ key: "ideas", icon: <Compass size={18} />, title: thinking ? "Thinking of ideas…" : `Get strategy ideas for “${text.length > 40 ? text.slice(0, 40) + "…" : text}”`,
         sub: "4 testable ideas, each one click from a verdict", run: () => { if (!thinking) getIdeas(); } });
     }
+    // search inside the companies' filed documents for the words typed (pages/DocSearchPage.tsx; Free sees the first 3 results)
+    if (!code && text.length >= 3 && words <= 8) act.push({ key: "docs", icon: <Lens size={18} />, title: `Search filings for “${text.length > 50 ? text.slice(0, 50) + "…" : text}”`,
+      sub: "Call transcripts, presentations, annual reports and earnings releases", space: "invest", run: () => go(`/research/search?q=${encodeURIComponent(text)}`) });
     if (intent) act.unshift({ key: "intent", icon: <Lens size={18} />, title: intent.title, sub: intent.sub, space: intent.to ? spaceOf(intent.to.split("?")[0]) : "invest", run: () => { runIntent(intent); } });
     out.push({ group: "Do", items: act });
     if (ideas && ideasFor === text) out.push({ group: "Ideas", items: ideas.map((i, n) => ({

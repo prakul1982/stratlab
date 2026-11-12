@@ -7,7 +7,10 @@ import { THEME_IDEAS, researchApi, useRegion, type SectorAI } from "../lib/resea
 import { bizFor, LIBRARY_HEAD, libraryLabel, themeApi, type Business, type Dive, type LibraryTheme, type Listing, type NewsRow, type Prices } from "../lib/theme";
 import { StoredNote, StoredStamp, useStoredRefresh } from "../components/StoredStamp";
 import { RegionSwitch } from "../components/Research";
+import { ShareResearchButton } from "../components/ShareResearch";
+import { ThemeLinksCard } from "../components/ThemeLinks";
 import { ChainCard, ClaimsCard, LayerCard, ListingsCard, MembersCard, NewsCard, NumbersCards, SubThemesCard, ThemeDownloads } from "../components/ThemeDive";
+import { ChangesCard } from "../components/ThemeChanges";
 import { SaveButton, SavedList } from "../components/SavedSearches";
 import { themeReady, themeSnap } from "../lib/savedSnap";
 import { Card, CardHead, DataTable, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PageNav, Skeleton, Working } from "../components/kit";
@@ -161,7 +164,8 @@ export function ThemesPage() {
         <>
           <Card>
             <CardHead title={r.sector} actions={<><StoredStamp at={r.generated_at > 0 ? r.generated_at : null} tz={marketTz(region)} busy={busy || rf.busy} onRefresh={refresh} />
-              <SaveButton kind="theme" label="Save theme" name={r.sector || q} params={{ q, region }} snap={() => (themeReady(r) ? themeSnap(r) : null)} /></>} />
+              <SaveButton kind="theme" label="Save theme" name={r.sector || q} params={{ q, region }} snap={() => (themeReady(r) ? themeSnap(r) : null)} />
+              {themeReady(r) && <ShareResearchButton kind="theme" region={region} target={q} label="this theme" />}</>} />
             <StoredNote busy={rf.busy} state={rf.state} at={r.generated_at > 0 ? r.generated_at : null} tz={marketTz(region)} />
             {r.summary && <p className="k-lede">{r.summary}</p>}
             {r.core && <p className="k-small">Everything converges on <b>{r.core}</b>.</p>}
@@ -214,10 +218,12 @@ export function ThemesPage() {
               {biz && !biz.allowed && dive.region === "IN" && <p className="k-note">Operating figures that companies file between results (monthly sales, output, traffic) are on the Basic plan.</p>}
               {dive.layers.map((l, i) => <LayerCard key={l.layer} layer={l} i={i} region={dive.region} business={bizFor(biz, l)} />)}
               <SubThemesCard dive={dive} business={biz} />
+              <ThemeLinksCard region={dive.region} theme={q} />
             </>
           )}
           <ClaimsCard tailwinds={r.tailwinds} risks={r.risks} />
           {dive && <NewsCard items={news} loading={newsBusy} />}
+          {dive && <ChangesCard dive={dive} />}
           {dive && dive.members > 0 && (
             <>
               <h2 className="k-section-title" id="theme-numbers">The theme in numbers</h2>

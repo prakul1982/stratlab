@@ -11,7 +11,7 @@ export const APP_ROUTES = [
   "/notebooks", "/new", "/n/:id", "/n/:id/market", "/n/:id/compare", "/n/:id/e/:v", "/import", "/library", "/options",
   "/trade/positioning", "/trade/positioning/stocks", "/options/s/:sid", "/paper", "/paper/:sid", "/trade/journal",
   "/trade/fo-changes", "/trade/closing-auction", "/trade/replay", "/trade/signals", "/trade/signals/:sid", "/trade/events",
-  "/plans", "/pricing", "/upgrade", "/help", "/faq", "/tour", "/account", "/settings", "/assistant", "/app", "/invite", "/admin/*", "/news",
+  "/research/search", "/plans", "/pricing", "/upgrade", "/help", "/faq", "/tour", "/account", "/settings", "/assistant", "/app", "/invite", "/admin/*", "/news",
   "/holdings", "/tax-report", "/money/net-worth", "/money/mutual-funds", "/money/tax-tools", "/money/calendar",
   "/money/us-tax", "/money/itr", "/money/sip-test", "/money/rates", "/alerts", "/research", "/research/themes",
   "/research/pulse", "/research/compare", "/research/watchlist", "/research/scan", "/research/scans", "/scans",
@@ -20,9 +20,11 @@ export const APP_ROUTES = [
   "/research/results", "/research/corporate-actions", "/research/IN/:symbol/deep", "/research/US/:symbol/deep",
   "/research/investor", "/chart/:market/:symbol", "/research/:region/:symbol", "/login", "/signup", "/about",
   // IA-1: the one Calendar's own page and Market today's Flows tab
-  "/calendar", "/invest/flows", "/invest/heatmap",
+  "/calendar", "/invest/flows", "/invest/heatmap", "/invest/movers",
   // R15: the ad landing; signed in, it is home
   "/start",
+  // f5: the Calendar's earnings calls and Invest's business groups
+  "/research/earnings-calls", "/invest/groups", "/invest/groups/:slug",
 ];
 
 const PATTERNS = APP_ROUTES.map((r) => new RegExp("^" + r.replace(/\/\*$/, "(/.*)?").replace(/:[A-Za-z]+/g, "[^/]+") + "/?$"));

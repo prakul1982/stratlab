@@ -60,7 +60,8 @@ test("LIVE6-007: the page shows a line as a company's own words by the deck's ru
 test("LIVE6-006: one market value per company on the page: the dive's wherever it has the company", () => {
   const src = read("src/components/ThemeDive.tsx");
   assert.match(src, /amount\(caps\.get\(c\.ticker\) \?\? c\.cap \?\? null, region\)/);
-  assert.match(src, /csv: \(x\) => x\.fig\?\.cap \?\? x\.co\.cap \?\? null/);
+  // (updated on purpose, Release 43) the companies CSV is made by the server from the same rows: the dive's market value where it has one
+  assert.match(read("../backend/app/intel/theme_routes.py"), /"cap": f\.get\("cap"\) if f\.get\("cap"\) is not None else c\.get\("cap"\)/);
   assert.match(read("src/pages/ThemesPage.tsx"), /<MembersCard r=\{r\} region=\{region\} dive=\{dive\} \/>/);
 });
 

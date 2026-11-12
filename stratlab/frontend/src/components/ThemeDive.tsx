@@ -1,12 +1,16 @@
+import { ReportScope } from "./kit/ReportFigure";
 import { useMemo, useState, type ReactNode } from "react";
 import { deckFileName } from "../lib/deckName";
 import { deckWhenReady } from "../lib/deckReady";
 import { REGION_NAME } from "../lib/research";
 import { Link } from "react-router-dom";
-import { Badge, Card, CardHead, CsvButton, DataTable, ShowLess, Select, Spark, Signed, Meter, usePhone, Working, type Column } from "./kit";
+import { Badge, Card, CardHead, DataTable, ShowLess, Select, Spark, Signed, Meter, usePhone, Working, type Column } from "./kit";
 import { Download } from "./Icons";
+import { ThemeCsvButton, WorkbookButton } from "./ThemeChanges";
 import { useApp } from "../lib/app";
 import { download } from "../lib/share";
+import { deckLock } from "../lib/account";
+import { SampleDeckLink } from "./SampleDeck";
 import { LineChart } from "./Charts";
 import { bizChange, bizValue, periodName } from "../lib/biz";
 import { filedOn } from "./BizUpdates";
@@ -47,6 +51,7 @@ export function ChainCard({ dive }: { dive: Dive }) {
     { key: "c", header: "ROCE", numeric: true, info: "Return on capital employed, median of the layer's companies.", cell: (x) => ((x.roce_n ?? MIN_BASE) < MIN_BASE ? dash : pc(x.roce)) },
   ];
   return (
+    <ReportScope section="The whole chain in one table" source="The companies' reported annual results">
     <Card id="theme-chain" label="The whole chain in one table">
       <CardHead title="The whole chain in one table" info={basisWords(dive.basis)} />
       <DataTable label="The value chain by layer: companies, revenue and median margins" columns={cols} rows={dive.chain.rows} rowKey={(x) => x.layer} />
@@ -54,6 +59,7 @@ export function ChainCard({ dive }: { dive: Dive }) {
       {dive.chain.rows.some((x) => x.ebitda_n > 0 && x.ebitda_n < MIN_BASE) && <p className="k-note">A median is shown on {MIN_BASE} companies or more in a layer's calculations; each company's own figures are on its layer's table.</p>}
       <p className="k-note">{basisWords(dive.basis)}</p>
     </Card>
+    </ReportScope>
   );
 }
 
@@ -150,31 +156,13 @@ export function memberRows(r: SectorAI, dive: Dive | null): MemberRow[] {
   return groups.flatMap(([layer, cos]) => cos.map((co) => ({ co, layer, fig: figs.get(co.ticker) ?? null })));
 }
 
-/** EXPORT: the members CSV's columns: raw figures, each with its unit in the column's name. */
-export function memberColumns(region: Region, unit: string | null): Column<MemberRow>[] {
-  const u = unit ?? (region === "IN" ? "₹ crore" : "$ million");
-  const cap = region === "IN" ? "₹ crore" : "$ million";
-  const cell = () => null;
-  return [
-    { key: "c", header: "Company", cell, csv: (x) => x.co.name },
-    { key: "s", header: "Symbol", cell, csv: (x) => x.co.ticker },
-    { key: "l", header: "Layer", cell, csv: (x) => x.layer },
-    { key: "i", header: "Industry", cell, csv: (x) => x.co.industry || null },
-    { key: "m", header: `Market value (${cap})`, cell, csv: (x) => x.fig?.cap ?? x.co.cap ?? null },
-    { key: "rev", header: `Revenue (${u})`, cell, csv: (x) => x.fig?.revenue ?? null },
-    { key: "e", header: "EBITDA margin (%)", cell, csv: (x) => x.fig?.ebitda ?? null },
-    { key: "n", header: "Net margin (%)", cell, csv: (x) => x.fig?.net ?? null },
-    { key: "roce", header: "ROCE (%)", cell, csv: (x) => x.fig?.roce ?? null },
-    { key: "y", header: "Year of the figures", cell, csv: (x) => x.fig?.year ?? null },
-    { key: "b", header: "In the theme by", cell, csv: (x) => memberBy(x.co) },
-    { key: "w", header: "What it does, in its own words", cell, csv: (x) => ownWords(x.co.what, x.co.name) || null },
-  ];
-}
+/* EXPORT: the members CSV is made by the server from the same rows (theme_routes.companies_csv; Release 43: a download, Basic and up). */
 
 /** EXPORT (owner, 4 Nov: "you forgot to put an export PDF or slides option in themes"): the theme as slides, PDF or PowerPoint, made by the
  * deep dive's deck builder and counted against the same monthly decks; and every company as a CSV. Each file goes through lib/share.ts. */
 export function ThemeDownloads({ r, dive, region, theme }: { r: SectorAI; dive: Dive | null; region: Region; theme: string }) {
-  const { fail, refreshMe } = useApp();
+  const { fail, refreshMe, me } = useApp();
+  const locked = me?.usage?.deck_limit === 0;      // FREE-TIER: no decks on Free: a locked button and the sample deck
   const [making, setMaking] = useState<"pptx" | "pdf" | null>(null);
   const [preparing, setPreparing] = useState<string | null>(null);
   const rows = useMemo(() => memberRows(r, dive), [r, dive]);
@@ -190,10 +178,13 @@ export function ThemeDownloads({ r, dive, region, theme }: { r: SectorAI; dive: 
   return (
     <div className="k-row" role="group" aria-label="Download this theme" data-testid="theme-downloads">
       <span className="k-small k-muted">Download</span>
+      {locked ? <><Link className="btn quiet sm" to="/plans" title={deckLock()} data-testid="deck-locked">🔒 Slides: on Basic</Link>
+        <SampleDeckLink className="btn quiet sm" label="Sample deck" /></> : <>
       <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pdf")} title="The whole theme as slides in a PDF: the chain and each layer, every company with its figures, the tailwinds and risks with their sources, the news and the theme in numbers"><Download size={16} />{making === "pdf" ? "Making the PDF…" : "Slides (PDF)"}</button>
-      <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pptx")} title="The same slides as PowerPoint"><Download size={16} />{making === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button>
+      <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pptx")} title="The same slides as PowerPoint"><Download size={16} />{making === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button></>}
+      <WorkbookButton region={region} theme={theme} dive={dive} />
       {preparing && <Working small label={preparing} />}
-      {rows.length > 0 && <CsvButton name={`theme ${theme} ${region} companies`} label="every company in this theme" columns={memberColumns(region, dive?.unit ?? null)} rows={rows} text="CSV" />}
+      {rows.length > 0 && <ThemeCsvButton region={region} theme={theme} dive={dive} />}
     </div>
   );
 }
@@ -249,6 +240,7 @@ export function LayerCard({ layer, i, region, business }: { layer: Layer; i: num
   const hist = layer.history;
   const listed = layer.listed ?? layer.companies.length, inCalc = layer.n ?? layer.companies.filter((c) => calcOf(c).in).length;
   return (
+    <ReportScope section={`Theme layer: ${layer.layer}`} source="The companies' reported annual results">
     <Card id={`layer-${i}`} label={`Layer ${i + 1}: ${layer.layer}`}>
       <CardHead title={<><span className="k-muted">Layer {i + 1} · </span>{layer.layer}</>} />
       {layer.description && <p className="k-small">{layer.description} <span className="k-muted">(Written by AI from general knowledge, with no figures.)</span></p>}
@@ -281,6 +273,7 @@ export function LayerCard({ layer, i, region, business }: { layer: Layer; i: num
         </>
       )}
     </Card>
+    </ReportScope>
   );
 }
 

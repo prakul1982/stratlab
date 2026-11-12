@@ -75,6 +75,8 @@ export const FEATURES: Feature[] = [
     words: "market breadth advance decline advances declines a/d line ad ratio mcclellan oscillator summation index new highs lows 52 week dma moving average stage 2 trin arms thrust sector breadth nifty 500 midcap smallcap" },
   { id: "heatmap", title: "Heatmap", what: "A market as tiles: each company sized by its market value and coloured by its change over a day to a year, grouped by sector. India and the US, or one theme's companies.", to: "/invest/heatmap",
     words: "heatmap heat map treemap tiles sector map gainers losers movers market cap" },
+  { id: "movers", title: "Market movers", what: "The day's biggest gainers and losers, the most traded, volume spikes and new 52-week highs and lows, India and the US. The top 5 of each list on every plan; every row, any index and the CSV on Basic.", to: "/invest/movers",
+    words: "movers top gainers losers most active traded volume spikes shockers 52 week high low" },
   { id: "filings", title: "Filings and red flags", what: "Fund raises (QIP), pledges, resignations and defaults your watchlist companies filed, with an evening alert.", to: "/research/filings",
     words: "filings announcements red flags qip fund raise preferential rights issue pledge resignation auditor default sebi rating downgrade nse bse alert", home: true, goal: "find", flag: "filings" },
   { id: "deepdive", title: "Company deep dive", what: "Open any Indian or US company, then Deep dive: 10 years of numbers, its business, capex plans and whether management delivered.", to: "/research",
@@ -118,12 +120,15 @@ const EXTRA: Feature[] = [
     words: "contact us support email write person human team complaint feedback reach" },
   { id: "theme", title: "Theme: dark or light", what: "Dark, light or the same as your device, in Settings → Experience.", to: "/settings#theme",
     words: "dark mode light mode theme appearance night colours colors" },
+  // bet 3: the share links a person made to deep dives and themes, on Account
+  { id: "shares", title: "Shared research links", what: "The public links you made to deep dives and themes, each one open or turned off.", to: "/account#shares",
+    words: "share shared link links public snapshot research deep dive theme turn off unshare" },
   { id: "signout", title: "Sign out", what: "Sign out of StratLab in this browser.", to: "@signout",
     words: "sign out log out logout signout leave" },
 ];
 
 /** The pages that belong to the person, not to a market: a search that names one gets no "strategy ideas" (DI-003). */
-export const OWN_PAGES = ["account", "settings", "plans", "assistant", "invite", "phone", "help", "contact", "theme", "signout", "features", "mine_home"];
+export const OWN_PAGES = ["account", "settings", "plans", "assistant", "invite", "phone", "help", "contact", "theme", "signout", "features", "mine_home", "shares"];
 
 /** What search looks through: every page in the menu (by its name, its one-liner and the everyday words for it, such as "MTF"
  * or "borrowed money" for Margin funding), then the features that are not a page of their own. */

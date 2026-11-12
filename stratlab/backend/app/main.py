@@ -109,6 +109,7 @@ from . import corp_actions
 from . import surveillance
 from . import etf_nav
 from . import heatmap
+from . import data_status, movers
 from . import vix
 from . import biz_updates, library_seed, shareholders
 from . import positioning
@@ -132,7 +133,7 @@ from .plans import FEATURE_PLAN, PLANS, allows, offer_state, promo_active, promo
 from .plans import stock_alerts as stock_alert_limit
 from .plans import access_plan, ai_reads_per_day, bigger_plan, free_basic_until, screens as screens_limit
 from .plans import decks as decks_limit, deepdives as deepdives_limit, payments_live  # noqa: F401  (tests set main.payments_live)
-from .plans import limit_message as plan_limit_message
+from .plans import limit_message as plan_limit_message, limit_of, not_on_plan, allows_for, free_change_notice
 
 kite = KiteService()
 hub = TickHub(kite)
@@ -207,8 +208,7 @@ def alert_bars(region: str, sym: str) -> list[dict]:
 
 
 def _alert_limit(profile: dict) -> int:
-    from .plans import plan_of
-    return stock_alert_limit(plan_of(profile))
+    return stock_alert_limit(profile)        # its plan (plans.plan_of), and a Free account's grace (plans._limit)
 
 
 ALERT_FEATURE = {"etfgap": "etf_gaps", "bizupdate": "biz_updates", "mwpl": "stock_futures", "mtf": "mtf"}     # kinds of alert on a paid plan
@@ -293,6 +293,12 @@ vix_job = vix.Job(lambda: filings_feed)
 rules_watch_job = rules_watch.Job(lambda: filings_feed, lambda subject, text: tell_admins(subject, text))   # official rate sources, daily
 # monthly and quarterly business updates read into numbers, and named holders above 1% (the exchange's filings)
 biz_updates.setup(lambda: filings_feed, lambda: deep_docs, lambda: (_gemini, _anthropic))
+# search inside filings and call transcripts: the nightly index (off until Admin turns it on) reads with the same sources
+from . import doc_index, doc_search  # noqa: E402
+doc_index.setup(lambda: filings_feed, lambda: sec_feed, lambda: deep_docs)
+# the customer and supplier map: links named in filings, read each night (off until Admin turns it on) with the same sources
+from . import supply_links  # noqa: E402
+supply_links.setup(lambda: filings_feed, lambda: sec_feed, lambda: deep_docs)
 biz_job = biz_updates.Job(lambda rows, now: stock_alerts.fire_events(rows, now, _alert_limit, kind_ok=_alert_kind_ok),
                           biz_updates.alert_symbols)
 # IPOs: India's from the exchanges' public-issue pages and SEBI's lists, the US's from the public IPO calendar and the SEC's filings
@@ -445,6 +451,8 @@ def start_jobs():
     _start("vix_job", vix_job.start)
     _start("biz_job", biz_job.start)
     _start("holders_job", holders_job.start)
+    _start("doc_index.job", doc_index.job.start)          # the filings search index, once a night when switched on
+    _start("supply_links.job", supply_links.job.start)    # the customer and supplier map, once a night when switched on
     _start("ipo.job", ipo.job.start)                    # IPOs: the exchanges' and regulators' pages, the bids through the day, the alerts
     _start("ai_providers.job", ai_providers.job.start)          # measures the AI models every 6 hours
     _start("memory-janitor", lambda: threading.Thread(target=memguard.janitor, daemon=True, name="memory-janitor").start())   # expired cache entries out, the heap trimmed (MEM-001)
@@ -464,6 +472,8 @@ app = FastAPI(title="StratLab API", lifespan=lifespan, docs_url="/docs" if _docs
 research_routes.setup(research_hub, _gemini, _anthropic)
 research_routes.corp_sources = corp_job.sources          # a US company page's dividend yield from its listed payments
 app.include_router(research_routes.router)
+from . import sample_deck  # noqa: E402  (FREE-TIER: the public sample deck, /pricing/sample-deck)
+app.include_router(sample_deck.router)
 app.include_router(money_mf.router)          # /money/mutual-funds
 app.include_router(feedback.router)          # /feedback from anyone, /admin/feedback the inbox (owner, 4 Nov)
 app.include_router(money_mf_ter.router)      # /money/mutual-funds/costs
@@ -495,6 +505,8 @@ app.include_router(saved_routes.router)       # /me/saved: saved searches and AI
 app.include_router(saved_routes.admin_router)  # /admin/saved-searches: their counts by kind
 app.include_router(watch_routes.router)       # /watch: Market Watch lists, prices and the live stream (MW-1)
 app.include_router(watch_routes.public_router)  # /public/markets/watch: the visitor's fixed board
+from . import watch_import                     # noqa: E402  /watch/import: a watchlist pasted or from a file (owner, 12 Nov)
+app.include_router(watch_import.router)
 app.include_router(money_us_routes.router)     # /money/us-tax
 app.include_router(money_itr.router)           # /money/itr
 app.include_router(etf_nav.router)             # /invest/etf-gaps
@@ -505,14 +517,28 @@ app.include_router(shareholders.router)        # /research/holders, /invest/hold
 app.include_router(ipo.router)                 # /invest/ipos
 app.include_router(ipo_history.router)         # /admin/ipos/history
 app.include_router(redflags_routes.router)     # /research/redflags, /research/holders-us
+from . import concalls_routes  # noqa: E402
+app.include_router(concalls_routes.router)     # /research/earnings-calls, /invest/groups (f5)
 app.include_router(stock_futures.router)       # /trade/stock-futures
 app.include_router(slb.router)                 # /invest/stock-lending
 app.include_router(mtf.router)                 # /invest/margin-funding
 app.include_router(heatmap.router)             # /invest/heatmap: the stock heatmap's tiles, from the daily run's stored rows
+app.include_router(movers.router)              # /invest/movers: gainers, losers, most traded, volume spikes, 52-week highs and lows
+app.include_router(movers.public_router)       # /stocks/<in|us>/movers: the same lists as a public page (before /stocks/<region>/<symbol>)
+app.include_router(data_status.router)         # /status and /public/data-status: each dataset's last update and next due time, for anyone
 app.include_router(stock_desks.admin_router)   # /admin/stock-desks
 app.include_router(ai_admin.router)            # /admin/ai: the AI panel
 app.include_router(library_admin.router)       # /admin/stored: everything kept once for every user (R19)
 app.include_router(mcp_server.router)          # /mcp and /me/assistant: StratLab in your AI assistant
+app.include_router(doc_search.router)          # /research/docs/search: search inside filings and call transcripts (signed in)
+app.include_router(doc_search.admin_router)    # /admin/doc-index: the nightly index's switch and runs
+from . import embeds, public_themes, share  # noqa: E402  (bet 3: public, shareable research)
+app.include_router(share.router)               # /research/share/..., /research/shares: share links to a deep dive or a theme
+app.include_router(share.page_router)          # /r/<token>: a share link's public page
+app.include_router(public_themes.router)       # /themes, /themes/<in|us>/<slug>: public theme pages
+app.include_router(embeds.router)              # /embed/price/..., /embed/theme/...: charts other sites may frame
+app.include_router(supply_links.router)        # /research/links: customers and suppliers named in filings
+app.include_router(supply_links.admin_router)  # /admin/supply-links: the nightly job's switch, AI cap and review queue
 
 
 RECENT_ERRORS: list[dict] = []   # the last crashes, shown on the admin page
@@ -620,7 +646,7 @@ app.add_middleware(CORSMiddleware, allow_origins=settings.FRONTEND_ORIGINS,
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=6)   # outermost: JSON and pages go compressed (a chart is 5x smaller)
 
 
-HEAD_PATHS = re.compile(r"^/(?:stocks(?:/.*)?|blog(?:/.*)?|sitemap\.xml|sitemaps/[^/]+|robots\.txt)$")
+HEAD_PATHS = re.compile(r"^/(?:stocks(?:/.*)?|blog(?:/.*)?|themes(?:/.*)?|r/[^/]+|embed/.+|status|sitemap\.xml|sitemaps/[^/]+|robots\.txt)$")
 
 
 class HeadAsGet:
@@ -665,7 +691,7 @@ def need(profile, feature: str, what: str):
 
 
 def check_group_size(profile, n: int):
-    cap = group_size(profile["_plan"])
+    cap = group_size(profile)       # a Free account in the grace keeps the old 10 (plans._limit)
     if n > cap:
         bigger = next((PLANS[p]["name"] for p in ("basic", "pro") if PLANS[p]["group_size"] >= n), None)
         upgrade(f"Your plan tests groups of up to {cap} instruments; this one has {n}."
@@ -968,7 +994,7 @@ def me(profile=Depends(current_profile)):
     uid = profile["id"]
     # the person's settings read below one by one, in one database call (R11E: 11 to 18 round trips on a cold /me)
     db.prefetch_settings([alerts.ALERT_OFF + uid, daily_report.PREFS + uid, holdings.KEY + uid, user_data.WATCHLIST + uid,
-                          push.KEYS])
+                          push.KEYS, feedback.NOTE_KEY + uid])
     try:
         lifecycle.seen(profile)       # remembers the visit; welcomes a brand-new account
     except Exception as e:
@@ -978,9 +1004,9 @@ def me(profile=Depends(current_profile)):
     # plan and billing are untouched in the database, and billing changes are refused while it is on
     seen = profile.get("_view_as") if profile.get("_view_as") in PLANS else None
     paid = seen or (profile.get("_paid_plan", plan) if profile.get("_paid_plan", plan) in PLANS else "free")
-    info = plan_info(plan)
+    info = plan_info(plan, profile)          # a Free account in the grace: the counts it still has (plans.free_grace_until)
     reads_today = _usage_pool.submit(research_routes.ai_reads_today, profile)
-    used = month_usage(profile["id"], ("backtest", "ai", "deepdive", "deck"))
+    used = month_usage(profile["id"], ("backtest", "ai", "deepdive", "deck", "theme"))
     reads_cap = research_routes.ai_cap(profile)
     return ok({
         "id": profile["id"], "email": profile.get("email"),
@@ -1000,6 +1026,8 @@ def me(profile=Depends(current_profile)):
                   "ai_used": used["ai"], "ai_limit": info["ai_builds_per_month"],
                   "deepdive_used": used["deepdive"], "deepdive_limit": info["deepdives_per_month"],
                   "deck_used": used["deck"], "deck_limit": info["decks_per_month"],
+                  # FREE-TIER: new themes mapped this month (a theme already in the library never counts); the site's admins have no limit
+                  "theme_used": used["theme"], "theme_limit": None if admin.is_admin(profile) else info["themes_per_month"],
                   # the plan's own limits (what the Plans page lists), and why they're lifted now when they are
                   "deepdive_plan_limit": PLANS[paid]["deepdives_per_month"], "deck_plan_limit": PLANS[paid]["decks_per_month"],
                   # fresh AI reads today against the person's daily cap (None: no cap), said on Account (R8O-002)
@@ -1011,6 +1039,8 @@ def me(profile=Depends(current_profile)):
                   "ai_builds_per_day": AI_BUILDS_PER_DAY if info["ai_builds_per_month"] is None else None,
                   "lifted_by": "the launch offer" if promo_active() and not seen else None},
         "trial": trial_state(profile) if plan == "free" else None,
+        # FREE-TIER: an account made before the smaller Free plan: when its counts change and exactly what changes (Account, My space)
+        "free_change": None if seen else free_change_notice(profile),
         # a follower runs no sessions: the running rows are in the database
         "live_running": len(manager.user_running(profile["id"])) if leader.leading() else db.count_running(profile["id"]),
         "live_limit": info["live_limit"],
@@ -1023,6 +1053,7 @@ def me(profile=Depends(current_profile)):
         "billing_enabled": billing.enabled(), "yearly_enabled": billing.yearly_enabled(), "plans": public_plans(),
         "offer": offer_state(promo=not seen),
         "onboarding": onboarding_of(profile["id"]),
+        "notes": feedback.notes_for(uid),          # one-line notes for the person: a figure they reported was fixed
         "established": established_of(profile["id"]),
         # whether My Holdings has any stock, so the Money space's main button says "Update holdings", not "Add your holdings" (LIVE1C-055)
         "has_holdings": has_holdings(profile["id"]),
@@ -1046,13 +1077,14 @@ def my_limits(profile=Depends(current_profile)):
             "screens": lambda: len(screens.items(uid)), "holdings": lambda: len(holdings.load(uid)["items"]),
             "mf_schemes": lambda: len(money_mf.load(uid)["schemes"]), "networth_items": lambda: len(money_networth.load(uid)["items"])}
     got = {k: _usage_pool.submit(n, f) for k, f in jobs.items()}
-    rows = [{"key": k, "used": got[k].result() if k in got else None, "limit": PLANS[plan][k], "next": bigger_plan(plan, k)}
+    rows = [{"key": k, "used": got[k].result() if k in got else None, "limit": limit_of(profile, k), "next": bigger_plan(plan, k)}
             for k in ("stock_alerts", "screens", "holdings", "mf_schemes", "networth_items", "journal_trades")]
     return ok({"plan": PLANS[plan]["name"], "rows": rows})
 
 
 # LIVE7B-002: a Refresh of a stored read is a fresh AI read, held to that one daily count (no separate refresh count)
-USAGE_LABELS = {"research_ai": "Fresh AI reads, refreshes included", "backtest": "Backtests", "ai": "AI strategy builds",
+USAGE_LABELS = {"research_ai": "Fresh AI reads, refreshes included", "search_ai": "AI answers in the search box",
+                "theme": "New themes mapped", "backtest": "Backtests", "ai": "AI strategy builds",
                 "deepdive": "Company deep dives", "deck": "Decks (PDF or PowerPoint)", "stock_alerts": "Active stock alerts",
                 "screens": "Saved screens", "holdings": "Stocks in My Holdings", "mf_schemes": "Mutual fund schemes",
                 "networth_items": "Net worth entries", "journal_trades": "Journal trades kept"}
@@ -1064,7 +1096,8 @@ def my_usage(profile=Depends(current_profile)):
     midnight India time, "month": the 1st, None: a kept count that goes down when something is removed). R19 (owner, 7 Nov: "tell them
     about their daily quota left"): Settings' "Your usage" table and the note beside every Refresh button read this one call."""
     plan, uid = profile["_plan"], profile["id"]
-    info = plan_info(plan)
+    info = plan_info(plan, profile)
+    is_admin = admin.is_admin(profile)
 
     def n(fn):
         try:
@@ -1073,11 +1106,14 @@ def my_usage(profile=Depends(current_profile)):
             return None
     day, month = research_routes.ai_day_start(), month_start_iso()
     counts = {"research_ai": _usage_pool.submit(n, lambda: research_routes.ai_reads_today(profile)),
-              **{k: _usage_pool.submit(n, lambda k=k: db.count_usage(uid, k, month)) for k in ("backtest", "ai", "deepdive", "deck")}}
+              "search_ai": _usage_pool.submit(n, lambda: db.count_usage(uid, research_routes.SEARCH_KIND, day)),
+              **{k: _usage_pool.submit(n, lambda k=k: db.count_usage(uid, k, month)) for k in ("theme", "backtest", "ai", "deepdive", "deck")}}
     limits = {"research_ai": research_routes.ai_cap(profile),
               "backtest": info["backtests_per_month"], "ai": info["ai_builds_per_month"], "deepdive": info["deepdives_per_month"],
-              "deck": info["decks_per_month"]}
-    resets = {"research_ai": "day", "backtest": "month", "ai": "month", "deepdive": "month", "deck": "month"}
+              "deck": info["decks_per_month"], "search_ai": research_routes.search_cap(profile),
+              "theme": None if is_admin else info["themes_per_month"]}
+    resets = {"research_ai": "day", "search_ai": "day", "theme": "month", "backtest": "month", "ai": "month", "deepdive": "month",
+              "deck": "month"}
     rows = [{"key": k, "label": USAGE_LABELS[k], "used": counts[k].result(), "limit": limits[k], "resets": resets[k]} for k in counts]
     try:
         kept = json.loads(my_limits(profile).body)["rows"]
@@ -1086,7 +1122,11 @@ def my_usage(profile=Depends(current_profile)):
     rows += [{"key": r["key"], "label": USAGE_LABELS.get(r["key"], r["key"]), "used": r["used"], "limit": r["limit"], "resets": None} for r in kept]
     for r in rows:
         r["left"] = None if r["limit"] is None or r["used"] is None else max(0, r["limit"] - r["used"])
-    return ok({"plan": PLANS[plan]["name"], "rows": rows})
+    # FREE-TIER: a plan with no Refresh of a stored read (Free outside its grace): the note beside Refresh says where it is
+    from . import computed
+    from .plans import refreshes_allowed
+    word = computed.plan_word(profile)
+    return ok({"plan": PLANS[plan]["name"], "rows": rows, "refresh_off": word != "admin" and not refreshes_allowed(word, profile)})
 
 
 _usage_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="usage-counts")
@@ -1594,7 +1634,7 @@ def export_trades(nid: str, version: int, profile=Depends(current_profile)):
 def ai_allowance(profile, held: int = 0) -> tuple[int, int | None]:
     """AI builds used this month and the plan's limit; errors out when either cap is reached. `held`: builds running
     right now that will be counted when they finish."""
-    limit = PLANS[profile["_plan"]]["ai_builds_per_month"]
+    limit = limit_of(profile, "ai_builds_per_month")
     used = db.count_usage(profile["id"], "ai", month_start_iso())
     if limit is not None and used + held >= limit:
         # the one lock wording, with when the count starts again (DP2-022, DP1-018)
@@ -1633,7 +1673,7 @@ def search_ideas(req: IdeasReq, profile=Depends(current_profile)):
     q = req.q.strip()
     try:
         out = research_routes.ai_call(profile, "ideas", ideas.key(q), 7 * 86400, False, lambda: ideas.build(ask_json, q),
-                                      kind_used=research_routes.SEARCH_KIND, cap=research_routes.SEARCH_AI_PER_DAY)
+                                      kind_used=research_routes.SEARCH_KIND, cap=research_routes.search_cap(profile))
         return {"ideas": out["ideas"], "fallback": False}
     except HTTPException as e:
         if e.status_code in (422, 429, 503):
@@ -1649,7 +1689,7 @@ def ask_route(req: IdeasReq, profile=Depends(current_profile)):
         return {"action": "import", "text": q, "title": "Import this strategy", "fallback": False}
     try:
         out = research_routes.ai_call(profile, "ask", ask.key(q), 7 * 86400, False, lambda: ask.build(ask_json, q),
-                                      kind_used=research_routes.SEARCH_KIND, cap=research_routes.SEARCH_AI_PER_DAY)
+                                      kind_used=research_routes.SEARCH_KIND, cap=research_routes.search_cap(profile))
         return {**out, "fallback": False}
     except HTTPException as e:
         if e.status_code in (422, 429, 503):
@@ -1757,7 +1797,7 @@ def heavy_read_throttle(profile):
 # ---------- backtests and notebooks ----------
 def use_backtest(profile, held: int = 0) -> int | None:
     """Check the monthly backtest limit before running one (`held`: runs of theirs already going); returns the limit."""
-    limit = PLANS[profile["_plan"]]["backtests_per_month"]
+    limit = limit_of(profile, "backtests_per_month")
     if limit is not None and backtests_used(profile) + held >= limit:
         upgrade(plan_limit_message(profile["_plan"], "backtests_per_month", f"You've used all {limit} backtests this month", "backtests", monthly=True),
                 "backtest_limit")
@@ -2457,7 +2497,7 @@ def alerts_page(profile) -> dict:
     done = sorted((a for a in mine if a.get("status") != "active"), key=lambda a: a.get("triggered_at") or "", reverse=True)
     to = alerts.newsletter_email(profile)
     return {"active": [alert_view(a) for a in active], "triggered": [alert_view(a) for a in done],
-            "limit": stock_alert_limit(profile["_plan"]), "count": len(active), "channels": stock_alerts.channels(profile),
+            "limit": stock_alert_limit(profile), "count": len(active), "channels": stock_alerts.channels(profile),
             "email": to, "email_confirmed": bool(to) and alerts.email_confirmed(profile)}
 
 
@@ -2497,7 +2537,7 @@ def alert_note(a: dict, q: dict | None) -> str | None:
 
 
 def save_alert(profile, req: StockAlertReq, aid: str | None = None) -> dict:
-    limit = stock_alert_limit(profile["_plan"])
+    limit = stock_alert_limit(profile)
     try:
         body = stock_alerts.clean(req.model_dump())
     except stock_alerts.AlertError as e:
@@ -3097,7 +3137,11 @@ def check_deep(profile, kind: str, sym: str, region: str, mark: str | None = Non
     mark, since = mark or f"{kind}:{region}:{sym}", month_start_iso()
     if db.count_usage(profile["id"], mark, since):
         return None
-    limit = limit_of(profile["_plan"])
+    limit = limit_of(profile)              # a profile: a Free account in the grace keeps its old count (plans._limit)
+    if limit == 0:
+        # FREE-TIER: none on the plan: said as "Slide decks are on Basic: 5 a month.", never "You've made 0 decks this month"
+        upgrade(not_on_plan(profile["_plan"], key, "Slide decks" if kind == "deck" else "Company deep dives",
+                            after="The sample deck on the Plans page shows what one holds." if kind == "deck" else ""), f"{kind}_limit")
     if limit is not None and deep_used(profile, kind) >= limit:
         # the one lock wording, with when the count starts again (DP2-022, DP1-018)
         if kind == "deepdive":
@@ -4288,7 +4332,11 @@ def tax_delete(profile=Depends(current_profile)):
 @app.get("/tax/export")
 def tax_export_file(fy: int = Query(..., ge=2000, le=2100), format: str = Query("csv", pattern="^(csv|pdf)$"),
                     profile=Depends(current_profile)):
-    """One financial year's report as a CSV (every realised line) or a PDF summary."""
+    """One financial year's report as a CSV (every realised line) or a PDF summary. Basic and up (FREE-TIER: the report on screen is
+    for everyone; a Free account in the grace still downloads, plans.allows_for)."""
+    if not allows_for(profile, "tax_export"):
+        upgrade(f"The tax report's CSV and PDF downloads are on the {PLANS[FEATURE_PLAN['tax_export']]['name']} plan. The report on "
+                "screen stays free.")
     throttle(profile, "tax_export", 60, 3600, "That's a lot of downloads in an hour. Try again a little later.")
     i = tax_inputs(profile)
     c, equity, units = money_routes.tax_computed(profile, i)
@@ -4933,6 +4981,11 @@ def stock_page_older_facts(region: str, symbol: str, f: dict | None) -> dict | N
 stock_page_store = stock_pages.Pages(stock_page_facts, settings.STOCK_PAGE_BUILDS_PER_MINUTE, older=stock_page_older_facts)
 stock_page_store.adjust = lambda r, s, f: stock_pages.with_week52_report(f, official_close.ranges(), s) if r == "IN" else f   # R10O-007
 research_routes.public_facts = lambda r, s: stock_page_store.peek(r, s)    # the app's US P/E on the public page's EPS (R7O-004)
+# lane c-f2: a company's peers, statements and shareholding by quarter (company_tables.py), from the same stored readers
+from . import company_tables  # noqa: E402
+company_tables.setup(screener=lambda: research_hub.screener, sec=lambda: sec_feed, facts=lambda r, s: stock_page_store.peek(r, s),
+                     bse_code=lambda s: bse_code(s))
+app.include_router(company_tables.router)
 research_routes.filed_numbers = lambda s: sec_feed.company(s)               # a page stored before its quarterly EPS was kept (RC1 DD-030)
 SEO_HEADERS = {"Cache-Control": stock_pages.FEED_CACHE}           # robots, the sitemaps and search results: kept minutes
 PAGE_HEADERS = {"Cache-Control": stock_pages.CACHE_CONTROL}       # the lists of companies and the directories: kept a day by the site's cache (SEO-1)
@@ -5121,6 +5174,10 @@ def stock_prices(region: str, symbol: str, request: Request):
     if not series:
         return missing
     return JSONResponse({"currency": "USD" if r == "US" else "INR", **series}, headers={"Cache-Control": stock_pages.CHART_SERIES_CACHE})
+
+
+share.setup(company_card)          # a deep dive's share link takes its key numbers from the company's public page
+embeds.setup(stock_prices)         # a price embed draws the public page chart's own closes
 
 
 @app.get("/stocks", response_class=HTMLResponse)
@@ -5347,13 +5404,13 @@ def stock_price_refresh_job():
         except Exception as e:
             print("stock price refresh failed:", str(e)[:160])
         time.sleep(refresh_wait(status))
-screen_job = screens.Job(lambda uid: db.get_profile(uid), lambda p: screens_limit(access_plan(p)))
+screen_job = screens.Job(lambda uid: db.get_profile(uid), lambda p: screens_limit(p))
 
 
 def screens_page(profile) -> dict:
     mine = sorted(screens.items(profile["id"]), key=lambda s: s.get("created_at") or "")
     to = alerts.newsletter_email(profile)
-    return {"items": [screens.view(s) for s in mine], "limit": screens_limit(profile["_plan"]), "count": len(mine),
+    return {"items": [screens.view(s) for s in mine], "limit": screens_limit(profile), "count": len(mine),
             "email": to, "email_confirmed": bool(to) and alerts.email_confirmed(profile)}
 
 
@@ -5383,7 +5440,7 @@ def screens_saved(profile=Depends(current_profile)):
 
 
 def save_screen(profile, req: ScreenSaveReq, sid: str | None = None) -> dict:
-    limit = screens_limit(profile["_plan"])
+    limit = screens_limit(profile)
     try:
         s = screens.save(profile["id"], req.model_dump(), limit, sid)
     except screens.ScreenError as e:

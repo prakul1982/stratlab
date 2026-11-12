@@ -10,7 +10,7 @@ from app.intel import ai as A
 from app.intel import routes, theme_base, theme_library as L, theme_routes
 from tests.test_research_api import api  # noqa: F401  (the research pages' fake world, signed in as a Free user)
 
-U2 = {"id": "u2", "_plan": "free", "plan": "free"}
+U2 = {"id": "u2", "_plan": "basic", "plan": "basic", "_paid_plan": "basic"}
 
 
 class Store(dict):
@@ -92,7 +92,8 @@ def test_the_guard_window_and_the_daily_cap(store, monkeypatch):
     monkeypatch.setattr(db, "add_usage", lambda u, k: used.append(k))
     monkeypatch.setattr(settings, "RESEARCH_AI_PER_DAY", 2)
     now = computed._now()
-    me = {"id": "u1", "_plan": "free", "plan": "free"}
+    # (updated on purpose, FREE-TIER: Free has no Refresh now; the daily cap is shown on Basic, whose count is RESEARCH_AI_PER_DAY)
+    me = {"id": "u1", "_plan": "basic", "plan": "basic", "_paid_plan": "basic"}
     assert computed.refresh_gate(me, "ai:company", now - 60) == "fresh" and used == []         # written a minute ago
     assert computed.refresh_gate(me, "ai:company", None) == "go" and used == []                # nothing kept yet: not counted
     old = now - 7 * 3600
@@ -185,6 +186,8 @@ def test_refresh_updates_the_shared_read_for_the_next_person_with_a_guard_and_a_
     later.start()
     request.addfinalizer(later.stop)
     # (updated on purpose, LIVE7B-002: the day's cap is the fresh AI reads', each refresh's new map one of them)
+    # (updated on purpose, FREE-TIER: Free has no Refresh now, so both people here are on Basic, whose count is RESEARCH_AI_PER_DAY)
+    main.app.dependency_overrides[main.current_profile] = lambda: {**U2, "id": "u1"}    # the api fixture clears it
     from app.config import settings
     monkeypatch.setattr(settings, "RESEARCH_AI_PER_DAY", 1)
     monkeypatch.setattr(computed, "DEFAULT_GUARD", 0)                         # (u2 refreshes right after)
@@ -193,7 +196,7 @@ def test_refresh_updates_the_shared_read_for_the_next_person_with_a_guard_and_a_
     monkeypatch.setattr(db, "add_usage", lambda u, k: mine.append((u, k)))
     got = _sector(lib, "AI data centers", refresh=True)
     assert got["refresh_state"] == "done" and len(lib.calls) > calls and got["generated_at"] > first["generated_at"]
-    main.app.dependency_overrides[main.current_profile] = lambda: U2          # someone else, next
+    main.app.dependency_overrides[main.current_profile] = lambda: U2          # someone else, next (on Basic)
     calls = len(lib.calls)
     seen = _sector(lib, "AI data center")
     assert seen["generated_at"] == got["generated_at"] and len(lib.calls) == calls
@@ -205,10 +208,13 @@ def test_refresh_updates_the_shared_read_for_the_next_person_with_a_guard_and_a_
     capped = _sector(lib, "AI data centers", refresh=True)                    # u2's second: past the day's one
     assert capped["refresh_state"] == "capped" and capped["generated_at"] > 0
     row = next(s for s in computed.stats() if s["kind"] == "theme")
-    assert row["refreshes"] == 2 and row["by"]["free"] == 2
+    assert row["refreshes"] == 2 and row["by"]["basic"] == 2
 
 
 def test_a_failed_refresh_keeps_the_old_read_with_its_date(lib, monkeypatch):
+    # (updated on purpose, FREE-TIER: Free has no refreshes now, so a refresh is shown on Basic, 10 a day)
+    from app import main as _m
+    _m.app.dependency_overrides[_m.current_profile] = lambda: {"id": "u1", "_plan": "basic", "plan": "basic", "_paid_plan": "basic"}    # the api fixture clears it
     old = lib.get("/research/company/US/NVDA/ai").json()
     monkeypatch.setattr(computed, "DEFAULT_GUARD", 0)
     from app.ai_providers import AIError
@@ -275,6 +281,8 @@ def test_admin_library_is_admin_only_and_shows_every_store(lib):
 # ---------- the person's usage ----------
 # (updated on purpose, LIVE7B-002: one daily count, the fresh AI reads, refreshes included; no separate refresh row)
 def test_my_usage_lists_every_limit_and_the_refreshes_left(lib, monkeypatch):
+    # (updated on purpose, FREE-TIER: shown on Basic, whose count is RESEARCH_AI_PER_DAY; Free's is 5)
+    main.app.dependency_overrides[main.current_profile] = lambda: {"id": "u1", "_plan": "basic", "plan": "basic", "_paid_plan": "basic"}    # the api fixture clears it
     from app.config import settings
     rows = {r["key"]: r for r in lib.get("/me/usage").json()["rows"]}
     assert "refresh" not in rows

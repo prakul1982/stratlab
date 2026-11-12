@@ -2461,7 +2461,8 @@ INSTAGRAM = "https://www.instagram.com/stratlab.studio/"      # the same address
 
 def _foot() -> str:
     site = settings.PUBLIC_SITE_URL
-    explore = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/library", "Strategy library"), ("/stocks", "Companies"), ("/blog", "Blog"), ("/pricing", "Plans")))
+    explore = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/library", "Strategy library"), ("/stocks", "Companies"), ("/themes", "Themes"), ("/blog", "Blog"), ("/pricing", "Plans"),
+                                                                ("/status", "Data status")))
     policies = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/terms", "Terms of service"), ("/privacy", "Privacy policy"),
                                                                    ("/refunds", "Cancellation and refunds"), ("/contact", "Contact us")))
     policies += f'<a href="{INSTAGRAM}" rel="me noopener">Instagram</a>'
@@ -2679,7 +2680,10 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
 {_sub_line(f.get("exchange") or country, ind)}{_price_block(f, as_of)}
 <p class="small muted" data-advice>Facts from reported results and exchange filings. Not investment advice.</p>"""]
     parts.append(price_chart_html(f, region, symbol))       # PUB-1: the share price, drawn in the browser from the cached closes
-    parts.append(_figures(f))
+    figs = _figures(f)
+    parts.append(figs)
+    if figs:     # "Report an error in this figure" (owner, 12 Nov): a visitor signs in to report one; the app's figures carry the flag
+        parts.append(f'<p class="small muted" data-report>A figure looks wrong? <a href="{e(app)}#co-numbers">Sign in to report it</a>, and we reply when it\'s checked.</p>')
     parts += [n for n in notes if not _is_basis(n)]
     parts.append(_trend(f))
     parts.append(_table(f))
@@ -3725,7 +3729,7 @@ def robots() -> str:
 
 def sitemap_index() -> str:
     site = settings.PUBLIC_SITE_URL
-    names = ["pages", "blog", "directory"] + [f"stocks-{r}-{i + 1}" for r, R in REGIONS.items() for i in range(max(1, -(-len(companies(R)) // CHUNK)))]
+    names = ["pages", "blog", "directory", "themes"] + [f"stocks-{r}-{i + 1}" for r, R in REGIONS.items() for i in range(max(1, -(-len(companies(R)) // CHUNK)))]
     def day(n: str) -> str:
         if n == "pages":
             return max(d for _, d in site_pages.PAGES)
@@ -3734,6 +3738,13 @@ def sitemap_index() -> str:
                 return blog.latest_day()
             except Exception as ex:
                 print("sitemap: the blog's day couldn't be read:", str(ex)[:120])
+                return ""
+        if n == "themes":                 # the public theme pages (public_themes.py): the newest stored map's day
+            try:
+                from . import public_themes
+                return public_themes.latest_day()
+            except Exception as ex:
+                print("sitemap: the themes' day couldn't be read:", str(ex)[:120])
                 return ""
         if n == "directory":              # the A-Z and index lists change with the companies list (SEO-1)
             return max((str(((_setting(f"stocks:list:{R}") or {}).get("at")) or "")[:10] for R in REGIONS.values()), default="")
@@ -3760,11 +3771,14 @@ def sitemap(name: str) -> str | None:
         # /stocks is the API's own list of company pages, not one of the site's pages: it changes with the companies list
         listed = max((str(((_setting(f"stocks:list:{R}") or {}).get("at")) or "")[:10] for R in REGIONS.values()), default="")
         return _urlset([(site + p, d) for p, d in site_pages.PAGES] + [(site + p, listed or max(d for _, d in site_pages.PAGES)) for p in ["/stocks"] + [f"/stocks/{r}" for r in REGIONS]]
-                       + [(site + p, d) for p, d in site_pages.library_pages()])
+                       + [(site + p, d) for p, d in site_pages.library_pages()] + _market_pages(site, listed or max(d for _, d in site_pages.PAGES)))
     if name == "blog":                   # the blog's lists and posts (BLOG-1), each with the day it last changed
         return _urlset(blog.sitemap_urls(site))
     if name == "directory":              # the A-Z and index lists that link every company page (SEO-1)
         return _urlset(directory_urls())
+    if name == "themes":                 # the theme directory and the theme pages offered to search engines (public_themes.py)
+        from . import public_themes
+        return _urlset(public_themes.sitemap_rows(site))
     bits = name.split("-")
     if len(bits) != 3 or bits[0] != "stocks" or bits[1] not in REGIONS or not bits[2].isdigit() or len(bits[2]) > 6:
         return None
@@ -3776,6 +3790,18 @@ def sitemap(name: str) -> str | None:
     day = str(((_setting(f"stocks:list:{region}") or {}).get("at")) or "")[:10] or None
     known = listing(region)
     return _urlset([(site + path(bits[1], s), day) for s in syms[i * CHUNK:(i + 1) * CHUNK] if listable(region, s, known)])
+
+
+def _market_pages(site: str, day: str) -> list[tuple[str, str]]:
+    """The public market pages beside the companies: each market's movers (with the day of their closes, else `day`) and the data status
+    page (whose figures change all day: `day`, the companies list's)."""
+    from . import movers
+    try:
+        rows = [(u, d or day) for u, d in movers.sitemap_urls(site)]
+    except Exception as ex:              # the stored closes can't be read: the pages are still listed, without a day
+        print("sitemap: the movers' day couldn't be read:", str(ex)[:120])
+        rows = [(f"{site}/stocks/{r}/movers", day) for r in REGIONS]
+    return rows + [(site + "/status", day)]
 
 
 def directory_urls() -> list[tuple[str, str | None]]:

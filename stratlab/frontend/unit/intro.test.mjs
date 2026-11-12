@@ -69,7 +69,10 @@ test("plan gating: no step points at a page its plan locks as a whole, and every
   assert.match(I.lockLine(tools, { tax_tools: false }), /: on the Pro plan\.$/);
   // a Free limit is said on Free only
   const company = ALL.find((s) => s.id === "company");
-  assert.deepEqual(I.planLines(company, {}, "free"), [`On Free: ${LIMITS.free.deepdives_per_month} deep dives and ${LIMITS.free.decks_per_month} slide download a month.`]);
+  // (updated on purpose, FREE-TIER: Free has 1 deep dive a month and no slide decks)
+  assert.deepEqual(I.planLines(company, {}, "free"), [`On Free: ${LIMITS.free.deepdives_per_month} deep dive a month; slide decks are on Basic.`]);
+  const tax = ALL.find((s) => s.id === "tax");
+  assert.equal(I.lockLine(tax, { tax_export: false }), "Tax report downloads: CSV and PDF: on the Basic plan.");
   assert.deepEqual(I.planLines(company, {}, "pro"), []);
   assert.ok(PLAN_IDS.includes("basic"));
 });

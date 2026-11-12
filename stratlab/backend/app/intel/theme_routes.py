@@ -24,7 +24,7 @@ from ..auth import current_profile
 from ..guard import Window
 from ..responses import err
 from . import ai as A
-from . import grounding, theme_base, theme_check, theme_data, theme_library, theme_prices
+from . import grounding, theme_base, theme_changes, theme_check, theme_data, theme_library, theme_prices
 from . import sector_metrics
 from .net import SourceError, TTLCache
 from .news import aggregator_url, company_headline, company_text, fits_company, plain_headline, publisher_url
@@ -366,7 +366,7 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
 def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
@@ -868,9 +868,9 @@ def theme_dive(q: str, region: str = "IN", refresh: bool = False, profile=Depend
         kept = computed.get(theme_library.DIVE, dive_key(r, theme, m), count=False)
         state = "go" if kept is None else computed.refresh_gate(profile, "theme:dive", kept.get("at"))
         if state != "go":
-            return R.ok({**kept["value"]["dive"], "refresh_state": state})
+            return R.ok(theme_changes.served(r, m.get("_library") or theme, {**kept["value"]["dive"], "refresh_state": state}, profile))
         by = computed.plan_word(profile)
-    out = dive_of(r, theme, m, refresh, by=by)
+    out = theme_changes.served(r, m.get("_library") or theme, dive_of(r, theme, m, refresh, by=by), profile)
     return R.ok({**out, "refresh_state": "done"} if refresh else out)
 
 
@@ -981,6 +981,7 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
         pieces = getattr(src, "pieces", None) or {}
         computed.put(theme_library.DIVE, key, {"dive": hit, "pieces": pieces, "priced": priced_mark(r, list(pieces))}, label=m.get("sector") or theme,
                      region=r, by=by)
+        theme_changes.record(r, m.get("_library") or theme, hit, _map_names(fm), m.get("generated_at"), theme_base.RULES, refresh)   # f4: "What changed"
         auto_post(r, theme, hit)
     return hit
 
@@ -1056,6 +1057,7 @@ def members_of(m: dict, dive: dict) -> list[dict]:
     for sub in dive.get("subs") or []:
         for c in sub.get("companies") or []:
             figs.setdefault(c["symbol"], c)
+    m = theme_base.with_sub_only(m, m.get("sector") or "")          # d1: every company in a layer or in "Other", never in neither
     in_layer = {c["ticker"] for v in m.get("value_chain") or [] for c in v.get("companies") or []}
     groups = [(v.get("layer") or "", v.get("companies") or []) for v in m.get("value_chain") or []]
     only = {}
@@ -1072,7 +1074,7 @@ def members_of(m: dict, dive: dict) -> list[dict]:
         for c in cos:
             f = figs.get(c["ticker"]) or {}
             out.append({"symbol": c["ticker"], "name": c.get("name") or f.get("name") or c["ticker"], "layer": layer, "official": official.get(layer, False),
-                        **({"rest": True} if layer in rest else {}),
+                        **({"rest": True} if layer in rest else {}), **({"unread": True} if c.get("unread") else {}),
                         "industry": c.get("industry") or None, "what": theme_base.own_words(f.get("what") if f.get("what") else c.get("what"), c.get("name") or f.get("name") or "") or None,
                         # LIVE6-006: the dive's market value, on its one price date
                         "cap": f.get("cap") if f.get("cap") is not None else c.get("cap"), "revenue": f.get("revenue"), "ebitda": f.get("ebitda"),
@@ -1239,6 +1241,72 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
     return Response(body, media_type="application/pdf" if format == "pdf" else "application/vnd.openxmlformats-officedocument.presentationml.presentation",
                     headers={"Content-Disposition": f'attachment; filename="{deck_file_name(theme, r, format, today)}"'})
 
+
+@router.get("/theme-dive/workbook")
+def theme_dive_workbook(q: str, region: str = "IN", profile=Depends(current_profile)):
+    """f4: the theme as an Excel workbook, every table of its page and deck (theme_workbook.py). Basic and up (plans.py "theme_workbook");
+    counted as the theme's deck of the month, so a theme's PDF, PowerPoint and workbook are one deck (Basic 5 a month, Pro unlimited)."""
+    from .. import main
+    from . import theme_workbook
+    main.need(profile, "theme_workbook", "A theme's workbook (Excel)")
+    R = _routes()
+    pending: list = []
+    r, theme, m = map_for_deck(R, profile, region, q, pending=pending)
+    mark = main.check_deep(profile, "deck", "", r, mark=f"deck:theme:{r}:{theme_data.slug(theme)}")
+    if pending and pending[0]:
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"preparing": True, "retry_after": DECK_RETRY,
+                             "message": "Preparing the workbook: the AI map is being written."}, status_code=202)
+    today = datetime.now(R.IST).date()
+    dive = dive_of(r, theme, m)
+    body = theme_workbook.build(dive, r, m.get("sector") or theme, theme_changes.view(r, m.get("_library") or theme, True), today)
+    if mark:
+        db.add_usage(profile["id"], "deck")
+        db.add_usage(profile["id"], mark)
+    from fastapi.responses import Response
+    return Response(body, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="{deck_file_name(theme, r, "xlsx", today)}"'})
+
+
+
+def companies_csv(m: dict, dive: dict, r: str) -> bytes:
+    """Every company in the theme as a CSV, the rows of the page's company list (members_of): raw figures, each with its unit in the
+    column's name, and a cell that starts like a formula written as text."""
+    import csv
+    import io
+    unit = dive.get("unit") or ("₹ crore" if r == "IN" else "$ million")
+    cap = "₹ crore" if r == "IN" else "$ million"
+    head = ["Company", "Symbol", "Layer", "Industry", f"Market value ({cap})", f"Revenue ({unit})", "EBITDA margin (%)", "Net margin (%)",
+            "ROCE (%)", "Year of the figures", "In the theme by", "What it does, in its own words"]
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(head)
+    for x in members_of(m, dive):
+        row = [x["name"], x["symbol"], x["layer"], x.get("industry"), x.get("cap"), x.get("revenue"), x.get("ebitda"), x.get("net"),
+               x.get("roce"), x.get("year"), x.get("by"), x.get("what")]
+        w.writerow(["" if v is None else (f"'{v}" if isinstance(v, str) and v[:1] in "=+-@" else v) for v in row])
+    return ("\ufeff" + buf.getvalue()).encode("utf-8")
+
+
+@router.get("/theme-dive/companies.csv")
+def theme_dive_companies_csv(q: str, region: str = "IN", profile=Depends(current_profile)):
+    """Every company in the theme as a CSV (the page's company list with the dive's figures). A download, so Basic and up with the theme's
+    workbook (plans.py "theme_workbook"); Free sees the same companies on the page. Not counted as a deck."""
+    from .. import main
+    main.need(profile, "theme_workbook", "Downloading a theme's companies as a CSV")
+    R = _routes()
+    pending: list = []
+    r, theme, m = map_for_deck(R, profile, region, q, pending=pending)
+    if pending and pending[0]:
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"preparing": True, "retry_after": DECK_RETRY,
+                             "message": "Preparing the list: the AI map is being written."}, status_code=202)
+    body = companies_csv(m, dive_of(r, theme, m), r)
+    today = datetime.now(R.IST).date()
+    from fastapi.responses import Response
+    name = f"stratlab-theme-{theme_data.slug(theme)}-{r.lower()}-companies-{today.isoformat()}.csv"      # as every table CSV is named (lib/csv.ts csvName)
+    return Response(body, media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "private, no-store"})
 
 # ---------- business updates ----------
 def business_reader():

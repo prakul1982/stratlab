@@ -132,16 +132,17 @@ def read(n=[0]):
 
 def test_who_has_a_cap(usage):
     assert routes.ai_cap(OWNER) is None and routes.ai_cap(PRO) is None
-    assert routes.ai_cap(BASIC) == 2 and routes.ai_cap(FREE) == 2               # the plan paid for, not the launch offer's Pro
+    # (updated on purpose, FREE-TIER: RESEARCH_AI_PER_DAY, 2 here, is Basic's; Free has its own 5 a day)
+    assert routes.ai_cap(BASIC) == 2 and routes.ai_cap(FREE) == 5               # the plan paid for, not the launch offer's Pro
     assert routes.ai_auto_counts(FREE) and not routes.ai_auto_counts(BASIC) and not routes.ai_auto_counts(OWNER)
-    assert plans.ai_reads_per_day("pro") is None and plans.ai_reads_per_day("free") == 2
+    assert plans.ai_reads_per_day("pro") is None and plans.ai_reads_per_day("free") == 5
     assert plans.public_plans()["pro"]["ai_reads_per_day"] is None and plans.plan_info("basic")["ai_reads_per_day"] == 2
 
 
 def test_the_owner_is_never_capped_and_free_is(usage):
     for i in range(5):
         routes.ai_call(OWNER, "sector", ("IN", f"t{i}"), 60, False, read)
-    for i in range(2):
+    for i in range(5):                          # (updated on purpose, FREE-TIER: Free's 5 a day)
         routes.ai_call(FREE, "sector", ("IN", f"f{i}"), 60, False, read)
     with pytest.raises(HTTPException) as e:
         routes.ai_call(FREE, "sector", ("IN", "f9"), 60, False, read)
@@ -203,7 +204,7 @@ def test_a_company_read_is_written_behind_the_page(usage, monkeypatch):
 
 def test_past_the_cap_the_page_hears_so_at_once(usage, monkeypatch):
     monkeypatch.setattr(routes, "hub", SimpleNamespace(company=lambda r, s: pytest.fail("no read past the cap")))
-    for i in range(2):
+    for i in range(5):                          # (updated on purpose, FREE-TIER: Free's 5 a day)
         routes.ai_call(FREE, "sector", ("IN", f"y{i}"), 60, False, read)
     got = json.loads(routes.company_ai("IN", "WIPRO", False, True, FREE).body)
     assert got["unavailable"] and got["code"] == "research_ai_limit"
@@ -218,7 +219,8 @@ def test_account_shows_the_days_reads_against_the_cap(monkeypatch):
         free = c.get("/me", headers=headers("free-token")).json()["usage"]
         pro = c.get("/me", headers=headers("pro-token")).json()["usage"]
         owner = c.get("/me", headers=headers("admin-token")).json()["usage"]
-        assert free["ai_reads_limit"] == settings.RESEARCH_AI_PER_DAY and free["ai_reads_today"] == 0
+        # (updated on purpose, FREE-TIER: Free's own 5 a day, not RESEARCH_AI_PER_DAY, which is Basic's)
+        assert free["ai_reads_limit"] == plans.PLANS["free"]["ai_reads_per_day"] == 5 and free["ai_reads_today"] == 0
         assert pro["ai_reads_limit"] is None and owner["ai_reads_limit"] is None and owner["ai_reads_cap_for"] == "admin"
     finally:
         w["close"]()
@@ -226,11 +228,13 @@ def test_account_shows_the_days_reads_against_the_cap(monkeypatch):
 
 def test_plans_page_copy_says_the_cap():
     import re
-    ts = (ROOT / "frontend" / "src" / "lib" / "plans.ts").read_text(encoding="utf-8")
+    # (updated on purpose, Release 43) LIMITS is in planCore.ts (the landing page's plan file), the rows in plans.ts
+    ts = "\n".join((ROOT / "frontend" / "src" / "lib" / f).read_text(encoding="utf-8") for f in ("planCore.ts", "plans.ts"))
     limits = ts[ts.index("export const LIMITS"):ts.index("export const WHO")]
     shown = dict(re.findall(r"\b(free|basic|pro): \{[^}]*?ai_reads_per_day: (null|\d+)", limits, re.S))
     want = {p: plans.ai_reads_per_day(p) for p in plans.PLANS}
-    assert {p: (None if v == "null" else int(v)) for p, v in shown.items()} == want == {"free": 60, "basic": 60, "pro": None}
+    # (updated on purpose, FREE-TIER: Free's 60 became 5)
+    assert {p: (None if v == "null" else int(v)) for p, v in shown.items()} == want == {"free": 5, "basic": 60, "pro": None}
     assert '"ai_reads_per_day", "Fresh AI reads a day' in ts
 
 

@@ -5,16 +5,20 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { deepDiveLimitLine } from "../lib/account";
+import { deckLock, deepDiveLimitLine } from "../lib/account";
+import { SampleDeckLink } from "../components/SampleDeck";
 import { asOf, CRORE, inrCompact, marketTz, pct, safeHref, fmtDate } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { marginText, millionsOf, scaleFor, usdAmount } from "../lib/research";
 import { Panel, TrendBars } from "../components/Research";
 import { BizUpdatesPanel } from "../components/BizUpdates";
+import { CompanyTables } from "../components/CompanyTables";
+import { ReportScope } from "../components/kit/ReportFigure";
 import { Badge, Card, CardHead, CsvButton, DataTable, ErrorState, Meter, PageHeader, PlanNote, Select, Signed, Skeleton, Stat, StatRow, type Column } from "../components/kit";
 import { AlertButton } from "../components/AlertForm";
 import { SaveButton } from "../components/SavedSearches";
 import { ShareCompanyButton } from "../components/ShareCompany";
+import { ShareResearchButton } from "../components/ShareResearch";
 import { track } from "../lib/analytics";
 import { CHECK_BADGE, checkCountsLine } from "../lib/checklistText";
 
@@ -270,14 +274,21 @@ export function DeepDivePage() {
         </>} />
       <div className="k-row">
         {v && <>
+          {/* FREE-TIER: no decks on Free: a locked button that says where they are, and the sample deck beside it */}
+          {u?.deck_limit === 0 ? <>
+            <Link className="btn quiet sm" to="/plans" title={deckLock()} data-testid="deck-locked">🔒 Slides: on Basic</Link>
+            <SampleDeckLink className="btn quiet sm" label="Sample deck" />
+          </> : <>
           <button className="btn quiet sm" disabled={!!decking} onClick={() => downloadDeck("pptx")} title="Numbers, business, plans, report card and checklist as slides, with sources">{decking === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button>
           <button className="btn quiet sm" disabled={!!decking} onClick={() => downloadDeck("pdf")} title="The same slides as a PDF, to read or share anywhere">{decking === "pdf" ? "Making the PDF…" : "Slides (PDF)"}</button>
+          </>}
           {/* EXPORT: every reported year's figures, as numbers in the reporting unit (the company page's 10 years) */}
           {(n?.years.length ?? 0) > 0 && <CsvButton name={`${sym} figures by year`} label="every reported year's figures" text="Figures (CSV)" rows={n!.years}
             columns={yearCsv(n!.unit)} />}
         </>}
         <AlertButton region={region} symbol={sym} />
         <ShareCompanyButton region={region} symbol={sym} />
+        {v && <ShareResearchButton kind="deep" region={region} target={sym} label="this deep dive" />}
         {v && <Link className="btn quiet sm" to="/research/investor">Watchlist at a glance →</Link>}
       </div>
       {limited && <PlanNote>{error}</PlanNote>}
@@ -288,6 +299,7 @@ export function DeepDivePage() {
       )}
       {v && n && (
         <>
+          <ReportScope section="Growth and margins" source="The company's reported annual and quarterly results">
           <Panel title="Growth and margins" info="Compound annual growth from the reported annual sales and net profit. EBITDA margin is operating profit before depreciation, interest and tax, as a share of sales.">
             {(() => {
               // a table: Sales, Net profit and earnings per share by the 3 and 5 years' rate a year; a reason a rate is blank is a numbered note under it
@@ -321,8 +333,10 @@ export function DeepDivePage() {
                   { key: "p", header: "Net profit", numeric: true, cell: (q) => qS.fmt(q.profit) }]} />
             )}
           </Panel>
+          </ReportScope>
 
           {v.valuation && (
+            <ReportScope section="How it's valued" source="The latest price and the company's reported figures">
             <Panel title="How it's valued" info={v.valuation.why}>
               <div className="dd-fit"><DataTable label="How it's valued" rows={[
                 { k: "v", name: v.valuation.name, v: v.valuation.value == null ? "–" : `${v.valuation.value.toFixed(1)}×` },
@@ -332,7 +346,11 @@ export function DeepDivePage() {
                 columns={[{ key: "n", header: "Measure", rowHeader: true, cell: (r) => r.name }, { key: "v", header: "Value", numeric: true, cell: (r) => <b>{r.v}</b> }]} /></div>
               <p className="k-note">{v.valuation.why} A number to compare with similar companies, not a verdict on the price.</p>
             </Panel>
+            </ReportScope>
           )}
+
+          {/* lane c-f2: the same peers, statements and shareholding cards as the company page */}
+          <CompanyTables region={region} symbol={v.symbol} ids="dd" />
 
           {v.checklist && <ChecklistPanel c={v.checklist} />}
 
@@ -346,6 +364,7 @@ export function DeepDivePage() {
               <p className="k-small k-muted">This is a bank or lender: its revenue is mostly interest, and lending runs through its cash flow, so capex, free cash flow, operating margin and debt to equity don't describe it. The checklist uses return on equity instead.</p>
             </Panel>
           ) : (
+          <ReportScope section="Capex and cash" source={n.capex_reported ? "The company's reported cash flow statement" : "The company's reported balance sheet and cash flow"}>
           <Panel title="Capex and cash" info={n.capex_reported
             ? `Capex as the company reports it in its cash flow statement (purchases of property, plant and equipment). Free cash flow is cash from operations minus capex. Figures in ${capS.unit}.`
             : `Capex is estimated from the balance sheet: the rise in fixed assets and work in progress, plus the year's depreciation. Free cash flow is cash from operations minus that capex. Figures in ${capS.unit}.`}>
@@ -356,6 +375,7 @@ export function DeepDivePage() {
                 { key: "cs", header: "Capex / sales", numeric: true, cell: (y) => pc(y.capex_pct_sales) }, { key: "cfo", header: "Cash from operations", numeric: true, cell: (y) => capS.fmt(y.cfo) },
                 { key: "f", header: "Free cash flow", numeric: true, cell: (y) => capS.fmt(y.fcf) }, { key: "d", header: "Debt", numeric: true, cell: (y) => capS.fmt(y.debt) }]} />
           </Panel>
+          </ReportScope>
           )}
 
           <Card>

@@ -1270,6 +1270,8 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .mc-ev { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 10px; align-items: start; }
 .mc-ev.past { opacity: .6; }
 .mc-ev-title { font-weight: 500; overflow-wrap: anywhere; }
+/* an earnings call's line ends with the webcast address from its filing, one long word: it breaks rather than push a phone's page sideways (ui-lint R10) */
+.mc-ev-body > .k-note { overflow-wrap: anywhere; }
 .mc-amount { color: var(--muted); font-weight: 400; }
 .mc-cat { justify-self: start; font-size: 11.5px; padding: 2px 8px; }
 .mc-tax { background: var(--orange-soft); color: var(--orange-ink); }
@@ -2290,10 +2292,11 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
   color: var(--ink-2); font-size: var(--t-label); font-weight: 500; text-decoration: none; white-space: nowrap; }
 .hub-tab:hover { border-color: var(--ink); color: var(--ink); }
 .hub-tab.active { background: var(--ink); border-color: var(--ink); color: var(--on-ink); font-weight: 600; }
-/* a laptop's row is ~930px: the Calendar's six tabs and its longest breadcrumb ("Invest › Calendar › Corporate actions") left
+/* a laptop's row is ~900px: the Calendar's six tabs and its longest breadcrumb ("Invest › Calendar › Corporate actions") left
    22px, so a hair's difference in text width put the tabs on a second line and the title 40px lower (CI, 30 Oct). Slimmer
-   tabs leave them ~70px */
-@media (min-width: 901px) and (max-width: 1440px) { .hub-tabs { gap: 4px; } .hub-tab { padding: 0 11px; } }
+   tabs left them ~70px. Release 43 gave the Calendar a seventh tab and Companies a fifth and sixth (90px and 135px over):
+   the tabs where the entry's name says the rest have a shorter name (NavPage.tab) and the tabs are a little slimmer still */
+@media (min-width: 901px) and (max-width: 1440px) { .hub-tabs { gap: 4px; } .hub-tab { padding: 0 9px; } }
 .hub-tab .side-lock { margin-left: 0; }
 .hub-tab.active .side-lock { background: transparent; color: inherit; }
 
@@ -3113,3 +3116,28 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .nw-head { grid-template-columns: 1fr; gap: 16px; }
   .nw-head-figure { font-size: 28px; }
 }
+
+/* f5: the Calendar's earnings calls (pages/EarningsCallsPage.tsx) and the business groups (pages/BusinessGroupsPage.tsx) */
+.calls-links { display: inline-flex; flex-wrap: wrap; gap: var(--s1) var(--s3); }
+.calls-when { display: inline-flex; flex-direction: column; }
+.groups-rule { margin: 0 0 var(--s2); padding-left: var(--s5); display: grid; gap: var(--s1); }
+/* "Report an error in this figure": a small flag after a row's name or a figure's label. On a screen with a pointer it shows when the
+ * row or figure is hovered or the flag has focus; on a touch screen it stays, faint, so it can be tapped. */
+.k-report {
+  display: inline-grid; place-items: center; width: 24px; height: 24px; margin: -4px 0 -4px 2px; padding: 0; vertical-align: middle;
+  border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; opacity: 0;
+  transition: opacity .12s ease;
+}
+.k-report svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.k-report:hover { color: var(--ink); background: var(--chip); }
+.k-report:focus-visible { opacity: 1; }
+tr:hover .k-report, tr:focus-within .k-report, .k-stat:hover .k-report, .k-stat:focus-within .k-report { opacity: .85; }
+/* in a table the flag sits at the right end of the row's name cell, so it never wraps a short name ("Div yield") onto two lines */
+.k-tbl-wrap .k-table th[scope="row"]:has(> .k-report) { position: relative; padding-right: 34px; }   /* (a phone's sticky first column stays sticky: its rule is stronger) */
+th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
+/* a touch screen's flag is 32px tall like every other control on a phone (stale.spec's tap check); its width and place beside the name are
+   the same, and its margins keep the row's height */
+@media (hover: none) { .k-report { opacity: .55; height: 32px; margin: -8px 0 -8px 2px; } th > .k-report { margin: -16px 0 0; } }
+@media print { .k-report { display: none; } }
+/* f4: the workbook's plan note on its own line under the theme's download buttons (components/ThemeChanges.tsx) */
+.theme-wb-lock { flex-basis: 100%; order: 1; }

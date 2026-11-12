@@ -31,16 +31,21 @@ test.describe("a visitor in India", () => {
 test("plans: short cards, the full comparison, and backtests (not experiments)", async ({ page }, info) => {
   const errors = await open(page, "/plans", "Compare the plans");
   // R11: five short lines a card (lib/plans.ts KEY), the long lists in the table below
-  for (const line of ["Everything in Free, with no ads", "Everything in Basic", "10 backtests and 10 AI strategy builds a month",
-    "2 company deep dives and 1 slide deck a month", "Indian F&O in notebooks, and options on your own rules' signals"]) {
+  // (updated on purpose, FREE-TIER: Free's card says its smaller counts, and a deep dive and its daily AI reads in place of a deck)
+  for (const line of ["Everything in Free, with no ads", "Everything in Basic", "5 backtests and 5 AI strategy builds a month",
+    "1 company deep dive a month, 5 fresh AI reads a day", "Indian F&O in notebooks, and options on your own rules' signals"]) {
     await expect(page.locator(".k-plans li", { hasText: line })).toBeVisible();
   }
   for (const card of await page.locator(".k-plans > .k-card").all()) expect(await card.locator("li").count()).toBe(5);
   expect(await page.locator("main").innerText()).not.toMatch(/experiment/i);
+  await expect(page.getByTestId("sample-deck-line")).toContainText("Slide decks are on Basic and Pro.");      // FREE-TIER: and the sample deck
   const table = page.locator("#compare");        // one table for each group (how much, what each plan adds, on every plan), each with the plan names on top
   const row = (label: string) => table.locator("tr", { has: page.getByText(label, { exact: true }) }).locator("td");
-  await expect(row("Backtests a month, each with a verdict")).toHaveText(["Backtests a month, each with a verdict", "10", "100", "Unlimited"]);
-  await expect(row("Company deep dives a month")).toHaveText(["Company deep dives a month", "2", "15", "Unlimited"]);
+  // (updated on purpose, FREE-TIER: Free's 5 backtests, 1 deep dive, no decks but the sample deck, and 1 new theme a month)
+  await expect(row("Backtests a month, each with a verdict")).toHaveText(["Backtests a month, each with a verdict", "5", "100", "Unlimited"]);
+  await expect(row("Company deep dives a month")).toHaveText(["Company deep dives a month", "1", "15", "Unlimited"]);
+  await expect(row("New themes mapped a month")).toHaveText(["New themes mapped a month", "1", "10", "Unlimited"]);
+  await expect(row("Tax report downloads: CSV and PDF")).toHaveText(["Tax report downloads: CSV and PDF", "–", "✓", "✓"]);
   await expect(row("Trades the journal keeps")).toHaveText(["Trades the journal keeps", "50", "Unlimited", "Unlimited"]);
   await expect(row("All 20+ indicators in strategy rules")).toHaveText(["All 20+ indicators in strategy rules", "–", "✓", "✓"]);
   await expect(row("Trade notifications")).toHaveText(["Trade notifications", "–", "✓", "✓"]);
@@ -200,7 +205,8 @@ test("the menu (IA-1): a space's short list of entries, the one you are in lit, 
   if (phone) await page.getByRole("button", { name: "Close menu" }).click();
   await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Market today" }).click();
   await expect(page).toHaveURL(/\/invest\/g\/market-today$/);
-  await expect(page.getByTestId("group-card")).toHaveCount(6);       // Mood, Breadth, Heatmap (L4), Sectors, Flows, Today's brief
+  // (updated on purpose: Market movers is a new page beside the Heatmap)
+  await expect(page.getByTestId("group-card")).toHaveCount(7);       // Mood, Breadth, Heatmap (L4), Movers, Sectors, Flows, Today's brief
   // the old addresses still work, the old groups' pages too
   await page.goto("/research/scans");
   await expect(page).toHaveURL(/\/research\/scan$/);

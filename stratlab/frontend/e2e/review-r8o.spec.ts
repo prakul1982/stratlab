@@ -76,7 +76,8 @@ test("R8O-002: when the day's cap is the reason, the mood says so and offers no 
 test("R8O-002: Account says the day's fresh AI reads against the cap", async ({ page }) => {
   const errors = await open(page, "/account", visitor);
   const row = page.locator(".k-rows > div", { hasText: "Fresh AI reads today" });
-  await expect(row).toContainText(/\d+ of 60 \(starts again at midnight India time\)/, { timeout: 30_000 });
+  // (updated on purpose, FREE-TIER: Free's fresh AI reads are 5 a day now, Basic keeps 60; the visitor here is on Free)
+  await expect(row).toContainText(/\d+ of 5 \(starts again at midnight India time\)/, { timeout: 30_000 });
   expect(errors).toEqual([]);
 });
 

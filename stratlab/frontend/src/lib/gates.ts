@@ -25,19 +25,27 @@ export const PAGE_GATES: Record<string, Gate> = {
   "/invest/etf-gaps": { feature: "etf_gaps", whole: false },
   "/invest/margin-funding": { feature: "mtf", whole: false },
   "/invest/ipos": { feature: "ipo_alerts", whole: false },
+  "/invest/movers": { feature: "movers", whole: false },
   // on Free these pages hold nothing else (each company's own updates and holders are on its company page), so the menu
   // marks them locked like the scan (DP1-019: no badge, then a page blank under its banner)
   "/invest/business-updates": { feature: "biz_updates", whole: true },
   "/invest/holders": { feature: "holders", whole: true },
+  // this week's calls and every group's members are for everyone; the full calendar and the groups' figures are Basic (f5)
+  "/research/earnings-calls": { feature: "earnings_calls", whole: false },
+  "/invest/groups": { feature: "group_figures", whole: false },
   "/money/net-worth": { feature: "networth", whole: false },
   "/money/mutual-funds": { feature: "mf_gains", whole: false },
   "/money/tax-tools": { feature: "tax_tools", whole: false },
   "/money/us-tax": { feature: "us_tax", whole: false },
   "/money/itr": { feature: "itr_export", whole: false },
+  // FREE-TIER: the tax report on screen is for everyone; its CSV and PDF downloads are Basic's
+  "/tax-report": { feature: "tax_export", whole: false },
   "/money/sip-test": { feature: "sip_luck", whole: false },
   "/money/rates": { feature: "rates_slab", whole: false },
   "/money/calendar": { feature: "money_reminders", whole: false },
   "/options": { feature: "options", whole: false },
+  // the filings search: Free searches by company and sees the first 3 results; every result and the filters are Basic
+  "/research/search": { feature: "doc_search", whole: false },
 };
 
 /** The paid part as a page holds it, where the plan's row names more than that page has (LIVE7A-018: Flows' lock named "derivatives
@@ -52,7 +60,8 @@ export const lockWhat = (path: string, feature: string): string => PAGE_WHAT[pat
 /** The paid part of a page that is free in the main, in a few words for its card's tag: "Pro for advance tax" (LIVE1B-022: "Pro for
  * part" did not say which part). */
 export const PART_WORDS: Record<string, string> = {
-  tax_tools: "advance tax", us_tax: "rupee workings", itr_export: "the downloads", networth: "history", mf_gains: "gains by year", journal: "the checks",
+  earnings_calls: "the full calendar", group_figures: "the figures", tax_tools: "advance tax", us_tax: "rupee workings", itr_export: "the downloads", tax_export: "the downloads", networth: "history", mf_gains: "gains by year", journal: "the checks",
+  doc_search: "every result and filter",
 };
 
 /** An IPO's own page holds the summary of its offer document (Basic); the rest of the page is for everyone. */
@@ -61,10 +70,14 @@ export const IPO_PAGE_GATE: Gate = { feature: "ipo_summary", whole: false };
 /** Paid features that live inside other pages, not a page of their own (where to find them, for the test's sake). */
 export const ELSEWHERE: Record<string, string> = {
   indicators: "the rules editor", fno: "Indian F&O instruments", group_live: "paper trading a group", options_signal: "the options builder",
-  fast_entries: "group paper trading", alerts: "Settings", daily_report: "Settings", export: "a notebook's More menu",
+  fast_entries: "group paper trading", alerts: "Settings", daily_report: "Settings", export: "a notebook's More menu (and a company page's tables)",
   newsletter: "Settings", dividends: "Tax tools (by company)", mf_costs: "Mutual funds", mf_behaviour: "Mutual funds", options_whatif: "the options builder",
   vix_filter: "the options builder", strike_rules: "the options builder", loan_check: "Net worth",
   assistant: "Connect an AI assistant (its own plan note)", ipo_summary: "an IPO's own page (its gate is below)",
+  supply: "company page", supply_pro: "themes",
+  doc_search_all: "Search filings (every year, and the CSV)",
+  tables: "a company page's Peers, Financial statements and Shareholding history",
+  watchlist_import: "Import a watchlist (Market Watch and the watchlist page)",
 };
 
 export const featureName = (feature: string) => FLAGS.find(([f]) => f === feature)?.[1] ?? feature;

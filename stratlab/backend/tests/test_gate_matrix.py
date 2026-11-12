@@ -89,6 +89,19 @@ ROUTES = [
     ("journal", "get", "/trade/journal/compare?tag=x&session=s1", None),
     ("ipo_alerts", "put", "/invest/ipos/alerts", {"on": True, "events": ["open"], "markets": ["IN"], "sme": False}),
     ("ipo_summary", "post", "/invest/ipos/in-none/summary", None),
+    # (updated on purpose, f5) the full earnings-call calendar: the calls held, the filters and your stocks
+    ("earnings_calls", "get", "/research/earnings-calls?when=past", None),
+    ("earnings_calls", "get", "/research/earnings-calls?scope=mine", None),
+    # (updated on purpose, lane b1: the filings search's filters are Basic, its CSV of hits Pro; Free still searches, by company only)
+    ("doc_search", "get", "/research/docs/search?q=order&sector=Banks", None),
+    ("doc_search_all", "get", "/research/docs/export?q=order", None),
+    # (updated on purpose: lane c-f2's downloads of a company's tables)
+    ("export", "get", "/research/company/IN/TCS/peers.csv", None),
+    ("export", "get", "/research/company/IN/TCS/statements.xlsx", None),
+    # (updated on purpose, f3: the watchlist file import is Basic)
+    ("watchlist_import", "post", "/watch/import/file", {"data": "U3ltYm9sClRDUwo=", "filename": "list.csv"}),
+    # (updated on purpose: lane b2's new Pro feature, the customer and supplier links as a CSV)
+    ("supply_pro", "get", "/research/links/IN/LT/csv", None),
 ]
 
 
@@ -128,6 +141,18 @@ def test_every_paid_feature_is_refused_somewhere_on_the_server():
                  "journal": "journal view and /trade/journal/compare", "mf_costs": "fund costs view", "etf_gaps": "ETF gap alerts",
                  "biz_updates": "business update views and alert", "holders": "holder search", "stock_futures": "history views and MWPL alert",
                  "mtf": "history views and alert", "mf_behaviour": "fund behaviour view", "sip_luck": "dip rules in the SIP test",
-                 "rates_slab": "rates at your own slab", "loan_check": "loan check view"}
+                 "rates_slab": "rates at your own slab", "loan_check": "loan check view",
+                 # (updated on purpose: a new feature) Free gets the movers' top 5 rather than a refusal (tests/test_movers.py)
+                 "movers": "the movers' full lists and filters",
+                 # (updated on purpose, f5) the groups' figures are held back from the answer, not refused (test_f5_groups.py)
+                 "group_figures": "group pages' figures",
+                 # (updated on purpose) trimmed rather than refused: tests/test_company_tables.py
+                 "tables": "peers, statements and shareholding views",
+                 # (updated on purpose, FREE-TIER) the tax report's downloads: tests/test_free_tier.py checks the 402
+                 "tax_export": "GET /tax/export",
+                 # f4 (test_f4_theme_changes): the whole change log on the theme's dive, and GET /research/theme-dive/workbook
+                 "theme_changes": "the theme dive's change log", "theme_workbook": "GET /research/theme-dive/workbook",
+                 # (updated on purpose: lane b2) Free sees the latest links on the company card, Basic every one (test_supply_links)
+                 "supply": "company card rows beyond the Free teaser"}
     covered = {r[0] for r in ROUTES} | set(elsewhere)
     assert covered == set(FEATURES), set(FEATURES) ^ covered

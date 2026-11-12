@@ -169,11 +169,14 @@ def test_layers_are_one_scheme_the_maps_own_with_the_rest_in_the_appendix():
     v, slides = deck_of(region, m, f)
     layer_titles = [s.title for s in core(slides) if re.match(r"Layer \d+ ·", s.title)]
     # changed on purpose (R21): the two companies no layer fits are one "Other ..." layer, never the exchange's industry beside the map's
-    assert layer_titles == ["Layer 1 · Deposit gathering", "Layer 2 · Retail and SME lending", "Layer 3 · Other private bank companies"]
+    # lane d1 (updated on purpose): the "Other" group of two is rows of "Smaller layers"
+    assert layer_titles == ["Layer 1 · Deposit gathering", "Layer 2 · Retail and SME lending"]
+    assert "Other private bank companies" in [r[0] for s in slides if s.title.startswith(deck.SMALL_TITLE) for b in s.blocks if b["kind"] == "table" for r in b["rows"]]
     assert "Private Sector Bank" not in [r[0] for r in table_of(slides, "The value chain by layer")["rows"]]
     t = texts(slides)
     # R19: the unplaced companies are a count and their names (up to five), and rows of the appendix's one table; no list page of their own
-    assert "Companies of the theme's industries whose own words fit none of the map's layers." in t
+    # lane d1 (updated on purpose): the "Other" group of two has no page of its own, so its page's note isn't printed; its rows are on
+    # "Smaller layers" (above)
     figs = [r for s in slides if s.title.startswith("Every company's figures") for b in s.blocks if b["kind"] == "table" for r in b["rows"]]
     assert {r[0] for r in figs} >= {f"Private Lender {i} Ltd" for i in range(6, 8)}
     assert "No listed company is shown for Fee and distribution income:" in t and "shown for , " not in t      # never an empty name in a list

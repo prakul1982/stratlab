@@ -2,7 +2,7 @@
  * live apart from lib/ads.ts: that file is read by the consent banner on every public page (a policy page too), and the plans file with its
  * 14 kB of prices and feature lists would have come with it (R5V-020: a policy page stays under 400 KB of JavaScript). Only the app's slot, in the
  * signed-in app, draws these. */
-import { LIMITS } from "./plans";
+import { LIMITS } from "./planCore";
 
 export interface HouseCard { id: "plans" | "luck" | "brief"; title: string; text: string; to: string; cta: string }
 /** The cards that hold a Free account's slot while ads are off: StratLab's own pages, in plain facts. */

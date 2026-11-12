@@ -1,6 +1,7 @@
 import { Children, createContext, useContext, useLayoutEffect, useRef, type ReactNode } from "react";
 import { changeDir, isOneWord, longRupees, minusNode } from "../../lib/format";
 import { useNoOrphan } from "../../lib/noOrphan";
+import { ReportFigure } from "./ReportFigure";
 
 /* A big figure never breaks inside its digits (LIVE1B-019: "₹6,85,30,\n01,63,68\n0" in a 125px tile). A figure that is one word
  * is kept on one line and its type shrinks, down to 62% of its size, until it fits its box (a rupee amount of ₹100 crore or more
@@ -69,7 +70,7 @@ export function Stat({ label, value, note, delta, tone, item, testId }: { label:
   }, [one, text]);
   return (
     <div className="k-stat" role={listed ? "listitem" : undefined} data-testid={testId}>
-      <span className="k-stat-k">{label}</span>
+      <span className="k-stat-k">{label}<ReportFigure label={textOf(label)} value={text ?? textOf(value)} /></span>
       <span ref={v} className={`k-stat-v${tone ? ` k-${tone}` : ""}${one ? " one" : ""}`} title={short ? text ?? undefined : undefined}>
         {short ? <><span aria-hidden="true">{short}</span><span className="sr-only">{text}</span></> : minusNode(value)}
       </span>

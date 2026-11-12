@@ -27,7 +27,7 @@ export function HubTabs({ at, path }: { at: Located; path: string }) {
         return (
           <Link key={t.to} to={t.to} className={`hub-tab${here ? " active" : ""}`} aria-current={here ? "page" : undefined}
             title={off ? `${t.line} (${gate!.whole ? "" : "part of it "}on the ${plan} plan)` : t.line}>
-            {t.label}{locked && <span className="side-lock" data-plan={plan} aria-hidden="true" />}
+            {t.tab ?? t.label}{locked && <span className="side-lock" data-plan={plan} aria-hidden="true" />}
           </Link>
         );
       })}

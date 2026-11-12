@@ -114,7 +114,26 @@ APPROVED_LAYER = {
 # words describe another business are dropped from the theme, never placed in "Other" (theme_base.without_off_industry): solar makers filed
 # as semiconductors, propane distributors filed as retail. "theme:symbol" -> why
 DROPPED = {**{f"semis:{s_}": "solar products and no chips, filed as semiconductors: another business" for s_ in ("TE", "TYGO", "FTCI", "MAXNQ", "DQ", "ASTI")},
-           **{f"retail:{s_}": "propane distribution and no stores, filed as retail: another business" for s_ in ("SPH", "FGPR")}}
+           **{f"retail:{s_}": "propane distribution and no stores, filed as retail: another business" for s_ in ("SPH", "FGPR")},
+           **{f"retail:{s_}": 'filed under retail, its own words describe another business (pawnbroking, IT services to business, a blank-check company, a bank, payments or travel): R43, theme_check.OFF_INDUSTRY' for s_ in ('CDW', 'EZPW', 'FBCD', 'FCFS', 'IPSI', 'NSIT', 'TMS')}}
+# lane d1 (R43, the outside review of the live Release 41 decks, approved on purpose): the moves its rules make on this older fixture,
+# each with why; kept apart from APPROVED_LAYER so the earlier lanes' checks of their own moves stand
+_D1_NARROW = 'R43 (lane d1, approved on purpose): the largest layer of its family took it by its industry alone, but that layer\'s own name states a kind of business its own words don\'t say, nor any word of its description, and it is no catch-all of its family (by_model.home_of `narrow`): the layer of its family it fits, else "Other"'
+_D1_GROUP = 'R43 (lane d1, approved on purpose): the largest\'s name doesn\'t describe it (by_model.home_of `narrow`); with the like of it of its official industry in "Other" it makes a layer of that industry (INDUSTRY_GROUP_MIN)'
+D1 = {
+    'auto:ASAHIINDIA': ('Other', _D1_NARROW),
+    'auto:STUDDS': ('Two-wheeler makers', _D1_NARROW),
+    'bank:TMB': ('High-yield retail and microfinance lenders', _D1_NARROW),
+    'defence:JAYKAY': ('Other', _D1_NARROW),
+    'defence:SIGMAADV': ('Other', _D1_NARROW),
+    'defence:UNIMECH': ('Specialty materials and forgings', _D1_NARROW),
+    'metals:20MICRONS': ('Other', _D1_NARROW),
+    'metals:GOACARBON': ('Other', _D1_NARROW),
+    'metals:MMP': ('Other', _D1_NARROW),
+    'retail:BWMX': ('Other', _D1_NARROW),
+    'retail:HEPS': ('Other', _D1_NARROW),
+}
+
 
 
 def replay_theme(t) -> dict:
@@ -156,7 +175,7 @@ def test_no_company_in_any_theme_changes_its_layer_unless_approved():
         got = replay_theme(t)
         for c in t["companies"]:
             k = f"{t['key']}:{c['s']}"
-            want = None if k in DROPPED else APPROVED_LAYER[k][0] if k in APPROVED_LAYER else c["e"]
+            want = None if k in DROPPED else D1[k][0] if k in D1 else APPROVED_LAYER[k][0] if k in APPROVED_LAYER else c["e"]          # lane d1: D1 (updated on purpose)
             if got.get(c["s"]) != want:
                 moved.append(f"{k} ({c['n']}): expected {want!r}, got {got.get(c['s'])!r}")
     assert not moved, "a rule change moved these companies to another layer (edit APPROVED_LAYER, with the reason, if on purpose):\n" + "\n".join(moved)

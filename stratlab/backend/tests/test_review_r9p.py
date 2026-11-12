@@ -199,7 +199,8 @@ def test_me_gives_the_viewed_plans_ai_caps_to_the_owner(monkeypatch):
             return c.get("/me", headers=h).json()["usage"]
         free, basic, pro = usage("free"), usage("basic"), usage("pro")
         assert free["ai_reads_limit"] is None and free["ai_reads_cap_for"] == "admin"                  # not enforced for the owner
-        assert free["ai_reads_plan_limit"] == settings.RESEARCH_AI_PER_DAY == basic["ai_reads_plan_limit"]
+        # (updated on purpose, FREE-TIER: Free's own 5 a day; RESEARCH_AI_PER_DAY is Basic's)
+        assert free["ai_reads_plan_limit"] == 5 and basic["ai_reads_plan_limit"] == settings.RESEARCH_AI_PER_DAY
         assert pro["ai_reads_plan_limit"] is None
         assert free["ai_builds_per_day"] is None and basic["ai_builds_per_day"] is None
         assert pro["ai_builds_per_day"] == main.AI_BUILDS_PER_DAY == 200                              # the Plans card's "up to 200 a day"

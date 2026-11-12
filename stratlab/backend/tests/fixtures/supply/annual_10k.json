@@ -1,0 +1,213 @@
+{
+ "source": "Sentences copied from each company's 2025 annual report (Form 10-K) on the SEC's archive, at the url given; expected links labelled by hand.",
+ "docs": [
+  {
+   "filer": "G Iii Apparel Group Ltd /De/",
+   "ticker": "GIII",
+   "url": "https://www.sec.gov/Archives/edgar/data/821002/000155837025003540/giii-20250131x10k.htm",
+   "text": "Our owned brands accounted for approximately 52% of our net sales in fiscal 2025, 47% of our net sales in fiscal 2024 and 41% of our net sales in fiscal 2023, with the remainder of net sales in each year driven by our licensed businesses. ​ We continue to expand our portfolio of brands through licenses, acquisitions and joint ventures as we extend our global reach and product offerings. Sales of licensed products accounted for 48.0% of our net sales in fiscal 2025, 53.4% of our net sales in fiscal 2024 and 58.6% of our net sales in fiscal 2023. ​ Our key licensed brands include: ​ Calvin Klein ​ Beginning in 2005, we had licenses for Calvin Klein men's and women's outerwear and subsequently added licenses for women's suits, dresses, women's performance wear, women's sportswear, men's and women's swimwear, women's handbags, small leather goods, luggage and jeanswear in the United States and Canada. We also distribute our products through our retail stores and through digital channels for the DKNY, Donna Karan, Vilebrequin, Karl Lagerfeld, Karl Lagerfeld Paris, G.H. Bass, Wilsons Leather and Sonia Rykiel businesses, as well as the digital channels of our retail partners such as Macy's, Nordstrom, Amazon, Fanatics, Zalando and Zappos. ​ Sales to our ten largest customers accounted for 69.6% of our net sales in fiscal 2025. Sales to Macy's, which includes sales to its Macy's and Bloomingdale's store chains, as well as through macys.com, accounted for an aggregate of 18.0% of our net sales in fiscal 2025. Sales to TJX Companies accounted for an aggregate of 13.2% of our net sales in fiscal 2025. In addition, sales to Ross Stores accounted for an aggregate of 12.6% of our net sales in fiscal 2025. The loss of any of these customers or a significant reduction in purchases by our largest customers could have a material adverse effect on our results of operations. ​ A substantial majority of our sales are made in the United States. We also sell our products to customers in Europe, Canada, the Far East, the Middle East, Central America, South America and Australia, which, on a combined basis, accounted for approximately 22.6% of our net sales in fiscal 2025, 22.5% of our net sales in fiscal 2024 and 19.1% of our net sales in fiscal 2023. ​ Our products are sold primarily through our direct sales force along with our principal executives who are also actively involved in the sale of our products. Net sales during the third and fourth quarters accounted for approximately 61% of our net sales in fiscal 2025, 59% of our net sales in fiscal 2024 and 60% of our net sales in fiscal 2023. In fiscal 2025, net sales of licensed product accounted for 48.0% of our net sales compared to 53.4% of our net sales in fiscal 2024 and 58.6% of our net sales in fiscal 2023. ​ We are generally required to achieve specified minimum net sales, make specified royalty and advertising payments and receive prior approval from the licensor as to all design and other elements of each product prior to production. To the extent that any of our key customers reduces the number of its vendors and, as a result, reduces or eliminates purchases from us, there could be a material adverse effect on us. ​ We have significant customer concentration, and a reduction in purchases or the loss of one of our large customers could adversely affect our business. ​ Our ten largest customers, all of which are department stores or off price accounts, accounted for approximately 69.6% of our net sales in fiscal 2025, with the Macy's Inc. group accounting for approximately 18.0% of our net sales in fiscal 2025. TJX Companies accounted for approximately 13.2% of our net sales in fiscal 2025.",
+   "expect": [
+    [
+     "customer",
+     "Macy's"
+    ],
+    [
+     "customer",
+     "TJX Companies"
+    ],
+    [
+     "customer",
+     "Ross Stores"
+    ]
+   ]
+  },
+  {
+   "filer": "Shoe Carnival Inc",
+   "ticker": "SCVL",
+   "url": "https://www.sec.gov/Archives/edgar/data/895447/000095017025043195/scvl-20250201.htm",
+   "text": "E-commerce sales represented approximately 10% of our merchandise sales in each of Fiscal 2024, Fiscal 2023 and Fiscal 2022. Nike, Inc. (\"Nike\"), Skechers U.S.A., Inc. (\"Skechers\") and Crocs, Inc. (\"Crocs\") collectively accounted for approximately 48% of our Net Sales in Fiscal 2024 and 45% of our Net Sales in Fiscal 2023. Nike accounted for approximately 24% of our Net Sales in Fiscal 2024, 20% in Fiscal 2023 and 14% in Fiscal 2022; Skechers accounted for approximately 13% of our Net Sales in Fiscal 2024, 14% in Fiscal 2023 and 13% in Fiscal 2022; and Crocs accounted for approximately 11% of our Net Sales in both Fiscal 2024 and Fiscal 2023. Television, radio, print media (including inserts, direct mail and newspaper advertising) and outdoor advertising accounted for the balance of our total advertising investment. We rely on imported merchandise to sell in our stores. We depend on our key suppliers for merchandise and advertising support and the loss of any of our key suppliers could adversely affect our business. Three branded suppliers, Nike, Inc., Skechers U.S.A., Inc. and Crocs, Inc., collectively accounted for approximately 48% of our Net Sales in Fiscal 2024 and 45% of our Net Sales in Fiscal 2023. Nike, Inc. and Skechers U.S.A., Inc. collectively accounted for approximately 27% of our Net Sales in Fiscal 2022. We rely on our information technology systems in operating and monitoring major aspects of our business, including sales, warehousing, distribution, purchasing, inventory control, merchandise planning and replenishment, point-of-sale support and financial systems. We rely on third-party suppliers for our merchandise and outsource some of our business processes to third-party vendors. The redemption of loyalty points under our Shoe Perks loyalty rewards program and redemptions of gift cards are accounted for as separate performance obligations.",
+   "expect": [
+    [
+     "supplier",
+     "Nike"
+    ],
+    [
+     "supplier",
+     "Skechers"
+    ],
+    [
+     "supplier",
+     "Crocs"
+    ]
+   ]
+  },
+  {
+   "filer": "Aehr Test Systems",
+   "ticker": "AEHR",
+   "url": "https://www.sec.gov/Archives/edgar/data/1040470/000165495425008553/aehr_10k.htm",
+   "text": "Net revenues of full wafer contact product lines, systems, WaferPak Contactors, DiePak Carriers and services for fiscal 2025, 2024, and 2023 were $39.2 million, $64.6 million, and $63.5 million, respectively, and accounted for approximately 66%, 98%, and 98% of the Company's net revenues in fiscal 2025, 2024, and 2023, respectively. Net revenues of packaged part product lines, systems and services for fiscal 2025, 2024, and 2023 were $19.8 million, $1.6 million, and $1.4 million, respectively, and accounted for approximately 34%, 2%, and 2% of the Company's net revenues in fiscal 2025, 2024, and 2023, respectively. Revenues from the Company's five largest customers accounted for approximately 77%, 93%, and 97% of its net revenues in fiscal 2025, 2024, and 2023, respectively. During fiscal 2025, two customers accounted for approximately 39% and 15% of the Company's net revenues. During fiscal 2024, two customers accounted for approximately 67% and 17% of the Company's net revenues. During fiscal 2023, two customers accounted for approximately 79% and 10% of the Company's net revenues. No other customers accounted for more than 10% of the Company's net revenues for any of these periods. EV and power semiconductor revenues accounted for 41%, 92%, and 85% of total revenues in fiscal 2025, 2024, and 2023, respectively. Sales to our five largest customers accounted for approximately 77%, 93%, and 97% of our net sales in fiscal 2025, 2024, and 2023, respectively. During fiscal 2025, two customers accounted for approximately 39% and 15% of the Company's net sales. During fiscal 2024, two customers accounted for approximately 67% and 17% of the Company's net sales. During fiscal 2023, two customers accounted for approximately 79% and 10% of our net sales.",
+   "expect": []
+  },
+  {
+   "filer": "Monster Beverage Corp",
+   "ticker": "MNST",
+   "url": "https://www.sec.gov/Archives/edgar/data/865752/000141057825000248/mnst-20241231x10k.htm",
+   "text": "We depend on our bottlers/distributors to prioritize our products, provide efficient, stable and reliable distribution and secure adequate shelf space in retail outlets. Coca-Cola Europacific Partners accounted for approximately 14%, 13% and 13% of our net sales for the years ended December 31, 2024, 2023 and 2022, respectively. Coca-Cola Consolidated, Inc. accounted for approximately 10%, 10% and 11% of our net sales for the years ended December 31, 2024, 2023 and 2022, respectively. Reyes Holdings, LLC accounted for approximately 9% of our net sales for the years ended December 31, 2024, 2023 and 2022. If we are unable to maintain good relationships with our bottlers and contract packers and/or their ability to manufacture our products becomes constrained or unavailable to us, our business could suffer. ● We rely on limited Company-owned facilities for production of certain of our non-alcohol and alcohol beverages, and developments negatively affecting production at such facilities could materially impact the financial results of our business. ● We rely on bottlers and distributors to distribute our products. 21 Table of Contents We rely on limited Company-owned facilities for production of certain of our non-alcohol and alcohol beverages, and developments negatively affecting production at such facilities could materially impact the financial results of our business. We rely on bottlers and distributors to distribute our products. We rely on relationships with third parties, including suppliers, distributors, bottlers, contract packers, contractors, cloud data storage and other information technology service providers and other external business partners, for certain functions or for services in support of our operations. Business Combinations - Business acquisitions are accounted for in accordance with Financial Accounting Standards Board (\"FASB\") Accounting Standards Codification (\"ASC\") 805 \"Business Combinations\".",
+   "expect": [
+    [
+     "customer",
+     "Coca-Cola Europacific Partners"
+    ],
+    [
+     "customer",
+     "Coca-Cola Consolidated"
+    ],
+    [
+     "customer",
+     "Reyes Holdings"
+    ]
+   ]
+  },
+  {
+   "filer": "Grail, Inc.",
+   "ticker": "GRAL",
+   "url": "https://www.sec.gov/Archives/edgar/data/1699031/000169903125000041/gral-20241231.htm",
+   "text": "Table of Contents • If we fail to obtain additional financing, we may be unable to expand our commercialization efforts, or to develop and commercialize additional products. • If our products result in direct or indirect participant or patient harm or injury, we could be subject to significant reputational and liability risks. • We rely on Illumina as a sole supplier for our next-generation sequencers and associated reagents, Madison Industries as a sole supplier of blood collection tubes, and Twist Bioscience Corporation as a sole supplier of DNA panels. We rely on a limited number of suppliers, or in some cases, sole suppliers, to provide certain materials for our products and services. For example, Illumina, Inc. is our sole supplier of sequencers and certain laboratory reagents, Madison (who acquired our blood collection tube manufacturer Streck, Inc. in 2023) is our sole supplier of tubes used for sample collection and Twist is the sole supplier of our DNA probes. We rely on standard commercial carriers for the delivery of samples to our laboratory. GRAIL sole-source suppliers include Illumina, Inc. who is our sole supplier of sequencers and certain laboratory reagents, Madison, who acquired our blood collection tube manufacturer Streck, Inc. in 2023 and who is our sole supplier of tubes used for sample collection, and Twist who is the sole supplier of our DNA probes. Moreover, we depend on our collaborators and on medical and clinical institutions and CROs to conduct our clinical studies in compliance with applicable GCP and other regulatory requirements, and while we have agreements governing their committed activities, we have limited influence over their actual performance. Sales of Galleri accounted for a substantial majority of our revenue to date and we expect that such sales will continue to account for the substantial majority of our revenue for the foreseeable future. We rely on Illumina as a sole supplier for our next-generation sequencers and associated reagents, Madison Industries (\"Madison\") (who acquired our blood collection tube manufacturer, Streck, Inc., in 2023) as a sole supplier of our blood collection tubes, and Twist Bioscience Corporation (\"Twist\") as a sole supplier of our DNA panels. Additionally, we rely on a limited number of suppliers for some of our laboratory instruments and reagents, and we may not be able to immediately find replacements if necessary. We rely on Illumina as the sole supplier of the next-generation sequencers and associated Illumina-supplied reagents we use to perform our genomic tests and as the sole provider of servicing, including maintenance and repair services for these sequencers. We also rely on Madison as the sole supplier of our blood collection tubes and Twist as the sole supplier of our DNA panels.",
+   "expect": [
+    [
+     "supplier",
+     "Illumina"
+    ],
+    [
+     "supplier",
+     "Madison"
+    ],
+    [
+     "supplier",
+     "Twist"
+    ]
+   ]
+  },
+  {
+   "filer": "Aurinia Pharmaceuticals Inc.",
+   "ticker": "AUPH",
+   "url": "https://www.sec.gov/Archives/edgar/data/1600620/000160062025000011/auph-20241231.htm",
+   "text": "MANUFACTURING AND SUPPLY CHAIN We rely on third-party manufacturers to supply commercial inventory for LUPKYNIS and semi-finished products and expect to continue to do so to meet our development and commercial needs. Manufacturing of Drug Substance Voclosporin requires a specialized drug substance manufacturing process and is manufactured by Lonza, our sole supplier for drug substance. Encapsulation Catalent Pharma Solutions (\"Catalent\") is currently the sole supplier for the preparation of our voclosporin capsules. Packaging We use a sole supplier for the blistering and packaging of LUPKYNIS commercial cartons for sale in the U.S. and for the blistering of semi-finished products. We rely on sole-source contract manufacturers to produce LUPKYNIS and clinical drug supply and expect to continue to do so to meet our commercial and development needs. We rely on third parties to provide certain services relating to our commercial distribution, clinical studies and other activities. In the U.S., we rely on two specialty pharmacies to distribute LUPKYNIS to patients. We rely on clinical sites to comply with study protocols and regulations applicable to clinical study conduct. We rely on clinical sites to enroll patients in our clinical studies. The Company's major customers, which include two specialty pharmacies and our collaboration and license partner, Otsuka, accounted for the majority of our accounts receivable as of December 31, 2024. The Company's major customers, which includes two specialty pharmacies and its collaboration partner, Otsuka Pharmaceutical Co., Ltd (\"Otsuka\") accounted for the majority of the Company's accounts receivable as of December 31, 2024. The Company also entered into a manufacturing agreement that contained an embedded lease of a dedicated manufacturing facility (the \"Monoplant\") that was accounted for as a finance lease when the lease commencement began (see Note 5).",
+   "expect": [
+    [
+     "supplier",
+     "Lonza"
+    ],
+    [
+     "supplier",
+     "Catalent Pharma Solutions"
+    ]
+   ]
+  },
+  {
+   "filer": "Healthlynked Corp",
+   "ticker": "HLYK",
+   "url": "https://www.sec.gov/Archives/edgar/data/1680139/000121390025026262/ea0235172-10k_health.htm",
+   "text": "We rely on our customers to provide us with accurate and complete information and to appropriately use the solutions we provide to them, but they may not always do so. Key components of our product sales made through MOD are provided by a sole supplier, and supply shortages or loss of this supplier could result in interruptions in supply or increased costs. We rely on a sole supplier for the fulfillment of nearly all product sales made through MOD. If this sole supplier is unable to supply to us in the quantities we require, or at all, or otherwise defaults on its supply obligations to us, we may not be able to obtain alternative supplies form other suppliers on acceptable terms, in a timely manner, or at all. In the event the sole supplier breaches its contract with us, our legal remedies associated with such a breach may be insufficient to compensate us for any damages we may suffer. 17 We rely on Amazon Web Services, or AWS, for the vast majority of our computing, storage, bandwidth, and other services. We rely on information systems and the data stored on them to conduct its operations. The Company relies on a sole supplier for the fulfillment of substantially all of its product sales made through MOD. ASU 2024-01 adds an example to Topic 718 which illustrates how to apply the scope guidance to determine whether profits interests and similar awards should be accounted for as share-based payment arrangements under Topic 718 or under other U.S. GAAP. ASU 2024-04 clarifies the requirements for determining whether certain settlements of convertible debt instruments, including convertible debt instruments with cash conversion features or convertible debt instruments that are not currently convertible, should be accounted for as an induced conversion. NOTES TO THE CONSOLIDATED FINANCIAL STATEMENTS DECEMBER 31, 2024 AND 2023 NOTE 14 - COMMITMENTS AND CONTINGENCIES Supplier Concentration The Company relied on a single supplier for the fulfillment of approximately 96 % and 94 % of its product sales made through MOD in the years ended December 31, 2024 and 2023, respectively.",
+   "expect": [
+    [
+     "supplier",
+     "Amazon Web Services"
+    ]
+   ]
+  },
+  {
+   "filer": "Collegium Pharmaceutical, Inc",
+   "ticker": "COLL",
+   "url": "https://www.sec.gov/Archives/edgar/data/1267565/000155837025001801/coll-20241231x10k.htm",
+   "text": "Due to the controlled substances classification, the manufacturing, shipping, dispensing and storing of these products are subject to a high degree of regulation, as described in more detail under the caption \"- Government Regulation - DEA and Opioid Regulation.\" ​ We currently procure the API used in our products from a sole supplier or limited number of suppliers. ​ 7 ​ Marketing and Commercialization ​ We commercialize our products in the United States through two dedicated field sales forces, one focused on our pain portfolio and the other on ADHD. To help protect our proprietary know-how that is not patentable, we rely on trade secret protection and confidentiality agreements to protect our interests. Ultimately, the outcome of such litigation, including our pending litigation with Purdue, could compromise the validity and scope of our patents or other proprietary rights or hinder our ability to manufacture and market our products. ​ If we are unable to obtain or maintain intellectual property rights for our technologies, products or any products we may acquire, we may lose valuable assets or be unable to compete effectively in our market. ​ We depend on our ability to protect our proprietary technology. We rely on patent and trademark laws, unpatented trade secrets and know-how, and confidentiality, licensing and other agreements with employees and third parties, all of which offer only limited protection. In addition, an adverse result in any litigation proceeding could put one or more of our patents at risk of being invalidated, held unenforceable or interpreted narrowly. ​ If we are unable to protect the confidentiality of our trade secrets, our business and competitive position would be harmed. ​ In addition to seeking patents for some of our technology and products, we rely on trade secrets, including unpatented know-how, technology and other proprietary information, to maintain our competitive position. In the future, we may identify impurities, which could result in increased scrutiny by regulatory authorities, delays in our clinical programs and regulatory approval, increases in our operating expenses, failure to obtain or maintain approval or limitations in our commercial supply. ​ We depend on wholesale pharmaceutical distributors for retail distribution of our products; if we lose any of our significant wholesale pharmaceutical distributors or their distribution network is disrupted, our financial condition and results of operations may be adversely affected. ​ A significant percentage of our product shipments are to three of our wholesale pharmaceutical distributors. Our Systems, along with those of the third parties whom we rely on to process confidential and sensitive data in a variety of contexts, are potentially vulnerable to a variety of evolving threats that may expose this data 37 ​ to unauthorized persons or otherwise compromise its integrity. Business Combination Accounting and Valuation of Acquired Assets We completed the Ironshore Acquisition in September 2024 and the BDSI Acquisition in March 2022, both of which were accounted for as business combinations. To determine whether the acquisitions should be accounted for as business combinations or as asset acquisitions, we made certain judgments regarding whether the acquired set of activities and assets met the definition of a business. Accordingly, we excluded the portion of Ironshore's operations that represented approximately 8.5% of total operating expenses for the year ended December 31, 2024 from management's assessment of internal control over financial reporting. In addition, the Company currently relies on a sole supplier or a limited number of suppliers for the active pharmaceutical ingredients in its products. Refer to Note 8, Inventory , for further information. ​ Business Combination Accounting and Valuation of Acquired Assets ​ To determine whether acquisitions should be accounted for as a business combination or as an asset acquisition, the Company makes certain judgments regarding whether the acquired set of activities and assets meets the definition of a business.",
+   "expect": []
+  },
+  {
+   "filer": "Ubiquiti Inc.",
+   "ticker": "UI",
+   "url": "https://www.sec.gov/Archives/edgar/data/1511737/000151173725000053/ubnt-20250630.htm",
+   "text": "Risk Factors - Risks Related to Our Business and Industry - We rely on a limited number of contract manufacturers to produce our products. Shortages of components or manufacturing capacity could increase our costs or delay our ability to fulfill future orders and could have a material adverse impact on our business and results of operations.\" We rely on third party components and technology to build and operate our products, and we rely on our contract manufacturers to obtain the components, subassemblies and products necessary for the manufacture of our products. The Company has not received any termination notice as of the date of this Annual Report on Form 10-K. We depend on these license agreements to modify and replace firmware on certain chipsets with our proprietary firmware. Intellectual Property We rely on a combination of patent, copyright, trademark and trade secret laws, as well as confidentiality procedures and contractual restrictions, to establish and protect our proprietary rights. Sales to our distributors have accounted for the majority of our revenues. With some of our products, we depend on third party retailers to provide adequate and attractive placement for our products in their stores, both physical and online. We rely on a combination of patent, copyright, trademark, trade secret laws, and contractual rights to establish, maintain and protect these intellectual property rights, all of which afford only limited protection. We rely on third-party software and services to conduct our enterprise resource planning, financial planning and analysis, and financial reporting. We rely on third party service providers, such as G-Suite, Google Cloud and Amazon Web Services, to provide distributed computing infrastructure platforms for business operations, or what is commonly referred to as a \"cloud\" computing service. Sales to distributors accounted for 56% and 62% of our revenues during the years ended June 30, 2025 and 2024, respectively. Webstore sales accounted for 44% and 38% of our revenues during the years ended June 30, 2025 and 2024, respectively.",
+   "expect": []
+  },
+  {
+   "filer": "Biomerica Inc",
+   "ticker": "BMRA",
+   "url": "https://www.sec.gov/Archives/edgar/data/73290/000164117225026041/form10-k.htm",
+   "text": "Additionally, we rely on our Scientific Advisory Board, comprised of leading medical doctors and clinicians, to guide our clinical studies and product development efforts. We rely on distributors, advertising in medical and trade journals, exhibitions at trade shows, direct mailings, and an internal sales staff to market our diagnostic products. For the fiscal years ended May 31, 2025, and 2024, the Company had one distributor each year that accounted for 31% and 33% of our net sales, respectively. As of those dates, four distributors accounted for approximately 69% and 64% of gross accounts receivable, respectively. For the fiscal year ended May 31, 2025, purchases from one vendor accounted for approximately 12% of our total raw material procurement, primarily related to commodity plastic products. For the fiscal year ended May 31, 2024, purchases from one vendor accounted for approximately 16% of our total raw material procurement, also primarily related to commodity plastic products. We rely on a limited number of key distributors that account for a substantial majority of our total revenue. For the fiscal years ended May 31, 2025 and 2024, the Company had one distributor each year that accounted for 31% and 33% of our net sales, respectively. As of May 31, 2025 and 2024, the Company had four distributors, respectively, that accounted for a total of 69% and 64% of gross accounts receivable, respectively. We rely on IP for the current products we sell and for the new products in research, development, and in clinical trials. Some raw materials require significant ordering lead time and we may not be able to timely access sufficient raw materials in the event of an unexpected increase in demand, particularly those obtained from a sole supplier or a limited group of suppliers. We rely on third-party contract research organizations (\"CROs\"), universities or/clinical sites collectively, (\"Clinical Research Partners\"), to coordinate, monitor and conduct of our clinical trials and to manage, analyze, and interpret data for our clinical programs.",
+   "expect": []
+  },
+  {
+   "filer": "Lifeway Foods, Inc.",
+   "ticker": "LWAY",
+   "url": "https://www.sec.gov/Archives/edgar/data/814586/000168316825001592/lifeway_i10k-123124.htm",
+   "text": "Sales distributed outside the United States represented approximately 3% of net sales for the year ended 2024. MAJOR CUSTOMERS During the year ended December 31, 2024, two customers accounted for a total of 25% of our total net sales. Two customers accounted for a total of 26% of net accounts receivable as of December 31, 2024. For example, as required by the National Organic Program (\"NOP\"), we rely on third parties to certify certain of our products and production locations as organic. For certain items, we rely on a single supplier or co-packer as our sole source for the item. We rely on a limited number of production and distribution facilities. We depend on the skills, working relationships, and continued services of key personnel, including our experienced senior management team. RISKS RELATED TO OUR INDUSTRY The consolidation of our customers or the loss of any of our largest customers could negatively impact our sales and results of operations. Two of our customers together accounted for 25% of our net sales in the fiscal year ended December 31, 2024. 14 We rely on sales made by or through our independent distributors to customers. We rely on independent certification for several of our products and facilities. We rely on independent certification, such as certifications of our products as \"organic,\" or \"gluten-free,\" to differentiate our products from others.",
+   "expect": []
+  },
+  {
+   "filer": "Iridex Corp",
+   "ticker": "IRIX",
+   "url": "https://www.sec.gov/Archives/edgar/data/1006045/000095017025046107/irix-20241228.htm",
+   "text": "In 2024, international sales accounted for 53.4% of our revenues. We rely on third parties to manufacture substantially all of the components used in our products, although we assemble critical subassemblies and the final product at our facility in Mountain View, California. Some of these suppliers and manufacturers are sole source. We rely on a combination of patents, trade secrets, copyright and trademark laws, nondisclosure and other contractual agreements and technical measures to protect our intellectual property rights. In addition to patents, we rely on trade secrets and proprietary know-how which we seek to protect, in part, through proprietary information agreements with employees, consultants and other parties. We rely on our direct and independent sales forces and international distributors to sell our products and if we lose our sales force or distributor relationships, it could harm our business. We depend on international sales for a significant portion of our operating results. We rely on continued market acceptance of our existing products and any decline in sales of our existing products would adversely affect our business and results of operations. We depend on collaborative relationships to develop, introduce and market new products, product enhancements and applications. We depend on both clinical and commercial collaborative relationships. We rely on patents and proprietary rights to protect our intellectual property and business.",
+   "expect": []
+  },
+  {
+   "filer": "Weatherford International Plc",
+   "ticker": "WFRD",
+   "url": "https://www.sec.gov/Archives/edgar/data/1603923/000160392325000050/wfrd-20241231.htm",
+   "text": "Also, certain parts and equipment that we use in our operations may be available only from a small number of suppliers, manufacturers or service providers, or in some cases may be sourced through a single supplier, manufacturer or service provider. At many sites, we depend on other companies and personnel to conduct drilling and other operations in accordance with appropriate safety standards. The U.S. accounted for 15%, 16% and 20% of revenues in 2024, 2023 and 2022, respectively. Approximately 10% of our 2024 revenue and approximately 26% of our December 31, 2024 accounts receivables were related to our largest customer in Mexico. Our largest customer in Mexico has a history of making late payments and, in more recent periods, has utilized third-party financial institutions to pay certain of our receivables. Other charges of $56 million increased $52 million in 2024 compared to 2023, primarily due to an increase in severance and restructuring costs, and fees to third-party financial institutions related to collections of certain receivables from our largest customer in Mexico. The primary source of cash was from heightened collections activity from our largest customer in Mexico. Weatherford International plc - 2024 Form 10-K | 37 Table of Contents Critical Accounting Policies and Estimates As of December 31, 2024, and December 31, 2023, Mexico accounted for 31% and 27% of our total net accounts receivables, respectively, of which our largest customer in the country accounted for 26% and 22% of our total net outstanding accounts receivables, respectively. During the twelve months ended December 31, 2024 we paid an immaterial amount of fees to third-party financial institutions related to collections of certain receivables from our largest customer in Mexico. Credit Default Swap During the fourth quarter of 2024, we entered into a CDS with a third-party financial institution terminating in September of 2026 related to a secured loan between that third-party financial institution and our largest customer in Mexico. As of December 31, 2024 and December 31, 2023, Mexico accounted for 31 % and 27 % of our total net outstanding accounts receivables, respectively, of which our largest customer in the country accounted for 26 % and 22 % of our total net outstanding accounts receivables, respectively.",
+   "expect": []
+  },
+  {
+   "filer": "Central Garden & Pet Co",
+   "ticker": "CENT",
+   "url": "https://www.sec.gov/Archives/edgar/data/887733/000088773325000041/cent-20250927.htm",
+   "text": "The charts below present product classes that accounted for approximately 10% or more of our consolidated net sales and the percentage of net sales represented by segment for fiscal 2025. Walmart, our largest customer, accounted for approximately 17% of total net sales in fiscal 2025 and 16% in fiscal 2024. Home Depot, our second largest customer, represented approximately 16% of total net sales in fiscal 2025 and 17% in fiscal 2024. Together with Costco, Lowe's and Amazon these major retailers represented approximately 54% of total net sales in fiscal 2025 and 2024. Costco accounted for approximately 15% of our Pet segment's net sales in fiscal 2025, and 14% in fiscal 2024. Sales resources are structured to optimize coverage: • Category- and channel-based sales teams • Dedicated account teams for our largest customers • Account managers for regional chains • Territory managers for independents • Specialists for professional and equine markets Our marketing strategy is consumer-, brand- and channel-driven, with value creation centered on innovation, product quality and performance, premium packaging, product positioning and consumer relevance. In fiscal 2025 and 2024, sales to The Home Depot accounted for approximately 37% and 38%, Walmart represented approximately 29% and 27%, and Lowe's represented approximately 14% and 15% of our Garden segment's net sales, respectively. Additional details on our liquidity, working capital management, cash flow and financing activities, can be found in Liquidity and Capital Resources , and Note 11, Long-Term Debt , included in this Form 10-K. Sources and Availability of Raw Materials We source most of our raw materials from multiple suppliers; however, one key input used to manufacture (S)-Methoprene is obtained from a single supplier. Many of these trademarks are registered, and for those that are not, we rely on our common law trademark rights to protect our brand identity. We depend on a few customers for a significant portion of our business. Walmart, our largest customer in fiscal 2025, represented approximately 17% of total net sales in fiscal 2025 and 16% of total net sales in fiscal 2024 and 2023. Home Depot, our second largest customer in fiscal 2025, represented approximately 16% of total net sales in fiscal 2025, 2024 and 2023.",
+   "expect": [
+    [
+     "customer",
+     "Walmart"
+    ],
+    [
+     "customer",
+     "Home Depot"
+    ],
+    [
+     "customer",
+     "Costco"
+    ],
+    [
+     "customer",
+     "Lowe's"
+    ]
+   ]
+  },
+  {
+   "filer": "Pro Dex Inc",
+   "ticker": "PDEX",
+   "url": "https://www.sec.gov/Archives/edgar/data/788920/000107997325001426/pdex_10k-063025.htm",
+   "text": "In fiscal 2025, our top three customers accounted for 94% of our sales compared to 88% in fiscal 2024. In fiscal 2025, we had one customer, included in both medical device and repairs revenue above, that accounted for 75% of sales with our next largest customer accounting for 12% of sales. This compares to fiscal 2024, when these same two customers accounted for 71% and 12%, respectively, of our total sales. In many cases, including our largest customers, disclosure of customer names is prohibited by confidentiality agreements with such entities. During the first quarter of fiscal 2021, our largest customer executed an amendment to our existing supply agreement such that we will continue to supply their surgical handpieces to them through calendar 2025 and, during the fourth quarter of fiscal 2021, they executed a product development agreement and related statement of work for our assistance with the next generation of this handpiece. In fiscal 2025, our top three customers accounted for 94% of our sales, with our current largest customer accounting for 75% of our sales. Our medical device revenue to our largest customer, included in orthopedic sales above, increased $10.1 million, compared to the prior fiscal year due primarily to the launch of that customer's next generation handpiece. Our fiscal 2025 repair revenue increased approximately $2.1 million, or 13%, to $18.6 million, as compared to fiscal 2024, due to increased repairs of the legacy orthopedic handpiece we sold to our largest customer. Additionally, at June 30, 2025 compared to June 30, 2024, our accounts receivable increased by $2.5 million corresponding with our increased revenue, our income tax accounts reflect a $1.5 million outlay of cash mostly related to higher estimated income tax payments, and our inventory increased by $6.9 million in anticipation of increased sales to support our largest customer's release of their next generation orthopedic handpiece.",
+   "expect": []
+  },
+  {
+   "filer": "Intellinetics, Inc.",
+   "ticker": "INLX",
+   "url": "https://www.sec.gov/Archives/edgar/data/1081745/000164117225000274/form10-k.htm",
+   "text": "For 2024 and 2023, the two largest customers of our Document Management segment accounted for approximately 7% and 2%, respectively, of the segment's revenues for that period. For the years ended December 31, 2024, and 2023, government contracts, including K-12 education, represented approximately 78% and 84%, respectively, of the Document Management segment's net revenues, including a significant portion of the segment's sales to resellers which represent ultimate sales to government agencies. For 2024, the State of Michigan represented approximately 69% of our Document Conversion segment's net revenues, and 40% of the total consolidated revenues. Our second largest customer in 2024 was our reseller Applied Innovation, representing 7% of our Document Conversion segment's net revenues and 4% of the total consolidated revenues. For 2023, the State of Michigan represented approximately 62% of our Document Conversion segment's net revenues, and 35% of the total consolidated revenues. Our second largest customer in 2023 was Rocket Mortgage, representing 9% of our Document Conversion segment's net revenues and 5% of the total consolidated revenues. We rely on a combination of copyright, trademark laws, non-disclosure agreements and other contractual provisions to establish and maintain our proprietary intellectual property rights. Risks Relating to Our Business Our largest customer awards long-term contracts through a competitive bidding process that is open as of the date of this Report, and any loss or volume reduction of this or any other major customer or the failure to collect a large account receivable could negatively affect our results of operations and financial condition. Our largest customer awards long-term contracts through a competitive bidding process that is open as of the date of this Report. Revenues from a limited number of customers have accounted for a substantial percentage of our total revenues. For the years ended December 31, 2024, and 2023, government contracts, including K-12 education, represented approximately 80% of our net revenues in each period. We rely on close cooperation with our distribution partners for sales and product development as well as for the optimization of opportunities that arise in our competitive environment.",
+   "expect": [
+    [
+     "customer",
+     "State of Michigan"
+    ],
+    [
+     "customer",
+     "Applied Innovation"
+    ],
+    [
+     "customer",
+     "Rocket Mortgage"
+    ]
+   ]
+  }
+ ]
+}

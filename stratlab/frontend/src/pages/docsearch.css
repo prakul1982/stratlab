@@ -1,0 +1,14 @@
+/* Search filings (DocSearchPage): the hits as a list of extracts, each linked to the filed copy. */
+.ds-hits { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s4); }
+.ds-hit { display: flex; flex-direction: column; gap: var(--s1); padding-bottom: var(--s4); border-bottom: 1px solid var(--line); min-width: 0; }
+.ds-hit:last-child { border-bottom: 0; padding-bottom: 0; }
+.ds-hit-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s3); min-width: 0; }
+.ds-co { overflow-wrap: anywhere; }
+.ds-title { color: var(--ink-2); overflow-wrap: anywhere; }
+.ds-quote { margin: var(--s1) 0 0; padding: var(--s2) var(--s3); border-left: 3px solid var(--line-2); background: var(--paper-2); border-radius: 0 var(--r-ctl) var(--r-ctl) 0; }
+.ds-extract { margin: 0; font-size: var(--t-body); line-height: 1.55; color: var(--ink); overflow-wrap: anywhere; }
+.ds-extract + .ds-extract { margin-top: var(--s2); }
+.ds-extract::before { content: "… "; color: var(--muted); }
+.ds-extract mark { background: var(--orange-soft); color: var(--ink); font-weight: 600; padding: 0 2px; border-radius: 3px; }
+.ds-hit-foot { align-items: center; flex-wrap: wrap; }
+.ds-sub { margin: 0 0 var(--s3); }

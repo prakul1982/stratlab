@@ -9,6 +9,9 @@ export const FEEDBACK_TYPES: [FeedbackType, string, string][] = [
   ["idea", "Idea for a new feature", "Idea"],
 ];
 
+/** Admin → Feedback's types: the form's three and the data errors sent from a figure's own flag (backend feedback.TYPES "data_error"). */
+export const ADMIN_TYPES: [string, string][] = [...FEEDBACK_TYPES.map(([v, l]): [string, string] => [v, l]), ["data_error", "Data error"]];
+
 /** The words' limit, the server's own (feedback.MAX_TEXT). */
 export const FEEDBACK_MAX = 2000;
 
@@ -27,6 +30,8 @@ export function browserLine(ua: string): string {
 }
 
 export type FeedbackRow = {
-  id: string; at: string; type: FeedbackType; text: string; path: string; version: string; browser: string; screen: string;
+  id: string; at: string; type: FeedbackType | "data_error"; text: string; path: string; version: string; browser: string; screen: string;
   plan: string; signed_in: boolean; reply: boolean; reply_to: string | null; status: "new" | "seen" | "fixed";
+  /** A data error's figure, as the page showed it; `noted`: the reporter was told it was fixed. */
+  figure?: { section: string; label: string; value: string; period: string; source: string }; noted?: boolean;
 };

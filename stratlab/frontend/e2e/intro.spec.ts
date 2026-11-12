@@ -153,7 +153,8 @@ test("the welcome starts the picked space's tour; the other spaces are offered o
   await expect(page).toHaveURL(/\/research$/);
   // on Free, the company step says its monthly limits
   await dlg.getByRole("button", { name: "Next" }).click();
-  await expect(dlg).toContainText("On Free: 2 deep dives", { timeout: 30_000 });
+  // (updated on purpose, FREE-TIER: Free has 1 deep dive a month and no decks of its own)
+  await expect(dlg).toContainText("On Free: 1 deep dive a month; slide decks are on Basic.", { timeout: 30_000 });
   await page.keyboard.press("Escape");
   await expect(dlg).toHaveCount(0);
   await expect(page).toHaveURL(/\/invest$/);                 // back to the home the answer opened

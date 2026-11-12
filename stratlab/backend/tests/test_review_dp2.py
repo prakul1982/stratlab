@@ -93,11 +93,11 @@ def test_a_402_names_its_plan_for_the_price(w):
 def test_the_alert_limit_says_the_plan_and_what_the_next_gives(w, paid):
     c = w["client"]
     body = {"region": "IN", "symbol": "TCS", "kind": "move", "op": "either", "value": 5}
-    for i in range(5):
+    for i in range(3):                     # (updated on purpose, FREE-TIER: Free keeps 3 alerts on at once)
         assert c.post("/alerts", headers=FREE, json={**body, "value": 5 + i}).status_code == 200
     r = c.post("/alerts", headers=FREE, json=body)
     msg = r.json()["detail"]["message"]
-    assert r.status_code == 402 and msg == "Your Free plan has 5 alerts on at a time. Delete one to add another. Basic gives 25."
+    assert r.status_code == 402 and msg == "Your Free plan has 3 alerts on at a time. Delete one to add another. Basic gives 25."
     assert "see plans" not in msg.lower()                         # the page's button says it, once (DP2-022)
 
 
@@ -160,7 +160,7 @@ def test_my_limits_lists_every_kept_count(w, paid):
     got = c.get("/me/limits", headers=FREE).json()
     rows = {r["key"]: r for r in got["rows"]}
     assert got["plan"] == "Free" and list(rows) == ["stock_alerts", "screens", "holdings", "mf_schemes", "networth_items", "journal_trades"]
-    assert rows["stock_alerts"] == {"key": "stock_alerts", "used": 1, "limit": 5, "next": "Basic"}
+    assert rows["stock_alerts"] == {"key": "stock_alerts", "used": 1, "limit": 3, "next": "Basic"}      # (updated on purpose, FREE-TIER: 3)
     assert rows["holdings"]["limit"] == 30 and rows["mf_schemes"]["limit"] == 5 and rows["networth_items"]["limit"] == 5
     assert rows["journal_trades"]["used"] is None and rows["journal_trades"]["limit"] == 50
     pro = {r["key"]: r for r in c.get("/me/limits", headers=PRO).json()["rows"]}

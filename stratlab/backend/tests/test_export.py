@@ -39,7 +39,7 @@ def texts(slides):
 def test_every_company_is_a_member_row_with_its_layer_figures_and_how_it_is_in():
     rows = view()["members"]
     assert [(r["symbol"], r["layer"]) for r in rows] == [("MINEA", "Mining"), ("MINEB", "Mining"), ("CELLA", "Cells"), ("CELLB", "Cells"),
-                                                          ("RELIANCE", "Cells"), ("SCRAP", "Named in a sub-theme only")]
+                                                          ("RELIANCE", "Cells"), ("SCRAP", "Other test theme companies")]      # lane d1: in "Other", never in no layer (updated on purpose)
     by = {r["symbol"]: r for r in rows}
     # LIVE6-006 (updated on purpose): the market value is the dive's, on its one price date, as the page shows it
     assert (by["MINEA"]["revenue"], by["MINEA"]["ebitda"], by["MINEA"]["net"], by["MINEA"]["cap"]) == (1500, 50, 24.0, 40000.0)
@@ -70,23 +70,23 @@ def test_the_theme_deck_has_the_cover_chain_layers_members_claims_and_notes():
     # "Dated company updates" when no company meets the rules, no page for a part with nothing important (an empty sub-theme, margins over time, the
     # balance sheet when it shows nothing), the notes on one page and the appendix one table of every confirmed company's figures
     assert titles == ["Test theme", "Contents", "Key findings", "Data confidence",
-                      "The value chain by layer", "Layer 1 · Mining", "Layer 2 · Cells", "Layers side by side", "What moved the aggregate margin",
+                      "The value chain by layer", "Smaller layers", "Layers side by side", "What moved the aggregate margin",       # lane d1: two layers of 2 confirmed companies, one page (updated on purpose)
                       "Tailwinds and risks", "Size and shape", "Growth and profitability", "Valuation", "Price", "How to read this deck",
                       "How the figures are built", "Every company's figures"]       # R25: changed on purpose, the figures' notes before the appendix
     assert slides[0].kind == "cover" and slides[0].subtitle == "India (NSE and BSE) · Theme deep dive" and "Theme deep dive" in footer
     assert not [s for s in slides if s.kind == "section"]
     contents = table_of(slides, "Contents")["rows"]
     assert [(r[0], r[2]) for r in contents[:2]] == [("Findings", "3"), ("The value chain", "5")]          # each part with its first page
-    assert contents[-1][0] == "Appendix" and contents[-1][2] == "17"            # R25: one page later (the figures' notes)
-    assert contents[-2][0] == "How the figures are built" and contents[-2][2] == "16"
+    assert contents[-1][0] == "Appendix" and contents[-1][2] == "16"            # R25: one page later (the figures' notes); lane d1: one layer page fewer (updated on purpose)
+    assert contents[-2][0] == "How the figures are built" and contents[-2][2] == "15"
     cover = dict((t[0], t[1]) for t in next(b for b in slides[0].blocks if b["kind"] == "stats")["items"])
     # R28: changed on purpose, "with figures" is of the confirmed companies (CELLB, not confirmed, has figures but is never in them)
     assert cover["Companies"] == "6" and cover["Layers"] == "2" and cover["With figures"] == "4"          # R20: its share and the universe beneath
     figs = table_of(slides, "Every company's figures")
     assert figs["head"][:3] == ["Company", "Layer", "Market value"] and figs["rows"][1][:3] == ["Mine A", "Mining", "₹40,000 cr"]
     # changed on purpose (lane t1, LIVE7A-014): a whole figure keeps ".0" in a column where another figure has a decimal (one precision a column)
-    row = table_of(slides, "Layer 1 · Mining")["rows"][0]
-    assert row[:3] == ["Mine A", "₹1,500 cr", "50%"] and row[3] in ("24%", "24.0%") and row[4] in ("15%", "15.0%") and row[5] == "Mar 2026"   # R16: whole points as filed
+    row = table_of(slides, deck.SMALL_TITLE)["rows"][0][1:]          # lane d1: a layer of 2 is rows of "Smaller layers" (updated on purpose)
+    assert row[0] == "Mine A" and row[2:4] == ["₹1,500 cr", "50%"] and row[4] in ("24%", "24.0%") and row[5] in ("15%", "15.0%") and row[6] == "Mar 2026"   # R16: whole points as filed
     claims = next(b for s in slides if s.title == "Tailwinds and risks" for b in s.blocks if b["kind"] == "flow")["items"]
     assert claims[0]["text"] == "A battery subsidy" and [t[0] for t in claims[0]["tags"]] == ["Tailwind", "Dated source"]   # R16: "Checked" meant only that a headline exists
     assert claims[0]["sub"] == "Subsidy scheme extended · 01 Sep 2026 · A daily" and claims[0]["url"] == "https://example.com/news/subsidy"
@@ -139,11 +139,15 @@ def test_a_us_theme_deck_writes_dollars():
     slides, _ = deck.theme_plan(v)
     assert slides[0].subtitle == "US · Theme deep dive"
     assert table_of(slides, "Every company's figures")["rows"][1][2] == "$40 bn"
-    assert table_of(slides, "Layer 1 · Mining")["rows"][0][1] == "$1.50 bn"
+    assert table_of(slides, deck.SMALL_TITLE)["rows"][0][3] == "$1.50 bn"          # lane d1: the layer of 2 is rows of "Smaller layers" (updated on purpose)
 
 
 def test_the_deck_route_downloads_both_formats_as_one_deck_and_stops_at_the_plan_limit(api):
     from app.intel import routes
+    from app import main as _main
+    # (updated on purpose, FREE-TIER: Free has no decks of its own now, so the deck's route and its monthly count are shown on Basic, 5 a
+    # month; Free's refusal is in tests/test_free_tier.py)
+    _main.app.dependency_overrides[_main.current_profile] = lambda: {"id": "u1", "_plan": "basic", "plan": "basic"}
     routes_pf = routes.public_facts
     try:
         routes.public_facts = lambda region, sym: None
@@ -174,15 +178,16 @@ def test_the_deck_route_downloads_both_formats_as_one_deck_and_stops_at_the_plan
         r = api.get("/research/theme-dive/deck?q=AI%20data%20centers&region=US&format=pptx")      # the same theme's other format: free
         assert r.status_code == 200 and r.content[:2] == b"PK" and r.headers["content-disposition"].endswith('.pptx"')
         assert api.usage.count("deck") == 1
-        r = api.get("/research/theme-dive/deck?q=AI%20chips&region=US&format=pdf")                # Free: one deck a month
+        api.usage.extend(["deck"] * 4)                                                             # Basic: five decks a month
+        r = api.get("/research/theme-dive/deck?q=AI%20chips&region=US&format=pdf")
         assert r.status_code == 402 and r.json()["detail"]["code"] == "deck_limit"
         msg = r.json()["detail"]["message"]
-        assert msg.startswith("You've made 1 slide deck this month.") and "A company's or a theme's PDF and PowerPoint count as one deck" in msg
+        assert msg.startswith("You've made 5 slide decks this month.") and "A company's or a theme's PDF and PowerPoint count as one deck" in msg
         import pytest
         from fastapi import HTTPException
         from app import main
         with pytest.raises(HTTPException) as e:                                                    # a company's deck shares the count
-            main.check_deep({"id": "u1", "_plan": "free", "plan": "free"}, "deck", "TCS", "IN")
+            main.check_deep({"id": "u1", "_plan": "basic", "plan": "basic"}, "deck", "TCS", "IN")
         assert e.value.status_code == 402
         assert api.get("/research/theme-dive/deck?q=AI%20data%20centers&region=US&format=doc").status_code == 400
     finally:

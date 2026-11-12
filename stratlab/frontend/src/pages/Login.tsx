@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState, ty
 import { Link } from "react-router-dom";
 import { aboutUsd, usdNote, usePricing } from "../lib/currency";
 import { finePrint, landingAction, pricingIntro, YEARLY_LABEL, yearlySaving } from "../lib/offer";
-import { KEY, LIMITS, PLAN_IDS, PLAN_NAME, PRICE, WHO, type PlanId } from "../lib/plans";
+import { KEY, LIMITS, PLAN_IDS, PLAN_NAME, PRICE, WHO, type PlanId } from "../lib/planCore";   // the cards only: the tables (plans.ts) stay off the landing download
 import { signIn, signInUnfinished } from "../lib/signin";
 import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 import { signInProblem } from "../lib/signinError";
@@ -75,7 +75,7 @@ const RESEARCH: [string, string][] = [
   ["Deep dive", "Ten years of numbers, then the business and its plans in its own words."],
   ["Report card and checklist", "What management promised on past calls, against what followed."],
   ["Themes", "Any theme's listed companies and their numbers, as a deck too."],
-  ["Company decks", "A deep dive as slides, PowerPoint or PDF."],
+  ["Company decks", "A deep dive as slides (Basic and Pro)."],
   ["Market mood", "The day in one page: breadth, sectors, flows."],
   ["Heatmap", "An index's companies as tiles, coloured by their move."],
   ["Flows", "FII and DII buying and selling, day by day."],

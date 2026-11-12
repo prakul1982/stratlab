@@ -49,7 +49,8 @@ for (const { space, groups } of SHARED) {
         if (phone) {
           await crumb.locator(".k-crumb-btn").click();
           await page.getByRole("menuitem", { name: p.label, exact: true }).click();
-        } else await page.getByTestId("hub-tabs").getByRole("link", { name: p.label, exact: true }).click();
+        // (updated on purpose, R43: a tab may show a shorter name, NavPage.tab, so the row of tabs stays on one line at 1280)
+        } else await page.getByTestId("hub-tabs").getByRole("link", { name: p.tab ?? p.label, exact: true }).click();
         const own = spaceOf(p.to);
         // the address names the space when it isn't the page's own, so a bookmark or a shared link keeps it
         await expect(page, p.to).toHaveURL(new RegExp(`${p.to.replace(/[/]/g, "\\/")}${own === space ? "(\\?(?!.*space=).*)?" : "\\?(.*&)?space=" + space}$`), { timeout: 30_000 });

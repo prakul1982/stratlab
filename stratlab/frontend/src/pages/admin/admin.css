@@ -17,7 +17,10 @@
   .adm-tail { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }      /* (clip as .sr-only has it, so the 400px spill check knows it is hidden for the eye) */
   .adm-link { padding: 0 var(--s2); }
 }
+/* a phone's width takes the touch height too: the pills' height (and so where the title starts) never hangs on which pointer the browser
+   reports, which in the layout checker's phone pass changed from page to page (ui-lint R17: 260px or 280px) */
 @media (pointer: coarse) { .adm-link { min-height: var(--ctl); } }
+@media (max-width: 640px) { .adm-link { min-height: var(--ctl); } }
 
 /* Needs your attention: one row per item */
 .adm-todo { display: flex; flex-direction: column; border-top: 1px solid var(--line); }

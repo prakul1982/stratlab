@@ -150,10 +150,15 @@ test("account: Free's limits match the Plans page, and deleting all your data as
   const main = page.locator("main");
   const plan = main.locator("#plan");
   await expect(plan.getByText("Deep dives this month")).toBeVisible({ timeout: 30_000 });
-  for (const [label, n] of [["Deep dives this month", plans.free.deepdives_per_month], ["Slide decks this month", plans.free.decks_per_month]] as const) {
+  for (const [label, n] of [["Deep dives this month", plans.free.deepdives_per_month]] as const) {
     const row = plan.locator(".k-rows > div", { hasText: label });
     await expect(row).toContainText(new RegExp(`(of ${n}$|Free has ${n} a month)`));
   }
+  // (updated on purpose, FREE-TIER: Free has no decks of its own, so the row says where they are, never "0 of 0")
+  expect(plans.free.decks_per_month).toBe(0);
+  await expect(plan.locator(".k-rows > div", { hasText: "Slide decks this month" }))
+    .toContainText(`None on Free: on Basic, ${plans.basic.decks_per_month} a month. The sample deck is on Plans.`);
+  await expect(plan.locator(".k-rows > div", { hasText: "New themes this month" })).toContainText(new RegExp(`of ${plans.free.themes_per_month}$`));
   // "Contact us" once on the page
   await expect(main.getByRole("link", { name: "Contact us" })).toHaveCount(1);
   // your own copy of everything, as one JSON file, with no secrets in it
@@ -374,4 +379,31 @@ test("assistant: its own page, no longer a section of Account", async ({ page, r
   await expect(main.getByRole("heading", { name: "What your assistants did" })).toBeVisible();
   await sane(page, errors, phone);
   await shot(page, "assistant", phone);
+});
+
+// FREE-TIER: an account made before the smaller Free plan sees a one-time notice on Account and My space, saying exactly what changes
+// and when; "Got it" hides it on both. (The server's own notice is tested in backend/tests/test_free_tier.py; here /me carries one.)
+test("account: the one-time notice of the Free plan's change, on Account and My space, until Got it", async ({ page, request }, info) => {
+  const phone = info.project.name === "phone";
+  const u = phone ? who(291, true) : who(249, false);      // a Free account in no other spec: load-249, and load-294 on the phone
+  const notice = { on: "2026-11-30T00:00:00+05:30", moves: ["The tax report's CSV and PDF downloads move to Basic (the report on screen stays free)"],
+    rows: [{ key: "ai_reads_per_day", label: "Fresh AI reads a day", before: 60, after: 5 }, { key: "decks_per_month", label: "Slide decks a month", before: 1, after: 0 }] };
+  await page.route(`${API}/me`, async (r) => {
+    const res = await r.fetch();
+    await r.fulfill({ response: res, json: { ...(await res.json()), free_change: notice } });
+  });
+  const errors = await signIn(page, request, u, "/account");
+  const box = page.getByTestId("free-change");
+  await expect(box).toBeVisible({ timeout: 30_000 });
+  await expect(box).toContainText("Your Free plan changes on 30 Nov 2026.");
+  await expect(box.locator("li")).toHaveText(["Fresh AI reads a day: 60 now, 5 from 30 Nov 2026", "Slide decks a month: 1 now, 0 from 30 Nov 2026",
+    "The tax report's CSV and PDF downloads move to Basic (the report on screen stays free), from 30 Nov 2026"]);
+  await page.goto("/mine");
+  await expect(page.getByTestId("free-change")).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId("free-change").getByRole("button", { name: "Got it" }).click();
+  await expect(page.getByTestId("free-change")).toHaveCount(0);
+  await page.goto("/account");
+  await expect(page.locator("main #plan")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("free-change")).toHaveCount(0);              // once: not again on Account either
+  await sane(page, errors, phone);
 });

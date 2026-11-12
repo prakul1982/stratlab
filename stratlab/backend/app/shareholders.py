@@ -49,7 +49,8 @@ MAX_QUEUE = 8000
 MAX_FOLLOWS = 20
 MAX_NAMES = 200                 # spellings of one holder read or followed (RC1-002: LIC alone has 42)
 MAX_RESULTS = 40                # name groups a search answers with
-PARSER = 2                      # how filings are read: stored quarters read by an older parser are read again (DF-016)
+PARSER = 3                      # how filings are read: stored quarters read by an older parser are read again (DF-016);
+                                # 3: the promoter group's total holding too (business groups, groups.py)
 POPULAR = 8                     # the holders named in the most companies, offered before anything is typed (DF-019)
 LIST_AT = "21:00"               # India time: the day's filings are listed after this
 SYMBOL = re.compile(r"^[A-Z0-9][A-Z0-9&\-_.]{0,19}$")
@@ -227,6 +228,7 @@ def parse_xbrl(data: bytes | str) -> dict:
         raise BadFiling("not XML") from None
     axis: dict[str, str] = {}
     facts: dict[str, dict[str, str]] = {}
+    total_ctx: list[str] = []             # the promoter and promoter group's own total (its category line)
     for el in root:
         tag = _local(el.tag)
         if tag == "context":
@@ -235,6 +237,8 @@ def parse_xbrl(data: bytes | str) -> dict:
                 dim = m.get("dimension")
                 if dim:
                     axis[cid] = _axis_of(dim)
+                    if (m.text or "").strip().endswith("ShareholdingOfPromoterAndPromoterGroupMember"):
+                        total_ctx.append(cid)
                     break
         elif el.get("contextRef"):
             facts.setdefault(el.get("contextRef"), {})[tag] = " ".join((el.text or "").split())
@@ -281,8 +285,10 @@ def parse_xbrl(data: bytes | str) -> dict:
     quarter = (meta.get("DateOfReport") or "")[:10]
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", quarter):
         raise BadFiling("no quarter date")
+    total = next((p for p in (_number(facts.get(c, {}).get("ShareholdingAsAPercentageOfTotalNumberOfShares")) for c in total_ctx) if p is not None), None)
     return {"symbol": (meta.get("Symbol") or "").upper(), "name": tidy_name(meta.get("NameOfTheCompany")),
-            "isin": meta.get("ISIN") or "", "quarter": quarter, "holders": holders}
+            "isin": meta.get("ISIN") or "", "quarter": quarter, "holders": holders,
+            "promoter_pct": round(total * scale, 2) if total is not None and 0 <= total * scale <= 100 else None}
 
 
 # ---------- the exchange's lists ----------
@@ -388,7 +394,8 @@ def store(symbol: str, row: dict, parsed: dict) -> tuple[dict | None, dict]:
         if old and old.get("filed", "") > row["filed"] and int(old.get("parser") or 1) >= PARSER:
             return None, old                                  # a newer (revised) filing is already stored
         qs[row["quarter"]] = {"rec": row["rec"], "filed": row["filed"], "url": row["url"], "parser": PARSER,
-                              "rows": [[h["name"], h["kind"], h["group"], h["shares"], h["pct"]] for h in parsed["holders"]]}
+                              "rows": [[h["name"], h["kind"], h["group"], h["shares"], h["pct"]] for h in parsed["holders"]],
+                              **({"ppct": parsed["promoter_pct"]} if parsed.get("promoter_pct") is not None else {})}
         keep = sorted(qs)[-KEEP_QUARTERS:]
         co = {"name": parsed.get("name") or row.get("name") or co.get("name") or symbol, "isin": parsed.get("isin") or co.get("isin") or "",
               "q": {k: qs[k] for k in keep}}

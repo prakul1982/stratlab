@@ -135,7 +135,9 @@ test("money calendar: reachable from the menu (IA-1: Money's Calendar entry open
   await page.locator("aside.sidebar").getByRole("link", { name: "Calendar", exact: true }).click();
   await expect(page).toHaveURL(/\/money\/calendar$/);
   await expect(page.getByRole("heading", { name: "Money calendar" })).toBeVisible();
-  await expect(page.getByTestId("hub-tabs").locator("a", { hasText: "My money dates" })).toHaveAttribute("aria-current", "page");
+  // (updated on purpose, R43: the Calendar's seventh tab put its row on two lines at 1280; this tab's short name is "My dates", the
+  // breadcrumb and the menu still say "My money dates")
+  await expect(page.getByTestId("hub-tabs").locator("a", { hasText: "My dates" })).toHaveAttribute("aria-current", "page");
   expect(errors).toEqual([]);
 });
 

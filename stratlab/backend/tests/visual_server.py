@@ -122,6 +122,9 @@ def build():
     closing_auction(mp)
     vix_history(mp)
     holders_and_updates(mp)
+    from tests import fake_f5
+    fake_f5.seed()                           # the earnings-call calendar and the business groups (f5)
+    supply_links_world()                    # the customer and supplier map (b2)
     deep_reads()
     live_breadth(mp, sizes)
     library_seeds()
@@ -131,6 +134,7 @@ def build():
     fx_rates.seed()
     blog_posts()
     theme_pages(mp)
+    company_tables_world(mp)
     # the AI builder's answers Instinct saw for two sentences, for the parser's browser test (57.1); any other finds no AI
     from app import ai_writer
     from tests import fake_ai_writer
@@ -138,6 +142,7 @@ def build():
     # keep that index: the background job would rebuild it from stored pages a few minutes in, mid-run
     mp.setattr(main.screen_indexer, "loop", lambda: None)
     connect_once(mp)
+    doc_search_world()
     return w
 
 
@@ -283,6 +288,37 @@ def holders_and_updates(mp):
                                                                   {"symbol": "MARUTI", "region": "IN"}, {"symbol": "AAPL", "region": "US"}]}))
 
 
+def supply_links_world():
+    """The customer and supplier map (lane b2): RELIANCE's own filings name five customers (two linked, one in Admin's review queue,
+    two unlisted buyers kept as filed), TCS's annual report names RELIANCE as a customer, and a US pair (made-up quotes in the
+    filings' own wording) for the US card."""
+    from app import db
+    t = db.sb().table("supply_links")
+
+    def put(region, by, name, direction, cp, sym, state, basis, quote, day, amount=None, share=None, cands=None):
+        t.insert({"region": region, "stated_by": by, "stated_name": name, "direction": direction, "counterparty": cp, "cp_norm": cp.lower(),
+                  "cp_region": region, "cp_symbol": sym, "state": state, "candidates": cands, "basis": basis, "share_pct": share, "amount": amount,
+                  "quote": quote, "doc_url": f"https://nsearchives.nseindia.com/corporate/{by}-{day}.pdf" if region == "IN" else
+                  f"https://www.sec.gov/Archives/edgar/data/1/0001/{by.lower()}-10k.htm", "doc_title": "Receipt of order" if region == "IN" else "Annual report (10-K)",
+                  "said_on": day, "method": "rule"}).execute()
+    R = "Reliance Industries Limited"
+    put("IN", "RELIANCE", R, "customer", "Tata Steel Limited", "TATASTEEL", "auto", "order_win",
+        "Reliance Industries Limited has received an order worth Rs 820 crore from Tata Steel Limited for supply of industrial gases.", "2026-11-04", "Rs 820 crore")
+    put("IN", "RELIANCE", R, "customer", "Indian Railways", None, "text", "order_win",
+        "Reliance Industries Limited has received a Letter of Award from Indian Railways for supply of high speed diesel.", "2026-10-28")
+    put("IN", "RELIANCE", R, "customer", "Tata", None, "review", "order_win",
+        "Reliance Industries Limited has received a work order from Tata for polymer supplies worth Rs 64 crore.", "2026-10-15", "Rs 64 crore",
+        cands=[{"symbol": "TATASTEEL", "name": "Tata Steel"}, {"symbol": "TATAPOWER", "name": "Tata Power Company"}, {"symbol": "TCS", "name": "Tata Consultancy Services"}])
+    put("IN", "RELIANCE", R, "customer", "Ministry of Defence (MoD)", None, "text", "order_win",
+        "Reliance Industries Limited has signed a contract with the Ministry of Defence (MoD) for supply of aviation fuel.", "2026-09-30")
+    put("IN", "RELIANCE", R, "customer", "Saregama India Limited", "SAREGAMA", "auto", "order_win",
+        "Reliance Industries Limited has received an order from Saregama India Limited for digital distribution services.", "2026-09-12")
+    put("IN", "TCS", "Tata Consultancy Services Limited", "customer", "Reliance Industries Limited", "RELIANCE", "auto", "order_win",
+        "Tata Consultancy Services Limited has received an order from Reliance Industries Limited for a cloud migration programme.", "2026-08-20")
+    put("US", "AAPL", "Apple Inc.", "supplier", "Taiwan Semiconductor Manufacturing Company Limited", "TSM", "auto", "supplier_named",
+        "We rely on Taiwan Semiconductor Manufacturing Company Limited to manufacture our processors.", "2026-10-31")
+
+
 def deep_reads():
     """RELIANCE's deep dive with its document read and management report card already made (the model's replies, made up), so the
     page's Business model, measures, plans and report-card tables are drawn full: a mix of targets met, missed, not due and
@@ -388,6 +424,46 @@ def theme_pages(mp):
         hit = stock_pages.find("IN", sym)
         if hit:
             main.stock_page_store.get("IN", hit[0], hit[1])
+
+
+def doc_search_world():
+    """The filings search's index (doc_store.py) over made-up documents, on the in-memory store (tests/fake_doc_store.py): transcripts
+    and presentations of a few Indian companies over two years (one read from a scan, one with markup in its text), and US annual
+    reports and earnings releases, for e2e/doc-search.spec.ts. Every passage is invented for the tests."""
+    from datetime import date, timedelta
+    from app import doc_store
+    from tests.fake_doc_store import MemoryDocStore
+    s = MemoryDocStore()
+    today = date.fromisoformat(str(AT)[:10]) if AT else date.today()
+    nse = "https://nsearchives.nseindia.com/corporate/"
+    filler = " ".join(f"Management walked through the {w} segment's volumes, costs and the plan for the next quarters." for w in
+                      ("first", "second", "third", "fourth", "fifth", "sixth"))
+    docs = [
+        ("IN", "RELIANCE", "Reliance Industries Ltd", "Energy", "transcript", 20, "Transcript of the earnings call for Q2 FY27",
+         [(3, "Our order book in the new energy business stands at Rs 18,400 crore, and capacity utilisation at the refinery was 94 percent. " + filler),
+          (7, "On capex, we expect to spend about Rs 1.3 lakh crore this year across the businesses. " + filler)]),
+        ("IN", "RELIANCE", "Reliance Industries Ltd", "Energy", "presentation", 22, "Investor presentation Q2 FY27",
+         [(12, "Capacity utilisation across the petrochemical plants averaged 88 percent in the quarter. " + filler)]),
+        ("IN", "RELIANCE", "Reliance Industries Ltd", "Energy", "transcript", 480, "Transcript of the earnings call for Q2 FY26",
+         [(4, "The order book for the solar giga factory stood at Rs 9,000 crore a year ago. " + filler)]),
+        ("IN", "TCS", "Tata Consultancy Services Ltd", "Information Technology", "transcript", 15, "Transcript of the earnings call for Q2 FY27",
+         [(5, "Our order book, the total contract value, was $10 billion this quarter, and attrition fell to 13 percent. " + filler)]),
+        ("IN", "INFY", "Infosys Ltd", "Information Technology", "presentation", 30, "Investor presentation Q2 FY27",
+         [(9, "<script>alert('x')</script> Large deal wins took the order book to $3.1 billion; utilisation was 85 percent. " + filler)]),
+        ("IN", "HDFCBANK", "HDFC Bank Ltd", "Financial Services", "transcript", 40, "Transcript of the earnings call for Q2 FY27",
+         [(None, "Read from a scan: the loan book grew 9 percent and the order of priorities stays deposits first, then loans. " + filler)]),
+        ("US", "AAPL", "Apple Inc.", "Technology", "annual_report", 35, "Annual report (10-K)",
+         [(None, "We depend on component suppliers in Asia; supply constraints and tariffs could raise costs and affect our order book of devices. " + filler)]),
+        ("US", "NVDA", "NVIDIA Corp", "Technology", "earnings_release", 25, "Earnings release (8-K)",
+         [(None, "Data center revenue was a record, driven by demand for accelerated computing; our order book of systems keeps growing. " + filler)]),
+    ]
+    for n, (region, sym, name, sector, kind, ago, title, chunks) in enumerate(docs):
+        sec = region == "US"
+        url = (f"https://www.sec.gov/Archives/edgar/data/{1000 + n}/000100026{n}/doc{n}.htm" if sec else f"{nse}{sym}_{n}.pdf")
+        s.save({"url": url, "link": url, "host": "www.sec.gov" if sec else "nsearchives.nseindia.com", "region": region, "symbol": sym,
+                "company": name, "sector": sector, "kind": kind, "title": title, "filed_at": (today - timedelta(days=ago)).isoformat(),
+                "pages": None if sec or chunks[0][0] is None else 20, "ocr": sym == "HDFCBANK"}, chunks)
+    doc_store.use(s)
 
 
 def library_seeds():
@@ -594,6 +670,34 @@ def screen_index():
         if region == "IN":          # the stored purchase dates reach back 120 days: the 30 and 90 day windows are covered, 180 and 365 not (RC3M-009)
             index["insider_from"] = (date.today() - timedelta(days=120)).isoformat()
         db.set_setting(screens.INDEX_KEY + region, json.dumps(index))
+
+
+def company_tables_world(mp):
+    """Lane c-f2 (e2e/company-tables.spec.ts): the peers read the screens' index plus three more Indian companies the demo world has pages
+    for (UltraTech, Ambuja and the made-up Orion Polymers), built the same way, so a Commodities company has six peers and a Free account
+    sees three of them and the lock. The screens and every other page keep the index as it is."""
+    from app import company_tables, screens
+    from app.intel.company import at_live_price
+    from app.intel.screener import summary
+    from app import deepdive
+    from tests import fake_prices as P
+    extra = []
+    for sym in ("ULTRACEMCO", "AMBUJACEM", "ORIONPOLY"):
+        page = main.research_hub.screener.company(sym)
+        price = P.last(sym)
+        s = at_live_price(summary(page), price)
+        g = deepdive.numbers(page).get("growth") or {}
+        f = {"region": "IN", "symbol": sym, "name": P.name_of(sym), "industry": [P.sector_of(sym)], "price": price,
+             "market_cap": s["market_cap_cr"], "pe": s["pe"], "roe": s["roe"], "roce": s["roce"], "net_margin": s["net_margin"], "opm": s["opm"],
+             "debt_equity": s["debt_equity"], "bank": False, "growth": {"sales_cagr_3y": g.get("sales_cagr_3y")}}
+        r = screens.row("IN", sym, f)
+        if r:
+            extra.append(r)
+
+    def index(region):
+        ix = screens.load_index(region)
+        return {**ix, "rows": (ix.get("rows") or []) + extra} if region == "IN" else ix
+    mp.setitem(company_tables._wire, "index", index)
 
 
 def results_calendar(mp):

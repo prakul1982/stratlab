@@ -188,13 +188,23 @@ test("Invest's watchlist and Coming up are tables, Coming up agrees with My spac
     expect(await halfEmpty(), `/invest ${w}`).toEqual([]);
     if (w === 1440) {
       // every event the Invest home lists up to the last day My space's list reaches is in My space's list too
-      const inv = await coming.locator("tbody tr").evaluateAll((rs) => rs.map((r) => r.querySelector("th")?.textContent?.trim() ?? ""));
+      // (updated on purpose, R43 earnings calls: the watched TCS's call on the world's day is one more of the person's own dates, so
+      // My space's five now end on 29 Oct, before Invest's first market event on 2 Nov, and "some event in both" no longer held
+      // although nothing was missing. The check is now the one this comment states, day by day, and it still fails when My space
+      // stops short with room to spare: its list must either reach an event Invest lists or be full, with more in the calendar.)
+      const inv = await coming.locator("tbody tr").evaluateAll((rs) => rs.map((r) => ({ name: r.querySelector("th")?.textContent?.trim() ?? "", day: r.querySelector("td")?.textContent?.trim() ?? "" })));
       await page.goto("/mine");
       const mine = page.getByTestId("mine-coming");
       await expect(mine.locator(".mine-tl-i").first()).toBeVisible({ timeout: 30_000 });
       const mineText = await mine.innerText();
-      const shared = inv.filter((t) => mineText.includes(t));
-      expect(shared.length, `Invest ${JSON.stringify(inv)} vs My space ${mineText}`).toBeGreaterThan(0);
+      const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const dayKey = (m: RegExpMatchArray) => MONTHS.indexOf(m[2]) * 100 + Number(m[1]);
+      const last = Math.max(...[...mineText.matchAll(/\b(\d{1,2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec):/g)].map(dayKey));
+      const inRange = inv.filter((r) => { const m = r.day.match(/(\d{1,2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/); return !!m && dayKey(m) <= last; });
+      const said = `Invest ${JSON.stringify(inv)} vs My space ${mineText}`;
+      expect(Number.isFinite(last), said).toBe(true);
+      expect(inRange.filter((r) => !mineText.includes(r.name)), said).toEqual([]);
+      expect(inRange.length > 0 || /more in the calendar/.test(mineText), said).toBe(true);
     }
     await page.unrouteAll({ behavior: "ignoreErrors" });
     await open(page, "/holdings", ADMIN, w);

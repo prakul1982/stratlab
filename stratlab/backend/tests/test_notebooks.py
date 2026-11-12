@@ -156,12 +156,12 @@ def test_old_saved_strategy_opens_as_notebook(api):
 
 def test_backtest_limit(api):
     api.profile["_plan"] = "free"
-    api.usage.extend(["backtest"] * 10)
+    api.usage.extend(["backtest"] * 5)             # (updated on purpose, FREE-TIER: Free's 5 backtests a month)
     nb = api.post("/notebooks", json={"name": "x", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
     r = api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 365})
     assert r.status_code == 402 and r.json()["detail"]["code"] == "backtest_limit"
     msg = r.json()["detail"]["message"]
-    assert msg.startswith("You've used all 10 backtests this month. The count starts again on ") and "Basic gives 100 a month." in msg   # DP2-022
+    assert msg.startswith("You've used all 5 backtests this month. The count starts again on ") and "Basic gives 100 a month." in msg   # DP2-022
     # while no plan can be bought, the prompt says how to get early access instead of pointing at a checkout
     assert msg.endswith("Paid plans open soon; ask us at support@stratlab.studio for early access.") or r.json()["detail"]["payments"]
 

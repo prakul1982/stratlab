@@ -136,9 +136,16 @@ def test_company_ai_is_cleaned_cached_and_counted(api, monkeypatch):
     assert not {"scores", "composite", "valuation"} & set(r)          # the AI's scores are ignored: no ratings
     assert [i["title"] for i in r["ideas"]] == ["Trend rider"]          # blank and malformed ideas dropped
     assert "generated_at" in r and api.usage == ["research_ai"]
-    assert "EMA" in api.calls[0] and "MACD" not in api.calls[0]          # free plan: basic indicators only
+    # (updated on purpose, FREE-TIER: a Free reader's fresh read is the one shared read Basic and Pro readers get, so no separate Free
+    # copy written with the basic indicators only; it is counted against Free's day as before)
+    assert "EMA" in api.calls[0] and "MACD" in api.calls[0]
     api.get("/research/company/US/NVDA/ai")                              # cached: no new AI call, not counted
     assert len(api.calls) == 1 and api.usage == ["research_ai"]
+    from app import main as _m
+    _m.app.dependency_overrides[_m.current_profile] = lambda: {"id": "u2", "_plan": "basic", "plan": "basic", "_paid_plan": "basic"}
+    api.get("/research/company/US/NVDA/ai")                              # a Basic reader gets the same read: no AI call
+    assert len(api.calls) == 1 and api.usage == ["research_ai"]
+    # (updated on purpose, FREE-TIER: Free has no refreshes now; the Refresh below is a Basic reader's)
     # R19 (owner, 7 Nov): a Refresh within the guard window gives the stored read, "already fresh": no AI call, nothing counted
     r = api.get("/research/company/US/NVDA/ai?refresh=true").json()
     assert r["refresh_state"] == "fresh" and len(api.calls) == 1 and api.usage == ["research_ai"]
@@ -147,10 +154,15 @@ def test_company_ai_is_cleaned_cached_and_counted(api, monkeypatch):
     r = api.get("/research/company/US/NVDA/ai?refresh=true").json()
     # (updated on purpose, LIVE7B-002: the Refresh is one fresh AI read, counted once, with no separate refresh count)
     assert r["refresh_state"] == "done" and len(api.calls) == 2 and api.usage == ["research_ai", "research_ai"]
+    _m.app.dependency_overrides[_m.current_profile] = lambda: {"id": "u1", "_plan": "free", "plan": "free"}
+    r = api.get("/research/company/US/NVDA/ai?refresh=true").json()     # a Free reader's Refresh: the stored read, "capped", nothing spent
+    assert r["refresh_state"] == "capped" and len(api.calls) == 2
 
 
 def test_daily_ai_allowance(api, monkeypatch):
     from app.intel import routes
+    # (updated on purpose, FREE-TIER: Free has its own 5 fresh reads a day now, not RESEARCH_AI_PER_DAY's 3: two already used today)
+    api.usage.extend(["research_ai"] * 2)
     day = routes.datetime.now(routes.IST)
 
     class Fixed(routes.datetime):          # the cache key carries the date: hold it, so a run across midnight IST passes

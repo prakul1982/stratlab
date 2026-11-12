@@ -17,6 +17,8 @@ PUBLIC = {"/health", "/version", "/plans", "/pricing", "/markets", "/public/v/{t
           "/public/company/{region}/{symbol}",      # a company's name and public page, for "Sign in to see …"
           "/public/library", "/public/library/{eid}",   # StratLab's own library strategies, read only, for visitors
           "/public/business",                       # the seller's name, address and email, for the policy pages
+          # (updated on purpose, FREE-TIER) the sample deck: one theme deck already kept, for Free and visitors on Plans (app/sample_deck.py)
+          "/pricing/sample-deck", "/pricing/sample-deck/info",
           # a Market Brief's headline from the plain-text email: forwards only to a link stored in that brief (R13-003)
           "/news-link/{iid}/{n}",
           # routes on included routers, seen since the sweep reads every router (newer FastAPI keeps them unflattened; LIVE4-016):
@@ -28,7 +30,13 @@ PUBLIC = {"/health", "/version", "/plans", "/pricing", "/markets", "/public/v/{t
           "/inbound/email/{provider}",              # the mail provider's inbound hook (signature-checked)
           "/mcp",                                   # the AI-assistant endpoint: its own key in the request
           "/money/calendar/feed/{token}.ics",       # a personal calendar feed: the secret token in the address is the key
-          "/public/markets/watch"}                  # the visitor's fixed Market Watch board
+          "/public/markets/watch",                  # the visitor's fixed Market Watch board
+          # (updated on purpose: new public pages) each market's movers (their top 5) and the data status page with its JSON
+          "/stocks/{region}/movers", "/status", "/public/data-status",
+          # (updated on purpose, bet 3) public research: a share link's page (its random token is the key), the public theme pages and
+          # the embeddable charts; making, listing and turning off links needs sign-in
+          "/r/{token}", "/themes", "/themes/{region}", "/themes/{region}/{s}",
+          "/embed/price/{region}/{symbol}", "/embed/price/{symbol}", "/embed/theme/{region}/{slug}"}
 
 
 def _deps(d) -> set:
@@ -266,8 +274,9 @@ def test_parallel_ai_builds_cannot_pass_the_monthly_limit(monkeypatch):
     try:
         _slow_ai(monkeypatch)
         codes = _burst(w["client"], "free-token")
-        assert codes.count(200) == 10 and codes.count(429) == 15                       # Free: 10 a month
-        assert db.count_usage("u-free", "ai", "2000-01-01T00:00:00+00:00") == 10
+        # (updated on purpose, FREE-TIER: Free's AI builds went from 10 to 5 a month)
+        assert codes.count(200) == 5 and codes.count(429) == 20                        # Free: 5 a month
+        assert db.count_usage("u-free", "ai", "2000-01-01T00:00:00+00:00") == 5
     finally:
         w["close"]()
 
@@ -302,7 +311,8 @@ def test_a_failed_ai_build_does_not_use_up_the_allowance(monkeypatch):
             pass
         assert db.count_usage("u-free", "ai", "2000-01-01T00:00:00+00:00") == 0
         _slow_ai(monkeypatch, delay=0)
-        assert [c.post("/ai/strategy", headers=W.headers("free-token"), json={"text": "buy low"}).status_code for _ in range(10)] == [200] * 10
+        # (updated on purpose, FREE-TIER: Free's 5 AI builds a month)
+        assert [c.post("/ai/strategy", headers=W.headers("free-token"), json={"text": "buy low"}).status_code for _ in range(5)] == [200] * 5
         assert c.post("/ai/strategy", headers=W.headers("free-token"), json={"text": "buy low"}).status_code == 429
     finally:
         w["close"]()

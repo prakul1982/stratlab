@@ -2,56 +2,10 @@
  * The server's plans.py is the source of truth: tests/test_plan_copy.py fails when these numbers drift from it, and
  * the same amounts must be set on the Razorpay plans. */
 
-export type PlanId = "free" | "basic" | "pro";
-export const PLAN_IDS: PlanId[] = ["free", "basic", "pro"];
-export const PLAN_NAME: Record<PlanId, string> = { free: "Free", basic: "Basic", pro: "Pro" };
-
-/** Rupee prices including GST: [a month, a year]. */
-export const PRICE: Record<PlanId, [number, number]> = { free: [0, 0], basic: [699, 6999], pro: [1999, 19999] };
-
-export type Limits = { backtests_per_month: number | null; ai_builds_per_month: number | null; live_limit: number; group_size: number;
-  deepdives_per_month: number | null; decks_per_month: number | null; stock_alerts: number; screens: number; holdings: number;
-  networth_items: number | null; mf_schemes: number | null; journal_trades: number | null;
-  /** Market Watch (MW-1): lists, symbols in one list, charts whose drawings are kept, indicators on one chart. null: no limit. */
-  watchlists: number | null; watchlist_symbols: number | null; chart_saves: number | null; chart_indicators: number | null;
-  /** Fresh AI reads a day (plans.ai_reads_per_day): a company's read already written today and the market mood never count. */
-  ai_reads_per_day: number | null; features: string[] };
-
-export const LIMITS: Record<PlanId, Limits> = {
-  free: { backtests_per_month: 10, ai_builds_per_month: 10, live_limit: 1, group_size: 10, deepdives_per_month: 2, decks_per_month: 1,
-    stock_alerts: 5, screens: 2, holdings: 30, networth_items: 5, mf_schemes: 5, journal_trades: 50,
-    watchlists: 1, watchlist_symbols: 20, chart_saves: 3, chart_indicators: 3, ai_reads_per_day: 60, features: [] },
-  basic: { backtests_per_month: 100, ai_builds_per_month: 100, live_limit: 2, group_size: 25, deepdives_per_month: 15, decks_per_month: 5,
-    stock_alerts: 25, screens: 10, holdings: 100, networth_items: null, mf_schemes: null, journal_trades: null,
-    watchlists: 10, watchlist_symbols: 100, chart_saves: null, chart_indicators: 10, ai_reads_per_day: 60,
-    features: ["indicators", "group_live", "options", "alerts", "daily_report", "newsletter", "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "money_reminders", "breadth", "positioning", "journal", "mf_costs", "etf_gaps", "fo_alerts", "cas_history", "vix_filter",
-      "chart_replay",
-      "event_reminders",
-      "biz_updates", "holders",
-      "stock_futures", "mtf",
-      "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
-      "ipo_summary", "ipo_alerts"] },
-  pro: { backtests_per_month: null, ai_builds_per_month: null, live_limit: 10, group_size: 50, deepdives_per_month: null, decks_per_month: null,
-    stock_alerts: 100, screens: 25, holdings: 300, networth_items: null, mf_schemes: null, journal_trades: null,
-    watchlists: null, watchlist_symbols: null, chart_saves: null, chart_indicators: null, ai_reads_per_day: null,
-    features: ["indicators", "fno", "group_live", "options", "options_signal", "fast_entries", "alerts", "daily_report", "export", "newsletter",
-      "scans", "filings", "investor_home", "networth", "mf_gains", "dividends", "tax_tools", "money_reminders", "breadth", "positioning", "journal", "itr_export", "us_tax", "mf_costs", "etf_gaps", "fo_alerts", "options_whatif", "cas_history",
-      "vix_filter", "strike_rules",
-      "chart_replay", "signal_webhooks",
-      "event_reminders",
-      "biz_updates", "holders",
-      "assistant",
-      "stock_futures", "mtf",
-      "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
-      "ipo_summary", "ipo_alerts"] },
-};
-
-// Free has every market and the core tools, not every tool: Replay, Forward test, the scans and the full journal are paid (DP1-021)
-export const WHO: Record<PlanId, string> = { free: "Every market and the core tools, free", basic: "For investors and part-time traders", pro: "For active traders and heavy research" };
-
-const L = LIMITS;
-/** The daily safety cap on Pro's unlimited AI builds (the server's AI_BUILDS_PER_DAY). */
-export const AI_BUILDS_PER_DAY = 200;
+// The cards' part (names, prices, LIMITS, WHO, KEY) is in planCore.ts, the only plan file the landing page downloads; this file adds
+// the comparison table's rows and is loaded by the app, the Plans page and the landing page's comparison fold.
+export * from "./planCore";
+import { AI_BUILDS_PER_DAY, LIMITS, type Limits, type PlanId } from "./planCore";
 
 /** The comparison table's cell for a limit that has none: Pro's AI builds still have a daily safety cap. */
 export const unlimitedLabel = (p: PlanId, k: keyof Limits) => (p === "pro" && k === "ai_builds_per_month" ? `Unlimited (up to ${AI_BUILDS_PER_DAY} a day)` : "Unlimited");
@@ -60,38 +14,17 @@ export const unlimitedLabel = (p: PlanId, k: keyof Limits) => (p === "pro" && k 
 // plan" on the landing page, so its JavaScript stays under 450 KB (R5V-020)
 
 
-/** R11 (owner, 5 Nov: the Plans page was "bad UI"); LIVE4-020: every plan card, on the Plans page and the landing page alike, shows five short lines, the plan's main points, and the full
- * comparison is the table under the cards (PlanCompare): the cards are level, short, and say no number the table doesn't. Built from LIMITS. */
-export const KEY: Record<PlanId, string[]> = {
-  free: ["Every market, price charts, screens and the options builder",
-    `${L.free.backtests_per_month} backtests and ${L.free.ai_builds_per_month} AI strategy builds a month`,
-    `Paper trading trial: ${L.free.live_limit} strategy for 5 market days`,
-    `${L.free.deepdives_per_month} company deep dives and ${L.free.decks_per_month} slide deck a month`,
-    `${L.free.stock_alerts} stock alerts, ${L.free.screens} saved screens, ${L.free.holdings} holdings`],
-  basic: ["Everything in Free, with no ads",
-    `${L.basic.backtests_per_month} backtests and ${L.basic.ai_builds_per_month} AI builds a month, all 20+ indicators`,
-    `Paper trade ${L.basic.live_limit} strategies at a time, with options and whole groups`,
-    "Full trade journal, alerts and the daily Market Brief by email",
-    `${L.basic.deepdives_per_month} deep dives and ${L.basic.decks_per_month} slide decks a month`],
-  pro: ["Everything in Basic",
-    `Unlimited backtests, deep dives and decks; up to ${AI_BUILDS_PER_DAY} AI builds a day`,
-    `Paper trade ${L.pro.live_limit} strategies at a time, groups of up to ${L.pro.group_size}`,
-    "Indian F&O in notebooks, and options on your own rules' signals",
-    // LIVE7B-026: Basic has Tax tools' dividends; what Pro adds there is the advance tax and the long-term exemption
-    "Advance tax, long-term exemption, ITR export, StratLab in your AI app"],
-};
-
 /** Ads (ADS-1), one row of the comparison table: Free accounts and signed-out pages may show Google ads, only after the visitor allows
  * them (lib/ads.ts); Basic and Pro never do. The cards say it once, on the plan that adds it (Basic; Pro includes Basic). */
 export const ADS: Record<PlanId, string> = { free: "After you allow them", basic: "None", pro: "None" };
 
 export const NUMBERS: [keyof Limits, string][] = [["backtests_per_month", "Backtests a month, each with a verdict"], ["ai_builds_per_month", "AI strategy builds a month"],
   ["live_limit", "Paper trading sessions at a time"], ["group_size", "Instruments in a group test"], ["deepdives_per_month", "Company deep dives a month"],
-  ["decks_per_month", "Slide decks a month, of a company or a theme (its PDF and PowerPoint are one deck)"], ["stock_alerts", "Stock alerts on at a time"], ["screens", "Saved screens"], ["holdings", "Holdings kept"],
+  ["decks_per_month", "Slide decks a month, of a company or a theme (its PDF and PowerPoint are one deck)"], ["themes_per_month", "New themes mapped a month"], ["stock_alerts", "Stock alerts on at a time"], ["screens", "Saved screens"], ["holdings", "Holdings kept"],
   ["mf_schemes", "Mutual fund schemes kept"], ["networth_items", "Net worth entries"], ["journal_trades", "Trades the journal keeps"],
   ["watchlists", "Market Watch lists (the first is your Research watchlist)"], ["watchlist_symbols", "Symbols in one Market Watch list"],
   ["chart_saves", "Charts that keep your drawings and indicators"], ["chart_indicators", "Indicators on one chart"],
-  ["ai_reads_per_day", "Fresh AI reads a day, refreshes included (a company's read already written today, and the market mood, never count)"]];
+  ["ai_reads_per_day", "Fresh AI reads a day, refreshes included (Free has no refreshes; reads already written, and the market mood, never count)"]];
 export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in strategy rules"], ["group_live", "Paper trade a whole group (on 5-minute, 15-minute or 1-hour candles)"], ["options", "Options paper trading at set times"],
   ["alerts", "Trade notifications"], ["daily_report", "Daily report after the close"], ["newsletter", "Daily Market Brief and My Stocks by email"],
   ["scans", "Stage 2 + Supertrend scan, with a daily alert"],
@@ -109,7 +42,7 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in 
   ["breadth", "Market breadth history, charts and sector table"],
   ["positioning", "Positioning and FII/DII flow history, IV percentiles"],
   ["journal", "Trade journal: every trade, the honesty checks, breakdowns and paper vs real"],
-  ["itr_export", "ITR-ready schedules and a PDF pack for your CA"], ["us_tax", "US stocks in Indian tax sale by sale: each sale's gain in rupees, the foreign tax credit and Schedule FA"],
+  ["tax_export", "Tax report downloads: CSV and PDF"], ["itr_export", "ITR-ready schedules and a PDF pack for your CA"], ["us_tax", "US stocks in Indian tax sale by sale: each sale's gain in rupees, the foreign tax credit and Schedule FA"],
   ["etf_gaps", "Alerts on an ETF's price against its NAV"],
 
 ["fo_alerts", "Alerts when an F&O exit, lot size or expiry change touches your watchlist or paper sessions"],
@@ -130,25 +63,17 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in 
   ["rates_slab", "Fixed-income rates after tax at the rate from your own tax estimate"],
   ["loan_check", "Floating-rate loans: is your rate following its benchmark, and what each change did"],
   ["ipo_summary", "IPO offer document summaries: what the company does, its figures, what the money is for, the main risk factors and the promoters"],
-  ["ipo_alerts", "IPO alerts: when an issue opens, closes, is allotted or lists"]];
-export const EVERYONE = ["Every market, and your own CSV",
-  "Price charts: candles, Heikin-Ashi or bars, indicators, drawings kept on your account, and compare",
-  "Market Watch on every page: lists across every market we cover, live prices, and charts from 1 minute to 1 month with drawings",
-  "Options builder: charges to open and close, breakevens and the most it can make or lose after them", "Screens (unlimited runs), sector rotation and the results calendar", "Red flags on every company page",
-  "Corporate actions, deals and surveillance lists", "Today's market breadth numbers", "Derivatives positioning today: participant OI, FII/DII flows, PCR and the option chain facts",
-  "F&O contract changes: stocks entering and leaving F&O, lot sizes and expiry days",
-  "Closing auction, live: each F&O stock's reference and indicative price, the indices and the expiry settlement",
-  "Market events calendar: RBI policy, data releases, the Fed, index changes, expiries and holidays",
-  "Option Greeks for every strike and your position, and the payoff today beside the one at expiry (model estimates)",
-  "A trade journal with the basic stats", "My Holdings, the tax report and the year's total tax estimate", "Money calendar and its calendar feed",
-  // what Free sees on these pages, in the words the pages use (DP2-010: Holdings' dividends, US tax's year totals, the ITR preview)
-  "Each holding's dividends on My Holdings; the year's dividend total, and each year's US share gains in rupees, on Tax tools and US stocks tax",
-  "Advance tax due dates and the exemption used", "A preview of the ITR-ready export: each schedule's totals and line counts",
-  "Weekly Market Brief and My Stocks emails", "Public company pages, share cards and invite links", "ETF prices against their NAV, with 30 days of history",
-  "Named holders above 1% and the business-update filings on every company page",
-  "Stock futures today: OI buildup, rollover, basis and MWPL use for every F&O stock", "Stock lending fees that traded for your holdings",
-  "Margin-funded positions per stock today, and your own MTF cost worked out",
-  "IPOs in India and the US: dates, price bands, lot sizes, the bids by category while an issue is open, the offer documents' key facts, and listings against the issue price"];
+  ["ipo_alerts", "IPO alerts: when an issue opens, closes, is allotted or lists"],
+  ["movers", "Market movers in full: every row, any index, a smallest market value and CSV"],
+  ["earnings_calls", "Earnings-call calendar in full: every week ahead, calls already held with their transcript, recording and presentation links, filters and your stocks' calls in the calendar feed"],
+  ["group_figures", "Business group figures: each member's 1-month and 1-year change, promoter holding and the members' heatmap"],
+  // the filings search (doc_search.py): Free sees the first 3 results of a search, filtered by company only (plans.DOC_SEARCH)
+  ["doc_search", "Search filings: all results"], ["doc_search_all", "Search filings: all years, CSV"],
+  ["tables", "All company tables"],
+  ["watchlist_import", "Watchlist import from a CSV or Excel file"],
+  ["supply", "Customer and supplier links"], ["supply_pro", "Theme links, CSV"]];
+// EVERYONE (what every plan has, the comparison table's last fold) is in planFeatures.ts: only the lazy table reads it, so the landing
+// page's JavaScript doesn't carry it (FREE-TIER kept that page's budget)
 
 /** The cheapest plan that includes a feature flag ("free" when neither paid list names it). */
 export function planOf(feature: string): PlanId {
@@ -165,5 +90,5 @@ export const FLAG_GROUP: Record<string, "trade" | "research" | "money"> = {
   vix_filter: "trade", strike_rules: "trade", chart_replay: "trade", signal_webhooks: "trade", event_reminders: "trade", stock_futures: "trade",
   mtf: "trade", assistant: "trade",
   networth: "money", mf_gains: "money", dividends: "money", tax_tools: "money", money_reminders: "money", mf_costs: "money", itr_export: "money",
-  us_tax: "money", mf_behaviour: "money", sip_luck: "money", rates_slab: "money", loan_check: "money",
+  us_tax: "money", tax_export: "money", mf_behaviour: "money", sip_luck: "money", rates_slab: "money", loan_check: "money",
 };

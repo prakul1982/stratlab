@@ -2,6 +2,7 @@ import { lazy, StrictMode, Suspense, useCallback, useEffect, useLayoutEffect, us
 import { titleFor } from "./lib/title";
 import { createRoot } from "react-dom/client";
 import { useFeedbackOpen } from "./components/FeedbackOpen";
+import { FigureReports } from "./components/FigureReportHost";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { AppProvider, sessionUnconfirmed, useApp } from "./lib/app";
 import { api } from "./lib/api";
@@ -114,8 +115,13 @@ const ScreensPage = page(screensPage, "ScreensPage");
 const breadthPage = () => import("./pages/BreadthPage");
 const BreadthPage = page(breadthPage, "BreadthPage");
 const HeatmapPage = page(() => import("./pages/HeatmapPage"), "HeatmapPage");
+const MoversPage = page(() => import("./pages/MoversPage"), "MoversPage");
 const EtfGapsPage = page(() => import("./pages/EtfGapsPage"), "EtfGapsPage");
 const HoldersPage = page(() => import("./pages/HoldersPage"), "HoldersPage");
+const EarningsCallsPage = page(() => import("./pages/EarningsCallsPage"), "EarningsCallsPage");
+const BusinessGroupsPage = page(() => import("./pages/BusinessGroupsPage"), "BusinessGroupsPage");
+const BusinessGroupPage = page(() => import("./pages/BusinessGroupsPage"), "BusinessGroupPage");
+const DocSearchPage = page(() => import("./pages/DocSearchPage"), "DocSearchPage");   // search inside filings (lane b1)
 const BizUpdatesPage = page(() => import("./pages/BizUpdatesPage"), "BizUpdatesPage");
 const netWorth = () => import("./pages/money/NetWorthPage");
 const NetWorthPage = page(netWorth, "NetWorthPage");
@@ -338,8 +344,11 @@ function Routed() {
         <Route path="/research/rotation" element={<RotationPage />} />
         <Route path="/invest/breadth" element={<BreadthPage />} />
         <Route path="/invest/heatmap" element={<HeatmapPage />} />
+        <Route path="/invest/movers" element={<MoversPage />} />
         <Route path="/invest/etf-gaps" element={<EtfGapsPage />} />
         <Route path="/invest/holders" element={<HoldersPage />} />
+        <Route path="/invest/groups" element={<BusinessGroupsPage />} />
+        <Route path="/invest/groups/:slug" element={<BusinessGroupPage />} />
         <Route path="/invest/business-updates" element={<BizUpdatesPage />} />
         <Route path="/invest/stock-lending" element={<StockLendingPage />} />
         <Route path="/invest/margin-funding" element={<MarginFundingPage />} />
@@ -350,8 +359,10 @@ function Routed() {
         <Route path="/dev/kit" element={import.meta.env.DEV ? <DevKit /> : <AdminOnly what="The design kit"><DevKit /></AdminOnly>} />
         <Route path="/chart/:market/:symbol" element={<ChartPage />} />
         <Route path="/research/filings" element={<FilingsPage />} />
+        <Route path="/research/search" element={<DocSearchPage />} />
         <Route path="/research/results" element={<ResultsPage />} />
         <Route path="/research/corporate-actions" element={<CorpActionsPage />} />
+        <Route path="/research/earnings-calls" element={<EarningsCallsPage />} />
         <Route path="/research/IN/:symbol/deep" element={<DeepDivePage />} />
         <Route path="/research/US/:symbol/deep" element={<DeepDivePage />} />
         <Route path="/research/investor" element={<InvestorHomePage />} />
@@ -380,6 +391,8 @@ function App() {
       <Routed />
       {/* Help & feedback: one dialog for every page, signed in or not (owner, 4 Nov) */}
       <AppFeedback />
+      {/* "Report an error in this figure" and the note when one is fixed (owner, 12 Nov) */}
+      <FigureReports />
       <Toast />
     </AppProvider>
   );

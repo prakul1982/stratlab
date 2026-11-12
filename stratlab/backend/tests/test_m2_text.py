@@ -88,12 +88,13 @@ def test_the_value_chains_footnote_and_chart_agree_with_the_headline():
 
 def test_a_lenders_headline_names_the_layer_below_its_lowest_and_why():
     """Live R32 Private Banks: "lowest in ... (13.1%)" beside a three-company layer at 4.9%."""
-    ch = D.chain_table([lender_block("Large universal banks", 7, 13.1), lender_block("Regional banks, larger", 5, 13.5),
+    # lane d1 (updated on purpose): 13.1% against 13.5% is a gap under a point, no comparison (R43's headline rule); 12.1% keeps the case
+    ch = D.chain_table([lender_block("Large universal banks", 7, 12.1), lender_block("Regional banks, larger", 5, 13.5),
                         lender_block("Regional banks, smaller", 5, 11.2, 4), lender_block("Microfinance lenders", 3, 4.9),
                         lender_block("Payments banks", 2, 1.0)])
     assert ch["measure"] == "roe" and (ch["highest"], ch["lowest"]) == ("Regional banks, larger", "Large universal banks")
     assert ch["line"] == (f"Among the 2 layers with {FLOOR}, median return on equity is highest in Regional banks, larger (13.5%) and lowest in "
-                          "Large universal banks (13.1%), a gap of 0.4 points. Shown, not ranked: Regional banks, smaller (11.2%) and "
+                          "Large universal banks (12.1%), a gap of 1.4 points. Shown, not ranked: Regional banks, smaller (11.2%) and "
                           f"Microfinance lenders (4.9%), fewer than {D.HEADLINE_MIN} companies with the figure.")
     # a median of two companies is not shown in the table or the chart: nothing to explain
     assert [x["layer"] for x in ch["unranked"]] == ["Regional banks, smaller", "Microfinance lenders"]

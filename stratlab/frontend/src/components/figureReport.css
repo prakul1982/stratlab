@@ -1,0 +1,5 @@
+/* The "Report an error" dialog's figure and source, as label and value pairs (owner, 12 Nov). */
+.figure-report-facts { display: grid; gap: 6px; margin: 0; }
+.figure-report-facts > div { display: grid; grid-template-columns: 72px 1fr; gap: 10px; align-items: baseline; }
+.figure-report-facts dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 400px) { .figure-report-facts > div { grid-template-columns: 1fr; gap: 2px; } }

@@ -5,6 +5,7 @@ import io
 import math
 import re
 import zipfile
+from typing import NamedTuple
 from xml.sax.saxutils import escape
 
 NS = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
@@ -19,6 +20,12 @@ STYLES = (HEAD + f'<styleSheet {NS.split(" xmlns:r")[0]}><fonts count="2"><font>
           # the named "Normal" style: without it Excel readers warn "Workbook contains no default style" (DH-013)
           '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>')
 _BAD = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
+class Num(NamedTuple):
+    """A number with a format of its own (a row of mixed units: a multiple beside percentages)."""
+    value: float | None
+    fmt: str
 
 
 def ref(row: int, col: int) -> str:
@@ -40,7 +47,20 @@ def sheet_name(name: str, used: set[str]) -> str:
     return out
 
 
-def _cell(r: int, c: int, v, bold: bool) -> str:
+def styles(codes: list[str]) -> str:
+    """STYLES with a number format of its own for each code (style 3 onwards, in order): a column's format (`workbook` fmts)."""
+    if not codes:
+        return STYLES
+    fmts = f'<numFmts count="{len(codes)}">' + "".join(f'<numFmt numFmtId="{164 + i}" formatCode="{escape(c, {chr(34): "&quot;"})}"/>'
+                                                       for i, c in enumerate(codes)) + "</numFmts>"
+    xfs = "".join(f'<xf numFmtId="{164 + i}" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>' for i in range(len(codes)))
+    return (STYLES.replace("<fonts ", fmts + "<fonts ", 1).replace('<cellXfs count="3">', f'<cellXfs count="{3 + len(codes)}">', 1)
+            .replace("</cellXfs>", xfs + "</cellXfs>", 1))
+
+
+def _cell(r: int, c: int, v, bold: bool, fmt: int | None = None, own: dict | None = None) -> str:
+    if isinstance(v, Num):                     # `own`: each format code's style in this workbook
+        v, fmt = v.value, (own or {}).get(v.fmt, fmt)
     if v is None or v == "":
         return ""
     if isinstance(v, bool):
@@ -48,17 +68,21 @@ def _cell(r: int, c: int, v, bold: bool) -> str:
     if isinstance(v, (int, float)):
         if not math.isfinite(v):
             return ""
-        style = ' s="1"' if bold else (' s="2"' if isinstance(v, float) and not v.is_integer() else "")
+        style = ' s="1"' if bold else (f' s="{fmt}"' if fmt is not None else ' s="2"' if isinstance(v, float) and not v.is_integer() else "")
         return f'<c r="{ref(r, c)}"{style}><v>{v!r}</v></c>' if isinstance(v, float) else f'<c r="{ref(r, c)}"{style}><v>{v}</v></c>'
     text = escape(_BAD.sub("", str(v)))[:32000]
     style = ' s="1"' if bold else ""
     return f'<c r="{ref(r, c)}" t="inlineStr"{style}><is><t xml:space="preserve">{text}</t></is></c>'
 
 
-def workbook(sheets: list[tuple[str, list[list], set[int] | None]]) -> bytes:
-    """An .xlsx of (name, rows, the row numbers to make bold) sheets."""
+def workbook(sheets: list[tuple]) -> bytes:
+    """An .xlsx of (name, rows, the row numbers to make bold) sheets; a sheet may add a fourth part, {column: number format code}, for
+    the numbers of its rows not made bold (e.g. "0.0%", a date's "d mmm yyyy"); text cells keep no format."""
     used: set[str] = set()
-    names = [sheet_name(n, used) for n, _, _ in sheets]
+    names = [sheet_name(s[0], used) for s in sheets]
+    codes = list(dict.fromkeys([f for s in sheets if len(s) > 3 and s[3] for f in s[3].values()]
+                               + [v.fmt for s in sheets for row in s[1] for v in row if isinstance(v, Num)]))
+    own = {c: 3 + i for i, c in enumerate(codes)}
     out = io.BytesIO()
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("[Content_Types].xml", HEAD + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
@@ -76,14 +100,18 @@ def workbook(sheets: list[tuple[str, list[list], set[int] | None]]) -> bytes:
                    + "".join(f'<Relationship Id="rId{i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet{i + 1}.xml"/>'
                              for i in range(len(sheets)))
                    + f'<Relationship Id="rId{len(sheets) + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>')
-        z.writestr("xl/styles.xml", STYLES)
-        for i, (_, rows, bold) in enumerate(sheets):
+        z.writestr("xl/styles.xml", styles(codes))
+        for i, s in enumerate(sheets):
+            rows, bold = s[1], s[2]
+            fmt = {c: 3 + codes.index(f) for c, f in (s[3] if len(s) > 3 and s[3] else {}).items()}
             widths: dict[int, int] = {}
             body = []
             for r, row in enumerate(rows):
                 cells = []
                 for c, v in enumerate(row):
-                    cells.append(_cell(r, c, v, r in (bold or set())))
+                    cells.append(_cell(r, c, v, r in (bold or set()), fmt.get(c), own))
+                    if isinstance(v, Num):
+                        v = v.value
                     if v not in (None, ""):
                         widths[c] = max(widths.get(c, 8), min(60, len(str(v)) + 2))
                 body.append(f'<row r="{r + 1}">{"".join(cells)}</row>')

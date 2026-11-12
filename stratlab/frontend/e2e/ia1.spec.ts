@@ -37,8 +37,10 @@ test("every page of the menu opens at its own address as the right tab of its en
     if (group.pages.length > 1) {
       const tabs = page.getByTestId("hub-tabs");
       await expect(tabs, p.to).toHaveAttribute("aria-label", group.label);
-      await expect(tabs.locator("a")).toHaveText(group.pages.map((t) => t.label));
-      await expect(tabs.locator("[aria-current=page]"), p.to).toHaveText(p.label);
+      // (updated on purpose, R43: a tab may carry a shorter name where its entry's name says the rest, NavPage.tab, so the row of tabs
+      // stays on the breadcrumb's line at 1280 (ui-lint R17); the breadcrumb and the menu keep the full name)
+      await expect(tabs.locator("a")).toHaveText(group.pages.map((t) => t.tab ?? t.label));
+      await expect(tabs.locator("[aria-current=page]"), p.to).toHaveText(p.tab ?? p.label);
     } else await expect(page.getByTestId("hub-tabs"), p.to).toHaveCount(0);
   }
   expect(errors).toEqual([]);
