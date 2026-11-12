@@ -284,19 +284,22 @@ def test_saved_screens_through_the_api(w):
 
 
 def test_plan_limits_free_2_basic_10_pro_25(w, monkeypatch):
-    assert (PLANS["free"]["screens"], PLANS["basic"]["screens"], PLANS["pro"]["screens"]) == (2, 10, 25)
+    # (updated on purpose, FREE-TIER: Free keeps 1 saved screen now; running screens stays unlimited; Basic 10 and Pro 25 unchanged)
+    assert (PLANS["free"]["screens"], PLANS["basic"]["screens"], PLANS["pro"]["screens"]) == (1, 10, 25)
     monkeypatch.setattr(settings, "RAZORPAY_KEY_ID", "")
-    assert plan_info("free")["screens"] == 2                        # Free's own limit, payments on or not (7 Oct)
+    assert plan_info("free")["screens"] == 1                        # Free's own limit, payments on or not (7 Oct)
     paid(monkeypatch)
-    assert [plan_info(p)["screens"] for p in ("free", "basic", "pro")] == [2, 10, 25]
+    assert [plan_info(p)["screens"] for p in ("free", "basic", "pro")] == [1, 10, 25]
     c, h = w["client"], headers("free-token")
     body = {"name": "Mine", "region": "IN", "filters": {}}
-    for _ in range(2):
+    for _ in range(1):
         assert c.post("/research/screens/saved", headers=h, json=body).status_code == 200
     r = c.post("/research/screens/saved", headers=h, json=body)
-    assert r.status_code == 402 and "2 saved screens." in r.json()["detail"]["message"] and "Basic" in r.json()["detail"]["message"]
-    assert c.get("/research/screens/saved", headers=h).json()["limit"] == 2
-    assert c.get("/me", headers=h).json()["plan_info"]["screens"] == 2
+    assert r.status_code == 402 and "1 saved screen." in r.json()["detail"]["message"] and "Basic" in r.json()["detail"]["message"]
+    assert c.get("/research/screens/saved", headers=h).json()["limit"] == 1
+    assert c.get("/me", headers=h).json()["plan_info"]["screens"] == 1
+    for _ in range(3):                                              # running a screen has no limit on Free
+        assert c.post("/research/screens/run", headers=h, json={"region": "IN", "filters": {}}).status_code == 200
 
 
 # ---------- the weekly note ----------

@@ -955,14 +955,22 @@ def use_theme(profile, r: str, theme: str, key: tuple) -> None:
     from ..main import month_start_iso, upgrade
     since = month_start_iso()
     mark = f"theme:{r}:{theme_library.normalise(theme, r) or theme.lower()}"
-    if db.count_usage(profile["id"], mark, since):
+    try:
+        if db.count_usage(profile["id"], mark, since):
+            return
+        used = db.count_usage(profile["id"], "theme", since)
+    except Exception as ex:          # the count couldn't be read: the theme opens, never an error on its page (as computed.refresh_gate)
+        print("themes: new theme not counted:", type(ex).__name__, str(ex)[:100])
         return
-    if db.count_usage(profile["id"], "theme", since) >= limit:
+    if used >= limit:
         plan = plan_of(profile)
         upgrade(limit_message(plan, "themes_per_month", f"You've had {limit} new theme{'' if limit == 1 else 's'} mapped this month",
                               "new themes", monthly=True, after="Every theme already in the library still opens."), THEME_LIMIT_CODE)
-    db.add_usage(profile["id"], "theme")
-    db.add_usage(profile["id"], mark)
+    try:
+        db.add_usage(profile["id"], "theme")
+        db.add_usage(profile["id"], mark)
+    except Exception as ex:
+        print("themes: new theme not counted:", type(ex).__name__, str(ex)[:100])
 
 
 def theme_map(profile, region: str, q: str):

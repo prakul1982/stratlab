@@ -141,6 +141,9 @@ def test_a_map_from_the_older_prompt_with_few_layers_is_written_again_once():
 
 # ---------- 2. the first deck of a theme waits for its map: 202, then the file, counted once ----------
 def test_the_deck_answers_preparing_while_the_map_is_written_then_the_file_counted_once(api, monkeypatch):
+    # (updated on purpose, FREE-TIER: Free has no decks of its own now; the deck's route is shown on Basic)
+    from app import main as _m
+    monkeypatch.setitem(_m.app.dependency_overrides, _m.current_profile, lambda: {"id": "u1", "_plan": "basic", "plan": "basic"})
     from app.intel import routes
     monkeypatch.setattr(routes, "public_facts", lambda region, sym: None)
     real = T.map_for_deck

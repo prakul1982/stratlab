@@ -161,9 +161,11 @@ def ai_reads(usage):
 
 def test_endpoints_store_reads_and_respect_the_daily_limit(api):
     c, who, calls, usage = api
-    assert c.get("/research/deep/ACME").status_code == 200          # Free opens 2 companies a month
+    assert c.get("/research/deep/ACME").status_code == 200          # Free opens 1 company a month
     assert usage == ["deepdive", "deepdive:IN:ACME"]
-    who["p"] = {"id": "u1", "plan": "pro", "_plan": "pro"}
+    # (updated on purpose, FREE-TIER: the daily cap set by RESEARCH_AI_PER_DAY is Basic's now, Free has its own 5: a Pro view on a
+    # Basic payment keeps the test's cap of 2)
+    who["p"] = {"id": "u1", "plan": "pro", "_plan": "pro", "_paid_plan": "basic"}
     v = c.get("/research/deep/ACME").json()
     assert v["numbers"]["years"][-1]["capex"] == 23 and v["reads"] is None and len(v["documents"]) == 3
     err = c.get("/research/deep/NOPE").json()["detail"]["message"]
@@ -457,32 +459,29 @@ def test_a_read_saved_before_the_unit_fix_shows_billions(monkeypatch):
 
 
 def test_monthly_deep_dives_and_decks_count_each_company_once(api, monkeypatch):
-    """Free: 2 companies a month in the deep dive and 1 deck; Basic 15 and 5; Pro unlimited. Opening a company again
-    in the same month (or its read, report card or deck) doesn't count again, and an unknown company never counts."""
+    """Free: 1 company a month in the deep dive and no decks; Basic 15 and 5; Pro unlimited. Opening a company again
+    in the same month (or its read, report card or deck) doesn't count again, and an unknown company never counts.
+    (updated on purpose, FREE-TIER: Free's 2 deep dives and 1 deck became 1 and none)"""
     from app import main
     c, who, _calls, usage = api
     monkeypatch.setattr(main, "deep_base", lambda sym, region="IN", years=2, trades=True: {"sym": sym})
     monkeypatch.setattr(main, "deep_view", lambda sym, base: {"symbol": sym})
     monkeypatch.setattr(main.deck, "build", lambda view: b"PK")
     assert c.get("/research/deep/AAA").status_code == 200 and c.get("/research/deep/AAA").status_code == 200
-    assert c.get("/research/deep/AAA?region=US").status_code == 200              # another market: another company
-    r = c.get("/research/deep/CCC")
+    r = c.get("/research/deep/AAA?region=US")                                    # another market: another company
     assert r.status_code == 402 and r.json()["detail"]["code"] == "deepdive_limit"
     msg = r.json()["detail"]["message"]
-    assert "You've opened 2 companies in the deep dive this month" in msg and "The count starts again on " in msg and "Basic gives 15 a month." in msg   # DP2-022
+    assert "You've opened 1 company in the deep dive this month" in msg and "The count starts again on " in msg and "Basic gives 15 a month." in msg   # DP2-022
     assert c.get("/research/deep/AAA").status_code == 200                        # already opened: still opens
     assert c.post("/research/deep/CCC/card").status_code == 402                  # the report card counts the same way
-    assert c.get("/research/deep/AAA/deck").status_code == 200
-    r = c.get("/research/deep/AAA/deck?region=US")
+    r = c.get("/research/deep/AAA/deck")
     assert r.status_code == 402 and r.json()["detail"]["code"] == "deck_limit"
-    from app.plans import resets_on
-    # a company's and a theme's decks share the month's count (EXPORT), so the words name both
-    assert r.json()["detail"]["message"] == (f"You've made 1 slide deck this month. The count starts again on {resets_on()}. A company's or a "
-                                                "theme's PDF and PowerPoint count as one deck, so a deck you've already made this month still downloads in "
-                                                "either format. Basic gives 5 a month.")
-    assert usage.count("deepdive") == 2 and usage.count("deck") == 1
+    # no decks on Free: the words say where they are and point at the sample deck, never "You've made 0 slide decks"
+    assert r.json()["detail"]["message"].startswith("Slide decks are on Basic: 5 a month. The sample deck on the Plans page shows what one holds.")
+    assert usage.count("deepdive") == 1 and usage.count("deck") == 0
     who["p"] = {"id": "u1", "plan": "basic", "_plan": "basic"}
-    for i in range(13):
+    assert c.get("/research/deep/AAA/deck").status_code == 200                   # Basic: a deck
+    for i in range(14):
         assert c.get(f"/research/deep/B{i:02d}").status_code == 200
     r = c.get("/research/deep/ZZZ")
     assert r.status_code == 402 and r.json()["detail"]["message"].endswith("Pro has no limit on deep dives.")
@@ -493,21 +492,21 @@ def test_monthly_deep_dives_and_decks_count_each_company_once(api, monkeypatch):
 
 
 def test_a_refused_deck_uses_no_deep_dive(api, monkeypatch):
-    """Free at its 1 deck with a deep dive left: a deck for a new company is refused and the deep dive stays unused."""
+    """Free, with no decks of its own and its deep dive left: a deck is refused and the deep dive stays unused.
+    (updated on purpose, FREE-TIER: Free's 1 deck became none, so the first deck is the refused one)"""
     from app import main
     c, who, _calls, usage = api
     monkeypatch.setattr(main, "deep_base", lambda sym, region="IN", years=2, trades=True: {"sym": sym})
     monkeypatch.setattr(main, "deep_view", lambda sym, base: {"symbol": sym})
     monkeypatch.setattr(main.deck, "build", lambda view: b"PK")
-    assert c.get("/research/deep/AAA/deck").status_code == 200
     r = c.get("/research/deep/BBB/deck")
     assert r.status_code == 402 and r.json()["detail"]["code"] == "deck_limit"
-    assert usage.count("deepdive") == 1 and usage.count("deck") == 1
-    assert c.get("/research/deep/BBB").status_code == 200                       # the second deep dive is still there
+    assert usage.count("deepdive") == 0 and usage.count("deck") == 0
+    assert c.get("/research/deep/BBB").status_code == 200                       # the deep dive is still there
 
 
 def test_deep_dive_cap_applies_before_payments_go_live(api, monkeypatch):
-    """The owner's decision (7 Oct): Free's 2 deep dives a month apply whether or not plans can be bought yet. (This
+    """The owner's decision (7 Oct): Free's deep dives a month (1: FREE-TIER) apply whether or not plans can be bought yet. (This
     test used to check the deep dive was unlimited until payments went live.)"""
     from app import main
     from app.config import settings
@@ -516,7 +515,7 @@ def test_deep_dive_cap_applies_before_payments_go_live(api, monkeypatch):
     monkeypatch.setattr(main, "deep_base", lambda sym, region="IN", years=2, trades=True: {"sym": sym})
     monkeypatch.setattr(main, "deep_view", lambda sym, base: {"symbol": sym})
     codes = [c.get(f"/research/deep/S{i}").status_code for i in range(3)]
-    assert codes == [200, 200, 402]                                                  # Free: 2 companies a month
+    assert codes == [200, 402, 402]                                                  # Free: 1 company a month (updated on purpose, FREE-TIER)
     r = c.get("/research/deep/S9")
     assert r.json()["detail"]["code"] == "deepdive_limit" and "ask us at" in r.json()["detail"]["message"]
 

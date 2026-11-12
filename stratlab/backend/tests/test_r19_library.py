@@ -199,6 +199,9 @@ def test_refresh_updates_the_shared_read_for_the_next_person_with_a_guard_and_a_
 
 
 def test_a_failed_refresh_keeps_the_old_read_with_its_date(lib, monkeypatch):
+    # (updated on purpose, FREE-TIER: Free has no refreshes now, so a refresh is shown on Basic, 10 a day)
+    from app import main as _m
+    monkeypatch.setitem(_m.app.dependency_overrides, _m.current_profile, lambda: {"id": "u1", "_plan": "basic", "plan": "basic", "_paid_plan": "basic"})
     old = lib.get("/research/company/US/NVDA/ai").json()
     monkeypatch.setattr(computed, "DEFAULT_GUARD", 0)
     from app.ai_providers import AIError
@@ -264,8 +267,11 @@ def test_admin_library_is_admin_only_and_shows_every_store(lib):
 
 # ---------- the person's usage ----------
 def test_my_usage_lists_every_limit_and_the_refreshes_left(lib, monkeypatch):
+    # (updated on purpose, FREE-TIER: Free has no refreshes now, so a refresh is shown on Basic, 10 a day)
+    from app import main as _m
+    monkeypatch.setitem(_m.app.dependency_overrides, _m.current_profile, lambda: {"id": "u1", "_plan": "basic", "plan": "basic", "_paid_plan": "basic"})
     rows = {r["key"]: r for r in lib.get("/me/usage").json()["rows"]}
-    assert rows["refresh"]["limit"] == plans.REFRESHES_PER_DAY["free"] and rows["refresh"]["used"] == 0 and rows["refresh"]["resets"] == "day"
+    assert rows["refresh"]["limit"] == plans.REFRESHES_PER_DAY["basic"] and rows["refresh"]["used"] == 0 and rows["refresh"]["resets"] == "day"
     assert {"research_ai", "backtest", "deck", "deepdive", "screens", "holdings"} <= set(rows)
     assert rows["deck"]["resets"] == "month" and rows["holdings"]["resets"] is None
     _sector(lib, "AI data centers")
