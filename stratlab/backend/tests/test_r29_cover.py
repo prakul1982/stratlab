@@ -281,4 +281,4 @@ def test_no_headline_compares_layers_of_different_families(monkeypatch):
 
 
 def test_the_versions_are_bumped_so_kept_maps_and_decks_are_made_again():
-    assert B.RULES == 39 and deck.THEME_DECK_VERSION == 49          # lane s1-fit: RULES 39 (updated on purpose); R38 bumped the deck version (updated on purpose); R37 lane r2: RULES 38 (updated on purpose); R36 lane r1: RULES 37 (updated on purpose); q1: RULES 36 (updated on purpose); R35 bumped the deck version (updated on purpose; lane n2: RULES 35)
+    assert B.RULES == 40 and deck.THEME_DECK_VERSION == 49          # lane s1-fit: RULES 39 (updated on purpose); R38 bumped the deck version (updated on purpose); R37 lane r2: RULES 38 (updated on purpose); R36 lane r1: RULES 37 (updated on purpose); q1: RULES 36 (updated on purpose); R35 bumped the deck version (updated on purpose; lane n2: RULES 35)

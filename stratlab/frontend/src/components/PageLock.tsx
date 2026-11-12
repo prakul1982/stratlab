@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocation } from "react-router-dom";
 import { CFG } from "../lib/api";
@@ -33,7 +33,9 @@ export function PageLock() {
   // of its own. A whole page on a plan shows it at once, as before.
   const [loading, setLoading] = useState(false);
   const slot = useLockSlot();           // the page's title draws it: the note goes under the title, on every page (RC7-003)
-  useEffect(() => {
+  // R38.1 (CI, LIVE6-020 at 390px: IPOs moved 0.14 with the toolbar 235px up): when the plan arrived after the title was drawn, the note
+  // was painted for a frame with "loading" still false before this look ran and hid it. Looked before the browser paints, not after.
+  useLayoutEffect(() => {
     setOwn(false);
     setLoading(false);
     if (!locked) return;

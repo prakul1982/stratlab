@@ -364,7 +364,7 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged): the one before carries
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own): the one before carries, and the one before that when it kept none (placed)
 
 
 def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
@@ -374,8 +374,14 @@ def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
     key = ["place", region, theme.lower(), int(float(m.get("generated_at") or 0)), theme_base.RULES]
     try:
         kept = (computed.get("theme:place", key) or {}).get("value") or {}
-        if not kept and theme_base.RULES in PLACE_CARRY:       # R30: the placement kept under the rules before, whose answers still hold
-            kept = (computed.get("theme:place", key[:-1] + [PLACE_CARRY[theme_base.RULES]]) or {}).get("value") or {}
+        # R30: the placement kept under the rules before, whose answers still hold. R40 (the live Release 38 Utilities map: the rules before
+        # had kept no placement of their own, theirs carried from the ones before them, so the placement was asked again from nothing and lost
+        # the layers its earlier answers had added): back through every carried version until one kept a placement
+        r, seen = theme_base.RULES, set()
+        while not kept and r in PLACE_CARRY and r not in seen:
+            seen.add(r)
+            r = PLACE_CARRY[r]
+            kept = (computed.get("theme:place", key[:-1] + [r]) or {}).get("value") or {}
     except Exception:
         kept = {}
     names = {c["ticker"]: c.get("name") for v in out.get("value_chain") or [] for c in v.get("companies") or []}
