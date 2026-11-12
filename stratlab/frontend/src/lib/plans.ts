@@ -90,7 +90,7 @@ export const NUMBERS: [keyof Limits, string][] = [["backtests_per_month", "Backt
   ["mf_schemes", "Mutual fund schemes kept"], ["networth_items", "Net worth entries"], ["journal_trades", "Trades the journal keeps"],
   ["watchlists", "Market Watch lists (the first is your Research watchlist)"], ["watchlist_symbols", "Symbols in one Market Watch list"],
   ["chart_saves", "Charts that keep your drawings and indicators"], ["chart_indicators", "Indicators on one chart"],
-  ["ai_reads_per_day", "Fresh AI reads a day (a company's read already written today, and the market mood, never count)"]];
+  ["ai_reads_per_day", "Fresh AI reads a day, refreshes included (a company's read already written today, and the market mood, never count)"]];
 export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in strategy rules"], ["group_live", "Paper trade a whole group (on 5-minute, 15-minute or 1-hour candles)"], ["options", "Options paper trading at set times"],
   ["alerts", "Trade notifications"], ["daily_report", "Daily report after the close"], ["newsletter", "Daily Market Brief and My Stocks by email"],
   ["scans", "Stage 2 + Supertrend scan, with a daily alert"],
@@ -106,7 +106,7 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in 
   ["money_reminders", "Money calendar reminders by email or phone"],
   ["mf_costs", "Fund costs: each fund's TER parts in rupees, both plans side by side, and changes since you bought"],
   ["breadth", "Market breadth history, charts and sector table"],
-  ["positioning", "Derivatives positioning history and IV percentiles"],
+  ["positioning", "Positioning and FII/DII flow history, IV percentiles"],
   ["journal", "Trade journal: every trade, the honesty checks, breakdowns and paper vs real"],
   ["itr_export", "ITR-ready schedules and a PDF pack for your CA"], ["us_tax", "US stocks in Indian tax sale by sale: each sale's gain in rupees, the foreign tax credit and Schedule FA"],
   ["etf_gaps", "Alerts on an ETF's price against its NAV"],

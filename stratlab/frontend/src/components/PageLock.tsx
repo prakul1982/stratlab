@@ -56,7 +56,7 @@ export function PageLock() {
   if (!gate.whole && !(slot && slot.isConnected)) return null;          // the page itself still opening (its title not drawn yet)
   const plan = PLAN_NAME[gatePlan(gate)];
   const yours = PLAN_NAME[(me.plan ?? "free") as "free" | "basic" | "pro"] ?? "Free";
-  const what = featureName(gate.feature);
+  const what = gate.what ?? featureName(gate.feature);
   const hint = unlockHint(me.offer, CFG.CONTACT_EMAIL || EARLY_ACCESS_EMAIL, price);
   const note = (
     <Notice className="page-lock plan-note" label={`${plan} feature`} actions={<PlanActions source="lock" />}>

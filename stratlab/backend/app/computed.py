@@ -309,25 +309,26 @@ def day_start() -> str:
     return datetime.now(IST).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
 
 
-def refresh_gate(profile: dict | None, kind: str, at: float | None, guard: float | None = None) -> str:
-    """Whether a person's Refresh of a stored result works it out again: "go" (counted against their day), "fresh" (it was worked out
-    within the kind's guard window: the stored one is given, "already fresh") or "capped" (their refreshes for today are used: the stored
-    one is given, with its date). Nothing stored yet (`at` None) is always "go" and not counted."""
+def refresh_gate(profile: dict | None, kind: str, at: float | None, guard: float | None = None, capped: bool = True) -> str:
+    """Whether a person's Refresh of a stored result works it out again: "go", "fresh" (it was worked out within the kind's guard window:
+    the stored one is given, "already fresh") or "capped" (the person's fresh AI reads for today are used: the stored one is given, with
+    its date). Nothing stored yet (`at` None) is always "go".
+    LIVE7B-002: one daily counter, the one Plans and Account state ("Fresh AI reads a day": none on Pro): a Refresh is held to it, and the
+    AI read it writes is what counts (intel/routes.ai_call), so it is never counted twice. `capped` False: a read shared by everyone that
+    no one's count holds (the market mood, LIVE7A-016): only the guard window applies."""
     if not at:
         return "go"
     if _now() - float(at) < (GUARD.get(kind, DEFAULT_GUARD) if guard is None else guard):
         return "fresh"
-    word = plan_word(profile)
-    if word == "admin" or not profile or not profile.get("id"):
+    if not capped or plan_word(profile) == "admin" or not profile or not profile.get("id"):
         return "go"
-    from .plans import refreshes_per_day
-    cap = refreshes_per_day(word)
+    from .intel.routes import ai_cap, ai_reads_today
     try:
-        if cap is not None and db.count_usage(profile["id"], "refresh", day_start()) >= cap:
+        cap = ai_cap(profile)
+        if cap is not None and ai_reads_today(profile) >= cap:
             return "capped"
-        db.add_usage(profile["id"], "refresh")
     except Exception as ex:                 # the count couldn't be read: the stored result is given, never an error
-        print("computed: refresh not counted:", type(ex).__name__, str(ex)[:100])
+        print("computed: refresh not checked:", type(ex).__name__, str(ex)[:100])
         return "capped"
     return "go"
 

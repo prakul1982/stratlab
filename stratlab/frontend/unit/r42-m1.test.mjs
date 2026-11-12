@@ -55,3 +55,27 @@ test("LIVE7A-015 / LIVE7A-024: after the bell the count is the day's; the index'
   assert.equal(liveTitle({ as_of: "15:15", state: "final" }), "Today, final at 15:15");
   assert.match(read("src/pages/BreadthPage.tsx"), /header: final \? \(live\.close \? "Close" : `At \$\{live\.as_of\}`\) : "Now"/);
 });
+
+test("LIVE7B-002 / LIVE7A-016: one daily count beside Refresh, the fresh AI reads Plans and Account state; none on the market's read", async () => {
+  const { refreshesLeft } = await import("../src/lib/usageText.ts");
+  const rows = [{ key: "research_ai", label: "Fresh AI reads, refreshes included", used: 10, limit: 60, left: 50, resets: "day" }];
+  assert.equal(refreshesLeft({ plan: "Basic", rows }), 50);                         // Account's "10 of 60", not a separate "10 left today"
+  assert.equal(refreshesLeft({ plan: "Pro", rows: [{ ...rows[0], limit: null, left: null }] }), null);   // Pro: no count shown, as Plans says
+  const stamp = read("src/components/StoredStamp.tsx");
+  assert.match(stamp, /const left = counted \? refreshesLeft\(usage\) : null;/);
+  const page = read("src/pages/Research.tsx");
+  assert.match(page, /onRefresh=\{refreshAI\} counted=\{false\} \/>/);
+  assert.match(page, /data-testid="pulse-tone-none"/);
+  assert.match(read("src/lib/plans.ts"), /"Fresh AI reads a day, refreshes included \(/);
+});
+
+test("LIVE7A-018: Flows' lock names what that page locks; Plans names the flow history", async () => {
+  const { gateFor, featureName } = await import("../src/lib/gates.ts");
+  const { lockWords } = await import("../src/lib/lockText.ts");
+  const g = gateFor("/invest/flows");
+  assert.equal(lockWords(g.what ?? featureName(g.feature), "Basic", "Free", g.whole),
+    "Basic adds each recorded day's FII and DII net buying, as a table and a chart. Everything else here is on your Free plan.");
+  assert.match(featureName("positioning"), /FII\/DII flow history/);
+  assert.equal(gateFor("/trade/positioning").what, undefined);                     // Positioning's own lock keeps the plan's row
+  assert.match(read("src/components/PageLock.tsx"), /const what = gate\.what \?\? featureName\(gate\.feature\);/);
+});

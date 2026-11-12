@@ -10,12 +10,14 @@ import { DataTable, Skeleton, Working } from "./kit";
  * with its date. */
 
 export type { RefreshState };
-export const NO_REFRESH_LEFT = "No refreshes left today, back at midnight IST";
+export const NO_REFRESH_LEFT = "No fresh AI reads left today, back at midnight IST";
 
-/** "Last updated 6 Nov, 14:05 IST", the Refresh button and "4 left today", for a card's head. */
-export function StoredStamp({ at, tz, busy, onRefresh }: { at: number | null | undefined; tz?: string; busy: boolean; onRefresh: () => void }) {
+/** "Last updated 6 Nov, 14:05 IST", the Refresh button and "4 left today", for a card's head. The count is the person's fresh AI reads,
+ * the one Plans and Account state (LIVE7B-002); `counted` false: a read shared by everyone that no one's count holds (the market's
+ * headlines read, LIVE7A-016), so no count is shown beside it. */
+export function StoredStamp({ at, tz, busy, onRefresh, counted = true }: { at: number | null | undefined; tz?: string; busy: boolean; onRefresh: () => void; counted?: boolean }) {
   const { usage } = useUsage();
-  const left = refreshesLeft(usage);
+  const left = counted ? refreshesLeft(usage) : null;
   const none = left === 0;
   return (
     <span className="stored-stamp" data-testid="stored-stamp">
@@ -29,11 +31,11 @@ export function StoredStamp({ at, tz, busy, onRefresh }: { at: number | null | u
 }
 
 /** Under the head: the loading bar while a Refresh is out, then one calm line saying what it did. */
-export function StoredNote({ busy, state, at, tz }: { busy: boolean; state: RefreshState | null; at: number | null | undefined; tz?: string }) {
+export function StoredNote({ busy, state, at, tz, counted = true }: { busy: boolean; state: RefreshState | null; at: number | null | undefined; tz?: string; counted?: boolean }) {
   const { usage } = useUsage();
   if (busy) return <Working label="Refreshing for everyone…" />;
   const when = at ? writtenAt(at, tz) : "";
-  const left = refreshesLeft(usage);
+  const left = counted ? refreshesLeft(usage) : null;
   const msg = state === "fresh" ? `Updated ${when} – already fresh.`
     : state === "capped" ? `${NO_REFRESH_LEFT}. Showing the read from ${when}.`
     : state === "failed" ? `Couldn't refresh just now. Still showing the read from ${when}.`

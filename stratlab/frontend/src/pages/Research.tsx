@@ -533,8 +533,8 @@ export function PulsePage() {
       {/* R15 #17 (owner, 7 Nov): what the headlines say sits with the mood, at the top, not under every table */}
       <Card>
         <CardHead title="What the headlines say" info={HELP.researchPulse}
-          actions={ai && !aiErr ? <StoredStamp at={ai.generated_at} tz={marketTz(region)} busy={busy || rf.busy} onRefresh={refreshAI} /> : undefined} />
-        {ai && !aiErr && <StoredNote busy={rf.busy} state={rf.state} at={ai.generated_at} tz={marketTz(region)} />}
+          actions={ai && !aiErr ? <StoredStamp at={ai.generated_at} tz={marketTz(region)} busy={busy || rf.busy} onRefresh={refreshAI} counted={false} /> : undefined} />
+        {ai && !aiErr && <StoredNote busy={rf.busy} state={rf.state} at={ai.generated_at} tz={marketTz(region)} counted={false} />}
         {aiErr ? (
           <div className="k-row ai-read-off" role="status">
             <span className="k-small k-muted">No AI read of the headlines right now{aiReason(aiErr)} The tables below don't depend on it.</span>
@@ -544,7 +544,9 @@ export function PulsePage() {
           : aiNothing ? <p className="k-small k-muted" data-testid="pulse-ai-none">Nothing in today's headlines held up against the market's figures, so there is no AI summary.</p>
           : (
             <>
-              {ai.tone && <p className="inv-summary" data-testid="pulse-tone">{ai.tone}</p>}
+              {ai.tone ? <p className="inv-summary" data-testid="pulse-tone">{ai.tone}</p>
+                // LIVE7A-016: a read with no reason for the day's move left the card with a head and no body: it says so, and where the rest is
+                : <p className="k-small" data-testid="pulse-tone-none">{ai.story_line || "No headline gives a reason for the day's move."} The companies, topics and themes the headlines name are in the tables below.</p>}
               {/* the FII/DII source line goes under the FII table (LIVE4-006); without that table it stays here */}
               {ai.flows_source && !mood?.flows && <p className="k-note" data-testid="pulse-flows-source">{ai.flows_source}</p>}
             </>

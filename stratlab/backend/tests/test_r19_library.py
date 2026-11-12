@@ -83,18 +83,26 @@ def test_an_unreachable_store_is_a_miss_never_an_error(monkeypatch):
 
 
 # ---------- Refresh: guard window and daily cap ----------
+# (updated on purpose, LIVE7B-002: a Refresh is held to the one daily count Plans and Account state, the fresh AI reads; the AI read it
+# writes is what counts, so the gate itself counts nothing, and the market mood is held by no one's count)
 def test_the_guard_window_and_the_daily_cap(store, monkeypatch):
+    from app.config import settings
     used = []
     monkeypatch.setattr(db, "count_usage", lambda u, k, since: sum(1 for x in used if x == k))
     monkeypatch.setattr(db, "add_usage", lambda u, k: used.append(k))
-    monkeypatch.setattr(plans, "REFRESHES_PER_DAY", {"free": 2, "basic": 10, "pro": 30})
+    monkeypatch.setattr(settings, "RESEARCH_AI_PER_DAY", 2)
     now = computed._now()
     me = {"id": "u1", "_plan": "free", "plan": "free"}
     assert computed.refresh_gate(me, "ai:company", now - 60) == "fresh" and used == []         # written a minute ago
     assert computed.refresh_gate(me, "ai:company", None) == "go" and used == []                # nothing kept yet: not counted
     old = now - 7 * 3600
-    assert [computed.refresh_gate(me, "ai:company", old) for _ in range(3)] == ["go", "go", "capped"] and used == ["refresh", "refresh"]
-    assert computed.refresh_gate(me, "ai:pulse", now - 400) == "capped"                          # the mood's window is 5 minutes
+    assert computed.refresh_gate(me, "ai:company", old) == "go" and used == []                 # the read it writes counts, not the gate
+    used += ["research_ai", "research_ai"]                                                         # the day's two fresh AI reads used
+    assert computed.refresh_gate(me, "ai:company", old) == "capped"
+    assert computed.refresh_gate(me, "ai:pulse", now - 400, capped=False) == "go"                 # the mood: past its 5 minutes, no count
+    assert computed.refresh_gate(me, "ai:pulse", now - 100, capped=False) == "fresh"
+    pro = {"id": "u2", "_plan": "pro", "plan": "pro", "_paid_plan": "pro"}
+    assert computed.refresh_gate(pro, "ai:company", old) == "go"                                  # Pro: no daily cap, as Plans says
 
 
 # ---------- the theme library's matching ----------
@@ -176,7 +184,9 @@ def test_refresh_updates_the_shared_read_for_the_next_person_with_a_guard_and_a_
     later = time_machine.travel(time.time() + 7 * 3600, tick=True)          # past the guard window
     later.start()
     request.addfinalizer(later.stop)
-    monkeypatch.setattr(plans, "REFRESHES_PER_DAY", {"free": 1, "basic": 1, "pro": 1})
+    # (updated on purpose, LIVE7B-002: the day's cap is the fresh AI reads', each refresh's new map one of them)
+    from app.config import settings
+    monkeypatch.setattr(settings, "RESEARCH_AI_PER_DAY", 1)
     monkeypatch.setattr(computed, "DEFAULT_GUARD", 0)                         # (u2 refreshes right after)
     mine = []                                                                 # each person's own count
     monkeypatch.setattr(db, "count_usage", lambda u, k, since: sum(1 for x in mine if x == (u, k)))
@@ -263,16 +273,20 @@ def test_admin_library_is_admin_only_and_shows_every_store(lib):
 
 
 # ---------- the person's usage ----------
+# (updated on purpose, LIVE7B-002: one daily count, the fresh AI reads, refreshes included; no separate refresh row)
 def test_my_usage_lists_every_limit_and_the_refreshes_left(lib, monkeypatch):
+    from app.config import settings
     rows = {r["key"]: r for r in lib.get("/me/usage").json()["rows"]}
-    assert rows["refresh"]["limit"] == plans.REFRESHES_PER_DAY["free"] and rows["refresh"]["used"] == 0 and rows["refresh"]["resets"] == "day"
+    assert "refresh" not in rows
+    assert rows["research_ai"]["limit"] == settings.RESEARCH_AI_PER_DAY and rows["research_ai"]["resets"] == "day"
     assert {"research_ai", "backtest", "deck", "deepdive", "screens", "holdings"} <= set(rows)
     assert rows["deck"]["resets"] == "month" and rows["holdings"]["resets"] is None
     _sector(lib, "AI data centers")
     monkeypatch.setattr(computed, "DEFAULT_GUARD", 0)
     _sector(lib, "AI data centers", refresh=True)
-    r = {x["key"]: x for x in lib.get("/me/usage").json()["rows"]}["refresh"]
-    assert r["used"] == 1 and r["left"] == r["limit"] - 1
+    before = rows["research_ai"]["used"]
+    r = {x["key"]: x for x in lib.get("/me/usage").json()["rows"]}["research_ai"]
+    assert r["used"] >= before + 1 and r["left"] == r["limit"] - r["used"]
 
 
 def test_a_theme_map_and_its_check_survive_a_deploy(lib):

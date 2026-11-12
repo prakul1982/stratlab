@@ -166,7 +166,8 @@ def ai_call(profile, kind: str, key: tuple, ttl: float, refresh: bool, build, co
         return A.cached(kind, key, ttl, False, build)[0]
     old = A.get(kind, key) if refresh else None
     if old is not None and not gated:
-        state = computed.refresh_gate(profile, "ai:" + kind, float(old.get("generated_at") or 0) or None, guard=min_age or None)
+        # the guard window only: a counted read's cap is held where it is written (read_slot), so a Refresh is one fresh AI read (LIVE7B-002)
+        state = computed.refresh_gate(profile, "ai:" + kind, float(old.get("generated_at") or 0) or None, guard=min_age or None, capped=False)
         if state != "go":
             return {**old, "refresh_state": state}
     by = computed.plan_word(profile) if refresh else None

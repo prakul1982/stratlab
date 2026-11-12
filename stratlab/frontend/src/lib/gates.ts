@@ -5,7 +5,9 @@
  * entry in ELSEWHERE. */
 import { FLAGS, planOf, type PlanId } from "./plans";
 
-export type Gate = { feature: string; whole: boolean };
+/** `what`: the paid part as this page holds it, when the plan's row names more than the page has (LIVE7A-018: Flows' lock named
+ * "derivatives positioning history and IV percentiles", neither of which is on that page) */
+export type Gate = { feature: string; whole: boolean; what?: string };
 
 export const PAGE_GATES: Record<string, Gate> = {
   "/trade/signals": { feature: "signal_webhooks", whole: true },
@@ -16,7 +18,7 @@ export const PAGE_GATES: Record<string, Gate> = {
   "/invest/breadth": { feature: "breadth", whole: false },
   "/trade/positioning": { feature: "positioning", whole: false },
   // Market today's Flows: Positioning's cash card and its history, on the same plan as there (IA-1)
-  "/invest/flows": { feature: "positioning", whole: false },
+  "/invest/flows": { feature: "positioning", whole: false, what: "Each recorded day's FII and DII net buying, as a table and a chart" },
   "/trade/positioning/stocks": { feature: "stock_futures", whole: false },
   "/trade/journal": { feature: "journal", whole: false },
   "/trade/closing-auction": { feature: "cas_history", whole: false },
