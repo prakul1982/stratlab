@@ -115,3 +115,23 @@ def test_the_builder_starts_only_for_the_owner_on_a_trusted_thread():
     assert 'include_comments_by_actor: "${{ github.repository_owner }},*[bot]"' in text
     # and the action keeps its own default checks: no non-write users, no bots allowed in
     assert "allowed_non_write_users" not in text and "allowed_bots" not in text
+
+
+def test_the_backend_image_runs_as_an_unprivileged_user():
+    lines = [ln.strip() for ln in (ROOT / "stratlab" / "backend" / "Dockerfile").read_text().splitlines()]
+    steps = [ln for ln in lines if ln and not ln.startswith("#")]
+    users = [i for i, ln in enumerate(steps) if ln.startswith("USER ")]
+    assert users, "the image names the user it runs as"
+    last = steps[users[-1]].split()[1]
+    assert last.split(":")[0] not in ("root", "0"), last
+    # it switches after everything that installs or copies, so the code and the packages stay root's
+    installs = [i for i, ln in enumerate(steps) if ln.startswith(("RUN pip", "COPY ", "ADD "))]
+    assert installs and max(installs) < users[-1]
+    assert not [ln for ln in steps[users[-1] + 1:] if ln.startswith(("RUN ", "USER "))]
+    # the user it switches to is made in the image, with its own home, and not as a system account sharing an id
+    made = [ln for ln in steps if ln.startswith("RUN useradd ")]
+    assert made and "--create-home" in made[0] and "--uid 10001" in made[0]
+    assert last == "10001:10001"
+    # the start command is unchanged: the same uvicorn line as railway.json, on $PORT
+    cmd = next(ln for ln in steps if ln.startswith("CMD "))
+    assert "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1" in cmd
