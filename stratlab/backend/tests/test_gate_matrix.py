@@ -90,8 +90,8 @@ ROUTES = [
     ("ipo_alerts", "put", "/invest/ipos/alerts", {"on": True, "events": ["open"], "markets": ["IN"], "sme": False}),
     ("ipo_summary", "post", "/invest/ipos/in-none/summary", None),
     # (updated on purpose: lane c-f2's downloads of a company's tables)
-    ("company_export", "get", "/research/company/IN/TCS/peers.csv", None),
-    ("company_export", "get", "/research/company/IN/TCS/statements.xlsx", None),
+    ("export", "get", "/research/company/IN/TCS/peers.csv", None),
+    ("export", "get", "/research/company/IN/TCS/statements.xlsx", None),
 ]
 
 
@@ -133,6 +133,6 @@ def test_every_paid_feature_is_refused_somewhere_on_the_server():
                  "mtf": "history views and alert", "mf_behaviour": "fund behaviour view", "sip_luck": "dip rules in the SIP test",
                  "rates_slab": "rates at your own slab", "loan_check": "loan check view",
                  # (updated on purpose) trimmed rather than refused: tests/test_company_tables.py
-                 "company_history": "peers, statements and shareholding views"}
+                 "tables": "peers, statements and shareholding views"}
     covered = {r[0] for r in ROUTES} | set(elsewhere)
     assert covered == set(FEATURES), set(FEATURES) ^ covered

@@ -1,5 +1,5 @@
 """Lane c-f2: a company's peers, statements and shareholding by quarter (app/company_tables.py), trimmed on the server by plan:
-Free sees a teaser, Basic everything (company_history), Pro the downloads (company_export). Fixtures only, no network."""
+Free sees a teaser, Basic everything (tables), Pro the downloads (export). Fixtures only, no network."""
 import csv
 import io
 import zipfile

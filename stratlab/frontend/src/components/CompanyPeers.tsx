@@ -5,7 +5,7 @@ import { useApp } from "../lib/app";
 import { download as saveFile } from "../lib/share";
 import { pct, pctPlain } from "../lib/format";
 import { capText, downloadPath, peText, sortPeers, type PeerKey, type PeerRow, type Peers, type Region } from "../lib/companyTables";
-import { Card, CardHead, DataTable, EmptyState, ErrorState, PlanNote, Signed, Skeleton, type Column } from "./kit";
+import { Card, CardHead, DataTable, EmptyState, ErrorState, PlanNote, Select, Signed, Skeleton, usePhone, type Column } from "./kit";
 import "./companyTables.css";
 
 /* Peers (lane c-f2): the companies of the same industry nearest in market value, with the company's own row in bold and the median of the
@@ -18,6 +18,7 @@ export function PeersCard({ region, symbol, id = "co-peers" }: { region: Region;
   const [tries, setTries] = useState(0);
   const [sort, setSort] = useState<{ key: PeerKey; desc: boolean } | null>(null);
   const [getting, setGetting] = useState(false);
+  const phone = usePhone();
 
   useEffect(() => {
     let live = true;
@@ -63,12 +64,19 @@ export function PeersCard({ region, symbol, id = "co-peers" }: { region: Region;
   const foot = m ? { name: `Median of ${v.rows.length} peer${v.rows.length === 1 ? "" : "s"}`, market_cap: capText(m.market_cap, region),
     sales_growth: m.sales_growth == null ? "–" : pct(m.sales_growth, 1), ebitda: pctCell(m.ebitda), net: pctCell(m.net), ret: pctCell(m.ret), pe: peText(m.pe) } : undefined;
   const onSort = (k: string) => setSort((s) => ({ key: k as PeerKey, desc: s?.key === k ? !s.desc : true }));
+  // on a phone the rows are cards with no header to press: the sort is picked here instead (Basic)
+  const phoneSort = phone && v.can_sort ? <>
+    <Select label="Sort by" small value={sort?.key ?? ""} onChange={(k) => setSort(k ? { key: k as PeerKey, desc: true } : null)}
+      options={[{ value: "", label: "Nearest in value" }, ...cols.filter((c) => c.sortable).map((c) => ({ value: c.key, label: typeof c.header === "string" ? c.header : c.key }))]} />
+    {sort && <button type="button" className="btn quiet sm" onClick={() => setSort((x) => (x ? { ...x, desc: !x.desc } : x))}>{sort.desc ? "High to low" : "Low to high"}</button>}
+  </> : null;
+  const download = v.can_export ? <button type="button" className="btn quiet sm" disabled={getting} onClick={() => void csv()}>{getting ? "Preparing…" : "Download CSV"}</button> : null;
   return (
     <Card id={id}>
-      {head(v.can_export ? <button type="button" className="btn quiet sm" disabled={getting} onClick={() => void csv()}>{getting ? "Preparing…" : "Download CSV"}</button> : undefined)}
+      {head(phoneSort || download ? <>{phoneSort}{download}</> : undefined)}
       <p className="k-small k-muted">{v.basis_words[0].toUpperCase() + v.basis_words.slice(1)}{v.return_label === "ROE" ? "; compared on return on equity, as a lender" : ""}. Market value in {region === "IN" ? "rupees" : "dollars"}.</p>
       <div className="ct-peers">
-        <DataTable label={`${symbol} and its peers`} rows={rows} rowKey={(r) => r.symbol} columns={cols} foot={foot} stack={false}
+        <DataTable label={`${symbol} and its peers`} rows={rows} rowKey={(r) => r.symbol} columns={cols} foot={foot}
           rowAttrs={(r): Record<string, string> => (r.own ? { className: "ct-own", "data-own": "" } : { "data-peer": r.symbol })}
           sort={v.can_sort ? { key: sort?.key ?? "", desc: sort?.desc ?? true, onSort } : undefined} />
       </div>

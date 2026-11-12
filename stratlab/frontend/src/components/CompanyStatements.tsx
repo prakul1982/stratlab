@@ -72,7 +72,8 @@ export function StatementsCard({ region, symbol, id = "co-statements" }: { regio
       <div className="ct-statement" data-view={shown}>
         <DataTable label={`${v.name}: ${options.find((o) => o.value === shown)?.label ?? ""}`} rows={rows} rowKey={(r) => r.label} columns={columns} stack={false} scrollEnd />
       </div>
-      {v.notes.map((n) => <p key={n} className="k-note">{n}</p>)}
+      {/* the "–" note only under a table that has one */}
+      {rows.some((r) => r.values.some((x) => x == null)) && v.notes.map((n) => <p key={n} className="k-note">{n}</p>)}
       {v.locked && <PlanNote plan={v.locked.plan}>{v.locked.message}</PlanNote>}
       {v.export_locked && <p className="k-note">{v.export_locked.message}</p>}
     </Card>

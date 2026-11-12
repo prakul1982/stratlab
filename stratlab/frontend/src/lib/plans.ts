@@ -31,7 +31,7 @@ export const LIMITS: Record<PlanId, Limits> = {
       "stock_futures", "mtf",
       "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
       "ipo_summary", "ipo_alerts",
-      "company_history"] },
+      "tables"] },
   pro: { backtests_per_month: null, ai_builds_per_month: null, live_limit: 10, group_size: 50, deepdives_per_month: null, decks_per_month: null,
     stock_alerts: 100, screens: 25, holdings: 300, networth_items: null, mf_schemes: null, journal_trades: null,
     watchlists: null, watchlist_symbols: null, chart_saves: null, chart_indicators: null, ai_reads_per_day: null,
@@ -45,7 +45,7 @@ export const LIMITS: Record<PlanId, Limits> = {
       "stock_futures", "mtf",
       "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
       "ipo_summary", "ipo_alerts",
-      "company_history", "company_export"] },
+      "tables"] },
 };
 
 // Free has every market and the core tools, not every tool: Replay, Forward test, the scans and the full journal are paid (DP1-021)
@@ -132,8 +132,7 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in 
   ["loan_check", "Floating-rate loans: is your rate following its benchmark, and what each change did"],
   ["ipo_summary", "IPO offer document summaries: what the company does, its figures, what the money is for, the main risk factors and the promoters"],
   ["ipo_alerts", "IPO alerts: when an issue opens, closes, is allotted or lists"],
-  ["company_history", "Company pages in full: every peer, 12 years of statements and 12 quarters of shareholding"],
-  ["company_export", "A company's statements as Excel or CSV, its peers as CSV"]];
+  ["tables", "All company tables"]];
 export const EVERYONE = ["Every market, and your own CSV",
   "Price charts: candles, Heikin-Ashi or bars, indicators, drawings kept on your account, and compare",
   "Market Watch on every page: lists across every market we cover, live prices, and charts from 1 minute to 1 month with drawings",
@@ -149,7 +148,6 @@ export const EVERYONE = ["Every market, and your own CSV",
   "Advance tax due dates and the exemption used", "A preview of the ITR-ready export: each schedule's totals and line counts",
   "Weekly Market Brief and My Stocks emails", "Public company pages, share cards and invite links", "ETF prices against their NAV, with 30 days of history",
   "Named holders above 1% and the business-update filings on every company page",
-  "Company pages: the 3 nearest peers, 3 years of profit and loss, the latest shareholding",
   "Stock futures today: OI buildup, rollover, basis and MWPL use for every F&O stock", "Stock lending fees that traded for your holdings",
   "Margin-funded positions per stock today, and your own MTF cost worked out",
   "IPOs in India and the US: dates, price bands, lot sizes, the bids by category while an issue is open, the offer documents' key facts, and listings against the issue price"];

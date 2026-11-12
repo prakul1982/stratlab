@@ -87,8 +87,7 @@ CARD_WORDS = {
     "loan_check": "floating-rate loan check",
     "ipo_summary": "IPO offer document summaries",
     "ipo_alerts": "IPO alerts",
-    "company_history": "ten years of statements and shareholding",
-    "company_export": "a company's statements to Excel",
+    "tables": "ten years of statements and shareholding",
 }
 
 

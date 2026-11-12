@@ -65,7 +65,7 @@ export function ShareholdingCard({ region, symbol, id = "co-holding-history" }: 
       {moves.length > 0 && (
         <p className="k-small">Since {v.quarters[0].quarter}: {moves.map((x, i) => <span key={x.k}>{i > 0 && " · "}{HOLDER_NAME[x.k]} <Signed value={x.d}>{`${x.d! > 0 ? "+" : x.d! < 0 ? "−" : ""}${Math.abs(x.d!).toFixed(2)} pts`}</Signed></span>)}</p>
       )}
-      <DataTable label={`${symbol} shareholding by quarter`} rows={rows} rowKey={(q) => q.quarter} columns={columns} stack={false} />
+      <DataTable label={`${symbol} shareholding by quarter`} rows={rows} rowKey={(q) => q.quarter} columns={columns} grid />
       {v.pledge_note && <p className="k-note">{v.pledge_note}</p>}
       {v.locked && <PlanNote plan={v.locked.plan}>{v.locked.message}</PlanNote>}
     </Card>

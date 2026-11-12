@@ -90,14 +90,14 @@ test("the cards use the kit, say a lock with the plan note, and never name a ven
   assert.doesNotMatch(read("src/components/companyTables.css"), /#[0-9a-f]{3,6}\b/i, "colours are tokens");
 });
 
-test("the plan copies name both features on the plans that add them", async () => {
+test("the plan copies name the feature on the plan that adds it, and the downloads on Pro", async () => {
   const plans = await import("../src/lib/plans.ts");
   const gates = await import("../src/lib/gates.ts");
-  assert.equal(plans.planOf("company_history"), "basic");
-  assert.equal(plans.planOf("company_export"), "pro");
-  assert.ok(plans.FLAGS.some(([f]) => f === "company_history") && plans.FLAGS.some(([f]) => f === "company_export"));
-  assert.ok(gates.ELSEWHERE.company_history && gates.ELSEWHERE.company_export);
-  assert.ok(plans.EVERYONE.some((x) => /3 nearest peers/.test(x)));
+  // (the landing page's plans file has 58 bytes to spare under its 450 KB budget: one short row, and the downloads are Pro's export)
+  assert.equal(plans.planOf("tables"), "basic");
+  assert.equal(plans.planOf("export"), "pro");
+  assert.ok(plans.FLAGS.some(([f]) => f === "tables"));
+  assert.ok(gates.ELSEWHERE.tables && /company page/.test(gates.ELSEWHERE.export));
   const cards = read("src/lib/planFeatures.ts");
   assert.match(cards, /every peer and ten years of statements and shareholding/);
   assert.match(cards, /a company's statements to Excel/);

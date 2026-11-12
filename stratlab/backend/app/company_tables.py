@@ -17,8 +17,8 @@ Every figure is one StratLab already keeps:
 
 Plans (the owner: "the public stuff is only to attract people"): Free sees a teaser (the three nearest peers and its own row,
 the latest three years of profit and loss, the latest quarter's shareholding); Basic sees everything, sorts the peers and gets
-the shareholding chart (feature company_history); Pro downloads the statements as a workbook or CSV and the peers as CSV
-(feature company_export). The trimming is done here, so a locked figure never leaves the server.
+the shareholding chart (feature tables); Pro downloads the statements as a workbook or CSV and the peers as CSV
+(Pro's feature export, beside a notebook's export). The trimming is done here, so a locked figure never leaves the server.
 
 Facts only: no figure is called good or bad, no company is ranked as a choice."""
 import csv
@@ -38,8 +38,8 @@ from .responses import err, ok
 
 router = APIRouter(tags=["research"])
 
-FULL = "company_history"         # Basic: every peer and sorting, every statement and quarter, 12 quarters of shareholding and the chart
-EXPORT = "company_export"        # Pro: the statements as a workbook or CSV, the peers as CSV
+FULL = "tables"                  # Basic: every peer and sorting, every statement and quarter, 12 quarters of shareholding and the chart
+EXPORT = "export"                # Pro's export: the statements as a workbook or CSV, the peers as CSV
 PEERS_MAX = 10                   # peers in the full table
 PEERS_FREE = 3                   # peers a Free account or a visitor sees, beside the company's own row
 PEERS_WIDEN = 3                  # an industry with fewer peers than this is widened to the company's sector

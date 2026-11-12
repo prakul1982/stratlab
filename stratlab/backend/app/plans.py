@@ -52,7 +52,7 @@ PLANS = {
                      "stock_futures", "mtf",
                      "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
                      "ipo_summary", "ipo_alerts",
-                     "company_history"},
+                     "tables"},
     },
     "pro": {
         "name": "Pro", "price": 1999, "price_year": 19999,
@@ -84,7 +84,7 @@ PLANS = {
                      "stock_futures", "mtf",
                      "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
                      "ipo_summary", "ipo_alerts",
-                     "company_history", "company_export"},
+                     "tables"},
     },
 }
 # indicators: every indicator beyond price, SMA, EMA and RSI; fno: Indian futures and options;
@@ -121,11 +121,11 @@ FEATURES = ("indicators", "fno", "group_live", "options", "options_signal", "fas
             "stock_futures", "mtf",
             "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
             "ipo_summary", "ipo_alerts",
-            "company_history", "company_export")
-# company_history: on a company page and its deep dive, every peer (up to ten) and sorting them, every year of the statements (up to
+            "tables")
+# tables: on a company page and its deep dive, every peer (up to ten) and sorting them, every year of the statements (up to
 # twelve) with the balance sheet, cash flow, ratios, the last twelve quarters and both standalone and consolidated, and twelve quarters of
 # shareholding with its chart (the three nearest peers, the latest three years of profit and loss and the latest quarter's shareholding
-# are for everyone); company_export: a company's statements as Excel or CSV and its peers as CSV (company_tables.py)
+# are for everyone); a company's statements as Excel or CSV and its peers as CSV are Pro's export (company_tables.py)
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 

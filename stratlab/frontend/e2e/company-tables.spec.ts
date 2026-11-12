@@ -57,6 +57,7 @@ test("Free: three peers and the company's own row, three years of profit and los
   await expect(table.locator("tfoot")).toContainText("Median of 3 peers");
   await expect(peers.getByText(/The other 3 peers and sorting the table are on the Basic plan/)).toBeVisible();
   await expect(table.getByRole("button", { name: /P\/E/ })).toHaveCount(0);      // no sorting on Free
+  await expect(peers.getByLabel("Sort by")).toHaveCount(0);
   await expect(peers.getByRole("button", { name: "Download CSV" })).toHaveCount(0);
   // a peer opens its own page
   await expect(table.locator("tbody tr").nth(1).getByRole("link")).toHaveAttribute("href", /^\/research\/IN\/[A-Z]+$/);
@@ -92,12 +93,24 @@ test("Basic: every peer and sorting, every statement and the quarters, twelve qu
   await expect(table.locator("tbody tr")).toHaveCount(7, { timeout: 20_000 });
   await expect(peers.getByText(/on the Basic plan/)).toHaveCount(0);
   await expect(peers.getByText("Downloading the peers as CSV is on the Pro plan.")).toBeVisible();
-  // sort by P/E, highest first, then lowest: the company's own row stays on top
-  const sortPe = table.getByRole("button", { name: /^P\/E/ });
-  await sortPe.click();
-  await expect(table.locator("thead th").filter({ hasText: "P/E" })).toHaveAttribute("aria-sort", "descending");
-  await sortPe.click();
-  await expect(table.locator("thead th").filter({ hasText: "P/E" })).toHaveAttribute("aria-sort", "ascending");
+  // sort by P/E, highest first, then lowest (a header on a desktop, the card's "Sort by" on a phone): the company's own row stays on top
+  const pe = async () => (await table.locator("tbody tr").locator("td").filter({ hasText: /×$/ }).allInnerTexts()).slice(1).map((t) => parseFloat(t.replace(/[^\d.]/g, "")));
+  if (phone) {
+    await peers.getByLabel("Sort by").selectOption("pe");
+    let got = await pe();
+    expect(got).toEqual([...got].sort((a, b) => b - a));
+    await peers.getByRole("button", { name: "High to low" }).click();
+    got = await pe();
+    expect(got).toEqual([...got].sort((a, b) => a - b));
+  } else {
+    const sortPe = table.getByRole("button", { name: /^P\/E/ });
+    await sortPe.click();
+    await expect(table.locator("thead th").filter({ hasText: "P/E" })).toHaveAttribute("aria-sort", "descending");
+    await sortPe.click();
+    await expect(table.locator("thead th").filter({ hasText: "P/E" })).toHaveAttribute("aria-sort", "ascending");
+    const got = await pe();
+    expect(got).toEqual([...got].sort((a, b) => a - b));
+  }
   await expect(table.locator("tbody tr").first()).toHaveClass(/ct-own/);
   await sane(page, errors, "#co-peers");
 
@@ -107,8 +120,12 @@ test("Basic: every peer and sorting, every statement and the quarters, twelve qu
   for (const name of ["Balance sheet", "Cash flow", "Ratios", "Quarters"]) {
     await st.getByRole("button", { name, exact: true }).or(st.getByRole("radio", { name, exact: true })).first().click();
     await expect(st.getByRole("table", { name: new RegExp(name) })).toBeVisible();
+    // the fundamentals page holds fewer years of cash flow than of profit and loss: "–" there, with its note
+    if (name === "Cash flow") {
+      await expect(st.getByRole("table", { name: /Cash flow/ })).toContainText("–");
+      await expect(st.getByText(/the stored filings have no figure for that period/)).toBeVisible();
+    }
   }
-  await expect(st.getByText(/the stored filings have no figure for that period/)).toBeVisible();
   await sane(page, errors, "#co-statements");
 
   const sh = page.locator("#co-holding-history");
