@@ -22,7 +22,7 @@ export const FEATURES: Record<PlanId, string[]> = {
     `Paper trade ${L.basic.live_limit} strategies at a time, whole groups on intraday candles and options at set times, with trade notifications and a daily report`,
     "Trading tools: full trade journal, positioning history, stock futures history, closing auction history, chart replay practice, an India VIX entry filter, SIP dip rules",
     "Alerts: F&O change alerts, ETF gap alerts, IPO alerts and market event reminders and money reminders; the daily Market Brief and My Stocks by email",
-    `${L.basic.deepdives_per_month} company deep dives and ${L.basic.decks_per_month} slide decks of companies or themes a month, business updates in numbers, named-holder search and IPO offer document summaries; on company pages, every peer and ten years of statements and shareholding`,
+    `${L.basic.deepdives_per_month} company deep dives and ${L.basic.decks_per_month} slide decks a month; every peer and ten years of statements and shareholding on company pages; business updates in numbers, named-holder search, IPO offer document summaries`,
     "Scans and watchlist: the Stage 2 scan and every other trend scan, watchlist red flags (and each holding's filings and results date), Watchlist at a glance, market breadth charts, margin funding history",
     "Money: every mutual fund and net worth entry, fund capital gains, fund costs in rupees, fund behaviour, dividends with TDS, deposit rates after your own tax, a floating-rate loan check",
     `${L.basic.stock_alerts} stock alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings, ${L.basic.watchlists} Market Watch lists of ${L.basic.watchlist_symbols}, drawings kept on every chart`],

@@ -132,8 +132,8 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in 
   ["loan_check", "Floating-rate loans: is your rate following its benchmark, and what each change did"],
   ["ipo_summary", "IPO offer document summaries: what the company does, its figures, what the money is for, the main risk factors and the promoters"],
   ["ipo_alerts", "IPO alerts: when an issue opens, closes, is allotted or lists"],
-  ["company_history", "On every company page: up to 10 peers to sort, up to 12 years of statements (balance sheet, cash flow, ratios, standalone and consolidated), 12 quarters of results and 12 quarters of shareholding with a chart"],
-  ["company_export", "A company's statements as Excel or CSV, and its peers as CSV"]];
+  ["company_history", "Company pages in full: every peer, 12 years of statements and 12 quarters of shareholding"],
+  ["company_export", "A company's statements as Excel or CSV, its peers as CSV"]];
 export const EVERYONE = ["Every market, and your own CSV",
   "Price charts: candles, Heikin-Ashi or bars, indicators, drawings kept on your account, and compare",
   "Market Watch on every page: lists across every market we cover, live prices, and charts from 1 minute to 1 month with drawings",
@@ -149,7 +149,7 @@ export const EVERYONE = ["Every market, and your own CSV",
   "Advance tax due dates and the exemption used", "A preview of the ITR-ready export: each schedule's totals and line counts",
   "Weekly Market Brief and My Stocks emails", "Public company pages, share cards and invite links", "ETF prices against their NAV, with 30 days of history",
   "Named holders above 1% and the business-update filings on every company page",
-  "On every company page: its 3 nearest peers, the latest 3 years of profit and loss and the latest quarter's shareholding",
+  "Company pages: the 3 nearest peers, 3 years of profit and loss, the latest shareholding",
   "Stock futures today: OI buildup, rollover, basis and MWPL use for every F&O stock", "Stock lending fees that traded for your holdings",
   "Margin-funded positions per stock today, and your own MTF cost worked out",
   "IPOs in India and the US: dates, price bands, lot sizes, the bids by category while an issue is open, the offer documents' key facts, and listings against the issue price"];

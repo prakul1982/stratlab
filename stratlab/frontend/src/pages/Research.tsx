@@ -44,6 +44,7 @@ import { IndexBadges } from "../components/IndexBadges";
 import { FilingsPanel } from "../components/Filings";
 import { UsFilingsCards } from "../components/UsFilings";
 import { CompanyActions } from "../components/CorpActions";
+import { CompanyTables } from "../components/CompanyTables";
 import { RouteSeg, WATCH_VIEWS } from "../components/RouteSeg";
 import {
   Badge, Card, CardHead, ChartFrame, CsvButton, DataTable, Delta, EmptyState, ErrorState, Field, FormGrid, PageHeader, PageNav, Signed, Skeleton, Stat, StockPicker,
@@ -391,6 +392,7 @@ function CompanyView() {
         ...(c.shareholding && c.shareholding.rows.length > 0 ? [{ id: "co-owners", label: "Who owns it" }] : []),
         ...(region === "US" && !c.delisted ? [{ id: "us-owners", label: "Holders above 5%" }] : []),
         ...(region === "IN" ? [{ id: "filings", label: "Filings" }, { id: "deals", label: "Deals" }] : c.delisted ? [] : [{ id: "filings", label: "Filings" }]),
+        ...(c.delisted ? [] : [{ id: "co-peers", label: "Peers" }]), { id: "co-statements", label: "Statements" },
         { id: "corporate-actions", label: "Corporate actions" }, { id: "co-news", label: "News" }]} />
       {!c.delisted && <Card id="co-chart"><PriceChart region={region} symbol={c.symbol} currency={ccy} price={c.quote?.price} asOf={c.as_of} /></Card>}
       {region === "IN" && <EtfGapDetailView symbol={c.symbol} price={c.quote?.price} day={c.quote?.at ? dayIn(c.quote.at) : null} quiet />}
@@ -470,6 +472,9 @@ function CompanyView() {
         info="Who bought or sold, from exchange disclosures: promoters', directors' and key staff's own trades and pledges, holders crossing 5% and moving 2% at a time (substantial acquisitions), and bulk and block deals with the named client." /><DealsPanel symbol={c.symbol} /></Card>}
 
       {c.quarters && c.quarters.cols.length > 0 && <Card><CardHead title="Last quarters" /><QuarterTable q={c.quarters} bank={!!c.bank} /></Card>}
+
+      {/* lane c-f2: peers, statements by year and quarter, and shareholding by quarter (each trimmed by plan on the server) */}
+      <CompanyTables region={region} symbol={c.symbol} delisted={!!c.delisted} />
 
       <Card id="corporate-actions"><CardHead title="Corporate actions"
         info="Dividends, bonus issues, splits, buybacks and rights issues, with ex-dates and record dates, as the company announced them." /><CompanyActions region={region} symbol={c.symbol} /></Card>
