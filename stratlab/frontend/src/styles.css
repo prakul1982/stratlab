@@ -183,8 +183,6 @@ a.link { margin-inline: -2px; }
 .field input:focus, .field select:focus, .field textarea:focus, .input:focus { outline: none; border-color: var(--ink); }
 .hint { font-size: 12.5px; font-weight: 400; color: var(--muted); }
 
-/* three choices on a phone: equal thirds, a long label on two lines, instead of one choice dropping to a row of its own */
-
 /* ---------- news ---------- */
 .news-grid { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 28px; align-items: start; }
 .news-pick { display: flex; flex-direction: column; gap: 4px; width: 100%; min-height: 44px; text-align: left; padding: 12px 14px; border: 0; border-radius: 10px;
@@ -294,7 +292,6 @@ a.link { margin-inline: -2px; }
 .nb-pin { flex: none; display: inline-flex; color: var(--muted); }
 .side-list a.nb-more { padding-left: 34px; font-size: 13px; color: var(--muted); }
 .side-list a.nb-more:hover { color: var(--ink); }
-.side-list .nb-key { padding-left: 34px; font-size: 12px; }
 .side-note { display: flex; align-items: center; height: 28px; padding-left: 34px; }
 
 .side-foot { flex: none; display: flex; flex-direction: column; gap: 2px; padding: 6px 8px 8px; border-top: 1px solid var(--line); }
@@ -483,8 +480,6 @@ th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: l
 th { font-size: 12.5px; font-weight: 600; color: var(--muted); background: var(--paper-2); }
 td.num, .num { font-family: var(--sans); }
 
-/* Admin → Exchange holidays: a compact row per market, all left-aligned; a status hint wraps */
-
 /* Plans → Compare: the feature wraps, each plan's column is centred */
 
 .pos { color: var(--blue-ink); }
@@ -506,7 +501,7 @@ td.num, .num { font-family: var(--sans); }
 @media (max-width: 600px) { .toast { width: min(360px, calc(100vw - 32px)); } }
 .banner { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-radius: 12px; background: var(--orange-soft); color: var(--orange-ink); font-size: 14.5px; margin-bottom: 20px; }
 /* on a phone the data note keeps to its one fact: when Indian data comes back (R48-003: five lines above the page) */
-@media (max-width: 560px) { .banner { padding: 8px 12px; font-size: 13.5px; margin-bottom: 12px; } .banner .banner-more { display: none; } }
+@media (max-width: 560px) { .banner { padding: 8px 12px; font-size: 13.5px; margin-bottom: 12px; } }
 /* the offline line: one thin line, not a block above every page (DD-006, DC-002); the phone gets its short form */
 .banner.data-banner { padding: 6px 14px; font-size: 13.5px; margin-bottom: 14px; flex-wrap: nowrap; }
 .banner.data-banner > span { min-width: 0; }
@@ -630,43 +625,20 @@ td.num, .num { font-family: var(--sans); }
 
 /* ---------- feature tour ---------- */
 .tour { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 20px; align-items: start; min-height: 230px; }
-.tour-icon { width: 72px; height: 72px; border-radius: 18px; display: grid; place-items: center; background: var(--blue-soft); color: var(--blue-ink); }
-.tour-where { padding: 10px 14px; border-radius: 10px; background: var(--paper-2); border: 1px solid var(--line); font-size: 15px; }
 .tour-dots { display: flex; gap: 6px; justify-content: center; margin-top: 18px; }
 .tour-dots button { width: 9px; height: 9px; padding: 0; border-radius: 50%; border: 1.5px solid var(--muted); background: transparent; cursor: pointer; }
 .tour-dots button[aria-selected="true"] { background: var(--ink); border-color: var(--ink); width: 22px; border-radius: 6px; }
-@media (max-width: 560px) { .tour { grid-template-columns: minmax(0, 1fr); } .tour-icon { width: 56px; height: 56px; } }
+@media (max-width: 560px) { .tour { grid-template-columns: minmax(0, 1fr); } }
 
 /* ---------- research ---------- */
 
-@media (max-width: 640px) {
-  /* one row that scrolls sideways, instead of three rows of tabs above every research page */
-  
-  
-  
-}
 .tiny { font-size: 12px; }
-
-/* two things side by side: the label takes the room, both value columns line up on the right */
-
-/* two even columns: cards in a row share a height, and a card left alone takes the whole row instead of leaving a hole */
-.rs-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: stretch; }
-
-@media (max-width: 900px) { .rs-grid { grid-template-columns: minmax(0, 1fr); } }
 
 .chart-skel, .skel { background: linear-gradient(90deg, var(--chip), var(--paper-2), var(--chip)); background-size: 200% 100%;
   animation: shimmer 1.4s linear infinite; border-radius: 10px; }
 .skel { display: inline-block; width: 60px; height: 14px; border-radius: 6px; }
 @keyframes shimmer { to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .chart-skel, .skel { animation: none; } }
-/* 52-week rail */
-
-/* where a sale goes */
-
-/* metrics */
-
-  
-/* bars */
 
 /* lists */
 
@@ -692,8 +664,6 @@ td.num, .num { font-family: var(--sans); }
   .ai-table .k-table tbody tr { border-bottom: 1px solid var(--line); }
   .ai-table .k-table tbody tr:last-child { border-bottom: 0; }
 }
-
-/* themes */
 
 /* ---------- landing page ---------- */
 .lp { min-height: 100vh; background: var(--paper); }
@@ -731,7 +701,6 @@ td.num, .num { font-family: var(--sans); }
 .lp-demo-verdict { display: flex; flex-direction: column; gap: 10px; box-shadow: var(--shadow); }
 .lp-verdict { font-size: clamp(38px, 4.4vw, 54px); line-height: .95; letter-spacing: -.03em; }
 @keyframes lp-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-/* facts band */
 
 /* sections */
 /* a section scrolled to (/pricing, /faq) starts below the sticky header, about 71 px tall on a phone (R12-008) */
@@ -741,7 +710,6 @@ td.num, .num { font-family: var(--sans); }
 .lp-alt { background: var(--paper-2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .lp-head { display: flex; flex-direction: column; gap: 12px; }
 .lp-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: clamp(32px, 5vw, 72px); align-items: center; }
-.lp-fix { font-size: 14px; font-weight: 600; color: var(--blue-ink); }
 .lp-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 .lp-steps li { display: flex; flex-direction: column; gap: 8px; }
 .lp-steps b { font-size: 17px; }
@@ -828,9 +796,7 @@ td.num, .num { font-family: var(--sans); }
   .lp-steps, .lp-checks, .lp-tools, .lp-markets { grid-template-columns: minmax(0, 1fr); }
   .lp-prices { grid-template-columns: minmax(0, 1fr); max-width: 560px; margin-inline: auto; }
   .lp-price { padding: 20px 18px; }
-  
-  
-  
+
   .lp-tool { padding-right: 0; }
   .lp-cta, .lp-cta-2 { width: 100%; }
 }
@@ -851,7 +817,6 @@ td.num, .num { font-family: var(--sans); }
 }
 .lp-money { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .lp-money .lp-beyond-card { display: flex; flex-direction: column; gap: 6px; padding: 16px; }
-.lp-money .lp-fix { margin-top: auto; font-size: 13px; }
 @media (min-width: 1001px) { .lp-money.lp-money-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 1000px) { .lp-money { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 520px) { .lp-money { grid-template-columns: minmax(0, 1fr); } }   /* CK-2 (R19): in 139px columns each tag ("An estimate for your CA") wrapped to two lines inside its pill */
@@ -870,7 +835,6 @@ td.num, .num { font-family: var(--sans); }
 .vdot.mixed { background: var(--dash); border-color: var(--dash); }
 .vdot.luck, .vdot.no_edge { background: var(--orange); border-color: var(--orange); }
 .vdot.not_enough { background: transparent; border-color: var(--orange); }
-
 
 kbd { font-family: var(--mono); font-size: 11.5px; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line-2); background: var(--paper); }
 @media (max-width: 640px) { .kbd-hint { display: none; } }
@@ -914,11 +878,8 @@ table.legs input[type=number] { width: 72px !important; }
 .link-ish { color: var(--blue); font-weight: 600; white-space: nowrap; }
 .legs-box[open] .link-ish { visibility: hidden; }
 
-
 .legs-box { min-width: 0; overflow: hidden; }
 .legs-box .table-wrap { max-width: 100%; }
-
-/* the options form: every control is 40px tall so rows line up */
 
 /* one look for every dropdown, in every browser (Safari otherwise draws its own box) */
 .field select, select.input, table.legs select {
@@ -938,7 +899,6 @@ table.legs input[type=number] { width: 72px !important; }
 .more-pop button.danger { color: var(--orange-ink); }
 .lp-beyond-card { display: flex; flex-direction: column; gap: 10px; padding: 24px; }
 .lp-beyond-card b { font-size: 18px; }
-.lp-beyond-card .lp-fix { margin-top: auto; }
 .pub { min-height: 100vh; background: var(--paper); }
 /* LIVE1B-052: the header's logo and button sit on the page's own edges (the body's column), not 40px from the window's while the text starts 300px in:
    the width is the page's (--pub-w), the same as its main's */
@@ -1082,9 +1042,6 @@ body:not(:has(.shell)) { padding-bottom: var(--consent-h, 0px); }
 .q-tag { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .q-tag i { width: 9px; height: 9px; border-radius: 50%; flex: none; }
 .rot-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; }
-.rot-read { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 20px; padding: 12px 14px; border-radius: 10px; background: var(--paper-2); }
-.rot-read > div { display: flex; flex-direction: column; gap: 2px; }
-.rot-read > p { grid-column: 1 / -1; }
 .rot-row { cursor: pointer; }
 .rot-row.on td { background: var(--chip); }
 
@@ -1097,10 +1054,6 @@ body:not(:has(.shell)) { padding-bottom: var(--consent-h, 0px); }
 
 /* company deep dive */
 
-.seg-row { display: flex; flex-direction: column; gap: 4px; }
-
-.quote-row { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: 1px solid var(--line); }
-.quote-row:first-of-type { border-top: 0; }
 @media (max-width: 640px) { .ca-table .k-table { font-size: 13px; } .ca-table .k-table th, .ca-table .k-table td { padding: 9px 6px; white-space: normal; min-width: 0; vertical-align: top; } .ca-table .k-badge { white-space: normal; } .ca-table .k-table :is(th, td):first-child { min-width: 0 !important; max-width: none !important; } }
 [data-testid="scan-custom"] .add-rule { align-self: flex-start; }
 .ts-words { align-items: flex-start; } .ts-words .k-input { flex: 1 1 260px; width: auto; }
@@ -1129,7 +1082,6 @@ body:not(:has(.shell)) { padding-bottom: var(--consent-h, 0px); }
 @media (max-width: 640px) { .rc-said { align-items: flex-start; } }
 .promises { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
 .promise { display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--line); }
-.promise-facts { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; }
 .checklist { display: flex; flex-direction: column; gap: var(--s5); }
 @media (min-width: 641px) { .check-group .k-table { table-layout: fixed; } }
 .check-group .k-table :is(th, td) { white-space: normal; max-width: none; min-width: 0; overflow-wrap: anywhere; vertical-align: middle; }
@@ -1179,19 +1131,6 @@ body:not(:has(.shell)) { padding-bottom: var(--consent-h, 0px); }
 /* Money: mutual funds upload (file, password, button) */
 
 label.btn.disabled { opacity: .5; }
-/* the company combobox: suggestions under a symbol box, never wider than the box (or the screen) */
-.combo { min-width: 0; }
-.combo-box { position: relative; min-width: 0; }
-.combo-box input { width: 100%; }
-.combo-list { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30; margin: 0; padding: 4px 0; list-style: none; max-width: calc(100vw - 32px);
-  max-height: min(340px, 55vh); overflow-y: auto; background: var(--card); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: var(--shadow); }
-.combo-list[hidden] { display: none; }
-.combo-list li[role=option] { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 48px; padding: 6px 12px; cursor: pointer; color: var(--ink); font-weight: 400; }
-.combo-list li.on { background: var(--paper-2); }
-.combo-text { display: flex; flex-direction: column; min-width: 0; font-size: 14px; }
-.combo-text b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.combo-list .badge { flex: none; padding: 2px 8px; font-size: 11.5px; }
-.combo-none { padding: 10px 12px; font-size: 13px; font-weight: 400; color: var(--muted); }
 /* ---------- stock alerts ---------- */
 .alert-row { display: flex; justify-content: space-between; align-items: center; gap: 12px 16px; flex-wrap: wrap; padding: 16px 20px; }
 .alert-row > .stack { flex: 1 1 280px; }
@@ -1236,10 +1175,6 @@ body:has(main .k-state.error button, main .k-state.error a.btn) .banner .account
 
 /* corporate actions: a quiet tag for each kind, and the bonus/split notice on My Holdings */
 .badge[class*="ca-"] { background: var(--chip); color: var(--ink-2); font-size: 12px; padding: 2px 8px; }
-
-/* research: the second row of tabs inside one section (Scans, Watchlist) */
-
-/* tax report: the total tax estimate card, its chips, the inputs and how it was worked out */
 
 /* ---------- spaces: Trade · Invest · Money, the switcher at the top of the menu and each space's home ---------- */
 /* One content column per space home: the promo, the strip, the panels and the sections under them share both edges and
@@ -1301,7 +1236,6 @@ body:has(main .k-state.error button, main .k-state.error a.btn) .banner .account
   .space-card-title b { font-size: 14px; }
   .space-card-line { font-size: 12.5px; }
 }
-/* The All home: what is new in three short columns, then a row of three small tool cards for each space. */
 
 /* A panel's loading placeholder, shaped like the figures or lines that replace it. */
 .panel-skel { display: flex; flex-direction: column; gap: 10px; }
@@ -1333,7 +1267,6 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 }
 @media (max-width: 760px) { .lp-spaces { grid-template-columns: minmax(0, 1fr); } }
 .space-tag { flex: none; align-self: center; padding: 1px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
-/* Money: net worth */
 
 /* ---------- Money: instrument badges (holdings, tax report) and the money calendar ---------- */
 .badge[class*="kind-"] { background: var(--blue-soft); color: var(--blue-ink); font-size: 11.5px; padding: 1px 8px; vertical-align: 1px; }
@@ -1421,8 +1354,6 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .j-rcol .tiny.muted { line-height: 1.2; min-height: 2.4em; }
    /* a hidden heading (sr-only) is placed inside the scroller, so it can't widen the page */
 
-/* Money · US stocks tax and the ITR-ready export */
-
 /* ---- current first, the past folded (components/Earlier.tsx, components/OrderList.tsx) ---- */
 /* "Earlier trades (12) · ₹4,200 after costs": one quiet line, closed until asked */
 .earlier > summary { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; min-height: 36px; cursor: pointer; list-style: none; color: var(--ink-2); }
@@ -1469,7 +1400,6 @@ ul.order-rows li { display: grid; grid-template-columns: auto minmax(0, 1fr) aut
 
 /* ---------- alignment pass: shared rules so rows, columns and edges line up on every page ----------
    Later in the file than the rules they refine, so they win at equal specificity. */
-/* The lead paragraph under a page title: one size and one reading width everywhere (pages used 62ch or 760px inline) */
 
 /* Empty states: centred in their card, at one reading width */
 .empty { align-items: center; text-align: center; padding: 40px 24px; }
@@ -1478,21 +1408,17 @@ ul.order-rows li { display: grid; grid-template-columns: auto minmax(0, 1fr) aut
    the second column (which tables default to the left, for names) */
 table td.num:not(:first-child) { text-align: right; }
 table:has(td.num:nth-child(2)) th:nth-child(2) { text-align: right; }
-/* Comparison tables: the compared columns share the width equally */
 
 /* Rows of stat tiles: label, number and up to two notes on a shared subgrid, so a label that wraps to two lines
    doesn't push its number below its neighbours'. The ITR summary's label/value pairs too. */
 
    /* a gap only between parts that exist: tiles with fewer parts end flush */
 
-/* A notebook's experiment rows: the verdict badge gets a fixed slot, so the return figures line up row to row */
-
 /* Screener: the unit after a range gets a fixed slot, so every filter's two boxes line up; the symbol sits under the name */
 
 .screens-table td:first-child > .tiny.muted { display: block; }
 /* Checklist values line up on the right; a figure with a sentence in it (who bought and who sold) reads left, in its own cell (VR3-011) */
 .check-group .ck-long { display: block; text-align: left; }
-/* Options: stop loss and target as two equal halves */
 
 /* ---------- ETF price against NAV: a factual gap, the same quiet look as the surveillance flags ---------- */
 .etf-gap-badge { display: inline; font: 600 11.5px/1.5 var(--mono); padding: 0 6px; margin-left: 4px; border-radius: 6px; border: 1px solid var(--line-2);
@@ -1517,7 +1443,6 @@ table:has(td.num:nth-child(2)) th:nth-child(2) { text-align: right; }
 
 .ev-figure { font-variant-numeric: tabular-nums; }
 
-.space-events { display: flex; flex-direction: column; gap: 8px; }      /* one event a line, in the half-width card beside Results today (UI-FIX-1) */
 /* Admin: the AI panel */
 .ai-provider { display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-top: 1px solid var(--line); }
 .ai-model, .ai-missing { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 12px; padding: 8px 0; border-top: 1px dashed var(--line); }
@@ -1586,7 +1511,6 @@ table:has(td.num:nth-child(2)) th:nth-child(2) { text-align: right; }
 .whatif-slider { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .whatif-slider input[type=range] { width: 100%; height: 32px; margin: 0; accent-color: var(--series-3); cursor: pointer; }
 
-
 .model-inputs { max-width: 80ch; }
 
 /* the closing auction desk */
@@ -1601,7 +1525,6 @@ table:has(td.num:nth-child(2)) th:nth-child(2) { text-align: right; }
 ul.order-rows li .order-pick { grid-column: 2 / -1; margin-top: -4px; }
 
 ul.leg-picks { margin: 0; padding-left: 18px; }
-/* Signal forward test (/trade/signals) and chart replay (/trade/replay) */
 
 /* R15 #19: the forward test's URL card holds the steps under a rule, and the form's card beside it ends level */
 .sg-two > .k-card { height: 100%; }
@@ -1648,7 +1571,6 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .sf-day b { color: var(--ink); font-size: 0.8rem; }
 
 .pos-tabs { align-self: flex-start; flex-wrap: wrap; }
-/* Test a SIP: the form's fields in a grid that wraps to one column on a phone */
 
 /* =====================================================================================================================
  * kit: the shared building blocks (src/components/kit/). Every class is prefixed k- so it never meets the older
@@ -2229,7 +2151,6 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5); align-items: stretch; }   /* two cards side by side end level, not one short with dead space under it (MO-4b); a pair that differs a lot belongs in one column instead */
 @media (max-width: 900px) { .k-two { grid-template-columns: minmax(0, 1fr); } }
 .k-two.k-two-start { align-items: start; }   /* the pickers beside a short list of changes: each its own height (VR1-065) */
-@media (min-width: 901px) { .k-two.cmp-top { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); } }   /* VR3-017: the two run pickers need the width of their names */
 .k-label-row .k-lbl { font-size: var(--t-label); font-weight: 500; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .k-sub-line { display: block; font-size: var(--t-note); color: var(--muted); font-weight: 400; }
 .k-picks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2); }
@@ -2474,12 +2395,6 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .mine-custom li:last-child { border-bottom: 0; }
 .mine-custom label { display: flex; align-items: center; gap: var(--s2); min-height: 34px; cursor: pointer; }
 .mine-move { display: flex; gap: 6px; }
-.mine-nw-ph { position: relative; display: flex; flex-direction: column; justify-content: flex-end; gap: var(--s2); min-height: 92px; padding: var(--s3); border-radius: var(--r-ctl); background: var(--paper-2); overflow: hidden; }
-.mine-nw-ph svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.mine-nw-ph .grid { stroke: var(--line); stroke-width: 1; fill: none; vector-effect: non-scaling-stroke; }
-.mine-nw-ph .base { stroke: var(--muted); stroke-width: 1.6; stroke-dasharray: 3 5; fill: none; opacity: .6; vector-effect: non-scaling-stroke; }
-.mine-nw-ph circle { fill: var(--muted); opacity: .7; }
-.mine-nw-ph > span { position: relative; }
 
 /* health lights and status rows (kit Health.tsx): Admin's Overview and its status lists */
 .k-light { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-note); font-weight: 600; white-space: nowrap; }
@@ -2562,7 +2477,6 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .lp-why { font-size: 16px; color: var(--ink-2); }
 .lp-verdict.tone-blue { color: var(--blue); } .lp-verdict.tone-orange { color: var(--orange); } .lp-verdict.tone-ink { color: var(--ink); }
 .lp-checklist { gap: 7px; border-top: 1px solid var(--line); padding-top: 12px; }
-.lp-blue { color: var(--blue); }
 .lp-top { align-items: flex-start; }
 .lp-end { align-items: flex-end; }
 .lp-idea-btn { align-self: flex-start; }
@@ -2748,8 +2662,6 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .lp-skel-p { height: calc(17px * 1.6 * 2); width: min(56ch, 100%); }
 .lp-skel-p.lp-skel-p-one, .lp-skel-p.lp-skel-p-one { height: calc(17px * 1.6); }   /* LIVE2-031: the Plans page's one-line lede: a two-line (four on a phone) placeholder moved the cards up 27 to 81px when the prices arrived */
 .lp-period { min-height: 44px; display: flex; align-items: center; flex-wrap: wrap; gap: 12px 20px; }
-.lp-currency { display: inline-flex; align-items: center; gap: 8px; }
-.lp-currency select { width: auto; min-height: 44px; }
 .lp-skel-seg { height: 44px; width: 280px; max-width: 100%; }
 .lp-skel-amount { height: calc(46px + 2px + 1.5em); width: 60%; }   /* the price line and the "about $8 at today's rate" line under it (VR1-162 put it on its own line): the page below holds still when prices arrive (R5V-006) */
 .lp-skel-note { height: 1.2em; width: 80%; }
@@ -2824,7 +2736,6 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .nw-snaps summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
 .nw-snaps ul { list-style: none; margin: 0; padding: 0; }
 .nw-snaps li { justify-content: flex-start; flex-wrap: wrap; gap: var(--s2); }   /* CK-2 (R20): the remove icon follows the snapshot's text, not 550px away at the card's edge */
-/* MO-2: the quick-add chips: every one shown (no scroll box), an icon beside each name */
 
 /* ---------- round 13, Safari (R13S) ---------- */
 /* R13S-005: iOS Safari zooms the page when a field under 16px takes focus and doesn't zoom back, so on a phone or a touch
@@ -2948,7 +2859,6 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .holder-search { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s2, 8px); margin: 0 0 var(--s2, 8px); }
 .holder-search > .k-field { flex: 1 1 260px; min-width: 0; }
 .holder-popular { flex-wrap: wrap; margin-top: var(--s2, 8px); }
-
 
 /* Invest home: the breadth and red-flag cards side by side at one height (DF-023) */
 .space-panels.even { align-items: stretch; }

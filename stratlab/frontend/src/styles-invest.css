@@ -18,10 +18,8 @@
 .k-split2 { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: var(--s5); align-items: start; }
 /* side by side only when the results still get a wide column next to the filters and the menu (R1-045) */
 @media (max-width: 1360px) { .k-split2 { grid-template-columns: minmax(0, 1fr); } }
-.inv-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: var(--s5); }
 .inv-plain { font-weight: 400; }
 .inv-ink { color: var(--ink); }
-.inv-clip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .inv-text { max-width: 80ch; }
 .k-form-wide { grid-column: 1 / -1; }
 .k-card-actions .k-input { width: auto; max-width: 100%; }
@@ -42,8 +40,6 @@
 .inv-rail52 .k-spread { gap: var(--s3); }
 /* the AI read when there is none: one calm line and one button */
 .ai-read-off { justify-content: flex-start; }   /* CK-2 (R20): "Ask again" follows the line it answers */
-
-/* the day's market: a few index levels */
 
 /* the Invest home's watchlist: a table (LIVE3-015; it was tiles two across, an odd one leaving an empty cell). The stock's surveillance
    note sits under its name; its F&O lot changes are on the watchlist page (LIVE2-015) */
@@ -111,7 +107,6 @@
 .tbar-bar.beat { fill: var(--up); }
 .tbar-bar.neg { fill: var(--down); }
 .tbar-year { font-size: var(--t-note); color: var(--muted); }
-.tbar-sub { line-height: 1.35; }
 .tbar-short { display: none; }
 .tbar-year { white-space: nowrap; }
 /* a bar a few pixels wide shows the figure in at most five characters, not cut with an ellipsis (R20-017) */
@@ -136,24 +131,8 @@
 .inv-idea { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s2); padding: var(--s4); border-radius: var(--r-ctl); background: var(--card); border: 1px solid var(--line); }
 .inv-idea .btn { margin-top: auto; }
 
-/* a chain, a cluster of companies (Themes) */
-.inv-chain { display: flex; flex-direction: column; }
-.inv-chain > li { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s3) 0; border-top: 1px solid var(--line); list-style: none; }
-.inv-chain > li:first-child { border-top: 0; padding-top: 0; }
-.inv-clusters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: var(--s4); }
-.inv-cluster { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s3); border-radius: var(--r-ctl); background: var(--paper); border: 1px solid var(--line); }
-.inv-chip { display: inline-flex; gap: 6px; align-items: baseline; padding: 5px 10px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); font-size: var(--t-label); color: var(--ink); text-decoration: none; }
-a.inv-chip:hover { border-color: var(--ink); }
-.inv-chip b { color: var(--blue-ink); font-weight: 600; }
-.inv-chip.off { color: var(--muted); }
-.inv-themes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: var(--s3); }
-.inv-theme { display: flex; flex-direction: column; gap: 4px; padding: var(--s4); border-radius: var(--r-ctl); background: var(--card); border: 1px solid var(--line); color: var(--ink); text-decoration: none; }
-a.inv-theme:hover { border-color: var(--ink); }
-
 /* a day's results or ex-dates, a list of filings, alert rows: rows inside a card */
 .inv-rows { display: flex; flex-direction: column; }
-.inv-row { display: grid; gap: 4px; padding: var(--s3) 0; border-top: 1px solid var(--line); min-width: 0; overflow-wrap: anywhere; }
-.inv-rows > .inv-row:first-child { border-top: 0; padding-top: 0; }
 .inv-day { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--s2); }
 .inv-day > * { grid-column: 1 / -1; }
 /* LIVE4-010: the day's Download CSV sits on the day's heading line, not on a row of its own over every day's table */
