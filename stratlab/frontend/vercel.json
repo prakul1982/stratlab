@@ -5,7 +5,7 @@
   "trailingSlash": false,
   "headers": [
     {
-      "source": "/(.*)",
+      "source": "/((?!embed/).*)",
       "headers": [
         {
           "key": "X-Content-Type-Options",
@@ -22,6 +22,31 @@
         {
           "key": "Content-Security-Policy",
           "value": "default-src 'self'; script-src 'self' https://checkout.razorpay.com https://*.razorpay.com https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://adservice.google.com https://*.adtrafficquality.google https://connect.facebook.net https://www.clarity.ms https://*.clarity.ms; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://stratlab-production-ca25.up.railway.app https://*.stratlab.studio https://*.supabase.co wss://*.supabase.co https://*.razorpay.com https://*.sentry.io https://us.i.posthog.com https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://adservice.google.com https://*.adtrafficquality.google https://connect.facebook.net https://www.facebook.com https://www.clarity.ms https://*.clarity.ms; frame-src https://*.razorpay.com https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://www.google.com https://*.adtrafficquality.google; worker-src 'self'; manifest-src 'self'; form-action 'self' https://*.razorpay.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; upgrade-insecure-requests"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=()"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=31536000; includeSubDomains"
+        }
+      ]
+    },
+    {
+      "source": "/embed/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors *"
         },
         {
           "key": "Permissions-Policy",
@@ -79,7 +104,7 @@
       ]
     },
     {
-      "source": "/((?:mine|all|features|trade|invest|money|notebooks|new|n|import|options|paper|plans/.+|upgrade|help|tour|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|chart|scans|watchlist|dev|login|signup|about|verdict|calendar|v|c)(?:/.*)?)",
+      "source": "/((?:mine|all|features|trade|invest|money|notebooks|new|n|import|options|paper|plans/.+|upgrade|help|tour|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|chart|scans|watchlist|dev|login|signup|about|verdict|calendar|v|c|r|embed)(?:/.*)?)",
       "headers": [
         {
           "key": "X-Robots-Tag",
@@ -98,6 +123,24 @@
     },
     {
       "source": "/blog/:path*",
+      "headers": [
+        {
+          "key": "x-vercel-enable-rewrite-caching",
+          "value": "1"
+        }
+      ]
+    },
+    {
+      "source": "/themes/:path*",
+      "headers": [
+        {
+          "key": "x-vercel-enable-rewrite-caching",
+          "value": "1"
+        }
+      ]
+    },
+    {
+      "source": "/embed/:path*",
       "headers": [
         {
           "key": "x-vercel-enable-rewrite-caching",
@@ -141,6 +184,18 @@
     {
       "source": "/c/:token",
       "destination": "https://stratlab-production-ca25.up.railway.app/c/:token"
+    },
+    {
+      "source": "/r/:token",
+      "destination": "https://stratlab-production-ca25.up.railway.app/r/:token"
+    },
+    {
+      "source": "/themes/:path*",
+      "destination": "https://stratlab-production-ca25.up.railway.app/themes/:path*"
+    },
+    {
+      "source": "/embed/:path*",
+      "destination": "https://stratlab-production-ca25.up.railway.app/embed/:path*"
     },
     {
       "source": "/money/calendar/feed/:token",

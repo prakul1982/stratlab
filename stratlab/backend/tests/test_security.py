@@ -28,7 +28,11 @@ PUBLIC = {"/health", "/version", "/plans", "/pricing", "/markets", "/public/v/{t
           "/inbound/email/{provider}",              # the mail provider's inbound hook (signature-checked)
           "/mcp",                                   # the AI-assistant endpoint: its own key in the request
           "/money/calendar/feed/{token}.ics",       # a personal calendar feed: the secret token in the address is the key
-          "/public/markets/watch"}                  # the visitor's fixed Market Watch board
+          "/public/markets/watch",                  # the visitor's fixed Market Watch board
+          # (updated on purpose, bet 3) public research: a share link's page (its random token is the key), the public theme pages and
+          # the embeddable charts; making, listing and turning off links needs sign-in
+          "/r/{token}", "/themes", "/themes/{region}", "/themes/{region}/{s}",
+          "/embed/price/{region}/{symbol}", "/embed/price/{symbol}", "/embed/theme/{region}/{slug}"}
 
 
 def _deps(d) -> set:

@@ -10,6 +10,7 @@ import { endsAt, viewingPlansNote } from "../lib/offer";
 import { HELP } from "../lib/help";
 import { LegalLinks } from "../components/LegalLinks";
 import { InvoicesCard } from "../components/InvoicesCard";
+import { ResearchSharesCard } from "../components/ResearchSharesCard";
 import { Badge, Card, CardHead, ConfirmDialog, Field, FormActions, FormGrid, LinkCard, PageHeader } from "../components/kit";
 import { AccountWait } from "../components/AccountWait";
 import { Modal } from "../components/ui";
@@ -129,6 +130,8 @@ export function AccountPage() {
         <p className="k-small">A friend who joins with your link and uses StratLab gets a month of Basic free, and you earn free time too.</p>
         <Link to="/invite" className="btn outline sm">Your invite link</Link>
       </Card>
+
+      <ResearchSharesCard />
 
       <InvoicesCard />
 

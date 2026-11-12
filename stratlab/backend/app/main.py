@@ -513,6 +513,11 @@ app.include_router(stock_desks.admin_router)   # /admin/stock-desks
 app.include_router(ai_admin.router)            # /admin/ai: the AI panel
 app.include_router(library_admin.router)       # /admin/stored: everything kept once for every user (R19)
 app.include_router(mcp_server.router)          # /mcp and /me/assistant: StratLab in your AI assistant
+from . import embeds, public_themes, share  # noqa: E402  (bet 3: public, shareable research)
+app.include_router(share.router)               # /research/share/..., /research/shares: share links to a deep dive or a theme
+app.include_router(share.page_router)          # /r/<token>: a share link's public page
+app.include_router(public_themes.router)       # /themes, /themes/<in|us>/<slug>: public theme pages
+app.include_router(embeds.router)              # /embed/price/..., /embed/theme/...: charts other sites may frame
 
 
 RECENT_ERRORS: list[dict] = []   # the last crashes, shown on the admin page
@@ -620,7 +625,7 @@ app.add_middleware(CORSMiddleware, allow_origins=settings.FRONTEND_ORIGINS,
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=6)   # outermost: JSON and pages go compressed (a chart is 5x smaller)
 
 
-HEAD_PATHS = re.compile(r"^/(?:stocks(?:/.*)?|blog(?:/.*)?|sitemap\.xml|sitemaps/[^/]+|robots\.txt)$")
+HEAD_PATHS = re.compile(r"^/(?:stocks(?:/.*)?|blog(?:/.*)?|themes(?:/.*)?|r/[^/]+|embed/.+|sitemap\.xml|sitemaps/[^/]+|robots\.txt)$")
 
 
 class HeadAsGet:
@@ -5124,6 +5129,10 @@ def stock_prices(region: str, symbol: str, request: Request):
     if not series:
         return missing
     return JSONResponse({"currency": "USD" if r == "US" else "INR", **series}, headers={"Cache-Control": stock_pages.CHART_SERIES_CACHE})
+
+
+share.setup(company_card)          # a deep dive's share link takes its key numbers from the company's public page
+embeds.setup(stock_prices)         # a price embed draws the public page chart's own closes
 
 
 @app.get("/stocks", response_class=HTMLResponse)

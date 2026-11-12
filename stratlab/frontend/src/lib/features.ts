@@ -118,12 +118,15 @@ const EXTRA: Feature[] = [
     words: "contact us support email write person human team complaint feedback reach" },
   { id: "theme", title: "Theme: dark or light", what: "Dark, light or the same as your device, in Settings → Experience.", to: "/settings#theme",
     words: "dark mode light mode theme appearance night colours colors" },
+  // bet 3: the share links a person made to deep dives and themes, on Account
+  { id: "shares", title: "Shared research links", what: "The public links you made to deep dives and themes, each one open or turned off.", to: "/account#shares",
+    words: "share shared link links public snapshot research deep dive theme turn off unshare" },
   { id: "signout", title: "Sign out", what: "Sign out of StratLab in this browser.", to: "@signout",
     words: "sign out log out logout signout leave" },
 ];
 
 /** The pages that belong to the person, not to a market: a search that names one gets no "strategy ideas" (DI-003). */
-export const OWN_PAGES = ["account", "settings", "plans", "assistant", "invite", "phone", "help", "contact", "theme", "signout", "features", "mine_home"];
+export const OWN_PAGES = ["account", "settings", "plans", "assistant", "invite", "phone", "help", "contact", "theme", "signout", "features", "mine_home", "shares"];
 
 /** What search looks through: every page in the menu (by its name, its one-liner and the everyday words for it, such as "MTF"
  * or "borrowed money" for Margin funding), then the features that are not a page of their own. */

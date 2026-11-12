@@ -3,6 +3,7 @@ import { DataTable, type Column } from "./kit/DataTable";
 import { Disclosure } from "./kit/Disclosure";
 import type { ReactNode } from "react";
 import { Info } from "./ui";
+import { SHARE_LINKS } from "../lib/planFeatures";
 import { ADS, EVERYONE, FLAG_GROUP, FLAG_GROUPS, FLAGS, LIMITS, NUMBERS, unlimitedLabel, type Limits, type PlanId } from "../lib/plans";
 
 /** Every limit and feature side by side, from the server's plans when signed in; signed out, the
@@ -13,6 +14,11 @@ export function PlanCompare({ plans }: { plans?: Record<string, Partial<Limits>>
     const v = lim(p)[k] as number | null;
     // Free's one session is a trial of 5 market days: said as a trial in the cell (DK-005)
     return v == null ? unlimitedLabel(p, k) : p === "free" && k === "live_limit" ? `${v} (5-market-day trial)` : v.toLocaleString("en-IN");
+  };
+  const shareCell = (p: PlanId) => {
+    const v = (plans?.[p] as { share_links_per_month?: number | null } | undefined)?.share_links_per_month;
+    const n = v === undefined ? SHARE_LINKS[p] : v;
+    return n == null ? "Unlimited" : n.toLocaleString("en-IN");
   };
   const ids: PlanId[] = ["free", "basic", "pro"];
   const names = { free: "Free", basic: "Basic", pro: "Pro" };
@@ -28,6 +34,8 @@ export function PlanCompare({ plans }: { plans?: Record<string, Partial<Limits>>
   const groups: { id: string; title: string; sub?: string; rows: Row[] }[] = [
     // "Ads" closes the limits: a fact about the plan like the numbers above it (ADS-1)
     { id: "limits", title: "How much", rows: [...NUMBERS.map(([k, label]) => ({ id: String(k), label, cell: (p: PlanId) => num(p, k) })),
+      // bet 3: public share links (planFeatures.ts SHARE_LINKS, the server's share_links_per_month), after the other limits
+      { id: "share_links_per_month", label: "Public share links a month, of a deep dive or a theme", cell: (p: PlanId) => shareCell(p) },
       { id: "ads", label: "Ads on StratLab (Google ads on public pages and under AI answers)", cell: (p: PlanId) => ADS[p] }] },
     ...FLAG_GROUPS.map((g) => ({ id: `paid-${g.id}`, title: g.title, sub: "What each plan adds", rows: flagRows(g.id) })),
   ];

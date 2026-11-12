@@ -40,6 +40,16 @@ HTML_CSP = (b"content-security-policy", b"default-src 'none'; style-src 'unsafe-
 # other origin (PUB-1)
 CHART_CSP = (b"content-security-policy", HTML_CSP[1].replace(b"default-src 'none';", b"default-src 'none'; script-src 'self'; connect-src 'self';"))
 COMPANY_PAGE = re.compile(r"^/stocks/(?:in|us)/[^/]+$", re.I)
+# embeddable charts (embeds.py) are the only pages another site may frame: no X-Frame-Options, and frame-ancestors * (bet 3)
+EMBED = re.compile(r"^/embed/")
+EMBED_CSP = (b"content-security-policy", HTML_CSP[1].replace(b"frame-ancestors 'none'", b"frame-ancestors *"))
+
+
+def security_headers(path: str, html: bool) -> list:
+    """The headers every answer gets, and a page its content policy: an embed may be framed anywhere, nothing else anywhere."""
+    if EMBED.match(path):
+        return [h for h in HEADERS if h[0] != b"x-frame-options"] + ([EMBED_CSP] if html else [])
+    return HEADERS + ([CHART_CSP if COMPANY_PAGE.match(path) else HTML_CSP] if html else [])
 
 
 def max_body(scope) -> int:
@@ -191,7 +201,7 @@ class Guard:
                 if bad_key and msg.get("status") == 401:
                     self.window.hit(bad_key, BAD_TOKENS_PER_MINUTE)       # a failed token check, counted per address
                 got = {k.lower(): v for k, v in msg.get("headers") or []}
-                extra = HEADERS + ([CHART_CSP if COMPANY_PAGE.match(path) else HTML_CSP] if got.get(b"content-type", b"").startswith(b"text/html") else [])
+                extra = security_headers(path, got.get(b"content-type", b"").startswith(b"text/html"))
                 msg = {**msg, "headers": list(msg.get("headers") or []) + [h for h in extra if h[0] not in got]}
             await send(msg)
 
