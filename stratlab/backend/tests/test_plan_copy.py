@@ -119,6 +119,9 @@ CARD_WORDS = {
     # (updated on purpose, f4: two new Basic features, a theme's full change log and its workbook)
     "theme_changes": "theme change logs",
     "theme_workbook": "theme's workbook in Excel",
+    # (updated on purpose: lane b2's new features)
+    "supply": "customers and suppliers named in filings",
+    "supply_pro": "links across a theme's companies",
 }
 
 
@@ -184,3 +187,10 @@ def test_features_doc_and_cards_say_the_free_tier():
     assert "slide deck a month" not in _plan(key, "free")
     assert "${L.free.deepdives_per_month} company deep dive a month, ${L.free.ai_reads_per_day} fresh AI reads a day" in _plan(key, "free")
     assert "${L.free.screens} saved screen," in _plan(key, "free")
+
+
+def test_supply_free_rows_match_the_free_card():
+    """(lane b2) The Free card's number of customer and supplier links is the server's own (supply_links.FREE_ROWS)."""
+    from app.supply_links import FREE_ROWS
+    m = re.search(r"latest (\d+) customer and supplier links", _plan(_block("FEATURES"), "free"))
+    assert m and int(m.group(1)) == FREE_ROWS

@@ -67,6 +67,7 @@ PLANS = {
                      "tables",
                      "tax_export",
                      "theme_changes", "theme_workbook",
+                     "supply",
                      "watchlist_import"},
     },
     "pro": {
@@ -108,6 +109,7 @@ PLANS = {
                      "tables",
                      "tax_export",
                      "theme_changes", "theme_workbook",
+                     "supply", "supply_pro",
                      "watchlist_import"},
     },
 }
@@ -152,6 +154,7 @@ FEATURES = ("indicators", "fno", "group_live", "options", "options_signal", "fas
             "tables",
             "tax_export",
             "theme_changes", "theme_workbook",
+            "supply", "supply_pro",
             "watchlist_import")
 # doc_search: search inside filings and call transcripts with every hit and every filter (sector, a stored theme's companies, kind
 # of document, dates), over the last year (Free: the first DOC_SEARCH["free"]["hits"] hits of a search, filtered by company only;
@@ -166,6 +169,8 @@ DOC_SEARCH = {"free": {"hits": 3, "days": 365}, "basic": {"hits": None, "days": 
 # theme_changes: a theme's whole change log, "What changed" (the latest refresh's counts and first 5 rows are on Free);
 # theme_workbook: a theme as an Excel workbook, counted as that theme's deck of the month (its PDF, PowerPoint and workbook are one deck); and a theme's companies as a CSV
 # (not counted; Free sees every company on the theme's page)
+# supply: every customer and supplier link named in filings on a company page, each with its quote and source (Free: the latest
+# supply_links.FREE_ROWS); supply_pro: the links among a theme's companies by value-chain layer, and the links as a CSV (supply_links.py)
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 

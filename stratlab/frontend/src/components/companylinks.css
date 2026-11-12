@@ -1,0 +1,9 @@
+/* The customer and supplier map's card and panels (lane b2): two groups side by side on a wide screen, one under the other on a phone. */
+.co-links-groups { display: grid; gap: var(--s-4, 16px); grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) { .co-links-groups.two { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.co-links-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-3, 12px); }
+.co-links-list > li { border-top: 1px solid var(--line); padding-top: var(--s-3, 12px); min-width: 0; }
+.co-links-list > li:first-child { border-top: 0; padding-top: 0; }
+.co-links-quote { margin: 6px 0 4px; padding-left: 10px; border-left: 2px solid var(--line-2); color: var(--ink, inherit); overflow-wrap: anywhere; }
+.co-links-group h3 { margin: 0 0 var(--s-2, 8px); }
+.co-links-head { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }

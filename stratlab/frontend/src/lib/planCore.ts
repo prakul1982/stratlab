@@ -38,7 +38,7 @@ export const LIMITS: Record<PlanId, Limits> = {
       "earnings_calls", "group_figures",
       "doc_search",
       "tables",
-      "watchlist_import", "tax_export"] },
+      "watchlist_import", "tax_export", "supply"] },
   pro: { backtests_per_month: null, ai_builds_per_month: null, live_limit: 10, group_size: 50, deepdives_per_month: null, decks_per_month: null,
     stock_alerts: 100, screens: 25, holdings: 300, networth_items: null, mf_schemes: null, journal_trades: null, themes_per_month: null,
     watchlists: null, watchlist_symbols: null, chart_saves: null, chart_indicators: null, ai_reads_per_day: null,
@@ -55,7 +55,7 @@ export const LIMITS: Record<PlanId, Limits> = {
       "earnings_calls", "group_figures",
       "doc_search", "doc_search_all",
       "tables",
-      "watchlist_import", "tax_export"] },
+      "watchlist_import", "tax_export", "supply", "supply_pro"] },
 };
 
 // Free has every market and the core tools, not every tool: Replay, Forward test, the scans and the full journal are paid (DP1-021)

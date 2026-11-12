@@ -100,6 +100,8 @@ ROUTES = [
     ("export", "get", "/research/company/IN/TCS/statements.xlsx", None),
     # (updated on purpose, f3: the watchlist file import is Basic)
     ("watchlist_import", "post", "/watch/import/file", {"data": "U3ltYm9sClRDUwo=", "filename": "list.csv"}),
+    # (updated on purpose: lane b2's new Pro feature, the customer and supplier links as a CSV)
+    ("supply_pro", "get", "/research/links/IN/LT/csv", None),
 ]
 
 
@@ -149,6 +151,8 @@ def test_every_paid_feature_is_refused_somewhere_on_the_server():
                  # (updated on purpose, FREE-TIER) the tax report's downloads: tests/test_free_tier.py checks the 402
                  "tax_export": "GET /tax/export",
                  # f4 (test_f4_theme_changes): the whole change log on the theme's dive, and GET /research/theme-dive/workbook
-                 "theme_changes": "the theme dive's change log", "theme_workbook": "GET /research/theme-dive/workbook"}
+                 "theme_changes": "the theme dive's change log", "theme_workbook": "GET /research/theme-dive/workbook",
+                 # (updated on purpose: lane b2) Free sees the latest links on the company card, Basic every one (test_supply_links)
+                 "supply": "company card rows beyond the Free teaser"}
     covered = {r[0] for r in ROUTES} | set(elsewhere)
     assert covered == set(FEATURES), set(FEATURES) ^ covered

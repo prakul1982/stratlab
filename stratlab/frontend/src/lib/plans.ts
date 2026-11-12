@@ -70,7 +70,8 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in 
   // the filings search (doc_search.py): Free sees the first 3 results of a search, filtered by company only (plans.DOC_SEARCH)
   ["doc_search", "Search filings: all results"], ["doc_search_all", "Search filings: all years, CSV"],
   ["tables", "All company tables"],
-  ["watchlist_import", "Watchlist import from a CSV or Excel file"]];
+  ["watchlist_import", "Watchlist import from a CSV or Excel file"],
+  ["supply", "Customer and supplier links"], ["supply_pro", "Theme links, CSV"]];
 // EVERYONE (what every plan has, the comparison table's last fold) is in planFeatures.ts: only the lazy table reads it, so the landing
 // page's JavaScript doesn't carry it (FREE-TIER kept that page's budget)
 

@@ -55,9 +55,10 @@ def test_features_per_plan_once_payments_are_live(paid):
              "tables",   # (updated on purpose: lane c-f2's company tables in full are Basic)
              "watchlist_import",   # (updated on purpose, f3: the watchlist import from a file is Basic)
              "tax_export",             # (updated on purpose, FREE-TIER: the tax report's downloads are Basic's)
-             "theme_changes", "theme_workbook"}      # (updated on purpose, f4: a theme's full change log and its workbook are Basic)
+             "theme_changes", "theme_workbook",      # (updated on purpose, f4: a theme's full change log and its workbook are Basic)
+             "supply"}            # (updated on purpose: lane b2's customer and supplier links)
     assert {f for f, on in plan_info("basic")["features"].items() if on} == basic
-    assert all(plan_info("pro")["features"].values()) and set(FEATURES) == basic | {"fno", "options_signal", "fast_entries", "export", "tax_tools", "itr_export", "us_tax", "options_whatif", "strike_rules", "signal_webhooks", "assistant", "doc_search_all"}
+    assert all(plan_info("pro")["features"].values()) and set(FEATURES) == basic | {"fno", "options_signal", "fast_entries", "export", "tax_tools", "itr_export", "us_tax", "options_whatif", "strike_rules", "signal_webhooks", "assistant", "doc_search_all", "supply_pro"}
     assert {f: FEATURE_PLAN[f] for f in ("indicators", "alerts", "scans", "fno", "export")} == {
         "indicators": "basic", "alerts": "basic", "scans": "basic", "fno": "pro", "export": "pro"}
     assert group_size("free") == 5 and group_size("basic") == 25          # (updated on purpose, FREE-TIER)

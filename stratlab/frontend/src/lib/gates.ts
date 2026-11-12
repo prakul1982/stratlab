@@ -74,6 +74,7 @@ export const ELSEWHERE: Record<string, string> = {
   newsletter: "Settings", dividends: "Tax tools (by company)", mf_costs: "Mutual funds", mf_behaviour: "Mutual funds", options_whatif: "the options builder",
   vix_filter: "the options builder", strike_rules: "the options builder", loan_check: "Net worth",
   assistant: "Connect an AI assistant (its own plan note)", ipo_summary: "an IPO's own page (its gate is below)",
+  supply: "company page", supply_pro: "themes",
   doc_search_all: "Search filings (every year, and the CSV)",
   tables: "a company page's Peers, Financial statements and Shareholding history",
   watchlist_import: "Import a watchlist (Market Watch and the watchlist page)",

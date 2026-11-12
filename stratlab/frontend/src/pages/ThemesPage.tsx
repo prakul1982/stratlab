@@ -8,6 +8,7 @@ import { bizFor, LIBRARY_HEAD, libraryLabel, themeApi, type Business, type Dive,
 import { StoredNote, StoredStamp, useStoredRefresh } from "../components/StoredStamp";
 import { RegionSwitch } from "../components/Research";
 import { ShareResearchButton } from "../components/ShareResearch";
+import { ThemeLinksCard } from "../components/ThemeLinks";
 import { ChainCard, ClaimsCard, LayerCard, ListingsCard, MembersCard, NewsCard, NumbersCards, SubThemesCard, ThemeDownloads } from "../components/ThemeDive";
 import { ChangesCard } from "../components/ThemeChanges";
 import { SaveButton, SavedList } from "../components/SavedSearches";
@@ -217,6 +218,7 @@ export function ThemesPage() {
               {biz && !biz.allowed && dive.region === "IN" && <p className="k-note">Operating figures that companies file between results (monthly sales, output, traffic) are on the Basic plan.</p>}
               {dive.layers.map((l, i) => <LayerCard key={l.layer} layer={l} i={i} region={dive.region} business={bizFor(biz, l)} />)}
               <SubThemesCard dive={dive} business={biz} />
+              <ThemeLinksCard region={dive.region} theme={q} />
             </>
           )}
           <ClaimsCard tailwinds={r.tailwinds} risks={r.risks} />

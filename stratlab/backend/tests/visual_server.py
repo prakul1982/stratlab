@@ -124,6 +124,7 @@ def build():
     holders_and_updates(mp)
     from tests import fake_f5
     fake_f5.seed()                           # the earnings-call calendar and the business groups (f5)
+    supply_links_world()                    # the customer and supplier map (b2)
     deep_reads()
     live_breadth(mp, sizes)
     library_seeds()
@@ -285,6 +286,37 @@ def holders_and_updates(mp):
         holdings.save(uid, [{"symbol": "MARUTI", "qty": 10, "avg": 11000.0}, {"symbol": "TCS", "qty": 5, "avg": 3500.0}], "manual")
         db.set_setting(f"watchlist:{uid}", json.dumps({"items": [{"symbol": "TVSMOTOR", "region": "IN"}, {"symbol": "JSWSTEEL", "region": "IN"},
                                                                   {"symbol": "MARUTI", "region": "IN"}, {"symbol": "AAPL", "region": "US"}]}))
+
+
+def supply_links_world():
+    """The customer and supplier map (lane b2): RELIANCE's own filings name five customers (two linked, one in Admin's review queue,
+    two unlisted buyers kept as filed), TCS's annual report names RELIANCE as a customer, and a US pair (made-up quotes in the
+    filings' own wording) for the US card."""
+    from app import db
+    t = db.sb().table("supply_links")
+
+    def put(region, by, name, direction, cp, sym, state, basis, quote, day, amount=None, share=None, cands=None):
+        t.insert({"region": region, "stated_by": by, "stated_name": name, "direction": direction, "counterparty": cp, "cp_norm": cp.lower(),
+                  "cp_region": region, "cp_symbol": sym, "state": state, "candidates": cands, "basis": basis, "share_pct": share, "amount": amount,
+                  "quote": quote, "doc_url": f"https://nsearchives.nseindia.com/corporate/{by}-{day}.pdf" if region == "IN" else
+                  f"https://www.sec.gov/Archives/edgar/data/1/0001/{by.lower()}-10k.htm", "doc_title": "Receipt of order" if region == "IN" else "Annual report (10-K)",
+                  "said_on": day, "method": "rule"}).execute()
+    R = "Reliance Industries Limited"
+    put("IN", "RELIANCE", R, "customer", "Tata Steel Limited", "TATASTEEL", "auto", "order_win",
+        "Reliance Industries Limited has received an order worth Rs 820 crore from Tata Steel Limited for supply of industrial gases.", "2026-11-04", "Rs 820 crore")
+    put("IN", "RELIANCE", R, "customer", "Indian Railways", None, "text", "order_win",
+        "Reliance Industries Limited has received a Letter of Award from Indian Railways for supply of high speed diesel.", "2026-10-28")
+    put("IN", "RELIANCE", R, "customer", "Tata", None, "review", "order_win",
+        "Reliance Industries Limited has received a work order from Tata for polymer supplies worth Rs 64 crore.", "2026-10-15", "Rs 64 crore",
+        cands=[{"symbol": "TATASTEEL", "name": "Tata Steel"}, {"symbol": "TATAPOWER", "name": "Tata Power Company"}, {"symbol": "TCS", "name": "Tata Consultancy Services"}])
+    put("IN", "RELIANCE", R, "customer", "Ministry of Defence (MoD)", None, "text", "order_win",
+        "Reliance Industries Limited has signed a contract with the Ministry of Defence (MoD) for supply of aviation fuel.", "2026-09-30")
+    put("IN", "RELIANCE", R, "customer", "Saregama India Limited", "SAREGAMA", "auto", "order_win",
+        "Reliance Industries Limited has received an order from Saregama India Limited for digital distribution services.", "2026-09-12")
+    put("IN", "TCS", "Tata Consultancy Services Limited", "customer", "Reliance Industries Limited", "RELIANCE", "auto", "order_win",
+        "Tata Consultancy Services Limited has received an order from Reliance Industries Limited for a cloud migration programme.", "2026-08-20")
+    put("US", "AAPL", "Apple Inc.", "supplier", "Taiwan Semiconductor Manufacturing Company Limited", "TSM", "auto", "supplier_named",
+        "We rely on Taiwan Semiconductor Manufacturing Company Limited to manufacture our processors.", "2026-10-31")
 
 
 def deep_reads():
