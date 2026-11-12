@@ -4,6 +4,7 @@ import copy
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
+import time_machine
 
 from app import group_live, live
 from app.engine import costs as C
@@ -46,6 +47,9 @@ def flipped(n=1300):
 
 
 # ---------- 1. a group's account value stays the same across a restart ----------
+# the clock held still: a 5-minute mark passed between the save and the restart would make the history fetched again end in a
+# candle closed "while the server was down", which the idle members rightly run (and buy on), moving equity by its cost
+@time_machine.travel(datetime(2026, 10, 12, 15, 0, tzinfo=timezone.utc), tick=False)
 def test_group_equity_and_counts_hold_across_a_restart(monkeypatch):
     from tests.test_group_live import candle
     from tests.test_live_polling import make_manager
