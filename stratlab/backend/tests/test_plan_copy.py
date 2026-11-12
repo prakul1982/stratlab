@@ -91,6 +91,9 @@ CARD_WORDS = {
     # (updated on purpose: two new Basic features, the earnings-call calendar in full and business group figures, f5)
     "earnings_calls": "earnings-call calendar in full",
     "group_figures": "business group figures",
+    # (updated on purpose, lane b1: two new paid features, the filings search on Basic and its every-year archive and CSV on Pro)
+    "doc_search": "search inside filings and call transcripts",
+    "doc_search_all": "every year of a company's filings",
 }
 
 

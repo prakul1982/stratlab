@@ -120,6 +120,7 @@ const HoldersPage = page(() => import("./pages/HoldersPage"), "HoldersPage");
 const EarningsCallsPage = page(() => import("./pages/EarningsCallsPage"), "EarningsCallsPage");
 const BusinessGroupsPage = page(() => import("./pages/BusinessGroupsPage"), "BusinessGroupsPage");
 const BusinessGroupPage = page(() => import("./pages/BusinessGroupsPage"), "BusinessGroupPage");
+const DocSearchPage = page(() => import("./pages/DocSearchPage"), "DocSearchPage");   // search inside filings (lane b1)
 const BizUpdatesPage = page(() => import("./pages/BizUpdatesPage"), "BizUpdatesPage");
 const netWorth = () => import("./pages/money/NetWorthPage");
 const NetWorthPage = page(netWorth, "NetWorthPage");
@@ -357,6 +358,7 @@ function Routed() {
         <Route path="/dev/kit" element={import.meta.env.DEV ? <DevKit /> : <AdminOnly what="The design kit"><DevKit /></AdminOnly>} />
         <Route path="/chart/:market/:symbol" element={<ChartPage />} />
         <Route path="/research/filings" element={<FilingsPage />} />
+        <Route path="/research/search" element={<DocSearchPage />} />
         <Route path="/research/results" element={<ResultsPage />} />
         <Route path="/research/corporate-actions" element={<CorpActionsPage />} />
         <Route path="/research/earnings-calls" element={<EarningsCallsPage />} />

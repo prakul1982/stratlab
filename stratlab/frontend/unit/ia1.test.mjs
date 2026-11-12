@@ -119,7 +119,9 @@ test("IA-1: the plan locks are the ones they were, now on the tabs", () => {
   // (updated on purpose, f5) and the two new features' pages: this week's calls and every group's members are for everyone
   assert.deepEqual(PAGE_GATES["/research/earnings-calls"], { feature: "earnings_calls", whole: false });
   assert.deepEqual(PAGE_GATES["/invest/groups"], { feature: "group_figures", whole: false });
-  assert.equal(Object.keys(PAGE_GATES).length, Object.keys(before).length + 4);
+  // (updated on purpose, lane b1: the filings search's own page gate, a new page, not a moved one)
+  assert.deepEqual(PAGE_GATES["/research/search"], { feature: "doc_search", whole: false });
+  assert.equal(Object.keys(PAGE_GATES).length, Object.keys(before).length + 5);
   const tabs = read("src/components/HubTabs.tsx");
   assert.match(tabs, /const locked = off && gate!\.whole;/);
   assert.match(tabs, /<span className="side-lock" data-plan=\{plan\} aria-hidden="true" \/>/);

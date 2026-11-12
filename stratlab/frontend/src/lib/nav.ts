@@ -140,6 +140,8 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
           { flag: "group_figures", part: true, also: /^\/invest\/groups\/[^/]+$/, line: "India's business groups from the promoters companies name: members, combined value and moves.",
             blurb: "Each business group the companies' own shareholding filings make out: its listed companies, their combined market value, how each moved and its promoter holding." }),
         page("/invest/holders", "Named holders", "layers", "named holders shareholders promoter fund fii dii mutual fund shareholding pattern above 1% who owns", { flag: "holders" }),
+        // kept short: this map is in the visitor's first download (e2e/review-r5.spec.ts's budget)
+        page("/research/search", "Search filings", "search", "transcripts concall", { flag: "doc_search" }),
       ] },
       { id: "find-stocks", label: "Find stocks", icon: "search", blurb: "Find companies by their figures, by what their charts do, or by what they filed.", pages: [
         page("/research/screens", "Figures", "search", "screener screen filter companies growth debt returns roe pe fundamentals ratios",

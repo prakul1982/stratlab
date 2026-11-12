@@ -52,7 +52,8 @@ PLANS = {
                      "stock_futures", "mtf",
                      "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
                      "ipo_summary", "ipo_alerts", "movers",
-                     "earnings_calls", "group_figures"},
+                     "earnings_calls", "group_figures",
+                     "doc_search"},
     },
     "pro": {
         "name": "Pro", "price": 1999, "price_year": 19999,
@@ -84,7 +85,8 @@ PLANS = {
                      "stock_futures", "mtf",
                      "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
                      "ipo_summary", "ipo_alerts", "movers",
-                     "earnings_calls", "group_figures"},
+                     "earnings_calls", "group_figures",
+                     "doc_search", "doc_search_all"},
     },
 }
 # indicators: every indicator beyond price, SMA, EMA and RSI; fno: Indian futures and options;
@@ -123,7 +125,13 @@ FEATURES = ("indicators", "fno", "group_live", "options", "options_signal", "fas
             "stock_futures", "mtf",
             "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
             "ipo_summary", "ipo_alerts", "movers",
-            "earnings_calls", "group_figures")
+            "earnings_calls", "group_figures",
+            "doc_search", "doc_search_all")
+# doc_search: search inside filings and call transcripts with every hit and every filter (sector, a stored theme's companies, kind
+# of document, dates), over the last year (Free: the first DOC_SEARCH["free"]["hits"] hits of a search, filtered by company only;
+# visitors: nothing, it needs sign-in); doc_search_all: every year stored (a company's documents across all its years, from its
+# company page) and the hits as a CSV (doc_search.py)
+DOC_SEARCH = {"free": {"hits": 3, "days": 365}, "basic": {"hits": None, "days": 365}, "pro": {"hits": None, "days": None}}
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 

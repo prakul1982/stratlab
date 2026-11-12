@@ -92,6 +92,9 @@ ROUTES = [
     # (updated on purpose, f5) the full earnings-call calendar: the calls held, the filters and your stocks
     ("earnings_calls", "get", "/research/earnings-calls?when=past", None),
     ("earnings_calls", "get", "/research/earnings-calls?scope=mine", None),
+    # (updated on purpose, lane b1: the filings search's filters are Basic, its CSV of hits Pro; Free still searches, by company only)
+    ("doc_search", "get", "/research/docs/search?q=order&sector=Banks", None),
+    ("doc_search_all", "get", "/research/docs/export?q=order", None),
 ]
 
 

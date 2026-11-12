@@ -1,3 +1,4 @@
+import { DocSearchLink } from "../components/DocSearchLink";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, type ApiError } from "../lib/api";
@@ -457,7 +458,7 @@ function CompanyView() {
 
       {region === "US" && !c.delisted && <UsFilingsCards symbol={c.symbol} />}
 
-      {region === "IN" && <Card id="filings"><CardHead title="Filings and red flags"
+      {region === "IN" && <Card id="filings"><CardHead title="Filings and red flags" actions={<DocSearchLink region="IN" symbol={c.symbol} />}
         info="What the company told the exchange: fund raises (QIP, preferential, rights), pledges, resignations, defaults, regulator action, rating changes, results and calls." /><FilingsPanel symbol={c.symbol} /></Card>}
 
       {region === "IN" && <BizUpdatesPanel symbol={c.symbol} wrap={wrap("Business updates", "business-updates",

@@ -42,6 +42,8 @@ export const PAGE_GATES: Record<string, Gate> = {
   "/money/rates": { feature: "rates_slab", whole: false },
   "/money/calendar": { feature: "money_reminders", whole: false },
   "/options": { feature: "options", whole: false },
+  // the filings search: Free searches by company and sees the first 3 results; every result and the filters are Basic
+  "/research/search": { feature: "doc_search", whole: false },
 };
 
 /** The paid part as a page holds it, where the plan's row names more than that page has (LIVE7A-018: Flows' lock named "derivatives
@@ -57,6 +59,7 @@ export const lockWhat = (path: string, feature: string): string => PAGE_WHAT[pat
  * part" did not say which part). */
 export const PART_WORDS: Record<string, string> = {
   earnings_calls: "the full calendar", group_figures: "the figures", tax_tools: "advance tax", us_tax: "rupee workings", itr_export: "the downloads", networth: "history", mf_gains: "gains by year", journal: "the checks",
+  doc_search: "every result and filter",
 };
 
 /** An IPO's own page holds the summary of its offer document (Basic); the rest of the page is for everyone. */
@@ -69,6 +72,7 @@ export const ELSEWHERE: Record<string, string> = {
   newsletter: "Settings", dividends: "Tax tools (by company)", mf_costs: "Mutual funds", mf_behaviour: "Mutual funds", options_whatif: "the options builder",
   vix_filter: "the options builder", strike_rules: "the options builder", loan_check: "Net worth",
   assistant: "Connect an AI assistant (its own plan note)", ipo_summary: "an IPO's own page (its gate is below)",
+  doc_search_all: "Search filings (every year, and the CSV)",
 };
 
 export const featureName = (feature: string) => FLAGS.find(([f]) => f === feature)?.[1] ?? feature;
