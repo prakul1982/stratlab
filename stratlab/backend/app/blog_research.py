@@ -21,7 +21,7 @@ from . import blog, db, email_kit as kit
 IST = ZoneInfo("Asia/Kolkata")
 STATE_KEY = "blog:research:state"
 MONTH_KEY = "blog:research:month"
-GEN = 6                             # 6: theme posts with no layers, a headline for a name or a same-day twin are hidden (LIVE6-003); the version of what the builders write; bump it with a change to a post's words or tables and every post is written again at the next check after the deploy (LIVE2-029)
+GEN = 7                             # 7: a theme post says the day of the theme's read it was worked out from (LIVE7A-017); 6: theme posts with no layers, a headline for a name or a same-day twin are hidden (LIVE6-003); the version of what the builders write; bump it with a change to a post's words or tables and every post is written again at the next check after the deploy (LIVE2-029)
 GEN_KEY = "blog:research:gen"       # {"gen", "ok", "tries", "at"} of the last run made for a version
 SIP_AMOUNT = 10000
 SIP_HORIZONS = (3, 5)
@@ -563,7 +563,18 @@ def theme_source(dive: dict, theme: str, region: str) -> dict:
                        "companies": [{"symbol": c.get("symbol"), "name": c.get("name") or c.get("symbol")} for c in blk.get("companies") or [] if c.get("symbol")][:40]})
     return {"v": 1, "theme": theme, "region": region, "sector": dive.get("sector") or theme, "members": dive.get("members"), "unit": dive.get("unit"),
             "basis": dive.get("basis") or "", "rows": rows, "notable": [n for n in dive.get("notable") or [] if n.get("kind") == "move"],
-            "stamp": theme_stamp()}
+            "stamp": theme_stamp(), "read_on": datetime.now(timezone.utc).date().isoformat()}
+
+
+def figures_moved(old: dict | None, new: dict) -> bool:
+    """Whether a theme post's kept figures differ from the theme's live read (LIVE7A-017: the public Cybersecurity post said 14 companies in 5
+    layers, "Identity and access has one company", while its theme page had 16 and two in identity): another set of layers, companies or
+    layer figures. The day of the read alone is no difference."""
+    if not isinstance(old, dict):
+        return False
+    shape = lambda src: [(r.get("layer"), r.get("n"), r.get("ebitda"), r.get("net"), r.get("roce"), r.get("revenue"),      # noqa: E731
+                          sorted(c.get("symbol") or "" for c in r.get("companies") or [])) for r in src.get("rows") or []]
+    return shape(old) != shape(new) or old.get("members") != new.get("members")
 
 
 def _num_cell(v) -> float | None:
@@ -660,6 +671,13 @@ def theme_post_from(src: dict, now: datetime | None = None) -> dict:
         intro += (f" {k} of {'them is' if k == 1 else 'them are'} part of the theme but in no layer; "
                   f"{'it is' if k == 1 else 'they are'} in the table, apart, and not in the charts.")
     intro += " Every figure is from the companies' latest full-year accounts."
+    if src.get("read_on"):           # LIVE7A-017: the day of the read, so a post is never taken for the theme's page of another day
+        try:
+            day = datetime.fromisoformat(str(src["read_on"])[:10]).strftime("%-d %b %Y")
+        except ValueError:
+            day = ""
+        if day:
+            intro += f" Worked out from StratLab's read of the theme on {day}; its companies and figures change as the theme is read again."
     lines = []
     if gap:
         lines.append(f"Median EBITDA margin is highest in {gap['high']} ({pts(gap['high_value'])}) and lowest in {gap['low']} ({pts(gap['low_value'])}), "
@@ -832,7 +850,8 @@ def carry_to_stored(slug: str, src: dict, now: datetime | None = None) -> str | 
     except Exception as e:
         print("blog research: theme post not read:", slug, type(e).__name__, str(e)[:100])
         return None
-    if not old or not stale_figures(_stored_src(old)):
+    # LIVE7A-017: also when the live read's layers, companies or figures differ from the post's (a theme read again under the same rules)
+    if not old or not (stale_figures(_stored_src(old)) or figures_moved(_stored_src(old), src)):
         return None
     try:
         if theme_problem(src):

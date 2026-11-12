@@ -143,8 +143,12 @@ def test_a_stored_post_from_older_rules_takes_the_new_figures_and_keeps_its_addr
 
 def test_a_stored_post_from_todays_rules_is_left_alone_and_one_the_new_figures_cant_stand_is_hidden(posts):
     slug = _store_post(posts, ROWS_OLD, BR.theme_stamp())
-    assert BR.carry_to_stored(slug, _src(ROWS_NEW, BR.theme_stamp())) is None
+    assert BR.carry_to_stored(slug, _src(ROWS_OLD, BR.theme_stamp())) is None          # the same figures: left alone
     assert [r["layer"] for r in posts[slug]["body"]["src"]["rows"]] == ["Equipment", "Designers"]
+    # changed on purpose (lane t1, LIVE7A-017: the public post kept 14 companies in 5 layers while its theme had 16): today's rules but
+    # another set of layers or companies in the live read: the post takes them
+    assert BR.carry_to_stored(slug, _src(ROWS_NEW, BR.theme_stamp())) == "updated"
+    assert [r["layer"] for r in posts[slug]["body"]["src"]["rows"]] == ["Equipment", "Memory makers", "Designers"]
     old = _store_post(posts, ROWS_OLD, None)                      # kept before posts carried their versions: stale
     assert BR.carry_to_stored(old, _src(ROWS_OLD[:1], BR.theme_stamp())) == "hidden" and posts[old]["published"] is False
 

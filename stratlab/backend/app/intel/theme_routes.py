@@ -33,7 +33,9 @@ router = APIRouter(tags=["research"])
 
 DIVE_TTL = 30 * 60
 DIVE_CACHE = TTLCache(max_items=24, max_bytes=3 * 1024 * 1024)            # a dive is about 60 KB of numbers
-PRICE_CACHE = TTLCache(max_items=300, max_bytes=3 * 1024 * 1024)          # one company's reduced closes: 160 weekly closes and a few numbers (about 6 KB)
+# one company's reduced closes: 160 weekly closes and a few numbers (about 6 KB). LIVE7A-002: room for a few large themes at once (300 held
+# less than the four themes a reader opened, 503 companies, so each one's companies pushed the last one's out and were read again)
+PRICE_CACHE = TTLCache(max_items=1200, max_bytes=7 * 1024 * 1024)
 EVIDENCE_CACHE = TTLCache(max_items=600, max_bytes=1500 * 1024)           # one company's description, 700 characters
 NEWS_CACHE = TTLCache(max_items=24, max_bytes=1024 * 1024)
 EVIDENCE_DAYS = 30                                                        # a description is read again after this long
@@ -607,9 +609,13 @@ def with_caps(m: dict, rows: list[dict]) -> dict:
     """The map's market values as the index has them now (LIVE3-003: a map kept for a day showed BDL at the 3 Nov close beside its own
     page's 4 Nov one): the index takes each page's newest close as the price job moves it (screens.note_price)."""
     caps = {r["symbol"]: r.get("market_cap") for r in rows or [] if r.get("symbol")}
-    # LIVE6-007: a line that isn't the company's own words about its work (a filing's title, its name alone) is never served as them
-    own = lambda c: {**c, "what": theme_base.own_words(c.get("what"), c.get("name") or "")} if c.get("what") else c      # noqa: E731
+    named = {r["symbol"]: r.get("name") for r in rows or [] if r.get("symbol") and r.get("name")}
+    # LIVE6-007: a line that isn't the company's own words about its work (a filing's title, its name alone) is never served as them;
+    # LIVE7A-025: the name with its apostrophe where the index's spelling keeps it
+    named_c = lambda c: {**c, "name": theme_data.shown_name(c.get("name"), named.get(c.get("ticker")))} if c.get("name") else c      # noqa: E731
+    own = lambda c: named_c({**c, "what": theme_base.own_words(c.get("what"), c.get("name") or "")} if c.get("what") else c)      # noqa: E731
     fix = lambda cos: [own({**c, "cap": caps[c["ticker"]]} if c.get("ticker") in caps else c) for c in cos or []]      # noqa: E731
+    m = theme_check.claims_fit(m)                  # LIVE7A-013: a dated headline that isn't about the claim isn't shown beside it
     return {**m, "value_chain": [{**v, "companies": fix(v.get("companies"))} for v in m.get("value_chain") or []],
             "sub_themes": [{**x, "companies": fix(x.get("companies"))} for x in m.get("sub_themes") or []]}
 
@@ -828,12 +834,15 @@ def sources(region: str, theme: str, fresh: bool = False):
     def red(symbols, frm, to):
         return redflags.listing(region, frm=frm.isoformat(), to=to.isoformat(), symbols=symbols, size=200, today=today)["items"]
     pieces: dict = {}
+    closes: dict = {}
 
     def facts(sym):
         f, at = facts_piece(region, sym, fresh)
         if at:
             pieces[sym] = at
-        return f
+        if not closes:                  # LIVE7A-003: each company at the newest close the index has for it (the price job's)
+            closes.update({r["symbol"]: r for r in R.index_rows(region) or [] if isinstance(r, dict) and r.get("symbol")} or {"": {}})
+        return theme_data.at_close(f, closes.get(sym), region, sym)
     src = theme_data.Sources(
         today, facts=facts, index_rows=lambda: R.index_rows(region),
         shareholding=(lambda s: shareholders.company(s)) if region == "IN" else (lambda s: None),
@@ -911,6 +920,41 @@ def figures_waiting(dive: dict) -> int:
     return len(dive.get("metrics_pending") or [])
 
 
+REPRICE_EVERY = 10 * 60          # seconds between two rebuilds of a kept dive for companies moved to the same newer close
+
+
+def priced_mark(region: str, symbols) -> list:
+    """[the newest close the index has for any of the companies, how many of them are still at an earlier one] (LIVE7A-003)."""
+    R = _routes()
+    idx = {x["symbol"]: str(x.get("price_at") or "")[:10] for x in R.index_rows(region) or [] if isinstance(x, dict) and x.get("symbol")}
+    days = [idx[s_] for s_ in symbols if idx.get(s_)]
+    top = max(days, default="")
+    return [top, sum(1 for d in days if d < top)]
+
+
+def prices_moved(region: str, kept: dict) -> bool:
+    """Whether a kept dive's prices are behind the index's (LIVE7A-003: a dive is kept "however old" until a Refresh, so the live Automotive
+    page said "prices to 6 Nov" on 12 Nov): a newer close for any of its companies, or (at most every REPRICE_EVERY) more of them at it."""
+    value = kept.get("value") or {}
+    mark = priced_mark(region, list((value.get("pieces") or {}).keys()))
+    was = value.get("priced")
+    if not isinstance(was, list) or len(was) != 2:
+        return bool(mark[0]) and mark[0] > str((value.get("dive") or {}).get("as_of") or "")[:10]
+    if mark[0] != was[0]:
+        return mark[0] > was[0]
+    return mark[1] < was[1] and time.time() - _at_seconds(kept.get("at")) > REPRICE_EVERY
+
+
+def _at_seconds(at) -> float:
+    try:
+        return datetime.fromisoformat(str(at).replace("Z", "+00:00")).timestamp()
+    except (TypeError, ValueError):
+        try:
+            return float(at)
+        except (TypeError, ValueError):
+            return 0.0
+
+
 def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None = None) -> dict:
     """The dive for a checked map with its descriptions (the page's tables and sections): kept once for everyone in the shared store
     (kind "theme:dive") and served from there, however old, until a Refresh (owner, 7 Nov); worked out again from the stored company
@@ -920,7 +964,7 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
     if not refresh:
         kept = computed.get(theme_library.DIVE, key)
         if kept is not None and isinstance((kept.get("value") or {}).get("dive"), dict) and not pieces_moved(r, kept["value"].get("pieces") or {}) \
-                and not sector_metrics.any_stored(r, kept["value"]["dive"].get("metrics_pending") or []):
+                and not sector_metrics.any_stored(r, kept["value"]["dive"].get("metrics_pending") or []) and not prices_moved(r, kept):
             requeue(r, kept["value"]["dive"])
             return kept["value"]["dive"]
     src = sources(r, theme, fresh=True) if refresh else sources(r, theme)
@@ -934,7 +978,8 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
         except Exception as e:
             print("theme: pages behind a filing not marked:", type(e).__name__, str(e)[:100])
     if (m.get("placements") or {}).get("checked"):
-        computed.put(theme_library.DIVE, key, {"dive": hit, "pieces": getattr(src, "pieces", None) or {}}, label=m.get("sector") or theme,
+        pieces = getattr(src, "pieces", None) or {}
+        computed.put(theme_library.DIVE, key, {"dive": hit, "pieces": pieces, "priced": priced_mark(r, list(pieces))}, label=m.get("sector") or theme,
                      region=r, by=by)
         auto_post(r, theme, hit)
     return hit
@@ -1028,7 +1073,7 @@ def members_of(m: dict, dive: dict) -> list[dict]:
             f = figs.get(c["ticker"]) or {}
             out.append({"symbol": c["ticker"], "name": c.get("name") or f.get("name") or c["ticker"], "layer": layer, "official": official.get(layer, False),
                         **({"rest": True} if layer in rest else {}),
-                        "industry": c.get("industry") or None, "what": theme_base.own_words(c.get("what") or f.get("what"), c.get("name") or f.get("name") or "") or None,
+                        "industry": c.get("industry") or None, "what": theme_base.own_words(f.get("what") if f.get("what") else c.get("what"), c.get("name") or f.get("name") or "") or None,
                         # LIVE6-006: the dive's market value, on its one price date
                         "cap": f.get("cap") if f.get("cap") is not None else c.get("cap"), "revenue": f.get("revenue"), "ebitda": f.get("ebitda"),
                         "net": f.get("net"), "roce": f.get("roce"), "year": f.get("year"), "by": by_of(c)})
@@ -1066,9 +1111,10 @@ def deck_extras(r: str, theme: str, m: dict, profile: dict) -> dict:
     names = _map_names(fm)
     placed = sorted({c["ticker"]: names.get(c["ticker"]) for grp in (fm.get("value_chain") or []) + (fm.get("sub_themes") or [])
                      for c in grp.get("companies") or []}.items())
-    if placed and any(PRICE_CACHE.get(f"{r}:{sym}") for sym, _ in placed):
-        try:
-            prices = gather_prices(r, placed, bars_loader(r), bench_loader(r), budget=0.0)
+    daily = daily_rows(r) if placed else ({}, None, {})
+    if placed and (any(PRICE_CACHE.get(f"{r}:{sym}") for sym, _ in placed) or any(sym in daily[0] for sym, _ in placed)):
+        try:          # LIVE7A-002: the page's figures, its stored daily rows for the companies whose candles aren't read
+            prices = gather_prices(r, placed, bars_loader(r), bench_loader(r), budget=0.0, daily=daily)
             out["prices"] = prices if prices.get("companies") else None
         except Exception as e:                       # the deck is made without them, and says so
             print("theme deck: prices not read:", type(e).__name__, str(e)[:100])
@@ -1258,6 +1304,36 @@ def ipo_items(region: str, today: date) -> list[dict]:
     return out
 
 
+LISTINGS_WAIT = 8.0          # seconds the page's request waits for the listings' match before answering "pending"
+
+
+def match_theme_listings(r: str, theme: str, m: dict, key: tuple, skey: list) -> None:
+    """The theme's new listings matched and kept (IPO_CACHE, and the shared store for everyone); nothing kept when the tracker or the AI
+    can't answer, so a later ask tries again."""
+    today = datetime.now(timezone.utc).date()
+    try:
+        items = ipo_items(r, today)
+    except Exception as e:
+        print("theme listings: tracker not read:", type(e).__name__, str(e)[:100])
+        return
+    try:
+        with _ai_gate:
+            hits = theme_check.match_listings(items, m, _ask, theme, VERDICTS)
+    except AIError:
+        return
+    by = {i["id"]: i["pub"] for i in items}
+    rows = []
+    for h in hits:
+        p = by.get(h["id"])
+        if not p:
+            continue
+        rows.append({"id": h["id"], "name": p.get("name"), "symbol": p.get("symbol"), "stage": p.get("stage"), "industry": p.get("industry"),
+                     "open": p.get("open"), "close": p.get("close"), "listing": p.get("listing"), "groups": h["groups"], "what": h["what"]})
+    hit = {"items": rows, "checked": True}
+    IPO_CACHE.set(key, hit, 6 * 3600)
+    computed.put("theme:listings", skey, hit, label=m.get("sector") or theme, region=r)
+
+
 @router.get("/theme-dive/listings")
 def theme_dive_listings(q: str, region: str = "IN", profile=Depends(current_profile)):
     """New issues in the IPO tracker that belong in the theme, each kept only with words from its own offer that show the work."""
@@ -1272,26 +1348,13 @@ def theme_dive_listings(q: str, region: str = "IN", profile=Depends(current_prof
     if kept is not None:
         IPO_CACHE.set(key, hit, 6 * 3600)              # (the deck reads the page's listings here)
     if hit is None:
-        today = datetime.now(timezone.utc).date()
-        try:
-            items = ipo_items(r, today)
-        except Exception as e:
-            print("theme listings: tracker not read:", type(e).__name__, str(e)[:100])
-            return R.ok({"items": [], "checked": False})
-        try:
-            with _ai_gate:
-                hits = theme_check.match_listings(items, m, _ask, theme, VERDICTS)
-        except AIError:
-            return R.ok({"items": [], "checked": False})
-        by = {i["id"]: i["pub"] for i in items}
-        rows = []
-        for h in hits:
-            p = by[h["id"]]
-            rows.append({"id": h["id"], "name": p.get("name"), "symbol": p.get("symbol"), "stage": p.get("stage"), "industry": p.get("industry"),
-                         "open": p.get("open"), "close": p.get("close"), "listing": p.get("listing"), "groups": h["groups"], "what": h["what"]})
-        hit = {"items": rows, "checked": True}
-        IPO_CACHE.set(key, hit, 6 * 3600)
-        computed.put("theme:listings", skey, hit, label=m.get("sector") or theme, region=r)
+        # LIVE7A-007: the matching is the AI's work and waits its turn behind other themes' (_ai_gate), so the page's request no longer
+        # waits for it (an India theme's request outlasted the hosting's time limit, whose error reply the browser can't read): it runs
+        # beside the request, which waits LISTINGS_WAIT at most and otherwise answers "pending" for the page to ask again
+        j = later(("listings",) + key, lambda: match_theme_listings(r, theme, m, key, skey), wait=LISTINGS_WAIT)
+        hit = IPO_CACHE.get(key)
+        if hit is None:
+            return R.ok({"items": [], "checked": False, **({"pending": True} if j.get("state") == "running" else {})})
     return R.ok(hit)
 
 
@@ -1331,9 +1394,59 @@ def _price_ttl(region: str) -> int:
         return 900
 
 
-def gather_prices(region: str, members: list[tuple[str, str]], load, bench, budget: float = PRICE_BUDGET) -> dict:
+def daily_rows(region: str) -> tuple[dict, str | None, dict]:
+    """(each company's stored daily row, their day, each group's index row) from the heatmap's store, the rows the daily breadth run keeps
+    after each close (LIVE7A-002: a theme's companies whose candles aren't read yet are shown from these at once). Empty when not stored."""
+    try:
+        from .. import heatmap
+        got = heatmap.load(region)
+        return got.get("stocks") or {}, got.get("day"), got.get("index") or {}
+    except Exception as e:
+        print("theme prices: daily rows not read:", type(e).__name__, str(e)[:100])
+        return {}, None, {}
+
+
+BENCH_GROUP = {"IN": "nifty500", "US": "sp500"}       # the breadth group whose stored index closes stand in for the benchmark's own read
+
+
+def stored_bench(region: str) -> tuple[str | None, list]:
+    """(the benchmark's name, its daily closes as [{"t", "c"}]) from the closes the daily breadth run stores with its group (the index's
+    close of each day), for when the benchmark's own candles can't be read (LIVE7A-002: the India pages' index column was "–" on every row)."""
+    try:
+        from .. import breadth
+        g = BENCH_GROUP.get(region)
+        rows = breadth.load_hist(g) if g else {}
+        bars = [{"t": d, "c": r[-1]} for d, r in sorted(rows.items()) if isinstance(r, list) and r and isinstance(r[-1], (int, float)) and r[-1] > 0]
+        return (breadth.GROUPS[g]["index"] if len(bars) >= 2 else None), bars
+    except Exception as e:
+        print("theme prices: stored index closes not read:", type(e).__name__, str(e)[:100])
+        return None, []
+
+
+def bench_bars(region: str, bench) -> tuple[str | None, list]:
+    """(the benchmark's name, its daily closes [{"t", "c"}]): kept beside the companies' (it was read again on every request), its own
+    candles first, else the index closes the breadth run stores."""
+    key = f"{region}:^bench"
+    hit = PRICE_CACHE.get(key)
+    if hit:
+        return hit.get("name"), hit.get("bars") or []
+    name, bars = None, []
+    try:
+        name, raw = bench()
+        bars = [{"t": str(b.get("t"))[:10], "c": b.get("c")} for b in raw or [] if isinstance(b, dict) and b.get("t") is not None]
+    except Exception as e:
+        print("theme prices: index not read:", type(e).__name__, str(e)[:100])
+    if len(theme_prices._pairs(bars)) < 2:
+        name, bars = stored_bench(region)
+    if len(bars) >= 2:
+        PRICE_CACHE.set(key, {"name": name, "bars": bars}, _price_ttl(region))
+    return name, bars
+
+
+def gather_prices(region: str, members: list[tuple[str, str]], load, bench, budget: float = PRICE_BUDGET, daily=None) -> dict:
     """The price section for the members, reading each company's candles that isn't already reduced and kept; a company whose read has
-    to wait (the minute's allowance is used, or the time is up) is counted as pending and read on a later request."""
+    to wait (the minute's allowance is used, or the time is up) is counted as pending and read on a later request, shown meanwhile from its
+    stored daily row (`daily`: daily_rows(region)) when it has one (LIVE7A-002)."""
     started = time.monotonic()
     reduced: dict = {}
     todo = []
@@ -1360,12 +1473,17 @@ def gather_prices(region: str, members: list[tuple[str, str]], load, bench, budg
                 PRICE_CACHE.set(f"{region}:{sym}", red or {}, _price_ttl(region))
                 reduced[sym] = red
     pending = sum(1 for s, _ in members if s not in reduced)
-    bname, braw = None, None
-    try:
-        bname, braw = bench()
-    except Exception as e:
-        print("theme prices: index not read:", type(e).__name__, str(e)[:100])
-    return theme_prices.compute(members, reduced, theme_prices.reduce_bars(braw or []), bname or "", pending)
+    stocks, day, _ = daily if daily is not None else ({}, None, {})
+    for s, _ in members:
+        if s not in reduced:
+            got = theme_prices.from_daily_row(stocks.get(s), day)
+            if got:
+                reduced[s] = got
+    bname, bbars = bench_bars(region, bench)
+    # the index to the companies' last close, so both columns run to the same day ("Over, to ...")
+    last = max((str(x["date"]) for x in reduced.values() if x), default=None)
+    bred = theme_prices.reduce_bars([b for b in bbars if not last or str(b.get("t"))[:10] <= last])
+    return theme_prices.compute(members, reduced, bred, bname or "", pending)
 
 
 @router.get("/theme-dive/prices")
@@ -1381,7 +1499,7 @@ def theme_dive_prices(q: str, region: str = "IN", profile=Depends(current_profil
     if not _price_gate.acquire(timeout=30):
         err(503, "busy", "Prices are busy right now. Try again in a minute.")
     try:
-        out = gather_prices(r, members, bars_loader(r), bench_loader(r))
+        out = gather_prices(r, members, bars_loader(r), bench_loader(r), daily=daily_rows(r))
     finally:
         _price_gate.release()
     return R.ok(out)

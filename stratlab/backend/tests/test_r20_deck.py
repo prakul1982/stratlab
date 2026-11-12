@@ -188,7 +188,9 @@ def test_every_rule_holds_on_every_synthetic_theme(name, v, slides):
                 assert not any(str(x).endswith("…") for it in b["items"] for x in it.get("lines") or []), s.title
     # no "of 0", no ".0" figure, no advice word
     assert not re.search(r"\bof 0\b", t), re.findall(r".{40}\bof 0\b.{10}", t)
-    assert not re.search(r"(?<![\w.,])\d[\d,]*\.0(?:%|x\b| pts| points)", t), re.findall(r".{20}\d\.0(?:%|x| pts).{10}", t)[:3]
+    # changed on purpose (lane t1, LIVE7A-014: "36%" beside "35.9%"): a whole figure keeps its ".0" only where a figure of its unit beside it
+    # (its text, table column or chart) has a decimal, so no ".0" figure stands where nothing beside it has one
+    assert not deck.precision_problems(slides), deck.precision_problems(slides)[:3]
     for word in ("avoid", "attractive", "undervalued", "overvalued", "recommend", "target price", "outlook", "implication"):
         assert not re.search(rf"\b{word}\b", t.lower()), word
     # lane n1 (changed on purpose): "buy" and "sell" only as a recommendation ("buy the stock", "a buy", "should sell"); a company

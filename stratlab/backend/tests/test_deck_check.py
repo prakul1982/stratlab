@@ -2,6 +2,7 @@
 never ship. Synthetic text only; a real PDF is read through pdftotext where it is installed."""
 import importlib.util
 import os
+import re
 import shutil
 
 from app import deck
@@ -49,7 +50,7 @@ def test_each_thing_that_must_never_ship_is_found_with_its_page():
     assert [f["text"].split(" in: ")[0] for f in by["count"]] == ["'14 of 12'"] and by["count"][0]["page"] == 2
     assert r["counts"]["cut text"] == 1 and [f["text"] for f in by["cut text"]][0].startswith("Harbour Motor…")
     assert r["counts"] == {"headline": 1, "mid-word": 1, "placeholder": 5, "joining word": 1, "count": 1, "repeated": 0, "cut text": 1,
-                           "other>40%": 0}          # lane s3-r40: the repeated-word and "Other" columns (updated on purpose)
+                           "other>40%": 0, "hyphen minus": 0, "mixed range": 0}          # lane s3-r40: the repeated-word and "Other" columns; lane t1 (LIVE7A-014): hyphen minus, mixed range (updated on purpose)
 
 
 def test_counts_that_reconcile_and_figures_beside_of_are_not_flagged():
@@ -74,12 +75,13 @@ def test_the_script_reads_a_folder_reports_a_row_for_each_deck_and_exits_non_zer
     (bad / "b.txt").write_text(BAD, encoding="utf-8")
     assert DC.main([str(good)]) == 0
     out = capsys.readouterr().out
-    assert out.splitlines()[0].split() == ["deck", "pages", "headline", "mid-word", "placeholder", "joining", "word", "count", "repeated", "cut", "text",
-                                           "other>40%", "result"]          # lane s3-r40: two columns (updated on purpose)
-    assert out.splitlines()[1].split() == ["a.txt", "2", "0", "0", "0", "0", "0", "0", "0", "0", "ok"]
+    assert out.splitlines()[0].split() == ["deck", "pages", "headline", "mid-word", "placeholder", "joining", "word", "count", "repeated", "hyphen",
+                                           "minus", "cut", "text", "other>40%", "mixed", "range", "result"]   # lane s3-r40: two columns; lane t1: two more (updated on purpose)
+    assert out.splitlines()[1].split() == ["a.txt", "2", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "ok"]
     assert DC.main([str(bad)]) == 1
     out = capsys.readouterr().out
-    assert "b.txt  2      1         1         5            1             1      0         1         0          FAIL" in out and "b.txt: headline (1)" in out and "p.2: '14 of 12'" in out
+    # lane t1: the "hyphen minus" and "mixed range" columns (updated on purpose)
+    assert re.search(r"b\.txt\s+2\s+1\s+1\s+5\s+1\s+1\s+0\s+0\s+1\s+0\s+0\s+FAIL", out) and "b.txt: headline (1)" in out and "p.2: '14 of 12'" in out
     assert DC.main([str(tmp_path / "missing")]) == 2 and DC.main([]) == 2
     empty = tmp_path / "empty"
     empty.mkdir()

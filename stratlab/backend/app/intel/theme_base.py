@@ -1601,17 +1601,46 @@ _FILING_TITLE = re.compile(r"^(?:annual|quarterly|current|interim|half[- ]yearly
 _LEGAL_WORDS = re.compile(r"\b(?:inc|incorporated|corp|corporation|co|company|ltd|limited|plc|llc|lp|nv|sa|ag|the|holdings?|group)\b\.?", re.I)
 
 
+# LIVE7A-004 (the live Semiconductors page: TOYO Co.'s "own words" were Toyo Tire's encyclopedia article, Monolithic Power's "an American,
+# publicly traded company headquartered in West Palm Beach", AMD's "We also offer ...", Dillard's "It is headquartered in Little Rock ..."):
+# an encyclopedia's opening line (a nationality or "multinational" right after "is a", "commonly known as") is not the company's own words,
+# nor a line that only adds to what an earlier one said ("also", "In addition") or only says where it is
+_ENCYCLOPEDIA = re.compile(r"^[^.]{0,160}?\b(?:is|was)\s+(?:an?|the)\s+(?:[\w&'-]+,?\s+){0,3}?(?:American|British|English|Scottish|Japanese|Taiwanese|"
+                           r"(?:South\s+)?Korean|Chinese|Indian|Israeli|Dutch|German|French|Swiss|Canadian|Irish|Swedish|Finnish|Norwegian|Danish|"
+                           r"Italian|Spanish|Belgian|Australian|Singaporean|Brazilian|Mexican|Argentine|Bermudian|Luxembourgish|Greek|Cypriot|"
+                           r"multinational|publicly[\s-]traded)\b|^[^.]{0,80}?,\s+(?:commonly|also|formerly|better)\s+known\s+as\b", re.I)
+_ABBR_DOT = re.compile(r"\b(inc|corp|co|ltd|plc|l\.p|n\.v|s\.a|bhd|pty|ltda|st)\.", re.I)      # "Inc." doesn't end the opening clause
+_ADDS = re.compile(r"^(?:in\s+addition\b|additionally\b|also\b|(?:we|it|they|the\s+company)\s+also\b)", re.I)
+_WHERE = re.compile(r"^(?:it|we|the\s+company)\s+(?:is|are)\s+(?:headquartered|based|located|domiciled|incorporated)\b", re.I)
+
+
 def own_words(text, name: str = "") -> str:
     """A company's line as its own words on a page, a CSV or a slide, or "" when it isn't one (LIVE6-007): the titles of its filings (the
     "From its own filings:" lines stand in for a missing description in the checks, never as one), its name alone, or a sentence that says
-    where it is and what it is called but not what it does (says no work: provides, makes, sells, operates; its software, its customers)."""
+    where it is and what it is called but not what it does (says no work: provides, makes, sells, operates; its software, its customers);
+    LIVE7A-004: an encyclopedia's opening line, a line that only adds to an earlier one, or one that only says where the company is."""
     t = " ".join(str(text or "").split()).strip(" “”\"'")
-    if not t or t.startswith("From its own filings:") or _FILING_TITLE.match(t):
+    if not t or t.startswith("From its own filings:") or _FILING_TITLE.match(t) or _ENCYCLOPEDIA.search(_ABBR_DOT.sub(r"\1", t)) or _ADDS.match(t) or _WHERE.match(t):
         return ""
     words = lambda x: [w for w in re.findall(r"[a-z0-9]+", _LEGAL_WORDS.sub(" ", x.lower()))]        # noqa: E731
     if name and not [w for w in words(t) if w not in set(words(name))]:
         return ""
     return t if _WORK.search(t) else ""
+
+
+def whole_words(what, about) -> str:
+    """A company's line with a word cut by the end of its stored description taken off and an ellipsis in its place (LIVE7A-004: ADI's "a
+    broad portfolio of solutio", eBay's "via retail sal": a description is kept to its first EVIDENCE_CHARS characters, so its last word can
+    be part of one). Only a line that runs to the very end of a description that doesn't end a sentence is touched."""
+    w = " ".join(str(what or "").split())
+    a = " ".join(str(about or "").split())
+    if not w or not a or " " not in w or a.rstrip(" ”\"'").endswith((".", "!", "?", ")", ";")):
+        return w
+    norm = lambda x: re.sub(r"\W+", " ", x).strip().lower()        # noqa: E731
+    wn, an = norm(w), norm(a)
+    if not wn or not an.endswith(wn[-40:]):
+        return w
+    return w[:w.rfind(" ")].rstrip(" ,;:-–—") + "…"
 
 
 def described(m: dict, about_of) -> dict:

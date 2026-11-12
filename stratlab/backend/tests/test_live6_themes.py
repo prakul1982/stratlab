@@ -45,8 +45,10 @@ def test_the_theme_and_its_index_over_the_same_calendar_periods_and_the_line_end
     i0 = max(i for i, d in enumerate(days) if d <= date(2026, 10, 10))
     assert days[i0] == date(2026, 10, 9)
     assert out["returns"]["1M"]["bench"] == round((bench[-1] / bench[i0] - 1) * 100, 1)
-    i3 = max(i for i, d in enumerate(days) if d <= date(2026, 8, 10))
-    assert out["returns"]["3M"]["bench"] == round((bench[-1] / bench[i3] - 1) * 100, 1)
+    # changed on purpose (lane t1, LIVE7A-002): the index's change is from its daily closes (the close on or before 10 Aug, a Monday, not the
+    # weekly line's Friday 7 Aug), and the theme's is the average of its companies' own changes, so neither waits on the weekly line
+    assert out["returns"]["3M"]["bench"] == idx["ret"]["3M"] and out["returns"]["1M"]["bench"] == idx["ret"]["1M"]
+    assert out["returns"]["3M"]["theme"] == round((a["ret"]["3M"] + b["ret"]["3M"]) / 2, 1)
 
 
 # ---------- LIVE6-018: only articles with a source and a headline; no quote pages or click-bait ----------

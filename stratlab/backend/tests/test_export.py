@@ -84,7 +84,9 @@ def test_the_theme_deck_has_the_cover_chain_layers_members_claims_and_notes():
     assert cover["Companies"] == "6" and cover["Layers"] == "2" and cover["With figures"] == "4"          # R20: its share and the universe beneath
     figs = table_of(slides, "Every company's figures")
     assert figs["head"][:3] == ["Company", "Layer", "Market value"] and figs["rows"][1][:3] == ["Mine A", "Mining", "₹40,000 cr"]
-    assert table_of(slides, "Layer 1 · Mining")["rows"][0] == ["Mine A", "₹1,500 cr", "50%", "24%", "15%", "Mar 2026"]   # R16: whole points as filed; R18: every whole figure
+    # changed on purpose (lane t1, LIVE7A-014): a whole figure keeps ".0" in a column where another figure has a decimal (one precision a column)
+    row = table_of(slides, "Layer 1 · Mining")["rows"][0]
+    assert row[:3] == ["Mine A", "₹1,500 cr", "50%"] and row[3] in ("24%", "24.0%") and row[4] in ("15%", "15.0%") and row[5] == "Mar 2026"   # R16: whole points as filed
     claims = next(b for s in slides if s.title == "Tailwinds and risks" for b in s.blocks if b["kind"] == "flow")["items"]
     assert claims[0]["text"] == "A battery subsidy" and [t[0] for t in claims[0]["tags"]] == ["Tailwind", "Dated source"]   # R16: "Checked" meant only that a headline exists
     assert claims[0]["sub"] == "Subsidy scheme extended · 01 Sep 2026 · A daily" and claims[0]["url"] == "https://example.com/news/subsidy"

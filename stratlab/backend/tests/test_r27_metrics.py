@@ -91,7 +91,7 @@ def test_semiconductors_show_makers_own_figures_and_rpo_only_for_the_design_lice
     head, rows = sector_table(slides, "US companies")
     byname = {r[0]: r for r in rows}
     chip = byname["Chip CH 0 Inc"]
-    assert chip[head.index("RPO growth")] == "n/a" and chip[head.index("Capex / revenue")] == "15%" and chip[head.index("Inventory days")].endswith(" days")
+    assert chip[head.index("RPO growth")] == "n/a" and chip[head.index("Capex / revenue")] == "15.0%" and chip[head.index("Inventory days")].endswith(" days")
     assert byname["Chip IP 0 Inc"][head.index("RPO growth")].startswith("+") and byname["Chip IP 0 Inc"][head.index("Inventory days")] == "n/a"
     t = texts(slides)
     card = next(c for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards" for c in b["items"] if c["title"] == "Sector operating figures")
@@ -238,7 +238,7 @@ def test_every_deck_rule_holds_on_the_new_structures(name):
 
 
 def test_the_deck_version_is_27():
-    assert deck.THEME_DECK_VERSION == 51 and S.VERSION == 2          # R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); R35 bumped the deck version (updated on purpose)
+    assert deck.THEME_DECK_VERSION == 52 and S.VERSION == 2          # lane t1: deck 52, dive text 11 (LIVE7A, updated on purpose); R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); R35 bumped the deck version (updated on purpose)
 
 
 def test_a_software_companys_unusual_rpo_growth_is_listed_with_its_base_and_kept_out_of_the_headline_when_it_dominates():

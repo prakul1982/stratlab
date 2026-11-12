@@ -225,7 +225,8 @@ def test_a_peer_median_more_than_five_percent_from_the_run_before_is_said_with_b
     assert "moved" not in v2["sections"]["valuation"]["peers"]["pe"] and "Their peers' median P/E was" not in " ".join(card_lines(slides2))
     same = deck.peer_moved_line({"moved": D.peer_moved([{"d": "2026-10-06", "peers": 19.2, "k": 212, "n": 37},
                                                         {"d": "2026-10-06", "peers": 18.0, "k": 208, "n": 35}])})
-    assert w(same) == ("Their peers' median P/E was 19.2x at an earlier run on the 06 Oct 2026 close and is 18x now: the peers or their reported "
+    # changed on purpose (lane t1, LIVE7A-014): "18.0x" beside "19.2x" in one sentence keeps its decimal (one precision a text)
+    assert w(same) == ("Their peers' median P/E was 19.2x at an earlier run on the 06 Oct 2026 close and is 18.0x now: the peers or their reported "
                        "figures changed; 37 of the theme's companies compared then, 35 now; 212 peers behind it then, 208 now.")
     assert D.peer_moved([{"d": "2026-10-06", "peers": 18.0}]) is None and D.peer_moved([]) is None and deck.peer_moved_line({}) == ""
     for word in ("cheap", "expensive", "fell", "rose", "worse", "better"):
@@ -246,7 +247,7 @@ def test_the_kept_peer_medians_are_one_a_run_that_differs_and_never_more_than_a_
     assert list(store) == ["theme:peers:IN:speciality-chemicals"] and len(json.loads(store["theme:peers:IN:speciality-chemicals"])) == D.PEER_RUNS
     assert len(store["theme:peers:IN:speciality-chemicals"]) < 600                          # bounded storage
     assert T.sources("US", "Speciality chemicals").peer_history("x", {"d": "2026-10-01", "peers": 30.0, "k": 9}) == [{"d": "2026-10-01", "peers": 30.0, "k": 9}]
-    assert D.DIVE_TEXT == 10          # lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); lane m1 bumped it; LIVE6-007 too (updated on purpose)
+    assert D.DIVE_TEXT == 11          # lane t1: dive text 11 (LIVE7A, updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); lane m1 bumped it; LIVE6-007 too (updated on purpose)
 
 
 # ---------- 4. a median row's figure with its count is never cut ----------
@@ -363,4 +364,4 @@ def test_layer_names_take_the_room_the_figure_columns_dont_use_and_one_still_cut
     assert key.startswith("Layer names in full: ") and key.endswith(" = Digital engineering and consulting projects for governments.")
     assert "Other IT service companies" not in key
     assert deck.short_names(head, rows[:1], widths, 1) == "" and deck.short_names(head, rows, widths, None) == ""
-    assert deck.THEME_DECK_VERSION == 51          # R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)
+    assert deck.THEME_DECK_VERSION == 52          # lane t1: deck 52, dive text 11 (LIVE7A, updated on purpose); R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)

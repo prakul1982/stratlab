@@ -242,12 +242,15 @@ def test_a_latest_figure_held_for_a_wild_move_shows_neither_comparison():
 
 # ---------- 6. one formatter: whole figures print whole ----------
 def test_whole_figures_print_whole_everywhere_and_others_keep_one_decimal():
-    assert deck.whole_figures("15.0%, 43.0x, 0.0 pts, 12.3%, ₹4.0 lakh cr, 100.0%") == "15%, 43x, 0 pts, 12.3%, ₹4 lakh cr, 100%"
+    # changed on purpose (lane t1, LIVE7A-014): in a text with "12.3%" the other percentages keep their ".0" (one precision a text)
+    assert deck.whole_figures("15.0%, 43.0x, 0.0 pts, 12.3%, ₹4.0 lakh cr, 100.0%") == "15.0%, 43x, 0 pts, 12.3%, ₹4 lakh cr, 100.0%"
+    assert deck.whole_figures("15.0%, 43.0x, 0.0 pts, ₹4.0 lakh cr, 100.0%") == "15%, 43x, 0 pts, ₹4 lakh cr, 100%"
     assert deck.whole_figures("Web 3.0 Ltd") == "Web 3.0 Ltd" and deck.whole_figures("1.05x") == "1.05x" and deck.whole_figures("0.0") == "0"
     for theme in (bank_theme()[:3], us_list_theme(), maker_theme()):
         _, slides = deck_of(*theme)
         t = texts(slides)
-        assert not re.search(r"(?<![\w.,])\d[\d,]*\.0(?:%|x\b| pts| points)", t), re.findall(r".{20}\d\.0(?:%|x| pts).{10}", t)[:5]
+        # changed on purpose (lane t1, LIVE7A-014): a ".0" figure only beside a decimal of its unit (one precision a text, column or chart)
+        assert not deck.precision_problems(slides), deck.precision_problems(slides)[:5]
         charts = [b for s in slides for b in s.blocks if b["kind"] in ("hbars", "columns", "lines")]
         assert charts and all(b.get("fmt") in (None, "pctw", "pct0", "num") or b["fmt"].endswith(("1", "1t")) for b in charts)
 
