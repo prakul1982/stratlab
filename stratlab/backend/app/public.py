@@ -105,11 +105,6 @@ def unpublish(token: str | None):
         db.delete_setting(f"shareimg:{token}")
 
 
-def unpublish_all(experiments: list[dict]):
-    for e in experiments:
-        unpublish(e.get("public"))
-
-
 def load(token: str) -> dict | None:
     if not TOKEN.match(token or ""):
         return None

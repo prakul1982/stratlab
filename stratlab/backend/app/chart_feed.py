@@ -82,10 +82,6 @@ def build(bars: list[dict], market: str | None, tf: str, until: datetime | None,
     return drop_partial_first(out, more, market, tf) if tf in bar_agg.BASE else out
 
 
-def utc_iso(d: datetime) -> str:
-    return d.astimezone(timezone.utc).isoformat()
-
-
 def between(bars: list[dict], start: datetime, end: datetime) -> list[dict]:
     """The candles that start at or after `start` and before `end`."""
     out = []

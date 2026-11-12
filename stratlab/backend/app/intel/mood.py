@@ -283,7 +283,7 @@ def flows_block(cash: dict | None, days: list[tuple[str, dict]]) -> dict | None:
             "note": "Provisional cash-market figures in ₹ crore; the final ones can differ a little."}
 
 
-def quote_rows(spec: list[tuple], got: dict[str, dict | None], today: str, tzs: dict[str, str] | None = None) -> list[dict]:
+def quote_rows(spec: list[tuple], got: dict[str, dict | None], today: str) -> list[dict]:
     """Rows of {"label", "price", "change_pct", "day", "group"/"kind"} from the quotes read; a symbol with none is left out."""
     rows = []
     for item in spec:
@@ -427,10 +427,6 @@ def verify(p: dict) -> list[str]:
             if "led (" in t and (s["rows"][0]["label"] not in t or s["rows"][-1]["label"] not in t):
                 problems.append(f"\"{t}\" doesn't name the table's leader and laggard")
     return problems
-
-
-def tag_story(titles: list[str], rx: str) -> list[int]:
-    return [i for i, t in enumerate(titles) if re.search(rx, t or "", re.I)]
 
 
 # ---------- the data, read ----------

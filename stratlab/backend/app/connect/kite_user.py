@@ -126,7 +126,7 @@ def stage(request_token: str, st: str) -> str:
     try:
         data = kite.generate_session(request_token, api_secret=api_secret())
         token = data["access_token"]
-    except Exception as e:
+    except Exception:
         raise KiteConnectError("Zerodha didn't accept that login. Try again.") from None
     claim = secrets.token_urlsafe(24)
     db.set_setting(key, json.dumps({"uid": uid, "token": vault.seal(token), "kite_user": str(data.get("user_id") or "")[:20],

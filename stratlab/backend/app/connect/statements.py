@@ -9,7 +9,6 @@ on the statement are never copied out.
 
 Used by the inbox (inbound.py) and by the manual upload, so both do exactly the same."""
 import hashlib
-import io
 import math
 import re
 from datetime import datetime, timedelta, timezone

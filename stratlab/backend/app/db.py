@@ -729,10 +729,6 @@ def _mirror_usable(m: dict | None) -> bool:
     return bool(m) and m["client"] == id(sb())
 
 
-def _mirror_fresh(m: dict | None) -> bool:
-    return _mirror_usable(m) and time.monotonic() - m["at"] < MIRROR_FOR
-
-
 def _mirror_rows(prefix: str, wait: bool = True) -> dict | None:
     """Every setting under a mirrored prefix, read from the database at most once every MIRROR_FOR seconds. A copy past
     that age is still served while one background thread reads the prefix again (a read that fails keeps the copy and

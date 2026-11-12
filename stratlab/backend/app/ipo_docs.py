@@ -13,15 +13,13 @@ Two kinds of reading, kept apart:
 Facts only, in the document's own words and figures. Nothing here says whether an issue is worth applying for."""
 import hashlib
 import io
-import json
 import re
 import zipfile
-from datetime import datetime, timezone
 
 import httpx
 
-from . import db, docs
-from .ai_providers import AIError, complete, extract_json
+from . import docs
+from .ai_providers import complete, extract_json
 from .http_retry import real_transport
 from .intel.ipo_sources import SEC_UA, nse_zip_pdf
 from .intel.net import BROWSER_UA, SourceError
@@ -471,7 +469,7 @@ def kpis(pages: list[str]) -> dict | None:
             continue
         if re.search(r"\.{4,}", pg[:300]):
             continue
-        blocks, start = [], i
+        blocks = []
         for j in range(i, min(len(pages), i + 4)):
             blocks.append(pages[j])
         text = "\n".join(blocks)

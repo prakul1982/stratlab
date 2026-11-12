@@ -4,7 +4,6 @@ for, in memory, with the PDF code the tax report uses (reportlab, the app's own 
 import io
 from datetime import datetime
 from xml.sax.saxutils import escape
-from zoneinfo import ZoneInfo
 
 from .. import email_kit as kit
 from . import tables, write

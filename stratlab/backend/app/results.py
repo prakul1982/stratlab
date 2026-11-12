@@ -704,11 +704,6 @@ class Job:
             job_status.keep("results", self)       # Admin shows this run after a restart too
         return sent
 
-    def unmark(self, name: str) -> None:
-        """Take a slot's day mark back (a read that got nothing must not use the slot up)."""
-        self.last.pop(name, None)
-        db.delete_setting(f"resultsjob:{name}")
-
     def refresh(self, region: str, who: dict | None = None, day: date | None = None) -> dict:
         who = who if who is not None else trackers()
         out = refresh(region, self.sources(), {s for (r, s) in who if r == region}, day)

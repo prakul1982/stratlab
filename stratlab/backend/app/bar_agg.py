@@ -87,7 +87,3 @@ def aggregate(bars: list[dict], tf: str, market: str | None = None) -> list[dict
             out.append({"t": t, "o": b["o"], "h": b["h"], "l": b["l"], "c": b["c"], "v": b.get("v") or 0})
     return out
 
-
-def candle_seconds(tf: str) -> int | None:
-    """How long an intraday candle lasts, in seconds (None for a day, week or month, whose end is the session's)."""
-    return MINUTES[tf] * 60 if tf in MINUTES else None

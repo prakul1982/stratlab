@@ -12,7 +12,7 @@ facts: no advice wording, no ranking of what to pick, no promise."""
 import json
 import re
 import threading
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from statistics import median
 from zoneinfo import ZoneInfo
 
@@ -144,7 +144,7 @@ def classic_strategies(entries: list[dict], now: datetime | None = None) -> dict
                    {"t": "p", "text": f"Group: {', '.join(groups)}." if groups else f"{mname} group."},
                    {"t": "table", "caption": f"{mname}, tested {usual}", "align": "lrrrrl", "widths": [34, 12, 9, 11, 8, 26],
                     "head": ["Rule set", "After costs", "Passive", "Difference", "Trades", "Checks"], "rows": table}]}]
-    risk, mrisk = library_seed.RISK, library_seed.MARKET_RISK
+    risk = library_seed.RISK
     blocks += [
         {"t": "details", "title": "The headline figures in words", "items": words, "words": True},
         {"t": "details", "title": "How these tests were run", "items": [
@@ -793,10 +793,6 @@ def theme_post(dive: dict, theme: str, region: str, now: datetime | None = None,
 
 def p1_plain(v, unit: str = "") -> str:
     return "–" if v is None else f"{v:,.0f}"
-
-
-def pts_or_dash(v) -> str:
-    return "–" if v is None else p1(v)
 
 
 def draft_theme_post(dive: dict, theme: str, region: str, now: datetime | None = None, notable_only: bool = True) -> dict:

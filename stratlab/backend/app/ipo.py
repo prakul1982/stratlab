@@ -23,9 +23,9 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from . import admin, alerts as alerts_mod, db, docs, ipo_docs as D, job_status, leader, memguard, official_close
+from . import admin, alerts as alerts_mod, db, ipo_docs as D, job_status, leader, memguard, official_close
 from . import ai_providers as AI
-from .ai_providers import AIError, complete, extract_json
+from .ai_providers import AIError
 from .auth import current_profile
 from .data.calendar import is_trading_day
 from .intel import ipo_sources as S

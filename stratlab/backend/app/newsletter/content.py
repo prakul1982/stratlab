@@ -548,11 +548,6 @@ def _add(out: list, seen: set, region, symbol):
         out.append((region, symbol))
 
 
-def _instrument(out: list, seen: set, inst):
-    if isinstance(inst, dict) and inst.get("type") in EQUITY:
-        _add(out, seen, inst.get("market"), inst.get("symbol"))
-
-
 def my_stocks(uid: str) -> list[tuple[str, str]]:
     """(region, symbol) for the user's watchlist and holdings only, up to 25 (R29B-012: notebook and paper instruments put RELIANCE
 in an email for a watchlist of TCS and NVDA)."""

@@ -10,7 +10,6 @@ lists, the sitemap and the feed; a post an admin has hidden answers 404. Nothing
 
 The admin routes (/admin/blog...) list the posts, show or hide one, add posts for the stored daily briefs, and run the
 research generator (blog_research.py) in the background."""
-import json
 import re
 import threading
 from datetime import datetime, timezone
