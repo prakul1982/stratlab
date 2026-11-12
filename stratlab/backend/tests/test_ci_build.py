@@ -54,3 +54,64 @@ def test_every_workflow_sets_its_token_permissions():
         assert grants, f"{path.name}: empty permissions block"
         for g in grants:
             assert re.fullmatch(r"[a-z-]+: (read|none)", g), f"{path.name}: top-level grants only read ({g})"
+
+
+def _run_blocks(text: str) -> list[str]:
+    """Every shell `run:` step's script (one-line or block)."""
+    lines, out = text.splitlines(), []
+    for i, line in enumerate(lines):
+        m = re.match(r"^(\s*)(?:-\s+)?run:\s*(.*)$", line)
+        if not m:
+            continue
+        indent, first = len(m.group(1)), m.group(2)
+        body = [first]
+        if first.strip() in ("|", ">", "|-", ">-"):
+            for nxt in lines[i + 1:]:
+                if nxt.strip() and len(nxt) - len(nxt.lstrip()) <= indent:
+                    break
+                body.append(nxt)
+        out.append("\n".join(body))
+    return out
+
+
+# text anyone can write: issue and pull request titles and bodies, comments, reviews, branch names, commit messages
+FREE_TEXT = re.compile(
+    r"\$\{\{[^}]*github\.(?:event\.(?:issue|comment|review|pull_request|head_commit|commits|discussion)"
+    r"[^}]*\.(?:title|body|message|name|label|ref)|head_ref)[^}]*\}\}"
+)
+
+
+def test_no_shell_step_reads_text_from_an_issue_or_comment():
+    runs = 0
+    for path in WORKFLOWS:
+        for block in _run_blocks(path.read_text()):
+            runs += 1
+            assert not FREE_TEXT.search(block), f"{path.name}: pass it through env instead:\n{block}"
+    assert runs >= 5
+    # the check itself catches the shape it is for
+    assert FREE_TEXT.search("echo ${{ github.event.issue.title }}")
+    assert FREE_TEXT.search("echo ${{ github.event.comment.body }}")
+    assert FREE_TEXT.search("git checkout ${{ github.head_ref }}")
+    assert not FREE_TEXT.search("npm run e2e -- --shard=${{ matrix.shard }}/6")
+
+
+def test_the_builder_starts_only_for_the_owner_on_a_trusted_thread():
+    text = (ROOT / ".github" / "workflows" / "claude.yml").read_text()
+    m = re.search(r"\n    if: >-\n((?:      .*\n)+)", text)
+    assert m, "the builder job has an if"
+    cond = " ".join(m.group(1).split())
+    assert cond.startswith("github.actor == github.repository_owner && (")
+    # each event: whoever wrote the text is the owner, and the thread was opened by the owner or a collaborator
+    assert "github.event_name == 'issues' && github.event.issue.user.login == github.repository_owner &&" in cond
+    for event, thread in (("issue_comment", "issue"), ("pull_request_review_comment", "pull_request")):
+        assert (f"github.event_name == '{event}' && github.event.comment.user.login == github.repository_owner && "
+                f"contains(fromJSON('[\"OWNER\",\"MEMBER\",\"COLLABORATOR\"]'), github.event.{thread}.author_association)"
+                ) in cond, event
+    assert "github.event_name != " not in cond, "every event is named, so a new one starts nothing by default"
+    # the events the workflow listens to are exactly the ones the condition names
+    on = _top_level(text, "on")
+    assert sorted(re.findall(r"^  ([a-z_]+):", "\n".join(on), re.M)) == ["issue_comment", "issues", "pull_request_review_comment"]
+    # Claude reads the owner's comments and apps' only
+    assert 'include_comments_by_actor: "${{ github.repository_owner }},*[bot]"' in text
+    # and the action keeps its own default checks: no non-write users, no bots allowed in
+    assert "allowed_non_write_users" not in text and "allowed_bots" not in text
