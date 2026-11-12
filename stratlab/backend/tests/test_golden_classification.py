@@ -32,6 +32,13 @@ APPROVED = {
     # (theme_check.OFF_INDUSTRY); on a live map they are dropped from the theme and named on its coverage (theme_base.without_off_industry)
     "retail:SPH": ("retail", "other"),
     "retail:FGPR": ("distribution", "other"),
+    # R43 (lane d1, the outside review of the live Release 41 Consumer retail deck, on purpose): pawnbrokers (loans against pledged goods),
+    # IT resellers to business and government, a blank-check company and a bank, filed as retail, are another business (theme_check.OFF_INDUSTRY)
+    "retail:FCFS": ("retail", "other"),
+    "retail:EZPW": ("retail", "other"),
+    "retail:NSIT": ("managed_services", "other"),
+    "retail:TMS": ("holding", "other"),
+    "retail:FBCD": ("lending", "other"),
     # R36 fix 4: Amazon sells goods it owns ("products to be sold by us and by third parties"): a retailer with a marketplace beside it
     "retail:AMZN": ("retail", ""),
     # ---- R37 lane r2 (the owner: the remaining misclassifications across all themes) ----

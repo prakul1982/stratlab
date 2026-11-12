@@ -57,7 +57,9 @@ KEEP = {
     "pharma": None,                                           # every company: excipient, animal-health and OTC groups as they are
     "chem": None,                                             # agrochemical, gas and petrochemical makers stay as Release 37 has them
     "cyber": None,
-    "metals": {"ARFIN", "HINDALUMI", "MMP", "JAINREC", "20MICRONS", "GOACARBON"},
+    # lane d1 (updated on purpose): 20 Microns (micronised minerals from its own mines) and Goa Carbon (calcined petroleum coke) leave
+    # "Ferro alloy producers", whose name their words don't say (R43, D1)
+    "metals": {"ARFIN", "HINDALUMI", "MMP", "JAINREC"},
 }
 
 
@@ -140,7 +142,36 @@ def test_the_fixture_holds_the_fourteen_benchmark_maps():
 # words describe another business are dropped from the theme, never placed in "Other" (theme_base.without_off_industry): solar makers filed
 # as semiconductors, propane distributors filed as retail. "theme:symbol" -> why
 DROPPED = {**{f"semis:{s_}": "solar products and no chips, filed as semiconductors: another business" for s_ in ("TE", "TYGO", "FTCI", "MAXNQ", "DQ", "ASTI")},
-           **{f"retail:{s_}": "propane distribution and no stores, filed as retail: another business" for s_ in ("SPH", "FGPR")}}
+           **{f"retail:{s_}": "propane distribution and no stores, filed as retail: another business" for s_ in ("SPH", "FGPR")},
+           **{f"retail:{s_}": 'filed under retail, its own words describe another business (pawnbroking, IT services to business, a blank-check company, a bank, payments or travel): R43, theme_check.OFF_INDUSTRY' for s_ in ('CDW', 'EZPW', 'FBCD', 'FCFS', 'IPSI', 'NSIT', 'TMS', 'WBUY')}}
+# lane d1 (R43, the outside review of the live Release 41 decks, approved on purpose): the moves its rules make on this older fixture,
+# each with why; kept apart from APPROVED so the earlier lanes' checks of their own moves stand
+_D1_NARROW = 'R43 (lane d1, approved on purpose): the largest layer of its family took it by its industry alone, but that layer\'s own name states a kind of business its own words don\'t say, nor any word of its description, and it is no catch-all of its family (by_model.home_of `narrow`): the layer of its family it fits, else "Other"'
+_D1_GROUP = 'R43 (lane d1, approved on purpose): the largest\'s name doesn\'t describe it (by_model.home_of `narrow`); with the like of it of its official industry in "Other" it makes a layer of that industry (INDUSTRY_GROUP_MIN)'
+D1 = {
+    'it:MCLOUD': ('Other', _D1_NARROW),
+    'metals:20MICRONS': ('Coal, iron ore and mineral mining', _D1_NARROW),
+    'metals:GOACARBON': ('Other', _D1_NARROW),
+    'retail:BWMX': ('Catalog and mail-order houses', _D1_GROUP),
+    'retail:CHWY': ('Catalog and mail-order houses', _D1_GROUP),
+    'retail:CPNG': ('Catalog and mail-order houses', _D1_GROUP),
+    'retail:CURV': ('Apparel and accessory stores', _D1_GROUP),
+    'retail:DDL': ('Catalog and mail-order houses', _D1_GROUP),
+    'retail:DDS': ('Other', _D1_NARROW),
+    'retail:DLTH': ('Apparel and accessory stores', _D1_GROUP),
+    'retail:HEPS': ('Catalog and mail-order houses', _D1_GROUP),
+    'retail:JL': ('Apparel and accessory stores', _D1_GROUP),
+    'retail:KSS': ('Other', _D1_NARROW),
+    'retail:LITB': ('Catalog and mail-order houses', _D1_GROUP),
+    'retail:LUXE': ('Catalog and mail-order houses', _D1_GROUP),
+    'retail:LVLU': ('Catalog and mail-order houses', _D1_GROUP),
+    'retail:M': ('Other', _D1_NARROW),
+    'retail:QVCG': ('Catalog and mail-order houses', _D1_GROUP),
+    'retail:SFIX': ('Catalog and mail-order houses', _D1_GROUP),
+    'retail:TLYS': ('Apparel and accessory stores', _D1_GROUP),
+    'retail:ZUMZ': ('Apparel and accessory stores', _D1_GROUP),
+}
+
 
 
 def test_no_company_in_any_theme_changes_its_layer_unless_approved():
@@ -149,7 +180,7 @@ def test_no_company_in_any_theme_changes_its_layer_unless_approved():
         got = layer_of(replay_vc(t))
         for c in t["companies"]:
             k = f"{t['key']}:{c['s']}"
-            want = None if k in DROPPED else APPROVED[k][0] if k in APPROVED else c["e"]
+            want = None if k in DROPPED else D1[k][0] if k in D1 else APPROVED[k][0] if k in APPROVED else c["e"]          # lane d1: D1 (updated on purpose)
             if got.get(c["s"]) != want:
                 moved.append(f"{k} ({c['n']}): expected {want!r}, got {got.get(c['s'])!r}")
     assert not moved, "a rule change moved these companies to another layer (edit APPROVED, with the reason, if on purpose):\n" + "\n".join(moved)
@@ -192,7 +223,9 @@ def test_the_rejected_moves_do_not_happen():
         t = _theme(key)
         before = {c["e"] for c in t["companies"]}
         after = set(layer_of(replay_vc(t)).values())
-        assert after <= before | {"Other"}, (key, after - before)
+        # lane d1 (updated on purpose): a layer of one official industry (R43 `industry_group`) is no layer named by how companies earn
+        made = {D1[k][0] for k in D1 if k.startswith(f"{key}:") and D1[k][1] == _D1_GROUP}
+        assert after <= before | {"Other"} | made, (key, after - before)
     assert "Retail" not in set(layer_of(replay_vc(_theme("retail"))).values())
 
 
@@ -215,8 +248,8 @@ def test_the_review_items_hold_on_the_live_maps():
     # Vipshop ("online discount sales") shares "discount" with the off-price layer's own words, so the largest stands for it, as before
     for s in ("CPNG", "W", "CHWY", "LULU", "JD"):
         assert not retail[s].startswith("Off-price"), s
-    for s in ("FCFS", "EZPW"):
-        assert retail[s] == "Other", s
+    for s in ("FCFS", "EZPW"):           # lane d1: pawnbrokers, another business (R43), out of the theme (updated on purpose)
+        assert s not in retail, s
     for s in ("SPH", "FGPR"):            # lane s3-r40: another business, dropped from the theme (updated on purpose)
         assert s not in retail, s
     assert retail["JD"] == "Resale, rental and small digital commerce"     # a broad online retailer, out of "Niche": the online commerce layer

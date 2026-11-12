@@ -37,7 +37,7 @@ FEW_BASE = 4                  # a highest or lowest median on this many companie
 COMPARE_MIN = MIN_BASE
 # R31 (the owner's review of the live R30 decks): a layer-vs-layer headline (the value chain's line, findings, questions) needs at least this
 # many companies with the figure in each layer it compares; tables still show every layer and mark (green, red) those of COMPARE_MIN or more
-DIVE_TEXT = 11         # LIVE7A (lane t1): every company at the index's newest close and one price date, own words without encyclopedia leads or a cut word, whole-point margins and gaps printed whole, operating figures of old periods left out and listed once, click-bait headlines left out, "Dividend: Dividend" said once; R40: a layer the split named only by how its companies earn is never ranked ("a group by how they earn, of different businesses"), a market-value half with fewer than 3 companies in its figures undone; LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
+DIVE_TEXT = 12         # d1: halves of a split layer never ranked, no ranking on a gap under a point, peers named and like for like, every company in a layer or "Other", the not-checked-yet mark; LIVE7A (lane t1): every company at the index's newest close and one price date, own words without encyclopedia leads or a cut word, whole-point margins and gaps printed whole, operating figures of old periods left out and listed once, click-bait headlines left out, "Dividend: Dividend" said once; R40: a layer the split named only by how its companies earn is never ranked ("a group by how they earn, of different businesses"), a market-value half with fewer than 3 companies in its figures undone; LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
 HEADLINE_MIN = 5
 # R27 (headline eligibility): a comparison is said as a headline only on a figure for at least this share of the companies of each group it
 # compares (a layer, a family); one with less is shown as data, never ranked (the live R26 Semis deck: "RPO growth -3.9%" of 21 of 53)
@@ -433,7 +433,7 @@ def model_fields(layer: dict, sym: str) -> dict:
     if "model" not in c:
         return {}
     return {"model": c.get("model") or "", "model_tags": list(c.get("model_tags") or []), "model_confidence": c.get("model_confidence") or "",
-            **({"model_out": c.get("model_out")} if c.get("model_out") else {})}
+            **({"model_out": c.get("model_out")} if c.get("model_out") else {}), **({"on_industry": True} if c.get("on_industry") else {})}
 
 
 # ---------- one record of who is in a layer's calculations (lane m1: the outside review of the live R32 decks, "15 equipment companies" in
@@ -561,13 +561,16 @@ def chain_table(blocks: list[dict]) -> dict:
                      **{k: (b["stats"].get(k) or {}).get("median") for k in LENDER_KEYS}, "roe_n": (b["stats"].get("roe") or {}).get("n", 0),
                      **{f"{k}_n": (b["stats"].get(k) or {}).get("n", 0) for k in STAT_KEYS if k not in ("ebitda", "roe")},
                      **{k: (b["stats"].get(k) or {}).get("median") for k in FAMILY_CHAIN}, **{f"{k}_n": (b["stats"].get(k) or {}).get("n", 0) for k in FAMILY_CHAIN},
-                     "model": b.get("model"), "intensity": b.get("intensity"), "basis": period_basis([c for c in b.get("companies") or [] if c.get("status") != "unverified"])})
+                     "model": b.get("model"), "intensity": b.get("intensity"), "basis": period_basis([c for c in b.get("companies") or [] if c.get("status") != "unverified"]),
+                     **({"scale": b["scale"]} if b.get("scale") else {})})
     # only the map's own layers (an official industry's leftover companies overlap them: "Vehicle assembly" and "Commercial Vehicles"), each
     # with MIN_BASE companies in its median, and only a gap wider than the rounding of whole-point margins, name a highest and a lowest
     # the "Other ..." group (companies that fit none of the map's layers) is never compared (R22)
     # R27: and each a headline figure (headline_ok: the sample, a figure for at least half the layer's companies, one business model), all on one
     # period basis; a layer that fails is shown in the table, never named
-    ok = lambda r, k: r[k] is not None and headline_ok(r[f"{k}_n"], r["n"], r["model"])      # noqa: E731
+    # d1 (the outside review of the live Release 41 Banks deck: "13.5% vs 13.3%" between "(larger)", one half of a layer split by market
+    # value, and another layer): a half of a layer split by market value is never ranked on its own, so no headline rests on the split
+    ok = lambda r, k: r[k] is not None and headline_ok(r[f"{k}_n"], r["n"], r["model"]) and not r.get("scale")      # noqa: E731
     have = [r for r in rows if ok(r, "ebitda") and not r["official"]]
     if len(have) < 2:          # a map whose layers are the official industries themselves: they are its layers (R17-011)
         have = [r for r in rows if ok(r, "ebitda") and not r["rest"]]
@@ -600,7 +603,7 @@ def chain_table(blocks: list[dict]) -> dict:
             hi = lo = None
             # R27: a tie (no gap as printed) is no comparison: no sentence, never "within 0.0 points"
             line = (f"The median EBITDA margins of the {len(have)} layers with at least {HEADLINE_MIN} companies are within {gap} "
-                    "points of each other, the rounding of whole points.") if float(gap) > 0 else None
+                    f"{'point' if float(gap) == 1 else 'points'} of each other: no layer stands apart.") if float(gap) > 0 else None      # d1: "1 point"
         else:
             whole = whole_points([c for b in blocks for c in b["companies"]])
             # m2 (outside review of the live R32 decks): every highest/lowest headline says, in its own sentence, which layers it ranks
@@ -625,9 +628,13 @@ def chain_table(blocks: list[dict]) -> dict:
         if len(lend) >= 2:
             measure, have = "roe", lend
             hi, lo = max(lend, key=lambda r: r["roe"]), min(lend, key=lambda r: r["roe"])
-            if hi["layer"] == lo["layer"] or hi["roe"] - lo["roe"] < 0.05:
+            if hi["layer"] == lo["layer"] or hi["roe"] - lo["roe"] < ROUNDING:
+                # d1 (the outside review of the live Release 41 Banks deck: "a gap of 0.2 points" as its headline): a gap under a point is
+                # no comparison
+                gap = gap_of(hi["roe"], lo["roe"])
                 hi = lo = None
-                line = f"The median return on equity of the {len(lend)} layers with at least {HEADLINE_MIN} companies is the same."
+                line = (f"The median return on equity of the {len(lend)} layers with at least {HEADLINE_MIN} companies is within {gap} points: "
+                        "no layer stands apart.") if float(gap) > 0 else f"The median return on equity of the {len(lend)} layers with at least {HEADLINE_MIN} companies is the same."
             else:
                 out = unranked_rows(rows, lend, "roe")
                 line = (f"{rank_scope(len(lend), out)}, median return on equity is highest in {hi['layer']} ({pts(hi['roe'], True)}{few(hi['roe_n'], hi['n'])}) "
@@ -649,7 +656,8 @@ def chain_table(blocks: list[dict]) -> dict:
 RANK_WHY = {"cover": "the figure for under half its companies",
             "sparse": "how most of its companies earn is not shown", "family": "a different kind of business", "sub": "a different commodity",
             "official": "an exchange industry, not one of the map's layers", "rest": "companies outside the map's layers",
-            "how": "a group by how they earn, of different businesses", "other": "not comparable with the ranked layers"}
+            "how": "a group by how they earn, of different businesses", "other": "not comparable with the ranked layers",
+            "half": "one half of a layer split by market value"}
 
 
 def rank_scope(n: int, out: list | None = None) -> str:
@@ -674,6 +682,8 @@ def unranked_rows(rows: list, have: list, key: str) -> list[dict]:
         m = r.get("model")
         if r.get("rest"):
             why = "rest"
+        elif r.get("scale"):
+            why = "half"
         elif r.get("official") and own:
             why = "official"
         elif n < HEADLINE_MIN:
@@ -817,6 +827,8 @@ def rank_pair(rows: list, value, count, floor: int | None = None, of=None, model
     basis (R27), and given `intensity`, are alike in asset intensity (R30); None when fewer than two qualify, or when the highest or the lowest is tied (no layer is named for a tie)."""
     have = comparable_rows(rows, value, count, floor, of, model, basis, intensity)
     if len(have) < 2 or value(have[-1]) == value(have[-2]) or value(have[0]) == value(have[1]):
+        return None
+    if value(have[-1]) - value(have[0]) < ROUNDING:          # d1: a gap under a point is no comparison
         return None
     return have[-1], have[0]
 
@@ -1018,6 +1030,7 @@ def _peer_values(r: dict, market: list[dict], key: str, ok, theme: set) -> tuple
     return (got, basis) if basis != "none" and len(got) >= PEER_MIN else ([], "none")
 
 
+PEER_NAMES = 3                # peers named beside a peer median (d1), the most used first
 PEER_KEEP = 120               # peer symbols kept behind a peer median, those the most companies are compared with first; "symbols_n" counts all
 PEER_MOVE = 5.0               # a peer median this many % away from the stored run before it is said with both (peer_moved)
 PEER_RUNS = 8                 # a theme's kept peer medians, one for each run that differs from the one before (theme_routes.sources)
@@ -1032,9 +1045,12 @@ def peers_section(rows: list[dict], market: list[dict], as_of: str | None = None
     median keeps the peers behind it ("symbols", the most used first, at most PEER_KEEP; "symbols_n" all of them) and the latest close its
     prices are of ("as_of": the peers' and the companies' own, `as_of` when the rows carry no day)."""
     theme = {r["symbol"] for r in rows}
+    names = {m["symbol"]: m.get("name") or m["symbol"] for m in market if m.get("symbol")}
+    ind_key = lambda x: re.sub(r"[^a-z0-9]+", " ", str(x or "").lower()).strip()      # noqa: E731
     out = {}
     for key, mkey, ok in (("pe", "pe", lambda x: 0 < x <= stock_pages.PE_MAX), ("sales_3y", "sales_cagr_3y", lambda x: True), ("roce", "roce", lambda x: True)):
         own, peer, prem, sets, used, days = [], [], [], {}, {}, []
+        alike, uses = 0, 0
         for r in rows:
             v = num(r.get(key))
             if v is None or not ok(v):
@@ -1044,9 +1060,13 @@ def peers_section(rows: list[dict], market: list[dict], as_of: str | None = None
             if not got:
                 continue
             pm = median(num(m.get(mkey)) for m in got)
+            mine = ind_key(r.get("map_industry") or r.get("industry"))
             for m in got:
                 if m.get("symbol"):
                     used[m["symbol"]] = used.get(m["symbol"], 0) + 1
+                if mine and m.get("industry"):          # judged only where both industries are known
+                    uses += 1
+                    alike += 1 if ind_key(m.get("industry")) == mine else 0
             days += [str(d)[:10] for d in [r.get("price_at")] + [m.get("price_at") for m in got] if d]
             own.append(v)
             peer.append(pm)
@@ -1059,7 +1079,12 @@ def peers_section(rows: list[dict], market: list[dict], as_of: str | None = None
             out[key] = {"n": len(own), "theme": round(mo, 1), "peers": round(mp, 1), "sets": sets, "none": sets.get("none", 0),
                         "premium": round((round(mo, 1) / round(mp, 1) - 1) * 100, 1) if prem and round(mp, 1) > 0 else None,
                         "symbols": sorted(used, key=lambda s_: (-used[s_], s_))[:PEER_KEEP], "symbols_n": len(used),
-                        "as_of": max(days, default=None) or as_of}
+                        "as_of": max(days, default=None) or as_of,
+                        # d1 (the outside review of the live Release 41 Banks, Insurance and Cybersecurity decks: "50.4% below peers' 22.6x"
+                        # with no peer named, the peers of the broad sector, not of the business): the peers most used, by name, and whether
+                        # most of the peers are of the company's own official industry (like for like); a gap is said only then
+                        "names": [names.get(s_, s_) for s_ in sorted(used, key=lambda s_: (-used[s_], s_))[:PEER_NAMES]],
+                        "like": (alike * 2 >= uses) if uses else None}
         elif sets.get("none"):
             out[key] = {"n": 0, "theme": None, "peers": None, "sets": sets, "none": sets["none"], "premium": None}
     return out
@@ -1101,8 +1126,10 @@ def relative_ok(val: dict) -> bool:
     comparable peer set): comparable peers cover at least half of the companies with a P/E. Otherwise the valuation is descriptive (the
     theme's own medians and spread, by layer and over time), never set against peers or the whole market."""
     pe_n = (val.get("pe") or {}).get("n") or 0
-    with_peers = (((val.get("peers") or {}).get("pe") or {}).get("n")) or 0
-    return bool(pe_n) and with_peers * 2 >= pe_n
+    pp = (val.get("peers") or {}).get("pe") or {}
+    with_peers = pp.get("n") or 0
+    # d1: and the peers are like for like (most of them of the companies' own official industries) and named; else no relative figure
+    return bool(pe_n) and with_peers * 2 >= pe_n and pp.get("like") is not False
 
 
 def layer_valuation(blocks: list[dict], counted: set) -> list[dict]:
@@ -1532,6 +1559,8 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     """The dive for a checked map (see theme_check.check_placements): the tables by layer, the whole chain in one table, the sub-themes'
     companies, and the sections for the theme as a whole. Every figure is from the stored facts; nothing here calls a source."""
     checked = by_industry(checked)
+    from .theme_base import with_sub_only
+    checked = with_sub_only(checked, theme)          # d1: a company named in a sub-theme only is in "Other", never in no layer
     # one layer per company: a company the map puts in two layers stays in the first (the owner, 7 Nov), so no company is counted twice
     first: dict[str, str] = {}
     for v in checked.get("value_chain") or []:
@@ -1553,6 +1582,8 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
             rows[s]["status"] = membership(c, words)
             rows[s]["map_industry"] = c.get("industry") or ""          # the exchange's (or the SEC's) industry the map gives (R27: metric_registry)
             rows[s]["map_what"] = c.get("what") or ""                  # what the map says the company does (an insurer's type: metric_registry)
+            if c.get("unread"):        # d1: in "Other" because nothing it says was read yet (theme_base.place_rest), not because it fits no layer
+                rows[s]["unread"] = True
 
     def segs(sym):
         try:
@@ -1584,6 +1615,8 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     own_words = lambda t, n, sym=None: _own(whole_words(t, src.about(sym)) if sym and t else t, n)     # noqa: E731  (LIVE7A-004: no word cut)
     for v in unsplit_unshown(checked.get("value_chain") or [], {s for s, r in rows.items() if r.get("status") != "unverified"}):
         mine = [rows[c["ticker"]] for c in v.get("companies") or [] if c["ticker"] in rows]
+        if v.get("sub_only") and not mine:          # d1: the "Other" group made for sub-theme-only companies none of which has figures
+            continue
         what = {c["ticker"]: c.get("what") for c in v.get("companies") or []}
         ind = {c["ticker"]: c.get("industry") for c in v.get("companies") or []}          # the exchange's industry, a column of an AI layer (R20)
         from .theme_check import model_family
@@ -1595,6 +1628,8 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         b["policy"] = v.get("policy")
         b["official"], b["basis"] = bool(v.get("official")), v.get("basis")     # a layer that is one official industry's companies the AI didn't place (theme_base.py)
         b["by_industry"] = bool(v.get("by_industry"))
+        if v.get("scale"):          # d1: a half of a layer split by market value (theme_base.by_model step 2), never ranked on its own
+            b["scale"], b["sibling"] = v["scale"], v.get("sibling")
         b["model"] = v.get("model") or None                 # what the layer's companies have in common: how they earn (theme_base.by_model, R25)
         if b["model"]:                                       # R28: counted over the companies the page shows, not every company the map placed
             from .theme_base import shown_model

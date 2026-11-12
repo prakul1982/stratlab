@@ -724,6 +724,9 @@ KEEP_APART = ("regulated_utility (a regulator sets its tariffs for transmission 
               "mobile, broadband or fixed-line subscriptions) apart from software (licences and subscriptions for software it owns).")
 
 
+MAKES_OWN = r"\b(?:engaged in|in the business of) (?:the )?manufactur\w*|\bmanufacturers? (?:and \w+ )?of\b"
+
+
 def refine_model(model, evidence) -> str:
     """A broad model made exact where the company's evidence shows one kind only (R29, generic for every theme): "utility" as regulated
     networks, generation or trading and renewables by its official industry or else its own words; "resources" as commodity_mining by mining
@@ -741,6 +744,12 @@ def refine_model(model, evidence) -> str:
         return hit[0] if len(hit) == 1 else ""
     if model == "utility":
         return one(("regulated_utility", "power_generation", "power_trading"), REFINE_HINTS) or model
+    # d1 (the outside review of the live Release 41 Utilities deck: Paramount Communications, a cable maker, in "Other" beside "Cable and wire
+    # makers", read as a telecom operator for its telecom and FTTH cables): a company whose own first sentence says it manufactures what it
+    # sells, and not that it runs a network, makes its own products
+    lead = re.split(r"(?<=[.!?])\s", own.strip(), maxsplit=1)[0] if own else ""
+    if model == "telecom_services" and re.search(MAKES_OWN, lead, re.I) and not re.search(TELECOM_OPERATOR, lead, re.I):
+        return "manufacturing"
     # q1 (the live R34 Telecom deck: every operator "software", 5 of 8 left out): a network operator's subscriptions are telecom services
     if model in ("software", "capacity", "unknown", "") and telecom_operator(evidence):
         return "telecom_services"
@@ -899,7 +908,19 @@ OFF_INDUSTRY = ((r"semiconductor|\bchips?\b|integrated circuits?",
                 # filed as retail): fuel distribution to homes and businesses with no shop, apparel or merchandise of its own is another business
                 (r"\bretail",
                  r"\bpropane\b|heating oil|\bfuel oil\b|\blpg\b|liquefied petroleum gas|natural gas distribution",
-                 r"\bstores?\b|\bshops?\b|apparel|clothing|merchandise|grocer|supermarket|e-?commerce|department"))
+                 r"\bstores?\b|\bshops?\b|apparel|clothing|merchandise|grocer|supermarket|e-?commerce|department"),
+                # d1 (the outside review of the live Release 41 Consumer retail deck: CDW and Insight, IT solution providers to businesses,
+                # FirstCash and EZCORP, pawnbrokers, among the retailers): a pawnbroker earns from loans against pledged goods, an IT reseller
+                # and integrator sells to businesses and governments, a blank-check company, a bank, a payments or travel company is another
+                # business, whatever its filing calls it
+                (r"\bretail",
+                 r"\bpawn|blank check company|special purpose acquisition|\bcommercial bank\b|licensed by the reserve bank|"
+                 r"digital payment solutions|travel (?:services|platform)",
+                 r"(?!)"),
+                (r"\bretail",
+                 r"information technology (?:services|solutions)|\bit (?:solutions|services) provider|business-to-business (?:and )?(?:it|information)|"
+                 r"serving business, government",
+                 r"\bstores?\b|\bshops?\b|apparel|clothing|grocer|supermarket|e-?commerce|marketplace|consumers?\b"))
 
 
 def off_industry(evidence) -> bool:
@@ -926,7 +947,9 @@ NOT_LENDER = r"investment bank|banking software|core banking|banking (?:technolo
 LANDLORD_SAYS = (r"\bmalls? operator|\boperat\w* (?:(?:&|and) manag\w* )?(?:of )?(?:retail |shopping )?malls\b|"
                  r"\b(?:offers?|leases?|lets?|rents?|licen[cs]es?)\b[^.;]{0,60}\bon (?:a )?(?:licen[cs]e|leave and licen[cs]e|lease|rental) basis|"
                  r"\brental income|\blease rentals?\b|\bannuity (?:income|assets|portfolio)|\breal estate investment trust|\breits?\b")
-DEVELOPER_SAYS = (r"\bdevelop(?:s|ing|er|ers)\b|build (?:&|and) sell|\bsale of (?:residential )?(?:units|flats|apartments|plots|homes|villas)|\bsells? (?:the )?(?:homes|apartments|"
+# d1 (the outside review of the live Release 41 Real estate deck: Peninsula Land, "in the business of real estate development", in the trusts'
+# layer for its lease rentals): "real estate development" is a developer's own words too
+DEVELOPER_SAYS = (r"\bdevelop(?:s|ing|er|ers)\b|real estate development|build (?:&|and) sell|\bsale of (?:residential )?(?:units|flats|apartments|plots|homes|villas)|\bsells? (?:the )?(?:homes|apartments|"
                   r"flats|plots|units|villas)\b|residential (?:real estate )?develop|housing projects")
 OWN_SAYS["property"] = LANDLORD_SAYS             # a landlord's words state its model too (stated_model)
 HOME_LOAN_WORDS = r"home loans?|housing loans?|housing finance|mortgage loans?|loans? (?:against|for) (?:property|homes|housing)"

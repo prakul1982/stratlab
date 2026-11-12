@@ -195,12 +195,14 @@ def test_a_row_carries_its_kept_reason_before_the_whole_company_mark_and_a_mark_
     c0["calc"] = {"in": False, "why": "way of earning not shown"}
     lay["company_wide"] = [c0["symbol"]]
     slides = deck.theme_plan(v)[0]
-    s = next(x for x in slides if x.title.startswith("Layer 1 · "))
+    # lane d1 (updated on purpose): a layer of two companies is rows of the "Smaller layers" page, which marks a row the same way
+    s = next(x for x in slides if x.title.startswith(("Layer 1 · ", deck.SMALL_TITLE)))
     tbl = next(b for b in s.blocks if b["kind"] == "table")
-    name = next(r[0] for r in tbl["rows"] if isinstance(r, list) and str(r[0]).startswith(c0["name"]))
+    name = next(c_ for r in tbl["rows"] if isinstance(r, list) for c_ in r[:2] if str(c_).startswith(c0["name"]))
     assert name.endswith("(left out)")
     notes = " ".join(p for b in s.blocks if b["kind"] == "text" for p in b.get("paras") or [])
-    assert "(left out):" in notes and "(whole company):" not in notes
+    whole_rows = any(str(c_).endswith("(whole company)") for r in tbl["rows"] if isinstance(r, list) for c_ in r[:2])
+    assert "(left out):" in notes and ("(whole company):" in notes) == whole_rows          # a mark's note only with a row that carries it
 
 
 def test_the_contents_line_for_tailwinds_and_risks_uses_the_page_s_own_counts():

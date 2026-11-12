@@ -289,8 +289,10 @@ def test_a_lender_theme_keeps_the_maps_layers_when_the_check_empties_them():
     assert keep["Deposit gathering"] == ["B0"] and keep["Retail and SME lending"] == ["B3"]                            # two layers kept: the check stands
     region, m, f, _, _ = bank_theme()
     v, slides = deck_of(region, m, f)
-    assert [s.title for s in slides if s.title.startswith("Layer ")] == ["Layer 1 · Deposit gathering", "Layer 2 · Retail and SME lending",
-                                                                          "Layer 3 · Other private bank companies"]          # R21; R22: "bank", as an adjective reads
+    # lane d1 (updated on purpose): the "Other" group of two confirmed companies is rows of the "Smaller layers" page, not a page of its own
+    assert [s.title for s in slides if s.title.startswith("Layer ")] == ["Layer 1 · Deposit gathering", "Layer 2 · Retail and SME lending"]
+    small = next(s for s in slides if s.title.startswith(deck.SMALL_TITLE))
+    assert "Other private bank companies" in [r[0] for b in small.blocks if b["kind"] == "table" for r in b["rows"]]   # R21; R22: "bank", as an adjective reads
 
 
 def test_a_map_layer_without_a_name_is_never_drawn():

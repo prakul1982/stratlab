@@ -106,7 +106,7 @@ def test_no_materials_supplier_sits_under_an_equipment_layer_whatever_model_it_w
 def test_the_rules_version_moved_so_kept_checks_and_dives_are_worked_out_again_and_placements_carry():
     """The cause on live: the materials rule came in without a new rules version, so the check kept under the old one (and the theme library's
     read of it) was served as it stood. The version is part of every kept check's, library read's and dive's key."""
-    assert B.RULES == 42 and T.PLACE_CARRY[42] == 41 and T.PLACE_CARRY[41] == 40 and T.PLACE_CARRY[34] == 33 and T.PLACE_CARRY[35] == 34 and T.PLACE_CARRY[36] == 35 and T.PLACE_CARRY[37] == 36 and T.PLACE_CARRY[38] == 37 and T.PLACE_CARRY[39] == 38   # lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); lane s2-exact and lane s1-fit bumped RULES (updated on purpose); lane r2, lane r1, lane n2, q1 bumped RULES (updated on purpose)
+    assert B.RULES == 43 and T.PLACE_CARRY[43] == 42 and T.PLACE_CARRY[42] == 41 and T.PLACE_CARRY[41] == 40 and T.PLACE_CARRY[34] == 33 and T.PLACE_CARRY[35] == 34 and T.PLACE_CARRY[36] == 35 and T.PLACE_CARRY[37] == 36 and T.PLACE_CARRY[38] == 37 and T.PLACE_CARRY[39] == 38   # lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); lane s2-exact and lane s1-fit bumped RULES (updated on purpose); lane r2, lane r1, lane n2, q1 bumped RULES (updated on purpose)
     assert T.check_key("US", "Semiconductors", {"generated_at": 5})[-1] == B.RULES
 
 
@@ -174,16 +174,17 @@ def _split_deck(t):
 def test_a_layer_with_companies_left_out_states_one_pair_on_every_page():
     v, slides = _split_deck(banks_in())
     said = deck.layer_count_statements(slides)["Retail and commercial lenders"]
-    assert {p for p, _ in said} == {(5, 7)}                                       # the same two numbers wherever the layer is counted
+    # lane d1 (updated on purpose, R43): Quietfin 0, with no description of its own and the layer's industry, is in its figures on its industry
+    assert {p for p, _ in said} == {(6, 7)}                                       # the same two numbers wherever the layer is counted
     where = {w.split(" (")[0] for _, w in said}
     assert {"The value chain by layer", "Layers side by side", "Layer 1 · Retail and commercial lenders"} <= where, where
     chain = next(b for s in slides if s.title == "The value chain by layer" for b in s.blocks if b["kind"] == "table")
     row = next(r for r in chain["rows"] if r[0] == "Retail and commercial lenders")
-    assert row[chain["head"].index("Companies")] == "5 of 7"
+    assert row[chain["head"].index("Companies")] == "6 of 7"
     notes = " ".join(p for s in slides if s.title == "The value chain by layer" for b in s.blocks if b["kind"] == "text" for p in b["paras"])
     assert deck.COMPANIES_NOTE in notes                                           # the two scopes are named where they differ
     layer = next(x for x in v["layers"] if x["layer"] == "Retail and commercial lenders")
-    assert D.layer_counts(layer) == {"listed": 7, "n": 5, "out": {"way of earning not shown": 2}} and layer["n"] == 5
+    assert D.layer_counts(layer) == {"listed": 7, "n": 6, "out": {"way of earning not shown": 1}} and layer["n"] == 6
     assert deck.layer_count_flags(slides) == []
     assert next(x for x in slides[0].gate["items"] if x["id"] == "reconcile")["ok"]
 
@@ -193,10 +194,10 @@ def test_the_gate_fails_when_two_pages_state_different_totals_for_a_layer():
     v, slides = _split_deck(banks_in())
     chain = next(b for s in slides if s.title == "The value chain by layer" for b in s.blocks if b["kind"] == "table")
     at = chain["head"].index("Companies")
-    chain["rows"] = [[*r[:at], "6", *r[at + 1:]] if r[0] == "Retail and commercial lenders" else r for r in chain["rows"]]
-    flags = deck.layer_count_flags(slides)
-    assert [f["layer"] for f in flags] == ["Retail and commercial lenders"] and "6 on “The value chain by layer”" in flags[0]["text"]
-    assert "5 of 7 on" in flags[0]["text"]
+    chain["rows"] = [[*r[:at], "5", *r[at + 1:]] if r[0] == "Retail and commercial lenders" else r for r in chain["rows"]]
+    flags = deck.layer_count_flags(slides)        # lane d1: 6 of 7 in the figures now (R43), the table edited to 5 (updated on purpose)
+    assert [f["layer"] for f in flags] == ["Retail and commercial lenders"] and "5 on “The value chain by layer”" in flags[0]["text"]
+    assert "6 of 7 on" in flags[0]["text"]
     gate = deck.publication_gate(slides, v)
     item = next(x for x in gate["items"] if x["id"] == "reconcile")
     assert not item["ok"] and any(d["text"].startswith("layer counts: Retail and commercial lenders") for d in gate["dropped"])
@@ -312,7 +313,7 @@ def test_a_company_with_no_figures_carries_its_reason_on_its_row():
 
 
 def test_the_versions_moved_with_the_records():
-    assert D.DIVE_TEXT == 11 and deck.THEME_DECK_VERSION == 52          # lane t1: deck 52, dive text 11 (LIVE7A, updated on purpose); R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)
+    assert D.DIVE_TEXT == 12 and deck.THEME_DECK_VERSION == 53          # lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane t1: deck 52, dive text 11 (LIVE7A, updated on purpose); R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)
 
 
 # ---------- 4. only layers of one way of earning are ranked together ----------

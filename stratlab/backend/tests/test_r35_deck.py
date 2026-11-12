@@ -131,9 +131,11 @@ def test_a_short_roll_stays_on_the_layer_page_and_adds_no_appendix_page():
     vc = B.by_model(copy.deepcopy(t["map"]["value_chain"]), t["models"], "Banks", tags=t["tags"], confidence=t["confidence"])
     v, slides = deck_of(t["region"], {**t["map"], "value_chain": vc}, t["facts"])
     page = next(s for s in slides if s.title.endswith("· Retail and commercial lenders"))
-    assert "(5 in the layer's calculations)" in page.subtitle
-    assert ("In the layer's calculations (5 of 7): Lendwell 0, Lendwell 1, Lendwell 2, Lendwell 3, Lendwell 4. "
-            "Left out (2): way of earning not shown: Vaguebank 0, Quietfin 0.") in " ".join(paras(slides, page.title))
+    # lane d1 (updated on purpose, R43): Quietfin 0 has no description of its own and the layer's industry: in its figures on its industry
+    assert "(6 in the layer's calculations)" in page.subtitle
+    roll = " ".join(paras(slides, page.title))
+    assert ("Left out (1): way of earning not shown: Vaguebank 0." in roll and "Quietfin 0" in roll) or "Quietfin 0 Ltd (on its industry)" in \
+        [str(r[0]) for b in page.blocks if b["kind"] == "table" for r in b["rows"]]
     assert not any(s.title.startswith(deck.ROLL_TITLE) for s in slides)
     every_rule("banks, a short roll", v, slides)
 
@@ -247,7 +249,7 @@ def test_the_kept_peer_medians_are_one_a_run_that_differs_and_never_more_than_a_
     assert list(store) == ["theme:peers:IN:speciality-chemicals"] and len(json.loads(store["theme:peers:IN:speciality-chemicals"])) == D.PEER_RUNS
     assert len(store["theme:peers:IN:speciality-chemicals"]) < 600                          # bounded storage
     assert T.sources("US", "Speciality chemicals").peer_history("x", {"d": "2026-10-01", "peers": 30.0, "k": 9}) == [{"d": "2026-10-01", "peers": 30.0, "k": 9}]
-    assert D.DIVE_TEXT == 11          # lane t1: dive text 11 (LIVE7A, updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); lane m1 bumped it; LIVE6-007 too (updated on purpose)
+    assert D.DIVE_TEXT == 12          # lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane t1: dive text 11 (LIVE7A, updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); lane m1 bumped it; LIVE6-007 too (updated on purpose)
 
 
 # ---------- 4. a median row's figure with its count is never cut ----------
@@ -364,4 +366,4 @@ def test_layer_names_take_the_room_the_figure_columns_dont_use_and_one_still_cut
     assert key.startswith("Layer names in full: ") and key.endswith(" = Digital engineering and consulting projects for governments.")
     assert "Other IT service companies" not in key
     assert deck.short_names(head, rows[:1], widths, 1) == "" and deck.short_names(head, rows, widths, None) == ""
-    assert deck.THEME_DECK_VERSION == 52          # lane t1: deck 52, dive text 11 (LIVE7A, updated on purpose); R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)
+    assert deck.THEME_DECK_VERSION == 53          # lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane t1: deck 52, dive text 11 (LIVE7A, updated on purpose); R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)

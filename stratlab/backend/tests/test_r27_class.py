@@ -38,7 +38,10 @@ def test_each_sector_splits_comparable_businesses_apart_and_every_deck_rule_hold
     models = t["models"]
     # one family a layer, never a one-company layer made by the split
     for v in vc:
-        fams = {C.model_family(models.get(c["ticker"])) for c in v["companies"] if t["confidence"].get(c["ticker"]) != "low"} - {""}
+        # lane d1 (updated on purpose): a company the map named in the layer, of a way of earning no layer has, stays there listed as
+        # "other business" (model_out), out of the layer's figures (R43), so the layer's figures stay of one family
+        fams = {C.model_family(models.get(c["ticker"])) for c in v["companies"] if t["confidence"].get(c["ticker"]) != "low"
+                and c.get("model_out") != "other"} - {""}
         assert len(fams) <= 1, (v["layer"], fams)
         if not v.get("official"):
             assert len(v["companies"]) != 1 or not v.get("by_model"), v["layer"]
@@ -174,26 +177,30 @@ def test_unknown_and_low_confidence_companies_are_listed_but_left_out_of_the_lay
     lay = layer_of(vc, "LND0")
     assert {c["ticker"] for c in lay["companies"]} >= {"LOW0", "UNK0"}                   # listed in their layer
     out = {c["ticker"] for c in lay["companies"] if c.get("model_out")}
-    assert out == {"LOW0", "UNK0"}
-    assert lay["model"]["line"] == ("They earn mainly from interest on loans they make. 2 of 7 are listed but left out of this layer's figures and "
-                                    "rankings, as their evidence doesn't show, or only weakly shows, how they earn.")
+    # lane d1 (updated on purpose, R43): UNK0 has no description of its own and the layer's own official industry, held by no other layer: it
+    # is in the layer's figures on its industry ("on_industry"); LOW0, whose own words show how it earns only weakly, stays out
+    assert out == {"LOW0"}
+    assert lay["model"]["line"] == ("They earn mainly from interest on loans they make. 1 of 7 is listed but left out of this layer's figures and "
+                                    "rankings, as its evidence shows how it earns only weakly.")
     low = next(c for c in lay["companies"] if c["ticker"] == "LOW0")
     assert low["model"] == "lending" and low["model_confidence"] == "low"
     unk = next(c for c in lay["companies"] if c["ticker"] == "UNK0")
-    assert unk["model"] == "" and unk["model_confidence"] == ""
+    assert unk["model"] == "lending" and unk["model_confidence"] == "low" and unk["on_industry"]
     view, slides = deck_of(t["region"], {**t["map"], "value_chain": vc}, t["facts"])
     block = next(x for x in view["layers"] if x["layer"] == lay["layer"])
-    assert block["n"] == 5 and block["listed"] == 7 and block["model_out"] == ["LOW0", "UNK0"]
-    assert all(r.get("model_out") for r in block["companies"] if r["symbol"] in ("LOW0", "UNK0"))
-    # the layer's median is the five lenders' only, and they alone are charted
-    five = [r for r in block["companies"] if r["symbol"].startswith("LND")]
-    assert block["revenue"] == sum(r["revenue"] for r in five if r.get("revenue"))
-    assert all(st is None or st["n"] <= 5 for st in block["stats"].values())
+    assert block["n"] == 6 and block["listed"] == 7 and block["model_out"] == ["LOW0"]
+    assert all(r.get("model_out") for r in block["companies"] if r["symbol"] in ("LOW0",))
+    # the layer's median is the five lenders' and UNK0's, never LOW0's
+    six = [r for r in block["companies"] if r["symbol"].startswith("LND") or r["symbol"] == "UNK0"]
+    assert block["revenue"] == sum(r["revenue"] for r in six if r.get("revenue"))
+    assert all(st is None or st["n"] <= 6 for st in block["stats"].values())
     page = next(s for s in slides if s.title.startswith("Layer ") and lay["layer"] in s.title)
     cells = [str(r[0] if not isinstance(r[0], dict) else r[0].get("text")) for b in page.blocks if b["kind"] == "table" for r in b["rows"]]
-    # the five lenders fill the page's rows first; the two left out are in the appendix, so the page carries no "(left out)" note for them
-    assert not any(x.endswith("(left out)") for x in cells) and "Lendwell 0 Ltd" in cells
-    assert not any("(left out):" in str(p) for b in page.blocks if b["kind"] == "text" for p in b.get("paras") or [])
+    # the lenders in the figures fill the page's rows first; a "(left out)" row comes after them, with its note (lane d1, updated on purpose:
+    # the page now shows at least 5 rows and room for them all, so LOW0's row and note are on it)
+    shown_out = [x for x in cells if x.endswith("(left out)")]
+    assert "Lendwell 0 Ltd" in cells and all(cells.index(x) > cells.index("Lendwell 0 Ltd") for x in shown_out)
+    assert bool(shown_out) == any("(left out):" in str(p) for b in page.blocks if b["kind"] == "text" for p in b.get("paras") or [])
     assert D.model_fields({"companies": [{"ticker": "X", "model": "lending", "model_tags": [], "model_confidence": "low", "model_out": True}]}, "X") == \
         {"model": "lending", "model_tags": [], "model_confidence": "low", "model_out": True}
     assert D.model_fields({"companies": [{"ticker": "X"}]}, "X") == {}
@@ -330,6 +337,7 @@ def test_a_lone_company_never_gets_its_own_layer_and_a_consumer_label_needs_cons
     assert "Hotels, travel and consumer services" not in names
     assert not any(len(v["companies"]) == 1 and not v.get("official") for v in out["value_chain"]), names
     home = next(v for v in out["value_chain"] if "VIS" in [c["ticker"] for c in v["companies"]])
+    # (lane d1: R43 keeps such a company in its map layer only when its own words say what the layer's name says; a visa centre's don't)
     assert home.get("basis") == "rest" and home["layer"] == "Other IT service companies"
 
 
@@ -349,7 +357,7 @@ def test_a_lone_company_joins_the_largest_layer_of_its_family_when_there_is_one(
 
 # ---------- RULES, prompts ----------
 def test_rules_bumped_map_prompt_unchanged_and_new_segments_have_needs():
-    assert B.RULES == 42 and A.MAP_V == 23          # lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); lane s2-exact bumped RULES: exact replays of the live placement (updated on purpose); lane s1-fit bumped RULES: the split places by fit (updated on purpose); lane r2 bumped RULES: models stated by companies' own words, layers by kind of business (updated on purpose); lane r1 bumped RULES: foundry vs IDM, platform vs retail, off-industry companies (updated on purpose); q1 bumped RULES: telecom operators (updated on purpose); lane n2 bumped RULES: low-confidence models read again (updated on purpose); lane m1 bumped RULES: the materials rule and the merge rule reach kept checks (updated on purpose); R33 bumped RULES (updated on purpose); R31 bumped RULES: models made exact by the R31 boundaries, layers merged (updated on purpose)
+    assert B.RULES == 43 and A.MAP_V == 23          # lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); lane s2-exact bumped RULES: exact replays of the live placement (updated on purpose); lane s1-fit bumped RULES: the split places by fit (updated on purpose); lane r2 bumped RULES: models stated by companies' own words, layers by kind of business (updated on purpose); lane r1 bumped RULES: foundry vs IDM, platform vs retail, off-industry companies (updated on purpose); q1 bumped RULES: telecom operators (updated on purpose); lane n2 bumped RULES: low-confidence models read again (updated on purpose); lane m1 bumped RULES: the materials rule and the merge rule reach kept checks (updated on purpose); R33 bumped RULES (updated on purpose); R31 bumped RULES: models made exact by the R31 boundaries, layers merged (updated on purpose)
     for new in ("bpo", "components", "fabless", "life_insurance", "general_insurance", "reinsurance", "property_development"):
         assert new in C.MODELS and new in C.MODEL_NEEDS and new in C.PLACE_SYSTEM2
     assert C.model_family("contract_manufacturing") != C.model_family("manufacturing") == C.model_family("fabless")
