@@ -375,8 +375,8 @@ function ReadTable({ r }: { r: CompanyAI }) {
           { key: "v", header: "Value", wrap: true, cell: (x) => <>{x.text}{stageMeaning(x.text) && <Info label={`About ${x.text}`}>{stageMeaning(x.text)}</Info>}</> }]} />}
       {rows.length > 0 && <div className="ai-table">
         <DataTable label="The AI read, by area" rows={rows} rowKey={(x) => x.id} stack={false}
-          columns={[{ key: "a", header: "The numbers", rowHeader: true, cell: (x) => <b className="k-small">{x.area}</b> },
-            { key: "f", header: "The figures", cell: (x) => x.body }]} />
+          columns={[{ key: "a", header: "Area", rowHeader: true, cell: (x) => <b className="k-small">{x.area}</b> },
+            { key: "f", header: "What the read says", cell: (x) => x.body }]} />
       </div>}
     </>
   );
@@ -394,7 +394,7 @@ export function NewsList({ items, limit = 8 }: { items: NewsItem[]; limit?: numb
         return (
           <a key={i} className="inv-news-row" href={safeHref(n.url)} target="_blank" rel="noopener noreferrer">
             <span>{n.headline}</span>
-            <span className="k-note">{[n.source, newsWhen(n.at), n.similar ? `${n.similar} similar ${n.similar === 1 ? "story" : "stories"}` : null].filter(Boolean).join(" · ")} ↗</span>
+            <span className="k-note">{[n.source && !/^(null|none|undefined)$/i.test(n.source) ? n.source : null, newsWhen(n.at), n.similar ? `${n.similar} similar ${n.similar === 1 ? "story" : "stories"}` : null].filter(Boolean).join(" · ")} ↗</span>
           </a>
         );
       })}

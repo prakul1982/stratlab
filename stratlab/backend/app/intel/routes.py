@@ -742,6 +742,11 @@ def company_ai(region: str, symbol: str, refresh: bool = False, background: bool
         # one read per company a day, shared by everyone: opening a page that already has one costs nobody anything, and
         # on a paid plan a read written as the page opens doesn't count either; "Refresh" (asked for) does (R8O-002)
         read = ai_call(profile, "company", key, 12 * 3600, refresh, build, counted=counted)
+        try:
+            from .. import results as results_calendar
+            read = A.filed_watch(read, results_calendar.lookup(r, s), ist_date())       # a read kept from before the filing (LIVE7B-003)
+        except Exception:
+            pass
     except HTTPException as e:
         # the read is a nice-to-have on a page that has loaded: no AI answer today is an answer ("unavailable", and why),
         # not a failed request on every company page opened

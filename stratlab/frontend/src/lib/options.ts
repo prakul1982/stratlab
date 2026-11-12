@@ -345,3 +345,17 @@ export function expiryChoiceLabel(name: string, date: string | undefined, fmt: (
 export function recordedLine(at: string): string {
   return `Priced on the last recorded option chain, as of ${at} (the last close), because live quotes are offline: bids and asks as recorded then, else last trades. Not a live price; the broker's margin and paper trading need the live feed.`;
 }
+
+/** The expiry choices with the date each picks, Next and Monthly merged into one when they are the same contract (LIVE7B-016: "Next ·
+ * 23 Nov" and "Monthly · 23 Nov" side by side). The merged choice keeps whichever of the two is picked now (Monthly when neither), so a
+ * strategy saved with it keeps its own meaning on another day. `value`: the choice to show as picked. */
+export function expiryChoices(expiries: string[] | undefined, picked: string, fmt: (d: string) => string): { options: { value: string; label: string }[]; value: string } {
+  const next = pickedExpiry(expiries, "next"), month = pickedExpiry(expiries, "month");
+  const value = ["current", "next", "month"].includes(picked) ? picked : "date";
+  const current = { value: "current", label: expiryChoiceLabel("Nearest", pickedExpiry(expiries, "current"), fmt) };
+  if (next && next === month && (expiries ?? []).length > 1 && next !== pickedExpiry(expiries, "current")) {
+    const merged = value === "next" ? "next" : "month";
+    return { options: [current, { value: merged, label: expiryChoiceLabel("Next = monthly", next, fmt) }], value: value === "next" || value === "month" ? merged : value };
+  }
+  return { options: [current, { value: "next", label: expiryChoiceLabel("Next", next, fmt) }, { value: "month", label: expiryChoiceLabel("Monthly", month, fmt) }], value };
+}

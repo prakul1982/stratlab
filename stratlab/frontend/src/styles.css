@@ -654,6 +654,8 @@ td.num, .num { font-family: var(--sans); }
 .ai-table .k-table :is(th, td) { white-space: normal; vertical-align: top; max-width: none; }
 .ai-table .k-table tbody th, .ai-table .k-table thead th:first-child { width: 11rem; min-width: 0; }
 .ai-table .k-table .k-list { margin: 0; }
+/* the area names its row: the header row is for screen readers only (LIVE7B-004: "The numbers / The figures" read as a stray row) */
+.ai-table .k-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 /* on a phone each area is its own block: its name over its figures, so the figures have the whole width */
 @media (max-width: 560px) {
   .ai-table .k-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }

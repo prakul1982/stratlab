@@ -79,3 +79,20 @@ test("LIVE7A-018: Flows' lock names what that page locks; Plans names the flow h
   assert.equal(gateFor("/trade/positioning").what, undefined);                     // Positioning's own lock keeps the plan's row
   assert.match(read("src/components/PageLock.tsx"), /const what = gate\.what \?\? featureName\(gate\.feature\);/);
 });
+
+test("LIVE7B-016: Next and Monthly are one choice when they are the same contract", async () => {
+  const { expiryChoices } = await import("../src/lib/options.ts");
+  const fmt = (d) => d.slice(5);
+  // weekly expiries 17 Nov and 23 Nov (the month's last): Next is the monthly
+  let c = expiryChoices(["2026-11-17", "2026-11-23", "2026-11-30"].slice(0, 2), "next", fmt);
+  assert.deepEqual(c.options.map((o) => o.label), ["Nearest · 11-17", "Next = monthly · 11-23"]);
+  assert.equal(c.value, "next");
+  c = expiryChoices(["2026-11-17", "2026-11-23"], "month", fmt);
+  assert.equal(c.value, "month");
+  assert.equal(c.options[1].value, "month");
+  // different contracts: three choices
+  c = expiryChoices(["2026-11-10", "2026-11-17", "2026-11-24"], "current", fmt);
+  assert.deepEqual(c.options.map((o) => o.label), ["Nearest · 11-10", "Next · 11-17", "Monthly · 11-24"]);
+  // a date picked elsewhere stays "date"
+  assert.equal(expiryChoices(["2026-11-10", "2026-11-17"], "2026-12-29", fmt).value, "date");
+});

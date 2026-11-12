@@ -816,13 +816,22 @@ def _head_words(h: str) -> set[str]:
     return {w[:4] for w in re.findall(r"[a-z0-9]+", str(h or "").lower()) if w not in _HEAD_STOP and len(w) > 1}
 
 
+_NO_SOURCE = {"", "null", "none", "undefined", "nan", "n/a", "-", "unknown"}
+
+
+def news_source(v) -> str | None:
+    """A headline's source as the feed gives it, or None for an empty one or a stand-in ("null": LIVE7B-005's "5 Nov · null")."""
+    s = " ".join(str(v or "").split())
+    return None if s.lower() in _NO_SOURCE else s
+
+
 def grouped(items: list[dict], alike: float = 0.6) -> list[dict]:
     """Headlines with near-repeats folded into the first (newest) one, which carries `similar` (how many it stands for):
     DE-017: five or six "Sensex falls…" stories one under another. Two headlines are alike when `alike` of the shorter
     one's words (the small ones left out, each by its first four letters, so "falls" and "falling" agree) are in the other."""
     out: list[tuple[set, dict]] = []
     for h in sorted(items, key=lambda x: str(x.get("at") or ""), reverse=True):
-        h = {**h, "headline": whole_words(h.get("headline") or "")}
+        h = {**h, "headline": whole_words(h.get("headline") or ""), "source": news_source(h.get("source"))}
         w = _head_words(h["headline"])
         hit = next((kept for words, kept in out if w and words and len(w & words) / min(len(w), len(words)) >= alike), None)
         if hit is not None:
@@ -1325,7 +1334,7 @@ class Research:
             return bool(focus) or not market_words or bool(MARKET_WORDS.get(region, MARKET_WORDS["US"]).search(title))
         if region == "US" and self.finnhub.ready() and not focus:
             try:
-                return grouped([{"headline": n.get("headline"), "url": n.get("url"), "source": n.get("source"),
+                return grouped([{"headline": n.get("headline"), "url": n.get("url"), "source": news_source(n.get("source")),
                                  "at": datetime.fromtimestamp(n["datetime"], timezone.utc).isoformat() if n.get("datetime") else None}
                                 for n in self.finnhub.market_news()[:60] if ok(n.get("headline"), False)])[:14]
             except SourceError:
@@ -1499,7 +1508,7 @@ class Research:
             "peers": us_peers(sym, [x for x in (r.get("peers") or []) if isinstance(x, str) and not FOREIGN_TICKER.search(x)]),
             # the company's own news: a plain headline that names it, not the day's market stories the feed files under
             # every big ticker (R5O-020), nor another company's story that names it only in the summary (R12-004)
-            "news": [{"headline": n.get("headline"), "url": n.get("url"), "source": n.get("source"),
+            "news": [{"headline": n.get("headline"), "url": n.get("url"), "source": news_source(n.get("source")),
                       "at": datetime.fromtimestamp(n["datetime"], timezone.utc).isoformat() if n.get("datetime") else None}
                      for n in (r.get("news") or []) if n.get("headline") and plain_headline(n["headline"])
                      and mentions(p["name"], sym, n["headline"])][:8],

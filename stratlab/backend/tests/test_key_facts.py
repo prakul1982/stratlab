@@ -44,7 +44,7 @@ def test_missing_sources_leave_lines_out_and_nothing_is_a_score():
     assert K.build({}, None, None) == []
     falling = [200 - i * 0.5 for i in range(260)]
     price = rows(K.build({}, None, bars(falling)))["price"]
-    assert price["Price vs 200-day average"].endswith("below") and price["1-year price change"].startswith("-")
+    assert price["Price vs 200-day average"].endswith("below") and price["1-year price change"].startswith("−")      # (updated on purpose, LIVE7B-004: the minus sign)
 
 
 def test_banks_have_no_debt_or_margin_lines():
