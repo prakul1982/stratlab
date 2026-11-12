@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 import httpx
 
 from . import ai_spend
-from .ai_catalog import PROVIDERS, base_url, family, key_for, setting, thinks
+from .ai_catalog import PROVIDERS, base_url, family, key_for, keys_for, setting, thinks
 from .ai_reply import answer, is_daily, strip_thinking, too_big, wait_from
 
 
@@ -33,6 +33,8 @@ class CallError(Exception):
     forbidden this key may not use this model (403): skip the model for hours
     context   the prompt is too long for this model: skip it for this request only
     refusal   the model declined this request (Claude's stop_reason "refusal"): ask the next model, no breaker
+    tier      this request may not go with any Claude key right now at this model (the second key's credit left is
+              too little for it, or the first key is past its Sonnet limit): ask the next model, no breaker
     transient timeout, network or server error: count towards the circuit breaker
     busy      this one model is overloaded right now ("high demand"): ask the provider's next model, breaker as transient
     """
@@ -56,9 +58,9 @@ def redact(text: str) -> str:
     """Error text with every configured key taken out, and anything after "Bearer", "key=" or "token:" that looks like
     one: a provider that echoes the key it was sent mustn't put it on the Admin page or in the logs."""
     for p in PROVIDERS.values():
-        k = key_for(p.name)
-        if k and len(k) >= 6:
-            text = text.replace(k, "[key]")
+        for k in keys_for(p.name):
+            if len(k) >= 6:
+                text = text.replace(k, "[key]")
     return _TOKENS.sub(lambda m: m.group(1) + m.group(2) + "[key]", text)
 
 
@@ -450,9 +452,19 @@ class GeminiNative:
 EFFORT = {"quick": "low", "research": "medium", "long": "medium"}
 
 
+# what the API says when a key can't be used at all (credit gone, a billing problem, the account's own usage limit reached):
+# the second key is spent for the month
+_KEY_GONE = re.compile(r"credit balance|insufficient (credit|balance|funds)|out of credits|billing|payment|usage limits?\b", re.I)
+
+
 class AnthropicHTTP:
     """Claude through the Messages API. Paid: which model a job may use, and whether this month's credit allows the
-    request at all, is decided by ai_spend; every reply's usage is priced and added to the month's spend here."""
+    request at all, is decided by ai_spend; every reply's usage is priced and added to the month's spend here.
+
+    Two keys (owner, 12 Nov): with ANTHROPIC_API_KEY_2 set and not spent, the request goes with it first, held against
+    its own credit. If the API answers that key with used-up credit, a billing problem or a rejected key, it is marked
+    spent for the month and the same request is sent at once with ANTHROPIC_API_KEY, under that key's own cap and tier.
+    The key sent is never logged or put in an error."""
 
     def __init__(self, name: str = "anthropic", transport: httpx.BaseTransport | None = None):
         self.name, self.transport = name, transport
@@ -469,15 +481,43 @@ class AnthropicHTTP:
                 "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
                 "messages": [{"role": "user", "content": text}],
                 "output_config": {"effort": EFFORT.get(task, "low")}}
-        held = ai_spend.reserve(ai_spend.estimate_micros(model, len(system) + len(text), room))
+        est = ai_spend.estimate_micros(model, len(system) + len(text), room)
+        if ai_spend.key2_active():
+            held = ai_spend.reserve(est, key=2)
+            if held is not None:
+                try:
+                    return self._send(2, held, model, body, deadline)
+                except CallError as e:
+                    if not (e.kind in ("credit", "auth") or (e.kind != "rate" and _KEY_GONE.search(e.detail or ""))):
+                        raise                           # a rate limit, a busy model, a timeout: the router's, as for one key
+                    ai_spend.mark_spent(redact(e.detail))
+        if ai_spend.key2():
+            # a second key is set: the first key answers only under its own month's rules
+            from .ai_rank import pinned
+            if ai_spend.key2_active():
+                # still active, but this request could pass what's left of its credit: the next (cheaper) model may fit
+                if not key_for(self.name) or not ai_spend.key1_allows(model, pinned(self.name)):
+                    raise CallError("tier", f"this request could pass what is left of the second Claude key's credit ({model})")
+            elif not key_for(self.name):
+                raise CallError("credit", "the second Claude key's credit is spent for this month and ANTHROPIC_API_KEY isn't set; "
+                                "the free models answer until the month turns", wait=max(60.0, ai_spend.month_end() - time.time()),
+                                scope="provider")
+            elif not ai_spend.key1_allows(model, pinned(self.name)):
+                raise CallError("tier", f"{model} is past the first Claude key's Sonnet limit this month; its next model answers")
+        held = ai_spend.reserve(est)
         if held is None:
             cap = ai_spend.cap_usd()
             raise CallError("credit", f"this month's Claude budget (${cap:.0f}) is used up or can't be read; the free models "
                             "answer until it resets", wait=max(60.0, ai_spend.month_end() - time.time()), scope="provider")
+        return self._send(1, held, model, body, deadline)
+
+    def _send(self, slot: int, held: int, model: str, body: dict, deadline: float) -> Reply:
+        """One request with key `slot` (1: ANTHROPIC_API_KEY, 2: ANTHROPIC_API_KEY_2), its reply billed to that key."""
+        key = ai_spend.key2() if slot == 2 else key_for(self.name)
         t0 = time.time()
         try:
             with httpx.Client(base_url=base_url(self.name), timeout=_timeout(deadline), transport=self.transport,
-                              headers={"x-api-key": key_for(self.name), "anthropic-version": "2023-06-01"}) as c:
+                              headers={"x-api-key": key, "anthropic-version": "2023-06-01"}) as c:
                 r = c.post("/messages", json=body)
         except httpx.TimeoutException:
             raise CallError("transient", "timed out") from None
@@ -496,7 +536,7 @@ class AnthropicHTTP:
             raise CallError("transient", f"answered {r.status_code} without a message ({not_a_reply(r)})", scope="provider")
         usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
         stop = data.get("stop_reason")
-        ai_spend.record(model, usage, refusal=stop == "refusal")        # billed whatever the answer says
+        ai_spend.record(model, usage, refusal=stop == "refusal", key=slot)     # billed whatever the answer says
         if stop == "refusal":
             # Claude's safeguards declined this request: another model (or provider) may answer it; this one isn't broken
             raise CallError("refusal", f"{model} declined this request")

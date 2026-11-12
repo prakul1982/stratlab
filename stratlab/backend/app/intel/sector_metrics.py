@@ -41,7 +41,6 @@ LIST_PATH = "/api/integrated-filing-results"
 REFERER = "https://www.nseindia.com/companies-listing/corporate-integrated-filing"
 CRORE = 1e7
 FAMILIES = ("bank", "insurer", "us")
-FAMILY_NAMES = {"bank": "Banks", "insurer": "Insurers", "us": "US companies"}
 # every figure: (key, label, family, format, how it is worked out), from the one registry of figures (R27: metric_registry, which also says
 # whom each applies to, its period, source and limitation). Formats: pct (a share, %), chg (a change, %), x (times), amt (money), days
 METRICS = tuple((m.id, m.label, m.group, m.unit, m.definition + ".") for m in registry.METRICS if m.group in FAMILIES)

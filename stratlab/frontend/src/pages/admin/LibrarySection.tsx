@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { fmtDate, fmtDateTime, IST } from "../../lib/format";
+import { fmtDateTime, IST } from "../../lib/format";
+import { deckStaleText, keptSpan } from "./library";
 import { bytesText, hoursText } from "../../lib/usageText";
 import { Badge, Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, Field, Select, Skeleton, Working, type Column } from "../../components/kit";
 
@@ -13,20 +14,22 @@ import { Badge, Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState
 type Store = { kind: string; label: string; entries: number; bytes: number; hits: number; misses: number; hit_rate: number | null; refreshes: number;
   by: Record<string, number>; oldest: string | null; newest: string | null; saved_seconds: number; saved_ai_calls: number };
 type Theme = { id: string; label: string; q: string; region: string; aliases: string[]; members: number | null; size: number; hits: number;
-  searched: number; refreshes: number; at: string | null; last: string | null; refreshing: boolean };
+  searched: number; refreshes: number; at: string | null; last: string | null; refreshing: boolean;
+  /** kept under today's membership rules, so a search is served it (older servers don't send it) */
+  current?: boolean };
 type Stored = { prefix: string; label: string; entries: number | null; bytes: number | null; oldest: string | null; newest: string | null };
 /* R27: each kept theme deck's publication check (backend deck.publication_gate): pass or fail per item and what was dropped before it shipped */
 type GateItem = { id: string; label: string; ok: boolean; dropped: number; note: string };
 type Gate = { passed: number; of: number; items: GateItem[]; dropped: { rule: string; slide: string; text: string; why: string }[]; dropped_n: number };
-type Deck = { id: string; label: string; region: string; at: string | null; size: number; hits: number; gate: Gate | null };
+type Deck = { id: string; label: string; region: string; at: string | null; size: number; hits: number; gate: Gate | null;
+  /** why it is no longer the file people get ("older version", "earlier day"), null when it is (older servers don't send it) */
+  stale?: string | null };
 type View = { stores: Store[]; themes: Theme[]; decks?: Deck[]; stored: Stored[]; saved: { kind: string; count: number }[] | null };
 
 const REGION_WORD: Record<string, string> = { IN: "India", US: "US" };
 
 const when = (iso: string | null | undefined) => (iso ? fmtDateTime(iso, { tz: IST, zone: false, year: false }) : "–");
-const day = (iso: string) => fmtDate(iso.slice(0, 10), { year: false });
-/** "28 Oct" or "2 Oct – 28 Oct": the oldest and newest entry of a store, by day. */
-const span = (a: string | null, b: string | null) => (!a || !b ? "–" : day(a) === day(b) ? day(a) : `${day(a)} – ${day(b)}`);
+const span = keptSpan;
 const byText = (by: Record<string, number>) => Object.entries(by).filter(([, n]) => n > 0).map(([p, n]) => `${p[0].toUpperCase()}${p.slice(1)} ${n}`).join(", ");
 
 export function LibrarySection() {
@@ -71,7 +74,8 @@ export function LibrarySection() {
   const themeCols: Column<Theme>[] = [
     { key: "n", header: "Theme", rowHeader: true, wrap: true, lead: true, cell: (t) => (
       <span className="k-stack k-tight"><Link className="link" to={`/research/themes?q=${encodeURIComponent(t.label)}&region=${t.region}`}><b>{t.label}</b></Link>
-        <span className="k-note">{REGION_WORD[t.region] ?? t.region}{t.aliases.length > 0 ? ` · also ${t.aliases.filter((a) => a !== t.q).join(", ") || t.q}` : ""}</span></span>) },
+        <span className="k-note">{REGION_WORD[t.region] ?? t.region}{t.aliases.length > 0 ? ` · also ${t.aliases.filter((a) => a !== t.q).join(", ") || t.q}` : ""}</span>
+        {t.current === false && <span className="k-note">Not served: kept under older rules</span>}</span>) },
     { key: "m", header: "Companies", numeric: true, cell: (t) => (t.members ?? "–") },
     { key: "a", header: "Last read", cell: (t) => (t.refreshing ? <Working label="Refreshing" inline /> : when(t.at)) },
     { key: "s", header: "Searched", numeric: true, cell: (t) => t.searched.toLocaleString("en-IN") },
@@ -86,7 +90,8 @@ export function LibrarySection() {
   const itemLabel = (g: Gate, id: string) => g.items.find((i) => i.id === id)?.label ?? id;
   const deckCols: Column<Deck>[] = [
     { key: "n", header: "Deck", rowHeader: true, wrap: true, lead: true, cell: (d) => (
-      <span className="k-stack k-tight"><b>{d.label}</b><span className="k-note">{REGION_WORD[d.region] ?? d.region} · made {when(d.at)}</span></span>) },
+      <span className="k-stack k-tight"><b>{d.label}</b><span className="k-note">{REGION_WORD[d.region] ?? d.region} · made {when(d.at)}</span>
+        {deckStaleText(d.stale) && <span className="k-note">{deckStaleText(d.stale)}</span>}</span>) },
     { key: "c", header: "Check", cell: (d) => (!d.gate ? <span className="k-note">Kept before the check</span>
       : <Badge tone={d.gate.passed === d.gate.of ? "ok" : "warn"}>{`${d.gate.passed} of ${d.gate.of} passed`}</Badge>) },
     { key: "i", header: "Each item", wrap: true, cell: (d) => {

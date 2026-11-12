@@ -92,8 +92,9 @@ The full list, with where each thing lives in the app, is in **[docs/FEATURES.md
 - Market Watch on every page: named lists of any instrument the app covers (stocks, indices, crypto, forex, commodities), prices every 5 seconds and tick by tick where the broker's feed carries them, and a chart workspace with every timeframe from 1 minute to 1 month, drawings, indicators and the timeframe kept on your account per symbol (`/chart/<market>/<symbol>` as a page).
 - Company pages for every Indian (NSE, and BSE-only) and US company, with a price chart (candles, Heikin-Ashi, bars, line; 1 minute to 1 month; indicators; drawings kept on your account; compare on a % scale), plus public facts pages at `/stocks/in/SYMBOL` and `/stocks/us/SYMBOL` for search engines.
 - Deep dive: ten years of numbers, the business and its plans read from the company's own presentations, calls or 10-K, industry measures, valuation on the yardstick its industry uses, a management report card, an investor checklist, and the whole thing as PowerPoint or PDF slides.
-- Themes (`/research/themes`): name a theme (defence, EVs, AI, railways, anything) and StratLab maps the listed companies in it, India or US, with each company's figures and its link to the theme; the whole map downloads as a slide deck (PowerPoint or PDF), and so does any company's deep dive.
+- Themes (`/research/themes`): name a theme (defence, EVs, AI, railways, anything) and StratLab maps the listed companies in it, India or US: every company of the theme's official industries plus the ones whose own descriptions show the work, each placed in one layer of the value chain by how it earns, with each layer's revenue, margins and returns worked out from the companies' filed figures (medians only where a layer has enough comparable companies, and every count traced to the companies behind it). The whole theme downloads as a slide deck (PowerPoint or PDF) that passes a publication check before it is kept, and so does any company's deep dive. A finished theme read is kept once for everyone, so the same theme however it's written opens at once ("Ready to open"), until someone presses Refresh.
 - Market mood (`/research/pulse`): the day in one page, every figure from one source: breadth, sectors, the stocks that moved the index, flows, volatility, currencies, other markets and today's calendar.
+- Heatmap (`/invest/heatmap`): every company of an index as a tile, sized by market value and coloured by its move over a day to a year, grouped by sector or industry, for India and the US; a theme's companies grouped by layer. Flows (`/invest/flows`): the FIIs' and DIIs' buying and selling in the cash market, each day.
 - IPOs (`/invest/ipos`): India's main-board and SME issues from NSE's and BSE's issue pages and SEBI's DRHP and RHP lists, and US IPOs from the IPO calendar and SEC filings, in tabs (upcoming, open, closed, listed, filed), with withdrawn issues kept apart. Each issue's page has its dates, price band, lot, size, bids by category while it is open, its documents and its trading since listing. A daily check compares the lists with the exchanges' and the regulator's own. The offer document's summary (each statement checked against a quote) and IPO alerts are on Basic.
 - Business updates and named holders: monthly sales of automakers and quarterly figures of lenders read into numbers, and every holder named above 1% in a company's shareholding, searchable across companies and followed on Basic.
 - Results calendar, corporate actions (dividends, bonuses, splits, buybacks, rights, demergers), deals and insider trades (including bulk and block deals), exchange surveillance lists (ASM, GSM, ESM, trade-to-trade, price bands, F&O ban), and filings with red flags.
@@ -168,7 +169,10 @@ and the landing page's e2e test checks the plans it shows against the server's.
 | Paper trading | 1 session, for 5 market days | 2 at a time | 10 at a time |
 | Instruments in a group test | 10 | 25 | 50 |
 | Company deep dives (each company counted once a month) | 2 a month | 15 a month | Unlimited |
-| Company slide decks | 1 a month | 5 a month | Unlimited |
+| Slide decks, of a company or a theme (its PDF and PowerPoint are one deck) | 1 a month | 5 a month | Unlimited |
+| Fresh AI reads a day (a read already written today never counts) | 60 | 60 | Unlimited |
+| Refreshes of a stored result a day (a theme, its figures, an AI read) | 3 | 10 | 30 |
+| Market Watch lists / symbols in a list / charts that keep drawings / indicators on a chart | 1 / 20 / 3 / 3 | 10 / 100 / Unlimited / 10 | Unlimited |
 | Stock alerts on at once / saved screens / holdings kept | 5 / 2 / 30 | 25 / 10 / 100 | 100 / 25 / 300 |
 | Mutual fund schemes / Net worth entries / trades the journal keeps | 5 / 5 / 50 | Unlimited | Unlimited |
 | All 20+ indicators in strategy rules (Free: price, SMA, EMA, RSI; price charts show every indicator on every plan) | – | ✓ | ✓ |
@@ -184,7 +188,7 @@ and the landing page's e2e test checks the plans it shows against the server's.
 | Indian F&O, options on your own signals, options what-if sliders and roll preview, strikes picked by delta or premium, faster group entries, export | – | – | ✓ |
 | Forward test from TradingView or Chartink alerts; StratLab in your AI assistant | – | – | ✓ |
 | Advance tax amounts and the long-term exemption lot by lot, US stocks in Indian tax, the ITR-ready export | – | – | ✓ |
-| Every market, company pages and price charts, the options builder with Greeks, the payoff today and breakevens after charges, F&O changes, ETF vs NAV, IPO lists, pages and bids, the events calendar, today's closing auction, stock futures and margin funding, each fund's TER in rupees, a plain SIP test, rates, screens, rotation, results, corporate actions, deals, surveillance, red flags on any company, today's positioning and breadth, My Holdings, the tax report and total tax estimate, the money calendar and its feed, share cards, invites | ✓ | ✓ | ✓ |
+| Every market, company pages and price charts, themes and the heatmap, the options builder with Greeks, the payoff today and breakevens after charges, F&O changes, ETF vs NAV, IPO lists, pages and bids, the events calendar, today's closing auction, stock futures and margin funding, each fund's TER in rupees, a plain SIP test, rates, screens, rotation, results, corporate actions, deals, surveillance, red flags on any company, today's positioning and breadth, My Holdings, the tax report and total tax estimate, the money calendar and its feed, share cards, invites | ✓ | ✓ | ✓ |
 
 Invite rewards give free months of Basic. Visitors outside India see prices in their own currency; every payment gets a
 GST invoice.
@@ -201,6 +205,9 @@ GST invoice.
   company research and the money tools. It keeps every key on the server; the browser talks only to it and to sign-in.
 - **Database and sign-in:** Postgres, with Google sign-in through Supabase (`stratlab/supabase/schema.sql`).
 - The same engine runs backtests, the verdict checks and live paper trading, so a strategy behaves the same everywhere.
+- Results that are the same for everyone (a theme's read and figures, its deck, AI reads) are worked out once and kept in one shared
+  store (`backend/app/computed.py`). A theme's read, its figures and its deck are keyed by the versions of the rules that made them,
+  so a rules change works them out again rather than serving the old ones.
 
 ```
 stratlab/
@@ -209,7 +216,7 @@ stratlab/
 ├── frontend/src/     pages, components (the shared chart system), lib (API client, formatting)
 ├── frontend/e2e/     Playwright browser tests and the UI layout checker
 └── supabase/         schema.sql
-docs/                 FEATURES.md, UI_CHECKER.md, AI_ASSISTANT.md, ROADMAP.md, images/, screenshots/
+docs/                 FEATURES.md, ADMIN.md, UI_CHECKER.md, AI_ASSISTANT.md, ROADMAP.md, images/, screenshots/
 ```
 
 ## Local setup
@@ -236,15 +243,24 @@ more on running it locally.
 ```bash
 cd stratlab/backend && python -m pytest -q -n auto          # backend (pytest-xdist)
 cd stratlab/frontend && npx tsc --noEmit && npm run build   # frontend typecheck and build
+cd stratlab/frontend && npm run test:unit                   # frontend unit tests
 cd stratlab/frontend && npx playwright test                 # browser tests against the fake world
 cd stratlab/frontend && npm run ui-lint                     # the layout checker, after a build
 ```
 
 The tests run on synthetic data only. The layout checker is described in **[docs/UI_CHECKER.md](docs/UI_CHECKER.md)**.
 
+## Deploys
+
+Every pull request runs the backend tests, the frontend build, the browser tests (in six parts) and the layout checker on
+GitHub Actions, and merges once they all pass. The merged build then deploys by itself: the backend is built from its
+`Dockerfile` (Python and PyPI packages only) on Railway, and the frontend is built by Vite and served by Vercel. After a
+deploy, Admin → System → **Check every feature** runs every feature against the live site.
+
 ## What's new
 
-The [changelog](CHANGELOG.md) has short release notes; the [roadmap](docs/ROADMAP.md) lists what's next. More:
+The [changelog](CHANGELOG.md) has one line per release, up to Release 39 (12 November 2026); the [roadmap](docs/ROADMAP.md)
+lists what's next. More:
 [what StratLab does and where to find it](docs/FEATURES.md) and [StratLab in your AI assistant](docs/AI_ASSISTANT.md).
 
 ## Security

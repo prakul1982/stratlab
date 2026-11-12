@@ -152,7 +152,6 @@ export function ivWait(days: number, need: number): string {
 
 // the exchange's "Pro" (brokers' own trading) is "Prop desks" here: "Pro" read as the account's plan beside it (DC-006)
 export const PARTICIPANTS: [PRow["id"], string][] = [["client", "Client"], ["dii", "DII"], ["fii", "FII"], ["pro", "Prop desks"]];
-export const RANGES: [string, string][] = [["3m", "3M"], ["6m", "6M"], ["1y", "1Y"], ["all", "All"]];
 
 /** A count of contracts, Indian grouping: 1,23,456. */
 export const contracts = (v: number | null | undefined) => (v == null ? "–" : Math.round(v).toLocaleString("en-IN"));

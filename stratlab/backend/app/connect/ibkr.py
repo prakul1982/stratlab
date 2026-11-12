@@ -46,7 +46,7 @@ def _get(path: str, params: dict) -> str:
     try:
         with httpx.Client(transport=transport, timeout=60, follow_redirects=False) as c:
             r = c.get(f"{BASE}/{path}", params=params, headers={"User-Agent": "StratLab"})
-    except httpx.HTTPError as e:
+    except httpx.HTTPError:
         raise FlexError("unreachable", "IBKR didn't answer. It will be tried again later.") from None
     if r.status_code != 200 or len(r.content) > MAX_XML:
         raise FlexError("unreachable", "IBKR didn't answer. It will be tried again later.")

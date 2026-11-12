@@ -24,6 +24,14 @@ type Provider = {
   last_ok: number | null; last_error: string | null; last_used_model: string | null; pinned: string | null; pinned_by: "admin" | "railway" | null;
   ranked_at: number | null; rank_error: string | null; discovered: number | null; skipped: Record<string, number>; probing: boolean;
   models: Model[]; blocked: string[]; blocked_info?: Record<string, { by?: string | null; at?: number | null }>;
+  /** Claude only: its two keys side by side (owner, 12 Nov) */ keys?: ClaudeKey[] | null;
+};
+/** One of Claude's keys: set or not, its last four characters at most (never the key), this month's spend against its
+ * limit, and whether it answers now. Slot 2 (ANTHROPIC_API_KEY_2) is asked first until its own credit is spent. */
+export type ClaudeKey = {
+  slot: 1 | 2; variable: string; configured: boolean; fingerprint: string | null; usd: number | null; credit_usd: number;
+  requests: number | null; state: "active" | "standby" | "spent" | "off" | "unknown"; state_text: string;
+  spent_reason?: string | null; spent_at?: number | null; models?: Record<string, { usd: number; requests: number }>;
 };
 type Step = { provider: string; label: string; model: string; ready: boolean; out_of_credit?: boolean };
 type Route = { label: string; budget_s: number; steps: Step[] };
@@ -35,6 +43,8 @@ export type ClaudeSpend = {
   input_tokens?: number; output_tokens?: number; cache_write_tokens?: number; cache_read_tokens?: number;
   cache_hit_share?: number | null; refusals?: number; models?: Record<string, { usd: number; requests: number }>;
   tier?: "sonnet" | "haiku" | "off"; resets_at?: number;
+  /** both keys (the fields above are the first key's), which one answers now, and the month's budget across them */
+  keys?: ClaudeKey[]; active_key?: 1 | 2 | null; budget_usd?: number; budget_spent_usd?: number | null;
 };
 export type AIView = {
   providers: Provider[]; routes: Record<string, Route>; cache: { entries: number; hits: number; misses: number };
@@ -45,6 +55,33 @@ export type AIView = {
 const usd = (n: number) => `$${n < 10 ? n.toFixed(2) : n.toFixed(0)}`;
 const usdFine = (n: number) => `$${n < 1 ? n.toFixed(4) : n.toFixed(2)}`;
 const count = (n: number | undefined) => (n ?? 0).toLocaleString("en-IN");
+const KEY_STATE: Record<ClaudeKey["state"], string> = {
+  active: "answering", standby: "waiting", spent: "spent this month", off: "not set", unknown: "spend can't be read",
+};
+/** "Key 2 (…abcd): answering, $12.30 of $100": what Admin may say about a key; never more of it than its last four characters. */
+export const keyLine = (k: ClaudeKey) =>
+  `Key ${k.slot} (${k.variable}${k.fingerprint ? ` ${k.fingerprint}` : ""}): ${KEY_STATE[k.state]}${k.configured && k.usd != null ? `, ${usdFine(k.usd)} of ${usd(k.credit_usd)}` : ""}`;
+
+/** Claude's two keys side by side, shown once the second key is set: the month's budget across both, then a row per key. */
+export function ClaudeKeys({ c }: { c: ClaudeSpend }) {
+  const keys = c.keys ?? [];
+  if (!keys.some((k) => k.slot === 2 && k.configured)) return null;
+  return (
+    <div className="k-stack" aria-label="Claude keys">
+      <span><b>Both Claude keys this month: {c.budget_spent_usd != null ? usd(c.budget_spent_usd) : "–"} of {usd(c.budget_usd ?? c.cap_usd)}</b>
+        <span className="k-muted"> · {c.active_key ? `key ${c.active_key} answers now` : "neither key can answer until the month turns"}; the second key is asked first until its own credit is spent, and its spend doesn't count toward the first key's cap or Sonnet limit.</span></span>
+      <DataTable label="Claude keys this month" rows={keys} rowKey={(k) => String(k.slot)} columns={[
+        { key: "key", header: "Key", rowHeader: true, cell: (k) => <span><span className="adm-mono">{k.variable}</span>{k.fingerprint ? <span className="k-muted"> {k.fingerprint}</span> : null}</span> },
+        { key: "state", header: "State", cell: (k) => <span title={k.state_text}>{KEY_STATE[k.state]}</span> },
+        { key: "requests", header: "Requests", numeric: true, cell: (k) => (k.requests == null ? "–" : count(k.requests)) },
+        { key: "usd", header: "Spent", numeric: true, cell: (k) => (k.usd == null ? "–" : usdFine(k.usd)) },
+        { key: "limit", header: "Limit", numeric: true, cell: (k) => usd(k.credit_usd) },
+      ]} />
+      {keys.filter((k) => k.state === "spent" && k.slot === 2).map((k) => <span key={k.slot} className="k-muted"><Said text={k.state_text} /></span>)}
+    </div>
+  );
+}
+
 const TIER: Record<string, string> = {
   sonnet: "Research reads and long documents use Claude Sonnet 5.5 first",
   haiku: "Past the Sonnet limit: research reads and long documents use Claude Haiku 5.5 first",
@@ -59,7 +96,8 @@ export function ClaudeMonth({ c }: { c: ClaudeSpend }) {
   const rows = Object.entries(c.models ?? {}).sort((a, b) => b[1].usd - a[1].usd);
   return (
     <div className="k-stack k-small" aria-label="Claude this month">
-      <span><b>Claude this month: {usd(c.usd)} of {usd(c.cap_usd)} cap (Sonnet until {usd(c.sonnet_until_usd)})</b>
+      <ClaudeKeys c={c} />
+      <span><b>Claude this month: {usd(c.usd)} of {usd(c.cap_usd)} cap (Sonnet until {usd(c.sonnet_until_usd)}){c.keys?.some((k) => k.slot === 2 && k.configured) ? " on the first key" : ""}</b>
         <span className="k-muted"> · {TIER[c.tier ?? "sonnet"]}{c.resets_at ? `; resets ${until(c.resets_at)}` : ""}.</span></span>
       <span className="k-muted">
         {count(c.requests)} requests · {count((c.input_tokens ?? 0) + (c.cache_write_tokens ?? 0) + (c.cache_read_tokens ?? 0))} prompt tokens
@@ -288,6 +326,9 @@ function ProviderBlock({ p, test, busy, rerank, pin, block }: {
           {p.probing ? "Measuring…" : "Re-rank"}</button>
       </div>
       <span className="k-small k-muted"><Said text={p.state_text} /></span>
+      {p.keys?.some((k) => k.slot === 2 && k.configured) && (
+        <span className="k-small k-muted" aria-label={`${p.label} keys`}>{p.keys.filter((k) => k.configured).map(keyLine).join(" · ")}.</span>
+      )}
       {test && <span className="k-small" role="status">Test: {test.ok ? `answered with ${test.model} in ${(test.ms / 1000).toFixed(1)} s` : <Said text={test.error} />}</span>}
       {p.quota.limited && p.quota.reset_at && <span className="k-small">Free quota resets {until(p.quota.reset_at)}.</span>}
       {p.pinned && (

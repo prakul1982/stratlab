@@ -507,7 +507,7 @@ def _cap_percent(text: str, only_minus: bool) -> str:
     return re.sub(pat, lambda m: m.group(0).replace(m.group(1), "100.0") if float(m.group(1).replace(",", "")) > 100 else m.group(0), text)
 
 
-def restate_verdict(v: dict | None, old_ret: float, ret: float, hold: float | None, n: int) -> dict | None:
+def restate_verdict(v: dict | None, ret: float, hold: float | None, n: int) -> dict | None:
     """A stored verdict whose run showed a loss past 100% (saved before an account stopped at zero) with the account's
     figures held to 100% and the headline and summary worded from the restated return."""
     if not isinstance(v, dict):
@@ -594,7 +594,7 @@ def restate_empty(e: dict) -> dict:
         e = {**e, "group": group}
     return {**e, "stats": new_stats, "costs": new_costs, "trades": trades,
             "series": {**ser, "equity": [max(x, 0.0) if num(x) else x for x in equity]},
-            "verdict": restate_verdict(e.get("verdict"), st["ret"], ret, float(hold) if num(hold) else None, int(st.get("n") or 0))}
+            "verdict": restate_verdict(e.get("verdict"), ret, float(hold) if num(hold) else None, int(st.get("n") or 0))}
 
 
 def decide(checks: list[dict], n: int, ret: float, strategy, days: int, max_days: int, hold: float | None = None,

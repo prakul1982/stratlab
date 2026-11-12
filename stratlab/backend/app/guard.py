@@ -213,16 +213,31 @@ HEAVY = [  # (method, path pattern): work that holds the CPU for a second or mor
 ]
 
 
+# file imports: each one holds its whole file, decoded, and the rows read from it while it is read, so they take turns
+# to keep the server's memory steady: their own gate (UPLOAD_SLOTS at once), apart from HEAVY, so an upload never waits
+# behind a backtest; a request waiting its turn hasn't read its body yet, so it holds no memory meanwhile.
+UPLOADS = [
+    ("POST", re.compile(r"^/tax/import/?$")),
+    ("POST", re.compile(r"^/holdings/import/?$")),
+    ("POST", re.compile(r"^/money/us-tax/import/?$")),
+    ("POST", re.compile(r"^/money/dividends/import/?$")),
+    ("POST", re.compile(r"^/trade/journal/import-tax/?$")),
+    ("POST", re.compile(r"^/connect/statement/?$")),
+]
+
+
 class HeavyGate:
     """At most `slots` heavy requests (backtests, scans, the sector chart, document reads) run at once; the rest
     wait their turn without holding a worker thread, so ordinary pages stay quick while the server is busy. A heavy
-    request that waits longer than `max_wait` seconds is told the server is busy instead of hanging."""
+    request that waits longer than `max_wait` seconds is told the server is busy instead of hanging. `routes` and
+    `slots_env` make another gate of the same kind for other routes (UPLOADS, UPLOAD_SLOTS)."""
 
-    def __init__(self, app, slots: int | None = None, max_wait: float = 90.0):
+    def __init__(self, app, slots: int | None = None, max_wait: float = 90.0, routes: list | None = None, slots_env: str = "HEAVY_SLOTS"):
         import asyncio
         import os
         self.app = app
-        self.slots = slots or int(os.environ.get("HEAVY_SLOTS", "2"))
+        self.routes = HEAVY if routes is None else routes
+        self.slots = slots or int(os.environ.get(slots_env, "2"))
         self.max_wait = max_wait
         self._sem: asyncio.Semaphore | None = None
         self._loop = None
@@ -230,7 +245,7 @@ class HeavyGate:
 
     def _heavy(self, scope) -> bool:
         m, p = scope.get("method"), scope.get("path", "")
-        return any(m == hm and rx.match(p) for hm, rx in HEAVY)
+        return any(m == hm and rx.match(p) for hm, rx in self.routes)
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http" or not self._heavy(scope):

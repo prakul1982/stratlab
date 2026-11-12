@@ -230,3 +230,27 @@ def test_the_deck_s_cache_key_changes_with_the_dive_text_and_the_sector_figure_r
     assert TR.deck_key(*args) == key
     monkeypatch.setattr(S, "VERSION", S.VERSION + 1)
     assert TR.deck_key(*args) != key
+
+
+def test_a_coloured_table_cell_is_measured_bold_so_its_row_holds_it_whole():
+    """R40 (live Consumer retail deck, p. 6: "Online retailers / and…"): the highest and lowest layers' names are drawn bold and coloured;
+    measured plain, the lowest one's row had a line too few at the width where bold wraps once more, and the name was cut."""
+    from app import deck as D
+    D._fonts()
+    name = "Online retailers and marketplaces"
+    for w0 in (1.43, 1.55, 1.66):
+        b = {"head": ["Layer", "Companies"], "rows": [[name, "15"], ["Home improvement", "3"]], "widths": [w0, 1.2],
+             "colors": {(0, 0): D.DOWN}, "tight": True}
+        lay = D.table_layout(b, w0 + 1.2, 9.0)
+        size, cw = lay["size"], lay["widths"][0]
+        need = len(D.wrap(name, size, cw - 0.2, True))
+        held = round((lay["heights"][1] - 0.12) / (size * 1.3 / 72))
+        assert held >= need, (w0, size, need, held)
+
+
+def test_a_paragraph_cut_to_its_lines_never_ends_on_a_joining_word():
+    from app import deck as D
+    D._fonts()
+    for w in (1.25, 1.4, 1.6, 2.0):
+        got = D.fit_paras(["Online retailers and marketplaces of every kind and size"], 11, w, 2 * D._lh(11))
+        assert got and not D._JOINER.search(got[-1].rstrip("…")), (w, got)

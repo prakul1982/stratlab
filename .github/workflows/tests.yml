@@ -11,6 +11,10 @@ concurrency:
   group: tests-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+# the test jobs only read the code; the merge job below asks for what it needs itself
+permissions:
+  contents: read
+
 jobs:
   backend:
     runs-on: ubuntu-24.04

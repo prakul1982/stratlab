@@ -527,10 +527,6 @@ def first_offering(sub: dict, final_on: str) -> bool:
     return not any(f in SEEN_BEFORE and d < final_on for f, d in zip(forms, days))
 
 
-def filing_index(cik: str, accession: str) -> str:
-    return f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession.replace('-', '')}/"
-
-
 # ---------- the sources ----------
 class Sebi(Source):
     name = "SEBI"

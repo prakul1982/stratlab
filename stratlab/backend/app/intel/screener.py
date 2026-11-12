@@ -408,7 +408,6 @@ def summary(p: dict, listed_on: str | None = None) -> dict:
     sales = [v for v in _row(pl, "Sales", "Revenue") if v is not None]
     profit = [v for v in _row(pl, "Net Profit") if v is not None]
     opm_all = _row(pl, "OPM", "Financing Margin")
-    reserves = [v for v in _row(bal, "Reserves") if v is not None]
     equity = [v for v in _row(bal, "Equity Capital") if v is not None]
     price = num(r.get("Current Price"))
     book = num(r.get("Book Value"))

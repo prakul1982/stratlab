@@ -1,7 +1,8 @@
 """What StratLab knows about each AI provider and model, kept in code so it can be read and reviewed.
 
 Every provider here has a genuinely free allowance, except Anthropic: paid from the owner's monthly credit, asked first
-for research reads and long documents while this month's spend allows it (ai_spend.py), and after Groq for quick jobs. Each one
+for research reads and long documents while this month's spend allows it (ai_spend.py), and after Groq for quick jobs (an
+optional second key, ANTHROPIC_API_KEY_2, has its own monthly credit and is asked first). Each one
 is used only when its key is set. The free limits, the terms and where to get a key are shown on the Admin page and
 in docs/ADMIN.md; keep the three in step when a provider changes its offer.
 
@@ -28,6 +29,7 @@ class Provider:
                                     # only: used last, after every production-ready provider), or "paid"
     defaults: tuple[str, ...]       # known-good models, best first: the cold start, never the final word
     extra_env: tuple[str, ...] = ()     # more settings the provider needs (Cloudflare's account id)
+    alt_key_env: str = ""           # a second key the provider can use instead (Anthropic: ANTHROPIC_API_KEY_2, asked first)
     models_url: str | None = "/models"  # where the provider lists its models (relative to `base`, or a full URL);
                                         # None = it doesn't, so the curated defaults are the list
     allow: str | None = None        # only models matching this are free / usable on this provider
@@ -113,11 +115,17 @@ PROVIDERS: dict[str, Provider] = {p.name: p for p in [
              ctx=128000, probe_max=3, prior=(15, 15, 15),
              note="Added 4 Nov 2026. The free plan's limits aren't published; Admin shows when it stops answering."),
     Provider("anthropic", "Anthropic", "anthropic", "https://api.anthropic.com/v1", "ANTHROPIC_API_KEY", "https://console.anthropic.com/settings/keys",
-             "Paid from the owner's $100 monthly credit; StratLab stops using it at $99 a month.", "paid",
+             "Paid from the owner's $100 monthly credit; StratLab stops using it at $99 a month. An optional second key "
+             "(ANTHROPIC_API_KEY_2) adds its own monthly credit, used first.", "paid",
              ("claude-sonnet-5-5", "claude-haiku-5-5"), models_url=None, ctx=200000, probe_max=1, probe_every_h=0, prior=(99, 99, 99),
-             note="Research reads and long documents ask Claude Sonnet 5.5 first until $75 is spent this month, then Claude "
-                  "Haiku 5.5 until $99; quick jobs ask Haiku 5.5 after Groq. From $99 Claude is skipped until the month turns "
-                  "(ANTHROPIC_MONTHLY_CAP_USD, ANTHROPIC_SONNET_UNTIL_USD). ANTHROPIC_MODEL pins one model for every job."),
+             alt_key_env="ANTHROPIC_API_KEY_2",
+             note="With ANTHROPIC_API_KEY_2 set, every Claude request uses that key first, Sonnet 5.5 first for research reads "
+                  "and long documents, until its own credit (ANTHROPIC_2_CREDIT_USD) is spent on it this month or the API says its "
+                  "credit is gone; its spend doesn't count toward the first key's limits. Then (and without a second key) "
+                  "ANTHROPIC_API_KEY: research reads and long documents ask Claude Sonnet 5.5 first until $75 is spent this "
+                  "month, then Claude Haiku 5.5 until $99; quick jobs ask Haiku 5.5 after Groq. From $99 Claude is skipped "
+                  "until the month turns (ANTHROPIC_MONTHLY_CAP_USD, ANTHROPIC_SONNET_UNTIL_USD). ANTHROPIC_MODEL pins one "
+                  "model for every job."),
 ]}
 
 # Providers left out on purpose (checked October and November 2026), so nobody adds them back by mistake:
@@ -146,10 +154,18 @@ def key_for(name: str) -> str:
     return setting(p.key_env) if p else ""
 
 
-def configured(name: str) -> bool:
-    """A key, plus any other setting the provider needs."""
+def keys_for(name: str) -> list[str]:
+    """Every key set for this provider (the main one, then a second one where the provider takes one)."""
     p = PROVIDERS.get(name)
-    return bool(p and key_for(name) and all(setting(e) for e in p.extra_env))
+    if not p:
+        return []
+    return [k for k in (setting(p.key_env), setting(p.alt_key_env) if p.alt_key_env else "") if k]
+
+
+def configured(name: str) -> bool:
+    """A key (the main one or a second one), plus any other setting the provider needs."""
+    p = PROVIDERS.get(name)
+    return bool(p and keys_for(name) and all(setting(e) for e in p.extra_env))
 
 
 def missing(name: str) -> list[str]:

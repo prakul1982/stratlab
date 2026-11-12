@@ -558,7 +558,10 @@ def _provider_view(name: str, now: float) -> dict:
     paused_models = sum(1 for m in models if m["in_use"] and m["open_until"])
     reset_at = st.quota_reset if (st.quota_reset or 0) > now else (st.cooldown_until if cooling else None)
     return {"name": name, "label": p.label, "configured": is_on, "missing": missing(name), "key_url": p.key_url,
-            "free": p.free, "terms": p.terms, "note": p.note, "variables": [p.key_env, *p.extra_env], "model_variable": p.model_env,
+            "free": p.free, "terms": p.terms, "note": p.note, "model_variable": p.model_env,
+            "variables": [p.key_env, *([p.alt_key_env] if p.alt_key_env else []), *p.extra_env],
+            # Claude's two keys side by side: set or not, last four characters at most, this month's spend, which answers now
+            "keys": ai_spend.keys_view() if name == "anthropic" else None,
             "state": state, "state_text": named(st, text), "answering": answering, "result": result, "paused_models": paused_models,
             "quota": {"limited": bool(st.quota and (cooling or all_closed)) or result == "quota", "reset_at": reset_at,
                       "remaining": {k: v for k, v in st.remaining.items() if k in ("requests", "tokens", "requests_reset", "tokens_reset")} or None,

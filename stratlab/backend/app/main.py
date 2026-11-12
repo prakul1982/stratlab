@@ -71,7 +71,7 @@ from .errors import report
 from . import errors as error_alerts           # Admin → System: is Sentry on, and its test message
 from . import feedback                          # Help & feedback: the reports and Admin's inbox
 from .responses import err, ok
-from .guard import Guard, HeavyGate, Window, address as caller_address
+from .guard import UPLOADS, Guard, HeavyGate, Window, address as caller_address
 from . import research
 from .engine import walkforward
 from . import rule_check
@@ -613,6 +613,7 @@ def _load_errors():
 app.add_middleware(RequestWaits)      # innermost: a request's source calls don't sleep long on the rate limit
 app.add_middleware(db.SettingsMemo)   # each request reads a setting from the database once
 app.add_middleware(HeavyGate)   # inside the guard: heavy work takes turns, ordinary pages don't wait behind it
+app.add_middleware(HeavyGate, routes=UPLOADS, slots_env="UPLOAD_SLOTS")   # file imports take turns too, in their own gate
 app.add_middleware(Guard)   # size cap, rate limit, security headers; inside CORS so its replies stay readable
 app.add_middleware(CORSMiddleware, allow_origins=settings.FRONTEND_ORIGINS,
                    allow_methods=["*"], allow_headers=["*"], max_age=7200)   # a browser asks before each call only every 2 h, not 10 min
@@ -6590,10 +6591,12 @@ _overview_lock = threading.Lock()
 
 def revenue_since(days: int = 30) -> dict:
     """The invoices of the last `days` days (DJ-004), by currency: {"INR": 6990.0, ...}, and how many there were. Read
-    from this financial year's invoices and, near its start, last year's."""
+    from this financial year's invoices and, near its start, last year's. The days are India days, today included: `days` dates in all
+    (lane upd1: the window started `days` days before today, so "the last 30 days" summed 31 dates)."""
     now = datetime.now(timezone.utc)
-    since = (now - timedelta(days=days)).astimezone(IST).date().isoformat()
-    years = {invoices.fy(now), invoices.fy(now - timedelta(days=days))}
+    start = now.astimezone(IST).date() - timedelta(days=days - 1)
+    since = start.isoformat()
+    years = {invoices.fy(now), invoices.fy(datetime(start.year, start.month, start.day, 12, tzinfo=IST))}
     rows = [i for y in sorted(years) for i in invoices.of_year(y) if str(i.get("date") or "") >= since]
     by: dict[str, float] = {}
     for i in rows:

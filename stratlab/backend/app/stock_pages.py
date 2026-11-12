@@ -2555,26 +2555,6 @@ ADVICE_WORDS = re.compile(r"\b(buy|sell|hold|accumulate|avoid|target|undervalued
 FAQ_HOLDERS = 3                  # named holders the shareholders answer lists
 
 
-def report_amount(f: dict, v, digits: int = 0) -> str | None:
-    """A reported figure in the unit the page's table uses, in words: "₹2,67,021 crore", "$391.0B"; a foreign filer's own
-    currency as "12,345 EUR million". None without a figure. `digits` 2 is the precision the page's table or key figures use
-    for a small company's amounts (small_digits): "₹0.31 crore", "$12.34M", as shown there, never "<₹1 crore" beside a 0.31
-    (RC4-002: 50 of 410 sampled Indian pages said "net profit of <₹1 crore" and "revenue of ₹41 crore" for 41.37)."""
-    v = _num(v)
-    if v is None:
-        return None
-    unit = f.get("unit") or ""
-    if digits >= 2 and unit in ("$ million", "₹ crore") and abs(v) < 100:
-        sign = "-" if v < 0 else ""
-        n = _fmt(abs(v), 2)
-        return f"{sign}${n}M" if unit == "$ million" else f"{sign}₹{n} crore"
-    if unit == "$ million":
-        return usd_text(v)
-    if unit == "₹ crore":
-        return inr_text(v)
-    return f"{_amount(f, v)} {unit}".strip()
-
-
 def listed_on(f: dict, region: str, symbol: str) -> str:
     """"on NSE and BSE", "on BSE", "in the US": where the company's shares are listed, as far as the app knows."""
     if region == "US":
@@ -3602,7 +3582,6 @@ def _az_style(n: int) -> str:
 def az_nav(region: str) -> str:
     """The market's A-Z letters (those with companies) and its index lists, as links: on /stocks, the exchange pages and the
     letter pages."""
-    r = region.lower()
     d = directory(region)
     where = "India" if region == "IN" else "US"
     letters = "".join(f'<a href="{letter_path(region, L)}">{"0–9" if L == OTHER else L}</a>' for L in [*LETTERS, OTHER] if d["count"].get(L))

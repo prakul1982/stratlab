@@ -9,9 +9,8 @@ import re
 
 from .. import name_search
 
-# a name agrees with another when most of the shorter one's words start the same way as the other's (the broker's
-# list cuts names short: "TATA CONSULTANCY SERV LT", "SOLAR INDUSTRIES (I) LTD")
-AGREE_SHARE = 2 / 3
+# a name agrees with another when two thirds of the shorter one's words start the same way as the other's (names_agree; the
+# broker's list cuts names short: "TATA CONSULTANCY SERV LT", "SOLAR INDUSTRIES (I) LTD")
 # words that say what kind of company, not which one: two names sharing only these don't agree
 GENERIC = {"india", "indian", "industries", "industry", "international", "global", "holdings", "group", "systems",
            "technologies", "technology", "tech", "enterprises", "services", "solutions", "bank", "financial", "finance",
@@ -619,14 +618,6 @@ def _phrase_stems(phrase: str) -> list[str]:
     return [w[:max(4, len(w) - 2)] for w in _cause_words(phrase)]
 
 
-def headline_count(phrase: str, titles: list[str]) -> int:
-    """How many headlines carry every word of a phrase (by stem, as cause_backed reads them)."""
-    stems = _phrase_stems(phrase)
-    if not stems:
-        return 0
-    return sum(1 for t in titles if all(re.search(r"\b" + re.escape(w), str(t or "").lower()) for w in stems))
-
-
 _PROPER = {"sensex", "nifty", "rbi", "sebi", "fed", "dow", "nasdaq", "wall", "fii", "fiis", "dii", "diis", "opec", "us", "india",
            "china", "trump", "budget", "gst", "it", "bank", "reliance", "adani", "tata", "infosys", "hdfc", "icici"}
 
@@ -685,23 +676,6 @@ def flows_source(cash: dict | None) -> str:
     except ValueError:
         return ""
     return f"FII and DII figures are the exchange's provisional cash-market numbers for {day}, in ₹ crore; the final ones can differ a little."
-
-
-def template_tone(indices: list[dict]) -> str:
-    """The market read from the numbers alone, when nothing the AI wrote survives the checks."""
-    def pc(x):
-        return f"{'+' if x > 0 else '−' if x < 0 else ''}{abs(x):.2f}%"
-    parts = []
-    for i in market_facts(indices)[:3]:
-        if i.get("price") is None:
-            continue
-        bit = f"{i['name']} at {i['price']:,.2f}"
-        if i.get("change_pct") is not None:
-            bit += f", {pc(i['change_pct'])} on the day"
-        if i.get("from_low_pct") is not None and i.get("from_high_pct") is not None:
-            bit += f", {abs(i['from_low_pct']):.1f}% {'above' if i['from_low_pct'] >= 0 else 'below'} its 52-week low and {abs(i['from_high_pct']):.1f}% below its high"
-        parts.append(bit + ".")
-    return " ".join(parts)
 
 
 # a claim about how many sectors moved, or that all of them did (R8B-004: "as all sectoral indices turned green", repeated

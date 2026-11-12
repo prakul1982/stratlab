@@ -132,6 +132,12 @@ def admin_rows(limit: int = 200) -> list[dict]:
     return _t().select(LIST_COLS).order("published_at", desc=True).limit(limit).execute().data or []
 
 
+def theme_sources(limit: int = 500) -> dict[str, dict]:
+    """{slug: the figures a theme post is written from (body.src)} of the stored theme posts, in one read (Admin's list, lane upd1)."""
+    rows = _t().select("slug,body").like("slug", "theme-%").limit(limit).execute().data or []
+    return {r["slug"]: (r.get("body") or {}).get("src") for r in rows if isinstance((r.get("body") or {}).get("src"), dict)}
+
+
 def set_published(slug: str, on: bool, now: datetime | None = None) -> dict | None:
     """Show or hide a post (a hidden one answers 404 and leaves the list, the sitemap and the feed). The post is kept."""
     if not valid_slug(slug) or not get(slug):
@@ -453,15 +459,6 @@ def pct(x, dp: int = 2) -> str:
     return kit.pct(x, dp)
 
 
-def move_words(change) -> str:
-    if change is None:
-        return ""
-    r = round(float(change), 2)
-    if r == 0:
-        return "unchanged from the previous close"
-    return f"{abs(r):.2f}% {'higher' if r > 0 else 'lower'} than the previous close"
-
-
 def company_path(region: str, symbol: str) -> str | None:
     """The public page of a listed company (/stocks/in/TCS), or None when the page doesn't exist (the symbol isn't listed)."""
     try:
@@ -473,8 +470,6 @@ def company_path(region: str, symbol: str) -> str | None:
 
 
 # ---------- a brief as a post ----------
-_SCAN_ITEM = re.compile(r"^([A-Z0-9][A-Z0-9&.\-]*) (matches|moved)\b")
-_SYMBOL = re.compile(r"^[A-Z0-9][A-Z0-9&.\-]{0,19}$")
 
 
 def brief_slug(region: str, day: str) -> str:
@@ -483,21 +478,6 @@ def brief_slug(region: str, day: str) -> str:
 
 def _section(issue: dict, start: str) -> dict | None:
     return next((s for s in issue.get("sections") or [] if isinstance(s, dict) and str(s.get("title") or "").startswith(start)), None)
-
-
-def _stocks(region: str, sec: dict | None) -> list:
-    """A scan section's stocks as lines: the symbol links to its company page when it has one."""
-    out = []
-    for it in (sec or {}).get("items") or []:
-        m = _SCAN_ITEM.match(str((it or {}).get("text") or ""))
-        if not m or not _SYMBOL.match(m.group(1)):
-            continue
-        sym = m.group(1)
-        href = company_path(region, sym)
-        # "(ST S2)" is the scan's own shorthand: a reader of the post is told the rule in words, just before (VR4-004)
-        tail = str(it["text"])[len(sym):].replace(" (ST S2)", "")
-        out.append([{"a": sym, "href": href} if href else sym, tail])
-    return out
 
 
 def _open_day(region: str, day: date) -> bool:

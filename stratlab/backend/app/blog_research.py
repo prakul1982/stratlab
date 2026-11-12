@@ -12,7 +12,7 @@ facts: no advice wording, no ranking of what to pick, no promise."""
 import json
 import re
 import threading
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from statistics import median
 from zoneinfo import ZoneInfo
 
@@ -144,7 +144,7 @@ def classic_strategies(entries: list[dict], now: datetime | None = None) -> dict
                    {"t": "p", "text": f"Group: {', '.join(groups)}." if groups else f"{mname} group."},
                    {"t": "table", "caption": f"{mname}, tested {usual}", "align": "lrrrrl", "widths": [34, 12, 9, 11, 8, 26],
                     "head": ["Rule set", "After costs", "Passive", "Difference", "Trades", "Checks"], "rows": table}]}]
-    risk, mrisk = library_seed.RISK, library_seed.MARKET_RISK
+    risk = library_seed.RISK
     blocks += [
         {"t": "details", "title": "The headline figures in words", "items": words, "words": True},
         {"t": "details", "title": "How these tests were run", "items": [
@@ -537,6 +537,19 @@ _MOVE = re.compile(r"^(?P<layer>.+?): the EBITDA margin of its (?P<n>\d+) compan
                    r"(?P<b>[−\-]?[\d.]+)% in (?P<ty>.+?), a move of")
 
 
+def theme_stamp() -> list:
+    """The versions a theme post's figures were worked out under: the membership rules (which company sits in which layer), the dive's
+    own sentences and the sector figures' rules, the parts of a stored dive's key that say how its figures were made (theme_routes.dive_key).
+    Kept in the post's figures (src "stamp"): a post whose stamp is not today's was worked out under older rules (lane upd1)."""
+    from .intel import sector_metrics, theme_base, theme_data
+    return [theme_base.RULES, theme_data.DIVE_TEXT, sector_metrics.VERSION]
+
+
+def stale_figures(src: dict | None) -> bool:
+    """Whether a theme post's kept figures were worked out under older rules than today's (a post kept before the stamp was, too)."""
+    return isinstance(src, dict) and src.get("stamp") != theme_stamp()
+
+
 def theme_source(dive: dict, theme: str, region: str) -> dict:
     """The figures a theme post is written from, kept in the post's row (body.src) so a later version of the words is written again from
     them, with no AI read and no map that may have expired: the chain's rows (with whether each is a layer or a group no layer took, and its
@@ -549,7 +562,8 @@ def theme_source(dive: dict, theme: str, region: str) -> dict:
                     | {"official": bool(r.get("official") or blk.get("official")), "basis": blk.get("basis"),
                        "companies": [{"symbol": c.get("symbol"), "name": c.get("name") or c.get("symbol")} for c in blk.get("companies") or [] if c.get("symbol")][:40]})
     return {"v": 1, "theme": theme, "region": region, "sector": dive.get("sector") or theme, "members": dive.get("members"), "unit": dive.get("unit"),
-            "basis": dive.get("basis") or "", "rows": rows, "notable": [n for n in dive.get("notable") or [] if n.get("kind") == "move"]}
+            "basis": dive.get("basis") or "", "rows": rows, "notable": [n for n in dive.get("notable") or [] if n.get("kind") == "move"],
+            "stamp": theme_stamp()}
 
 
 def _num_cell(v) -> float | None:
@@ -775,34 +789,73 @@ def same_day_twin(post: dict, rows: list[dict] | None = None) -> str | None:
     return None
 
 
-def theme_post(dive: dict, theme: str, region: str, now: datetime | None = None, notable_only: bool = True) -> dict | None:
+def theme_post(dive: dict, theme: str, region: str, now: datetime | None = None, notable_only: bool = True, carry: bool = True) -> dict | None:
     """A DRAFT research post from a theme's deep dive (intel/theme_data.build) when the data shows something worth saying: one layer's
     EBITDA margin far from the others', or a layer whose margin moved a lot over three years. None when it shows nothing notable. The post is
     never published here: it is stored hidden, for the owner to read in Admin and publish by hand. Every figure is the dive's; the words only
     say what the table says. `notable_only=False` (the owner's button, and a theme read with no post yet: R15) makes it from any theme
-    whose chain has two layers with a margin."""
+    whose chain has two layers with a margin. `carry`: a stored post on this theme with figures from older rules takes these (carry_to_stored;
+    the owner's button stores the post itself)."""
     notable = dive.get("notable") or []
     if notable_only and not notable:
         return None
     src = theme_source(dive, theme, region)
+    if carry:
+        carry_to_stored(theme_slug(src), src, now)
     if theme_problem(src):
         return None
     post = theme_post_from(src, now)
     return None if same_day_twin(post) else post
 
 
+def theme_slug(src: dict) -> str:
+    """A theme post's address from its figures (theme_post_from's)."""
+    from .intel import theme_data as td
+    return f"{THEME_PREFIX}{td.slug(src.get('theme') or src.get('sector') or 'Theme')}-margins-{(src.get('region') or 'IN').lower()}"
+
+
+def _stored_src(old: dict | None) -> dict | None:
+    if not old:
+        return None
+    src = (old.get("body") or {}).get("src") or old.get("src")
+    return src if isinstance(src, dict) else theme_source_from_blocks(old)
+
+
+def carry_to_stored(slug: str, src: dict, now: datetime | None = None) -> str | None:
+    """A theme post already stored under this address whose figures were worked out under older rules (stale_figures) takes the figures of
+    the dive just built (lane upd1: a stored post's figures were never worked out again, only re-worded from its old figures, so a post kept
+    its old layers, e.g. a chip maker in an equipment layer, after the rules that placed it there were fixed). Its address, first date and
+    whether it is published stay (blog.upsert_research); one the new figures can't stand up (theme_problem) is hidden, as
+    rewrite_theme_posts hides one. Returns what was done, or None when nothing was."""
+    try:
+        old = blog.get(slug)
+    except Exception as e:
+        print("blog research: theme post not read:", slug, type(e).__name__, str(e)[:100])
+        return None
+    if not old or not stale_figures(_stored_src(old)):
+        return None
+    try:
+        if theme_problem(src):
+            if old.get("published"):
+                blog.set_published(slug, False, now)
+            return "hidden"
+        post = {**theme_post_from(src, now), "slug": slug, "published": bool(old.get("published"))}
+        if advice_words(post):
+            return None
+        return blog.upsert_research(post, now)
+    except Exception as e:
+        print("blog research: theme post not brought up to date:", slug, type(e).__name__, str(e)[:100])
+        return None
+
+
 def p1_plain(v, unit: str = "") -> str:
     return "–" if v is None else f"{v:,.0f}"
-
-
-def pts_or_dash(v) -> str:
-    return "–" if v is None else p1(v)
 
 
 def draft_theme_post(dive: dict, theme: str, region: str, now: datetime | None = None, notable_only: bool = True) -> dict:
     """Store the theme's draft post (hidden) when its data is notable (or, with notable_only=False, has two layers with a margin):
     {"result": "new" | "updated" | "same" | "nothing notable" | "too few figures" | "left out", "slug"}."""
-    post = theme_post(dive, theme, region, now, notable_only)
+    post = theme_post(dive, theme, region, now, notable_only, carry=False)
     if not post:
         return {"result": "nothing notable" if notable_only else "too few figures", "slug": None}
     bad = advice_words(post)
@@ -850,6 +903,77 @@ def rewrite_theme_posts(now: datetime | None = None) -> tuple[list[dict], list[s
             problems.append(f"{slug}: {type(e).__name__}: {str(e)[:160]}")
             print("blog research: theme post", slug, type(e).__name__, str(e)[:160])
     return made, problems
+
+
+THEME_REFRESH_RUN = 5                   # stale theme posts worked out again in one run (each a theme dive from stored pieces: no AI)
+THEME_STAMP_KEY = "blog:theme:stamp"    # the theme_stamp() the stored theme posts were last brought up to date for
+
+
+def library_dive(region: str, theme: str) -> dict | None:
+    """A theme's dive from the theme library's read kept under today's rules (no AI asked, nothing read from a page), or None when the
+    library holds no such read: the dive the theme's page would show, built from the stored company pieces."""
+    from .intel import theme_library, theme_routes
+    hit = theme_library.stored(region, theme)
+    if hit is None:
+        return None
+    m = {**hit["payload"], "_library": hit["name"]}
+    return theme_routes.dive_of(region, theme, theme_routes.with_descriptions(region, theme_routes.checked(region, theme, m)))
+
+
+def refresh_stale_theme_posts(now: datetime | None = None, limit: int = THEME_REFRESH_RUN, dive_for=None) -> dict:
+    """The stored theme posts whose figures were worked out under older rules (stale_figures), worked out again from the theme's dive under
+    today's rules (lane upd1: a rules or dive fix reached a theme post only when someone happened to open that theme). At most `limit` a
+    run; a theme the library holds no current read of waits for its next read (carry_to_stored). {"made", "waiting", "problems"}."""
+    from . import memguard
+    now = now or datetime.now(timezone.utc)
+    dive_for = dive_for or library_dive
+    out: dict = {"made": [], "waiting": [], "problems": []}
+    try:
+        rows = blog.admin_rows(500)
+    except Exception as e:
+        out["problems"].append(f"posts not read: {type(e).__name__}")
+        return out
+    done = 0
+    for row in rows:
+        slug = str(row.get("slug") or "")
+        if row.get("kind") != "research" or not slug.startswith(THEME_PREFIX):
+            continue
+        try:
+            src = _stored_src(blog.get(slug))
+            if not src or not stale_figures(src):
+                continue
+            if done >= limit:
+                out["waiting"].append(slug)
+                continue
+            done += 1
+            with memguard.heavy("blog-theme-refresh", force_release=True):
+                dive = dive_for(src.get("region") or "IN", src.get("theme") or src.get("sector") or "")
+            if not dive:
+                out["waiting"].append(slug)
+                continue
+            res = carry_to_stored(slug, theme_source(dive, src.get("theme") or src.get("sector") or "", src.get("region") or "IN"), now)
+            out["made"].append({"post": "theme", "slug": slug, "result": res or "same"})
+        except Exception as e:
+            out["problems"].append(f"{slug}: {type(e).__name__}: {str(e)[:160]}")
+            print("blog research: stale theme post", slug, type(e).__name__, str(e)[:160])
+    return out
+
+
+def theme_posts_due() -> bool:
+    """Whether the theme posts were last brought up to date for other rules than today's (theme_stamp)."""
+    return db.json_value(db.get_setting(THEME_STAMP_KEY), []) != theme_stamp()
+
+
+def refresh_theme_posts_if_due(now: datetime | None = None) -> dict | None:
+    """After a deploy that changed the theme rules, the dive's sentences or the sector figures' rules: the stale theme posts worked out
+    again (refresh_stale_theme_posts), and the stamp marked once none is left that a run can do (the rest wait for their theme's next
+    read). None when nothing was due."""
+    if not theme_posts_due():
+        return None
+    out = refresh_stale_theme_posts(now)
+    if (not out["problems"] and not out["waiting"]) or not out["made"]:
+        db.set_setting(THEME_STAMP_KEY, json.dumps(theme_stamp()))
+    return out
 
 
 def stale(now: datetime) -> bool:

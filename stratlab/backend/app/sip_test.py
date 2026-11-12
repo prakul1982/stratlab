@@ -28,7 +28,6 @@ MAX_YEARS = 10
 HISTORY_DAYS = 3650             # the daily closes read: ten years, the most the market data keeps
 MAX_STARTS = 120                # start months in the spread (every month up to ten years)
 LOOKBACKS = (20, 60, 125, 252)  # trading days for the "recent high" of a dip rule
-FREQS = ("daily", "weekly", "monthly")
 RULES = ("plain", "only_dips", "extra_on_dips")
 WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
 

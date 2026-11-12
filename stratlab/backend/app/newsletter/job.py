@@ -928,17 +928,19 @@ class Job:
         """LIVE2-029: a fix to how a post is written reaches the posts already stored. The research posts are written again at the first
         check after a deploy that changed them (blog_research.GEN), and the brief posts are written again from their stored issues
         (blog.BRIEF_GEN): not at the next month's run, and not by hand. Remembered in memory once looked at, so a check with nothing
-        to do reads nothing."""
-        want = (blog.BRIEF_GEN, blog_research.GEN)
+        to do reads nothing. Theme posts whose figures were worked out under older theme rules are worked out again from the theme's dive
+        (blog_research.refresh_theme_posts_if_due, lane upd1)."""
+        want = (blog.BRIEF_GEN, blog_research.GEN, tuple(blog_research.theme_stamp()))
         if self.last.get("blog-gen") == want:
             return
         try:
             blog_research.run_if_stale(now)
+            blog_research.refresh_theme_posts_if_due(now)
             if db.get_setting("blog:brief:gen") != str(blog.BRIEF_GEN):
                 issues = recent("market", "IN", INDEX_CAP) + recent("market", "US", INDEX_CAP)
                 blog.refresh_briefs(issues)
                 db.set_setting("blog:brief:gen", str(blog.BRIEF_GEN))
-            if not blog_research.stale(now):
+            if not blog_research.stale(now) and not blog_research.theme_posts_due():
                 self.last["blog-gen"] = want
         except Exception as e:
             print("newsletters: the blog's posts couldn't be written again:", str(e)[:160])

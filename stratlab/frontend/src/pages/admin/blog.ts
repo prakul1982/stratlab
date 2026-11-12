@@ -3,7 +3,10 @@ import { ago } from "../../lib/format";
 
 /** One post as the list gives it (no words): `published` false is hidden by an admin; `indexable` false is a day with too little to say. */
 export type BlogPost = { slug: string; kind: "brief" | "research"; market: string | null; title: string; summary: string; published_at: string; updated_at: string;
-  indexable: boolean; published: boolean };
+  indexable: boolean; published: boolean;
+  /** a theme post whose figures were worked out under older theme rules (brought up to date at the theme's next read), and a published post
+   * the public site answers "not found" for (a theme post with no layers to chart); older servers send neither */
+  stale_figures?: boolean; not_shown?: boolean };
 export type BlogRun = { at?: string; made?: { post: string; slug: string | null; result: string }[]; problems?: string[] };
 export type Blog = { posts: BlogPost[]; run: BlogRun; running: boolean; site: string; counts: { posts: number; shown: number; hidden: number; not_indexed: number } };
 
