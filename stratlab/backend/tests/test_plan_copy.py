@@ -87,6 +87,9 @@ CARD_WORDS = {
     "loan_check": "floating-rate loan check",
     "ipo_summary": "IPO offer document summaries",
     "ipo_alerts": "IPO alerts",
+    # (updated on purpose: two new Basic features, the earnings-call calendar in full and business group figures, f5)
+    "earnings_calls": "earnings-call calendar in full",
+    "group_figures": "business group figures",
 }
 
 

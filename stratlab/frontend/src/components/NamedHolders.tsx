@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { safeHref, fmtDate } from "../lib/format";
 import { DataTable, ErrorState, ShowLess, Signed, Skeleton } from "./kit";
+import { GroupLink } from "./GroupLink";
 
 /* Named holders above 1% from the quarterly shareholding pattern (shareholders.py): the promoter group's members and
  * every public holder above 1%, by stake size, with the change since the quarter before. Names and numbers as filed. */
@@ -78,6 +79,7 @@ export function NamedHoldersPanel({ symbol, wrap }: { symbol: string; wrap: (bod
     <div className="k-stack named-holders">
       <span className="k-small">{isQuarterEnd(v.quarter) ? "Quarter to" : "As of"} <b>{quarterEnd(v.quarter)}</b>{v.prev_quarter ? <> · changes since {quarterEnd(v.prev_quarter)}</> : null}
         {v.url && <> · <a className="link" href={safeHref(v.url)} target="_blank" rel="noopener noreferrer">Filing ↗</a></>}</span>
+      <GroupLink symbol={symbol} />
       {v.holders.length === 0 ? <p className="k-small k-muted">The filing names no holder above 1%.</p> : (
         <DataTable label={`${v.symbol} named holders`} rows={list} rowKey={(h) => `${h.group}-${h.name}`} stack sticky={list.length > 14} rowAttrs={(h) => ({ "data-holder": h.name })}
           columns={[

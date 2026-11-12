@@ -65,7 +65,8 @@ test("IA-1: the one Calendar is in every space's menu, each opening it pre-filte
   assert.equal(startOf(cal("trade"), "trade"), "/trade/events");
   assert.equal(startOf(cal("invest"), "invest"), "/calendar");
   assert.equal(startOf(cal("money"), "money"), "/money/calendar");
-  assert.deepEqual(cal("invest").pages.map((p) => p.label), ["All dates", "Results", "Corporate actions", "IPOs", "Market events", "My money dates"]);
+  // (updated on purpose, f5: the Earnings calls tab joins the Calendar, after IPOs)
+  assert.deepEqual(cal("invest").pages.map((p) => p.label), ["All dates", "Results", "Corporate actions", "IPOs", "Earnings calls", "Market events", "My money dates"]);
   // each tab keeps its own space, so the trail and the menu agree with its address
   assert.equal(locate("/trade/events").space, "trade");
   assert.equal(locate("/money/calendar").space, "money");
@@ -113,7 +114,10 @@ test("IA-1: the plan locks are the ones they were, now on the tabs", () => {
   for (const [to, [feature, whole]] of Object.entries(before)) assert.deepEqual(PAGE_GATES[to], { feature, whole }, to);
   // the only new gate: Flows is Positioning's cash card and history, on Positioning's plan
   assert.deepEqual(PAGE_GATES["/invest/flows"], { feature: "positioning", whole: false });
-  assert.equal(Object.keys(PAGE_GATES).length, Object.keys(before).length + 1);
+  // (updated on purpose, f5) and the two new features' pages: this week's calls and every group's members are for everyone
+  assert.deepEqual(PAGE_GATES["/research/earnings-calls"], { feature: "earnings_calls", whole: false });
+  assert.deepEqual(PAGE_GATES["/invest/groups"], { feature: "group_figures", whole: false });
+  assert.equal(Object.keys(PAGE_GATES).length, Object.keys(before).length + 3);
   const tabs = read("src/components/HubTabs.tsx");
   assert.match(tabs, /const locked = off && gate!\.whole;/);
   assert.match(tabs, /<span className="side-lock" data-plan=\{plan\} aria-hidden="true" \/>/);

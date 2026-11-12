@@ -57,7 +57,8 @@ REMIND_DAYS = (1, 2, 3, 7, 14)
 REMIND_AT = "08:40"               # India time, each day
 # (module, function, category); each called as f(uid, days, frm=window start). money_routes gives the user's own tax
 # items (instalment amounts, a past year's tax still unpaid) on a plan with the advance tax amounts (DH-040, DH-043)
-HOOKS = [("money_networth", "upcoming_dates", "money"), ("money_routes", "calendar_dates", "tax")]
+HOOKS = [("money_networth", "upcoming_dates", "money"), ("money_routes", "calendar_dates", "tax"),
+         ("concalls", "calendar_dates", "holdings")]     # earnings calls and analyst meets of the user's stocks (concalls.py)
 NOTES = [
     "Tax dates are the ones the law sets for a resident individual; the tax department can extend them. Advance tax "
     "is due only when the year's tax, after TDS, is ₹10,000 or more.",

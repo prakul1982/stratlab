@@ -29,6 +29,9 @@ export const PAGE_GATES: Record<string, Gate> = {
   // marks them locked like the scan (DP1-019: no badge, then a page blank under its banner)
   "/invest/business-updates": { feature: "biz_updates", whole: true },
   "/invest/holders": { feature: "holders", whole: true },
+  // this week's calls and every group's members are for everyone; the full calendar and the groups' figures are Basic (f5)
+  "/research/earnings-calls": { feature: "earnings_calls", whole: false },
+  "/invest/groups": { feature: "group_figures", whole: false },
   "/money/net-worth": { feature: "networth", whole: false },
   "/money/mutual-funds": { feature: "mf_gains", whole: false },
   "/money/tax-tools": { feature: "tax_tools", whole: false },
@@ -43,7 +46,7 @@ export const PAGE_GATES: Record<string, Gate> = {
 /** The paid part of a page that is free in the main, in a few words for its card's tag: "Pro for advance tax" (LIVE1B-022: "Pro for
  * part" did not say which part). */
 export const PART_WORDS: Record<string, string> = {
-  tax_tools: "advance tax", us_tax: "rupee workings", itr_export: "the downloads", networth: "history", mf_gains: "gains by year", journal: "the checks",
+  earnings_calls: "the full calendar", group_figures: "the figures", tax_tools: "advance tax", us_tax: "rupee workings", itr_export: "the downloads", networth: "history", mf_gains: "gains by year", journal: "the checks",
 };
 
 /** An IPO's own page holds the summary of its offer document (Basic); the rest of the page is for everyone. */

@@ -89,6 +89,9 @@ ROUTES = [
     ("journal", "get", "/trade/journal/compare?tag=x&session=s1", None),
     ("ipo_alerts", "put", "/invest/ipos/alerts", {"on": True, "events": ["open"], "markets": ["IN"], "sme": False}),
     ("ipo_summary", "post", "/invest/ipos/in-none/summary", None),
+    # (updated on purpose, f5) the full earnings-call calendar: the calls held, the filters and your stocks
+    ("earnings_calls", "get", "/research/earnings-calls?when=past", None),
+    ("earnings_calls", "get", "/research/earnings-calls?scope=mine", None),
 ]
 
 
@@ -128,6 +131,8 @@ def test_every_paid_feature_is_refused_somewhere_on_the_server():
                  "journal": "journal view and /trade/journal/compare", "mf_costs": "fund costs view", "etf_gaps": "ETF gap alerts",
                  "biz_updates": "business update views and alert", "holders": "holder search", "stock_futures": "history views and MWPL alert",
                  "mtf": "history views and alert", "mf_behaviour": "fund behaviour view", "sip_luck": "dip rules in the SIP test",
-                 "rates_slab": "rates at your own slab", "loan_check": "loan check view"}
+                 "rates_slab": "rates at your own slab", "loan_check": "loan check view",
+                 # (updated on purpose, f5) the groups' figures are held back from the answer, not refused (test_f5_groups.py)
+                 "group_figures": "group pages' figures"}
     covered = {r[0] for r in ROUTES} | set(elsewhere)
     assert covered == set(FEATURES), set(FEATURES) ^ covered

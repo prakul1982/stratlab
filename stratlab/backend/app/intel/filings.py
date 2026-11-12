@@ -974,6 +974,15 @@ class NSEFilings:
     def market_flags(self, day) -> list[dict]:
         """The red and amber filings of every NSE company on one day (flagged_rows), from the exchange's list for the
         whole market: one call a day. A day still in progress is read again after a few minutes."""
+        return self._market_day(day)["flags"]
+
+    def market_meets(self, day) -> list[dict]:
+        """The same day's filings about calls and meetings with analysts or investors (concalls.meet_rows), from the
+        same one call: the earnings-call calendar reads them right after the red flags."""
+        return self._market_day(day)["meets"]
+
+    def _market_day(self, day) -> dict:
+        from .. import concalls
         key = ("market", day.isoformat())
         hit = self.cache.get(key)
         if hit is not None:
@@ -984,7 +993,7 @@ class NSEFilings:
         rows = data.get("data") if isinstance(data, dict) else data
         if not isinstance(rows, list):
             raise SourceError(self.name, "The exchange's announcements list wasn't in the expected shape.")
-        out = flagged_rows(rows)
+        out = {"flags": flagged_rows(rows), "meets": concalls.meet_rows(rows)}
         self.cache.set(key, out, 900)
         return out
 

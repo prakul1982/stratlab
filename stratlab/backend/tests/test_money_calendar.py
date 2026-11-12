@@ -143,7 +143,9 @@ def test_other_money_pages_through_hooks(w, monkeypatch):
     for name, mod in (("app.money_networth", fake), ("app.money_mf", broken), ("app.money_advance_tax", tax)):
         monkeypatch.setitem(sys.modules, name, mod)
     # only the pages that have the function are named; money_routes gives the user's own tax items (DH-040, DH-043)
-    assert M.HOOKS == [("money_networth", "upcoming_dates", "money"), ("money_routes", "calendar_dates", "tax")]
+    # (updated on purpose, f5: the earnings calls of the user's stocks come through a hook too, concalls.calendar_dates)
+    assert M.HOOKS == [("money_networth", "upcoming_dates", "money"), ("money_routes", "calendar_dates", "tax"),
+                       ("concalls", "calendar_dates", "holdings")]
     monkeypatch.setattr(M, "HOOKS", M.HOOKS + [("money_mf", "upcoming_dates", "money"), ("money_advance_tax", "upcoming_dates", "tax")])
     got = M.events("u-pro", today, today + timedelta(days=400))
     money = [(e["title"], e["amount"]) for e in got if e["cat"] == "money"]
