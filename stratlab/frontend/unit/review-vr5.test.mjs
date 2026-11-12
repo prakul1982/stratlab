@@ -33,7 +33,7 @@ test("VR5-004: a chip or badge longer than the screen wraps in its own box on a 
   assert.match(css, /@media \(max-width: 380px\) \{\n  \.k-badge, \.badge \{ max-width: 100%; white-space: normal;/);     // .badge too (the library table's Checks badge)
   assert.match(css, /\.k-chip \{ max-width: 100%; height: auto; min-height: 44px;/);
   // LIVE3-010 changed this on purpose: on a phone the question is a slim bar along the foot (smaller still), the answers one width
-  assert.match(css, /\.consent \{ right: 0; left: 0; bottom: 0; width: auto; .* font-size: 13px;/);
+  assert.match(css, /\.consent \{ gap: 6px; padding: 10px 14px; font-size: 13px;/);          // (updated on purpose, LIVE7B-006: in the flow, not pinned to the foot)
   assert.match(css, /\.consent-btns \.btn \{ flex: 0 0 96px; min-width: 0; \}/);          // still one width for Allow and No thanks (VR4-012)
 });
 

@@ -166,29 +166,32 @@ test("DI-005, DI-006: My space keeps the chosen order, and the layout is kept on
   expect(errors).toEqual([]);
 });
 
-test("DI-023: on a phone the tour opens the menu for the steps about it, and step 3 names the space's own button", async ({ page, request }, info) => {
+// (updated on purpose, R42 i1: the tour of My space, "Getting around", replaced the five menu steps; its menu steps still open the
+// phone's menu, and each space's main button is now shown by that space's own tour opening the page it leads to)
+test("DI-023: on a phone the tour opens the menu for the steps about it, and closes it for the others; it ends where it began", async ({ page, request }, info) => {
   test.skip(info.project.name !== "phone", "the phone's menu");
   const u = who(120, true);
   await answer(request, u, "money", "money");
   const errors = await signIn(page, u, "/money");
   await expect(page.locator("main h1")).toBeVisible({ timeout: 30_000 });
-  await page.evaluate(() => window.dispatchEvent(new Event("stratlab:tour")));
-  const tour = page.getByRole("dialog", { name: "A quick tour" });
-  await expect(tour).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent("stratlab:tour", { detail: { tour: "mine" } })));
+  const tour = page.getByRole("dialog", { name: "Tour: Getting around" });
+  await expect(tour).toContainText("My space is yours", { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/mine$/);
+  await tour.getByRole("button", { name: "Next" }).click();
+  await expect(tour).toContainText("Four spaces");
   await expect(page.locator("aside.sidebar.open")).toHaveCount(1);
   await expect(page.locator("aside.sidebar .space-switch")).toBeInViewport();
   await tour.getByRole("button", { name: "Next" }).click();
-  await tour.getByRole("button", { name: "Next" }).click();
-  await expect(tour).toContainText("Add your holdings");
-  // IA-1: a step about the menu's entries and their tabs comes before the account one, with the menu open on it
-  await tour.getByRole("button", { name: "Next" }).click();
-  await expect(tour).toContainText("One page for each job");
-  await expect(page.locator("aside.sidebar.open")).toHaveCount(1);
-  await tour.getByRole("button", { name: "Next" }).click();
+  await expect(tour).toContainText("Ask or do anything");
+  await expect(page.locator("aside.sidebar.open")).toHaveCount(0);
+  for (let i = 0; i < 3; i++) await tour.getByRole("button", { name: "Next" }).click();
   await expect(tour).toContainText("Settings");
+  await expect(page.locator("aside.sidebar.open")).toHaveCount(1);
   await expect(page.locator("aside.sidebar .acct-btn")).toBeInViewport();
   await tour.getByRole("button", { name: "Done" }).click();
   await expect(page.locator("aside.sidebar.open")).toHaveCount(0);
+  await expect(page).toHaveURL(/\/money$/);
   expect(errors).toEqual([]);
 });
 

@@ -1,6 +1,6 @@
 /* Market Watch's button and where the page makes room for the panel (MW-1). The panel's own look is in watch.css, which loads with it. */
 .mw-launch {
-  position: fixed; right: 16px; bottom: calc(16px + var(--mw-lift, 0px) + env(safe-area-inset-bottom, 0px)); z-index: 55;
+  position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 55;
   display: inline-flex; align-items: center; gap: 8px; min-height: var(--ctl); padding: 0 16px 0 14px; border-radius: 999px;
   border: 1px solid var(--line-2); background: var(--card); color: var(--ink); font-size: var(--t-label); font-weight: 600; cursor: pointer;
   box-shadow: var(--shadow);
@@ -20,10 +20,10 @@
   .mw-launch.app, .mw-launch.public { width: 44px; min-height: 44px; padding: 0; justify-content: center; right: 18px; }
   .mw-launch.app span, .mw-launch.public span { display: none; }
   body:not(.mw-docked) .shell > .main { padding-right: 80px; }
+  body:not(.mw-docked) .shell > .consent { justify-self: stretch; width: auto; margin-left: clamp(24px, 4vw, 56px); margin-right: 80px; }   /* in line with the page */
 }
-/* a docked panel takes its width from the page, and the cookie question moves out from under it */
+/* a docked panel takes its width from the page (the cookie question, in the page column, with it) */
 body.mw-docked .shell { padding-right: var(--mw-dock, 0px); }
-body.mw-docked .consent { right: calc(var(--mw-dock, 0px) + 16px); }
 @media (max-width: 900px) { body.mw-docked .shell { padding-right: 0; } }
 /* a panel floating in its corner: the page's end scrolls up clear of it (Instinct #11) */
 body.mw-cover .shell > .main { padding-bottom: calc(var(--mw-cover, 0px) + 24px); }

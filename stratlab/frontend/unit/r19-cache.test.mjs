@@ -9,10 +9,11 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
 test("R19: what's left, when it starts again and how much is used, in plain words", async () => {
   const { refreshesLeft, resetsWord, usedWord } = await import("../src/lib/usageText.ts");
-  const usage = { plan: "Free", rows: [{ key: "refresh", label: "Refreshes", used: 1, limit: 3, left: 2, resets: "day" }] };
+  // (updated on purpose, LIVE7B-002: the count beside Refresh is the fresh AI reads, the one Plans and Account state)
+  const usage = { plan: "Free", rows: [{ key: "research_ai", label: "Fresh AI reads", used: 1, limit: 3, left: 2, resets: "day" }] };
   assert.equal(refreshesLeft(usage), 2);
   assert.equal(refreshesLeft(null), null);
-  assert.equal(refreshesLeft({ plan: "Pro", rows: [{ key: "refresh", label: "", used: 4, limit: null, left: null, resets: "day" }] }), null);
+  assert.equal(refreshesLeft({ plan: "Pro", rows: [{ key: "research_ai", label: "", used: 4, limit: null, left: null, resets: "day" }] }), null);
   assert.equal(resetsWord({ resets: "day" }), "Midnight India time");
   assert.equal(resetsWord({ resets: "month" }, new Date("2026-11-07T10:00:00Z")), "1 Dec");
   assert.equal(resetsWord({ resets: "month" }, new Date("2026-12-31T20:00:00Z")), "1 Feb");      // already 1 Jan in India
@@ -44,7 +45,7 @@ test("R19: every stored shared read shows the one stamp and note, never its own 
   assert.match(stamp, /Last updated \{writtenAt/);
   assert.match(stamp, /left today/);
   assert.match(stamp, /disabled=\{busy \|\| none\}/);                  // none left: the button is off, with the reason beside it
-  assert.match(stamp, /No refreshes left today, back at midnight IST/);
+  assert.match(stamp, /No fresh AI reads left today, back at midnight IST/);       // (updated on purpose, LIVE7B-002: one count)
   assert.match(stamp, /<Working label=/);                              // the kit's bar while a Refresh is out
   assert.doesNotMatch(stamp, /\.message/);                             // never a raw error
 });

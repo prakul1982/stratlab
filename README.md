@@ -173,7 +173,7 @@ and the landing page's e2e test checks the plans it shows against the server's.
 | New themes mapped (every theme already in the library opens on every plan) | 1 a month | 10 a month | Unlimited |
 | Fresh AI reads a day, refreshes included (a read already written never counts; Free gets the Basic/Pro read when there is one) | 5 | 60 | Unlimited |
 | AI answers in the search box a day | 10 | 40 | 40 |
-| Refreshes of a stored result a day (a theme, its figures, an AI read) | None | 10 | 30 |
+| Refresh of a stored result (a theme, its figures, an AI read): each Refresh is one fresh AI read | None | ✓ | ✓ |
 | Market Watch lists / symbols in a list / charts that keep drawings / indicators on a chart | 1 / 20 / 3 / 3 | 10 / 100 / Unlimited / 10 | Unlimited |
 | Stock alerts on at once / saved screens (running a screen has no limit) / holdings kept | 3 / 1 / 30 | 25 / 10 / 100 | 100 / 25 / 300 |
 | Mutual fund schemes / Net worth entries / trades the journal keeps | 5 / 5 / 50 | Unlimited | Unlimited |
@@ -196,7 +196,7 @@ and the landing page's e2e test checks the plans it shows against the server's.
 Free is a teaser: the public pages and everything already written (company reads, themes in the library) are for everyone, and the
 counts above are kept small. Accounts made before the change (`FREE_TIER_CHANGE_AT` in
 [`config.py`](stratlab/backend/app/config.py)) keep Free's earlier counts (10 backtests and AI builds, 2 deep dives, 1 deck, 60 AI
-reads, 3 refreshes, 40 search answers, 5 alerts, 2 screens, groups of 10, the tax report downloads) for 14 days after it, and see a
+reads with Refresh, 40 search answers, 5 alerts, 2 screens, groups of 10, the tax report downloads) for 14 days after it, and see a
 one-time notice on Account and My space saying what changes and when; no email is sent.
 
 Invite rewards give free months of Basic. Visitors outside India see prices in their own currency; every payment gets a

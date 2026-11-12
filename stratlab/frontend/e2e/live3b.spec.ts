@@ -34,10 +34,10 @@ test("the analytics question is a slim bar on a phone on every page that asks it
     await expect(ask, path).toBeVisible({ timeout: 30_000 });
     const box = (await ask.boundingBox())!;
     expect(box.height, `${path}: the bar's height`).toBeLessThanOrEqual(112);
-    // signed in or out it runs along the window's foot, an overlay that never moves the page (LIVE6-014, behaviour changed on purpose:
-    // the LIVE5 band in the page's flow pushed the whole app down 75-95 px); the page's end clears it
-    expect(await ask.evaluate((e) => getComputedStyle(e).position), `${path}: over the page`).toBe("fixed");
-    expect(Math.round(box.y + box.height), `${path}: along the window's foot`).toBe(860);
+    // (updated on purpose, LIVE7B-006: along the window's foot it covered the P&L card on a phone) it is in the page's own flow, at the top
+    // of the page (signed in, under the top bar), so it covers nothing; the app itself still starts at the top of the window (LIVE6-014)
+    expect(await ask.evaluate((e) => getComputedStyle(e).position), `${path}: in the page's flow`).not.toBe("fixed");
+    expect(Math.round(box.y), `${path}: at the top of the page`).toBeLessThan(120);
     if (who && await page.locator(".shell").count()) expect(Math.round((await page.locator(".shell").boundingBox())!.y), `${path}: the app not moved`).toBe(0);
     await expect(ask.locator(".consent-short"), path).toBeVisible();
     await expect(ask.locator(".consent-long"), path).toBeHidden();
@@ -98,6 +98,9 @@ test("the phone tour's menu steps ring the thing they describe, on screen and cl
   const note = page.locator(".k-coach-note");
   const ring = page.locator(".k-coach-ring");
   const rect = (sel: string) => page.locator(sel).first().evaluate((e) => { const r = e.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
+  // (updated on purpose, R42 i1: /tour opens the list of tours; Getting around's menu step is its second)
+  await page.getByRole("dialog", { name: "Take a tour" }).getByRole("button", { name: /^Getting around/ }).click({ timeout: 30_000 });
+  await note.getByRole("button", { name: "Next" }).click({ timeout: 30_000 });
   const steps: [string, string][] = [["Four spaces", ".sidebar .space-switch"], ["Ask or do anything", ".topbar [aria-label='Search or ask anything']"]];
   for (const [title, sel] of steps) {
     await expect(note.getByRole("heading", { name: title })).toBeVisible({ timeout: 30_000 });

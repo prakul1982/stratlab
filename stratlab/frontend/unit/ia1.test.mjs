@@ -136,7 +136,8 @@ test("IA-1: the menu is one short list of entries; the tabs show on each tab's p
   const help = read("src/pages/AppGates.tsx");
   assert.match(help, /testId="help-places"/);
   assert.match(help, /cell: \(l\) => l\.page\.was \?\? l\.page\.label/);
-  assert.match(read("src/components/Tour.tsx"), /\{ title: "One page for each job", at: \[".sidebar .side-groups"\], menu: true,/);
+  // (updated on purpose, R42 i1: the tours now open the entries' pages themselves instead of describing the menu; the spaces step stays)
+  assert.match(read("src/lib/intro.ts"), /\{ id: "spaces", title: "Four spaces", at: \[".sidebar .space-switch"\], menu: true,/);
 });
 
 test("IA-1: All dates merges the calendars in date order, and an IPO's dates each make a row", () => {
@@ -159,6 +160,7 @@ test("IA-1: the space homes and 'More you can do' follow the menu's entries", ()
   assert.match(ex, /const rows: ToolRow\[\] = sections\.flatMap\(\(\{ g, tiles \}\) => tiles\.map/);
   assert.match(read("src/components/MoreTools.tsx"), /\(firstOf\.has\(r\.id\) \? r\.group : ""\)/);
   const homes = read("src/pages/SpaceHomes.tsx");
-  assert.match(homes, /const tools: ToolRow\[\] = NAV\.money\.groups\.flatMap/);
+  // (updated on purpose, LIVE7B-014: the space homes no longer list the menu's entries again at their foot)
+  assert.doesNotMatch(homes, /<Explore|<MoreTools/);
   assert.match(homes, /<Link to="\/calendar" className="link small">Calendar →<\/Link>/);
 });

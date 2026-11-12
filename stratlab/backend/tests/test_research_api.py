@@ -152,7 +152,8 @@ def test_company_ai_is_cleaned_cached_and_counted(api, monkeypatch):
     from app import computed
     monkeypatch.setattr(computed, "DEFAULT_GUARD", 0)                  # past the window: written again, for everyone
     r = api.get("/research/company/US/NVDA/ai?refresh=true").json()
-    assert r["refresh_state"] == "done" and len(api.calls) == 2 and api.usage == ["research_ai", "refresh", "research_ai"]
+    # (updated on purpose, LIVE7B-002: the Refresh is one fresh AI read, counted once, with no separate refresh count)
+    assert r["refresh_state"] == "done" and len(api.calls) == 2 and api.usage == ["research_ai", "research_ai"]
     _m.app.dependency_overrides[_m.current_profile] = lambda: {"id": "u1", "_plan": "free", "plan": "free"}
     r = api.get("/research/company/US/NVDA/ai?refresh=true").json()     # a Free reader's Refresh: the stored read, "capped", nothing spent
     assert r["refresh_state"] == "capped" and len(api.calls) == 2

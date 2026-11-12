@@ -1004,11 +1004,12 @@ def ground_company(read: dict, facts: dict, region: str, today) -> dict:
     # (RC2A-026: a RELIANCE read called the Jio IPO's subscription the cause of a 2% surge no headline or price on the page showed)
     titles = [str(h) for h in facts.get("recent_headlines") or []]
     backed = lambda check: (lambda s: check(s) and cause_backed(s, titles))        # noqa: E731
+    seen: set = set()                 # each quarter's one-off said once in the read (LIVE7B-004: the tax-rate note twice)
     for k in ("summary", "valuation_note", "position"):
-        res[k] = base_noted(keep_sentences(read.get(k) or "", pool, backed(page.check)), facts)
+        res[k] = base_noted(keep_sentences(read.get(k) or "", pool, backed(page.check)), facts, seen)
     for k in ("bull", "bear", "watch"):
         check = backed(page.check_watch if k == "watch" else page.check)
-        res[k] = [x for x in (base_noted(keep_sentences(fy(str(i)) if k == "watch" else str(i), pool, check), facts) for i in read.get(k) or []) if x]
+        res[k] = [x for x in (base_noted(keep_sentences(fy(str(i)) if k == "watch" else str(i), pool, check), facts, seen) for i in read.get(k) or []) if x]
     ideas = []
     for i in read.get("ideas") or []:
         text = rule_words(str(i.get("text") or ""), sym)
@@ -1026,7 +1027,7 @@ def ground_company(read: dict, facts: dict, region: str, today) -> dict:
 _BASE_WORDS = re.compile(r"one-off|base effect|moved by|other income|tax rate|exceptional|unusual", re.I)
 
 
-def base_noted(text: str, facts: dict) -> str:
+def base_noted(text: str, facts: dict, seen: set | None = None) -> str:
     """A line that measures a change against a quarter the quarterly table shows was moved by a one-off (other income several times the
     usual, a tax rate far off it) says so in the same line, as the Key numbers card does (RC2A-026: "Profit growth YoY June 2026 vs
     June 2025 is −24.6%" in Notable figures, with no word of June 2025's ₹15,119 crore of other income)."""
@@ -1037,8 +1038,31 @@ def base_noted(text: str, facts: dict) -> str:
         if len(q) != 2 or not q[1].isdigit():
             continue
         if re.search(rf"\b{re.escape(q[0])}[a-z]*\.?\s+{q[1]}\b", text, re.I):
-            return f"{text.rstrip('. ')} ({str(e.get('text') or '').split(':')[0]})."
+            note = str(e.get("text") or "").split(":")[0]
+            if seen is not None:
+                if note in seen:
+                    return text           # said already, in an earlier line of the same read
+                seen.add(note)
+            return f"{text.rstrip('. ')} ({note})."
     return text
+
+
+_TAIL_NOTE = re.compile(r"\s\(([^()]*(?:one-off|base effect|moved by|other income|tax rate|exceptional|unusual)[^()]*)\)\.?$", re.I)
+
+
+def notes_once(lines: list) -> list:
+    """A read's lines with each one-off note in brackets kept on its first line only (a read kept from before LIVE7B-004 had the same
+    tax-rate note on two lines)."""
+    seen, out = set(), []
+    for x in lines or []:
+        s = str(x)
+        m = _TAIL_NOTE.search(s)
+        if m:
+            if m.group(1).lower() in seen:
+                s = s[:m.start()].rstrip(" .") + "."
+            seen.add(m.group(1).lower())
+        out.append(s)
+    return out
 
 
 _LEAD = re.compile(r"^\s*(?:(buy|go long(?: on)?|purchase)|(sell(?:\s+\S+)?\s+short|short[- ]sell|short|go short(?: on)?))\s+(?:(?:the\s+)?(?:stock|shares)\s+(?:of\s+)?)?", re.I)
@@ -1964,6 +1988,9 @@ def polish_company(read: dict, region: str = "IN", lender: bool = False, today=N
             if x:
                 items.append(app_dates(x, today))
         out[k] = items
+    # the page lists strengths and risks as one list: a one-off's note once in it (LIVE7B-004)
+    both = notes_once(list(out.get("bull") or []) + list(out.get("bear") or []))
+    out["bull"], out["bear"] = both[:len(out.get("bull") or [])], both[len(out.get("bull") or []):]
     ideas = []
     for i in read.get("ideas") or []:
         if not isinstance(i, dict) or not idea_matches_name(i.get("title"), i.get("text")):

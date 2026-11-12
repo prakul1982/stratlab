@@ -268,10 +268,10 @@ test("LIVE1B-032, 050: the trade journal is a private page for the question and 
   assert.equal(ads.trackAllowedOn("/trade/journal"), false);
   assert.equal(ads.adsAllowedOn("/trade/journal"), false);
   assert.equal(ads.trackAllowedOn("/trade/positioning"), true);
-  assert.match(read("src/components/Tracking.tsx"), /root\.style\.setProperty\("--consent-h", `\$\{el\.offsetHeight \+ 16\}px`\)/);
+  // (updated on purpose, LIVE7B-006) the question is in the page's flow, not over its foot: nothing to keep clear
   const css = read("src/styles.css");
-  assert.match(css, /body:not\(:has\(\.shell\)\) \{ padding-bottom: var\(--consent-h, 0px\); \}/);
-  assert.match(css, /@media \(max-width: 900px\) \{ \.shell \{ padding-bottom: var\(--consent-h, 0px\); \} \}/);
+  assert.match(css, /\.consent \{ position: relative; display: flex;/);
+  assert.doesNotMatch(css, /--consent-h/);
 });
 
 test("LIVE1B-033, 056, 057, 058: the journal's line under the title is one sentence, its choice a compact control, its checks two by two, its curve placed by date", async () => {
@@ -330,7 +330,8 @@ test("LIVE1B-043: Help is at the page's width and its explanations are in groups
 
 test("LIVE1B-044, 045, 041, 087: the alerts page has no second 'space', the tour names the Account button, one sentence for the newsletter email, the delete line once", () => {
   assert.doesNotMatch(read("src/pages/AlertsPage.tsx"), /eyebrow=\{eyebrowOf/);
-  assert.match(read("src/components/Tour.tsx"), /The Account button opens your plan, Settings and Help\./);
+  // (updated on purpose, R42 i1: the tours' steps moved to lib/intro.ts, the Account step's words kept)
+  assert.match(read("src/lib/intro.ts"), /The Account button opens your plan, Settings and Help\./);
   assert.match(read("src/components/NewslettersCard.tsx"), /\{!prefs\.confirmed && "\. Newsletters start once you've confirmed it\."\}/);
   assert.equal((read("src/pages/AccountPage.tsx").replace(/^\s*\/\/.*$/gm, "").match(/Delete them on that page/g) ?? []).length, 0);
 });

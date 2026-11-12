@@ -7,7 +7,7 @@ import { useMarketRefresh } from "../lib/marketLive";
 import { axisInrFor, money, price, fmtDate, fmtDateTime, IST, tzLabel } from "../lib/format";
 import { chainStamp, exchangeTime, optionsMarket } from "../lib/marketHours";
 import { HELP } from "../lib/help";
-import { blankOptions, clampTyped, FALLBACK_HOURS, convertOptLimit, expiryChoiceLabel, IMPORTED, isAutoName, OPTIONS_DRAFT, OPTIONS_NOTES, legName, legRule, levelText, lotOf, mergeDraft, offsetsIn, optMoney, payoff, pickedExpiry, PICKS, POPULAR_FALLBACK, rangeText, recordedLine, sessionFor, signalFrom, startWhenText, signalLine, spotText, staleQuoteLine, STRUCTURES, STT_NOTE, timingIssues } from "../lib/options";
+import { blankOptions, clampTyped, FALLBACK_HOURS, convertOptLimit, expiryChoices, IMPORTED, isAutoName, OPTIONS_DRAFT, OPTIONS_NOTES, legName, legRule, levelText, lotOf, mergeDraft, offsetsIn, optMoney, payoff, pickedExpiry, PICKS, POPULAR_FALLBACK, rangeText, recordedLine, sessionFor, signalFrom, startWhenText, signalLine, spotText, staleQuoteLine, STRUCTURES, STT_NOTE, timingIssues } from "../lib/options";
 import type { LiveRow, Notebook, OptChain, OptCharges, OptionStrategy, OptLeg, OptPreview, StrikePick, Underlying } from "../lib/types";
 import { PayoffChart, type PayoffCurve, type PayoffMarker } from "../components/Charts";
 import { ModelInputs, ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
@@ -606,8 +606,9 @@ export function OptionsPage() {
             <div className="k-expiry">
               {/* each choice with the date it picks (DB-008: no date anywhere; for a monthly-only index Nearest and Monthly
                   are the same day, which the dates now show) */}
-              <Seg label="Expiry" value={["current", "next", "month"].includes(s.expiry) ? s.expiry : "date"}
-                options={([["current", "Nearest"], ["next", "Next"], ["month", "Monthly"]] as const).map(([v, name]) => ({ value: v, label: expiryChoiceLabel(name, pickedExpiry(und?.expiries, v), shortDay) }))}
+              {/* Next and Monthly as one choice when they are the same contract (LIVE7B-016) */}
+              <Seg label="Expiry" value={expiryChoices(und?.expiries, s.expiry, shortDay).value}
+                options={expiryChoices(und?.expiries, s.expiry, shortDay).options}
                 onChange={(v) => patch({ expiry: v })} />
               {/* the expiry priced, once there is a price: the one the pill names is the one the numbers use (R11C-007) */}
               {und && <span className="k-note" data-testid="opt-expiry-note">{[preview ? expiryName(preview.expiry) : exp ? expiryName(exp) : "", (preview ? preview.lot : lot) != null ? `lot ${preview ? preview.lot : lot} ${s.underlying}` : ""].filter(Boolean).join(" · ")}</span>}

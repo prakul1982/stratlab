@@ -309,7 +309,7 @@ def test_the_gate_result_is_kept_with_the_deck_and_admin_library_lists_it_per_de
 def test_a_deck_made_through_the_route_carries_its_gate_into_admin_library(lib, monkeypatch):  # noqa: F811
     # (updated on purpose, FREE-TIER: Free has no decks of its own now; the deck's route is shown on Basic)
     from app import main as _m
-    monkeypatch.setitem(_m.app.dependency_overrides, _m.current_profile, lambda: {"id": "u1", "_plan": "basic", "plan": "basic"})
+    _m.app.dependency_overrides[_m.current_profile] = lambda: {"id": "u1", "_plan": "basic", "plan": "basic"}    # the api fixture clears it
     from app import admin, main
     from app.intel import routes, theme_routes
     real = routes.public_facts

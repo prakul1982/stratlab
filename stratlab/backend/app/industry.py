@@ -65,6 +65,7 @@ def classify(p: dict, nums: dict | None = None, symbol: str | None = None) -> di
 
 # ---------- the operating measures each industry is judged on ----------
 # Not in the reported financial tables: read from the company's own investor presentation. First match wins.
+FARM = r"tractor|\btillers?\b|farm (?:machinery|equipment|implements?)|agricultur\w* (?:machinery|equipment|implements?)"
 MEASURES = [
     ("hospital", "Hospitals", r"hospital|healthcare facilit|health care facilit",
      ["ARPOB (average revenue per occupied bed)", "Bed occupancy %", "Operational beds", "Average length of stay", "New beds planned"]),
@@ -94,7 +95,11 @@ MEASURES = [
      ["Constant-currency revenue growth", "Deal wins (TCV)", "Attrition %", "Headcount", "Top-client concentration"]),
     ("pharma", "Pharmaceuticals", r"pharma|drug|formulation",
      ["US sales and growth", "India sales growth", "R&D spend % of sales", "Product approvals or filings"]),
-    ("auto", "Automobiles", r"automobile|passenger car|two wheeler|commercial vehicle|tractor|\bauto\b",
+    # tractors, tillers and other farm machinery (LIVE7B-023: a power-tiller and tractor maker was offered "EV share of volume")
+    ("farm", "Farm machinery", FARM,
+     ["Sales volume (units) by product", "Domestic and export volumes", "Market share in its products", "Realisation per unit",
+      "Dealer network"]),
+    ("auto", "Automobiles", r"automobile|passenger car|two wheeler|commercial vehicle|\bauto\b",
      ["Sales volume (units)", "Market share", "EV share of volume", "Realisation per vehicle"]),
     ("fmcg", "Consumer staples", r"fmcg|consumer staple|personal care|household|packaged food|food products|beverage",
      ["Volume growth", "Rural vs urban growth", "Distribution reach (outlets)", "Gross margin"]),
@@ -110,7 +115,12 @@ GENERAL_MEASURES = ["The operating measures the company itself highlights (volum
 def measures(p: dict, symbol: str | None = None) -> dict:
     """{"key", "label", "measures"}: what to look for in this company's presentation."""
     parts = [x for x in (p.get("industry_path") or []) if x]
-    for hay in ((parts[-1] if parts else "").lower(), " / ".join(parts).lower(), (p.get("name") or "").lower()):
+    hays = ((parts[-1] if parts else "").lower(), " / ".join(parts).lower(), (p.get("name") or "").lower())
+    # a farm-machinery maker filed under "Automobiles" is told by its industry's last part or its own name
+    if any(h and re.search(FARM, h) for h in hays) and not re.search(r"passenger car|two wheeler|commercial vehicle", hays[0]):
+        label, ms = next((lb, m) for k, lb, _, m in MEASURES if k == "farm")
+        return {"key": "farm", "label": label, "measures": ms}
+    for hay in hays:
         for key, label, rx, ms in MEASURES:
             if hay and re.search(rx, hay):
                 return {"key": key, "label": label, "measures": ms}

@@ -430,7 +430,7 @@ def test_every_suggested_and_curated_theme_in_both_markets_answers_without_waiti
     # (updated on purpose, FREE-TIER: Free maps 1 new theme a month now, so the sweep of every theme runs on Pro; the theme limit is
     # tests/test_free_tier.py's)
     from app import main as _m
-    monkeypatch.setitem(_m.app.dependency_overrides, _m.current_profile, lambda: {"id": "u1", "_plan": "pro", "plan": "pro"})
+    _m.app.dependency_overrides[_m.current_profile] = lambda: {"id": "u1", "_plan": "pro", "plan": "pro"}    # the api fixture clears it
     monkeypatch.setattr(theme_routes, "THEME_WAIT", 0.3)                         # the sweep's own pace; the bound is the same rule
     ideas = re.search(r"THEME_IDEAS[^=]*=\s*\{(.*?)\};", (Path(__file__).parents[2] / "frontend/src/lib/research.ts").read_text(), re.S).group(1)
     themes = {m: re.findall(r'"([^"]+)"', re.search(m + r":\s*\[(.*?)\]", ideas).group(1)) for m in ("IN", "US")}

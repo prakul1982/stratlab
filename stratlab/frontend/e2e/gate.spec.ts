@@ -124,10 +124,11 @@ test("signed in: a page that doesn't exist, Admin for someone else, /pricing and
   await expect(page).toHaveURL(/\/plans$/);
   await page.goto("/help");
   await expect(main.getByRole("heading", { level: 1, name: "Help" })).toBeVisible({ timeout: 30_000 });
+  // (updated on purpose, R42 i1: Help's button opens the list of tours, one per space)
   await main.getByRole("button", { name: "Start the tour" }).click();
-  await expect(page.getByRole("dialog", { name: "A quick tour" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Take a tour" })).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog", { name: "A quick tour" })).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Take a tour" })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
@@ -159,18 +160,25 @@ test("onboarding: asked once, on a home page only; the short tour once; the acco
   await expect(welcome).toHaveCount(0);
   await expect(page).toHaveURL(/\/trade$/);
 
-  // then the short tour, pointed at the real controls
-  const tour = page.getByRole("dialog", { name: "A quick tour" });
-  await expect(tour).toBeVisible();
-  await expect(tour).toContainText("Step 1 of 5");          // IA-1: a step on the menu's entries and their tabs
-  await expect(tour).toContainText("Four spaces");
+  // then the tour of the space they picked, on its real pages (updated on purpose, R42 i1: Trade's five steps, each opening its page)
+  const tour = page.getByRole("dialog", { name: "Tour: Trade" });
+  await expect(tour).toBeVisible({ timeout: 30_000 });
+  await expect(tour).toContainText("1 of 5");
+  await expect(tour).toContainText("Describe an idea, get a test");
+  await expect(page).toHaveURL(/\/new$/);
   await expect(tour).not.toContainText(/\bAll\b tab|three spaces/i);
-  for (let i = 2; i <= 5; i++) { await tour.getByRole("button", { name: "Next" }).click(); await expect(tour).toContainText(`Step ${i} of 5`); }
+  const pages = [/\/library$/, /\/paper$/, /\/options$/, /\/trade\/positioning$/];
+  for (let i = 2; i <= 5; i++) {
+    await tour.getByRole("button", { name: "Next" }).click();
+    await expect(tour).toContainText(`${i} of 5`);
+    await expect(page).toHaveURL(pages[i - 2]);
+  }
   // the last step: Back and Done, nothing else to guess at
   await expect(tour.getByRole("button", { name: "Skip tour" })).toHaveCount(0);
   await expect(tour.getByRole("button", { name: "Done" })).toBeFocused();
   await tour.getByRole("button", { name: "Done" }).click();
   await expect(tour).toHaveCount(0);
+  await expect(page).toHaveURL(/\/trade$/);                 // back where the tour began
   // now the checklist, under the heading
   await expect(page.getByText("Your first steps")).toBeVisible({ timeout: 30_000 });
   const [h1, steps] = await Promise.all([page.locator("main h1").boundingBox(), page.locator(".first-steps").boundingBox()]);

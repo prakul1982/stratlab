@@ -4,7 +4,7 @@ import { useApp } from "../lib/app";
 import { fmtDate, marketTz } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { THEME_IDEAS, researchApi, useRegion, type SectorAI } from "../lib/research";
-import { LIBRARY_HEAD, libraryLabel, themeApi, type Business, type Dive, type LibraryTheme, type Listing, type NewsRow, type Prices } from "../lib/theme";
+import { bizFor, LIBRARY_HEAD, libraryLabel, themeApi, type Business, type Dive, type LibraryTheme, type Listing, type NewsRow, type Prices } from "../lib/theme";
 import { StoredNote, StoredStamp, useStoredRefresh } from "../components/StoredStamp";
 import { RegionSwitch } from "../components/Research";
 import { ChainCard, ClaimsCard, LayerCard, ListingsCard, MembersCard, NewsCard, NumbersCards, SubThemesCard, ThemeDownloads } from "../components/ThemeDive";
@@ -19,6 +19,7 @@ import { Card, CardHead, DataTable, ErrorState, Field, FormActions, FormGrid, No
  * no figure; a company is shown only where its own description says it does the work. */
 const PRICE_TRIES = 6;
 const PRICE_EVERY_MS = 8000;
+const LISTING_TRIES = 8;
 // a map whose AI parts are still being written behind it is asked again on its own, every 5 s for 90 s, then the page stops asking
 // (THEMES item 6; LIVE3-001: the base shows at once, the AI's layers, explanations and checks fill in after)
 const CHECK_TRIES = 18;
@@ -40,7 +41,7 @@ export function ThemesPage() {
   const [news, setNews] = useState<NewsRow[] | null>(null);
   const [newsBusy, setNewsBusy] = useState(false);
   const [biz, setBiz] = useState<Business | null>(null);
-  const [ipos, setIpos] = useState<{ items: Listing[]; checked: boolean } | null>(null);
+  const [ipos, setIpos] = useState<{ items: Listing[]; checked: boolean; pending?: boolean } | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
   const seq = useRef(0);   // a late answer for an earlier theme or market is ignored, and doesn't clear "Mapping…" for the newer one
   const rf = useStoredRefresh();
@@ -79,8 +80,15 @@ export function ThemesPage() {
     themeApi.dive(region, q, again).then((d) => live && setDive(d)).catch((e) => live && setDiveError((e as Error).message));
     setNewsBusy(true); themeApi.news(region, q).then((n) => live && setNews(n.items)).catch(() => live && setNews(null)).finally(() => live && setNewsBusy(false));
     themeApi.business(region, q).then((b) => live && setBiz(b)).catch(() => live && setBiz(null));
-    themeApi.listings(region, q).then((l) => live && setIpos(l)).catch(() => live && setIpos({ items: [], checked: false }));
-    return () => { live = false; setNewsBusy(false); };
+    // LIVE7A-007: the server matches new listings beside the request and answers "pending" meanwhile; the page asks again a few times
+    let ipoTimer: ReturnType<typeof setTimeout> | undefined, ipoTries = 0;
+    const listings = () => themeApi.listings(region, q).then((l) => {
+      if (!live) return;
+      setIpos(l);
+      if (l.pending && ++ipoTries < LISTING_TRIES) ipoTimer = setTimeout(listings, PRICE_EVERY_MS);
+    }).catch(() => live && setIpos({ items: [], checked: false }));
+    listings();
+    return () => { live = false; if (ipoTimer) clearTimeout(ipoTimer); setNewsBusy(false); };
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [key]);
   // prices: read at a gentle pace on the server; asked again while some companies are still waiting
@@ -204,7 +212,7 @@ export function ThemesPage() {
               ) : <ChainCard dive={dive} />}
               {dive.figures && dive.figures.of > dive.figures.shown && <p className="k-note">The figures below are for {dive.figures.shown} of the theme's {dive.figures.of.toLocaleString("en-IN")} companies: every one the map names, then the largest of the rest by market value.</p>}
               {biz && !biz.allowed && dive.region === "IN" && <p className="k-note">Operating figures that companies file between results (monthly sales, output, traffic) are on the Basic plan.</p>}
-              {dive.layers.map((l, i) => <LayerCard key={l.layer} layer={l} i={i} region={dive.region} business={biz?.layers[i]?.rows} />)}
+              {dive.layers.map((l, i) => <LayerCard key={l.layer} layer={l} i={i} region={dive.region} business={bizFor(biz, l)} />)}
               <SubThemesCard dive={dive} business={biz} />
             </>
           )}
@@ -213,9 +221,9 @@ export function ThemesPage() {
           {dive && dive.members > 0 && (
             <>
               <h2 className="k-section-title" id="theme-numbers">The theme in numbers</h2>
-              <p className="k-note">Reported figures from each company's stored page{dive.as_of ? `, prices to ${dive.as_of}` : ""}; the sections below say what each is on.</p>
+              <p className="k-note">Reported figures from each company's stored page{dive.as_of ? `, prices to the ${fmtDate(dive.as_of)} close${dive.as_of_older ? ` (${dive.as_of_older.toLocaleString("en-IN")} ${dive.as_of_older === 1 ? "company" : "companies"} at an earlier close)` : ""}` : ""}; the sections below say what each is on.</p>
               <NumbersCards dive={dive} prices={prices} pricesBusy={pricesBusy} />
-              <ListingsCard items={ipos && ipos.checked ? ipos.items : null} checked={ipos?.checked ?? true} region={dive.region} />
+              <ListingsCard items={ipos && ipos.checked ? ipos.items : null} checked={(ipos?.checked || ipos?.pending) ?? true} region={dive.region} />
             </>
           )}
           <p className="k-note">The text on this page that describes how a layer or sub-theme works is written by AI from general knowledge, with no figures. Every company of the theme's official industries is listed, whatever the AI says; a company the AI added from another industry is kept only while its own description doesn't show otherwise, with its words shown where they confirm the work. Every figure is from the companies' reported numbers or stored pages, with its year and basis.</p>

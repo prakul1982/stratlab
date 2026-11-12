@@ -82,8 +82,9 @@ test("the next-plan wording for Free's new counts", () => {
 });
 
 test("refresh on Free says it is on Basic, not 'back at midnight'", () => {
-  const free = { plan: "Free", rows: [{ key: "refresh", label: "Refreshes", used: 0, limit: 0, left: 0, resets: "day" }] };
-  const basic = { plan: "Basic", rows: [{ key: "refresh", label: "Refreshes", used: 10, limit: 10, left: 0, resets: "day" }] };
+  // (updated on purpose: a Refresh is one fresh AI read, LIVE7B-002; Free's lack of it is the server's refresh_off, not a "refresh" row)
+  const free = { plan: "Free", rows: [{ key: "research_ai", label: "Fresh AI reads", used: 0, limit: 5, left: 5, resets: "day" }], refresh_off: true };
+  const basic = { plan: "Basic", rows: [{ key: "research_ai", label: "Fresh AI reads", used: 60, limit: 60, left: 0, resets: "day" }], refresh_off: false };
   assert.equal(usage.refreshNotOnPlan(free), true);
   assert.equal(usage.refreshNotOnPlan(basic), false);
   assert.equal(usage.REFRESH_ON_BASIC, "Refreshing a stored read is on Basic and Pro");

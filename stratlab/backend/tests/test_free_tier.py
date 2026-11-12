@@ -37,7 +37,7 @@ def test_free_limits_are_the_teaser_ones():
     f = PLANS["free"]
     assert (f["backtests_per_month"], f["ai_builds_per_month"], f["group_size"], f["stock_alerts"], f["screens"]) == (5, 5, 5, 3, 1)
     assert (f["deepdives_per_month"], f["decks_per_month"], f["themes_per_month"], f["ai_reads_per_day"], f["search_ai_per_day"]) == (1, 0, 1, 5, 10)
-    assert plans.REFRESHES_PER_DAY["free"] == 0
+    assert not plans.refreshes_allowed("free")
     assert "tax_export" not in f["features"] and plans.FEATURE_PLAN["tax_export"] == "basic"
     # what Free keeps: holdings, funds, net worth, the journal, Market Watch, the trial
     assert (f["holdings"], f["mf_schemes"], f["networth_items"], f["journal_trades"], f["live_limit"], f["live_trial_days"]) == (30, 5, 5, 50, 1, 5)
@@ -49,7 +49,7 @@ def test_basic_and_pro_do_not_change():
             b["decks_per_month"], b["search_ai_per_day"]) == (100, 100, 25, 25, 10, 15, 5, 40)
     assert (p["backtests_per_month"], p["ai_builds_per_month"], p["group_size"], p["stock_alerts"], p["screens"], p["deepdives_per_month"],
             p["decks_per_month"], p["search_ai_per_day"]) == (None, None, 50, 100, 25, None, None, 40)
-    assert plans.REFRESHES_PER_DAY["basic"] == 10 and plans.REFRESHES_PER_DAY["pro"] == 30
+    assert plans.refreshes_allowed("basic") and plans.refreshes_allowed("pro")      # each Refresh one fresh AI read (LIVE7B-002)
     assert plans.ai_reads_per_day("basic") == 60 and plans.ai_reads_per_day("pro") is None and plans.ai_reads_per_day("free") == 5
     # the new theme limit (Free 1, Basic 10, Pro none) and the downloads both paid plans have
     assert (b["themes_per_month"], p["themes_per_month"]) == (10, None)
@@ -76,11 +76,9 @@ def test_an_old_account_keeps_the_old_counts_and_a_new_one_gets_the_new(time_mac
     time_machine.move_to(AT + timedelta(days=2))
     old, new = free(BEFORE), free(AFTER)
     for key, before in FREE_BEFORE.items():
-        if key == "refreshes_per_day":
-            continue
         assert plans.limit_of(old, key) == before, key
         assert plans.limit_of(new, key) == PLANS["free"][key], key
-    assert plans.refreshes_per_day("free", old) == 3 and plans.refreshes_per_day("free", new) == 0
+    assert plans.refreshes_allowed("free", old) and not plans.refreshes_allowed("free", new)
     assert plans.ai_reads_per_day(old) == 60 and plans.ai_reads_per_day(new) == 5
     assert plans.allows_for(old, "tax_export") and not plans.allows_for(new, "tax_export")
     info = plans.plan_info("free", old)
@@ -97,10 +95,11 @@ def test_the_notice_says_exactly_what_changes_and_when(time_machine):
     n = plans.free_change_notice(free(BEFORE))
     assert n["on"] == (AT + timedelta(days=14)).isoformat()
     rows = {r["key"]: (r["before"], r["after"]) for r in n["rows"]}
-    assert rows == {"ai_reads_per_day": (60, 5), "refreshes_per_day": (3, 0), "search_ai_per_day": (40, 10), "themes_per_month": (None, 1),
+    assert rows == {"ai_reads_per_day": (60, 5), "search_ai_per_day": (40, 10), "themes_per_month": (None, 1),
                     "backtests_per_month": (10, 5), "ai_builds_per_month": (10, 5), "deepdives_per_month": (2, 1), "decks_per_month": (1, 0),
                     "stock_alerts": (5, 3), "screens": (2, 1), "group_size": (10, 5)}
-    assert n["moves"] == ["The tax report's CSV and PDF downloads move to Basic (the report on screen stays free)"]
+    assert n["moves"] == ["Refreshing a stored read (each Refresh is one fresh AI read) moves to Basic",
+                          "The tax report's CSV and PDF downloads move to Basic (the report on screen stays free)"]
     assert plans.free_change_notice(free(AFTER)) is None and plans.free_change_notice(paid("basic")) is None
 
 
@@ -169,10 +168,14 @@ def test_a_free_reader_past_five_reads_is_told_basic_gives_sixty(counts):
 
 
 def test_free_has_no_refreshes(counts, monkeypatch):
+    # (updated on purpose: a Refresh is one fresh AI read, LIVE7B-002, held to the plan's daily count; Free has none)
     from app import computed
     monkeypatch.setattr(computed, "_now", lambda: 1e9)
     assert computed.refresh_gate(free(), "theme", 1.0) == "capped" and counts == []
-    assert computed.refresh_gate(paid("basic"), "theme", 1.0) == "go" and counts == ["refresh"]
+    assert computed.refresh_gate(paid("basic"), "theme", 1.0) == "go"
+    counts.extend(["research_ai"] * 60)                    # Basic's 60 reads used: its Refresh is held too
+    assert computed.refresh_gate(paid("basic"), "theme", 1.0) == "capped"
+    assert computed.refresh_gate(free(), "mood", 1.0, capped=False) == "go"     # a read no one's count holds (the market mood)
 
 
 def test_free_refreshes_in_the_grace(counts, monkeypatch, time_machine):
@@ -180,7 +183,9 @@ def test_free_refreshes_in_the_grace(counts, monkeypatch, time_machine):
     time_machine.move_to(AT + timedelta(days=1))
     monkeypatch.setattr(computed, "_now", lambda: 1e9)
     old = free(BEFORE)
-    assert [computed.refresh_gate(old, "theme", 1.0) for _ in range(4)] == ["go", "go", "go", "capped"]
+    assert computed.refresh_gate(old, "theme", 1.0) == "go"          # held to its old 60 fresh AI reads
+    counts.extend(["research_ai"] * 60)
+    assert computed.refresh_gate(old, "theme", 1.0) == "capped"
 
 
 # ---------- decks: none on Free, and the lock reads well for 0 ----------
@@ -352,3 +357,18 @@ def test_me_carries_the_notice_and_the_theme_count(counts, monkeypatch, time_mac
         assert me["usage"]["theme_limit"] == (None if notice else 1)
         assert me["plan_info"]["backtests_per_month"] == (10 if notice else 5)
         assert me["usage"]["ai_reads_limit"] == (60 if notice else 5)
+
+
+def test_my_usage_says_free_has_no_refresh(counts, monkeypatch, time_machine):
+    # a Refresh is one fresh AI read (LIVE7B-002): no separate refresh row; Free outside its grace is told Refresh is on Basic
+    from app import main
+    time_machine.move_to(AT + timedelta(days=1))
+    for who, off in ((free(AFTER), True), (free(BEFORE), False), (paid("basic"), False)):
+        main.app.dependency_overrides[main.current_profile] = lambda who=who: who
+        try:
+            u = TestClient(main.app).get("/me/usage").json()
+        finally:
+            main.app.dependency_overrides.clear()
+        rows = {r["key"]: r for r in u["rows"]}
+        assert u["refresh_off"] is off and "refresh" not in rows
+        assert rows["research_ai"]["label"] == "Fresh AI reads, refreshes included"

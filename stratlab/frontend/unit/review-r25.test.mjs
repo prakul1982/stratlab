@@ -50,7 +50,8 @@ test("R25-003: a period table opens at its right end, columns in the same order"
   const fits = { scrollLeft: 0, scrollWidth: 300, clientWidth: 360 };
   scrollToEnd(fits); assert.equal(fits.scrollLeft, 0);
   scrollToEnd(null);
-  assert.match(read("src/components/Research.tsx"), /<DataTable scrollEnd label="The last quarters/);
+  // (updated on purpose, LIVE7B-010: the quarters also stack as blocks on a phone; on a wide screen they still open at the right end)
+  assert.match(read("src/components/Research.tsx"), /<DataTable scrollEnd stack label="The last quarters/);
   assert.match(read("src/components/kit/DataTable.tsx"), /if \(scrollEnd\) scrollToEnd\(box\.current\)/);
 });
 

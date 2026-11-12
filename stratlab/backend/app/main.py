@@ -1056,7 +1056,8 @@ def my_limits(profile=Depends(current_profile)):
     return ok({"plan": PLANS[plan]["name"], "rows": rows})
 
 
-USAGE_LABELS = {"refresh": "Refreshes of stored reads", "research_ai": "Fresh AI reads", "search_ai": "AI answers in the search box",
+# LIVE7B-002: a Refresh of a stored read is a fresh AI read, held to that one daily count (no separate refresh count)
+USAGE_LABELS = {"research_ai": "Fresh AI reads, refreshes included", "search_ai": "AI answers in the search box",
                 "theme": "New themes mapped", "backtest": "Backtests", "ai": "AI strategy builds",
                 "deepdive": "Company deep dives", "deck": "Decks (PDF or PowerPoint)", "stock_alerts": "Active stock alerts",
                 "screens": "Saved screens", "holdings": "Stocks in My Holdings", "mf_schemes": "Mutual fund schemes",
@@ -1068,8 +1069,6 @@ def my_usage(profile=Depends(current_profile)):
     """Every per-person limit the app enforces, each with what's used, the limit (None: no limit) and when it starts again ("day":
     midnight India time, "month": the 1st, None: a kept count that goes down when something is removed). R19 (owner, 7 Nov: "tell them
     about their daily quota left"): Settings' "Your usage" table and the note beside every Refresh button read this one call."""
-    from . import computed
-    from .plans import refreshes_per_day
     plan, uid = profile["_plan"], profile["id"]
     info = plan_info(plan, profile)
     is_admin = admin.is_admin(profile)
@@ -1080,15 +1079,14 @@ def my_usage(profile=Depends(current_profile)):
         except Exception:
             return None
     day, month = research_routes.ai_day_start(), month_start_iso()
-    counts = {"refresh": _usage_pool.submit(n, lambda: db.count_usage(uid, "refresh", day)),
-              "research_ai": _usage_pool.submit(n, lambda: research_routes.ai_reads_today(profile)),
+    counts = {"research_ai": _usage_pool.submit(n, lambda: research_routes.ai_reads_today(profile)),
               "search_ai": _usage_pool.submit(n, lambda: db.count_usage(uid, research_routes.SEARCH_KIND, day)),
               **{k: _usage_pool.submit(n, lambda k=k: db.count_usage(uid, k, month)) for k in ("theme", "backtest", "ai", "deepdive", "deck")}}
-    limits = {"refresh": None if is_admin else refreshes_per_day(computed.plan_word(profile), profile), "research_ai": research_routes.ai_cap(profile),
+    limits = {"research_ai": research_routes.ai_cap(profile),
               "backtest": info["backtests_per_month"], "ai": info["ai_builds_per_month"], "deepdive": info["deepdives_per_month"],
               "deck": info["decks_per_month"], "search_ai": research_routes.search_cap(profile),
               "theme": None if is_admin else info["themes_per_month"]}
-    resets = {"refresh": "day", "research_ai": "day", "search_ai": "day", "theme": "month", "backtest": "month", "ai": "month", "deepdive": "month",
+    resets = {"research_ai": "day", "search_ai": "day", "theme": "month", "backtest": "month", "ai": "month", "deepdive": "month",
               "deck": "month"}
     rows = [{"key": k, "label": USAGE_LABELS[k], "used": counts[k].result(), "limit": limits[k], "resets": resets[k]} for k in counts]
     try:
@@ -1098,7 +1096,11 @@ def my_usage(profile=Depends(current_profile)):
     rows += [{"key": r["key"], "label": USAGE_LABELS.get(r["key"], r["key"]), "used": r["used"], "limit": r["limit"], "resets": None} for r in kept]
     for r in rows:
         r["left"] = None if r["limit"] is None or r["used"] is None else max(0, r["limit"] - r["used"])
-    return ok({"plan": PLANS[plan]["name"], "rows": rows})
+    # FREE-TIER: a plan with no Refresh of a stored read (Free outside its grace): the note beside Refresh says where it is
+    from . import computed
+    from .plans import refreshes_allowed
+    word = computed.plan_word(profile)
+    return ok({"plan": PLANS[plan]["name"], "rows": rows, "refresh_off": word != "admin" and not refreshes_allowed(word, profile)})
 
 
 _usage_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="usage-counts")

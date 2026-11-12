@@ -10,7 +10,7 @@ from app.intel import ai as A
 from app.intel import routes, theme_base, theme_library as L, theme_routes
 from tests.test_research_api import api  # noqa: F401  (the research pages' fake world, signed in as a Free user)
 
-U2 = {"id": "u2", "_plan": "free", "plan": "free"}
+U2 = {"id": "u2", "_plan": "basic", "plan": "basic", "_paid_plan": "basic"}
 
 
 class Store(dict):
@@ -83,18 +83,27 @@ def test_an_unreachable_store_is_a_miss_never_an_error(monkeypatch):
 
 
 # ---------- Refresh: guard window and daily cap ----------
+# (updated on purpose, LIVE7B-002: a Refresh is held to the one daily count Plans and Account state, the fresh AI reads; the AI read it
+# writes is what counts, so the gate itself counts nothing, and the market mood is held by no one's count)
 def test_the_guard_window_and_the_daily_cap(store, monkeypatch):
+    from app.config import settings
     used = []
     monkeypatch.setattr(db, "count_usage", lambda u, k, since: sum(1 for x in used if x == k))
     monkeypatch.setattr(db, "add_usage", lambda u, k: used.append(k))
-    monkeypatch.setattr(plans, "REFRESHES_PER_DAY", {"free": 2, "basic": 10, "pro": 30})
+    monkeypatch.setattr(settings, "RESEARCH_AI_PER_DAY", 2)
     now = computed._now()
-    me = {"id": "u1", "_plan": "free", "plan": "free"}
+    # (updated on purpose, FREE-TIER: Free has no Refresh now; the daily cap is shown on Basic, whose count is RESEARCH_AI_PER_DAY)
+    me = {"id": "u1", "_plan": "basic", "plan": "basic", "_paid_plan": "basic"}
     assert computed.refresh_gate(me, "ai:company", now - 60) == "fresh" and used == []         # written a minute ago
     assert computed.refresh_gate(me, "ai:company", None) == "go" and used == []                # nothing kept yet: not counted
     old = now - 7 * 3600
-    assert [computed.refresh_gate(me, "ai:company", old) for _ in range(3)] == ["go", "go", "capped"] and used == ["refresh", "refresh"]
-    assert computed.refresh_gate(me, "ai:pulse", now - 400) == "capped"                          # the mood's window is 5 minutes
+    assert computed.refresh_gate(me, "ai:company", old) == "go" and used == []                 # the read it writes counts, not the gate
+    used += ["research_ai", "research_ai"]                                                         # the day's two fresh AI reads used
+    assert computed.refresh_gate(me, "ai:company", old) == "capped"
+    assert computed.refresh_gate(me, "ai:pulse", now - 400, capped=False) == "go"                 # the mood: past its 5 minutes, no count
+    assert computed.refresh_gate(me, "ai:pulse", now - 100, capped=False) == "fresh"
+    pro = {"id": "u2", "_plan": "pro", "plan": "pro", "_paid_plan": "pro"}
+    assert computed.refresh_gate(pro, "ai:company", old) == "go"                                  # Pro: no daily cap, as Plans says
 
 
 # ---------- the theme library's matching ----------
@@ -176,14 +185,18 @@ def test_refresh_updates_the_shared_read_for_the_next_person_with_a_guard_and_a_
     later = time_machine.travel(time.time() + 7 * 3600, tick=True)          # past the guard window
     later.start()
     request.addfinalizer(later.stop)
-    monkeypatch.setattr(plans, "REFRESHES_PER_DAY", {"free": 1, "basic": 1, "pro": 1})
+    # (updated on purpose, LIVE7B-002: the day's cap is the fresh AI reads', each refresh's new map one of them)
+    # (updated on purpose, FREE-TIER: Free has no Refresh now, so both people here are on Basic, whose count is RESEARCH_AI_PER_DAY)
+    main.app.dependency_overrides[main.current_profile] = lambda: {**U2, "id": "u1"}    # the api fixture clears it
+    from app.config import settings
+    monkeypatch.setattr(settings, "RESEARCH_AI_PER_DAY", 1)
     monkeypatch.setattr(computed, "DEFAULT_GUARD", 0)                         # (u2 refreshes right after)
     mine = []                                                                 # each person's own count
     monkeypatch.setattr(db, "count_usage", lambda u, k, since: sum(1 for x in mine if x == (u, k)))
     monkeypatch.setattr(db, "add_usage", lambda u, k: mine.append((u, k)))
     got = _sector(lib, "AI data centers", refresh=True)
     assert got["refresh_state"] == "done" and len(lib.calls) > calls and got["generated_at"] > first["generated_at"]
-    main.app.dependency_overrides[main.current_profile] = lambda: U2          # someone else, next
+    main.app.dependency_overrides[main.current_profile] = lambda: U2          # someone else, next (on Basic)
     calls = len(lib.calls)
     seen = _sector(lib, "AI data center")
     assert seen["generated_at"] == got["generated_at"] and len(lib.calls) == calls
@@ -195,13 +208,13 @@ def test_refresh_updates_the_shared_read_for_the_next_person_with_a_guard_and_a_
     capped = _sector(lib, "AI data centers", refresh=True)                    # u2's second: past the day's one
     assert capped["refresh_state"] == "capped" and capped["generated_at"] > 0
     row = next(s for s in computed.stats() if s["kind"] == "theme")
-    assert row["refreshes"] == 2 and row["by"]["free"] == 2
+    assert row["refreshes"] == 2 and row["by"]["basic"] == 2
 
 
 def test_a_failed_refresh_keeps_the_old_read_with_its_date(lib, monkeypatch):
     # (updated on purpose, FREE-TIER: Free has no refreshes now, so a refresh is shown on Basic, 10 a day)
     from app import main as _m
-    monkeypatch.setitem(_m.app.dependency_overrides, _m.current_profile, lambda: {"id": "u1", "_plan": "basic", "plan": "basic", "_paid_plan": "basic"})
+    _m.app.dependency_overrides[_m.current_profile] = lambda: {"id": "u1", "_plan": "basic", "plan": "basic", "_paid_plan": "basic"}    # the api fixture clears it
     old = lib.get("/research/company/US/NVDA/ai").json()
     monkeypatch.setattr(computed, "DEFAULT_GUARD", 0)
     from app.ai_providers import AIError
@@ -266,19 +279,22 @@ def test_admin_library_is_admin_only_and_shows_every_store(lib):
 
 
 # ---------- the person's usage ----------
+# (updated on purpose, LIVE7B-002: one daily count, the fresh AI reads, refreshes included; no separate refresh row)
 def test_my_usage_lists_every_limit_and_the_refreshes_left(lib, monkeypatch):
-    # (updated on purpose, FREE-TIER: Free has no refreshes now, so a refresh is shown on Basic, 10 a day)
-    from app import main as _m
-    monkeypatch.setitem(_m.app.dependency_overrides, _m.current_profile, lambda: {"id": "u1", "_plan": "basic", "plan": "basic", "_paid_plan": "basic"})
+    # (updated on purpose, FREE-TIER: shown on Basic, whose count is RESEARCH_AI_PER_DAY; Free's is 5)
+    main.app.dependency_overrides[main.current_profile] = lambda: {"id": "u1", "_plan": "basic", "plan": "basic", "_paid_plan": "basic"}    # the api fixture clears it
+    from app.config import settings
     rows = {r["key"]: r for r in lib.get("/me/usage").json()["rows"]}
-    assert rows["refresh"]["limit"] == plans.REFRESHES_PER_DAY["basic"] and rows["refresh"]["used"] == 0 and rows["refresh"]["resets"] == "day"
+    assert "refresh" not in rows
+    assert rows["research_ai"]["limit"] == settings.RESEARCH_AI_PER_DAY and rows["research_ai"]["resets"] == "day"
     assert {"research_ai", "backtest", "deck", "deepdive", "screens", "holdings"} <= set(rows)
     assert rows["deck"]["resets"] == "month" and rows["holdings"]["resets"] is None
     _sector(lib, "AI data centers")
     monkeypatch.setattr(computed, "DEFAULT_GUARD", 0)
     _sector(lib, "AI data centers", refresh=True)
-    r = {x["key"]: x for x in lib.get("/me/usage").json()["rows"]}["refresh"]
-    assert r["used"] == 1 and r["left"] == r["limit"] - 1
+    before = rows["research_ai"]["used"]
+    r = {x["key"]: x for x in lib.get("/me/usage").json()["rows"]}["research_ai"]
+    assert r["used"] >= before + 1 and r["left"] == r["limit"] - r["used"]
 
 
 def test_a_theme_map_and_its_check_survive_a_deploy(lib):
@@ -302,4 +318,5 @@ def test_live6_012_the_search_box_list_is_one_shared_library_with_no_ones_readin
     main.app.dependency_overrides[main.current_profile] = lambda: U2          # someone who never opened it
     theirs = theme_library_suggest(lib, "data")
     assert mine and theirs == mine
-    assert set(theirs[0]) == {"name", "q", "region", "at", "members", "searched"}
+    # changed on purpose (lane t1, LIVE7A-008): "day", the stored map's own day in the market's time zone, the date its page says
+    assert set(theirs[0]) == {"name", "q", "region", "at", "day", "members", "searched"}

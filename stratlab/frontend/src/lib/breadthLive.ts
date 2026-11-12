@@ -7,6 +7,8 @@ export type LiveView = {
   message: string | null; every_minutes: number;
   /** minutes since the newest point, and whether that is over 20 while the market trades (older servers send neither) */
   age_minutes?: number | null; late?: boolean;
+  /** after the bell: the last point is the close round's, from the closing session's prices (LIVE7A-015) */
+  close?: boolean;
   latest: { adv: number; dec: number; unch: number; a20: number; n20: number; a50: number; n50: number; a200: number; n200: number; idx: number | null;
     pct20: number | null; pct50: number | null; pct200: number | null;
     /** the group's size and its stocks with no price today (older points have neither) */
@@ -20,8 +22,9 @@ const minutes = (n: number) => `${n} minute${n === 1 ? "" : "s"}`;
 
 /** "Today, live as of 10:30": the live card's title. When the newest point is over 20 minutes old while the market trades it
  * says so instead: "Last updated 09:15, 25 minutes ago" (R24-002: "Live as of 09:15" stood for 27 minutes). */
-export const liveTitle = (live: Pick<LiveView, "as_of"> & Partial<Pick<LiveView, "late" | "age_minutes" | "state">>) =>
-  live.state === "final" && live.as_of ? `Today, final at ${live.as_of}`          // after the close, until the evening's figures land (R28-012)
+export const liveTitle = (live: Pick<LiveView, "as_of"> & Partial<Pick<LiveView, "late" | "age_minutes" | "state" | "close">>) =>
+  live.state === "final" && live.close ? "Today, at the close"                   // the close round's count (LIVE7A-015)
+    : live.state === "final" && live.as_of ? `Today, final at ${live.as_of}`          // after the close, until the evening's figures land (R28-012)
     : live.late && live.as_of ? `Last updated ${live.as_of}${live.age_minutes != null ? `, ${minutes(live.age_minutes)} ago` : ""}`
     : live.as_of ? `Today, live as of ${live.as_of}` : "Today, live";
 

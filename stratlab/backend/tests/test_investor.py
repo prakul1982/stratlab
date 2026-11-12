@@ -66,7 +66,8 @@ def test_deck_is_a_real_presentation():
                       "Capex and growth plans", "Management report card", "Investor checklist", "Sources"]
     text = " ".join(sh.text_frame.text for s in prs.slides for sh in s.shapes if sh.has_text_frame)
     assert "Not investment advice" in text and "Screener" not in text
-    assert deck._cr(1234567) == "12,34,567" and deck._cr(-950) == "-950" and deck._cr(None) == "–"
+    # lane t1 (LIVE7A-014): a negative amount with the real minus, as every other figure of a deck (updated on purpose)
+    assert deck._cr(1234567) == "12,34,567" and deck._cr(-950) == "−950" and deck._cr(None) == "–"
 
 
 def test_deck_without_reads_still_builds():

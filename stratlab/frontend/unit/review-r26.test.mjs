@@ -23,9 +23,10 @@ test("R26-005: the library's frame has a Menu (details/summary) with Trade, Inve
 });
 
 test("R26-004: /login's dialog (its h2) comes after the page's h1 in the DOM", () => {
+  // (updated on purpose, LIVE7B-008) there is no dialog on /login any more: the page's own h1 and its one button are the way in
   const src = read("src/pages/Login.tsx");
-  assert.ok(src.indexOf("</main>") < src.indexOf("{way && ("), "the dialog is drawn after main");
-  assert.ok(src.indexOf('<h1 className="serif lp-h1">') < src.indexOf("{way && ("));
+  assert.doesNotMatch(src, /<Dialog/);
+  assert.match(src, /\{!login && <section className="lp-final ruled">/);
 });
 
 test("R26-006, RC1-011: /pricing's canonical address is the plans page, and it is not in the sitemap", () => {

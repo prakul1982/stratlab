@@ -210,15 +210,15 @@ test.describe("addresses and sign-in (R5V-011, R5V-013, R5V-015)", () => {
   });
 
   test("/login and /signup open the way in; /about and /help scroll to the right place", async ({ page }) => {
+    // (updated on purpose, LIVE7B-008: a dialog with the same heading and button stood over the page) the page itself is the way in
     await open(page, "/login");
-    const panel = page.getByRole("dialog", { name: "Sign in to StratLab" });
-    await expect(panel).toBeVisible({ timeout: 30_000 });
-    await expect(panel.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Sign in to StratLab" })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("button", { name: "Continue with Google" })).toHaveCount(1);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, follow");
-    await page.keyboard.press("Escape");
-    await expect(panel).toHaveCount(0);
     await open(page, "/signup");
-    await expect(page.getByRole("dialog", { name: "Create your free account" })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("heading", { level: 1, name: "Sign up for StratLab" })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("button", { name: "Continue with Google" })).toHaveCount(1);
     await open(page, "/about");
     await expect(page.locator("#about")).toBeInViewport({ timeout: 30_000 });
     await open(page, "/help");

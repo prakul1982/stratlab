@@ -294,7 +294,10 @@ function MarketsCard({ later }: { later: boolean }) {
           return (
             <div key={t.id} className="mine-mkt" data-market={t.id}>
               <span className="k-stat-k">{t.label}{t.unit ? <span className="muted"> · {t.unit}</span> : null}</span>
-              {s === undefined ? <span className="k-skel w70" aria-hidden="true" />
+              {/* LIVE7B-012: while the levels are read the tile holds the height it will have (the value's line, the change with its day,
+                  the month's line): a 64px tile that grew to 167px moved every card under it, Coming up and the watchlist included */}
+              {s === undefined ? <span className="mine-mkt-hold" aria-hidden="true"><span className="mine-mkt-v"><span className="k-skel w70" /></span>
+                <span className="k-stat-d mine-hold-ghost"><Delta value={0.5}>+0.00%</Delta><span className="k-note nowrap"> on 00 Oct</span></span><span className="mine-spark-hold" /></span>
                 : s === null ? <span className="k-stat-d">Not available right now</span>
                 : (
                   <>

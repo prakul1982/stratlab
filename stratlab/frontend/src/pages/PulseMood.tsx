@@ -5,7 +5,7 @@ import { fmtDate, fmtTime, marketTz, pct, safeHref } from "../lib/format";
 import { newsWhen } from "../lib/researchFormat";
 import { researchApi, type MoodBreadthRow, type NewsItem, type PulseAI, type PulseMood, type Region } from "../lib/research";
 import { keepMood, keptMood, moodStale } from "../lib/moodCache";
-import { companyRows, crore, moverRows, movedBy, pairable, riskLevel, sectorCount, sessionHeader, signedPoints, signedPts, signedWhole, storyOf, whole } from "../lib/pulseMood";
+import { companyRows, crore, moverRows, movedBy, pairable, quoteMove, riskLevel, sectorCount, sessionHeader, sessionWord, signedPoints, signedPts, signedWhole, storyOf, whole } from "../lib/pulseMood";
 import { Card, CardHead, DataTable, Delta, EmptyState, Signed, Skeleton, Working, type Column } from "../components/kit";
 import { sparseNotes } from "../components/kit/DataTable";
 
@@ -48,9 +48,11 @@ export function usePulseMood(region: Region) {
 }
 
 /** The headline and its few lines, each from one of the tables below. */
-export function MoodCard({ m, region, updating = false }: { m: PulseMood; region: Region;
+export function MoodCard({ m, region, updating = false, behindNote }: { m: PulseMood; region: Region;
   /** an older read shown while a fresh one is read behind it: its read time says when, with the kit's small bar beside it (LIVE4-024) */
-  updating?: boolean }) {
+  updating?: boolean;
+  /** the read is of an earlier session than the index levels above: said once, here (LIVE7A-001) */
+  behindNote?: string | null }) {
   const tz = region === "IN" ? "Asia/Kolkata" : "America/New_York";
   const readDay = m.read_at ? new Date(m.read_at).toLocaleDateString("en-CA", { timeZone: tz }) : null;
   const today = new Date().toLocaleDateString("en-CA", { timeZone: tz });
@@ -61,11 +63,16 @@ export function MoodCard({ m, region, updating = false }: { m: PulseMood; region
         actions={m.read_at ? <span className="k-row k-note" data-testid="pulse-mood-read">Read {readAt}{updating && <Working inline label="Reading the market again" />}</span> : undefined} />   {/* with its zone (LIVE4-007) */}
       {m.headline ? <p className="inv-summary" data-testid="pulse-mood"><b>{m.headline}</b></p> : <p className="k-small k-muted">The tables below are the day's figures; their summary isn't available right now.</p>}
       {m.lines.length > 0 && <ul className="k-list" data-testid="pulse-mood-lines">{m.lines.map((l) => <li key={l}>{l}</li>)}</ul>}
+      {behindNote && <p className="k-note" data-testid="pulse-mood-behind">{behindNote}</p>}
     </Card>
   );
 }
 
-export function BreadthTable({ b, open = true }: { b: NonNullable<PulseMood["breadth"]>; /** the market trades now */ open?: boolean }) {
+export function BreadthTable({ b: given, open = true, behind = false }: { b: NonNullable<PulseMood["breadth"]>; /** the market trades now */ open?: boolean;
+  /** the read is of an earlier session than the levels: its live count is labelled with its own day, never "Today" (LIVE7A-001) */
+  behind?: boolean }) {
+  // a read behind the levels: its count is that day's, headed with its day, never "Today" (LIVE7A-001)
+  const b = behind && given.live ? { ...given, live: false } : given;
   // after the close the live round is the day's final count: "on 6 Nov", not "so far today" (LIVE5-009)
   const when = b.live && open ? "so far today" : `on ${day(b.day)}`;
   // a 52-week cell without a count: while the market trades it comes with the close; after it, with the evening's count (LIVE5-003:
@@ -147,22 +154,25 @@ export function RiskTable({ r }: { r: NonNullable<PulseMood["risk"]> }) {
   const cols: Column<(typeof r.rows)[number]>[] = [
     { key: "n", header: "Measure", rowHeader: true, cell: (x) => x.label },
     { key: "p", header: "Level", numeric: true, brief: true, cell: (x) => riskLevel(x) },
-    { key: "c", header: "Change", numeric: true, brief: true, cell: (x) => <Signed value={x.change_pct} fmt={(v) => pct(v, 2)} /> },
+    // a yield's move in basis points, the rest in percent (LIVE7A-023)
+    { key: "c", header: "Change", numeric: true, brief: true, cell: (x) => { const mv = quoteMove(x); return <Signed value={mv.value}>{mv.text}</Signed>; } },
   ];
   return (
     <Card testId="pulse-risk">
-      <CardHead title="Volatility, currencies and rates" info="The volatility index, the rupee, crude oil, gold, the US 10-year yield and the dollar index, with the move since the previous close." />
+      <CardHead title="Volatility, currencies and rates" info="The volatility index, the rupee, crude oil, gold, the US 10-year yield and the dollar index, with the move since the previous close (the yield's in basis points)." />
       <DataTable stack compact label="Volatility, currencies and rates" columns={cols} rows={r.rows} rowKey={(x) => x.symbol} />
     </Card>
   );
 }
 
-export function GlobalTable({ g, region }: { g: NonNullable<PulseMood["global"]>; region: Region }) {
+export function GlobalTable({ g, region, today }: { g: NonNullable<PulseMood["global"]>; region: Region;
+  /** the market's date now: each row's "today" is worked out against it, not against the day the read was made (LIVE7A-001) */
+  today?: string | null }) {
   const cols: Column<(typeof g.rows)[number]>[] = [
     { key: "n", header: "Market", rowHeader: true, cell: (x) => x.label },
     { key: "a", header: "Area", cell: (x) => x.tag },
     { key: "c", header: "Move", numeric: true, brief: true, cell: (x) => chg(x.change_pct) },
-    { key: "s", header: "Session", cell: (x) => (x.same_day === false && x.day ? `on ${day(x.day)}` : "today") },
+    { key: "s", header: "Session", cell: (x) => (today ? sessionWord(x.day, today, day) : x.same_day === false && x.day ? `on ${day(x.day)}` : "today") },
   ];
   return (
     <Card testId="pulse-global">

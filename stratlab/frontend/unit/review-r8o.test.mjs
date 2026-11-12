@@ -60,7 +60,8 @@ test("R8O-007: \"Opening…\" gives way to Reload after 15 s; Admin's reads go o
   assert.match(lg, /data-testid="opening-slow"[\s\S]*location\.reload\(\)[\s\S]*Reload/);
   const main = read("src/main.tsx");
   assert.match(main, /<Suspense fallback=\{<><h1 className="sr-only">Opening the page<\/h1><Opening \/><\/>\}>/);
-  assert.match(main, /if \(!ready\) return <main><h1 className="sr-only">Opening StratLab<\/h1><Opening label="Opening StratLab" \/><\/main>;/);
+  // (updated on purpose, LIVE7B-006: the analytics question is drawn before each start-up shell, not above the whole app)
+  assert.match(main, /if \(!ready\) return <><Tracking \/><main><h1 className="sr-only">Opening StratLab<\/h1><Opening label="Opening StratLab" \/><\/main><\/>;/);
   assert.match(read("src/visitor/VisitorApp.tsx"), /<Opening label="Opening StratLab" \/>/);
   assert.match(main, /void firstPage\(location\.pathname\)\?\.\(\)/);
   const admin = read("src/pages/admin/AdminContext.tsx");

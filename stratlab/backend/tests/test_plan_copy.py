@@ -116,7 +116,6 @@ def _readme_row(start: str) -> list[str]:
 
 def test_readme_plan_table_says_the_free_tier():
     f = PLANS["free"]
-    from app.plans import REFRESHES_PER_DAY
     assert _readme_row("Backtests")[1] == f"{f['backtests_per_month']} a month"
     assert _readme_row("AI strategy builds")[1] == f"{f['ai_builds_per_month']} a month"
     assert _readme_row("Instruments in a group test")[1:3] == [str(f["group_size"]), str(PLANS["basic"]["group_size"])]
@@ -125,7 +124,9 @@ def test_readme_plan_table_says_the_free_tier():
     assert _readme_row("New themes mapped")[1:4] == [f"{f['themes_per_month']} a month", f"{PLANS['basic']['themes_per_month']} a month", "Unlimited"]
     assert _readme_row("Fresh AI reads a day")[1:4] == [str(f["ai_reads_per_day"]), str(PLANS["basic"]["ai_reads_per_day"]), "Unlimited"]
     assert _readme_row("AI answers in the search box")[1:4] == [str(PLANS[p]["search_ai_per_day"]) for p in ("free", "basic", "pro")]
-    assert REFRESHES_PER_DAY["free"] == 0 and _readme_row("Refreshes of a stored result")[1] == "None"
+    # a Refresh is one fresh AI read (LIVE7B-002): Basic and Pro have it, Free none
+    from app import plans
+    assert not plans.refreshes_allowed("free") and _readme_row("Refresh of a stored result")[1:4] == ["None", "✓", "✓"]
     assert _readme_row("Stock alerts on at once")[1] == f"{f['stock_alerts']} / {f['screens']} / {f['holdings']}"
     assert _readme_row("The tax report's CSV and PDF downloads")[1:4] == ["–", "✓", "✓"]
 

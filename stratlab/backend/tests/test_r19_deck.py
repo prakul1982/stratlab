@@ -123,4 +123,5 @@ def test_page_counts_of_the_synthetic_themes():
     assert all(n <= 22 for n in counts.values()), counts
     assert counts["US list, one industry"] < counts["US list, by industry"]                   # no value chain when there is nothing to compare
     for name, slides in themes():
-        assert not re.search(r"\d\.0%", " ".join(s.subtitle or "" for s in slides)), name
+        # changed on purpose (lane t1, LIVE7A-014): a ".0%" only beside a decimal percentage in the same line (one precision a text)
+        assert all(deck.whole_figures(s.subtitle or "") == (s.subtitle or "") for s in slides), name

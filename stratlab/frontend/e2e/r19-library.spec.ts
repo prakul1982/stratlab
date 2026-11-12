@@ -27,7 +27,10 @@ test("a theme read is offered as already read, says when it was updated, and Ref
   await page.route((u) => u.href.startsWith(API) && u.pathname === "/me/usage", async (r) => {
     const res = await r.fetch();
     const d = await res.json();
-    d.rows = d.rows.map((x: { key: string }) => (x.key === "refresh" ? { ...x, used: 3 - left, limit: 3, left } : x));
+    // (updated on purpose, LIVE7B-002: the count beside Refresh is the fresh AI reads, the one Plans and Account state)
+    d.rows = d.rows.map((x: { key: string }) => (x.key === "research_ai" ? { ...x, used: 3 - left, limit: 3, left } : x));
+    // (updated on purpose, FREE-TIER: this user is on Free, which has no Refresh (refresh_off); the count beside it is a paid plan's here)
+    d.refresh_off = false;
     await r.fulfill({ response: res, json: d });
   });
   const errors = await open(page, url, "The whole chain in one table", me.session);
@@ -38,7 +41,7 @@ test("a theme read is offered as already read, says when it was updated, and Ref
   await head.getByRole("button", { name: "Refresh" }).click();
   await expect(head.getByTestId("refresh-left")).toHaveText("None left today", { timeout: 30_000 });
   await expect(head.getByRole("button", { name: /Refresh/ })).toBeDisabled();
-  await expect(head.getByRole("button", { name: /Refresh/ })).toHaveAttribute("title", "No refreshes left today, back at midnight IST");
+  await expect(head.getByRole("button", { name: /Refresh/ })).toHaveAttribute("title", "No fresh AI reads left today, back at midnight IST");
   await expect(page.getByTestId("stored-note")).toBeVisible();                        // "already fresh" (just written) or what it did
   for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme });
@@ -64,14 +67,17 @@ test("Settings' Your usage lists every limit as the server counts it", async ({ 
   const table = page.getByRole("table", { name: "Your usage" });
   await expect(table).toBeVisible();
   const server = await usageOf(page, me.token);
-  expect(server.rows.find((r) => r.key === "refresh")?.limit).toBe(3);
+  expect(server.rows.find((r) => r.key === "refresh")).toBeUndefined();            // (updated on purpose, LIVE7B-002: one daily count)
+  // (updated on purpose, FREE-TIER: this user is on Free: 5 fresh AI reads a day and no Refresh)
+  expect(server.rows.find((r) => r.key === "research_ai")?.limit).toBe(5);
+  expect((server as { refresh_off?: boolean }).refresh_off).toBe(true);
   await expect(table.getByRole("row")).toHaveCount(server.rows.length + 1);
   for (const r of server.rows) {
     const row = table.getByRole("row").filter({ hasText: r.label });
     await expect(row).toHaveCount(1);
     if (r.used != null) await expect(row).toContainText(r.limit == null ? `${r.used} (no limit)` : `${r.used} of ${r.limit}`);
   }
-  await expect(table.getByRole("row").filter({ hasText: "Refreshes of stored reads" })).toContainText("Midnight India time");
+  await expect(table.getByRole("row").filter({ hasText: "Fresh AI reads, refreshes included" })).toContainText("Midnight India time");
   for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme });
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/r19-usage-${info.project.name}-${scheme}.png`, fullPage: true });

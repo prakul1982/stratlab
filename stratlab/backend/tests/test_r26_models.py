@@ -342,7 +342,7 @@ def test_the_deck_waits_for_the_new_map_and_is_made_on_it(monkeypatch):
 def test_the_deck_route_answers_202_on_a_stale_map_then_the_file(api, monkeypatch):    # noqa: F811
     # (updated on purpose, FREE-TIER: Free has no decks of its own now; the deck's route is shown on Basic)
     from app import main as _m
-    monkeypatch.setitem(_m.app.dependency_overrides, _m.current_profile, lambda: {"id": "u1", "_plan": "basic", "plan": "basic"})
+    _m.app.dependency_overrides[_m.current_profile] = lambda: {"id": "u1", "_plan": "basic", "plan": "basic"}    # the api fixture clears it
     import time
 
     from app.intel import routes

@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { NAV_GROUPS } from "../src/lib/navGroups";
-import { ALL_PAGES, NAV, pageAt, startOf } from "../src/lib/nav";
+import { ALL_PAGES, NAV, startOf } from "../src/lib/nav";
 
 // The three spaces: Trade (the strategy lab), Invest and Money. The switcher at the top of the menu, the welcome
 // question that picks the first space, each space's home, deep links opening their own space, and search labelling
@@ -254,15 +254,13 @@ test("space homes: Trade with Options first, Invest at a glance, Money with hold
   await page.keyboard.press("Escape");
   // no "Prices as of" stamp: the tax total is worked out from the tradebooks' sales, not today's prices (R66)
   await expect(tax.locator(".as-of")).toHaveCount(0);
-  // one card per Money feature that exists (and the Calendar's All dates beside My money dates, IA-1), nothing for one that doesn't yet;
-  // each card under its menu entry, named as its tab is
-  const cards = page.locator("[data-money]");
-  await expect(cards).toHaveCount(NAV_GROUPS.Money.length + 1);
-  for (const e of NAV_GROUPS.Money) await expect(page.locator(`[data-money="${e.to}"]`)).toContainText(["/holdings", "/tax-report"].includes(e.to) ? e.label : pageAt(e.to)!.page.label);
-  await expect(page.locator('[data-entry="tax"] [data-money]')).toHaveCount(3);
+  // (updated on purpose, LIVE7B-014: the table of every other Money tool repeated the side menu's Money entries; the home is its two
+  // summaries, each linking its page, and the menu reaches the rest)
+  await expect(page.getByTestId("more-tools")).toHaveCount(0);
+  await expect(page.locator('[data-money]:not([data-money="/holdings"]):not([data-money="/tax-report"])')).toHaveCount(0);
   await sane(page, errors, phone);
-  await cards.first().click();
-  await expect(page).toHaveURL(new RegExp(NAV_GROUPS.Money[0].to + "$"));
+  await page.locator('[data-money="/holdings"]').click();
+  await expect(page).toHaveURL(/\/holdings$/);
 });
 
 /** How a space home is laid out: every section's left and right edges, the tool strip's cards and rows, figures whose

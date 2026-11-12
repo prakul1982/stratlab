@@ -15,7 +15,6 @@ import { PUBLIC_MENU, SiteLinks } from "../components/PublicFrame";
 import { PublicAd } from "../components/AdUnit";
 import { SkipLink } from "../components/SkipLink";
 import { Seg } from "../components/kit/Seg";
-import { Dialog } from "../components/kit/Dialog";
 import { publicGet } from "../lib/http";
 import { plainTerms } from "../lib/plainTerms";
 import { checksLine, LOST_CHECKS, lostMoney, underHeadline } from "../lib/tradeUi";
@@ -252,20 +251,20 @@ const moneyCard = ([t, b, tag]: [string, string, string]) => (
  * /help, /faq, /about, /login each were the 14,000 px page): the questions, the three spaces, or just the way in. */
 export type Slim = "faq" | "about" | "login";
 
-/** `section`: scroll there first (the page was opened as /pricing, /faq…). `panel`: the address was /login or /signup, so
- * the way in is open on top of the page. `heading`: the address's own heading (content/seo.ts: "Plans and prices" at
+/** `section`: scroll there first (the page was opened as /pricing, /faq…). `heading`: the address's own heading (content/seo.ts: "Plans and prices" at
  * /pricing), the page's one h1, with the tagline beside it as words, so the heading a crawler reads in the address's
  * own HTML is the one the page shows (R8V-008). `plansOnly`: /plans, the prices on their own page under that heading, not the
  * whole landing page scrolled down to them: a phone drew the page's top and then jumped about 8,900 px (R22-005). */
-export function Login({ section: asked = null, panel, heading, intro, plansOnly = false, slim }: { section?: string | null; panel?: "login" | "signup"; heading?: string; intro?: string; plansOnly?: boolean; slim?: Slim } = {}) {
+export function Login({ section: asked = null, heading, intro, plansOnly = false, slim }: { section?: string | null; heading?: string; intro?: string; plansOnly?: boolean; slim?: Slim } = {}) {
   // Google sends a refused or failed sign-in back with ?error= or #error= in the address: say so at the top, in words
   const [error, setError] = useState<string | null>(() => signInProblem(location.search, location.hash, signInUnfinished()));
   const section = plansOnly || slim ? null : asked;          // the plans page is only the prices: it starts at the top, nothing to scroll to (R22-005)
   const full = !plansOnly && !slim;                           // the whole landing page
   const helpOnly = !plansOnly && slim === "faq" && heading === "Help";       // /help: the questions, with no hero over them
   const ownMenu = plansOnly || !!slim;                        // a page with no sections to scroll to carries the public pages' links (DK-004)
-  const [way, setWay] = useState(panel ?? null);
-  useEffect(() => setWay(panel ?? null), [panel]);
+  // LIVE7B-008: /login and /signup are one sign-in panel: the heading, one line, one Google button and what signing in reads (a dialog
+  // with the same heading and button over the page, and a second band with a third button, said it all three times)
+  const login = slim === "login";
   useLayoutEffect(() => {
     if (!section) return;
     const go = () => document.getElementById(section)?.scrollIntoView({ behavior: "instant" });
@@ -315,7 +314,7 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
             {NAV_LINKS(ownMenu).map(([to, label]) => <a key={to} href={to}>{label}</a>)}
           </nav>
         </details>
-        <button type="button" className="btn outline sm" onClick={go}>Sign in</button>
+        {!login && <button type="button" className="btn outline sm" onClick={go}>Sign in</button>}
       </header>
 
       <main id="main" tabIndex={-1}>
@@ -337,7 +336,7 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
               {full && <a className="btn quiet lp-cta-2" href="#trade">See how it works</a>}
             </div>
             {error && <p className="banner" role="alert">{error}</p>}
-            <p className="small muted">Free to start · No card · No code</p>
+            {login ? <p className="small muted">Signing in only reads your name and email from Google. By continuing you agree to the <Link className="link" to="/terms">Terms</Link> and <Link className="link" to="/privacy">Privacy policy</Link>.</p> : <p className="small muted">Free to start · No card · No code</p>}
           </div>
           {full && <HeroDemo />}
         </div>
@@ -493,26 +492,15 @@ export function Login({ section: asked = null, panel, heading, intro, plansOnly 
         </div>
       </section>}
 
-      <section className="lp-final ruled">
+      {!login && <section className="lp-final ruled">
         <div className="lp-wrap stack g20 lp-center">
           <p className="serif lp-h2 lp-final-h">Test it, research it, track it.</p>
           <p className="lp-p">Sign in with Google, no card needed. Your home page shows the first steps.</p>
           {cta("Continue with Google")}
         </div>
-      </section>
+      </section>}
       </>}
       </main>
-
-      {/* after the page's h1 in the DOM (it sits over the page by position): the dialog's h2 never comes first (R26-004) */}
-      {way && (
-        <Dialog title={way === "signup" ? "Create your free account" : "Sign in to StratLab"} onClose={() => setWay(null)}>
-          <div className="k-stack">
-            <p className="k-small">{way === "signup" ? "StratLab accounts are made with Google: there's no password to set up and no card to add." : "StratLab signs in with your Google account."} Signing in only reads your name and email from Google.</p>
-            <div className="k-row">{cta()}</div>
-            <p className="k-small k-muted">By continuing you agree to the <Link className="link" to="/terms">Terms</Link> and <Link className="link" to="/privacy">Privacy policy</Link>.</p>
-          </div>
-        </Dialog>
-      )}
 
       <footer className="lp-foot">
         <div className="lp-wrap spread wrap g16">

@@ -5,6 +5,8 @@ import { useApp } from "../lib/app";
 import { Card, CardHead } from "./kit";
 import { useGuideOpen, welcomePending } from "../lib/onboarding";
 
+const SEEN_KEY = "stratlab.firstSteps.shown";
+
 type Step = { id: string; title: string; to: string; done: boolean };
 type View = { show: boolean; dismissed: boolean; done: number; steps: Step[] };
 
@@ -13,11 +15,15 @@ type View = { show: boolean; dismissed: boolean; done: number; steps: Step[] };
  *  for a page whose own content comes first (DF-023: on Invest home the whole checklist, the same as on Trade home,
  *  took the top of the page). */
 export function FirstSteps({ onShown, compact }: { onShown?: (shown: boolean) => void; compact?: boolean }) {
-  const { fail, me } = useApp();
+  const { fail, me, session } = useApp();
   const [view, setView] = useState<View | null>(null);
   const [busy, setBusy] = useState(false);
   const guiding = useGuideOpen();
 
+  // LIVE7B-012: whether the line showed last time on this device, so its place is kept while the list is read (it came in late at the top of
+  // the page and moved everything under it: /trade's layout shift was 0.30 with the full checklist)
+  const key = `${SEEN_KEY}.${me?.id ?? session?.user?.id ?? "guest"}`;
+  const [wasShown] = useState(() => { try { return localStorage.getItem(key) === "1"; } catch { return false; } });
   useEffect(() => {
     let live = true;
     api<View>("/me/first-steps").then((v) => { if (live && v && Array.isArray(v.steps)) setView(v); }).catch(() => undefined);
@@ -25,8 +31,12 @@ export function FirstSteps({ onShown, compact }: { onShown?: (shown: boolean) =>
   }, []);
   // one guide at a time: the checklist waits for the welcome question and the tour
   const shown = !!view?.show && !!me && !welcomePending(me) && !guiding;
-  useEffect(() => { onShown?.(shown); }, [shown, onShown]);
+  const holding = !view && wasShown && !!compact && !guiding;
+  useEffect(() => { onShown?.(shown || holding); }, [shown, holding, onShown]);
+  useEffect(() => { if (view) try { localStorage.setItem(key, view.show ? "1" : "0"); } catch { /* storage blocked */ } }, [view, key]);
 
+  // while it is read: the same one line, held empty, where it showed last time
+  if (holding) return <Card compact className="first-steps fs-compact fs-wait" label="Your first steps"><div className="k-row" aria-hidden="true"><span className="k-small"><b>Your first steps</b></span><span className="btn quiet sm fs-hold">Hide this</span></div></Card>;
   if (!shown || !view) return null;
   const dismiss = async () => {
     setBusy(true);

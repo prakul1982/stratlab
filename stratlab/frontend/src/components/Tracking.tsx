@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { askNow, CHOICE_KEY, clearChoice, consentWords, declineTrackers, onChoice, readAdsOnly, readChoice, readDeclined, trackersFor, writeChoice, type Choice } from "../lib/ads";
 import { doNotTrack } from "../lib/analytics";
@@ -43,28 +43,14 @@ export function Tracking() {
   return <ConsentCard adsOnly={adsOnly} />;
 }
 
-/** The question itself. It stands over the bottom of the page, so while it is up the page keeps what has focus clear of it: a link or
- * button the keyboard reaches near the bottom scrolls up above the card, not under it (A11Y-2, WCAG 2.4.11). The page's own scroll
- * padding is the card's height, kept in step with it, and given back when the card goes. */
+/** The question itself: a band in the page's own flow, above the page, so nothing is ever under it (LIVE7B-006). */
 function ConsentCard({ adsOnly }: { adsOnly: boolean }) {
-  const card = useRef<HTMLDivElement>(null);
   const text = useId();
-  useEffect(() => {
-    const el = card.current, root = document.documentElement;
-    if (!el) return;
-    // --consent-h: the page's own foot is padded by the card's height while it is up, so the end of a page is never under it (LIVE1B-050: the
-    // refund policy's last lines and the landing page's example were cut off by it)
-    const keep = () => { root.style.setProperty("scroll-padding-bottom", `${el.offsetHeight + 24}px`); root.style.setProperty("--consent-h", `${el.offsetHeight + 16}px`); };
-    keep();
-    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(keep) : null;
-    ro?.observe(el);
-    return () => { ro?.disconnect(); root.style.removeProperty("scroll-padding-bottom"); root.style.removeProperty("--consent-h"); };
-  }, []);
   const { title, text: words, short } = consentWords(CONFIG, adsOnly);
   // on a phone the slim bar shows the one-sentence question with "What this means" beside the answers (LIVE3-010); the card's
   // full wording is for wider screens (CSS shows one or the other)
   return (
-    <div ref={card} className="consent" role="dialog" aria-modal="false" aria-label={`${title} on StratLab`} aria-describedby={text} data-testid="consent">
+    <div className="consent" role="dialog" aria-modal="false" aria-label={`${title} on StratLab`} aria-describedby={text} data-testid="consent">
       <b className="consent-title">{title}</b>
       <p id={text}><span className="consent-long">{words} <Link className="link" to="/privacy">What this means</Link></span><span className="consent-short">{short}</span></p>
       <div className="consent-btns">

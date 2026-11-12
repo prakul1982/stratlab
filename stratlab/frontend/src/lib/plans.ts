@@ -79,7 +79,8 @@ export const KEY: Record<PlanId, string[]> = {
     `Unlimited backtests, deep dives and decks; up to ${AI_BUILDS_PER_DAY} AI builds a day`,
     `Paper trade ${L.pro.live_limit} strategies at a time, groups of up to ${L.pro.group_size}`,
     "Indian F&O in notebooks, and options on your own rules' signals",
-    "Tax tools, ITR-ready export and StratLab in your AI assistant"],
+    // LIVE7B-026: Basic has Tax tools' dividends; what Pro adds there is the advance tax and the long-term exemption
+    "Advance tax, long-term exemption, ITR export, StratLab in your AI app"],
 };
 
 /** Ads (ADS-1), one row of the comparison table: Free accounts and signed-out pages may show Google ads, only after the visitor allows
@@ -92,7 +93,7 @@ export const NUMBERS: [keyof Limits, string][] = [["backtests_per_month", "Backt
   ["mf_schemes", "Mutual fund schemes kept"], ["networth_items", "Net worth entries"], ["journal_trades", "Trades the journal keeps"],
   ["watchlists", "Market Watch lists (the first is your Research watchlist)"], ["watchlist_symbols", "Symbols in one Market Watch list"],
   ["chart_saves", "Charts that keep your drawings and indicators"], ["chart_indicators", "Indicators on one chart"],
-  ["ai_reads_per_day", "Fresh AI reads a day (reads already written, and the market mood, never count)"]];
+  ["ai_reads_per_day", "Fresh AI reads a day, refreshes included (Free has no refreshes; reads already written, and the market mood, never count)"]];
 export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in strategy rules"], ["group_live", "Paper trade a whole group (on 5-minute, 15-minute or 1-hour candles)"], ["options", "Options paper trading at set times"],
   ["alerts", "Trade notifications"], ["daily_report", "Daily report after the close"], ["newsletter", "Daily Market Brief and My Stocks by email"],
   ["scans", "Stage 2 + Supertrend scan, with a daily alert"],
@@ -108,7 +109,7 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in 
   ["money_reminders", "Money calendar reminders by email or phone"],
   ["mf_costs", "Fund costs: each fund's TER parts in rupees, both plans side by side, and changes since you bought"],
   ["breadth", "Market breadth history, charts and sector table"],
-  ["positioning", "Derivatives positioning history and IV percentiles"],
+  ["positioning", "Positioning and FII/DII flow history, IV percentiles"],
   ["journal", "Trade journal: every trade, the honesty checks, breakdowns and paper vs real"],
   ["tax_export", "Tax report downloads: CSV and PDF"], ["itr_export", "ITR-ready schedules and a PDF pack for your CA"], ["us_tax", "US stocks in Indian tax sale by sale: each sale's gain in rupees, the foreign tax credit and Schedule FA"],
   ["etf_gaps", "Alerts on an ETF's price against its NAV"],

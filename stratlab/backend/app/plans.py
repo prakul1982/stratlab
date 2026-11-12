@@ -195,11 +195,11 @@ def bigger_plan(plan: str, key: str) -> str | None:
 # one-time notice on Account and My space saying what changes and when (free_change_notice). New accounts get PLANS["free"] at once.
 FREE_BEFORE = {"backtests_per_month": 10, "ai_builds_per_month": 10, "group_size": 10, "stock_alerts": 5, "screens": 2,
                "deepdives_per_month": 2, "decks_per_month": 1, "themes_per_month": None, "ai_reads_per_day": 60,
-               "search_ai_per_day": 40, "refreshes_per_day": 3}
+               "search_ai_per_day": 40}
 FREE_BEFORE_FEATURES = {"tax_export"}           # what Free had before that it loses with the change
 FREE_GRACE_DAYS = 14
 # what the notice lists, in order: (the key, its words)
-FREE_CHANGE_WORDS = (("ai_reads_per_day", "Fresh AI reads a day"), ("refreshes_per_day", "Refreshes of a stored read a day"),
+FREE_CHANGE_WORDS = (("ai_reads_per_day", "Fresh AI reads a day"),
                      ("search_ai_per_day", "AI answers in the search box a day"), ("themes_per_month", "New themes mapped a month"),
                      ("backtests_per_month", "Backtests a month"), ("ai_builds_per_month", "AI strategy builds a month"),
                      ("deepdives_per_month", "Company deep dives a month"), ("decks_per_month", "Slide decks a month"),
@@ -318,27 +318,28 @@ def search_ai_per_day(plan) -> int | None:
     return _limit(plan, "search_ai_per_day")
 
 
-REFRESHES_PER_DAY = {"free": 0, "basic": 10, "pro": 30}
-
-
-def refreshes_per_day(plan: str, profile: dict | None = None) -> int | None:
-    """Refreshes of a stored shared result (an AI read, a theme's read) a person may ask for in a day (computed.refresh_gate). A
-    refresh within a few hours of the last one gives the stored result and isn't counted. None on Free (a teaser): a Free account in
-    the grace keeps its old 3."""
-    if plan == "free" and profile is not None and free_grace_until(profile):
-        return FREE_BEFORE["refreshes_per_day"]
-    return REFRESHES_PER_DAY.get(plan, REFRESHES_PER_DAY["free"])
-
-
 def free_change_notice(profile: dict | None, now: datetime | None = None) -> dict | None:
     """The one-time notice on Account and My space for an account in the grace: when its Free counts change and exactly what changes
     (old and new for each), and the downloads that move to Basic. None for everyone else. No email is sent about it."""
     end = free_grace_until(profile, now)
     if end is None or plan_of(profile) != "free":
         return None
-    new = {**{k: PLANS["free"].get(k) for k, _ in FREE_CHANGE_WORDS}, "refreshes_per_day": REFRESHES_PER_DAY["free"]}
-    return {"on": end.isoformat(), "rows": [{"key": k, "label": label, "before": FREE_BEFORE[k], "after": new[k]} for k, label in FREE_CHANGE_WORDS],
-            "moves": ["The tax report's CSV and PDF downloads move to Basic (the report on screen stays free)"]}
+    return {"on": end.isoformat(),
+            "rows": [{"key": k, "label": label, "before": FREE_BEFORE[k], "after": PLANS["free"][k]} for k, label in FREE_CHANGE_WORDS],
+            "moves": [REFRESH_MOVES, "The tax report's CSV and PDF downloads move to Basic (the report on screen stays free)"]}
+
+
+# A Refresh of a stored read is one fresh AI read (LIVE7B-002), held to the plan's daily count; Free has none (refreshes_allowed)
+REFRESH_MOVES = "Refreshing a stored read (each Refresh is one fresh AI read) moves to Basic"
+REFRESH_PLANS = ("basic", "pro")
+
+
+def refreshes_allowed(plan: str, profile: dict | None = None) -> bool:
+    """FREE-TIER: whether a plan may Refresh a stored shared read (an AI read, a theme's read): Basic and Pro, each Refresh one fresh AI
+    read held to the plan's daily count; not Free (0 a day), except a Free account in the grace, which keeps it (held to its old 60)."""
+    if plan in REFRESH_PLANS:
+        return True
+    return plan == "free" and profile is not None and free_grace_until(profile) is not None
 
 
 def plan_info(plan: str, profile: dict | None = None) -> dict:
@@ -357,7 +358,7 @@ def plan_info(plan: str, profile: dict | None = None) -> dict:
 
 def public_plans() -> dict:
     """What each plan includes, for the Plans page (independent of early access)."""
-    return {k: {**{x: v for x, v in p.items() if x != "features"}, "ai_reads_per_day": ai_reads_per_day(k), "refreshes_per_day": REFRESHES_PER_DAY[k],
+    return {k: {**{x: v for x, v in p.items() if x != "features"}, "ai_reads_per_day": ai_reads_per_day(k), "refresh": refreshes_allowed(k),
                 "features": sorted(p["features"])}
             for k, p in PLANS.items()}
 

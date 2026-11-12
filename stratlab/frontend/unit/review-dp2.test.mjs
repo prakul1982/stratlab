@@ -118,7 +118,8 @@ test("DP2-011: the ITR downloads look alike and say why they're off", () => {
 
 test("DP2-014: Money's home cards carry their plan tags and read in full on a phone", () => {
   // a row of the tools' table since 5 Nov, with its menu entry (IA-1); its line wraps, never cut with "..."
-  assert.match(read("src/pages/SpaceHomes.tsx"), /group: g\.label, groupId: g\.id, tag: <PageTags page=\{p\} \/>, attrs: \{ "data-money": p\.to \}/);
+  // (updated on purpose, LIVE7B-014: Money home no longer repeats the menu's entries as a table; the plan locks are on the menu and the pages)
+  assert.doesNotMatch(read("src/pages/SpaceHomes.tsx"), /<MoreTools/);
   assert.match(read("src/styles.css"), /\.k-more-tools \.k-table td\.k-wrap \{ white-space: normal;/);
   assert.doesNotMatch(read("src/styles.css"), /\.k-more-tools[^{]*\{[^}]*line-clamp/);
 });

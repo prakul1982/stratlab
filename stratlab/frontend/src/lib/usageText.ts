@@ -1,17 +1,18 @@
 /* The words for a person's limits (lib/usage.ts reads them; no imports, so the unit tests read this file on its own). */
 
 export type UsageRow = { key: string; label: string; used: number | null; limit: number | null; left: number | null; resets: "day" | "month" | null };
-export type Usage = { plan: string; rows: UsageRow[] };
+export type Usage = { plan: string; rows: UsageRow[]; refresh_off?: boolean };
 
-/** Refreshes left today, or null when there's no limit (or it isn't known yet). */
+/** Refreshes left today: the fresh AI reads left, the one daily count Plans and Account state (LIVE7B-002: a separate "30 left today"
+ * on Pro, whose Plans row says Unlimited), or null when there's no limit (or it isn't known yet). */
 export function refreshesLeft(u: Usage | null): number | null {
-  const r = u?.rows.find((x) => x.key === "refresh");
+  const r = u?.rows.find((x) => x.key === "research_ai");
   return r ? r.left : null;
 }
 
-/** FREE-TIER: the plan has no refreshes at all (Free's limit 0): the button says where they are, never "back at midnight". */
+/** FREE-TIER: the plan has no Refresh at all (Free: the server's refresh_off): the button says where it is, never "back at midnight". */
 export function refreshNotOnPlan(u: Usage | null): boolean {
-  return u?.rows.find((x) => x.key === "refresh")?.limit === 0;
+  return u?.refresh_off === true;
 }
 export const REFRESH_ON_BASIC = "Refreshing a stored read is on Basic and Pro";
 

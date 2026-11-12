@@ -374,9 +374,6 @@ a.link { margin-inline: -2px; }
 .brand:hover { color: var(--ink); }
 .main { min-width: 0; padding: 40px clamp(24px, 4vw, 56px) 80px; }
 .page { max-width: 1320px; margin: 0 auto; }
-/* the question stands over the corner while it is up (--mw-lift is its height, lib/consentLift): the foot of the page keeps that much room, so the last
-   rows can be scrolled clear of it instead of sitting under it (LIVE1C-077: the PCR table's edge and a library card's text) */
-.shell .page { padding-bottom: var(--mw-lift, 0px); }
 .topbar { display: none; }
 /* the menu folded away on a laptop (Shell "slim"): the page takes the whole width, one button brings the menu back */
 .side-hide, .side-show { display: none; }
@@ -389,7 +386,11 @@ a.link { margin-inline: -2px; }
     border-radius: 10px; border: 1px solid var(--line-2); background: var(--card); color: var(--ink); cursor: pointer; box-shadow: var(--shadow); }
 }
 @media (max-width: 900px) {
-  .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }   /* a short page's spare height goes to the page, not the top bar */
+  /* a short page's spare height goes to the page, not the top bar; the analytics question, while it is asked, is the row between them */
+  .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto 1fr; }
+  .shell > .topbar { grid-row: 1; }
+  .shell > .consent { grid-row: 2; width: auto; justify-self: stretch; margin: 12px 16px -8px; }
+  .shell > .main { grid-row: 3; }
   /* the drawer: shut, it's out of the Tab order too (visibility goes after the slide) */
   .sidebar { position: fixed; inset: 0 auto 0 0; width: min(300px, 86vw); height: auto; z-index: 40; transform: translateX(-102%); visibility: hidden; transition: transform .2s, visibility 0s .2s; box-shadow: var(--shadow); }
   .sidebar.open { visibility: visible; transition: transform .2s; }
@@ -654,6 +655,8 @@ td.num, .num { font-family: var(--sans); }
 .ai-table .k-table :is(th, td) { white-space: normal; vertical-align: top; max-width: none; }
 .ai-table .k-table tbody th, .ai-table .k-table thead th:first-child { width: 11rem; min-width: 0; }
 .ai-table .k-table .k-list { margin: 0; }
+/* the area names its row: the header row is for screen readers only (LIVE7B-004: "The numbers / The figures" read as a stray row) */
+.ai-table .k-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 /* on a phone each area is its own block: its name over its figures, so the figures have the whole width */
 @media (max-width: 560px) {
   .ai-table .k-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
@@ -794,7 +797,7 @@ td.num, .num { font-family: var(--sans); }
 }
 @media (max-width: 600px) {
   .lp-steps, .lp-checks, .lp-tools, .lp-markets { grid-template-columns: minmax(0, 1fr); }
-  .lp-prices { grid-template-columns: minmax(0, 1fr); max-width: 560px; margin-inline: auto; }
+  .lp-prices { grid-template-columns: minmax(0, 1fr); width: 100%; max-width: 560px; margin-inline: auto; }   /* LIVE7A-021: the full column on a phone (as a flex item it shrank to its content, 48px in from the gutter) */
   .lp-price { padding: 20px 18px; }
 
   .lp-tool { padding-right: 0; }
@@ -929,47 +932,36 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 .ad-ask { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; max-width: 520px; font-size: var(--t-label); line-height: 1.5; color: var(--ink-2); }
 .ad-ask p { margin: 0; }
 .ad-btns { display: flex; flex-wrap: wrap; gap: 10px; }
-/* ADS-1: the one question for ads and analytics. A small card at the corner of the screen, beside the page (a dialog that does not
-   take focus), until it is answered; on a phone it spans the width. Under the toast. */
-.consent { position: fixed; right: 16px; bottom: 16px; z-index: 65; width: min(400px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 8px;
-  padding: 14px 16px; border-radius: var(--r-card); background: var(--card); border: 1px solid var(--line-2); box-shadow: var(--shadow); font-size: var(--t-label); line-height: 1.5; }
-.consent p { margin: 0; color: var(--ink-2); }
-.consent-title { font-size: var(--t-body); }
-.consent-btns { display: flex; flex-wrap: wrap; gap: 10px; }
+/* ADS-1: the one question for ads and analytics, until it is answered. LIVE7B-006: it is a band in the page's own flow, above the page,
+   so it covers nothing: no tile, card, chart or panel sits under it (as a bar along the window's foot it stood over the Markets tiles at
+   1440 and the P&L card on a phone). Signed in, it is in the page column only (the side menu never moves, LIVE6-014); a visitor's is at
+   the top of the page. It is drawn with the page's first frame, so the page never shifts under it; answering it takes it away. */
+.consent { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; margin: 12px 16px 0; padding: 10px 18px;
+  border-radius: var(--r-card); background: var(--card); border: 1px solid var(--line-2); font-size: var(--t-label); line-height: 1.5; }
+.consent p { margin: 0; color: var(--ink-2); flex: 1 1 320px; }
+.consent-title { font-size: var(--t-body); flex: none; }
+.consent-btns { display: flex; flex: none; flex-wrap: nowrap; gap: 10px; }
 /* "Allow" and "No thanks" are two answers of equal weight: one width, not 63px beside 90px (VR4-012) */
 .consent-btns .btn { min-width: 104px; justify-content: center; }
-/* VR7-007: on a visitor's wide page (no side menu) the question is one slim bar along the foot of the window, not a 400px card standing over
-   the landing page's example panel until it is answered (the Markets button still rises above it, consentLift.ts); the app's is the same bar (LIVE4-008) */
+/* in the app: the first row of the page column (and first for the keyboard, A11Y-2: it comes before the menu in the page's order), lined
+   up with the page below it; the side menu spans both rows, so it starts at the top of the window as always */
 @media (min-width: 901px) {
-  body:not(:has(.shell)) .consent { left: 16px; right: 16px; width: auto; flex-direction: row; align-items: center; gap: 8px 20px; padding: 12px 18px; }
-  body:not(:has(.shell)) .consent-title { flex: none; }
-  body:not(:has(.shell)) .consent p { flex: 1 1 auto; }
-  body:not(:has(.shell)) .consent-btns { flex: none; flex-wrap: nowrap; }
-  /* LIVE4-008: in the app too it is one slim bar along the foot of the page column (beside the side menu, never over it), not a 400px card
-     standing over a table's right half; the page's foot clears it (--consent-h), so nothing is out of reach under it */
-  body:has(.shell) .consent { left: calc(248px + 16px); right: 16px; width: auto; flex-direction: row; align-items: center; gap: 8px 20px; padding: 10px 18px; }
-  body:has(.shell.slim) .consent { left: 16px; }
-  body:has(.shell) .consent-title { flex: none; }
-  body:has(.shell) .consent p { flex: 1 1 auto; }
-  body:has(.shell) .consent-btns { flex: none; flex-wrap: nowrap; }
-  .shell { padding-bottom: var(--consent-h, 0px); }
+  .shell { grid-template-rows: auto 1fr; }
+  .shell > .sidebar { grid-column: 1; grid-row: 1 / -1; }
+  .shell > .main { grid-column: -2 / -1; grid-row: 2; }
+  .shell > .consent { grid-column: -2 / -1; grid-row: 1; box-sizing: border-box; justify-self: center; width: min(1320px, 100% - 2 * clamp(24px, 4vw, 56px)); margin: 16px 0 -16px; }
 }
 /* LIVE1B-045: while the tour's note is up the question waits (a phone showed both at once); it is there again when the tour closes */
 body:has(.k-coach) .consent { visibility: hidden; }
-/* LIVE1B-050: while the question is up the page's foot clears it: a visitor's page and the app's phone layout end above the bar, not under it */
-body:not(:has(.shell)) { padding-bottom: var(--consent-h, 0px); }
-@media (max-width: 900px) { .shell { padding-bottom: var(--consent-h, 0px); } }
 .consent-short, .consent-more { display: none; }
-/* VR5: on a phone the question took 213px, over a quarter of a 360x800 screen. LIVE3-010: even at 190px the card stood over a company
-   page's Test a strategy / Compare / Watch buttons and Invest's shortcut cards. On a phone it is a slim bar along the foot of the
-   window: the question in one sentence, then "What this means" and the two answers on one row, about 100px; the full wording is on
-   the privacy page, and the page's foot still clears it (--consent-h) */
+/* VR5, LIVE3-010: on a phone the question is one sentence, then "What this means" and the two answers on one row; the full wording is on
+   the privacy page */
 @media (max-width: 640px) {
-  .consent { right: 0; left: 0; bottom: 0; width: auto; gap: 6px; padding: 10px 14px max(10px, env(safe-area-inset-bottom)); font-size: 13px; line-height: 1.4;
-    border-radius: var(--r-card) var(--r-card) 0 0; border-width: 1px 0 0; }
+  .consent { gap: 6px; padding: 10px 14px; font-size: 13px; line-height: 1.4; }
+  .consent p { flex-basis: 100%; }
   .consent-title, .consent-long { display: none; }
   .consent-short { display: inline; }
-  .consent-btns { gap: 8px; align-items: center; flex-wrap: nowrap; }
+  .consent-btns { flex: 1 1 100%; gap: 8px; align-items: center; }
   .consent-more { display: inline; margin-right: auto; white-space: nowrap; }
   .consent-btns .btn { flex: 0 0 96px; min-width: 0; }
 }
@@ -1147,8 +1139,9 @@ label.btn.disabled { opacity: .5; }
 .screens-filters-wait { min-height: min(70vh, 640px); }   /* the filter card keeps its height while it loads, so the page does not jump beside the 70vh results (LIVE1A-035) */
 /* LIVE2-020: a page showing its own "Try again" for the same failure leaves the account banner's Retry out: one retry, not two */
 body:has(main .k-state.error button, main .k-state.error a.btn) .banner .account-retry { display: none; }
-.screens-table { margin: 0 -24px; }
-@media (max-width: 640px) { .screens-table { margin: 0 -16px; } }
+/* LIVE7B-021: the results table and its Download CSV keep the card's inner padding, as the Filters card beside it does (it ran to the card's
+   edges, "vs 52-week high" and the CSV button touching the border) */
+.screens-table { margin: 0; }
 .screens-table td:first-child { white-space: normal; min-width: 180px; }
 .screens-table th[scope="row"] { min-width: 200px; }
 .screens-table td { white-space: normal; }
@@ -2177,6 +2170,8 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-downloads { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); grid-auto-rows: 1fr; gap: var(--s2); }   /* every download the same height, whatever its note (VR3-024) */
 .k-downloads .btn { height: auto; min-height: 52px; padding-block: var(--s2); text-align: left; justify-content: flex-start; white-space: normal; min-width: 0; }
 .k-downloads .btn small { display: block; font-weight: 400; opacity: .75; font-size: var(--t-note); }
+.k-downloads .btn { align-items: flex-start; }   /* LIVE7B-017: a one-line note starts at the top like its two-line neighbours, not centred beside them */
+.k-downloads .btn > svg { margin-top: 2px; }
 .k-fold { background: none; border: 0; padding: 0; width: 100%; min-height: 32px; cursor: pointer; color: inherit; display: flex; justify-content: space-between; align-items: center; gap: var(--s3); text-align: left; flex-wrap: wrap; }
 .k-fold .k-card-title { font-size: var(--t-card); }
 /* TABLE-SWEEP: an ITR schedule with nothing this year, a row of the same list that opens nothing */
@@ -2372,6 +2367,12 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 @media (max-width: 520px) { .mine-markets { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .mine-mkt { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: var(--s3); border: 1px solid var(--line); border-radius: 12px; }
 .mine-mkt-v { font-size: 20px; font-weight: 600; letter-spacing: -.01em; }
+/* LIVE7B-012: a tile still being read is as tall as a read one: the value's line (a bar in it), the change line's space, the month line's space */
+.mine-mkt-hold { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.mine-mkt-hold .mine-mkt-v { display: flex; align-items: center; min-height: 30px; }
+.mine-hold-ghost .k-note { display: block; }   /* the day under the change, as it wraps in a tile a sixth of the card wide */
+.mine-hold-ghost { visibility: hidden; }
+.mine-spark-hold { display: block; height: 36px; margin-top: auto; }
 .mine-tl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .mine-tl-i { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: var(--s3); align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .mine-tl-i:last-child { border-bottom: 0; }
@@ -2864,6 +2865,9 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .space-panels.even { align-items: stretch; }
 .space-panels > :only-child { grid-column: 1 / -1; }      /* the other card is not there (no market events): this one takes the row */
 .fs-compact .k-row { justify-content: space-between; flex-wrap: wrap; }
+/* LIVE7B-027: the one line of first steps is as wide as its words and its button, not a full-width card with half of it empty */
+.fs-compact { width: fit-content; max-width: 100%; }
+.fs-wait { visibility: hidden; }   /* LIVE7B-012: the line's place kept while it is read, nothing shown in it */
 
 /* the Help page's explanations, one line each until opened (DI-014) */
 .help-topics { display: flex; flex-direction: column; }
@@ -3076,11 +3080,6 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .lp-checks .lp-art { display: none; }
   .lp-phone-fold > .stack { margin-top: 16px; }
 }
-/* LIVE6-014: signed in, the analytics question was a band in the page's flow above the app (LIVE5 partial), so the whole app, side menu
-   included, stood 75-95 px lower until it was answered. It is an overlay again, never moving the app: the slim bar along the foot of the
-   page column (beside the side menu, LIVE4-008 above; on a phone along the window's foot), the page's end padded by its height
-   (--consent-h) so nothing stays out of reach under it, and the Markets button risen above it (consentLift.ts). */
-body:has(.shell) .consent { position: fixed; }
 /* LIVE5 partial: a few totals across one row (FactTable `across`): each figure with its note under it, the columns sharing the width */
 .k-facts-across .k-tbl-wrap { display: inline-block; max-width: 100%; vertical-align: top; }
 .k-facts-across .k-table { width: auto; }

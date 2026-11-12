@@ -62,13 +62,15 @@ export function change(v: number | null | undefined, unit: Unit): string {
 
 /** The live card's rows: the count so far today, the last close's, and the difference. `l` is the newest live point, `t` the last close's
  * figures, `lastLevel` the index's last close; the index row's close is "–" when the history isn't loaded. */
-export function liveRows(l: { adv: number; dec: number; pct20: number | null; pct50: number | null; pct200: number | null; idx: number | null }, t: Today, indexName: string, lastLevel: number | null): MeasureRow[] {
+export function liveRows(l: { adv: number; dec: number; pct20: number | null; pct50: number | null; pct200: number | null; idx: number | null }, t: Today, indexName: string, lastLevel: number | null,
+  /** the market has shut: the count is the day's, not "so far today" (LIVE7A-015) */
+  final = false): MeasureRow[] {
   const part = (now: number | null, before: number | null, unit: Unit, extra: Partial<Part> = {}): Part => ({ now, before, change: now != null && before != null ? now - before : null, avg: null, unit, ...extra });
   return [
-    { key: "ad", label: "Rose / fell", means: "Stocks above / below the previous close so far today.", info: "ad", parts: [part(l.adv, t.adv.value, "count", { tone: "up" }), part(l.dec, t.dec.value, "count", { tone: "down" })] },
+    { key: "ad", label: "Rose / fell", means: `Stocks above / below the previous close ${final ? "on the day" : "so far today"}.`, info: "ad", parts: [part(l.adv, t.adv.value, "count", { tone: "up" }), part(l.dec, t.dec.value, "count", { tone: "down" })] },
     { key: "p20", label: "Above 20-day average", means: "Share of stocks priced above their 20-day average.", info: "ma", parts: [part(l.pct20, t.pct20.value, "pct", { tone: "share" })] },
     { key: "p50", label: "Above 50-day average", means: "Share of stocks priced above their 50-day average.", info: "ma", parts: [part(l.pct50, t.pct50.value, "pct", { tone: "share" })] },
     { key: "p200", label: "Above 200-day average", means: "Share of stocks priced above their 200-day average.", info: "ma", parts: [part(l.pct200, t.pct200.value, "pct", { tone: "share" })] },
-    ...(l.idx != null ? [{ key: "idx", label: indexName, means: "The group's index, latest level.", info: null, parts: [part(l.idx, lastLevel, "level")] } as MeasureRow] : []),
+    ...(l.idx != null ? [{ key: "idx", label: indexName, means: final ? "The group's index, its level on the day." : "The group's index, latest level.", info: null, parts: [part(l.idx, lastLevel ?? t.index?.value ?? null, "level")] } as MeasureRow] : []),
   ];
 }

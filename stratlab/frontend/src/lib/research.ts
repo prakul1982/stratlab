@@ -208,11 +208,15 @@ export interface PulseAI {
 export interface MoodMover { symbol: string; name?: string; change_pct: number; points?: number }
 export interface MoodBreadthRow { key: string; label: string; now: number | null; before: number | null; change: number | null; kind: "count" | "share"; means: string; unit: string }
 export interface MoodSectorRow { name: string; label: string; change_pct: number; w1: number | null; m1: number | null; movers: MoodMover[] }
-export interface MoodQuoteRow { label: string; symbol: string; tag: string; price: number; change_pct: number | null; day: string | null; same_day: boolean | null }
+export interface MoodQuoteRow { label: string; symbol: string; tag: string; price: number; change_pct: number | null; day: string | null; same_day: boolean | null;
+  /** a yield's move in basis points (LIVE7A-023) */
+  change_bp?: number | null }
 export interface PulseMood {
   pending?: boolean; region: Region; is_open: boolean; today: string; levels_at: string | null; read_at?: string | null;
   /** a copy from before the open or close, answered while the fresh read goes on (LIVE4-024) */
   refreshing?: boolean;
+  /** the session the figures are of (the index's own day), and, on a copy behind the levels, the newer session being read (LIVE7A-001) */
+  session?: string | null; behind?: string | null;
   headline: string; lines: string[];
   compare: { index: string; avg_abs: number; days: number; ratio: number; words: string } | null;
   breadth: { group: string; live: boolean; day: string | null; close_day: string | null; prev_day: string | null; adv: number | null; dec: number | null; unch: number | null;
