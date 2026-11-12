@@ -61,6 +61,10 @@ test("VR4-008: the welcome question does not say the four spaces, which the tour
   await expect(dlg).toContainText("You're on Trade now");
   await expect(dlg).not.toContainText("four spaces");
   await dlg.getByRole("button", { name: /All of it/ }).first().click();
+  // (updated on purpose, R42 i1: "All of it" starts the tour of My space, whose second step names the four spaces)
+  const tour = page.getByRole("dialog", { name: "Tour: Getting around" });
+  await expect(tour).toContainText("My space is yours", { timeout: 15_000 });
+  await tour.getByRole("button", { name: "Next" }).click();
   await expect(page.getByText("Four spaces")).toBeVisible({ timeout: 15_000 });
 });
 

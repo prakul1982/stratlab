@@ -1,0 +1,41 @@
+/* The tours' notes and the list of tours (components/Tour.tsx), and a space's offer card (components/IntroOffer.tsx). The note's
+   frame, ring and placement are the kit's (.k-coach in styles.css); this is only what is inside it. Loads with the tour. */
+.k-coach-note .tour-title { margin: 0; }
+.k-coach-note .tour-body { margin: 0; line-height: 1.5; }
+.intro-eyebrow { white-space: nowrap; }
+.intro-plan { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 8px 10px; border-radius: var(--r-ctl);
+  background: var(--paper-2); color: var(--ink); line-height: 1.45; }
+.intro-plan svg { flex: none; margin-top: 2px; color: var(--muted); }
+.intro-next { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: var(--s3); border-top: 1px solid var(--line); }
+.intro-next > span { flex-basis: 100%; }
+.intro-foot { flex-wrap: nowrap; }
+.intro-foot .tour-foot { flex-wrap: nowrap; }
+
+/* the list of tours: one row per tour, the whole row the button */
+.intro-pick { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.intro-pick-btn { display: grid; grid-template-columns: auto 1fr; column-gap: 12px; row-gap: 2px; width: 100%; padding: 10px 12px;
+  text-align: left; font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line-2); border-radius: var(--r-ctl);
+  cursor: pointer; }
+.intro-pick-btn:hover { border-color: var(--ink); }
+.intro-pick-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.intro-pick-icon { grid-row: 1 / span 2; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px;
+  border-radius: 50%; background: var(--paper-2); color: var(--ink); align-self: center; }
+.intro-pick-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.intro-pick-status { grid-column: 2; color: var(--muted); }
+.intro-pick-status.on { color: var(--blue); font-weight: 600; }
+.k-coach-note:has(.intro-pick) { width: min(440px, calc(100vw - 32px)); }
+
+/* a space's offer: a card in the corner, over the page (fixed, so nothing on the page moves when it comes or goes), under every dialog */
+.intro-offer { position: fixed; z-index: 54; left: calc(248px + 24px); bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  width: min(380px, calc(100vw - 248px - 48px)); display: flex; flex-direction: column; gap: var(--s2);
+  padding: var(--s4); background: var(--paper); color: var(--ink); border: 1px solid var(--line-2); border-radius: var(--r-card); box-shadow: var(--shadow); }
+.intro-offer p { margin: 0; }
+.intro-offer .k-row { justify-content: flex-start; }
+.shell.slim .intro-offer { left: 24px; width: min(380px, calc(100vw - 48px)); }
+@media (max-width: 900px) {
+  .intro-offer { left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: auto; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .intro-offer { animation: intro-in .18s ease-out; }
+  @keyframes intro-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+}

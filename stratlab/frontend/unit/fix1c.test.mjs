@@ -142,9 +142,9 @@ test("LIVE1C-055: the Money space's main button says Update holdings once there 
   const shell = read("src/components/Shell.tsx");
   assert.match(shell, /label: hasHoldings \? "Update holdings" : "Add your holdings"/);
   assert.match(shell, /mainAction\(space, focus, !!me\?\.has_holdings\)/);
-  const { tourSteps } = await import("../src/components/Tour.tsx").catch(() => ({ tourSteps: null }));
-  assert.match(read("src/components/Tour.tsx"), /main === "Update holdings"/);
-  if (tourSteps) assert.match(tourSteps("Update holdings")[2].body, /^This space's main button\. Update holdings:/);
+  // (updated on purpose, R42 i1: the old tour's step naming the space's main button is gone; the Money tour opens My Holdings and
+  // points at its upload itself, the place the main button leads to whether it says Add or Update)
+  assert.match(read("src/lib/intro.ts"), /go: "\/holdings", at: \["main \[data-main-action\]"/);
 });
 
 test("LIVE1C-056: no repeated totals on Net worth, and the tax report's working is the table with the words behind a fold", () => {

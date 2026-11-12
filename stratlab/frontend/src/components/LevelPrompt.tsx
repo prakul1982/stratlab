@@ -28,7 +28,7 @@ export const FOCUSES: [Focus, string, string][] = [
  * step. The experience level sits under the choices, left for them to pick (the standard layout if they do not), and so does which companies the
  * calendars and Invest home open on (every company unless they pick their own stocks); picking what you came for answers all of them. None
  * hides anything, and all can be changed in Settings. */
-export function LevelPrompt({ onDone }: { onDone: (saved: Promise<void>, answered: boolean) => void }) {
+export function LevelPrompt({ onDone }: { onDone: (saved: Promise<void>, answered: boolean, focus?: Focus) => void }) {
   const { me, level, focus, savePrefs } = useApp();
   const [chosen, setChosen] = useState<Level | "">(level ?? "");        // nothing is picked for them
   // which companies the calendars and Invest home open on (owner, 5 Nov: "ask while setting up a new user"): every company unless they say
@@ -44,7 +44,7 @@ export function LevelPrompt({ onDone }: { onDone: (saved: Promise<void>, answere
     // on a home page (the only place this is asked), open the home of what they picked
     if (loc.pathname === "/" || SPACE_HOMES.includes(loc.pathname)) nav(homeOf(view, f), { replace: true });
     track("onboarding answered", { focus: f, level: lvl });
-    onDone(savePrefs({ focus: f, level: lvl, space: view, companies }), true);     // closes this: the answers are in
+    onDone(savePrefs({ focus: f, level: lvl, space: view, companies }), true, f);     // closes this: the answers are in, and that space's tour follows
   };
   return (
     // closing keeps the page as it is: the default answer is saved, so it isn't asked again
@@ -56,6 +56,8 @@ export function LevelPrompt({ onDone }: { onDone: (saved: Promise<void>, answere
         <p className="welcome-what">{INTRO_LINE}</p>
         {/* not "StratLab has four spaces...": the tour's first step says that straight after this, so a new account read it twice in a row (VR4-008) */}
         <p className="k-muted welcome-note">{here ? `You're on ${SPACES[here].label} now: pick ${SPACES[here].label} to stay, or another to open its home.` : "We'll open the one you pick."} The others stay one tap away, and you can change this any time in Settings.</p>
+        {/* what follows the answer, so the tour that opens is no surprise (owner, 12 Nov: the old tour "only shows like 5 steps") */}
+        <p className="k-muted welcome-note welcome-next">Then a short look around the one you pick, on its real pages: a minute or two, and you can skip it.</p>
         {/* the four choices come before the optional level question, so they are the first thing under the title: a 360 px phone showed the
             intro, the note and the level question first and needed a scroll to reach "Manage my money" (RC7-002; on a phone the two
             paragraphs also go under the choices, in the stylesheet) */}
