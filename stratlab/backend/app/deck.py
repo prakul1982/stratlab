@@ -304,7 +304,11 @@ def _chg(v) -> str:
 
 
 def _times(v, dp: int = 1) -> str:
-    return "–" if v is None else f"{v:.{dp}f}x".replace("-", MINUS)
+    """2.4x, −0.35x; a multiple that rounds to zero has no sign ("0.00x", never "−0.00x" or "-0.00x")."""
+    if v is None:
+        return "–"
+    text = f"{abs(v):.{dp}f}"
+    return f"{MINUS if v < 0 and float(text) != 0 else ''}{text}x"
 
 
 def _pts(v) -> str:
@@ -5928,7 +5932,7 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
         de, ic, cf = bal.get("debt_equity"), bal.get("interest_cover"), bal.get("cfo_to_profit")
         def tile(label, st, f, n):                # a figure no company has is said in words, never "0 companies"
             return (label, _med(st, f), f"Range {_span(st, f)} · {_n(n, 'company', 'companies')}" if st and n else "No company has the figures it needs")
-        tiles = [tile("Debt to equity, median", de, lambda x: f"{x:.2f}x", bal.get("with_debt_equity") or 0),
+        tiles = [tile("Debt to equity, median", de, lambda x: _times(x, 2), bal.get("with_debt_equity") or 0),
                  tile("Interest cover, median", ic, _times, (ic or {}).get("n") or 0),
                  tile("Cash from operations over net profit, median", cf, lambda x: _times(x, 2), bal.get("cfo_n") or 0)]
         tiles = [t_ for t_ in tiles if t_[1] != "–"] or tiles          # a figure no company has is no tile (R18)
