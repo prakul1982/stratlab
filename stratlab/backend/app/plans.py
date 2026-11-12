@@ -164,7 +164,8 @@ DOC_SEARCH = {"free": {"hits": 3, "days": 365}, "basic": {"hits": None, "days": 
 # are for everyone); a company's statements as Excel or CSV and its peers as CSV are Pro's export (company_tables.py)
 # tax_export: the tax report's CSV and PDF downloads (the report on screen is for everyone)
 # theme_changes: a theme's whole change log, "What changed" (the latest refresh's counts and first 5 rows are on Free);
-# theme_workbook: a theme as an Excel workbook, counted as that theme's deck of the month (its PDF, PowerPoint and workbook are one deck)
+# theme_workbook: a theme as an Excel workbook, counted as that theme's deck of the month (its PDF, PowerPoint and workbook are one deck); and a theme's companies as a CSV
+# (not counted; Free sees every company on the theme's page)
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 

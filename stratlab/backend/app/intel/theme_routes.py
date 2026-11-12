@@ -1268,6 +1268,46 @@ def theme_dive_workbook(q: str, region: str = "IN", profile=Depends(current_prof
                     headers={"Content-Disposition": f'attachment; filename="{deck_file_name(theme, r, "xlsx", today)}"'})
 
 
+
+def companies_csv(m: dict, dive: dict, r: str) -> bytes:
+    """Every company in the theme as a CSV, the rows of the page's company list (members_of): raw figures, each with its unit in the
+    column's name, and a cell that starts like a formula written as text."""
+    import csv
+    import io
+    unit = dive.get("unit") or ("₹ crore" if r == "IN" else "$ million")
+    cap = "₹ crore" if r == "IN" else "$ million"
+    head = ["Company", "Symbol", "Layer", "Industry", f"Market value ({cap})", f"Revenue ({unit})", "EBITDA margin (%)", "Net margin (%)",
+            "ROCE (%)", "Year of the figures", "In the theme by", "What it does, in its own words"]
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(head)
+    for x in members_of(m, dive):
+        row = [x["name"], x["symbol"], x["layer"], x.get("industry"), x.get("cap"), x.get("revenue"), x.get("ebitda"), x.get("net"),
+               x.get("roce"), x.get("year"), x.get("by"), x.get("what")]
+        w.writerow(["" if v is None else (f"'{v}" if isinstance(v, str) and v[:1] in "=+-@" else v) for v in row])
+    return ("\ufeff" + buf.getvalue()).encode("utf-8")
+
+
+@router.get("/theme-dive/companies.csv")
+def theme_dive_companies_csv(q: str, region: str = "IN", profile=Depends(current_profile)):
+    """Every company in the theme as a CSV (the page's company list with the dive's figures). A download, so Basic and up with the theme's
+    workbook (plans.py "theme_workbook"); Free sees the same companies on the page. Not counted as a deck."""
+    from .. import main
+    main.need(profile, "theme_workbook", "Downloading a theme's companies as a CSV")
+    R = _routes()
+    pending: list = []
+    r, theme, m = map_for_deck(R, profile, region, q, pending=pending)
+    if pending and pending[0]:
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"preparing": True, "retry_after": DECK_RETRY,
+                             "message": "Preparing the list: the AI map is being written."}, status_code=202)
+    body = companies_csv(m, dive_of(r, theme, m), r)
+    today = datetime.now(R.IST).date()
+    from fastapi.responses import Response
+    name = deck_file_name(theme, r, "csv", today).replace(" theme (", " theme companies (", 1)
+    return Response(body, media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "private, no-store"})
+
 # ---------- business updates ----------
 def business_reader():
     """symbol -> the company's headline operating figure from the business updates already read and stored (biz_updates), or None."""

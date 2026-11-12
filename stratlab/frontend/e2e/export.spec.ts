@@ -124,7 +124,13 @@ test("a Free account's theme deck button is locked and says decks are on Basic",
   await expect(lock).toHaveAttribute("href", "/plans");
   await expect(lock).toHaveAttribute("title", "Slide decks are on Basic: 5 a month. The sample deck on the Plans page shows what one holds.");
   await expect(box.getByRole("button", { name: "Slides (PDF)" })).toHaveCount(0);
-  await expect(box.getByRole("button", { name: /^CSV/ })).toBeVisible();          // the companies' CSV stays on every plan
+  // (updated on purpose, Release 43: the companies' CSV is a download, so Basic and up; the server answers 402 for Free) the button says so
+  // with the plan note, and no file is made
+  let asked = 0;
+  page.on("request", (r) => { if (r.url().includes("/research/theme-dive/companies.csv")) asked += 1; });
+  await box.getByRole("button", { name: /^CSV/ }).click();
+  await expect(box.getByTestId("theme-csv-lock")).toContainText("Downloading a theme's companies as a CSV is on the Basic plan");
+  expect(asked).toBe(0);
   expect(errors).toEqual([]);
 });
 

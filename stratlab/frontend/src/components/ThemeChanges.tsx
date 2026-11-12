@@ -74,3 +74,30 @@ export function WorkbookButton({ region, theme, dive }: { region: Region; theme:
     </>
   );
 }
+
+/** Release 43: every company in the theme as a CSV, made by the server (GET /research/theme-dive/companies.csv): a download, so Basic and
+ * up with the theme's workbook; Free sees the same companies on the page, and the plan note here. Not counted as a deck. */
+export function ThemeCsvButton({ region, theme, dive }: { region: Region; theme: string; dive: Dive | null }) {
+  const { me, fail } = useApp();
+  const [making, setMaking] = useState(false);
+  const [locked, setLocked] = useState(false);
+  const off = (me?.plan_info.features as Record<string, boolean> | undefined)?.theme_workbook === false;
+  const go = async () => {
+    if (off) { setLocked(true); return; }
+    setMaking(true);
+    try {
+      const url = `/research/theme-dive/companies.csv?region=${region}&q=${encodeURIComponent(theme)}`;
+      const blob = await deckWhenReady(() => api<Response>(url, { raw: true }), {});
+      download(blob, `StratLab - ${`${theme} theme companies (${REGION_NAME[region]})`.normalize("NFKD").replace(/[^\x20-\x7e]+/g, " ").replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120)} - ${deckDay()}.csv`);
+    } catch (e) { fail(e); } finally { setMaking(false); }
+  };
+  return (
+    <>
+      <button type="button" className="btn quiet sm" disabled={making || !dive} onClick={go} aria-describedby={locked ? "theme-csv-lock" : undefined}
+        data-csv="theme companies" aria-label="CSV: every company in this theme" title="Every company in this theme as a CSV file, to open in a spreadsheet">
+        <Download size={16} />{making ? "Making the CSV…" : "CSV"}
+      </button>
+      {locked && <div id="theme-csv-lock" className="theme-wb-lock" data-testid="theme-csv-lock"><PlanNote plan="basic">Downloading a theme's companies as a CSV is on the Basic plan; every company is listed on this page.</PlanNote></div>}
+    </>
+  );
+}

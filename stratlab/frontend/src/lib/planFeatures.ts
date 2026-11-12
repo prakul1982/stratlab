@@ -70,7 +70,7 @@ export const EVERYONE = ["Every market, and your own CSV",
  * these with plans.ts's LIMITS and FLAGS. */
 export const MORE_FLAGS: [string, string, PlanId][] = [
   ["theme_changes", "A theme's full change log: companies added, removed and moved between layers, layers renamed, split or merged, figures restated (Free: the latest refresh's summary)", "basic"],
-  ["theme_workbook", "A theme as an Excel workbook: every table of its page and deck, with sources and method (counts as the theme's deck of the month)", "basic"],
+  ["theme_workbook", "A theme as an Excel workbook: every table of its page and deck, with sources and method (counts as the theme's deck of the month), and its companies as a CSV", "basic"],
 ];
 
 const RANK: Record<PlanId, number> = { free: 0, basic: 1, pro: 2 };

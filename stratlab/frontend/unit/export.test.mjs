@@ -107,7 +107,8 @@ test("the audit as a class: every page whose main content is a table offers its 
     "src/pages/StockLendingPage.tsx": 1, "src/pages/trade/ClosingAuctionPage.tsx": 1, "src/pages/ResearchScans.tsx": 4, "src/pages/CompareExperiments.tsx": 1,
     "src/pages/trade/JournalPage.tsx": 1, "src/pages/money/MutualFundsPage.tsx": 3, "src/pages/money/TaxToolsPage.tsx": 2, "src/pages/HoldingsPage.tsx": 1,
     "src/pages/PulseMood.tsx": 1, "src/pages/money/UsTaxPage.tsx": 1, "src/pages/DeepDive.tsx": 4, "src/pages/Research.tsx": 1, "src/components/Research.tsx": 2,
-    "src/components/watch/WatchPanel.tsx": 1, "src/components/ThemeDive.tsx": 1,
+    "src/components/watch/WatchPanel.tsx": 1,
+    // (updated on purpose, Release 43) the theme's companies CSV is a server file now (Basic and up), checked with the others below
   };
   for (const [f, n] of Object.entries(CSV)) {
     const s = read(f);
@@ -117,7 +118,8 @@ test("the audit as a class: every page whose main content is a table offers its 
   // the downloads that were there before keep their own server files, each saved through lib/share.ts
   for (const [f, re] of [["src/pages/TaxReportPage.tsx", /saveFile\(await r\.blob\(\), `stratlab-tax-FY-/], ["src/pages/money/NetWorthPage.tsx", /saveFile\(await r\.blob\(\), `stratlab-net-worth-/],
     ["src/pages/money/UsTaxPage.tsx", /saveFile\(await r\.blob\(\), `stratlab-schedule-FA-CY/], ["src/pages/money/ItrExportPage.tsx", /saveFile\(await r\.blob\(\)/],
-    ["src/pages/ExperimentPage.tsx", /download\(await r\.blob\(\), `.*-trades\.csv`\)/], ["src/pages/DeepDive.tsx", /download\(await r\.blob\(\), deckFileName\(/]])
+    ["src/pages/ExperimentPage.tsx", /download\(await r\.blob\(\), `.*-trades\.csv`\)/], ["src/pages/DeepDive.tsx", /download\(await r\.blob\(\), deckFileName\(/],
+    ["src/components/ThemeChanges.tsx", /\/research\/theme-dive\/companies\.csv\?[^\n]*\n[^\n]*deckWhenReady[^\n]*\n\s*download\(blob, `StratLab - [^\n]*\.csv`\);/]])
     assert.match(read(f), re, f);
 });
 

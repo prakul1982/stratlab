@@ -4,9 +4,9 @@ import { deckFileName } from "../lib/deckName";
 import { deckWhenReady } from "../lib/deckReady";
 import { REGION_NAME } from "../lib/research";
 import { Link } from "react-router-dom";
-import { Badge, Card, CardHead, CsvButton, DataTable, ShowLess, Select, Spark, Signed, Meter, usePhone, Working, type Column } from "./kit";
+import { Badge, Card, CardHead, DataTable, ShowLess, Select, Spark, Signed, Meter, usePhone, Working, type Column } from "./kit";
 import { Download } from "./Icons";
-import { WorkbookButton } from "./ThemeChanges";
+import { ThemeCsvButton, WorkbookButton } from "./ThemeChanges";
 import { useApp } from "../lib/app";
 import { download } from "../lib/share";
 import { deckLock } from "../lib/account";
@@ -156,26 +156,7 @@ export function memberRows(r: SectorAI, dive: Dive | null): MemberRow[] {
   return groups.flatMap(([layer, cos]) => cos.map((co) => ({ co, layer, fig: figs.get(co.ticker) ?? null })));
 }
 
-/** EXPORT: the members CSV's columns: raw figures, each with its unit in the column's name. */
-export function memberColumns(region: Region, unit: string | null): Column<MemberRow>[] {
-  const u = unit ?? (region === "IN" ? "₹ crore" : "$ million");
-  const cap = region === "IN" ? "₹ crore" : "$ million";
-  const cell = () => null;
-  return [
-    { key: "c", header: "Company", cell, csv: (x) => x.co.name },
-    { key: "s", header: "Symbol", cell, csv: (x) => x.co.ticker },
-    { key: "l", header: "Layer", cell, csv: (x) => x.layer },
-    { key: "i", header: "Industry", cell, csv: (x) => x.co.industry || null },
-    { key: "m", header: `Market value (${cap})`, cell, csv: (x) => x.fig?.cap ?? x.co.cap ?? null },
-    { key: "rev", header: `Revenue (${u})`, cell, csv: (x) => x.fig?.revenue ?? null },
-    { key: "e", header: "EBITDA margin (%)", cell, csv: (x) => x.fig?.ebitda ?? null },
-    { key: "n", header: "Net margin (%)", cell, csv: (x) => x.fig?.net ?? null },
-    { key: "roce", header: "ROCE (%)", cell, csv: (x) => x.fig?.roce ?? null },
-    { key: "y", header: "Year of the figures", cell, csv: (x) => x.fig?.year ?? null },
-    { key: "b", header: "In the theme by", cell, csv: (x) => memberBy(x.co) },
-    { key: "w", header: "What it does, in its own words", cell, csv: (x) => ownWords(x.co.what, x.co.name) || null },
-  ];
-}
+/* EXPORT: the members CSV is made by the server from the same rows (theme_routes.companies_csv; Release 43: a download, Basic and up). */
 
 /** EXPORT (owner, 4 Nov: "you forgot to put an export PDF or slides option in themes"): the theme as slides, PDF or PowerPoint, made by the
  * deep dive's deck builder and counted against the same monthly decks; and every company as a CSV. Each file goes through lib/share.ts. */
@@ -203,7 +184,7 @@ export function ThemeDownloads({ r, dive, region, theme }: { r: SectorAI; dive: 
       <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pptx")} title="The same slides as PowerPoint"><Download size={16} />{making === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button></>}
       <WorkbookButton region={region} theme={theme} dive={dive} />
       {preparing && <Working small label={preparing} />}
-      {rows.length > 0 && <CsvButton name={`theme ${theme} ${region} companies`} label="every company in this theme" columns={memberColumns(region, dive?.unit ?? null)} rows={rows} text="CSV" />}
+      {rows.length > 0 && <ThemeCsvButton region={region} theme={theme} dive={dive} />}
     </div>
   );
 }
