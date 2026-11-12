@@ -203,7 +203,9 @@ test("LIVE1C-074: the View as choice shows as pressed at once", () => {
 });
 
 test("LIVE1C-077: the foot of a page keeps the cookie question's height free", () => {
-  assert.match(read("src/styles.css"), /\.shell \.page \{ padding-bottom: var\(--mw-lift, 0px\); \}/);
+  // (updated on purpose, LIVE7B-006) the question is a band above the page now, never at its foot, so the Markets button no longer rises over it
+  assert.doesNotMatch(read("src/styles.css"), /--mw-lift/);
+  assert.doesNotMatch(read("src/components/watch/launcher.css"), /--mw-lift/);
 });
 
 test("LIVE1C-090, LIVE1C-091: few watched stocks stack the Invest cards and fill the row; Coming up is shorter beside a short watchlist and reads date and title together", () => {

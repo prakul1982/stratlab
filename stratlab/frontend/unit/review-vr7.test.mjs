@@ -42,8 +42,9 @@ test("VR7-006 (UI-CO item 2): Key numbers are tables of one width in two balance
 
 test("VR7-007: on a visitor's wide page the cookie question is a slim bar along the foot of the window, in the app it stays the corner card", () => {
   const css = read("src/styles.css");
-  assert.match(css, /@media \(min-width: 901px\) \{\n  body:not\(:has\(\.shell\)\) \.consent \{ left: 16px; right: 16px; width: auto; flex-direction: row;/);
-  assert.match(css, /\.consent \{ position: fixed; right: 16px; bottom: 16px;/);          // the corner card is still the base
+  // (updated on purpose, LIVE7B-006: a bar along the window's foot still covered the page) one slim row in the page's own flow, everywhere
+  assert.match(css, /\.consent \{ position: relative; display: flex; flex-wrap: wrap; align-items: center;/);
+  assert.doesNotMatch(css, /\.consent \{[^}]*position: fixed/);
 });
 
 test("VR7-008: a chart with a drawing rail is at least as tall as the rail (the Market Watch panel's 260px chart had a rail 100px taller hanging below it)", () => {

@@ -7,7 +7,6 @@ import { useLocation, useNavigationType } from "react-router-dom";
 import { usePersisted } from "../../lib/persist";
 import { importWithRetry } from "../../lib/lazyRetry";
 import { clampLayout, cornerCover, dockWidth, DEFAULT_LAYOUT, isSheet, LAYOUT_KEY, shapeOf, showsOn, type PanelLayout } from "../../lib/watchLayout";
-import { useConsentLift } from "../../lib/consentLift";
 import { Markets } from "../Icons";
 import "./launcher.css";
 
@@ -98,11 +97,17 @@ export function MarketsLauncher({ mode, userId, button = mode, autoOpen }: { mod
     document.body.classList.toggle("mw-cover", cover > 0);
     return () => { document.body.classList.remove("mw-cover"); root.style.removeProperty("--mw-cover"); };
   }, [cover]);
-  useConsentLift(true);          // the button, and a floating panel, rise above the question
-  // focus goes back to the button when the panel closes with focus inside it
+  // focus goes back to the button when the panel closes with focus inside it. Only then: a panel drawn and taken away while the page
+  // loads (the guest's kept panel, then the person's own closed one) put focus on the button on every page load, so the first Tab left
+  // the page and skipped its skip links (LIVE7B-007). `had` is whether the last focus moved into the panel while it showed.
   useEffect(() => {
-    if (shown) { had.current = true; return; }
-    if (had.current) { had.current = false; if (!document.activeElement || document.activeElement === document.body) btn.current?.focus(); }
+    if (!shown) {
+      if (had.current) { had.current = false; if (!document.activeElement || document.activeElement === document.body) btn.current?.focus(); }
+      return;
+    }
+    const on = (e: FocusEvent) => { had.current = !!(e.target instanceof Element && e.target.closest(".mw")); };
+    document.addEventListener("focusin", on);
+    return () => document.removeEventListener("focusin", on);
   }, [shown]);
 
   const close = useCallback(() => patch({ open: false }), [patch]);

@@ -274,7 +274,7 @@ test("the panel never covers the cookie question or the page's main actions", as
   await open(page, "/", { ads: true });
   const ask = page.getByTestId("consent");
   await expect(ask).toBeVisible();
-  // signed in, the question is a bar along the foot of the page column (LIVE6-014), the button risen above it: never over it
+  // signed in, the question is the first row of the page column (LIVE7B-006), the button in the window's corner: never over it
   const l = (await launch(page).boundingBox())!, a = (await ask.boundingBox())!;
   expect(gone(l, a), `the button ${JSON.stringify(l)} covers the question ${JSON.stringify(a)}`).toBe(true);
   await launch(page).click();
