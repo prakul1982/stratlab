@@ -14,6 +14,7 @@ import { CalendarFilters, NO_CAL, SIZE_NAME, calCount, keepFilters, keptFilters,
 import { Info } from "../components/ui";
 import { Earlier } from "../components/Earlier";
 import { Card, CardHead, CheckField, DataTable, ShowLess, EmptyState, ErrorState, Field, PageHeader, Seg, Select, Signed, Skeleton, StockPicker, Working, type Column } from "../components/kit";
+import { ReportScope } from "../components/kit/ReportFigure";
 
 /* /research/results: the dates companies have called their board meetings to consider results (or, in the US, set for
  * their quarterly results), week by week, for your stocks or every company, narrowed by company size, sector, index, F&O and the
@@ -314,7 +315,9 @@ export function ResultsPage() {
           return (
             <div key={d} className="inv-day" data-testid="results-day">
               <span className="k-eyebrow">{dayHeading(d, info.count, data.today)}</span>
+              <ReportScope section={`Results on ${resultDay(d)}`} source="Results filed with the exchange and the day's prices">
               <DataTable csv={`results ${d}`} label={`Results on ${resultDay(d)}`} rows={on} rowKey={(r) => `${r.symbol}-${r.date}`} columns={on.some((r) => r.fo) ? columns : columns.filter((c) => c.key !== "im")} stack compact phonePage={10} />
+              </ReportScope>
               {(info.count > info.shown || (openDay === d && dayRows > 0)) && (
                 <div className="k-row">
                   <span className="k-note">Showing {info.shown} of {info.count.toLocaleString("en-IN")} on {resultDay(d)}.</span>

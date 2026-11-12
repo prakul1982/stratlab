@@ -2,6 +2,7 @@ import { lazy, StrictMode, Suspense, useCallback, useEffect, useLayoutEffect, us
 import { titleFor } from "./lib/title";
 import { createRoot } from "react-dom/client";
 import { useFeedbackOpen } from "./components/FeedbackOpen";
+import { FigureReports } from "./components/FigureReportHost";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { AppProvider, sessionUnconfirmed, useApp } from "./lib/app";
 import { api } from "./lib/api";
@@ -390,6 +391,8 @@ function App() {
       <Routed />
       {/* Help & feedback: one dialog for every page, signed in or not (owner, 4 Nov) */}
       <AppFeedback />
+      {/* "Report an error in this figure" and the note when one is fixed (owner, 12 Nov) */}
+      <FigureReports />
       <Toast />
     </AppProvider>
   );

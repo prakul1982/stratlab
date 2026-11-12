@@ -95,6 +95,8 @@ CARD_WORDS = {
     "doc_search": "search inside filings and call transcripts",
     "doc_search_all": "every year of a company's filings",
     "tables": "ten years of statements and shareholding",
+    # (updated on purpose, f3: a new Basic feature, the watchlist import from a file)
+    "watchlist_import": "watchlist import from a file",
 }
 
 

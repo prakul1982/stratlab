@@ -2680,7 +2680,10 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
 {_sub_line(f.get("exchange") or country, ind)}{_price_block(f, as_of)}
 <p class="small muted" data-advice>Facts from reported results and exchange filings. Not investment advice.</p>"""]
     parts.append(price_chart_html(f, region, symbol))       # PUB-1: the share price, drawn in the browser from the cached closes
-    parts.append(_figures(f))
+    figs = _figures(f)
+    parts.append(figs)
+    if figs:     # "Report an error in this figure" (owner, 12 Nov): a visitor signs in to report one; the app's figures carry the flag
+        parts.append(f'<p class="small muted" data-report>A figure looks wrong? <a href="{e(app)}#co-numbers">Sign in to report it</a>, and we reply when it\'s checked.</p>')
     parts += [n for n in notes if not _is_basis(n)]
     parts.append(_trend(f))
     parts.append(_table(f))

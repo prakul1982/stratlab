@@ -98,6 +98,8 @@ ROUTES = [
     # (updated on purpose: lane c-f2's downloads of a company's tables)
     ("export", "get", "/research/company/IN/TCS/peers.csv", None),
     ("export", "get", "/research/company/IN/TCS/statements.xlsx", None),
+    # (updated on purpose, f3: the watchlist file import is Basic)
+    ("watchlist_import", "post", "/watch/import/file", {"data": "U3ltYm9sClRDUwo=", "filename": "list.csv"}),
 ]
 
 

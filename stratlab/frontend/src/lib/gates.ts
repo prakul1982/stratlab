@@ -74,6 +74,7 @@ export const ELSEWHERE: Record<string, string> = {
   assistant: "Connect an AI assistant (its own plan note)", ipo_summary: "an IPO's own page (its gate is below)",
   doc_search_all: "Search filings (every year, and the CSV)",
   tables: "a company page's Peers, Financial statements and Shareholding history",
+  watchlist_import: "Import a watchlist (Market Watch and the watchlist page)",
 };
 
 export const featureName = (feature: string) => FLAGS.find(([f]) => f === feature)?.[1] ?? feature;

@@ -1,5 +1,5 @@
 import { DocSearchLink } from "../components/DocSearchLink";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, type ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -48,8 +48,13 @@ import { CompanyActions } from "../components/CorpActions";
 import { CompanyTables } from "../components/CompanyTables";
 import { RouteSeg, WATCH_VIEWS } from "../components/RouteSeg";
 import {
-  Badge, Card, CardHead, ChartFrame, CsvButton, DataTable, Delta, EmptyState, ErrorState, Field, FormGrid, PageHeader, PageNav, Signed, Skeleton, Stat, StockPicker,
+  Badge, Card, CardHead, ChartFrame, CsvButton, DataTable, Delta, EmptyState, ErrorState, Field, FormGrid, PageHeader, PageNav, PlanNote, Signed, Skeleton, Stat, StockPicker,
 } from "../components/kit";
+import { ReportScope } from "../components/kit/ReportFigure";
+import { importWithRetry } from "../lib/lazyRetry";
+import { FILE_LOCK } from "../lib/watchImport";
+// Import a watchlist (owner, 12 Nov): downloaded only when it is opened
+const ImportWatchlist = lazy(() => importWithRetry(() => import("../components/watch/ImportWatchlist")));
 import { resultDay, type ResultRow } from "./ResultsPage";
 import { pairKey, quotesInBatches } from "../lib/investUi";
 
@@ -401,11 +406,14 @@ function CompanyView() {
       {c.metrics.length > 0 && (
         <Card id="co-numbers">
           <CardHead title="Key numbers" info={HELP.researchMetrics} actions={<Link className="btn quiet sm" to={deepTo}>10 years in the deep dive →</Link>} />
-          <MetricsGrid groups={c.metrics} currency={ccy} industry={c.industry ?? (c.bank ? "bank" : null)} />   {/* India's pages have no industry name: a lender is still a bank's spans (LIVE4-013) */}
+          <ReportScope section="Key numbers" source={`The company's reported figures and the latest price${c.numbers_at ? `, worked out ${fmtDate(c.numbers_at)}` : ""}`}>
+          <MetricsGrid groups={c.metrics} currency={ccy} industry={c.industry ?? (c.bank ? "bank" : null)} />
+          </ReportScope>   {/* India's pages have no industry name: a lender is still a bank's spans (LIVE4-013) */}
         </Card>
       )}
 
       {trend && (
+        <ReportScope section="Sales and profit, by year" source="The company's reported annual results">
         <ChartFrame title="Sales and profit, by year"
           table={{ label: "Sales and profit by year", rows: trend.rev.points.map((p) => ({ y: p.y, sales: p.v, profit: trend.prof.points.find((q) => q.y === p.y)?.v ?? null })), rowKey: (x) => x.y,
             columns: [{ key: "y", header: "Year", rowHeader: true, cell: (x) => x.y },
@@ -419,6 +427,7 @@ function CompanyView() {
           {/* bars written "10.56L" are lakh crore under a title that says crore: said once under both charts (LIVE1A-063) */}
           {[trend.rev, trend.prof].some((x) => /cr/i.test(x.unit) && !/lakh/i.test(x.unit) && x.points.some((p) => trendValue(p.v, x.unit).length > 7)) && <p className="k-note" data-testid="trend-lakh">A figure written with L is in lakh crore (1 lakh crore is 1,00,000 crore).</p>}
         </ChartFrame>
+        </ReportScope>
       )}
 
       {/* the description comes after the figures: it sat between the chart and the key numbers (LIVE1A-062; owner pattern 14: the visual, the figures, then the words) */}
@@ -789,6 +798,7 @@ export function WatchlistPage() {
   const [region, setRegion] = useRegion();
   const { items, toggle, has, failed, retry, save } = useWatchlist();
   const { fail, notify, markets } = useApp();
+  const [importing, setImporting] = useState(false);
   const [quotes, setQuotes] = useState<Record<string, Quote | null> | null>(null);
   // between the US close and its settle point the prices are the day's last prints, said as the company header says it (R13-005)
   const settling = settlingNow(markets.find((m) => m.id === region));
@@ -861,7 +871,10 @@ export function WatchlistPage() {
       {/* one field across the card, its title as its label: a card with a heading above a 40%-wide box was mostly empty (RC2A-039) */}
       <Card compact className="watch-add">
         <Field label="Add a company" wide>{(id) => <StockPicker id={id} market={region} clearOnPick listedOnly onPick={add} placeholder="Search by name or symbol, like RELIANCE" />}</Field>
+        <p className="k-small k-muted" data-testid="watch-import-line">Have a list in another app or a spreadsheet?{" "}
+          <button type="button" className="link" onClick={() => setImporting(true)}>Import a watchlist</button></p>
       </Card>
+      {importing && <Suspense fallback={null}><ImportWatchlist onClose={() => setImporting(false)} lock={<PlanNote plan="basic">{FILE_LOCK}</PlanNote>} /></Suspense>}
       {items === null ? (failed
         ? <Card><ErrorState title="Your watchlist couldn't be opened" action={{ label: "Try again", onClick: retry }}>Nothing was changed. Adding or removing a company waits until it opens.</ErrorState></Card>
         : <Card><Skeleton label="Opening your watchlist" lines={3} /></Card>) : mine.length === 0 ? (

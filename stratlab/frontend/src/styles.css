@@ -3118,3 +3118,19 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .calls-links { display: inline-flex; flex-wrap: wrap; gap: var(--s1) var(--s3); }
 .calls-when { display: inline-flex; flex-direction: column; }
 .groups-rule { margin: 0 0 var(--s2); padding-left: var(--s5); display: grid; gap: var(--s1); }
+/* "Report an error in this figure": a small flag after a row's name or a figure's label. On a screen with a pointer it shows when the
+ * row or figure is hovered or the flag has focus; on a touch screen it stays, faint, so it can be tapped. */
+.k-report {
+  display: inline-grid; place-items: center; width: 24px; height: 24px; margin: -4px 0 -4px 2px; padding: 0; vertical-align: middle;
+  border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; opacity: 0;
+  transition: opacity .12s ease;
+}
+.k-report svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.k-report:hover { color: var(--ink); background: var(--chip); }
+.k-report:focus-visible { opacity: 1; }
+tr:hover .k-report, tr:focus-within .k-report, .k-stat:hover .k-report, .k-stat:focus-within .k-report { opacity: .85; }
+/* in a table the flag sits at the right end of the row's name cell, so it never wraps a short name ("Div yield") onto two lines */
+.k-tbl-wrap .k-table th[scope="row"]:has(> .k-report) { position: relative; padding-right: 34px; }   /* (a phone's sticky first column stays sticky: its rule is stronger) */
+th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
+@media (hover: none) { .k-report { opacity: .55; } }
+@media print { .k-report { display: none; } }

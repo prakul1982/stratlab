@@ -1,3 +1,4 @@
+import { ReportScope } from "./kit/ReportFigure";
 import { useMemo, useState, type ReactNode } from "react";
 import { deckFileName } from "../lib/deckName";
 import { deckWhenReady } from "../lib/deckReady";
@@ -47,6 +48,7 @@ export function ChainCard({ dive }: { dive: Dive }) {
     { key: "c", header: "ROCE", numeric: true, info: "Return on capital employed, median of the layer's companies.", cell: (x) => ((x.roce_n ?? MIN_BASE) < MIN_BASE ? dash : pc(x.roce)) },
   ];
   return (
+    <ReportScope section="The whole chain in one table" source="The companies' reported annual results">
     <Card id="theme-chain" label="The whole chain in one table">
       <CardHead title="The whole chain in one table" info={basisWords(dive.basis)} />
       <DataTable label="The value chain by layer: companies, revenue and median margins" columns={cols} rows={dive.chain.rows} rowKey={(x) => x.layer} />
@@ -54,6 +56,7 @@ export function ChainCard({ dive }: { dive: Dive }) {
       {dive.chain.rows.some((x) => x.ebitda_n > 0 && x.ebitda_n < MIN_BASE) && <p className="k-note">A median is shown on {MIN_BASE} companies or more in a layer's calculations; each company's own figures are on its layer's table.</p>}
       <p className="k-note">{basisWords(dive.basis)}</p>
     </Card>
+    </ReportScope>
   );
 }
 
@@ -249,6 +252,7 @@ export function LayerCard({ layer, i, region, business }: { layer: Layer; i: num
   const hist = layer.history;
   const listed = layer.listed ?? layer.companies.length, inCalc = layer.n ?? layer.companies.filter((c) => calcOf(c).in).length;
   return (
+    <ReportScope section={`Theme layer: ${layer.layer}`} source="The companies' reported annual results">
     <Card id={`layer-${i}`} label={`Layer ${i + 1}: ${layer.layer}`}>
       <CardHead title={<><span className="k-muted">Layer {i + 1} · </span>{layer.layer}</>} />
       {layer.description && <p className="k-small">{layer.description} <span className="k-muted">(Written by AI from general knowledge, with no figures.)</span></p>}
@@ -281,6 +285,7 @@ export function LayerCard({ layer, i, region, business }: { layer: Layer; i: num
         </>
       )}
     </Card>
+    </ReportScope>
   );
 }
 

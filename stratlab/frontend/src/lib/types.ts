@@ -174,6 +174,8 @@ export interface Me {
   offer?: Offer;
   /** The first-run guide, kept on the account: shown once per person, not once per device. */
   onboarding?: { welcome: string | null; tour: "done" | "skipped" | null };
+  /** One-line notes for the person not yet shown: a figure they reported was fixed (backend feedback.notes_for). */
+  notes?: { id: string; at: string; path: string; text: string }[];
   /** The account already has holdings, notebooks, a paper session or a watchlist: the welcome question is not asked of it. */
   established?: boolean;
   /** My Holdings has at least one stock: the Money space's main button then says "Update holdings" (LIVE1C-055). */

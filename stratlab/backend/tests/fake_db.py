@@ -28,6 +28,8 @@ USERS = {
     **{f"b3-{i}": (f"u-b3-{i}", f"b3{i}@example.com", "pro") for i in range(12)},
     # lane c-f2's e2e (e2e/company-tables.spec.ts): its own accounts, Free, Basic and Pro, one per test and project
     **{f"cf2-{i}": (f"u-cf2-{i}", f"cf2{i}@example.com", ("free", "basic", "pro")[i // 8]) for i in range(24)},
+    # the F3 lane's e2e (e2e/f3-import-report.spec.ts): its own accounts, one per test and project (free, basic, pro in turn)
+    **{f"f3-{i}": (f"u-f3-{i}", f"f3{i}@example.com", ("free", "basic", "pro")[i % 3]) for i in range(12)},
     "free-token": ("u-free", "free@example.com", "free"),
     "basic-token": ("u-basic", "basic@example.com", "basic"),
     "pro-token": ("u-pro", "pro@example.com", "pro"),

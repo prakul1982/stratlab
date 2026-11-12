@@ -33,7 +33,8 @@ export const LIMITS: Record<PlanId, Limits> = {
       "ipo_summary", "ipo_alerts", "movers",
       "earnings_calls", "group_figures",
       "doc_search",
-      "tables"] },
+      "tables",
+      "watchlist_import"] },
   pro: { backtests_per_month: null, ai_builds_per_month: null, live_limit: 10, group_size: 50, deepdives_per_month: null, decks_per_month: null,
     stock_alerts: 100, screens: 25, holdings: 300, networth_items: null, mf_schemes: null, journal_trades: null,
     watchlists: null, watchlist_symbols: null, chart_saves: null, chart_indicators: null, ai_reads_per_day: null,
@@ -49,7 +50,8 @@ export const LIMITS: Record<PlanId, Limits> = {
       "ipo_summary", "ipo_alerts", "movers",
       "earnings_calls", "group_figures",
       "doc_search", "doc_search_all",
-      "tables"] },
+      "tables",
+      "watchlist_import"] },
 };
 
 // Free has every market and the core tools, not every tool: Replay, Forward test, the scans and the full journal are paid (DP1-021)
@@ -142,7 +144,8 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in 
   ["group_figures", "Business group figures: each member's 1-month and 1-year change, promoter holding and the members' heatmap"],
   // the filings search (doc_search.py): Free sees the first 3 results of a search, filtered by company only (plans.DOC_SEARCH)
   ["doc_search", "Search filings: all results"], ["doc_search_all", "Search filings: all years, CSV"],
-  ["tables", "All company tables"]];
+  ["tables", "All company tables"],
+  ["watchlist_import", "Watchlist import from a CSV or Excel file"]];
 export const EVERYONE = ["Every market, and your own CSV",
   "Price charts: candles, Heikin-Ashi or bars, indicators, drawings kept on your account, and compare",
   "Market Watch on every page: lists across every market we cover, live prices, and charts from 1 minute to 1 month with drawings",
