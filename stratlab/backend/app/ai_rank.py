@@ -500,8 +500,9 @@ def record_fail(name: str, model: str, err: Exception, live: bool = True) -> str
         "empty": f"empty reply ({model})", "not_json": f"reply wasn't the JSON asked for ({model})",
         "truncated": f"reply was cut off ({model})"}.get(getattr(err, "why", ""), f"unusable reply ({model})")
     with _lock:
-        if kind in ("context", "refusal"):
-            return detail                                  # the wrong model for this prompt (or it declined it), not a fault
+        if kind in ("context", "refusal", "tier"):
+            return detail                                  # the wrong model for this prompt (or it declined it, or the month's
+                                                           # Claude budget doesn't reach it), not a fault
         if kind in ("rate", "credit"):
             wait = err.wait
             if kind == "credit":
