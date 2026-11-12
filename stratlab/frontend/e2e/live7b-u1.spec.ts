@@ -119,3 +119,37 @@ for (const width of [1440, 390]) {
     }
   });
 }
+
+// LIVE7B-010: on a phone a company page's "Last quarters" table was 805px in a 322px card, and Key numbers stayed four-column tables (a basis
+// wrapping to seven lines, "₹11,808 cr" broken over two)
+test("a company page's quarters and Key numbers fit a phone: no sideways table, each value on one line (LIVE7B-010)", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const errors = await open(page, "/research/IN/TCS", "Key numbers");
+  const q = page.locator("[aria-label^='The last quarters']").first();
+  await q.scrollIntoViewIfNeeded();
+  await expect(q).toBeVisible({ timeout: 30_000 });
+  const qs = await q.evaluate((e) => ({ sw: e.scrollWidth, cw: e.clientWidth }));
+  expect(qs.sw, "the quarters table scrolls sideways").toBeLessThanOrEqual(qs.cw + 1);
+  await expect(q.getByText("(₹ cr)").first()).toBeVisible();                       // the unit is still said
+  const bad = await page.locator(".inv-mt").evaluateAll((els) => els.flatMap((g) => {
+    const out: string[] = [];
+    const wrap = g.querySelector(".k-tbl-wrap") as HTMLElement;
+    if (wrap.scrollWidth > wrap.clientWidth + 1) out.push(`${g.textContent?.slice(0, 20)}: ${wrap.scrollWidth} in ${wrap.clientWidth}`);
+    for (const v of Array.from(g.querySelectorAll("td:nth-child(2)")) as HTMLElement[]) {
+      const lh = parseFloat(getComputedStyle(v).lineHeight) || 20;
+      if (v.getBoundingClientRect().height > lh * 1.6) out.push(`value "${v.textContent}" on ${Math.round(v.getBoundingClientRect().height)}px`);
+    }
+    for (const b of Array.from(g.querySelectorAll("td:nth-child(3)")) as HTMLElement[]) {
+      const lh = parseFloat(getComputedStyle(b).lineHeight) || 20;
+      if (b.getBoundingClientRect().height > lh * 3.5) out.push(`basis "${b.textContent?.slice(0, 30)}" on ${Math.round(b.getBoundingClientRect().height / lh)} lines`);
+    }
+    return out;
+  }));
+  expect(bad).toEqual([]);
+  await expect(page.locator(".inv-mt-title").first()).toBeVisible();              // each group keeps its name
+  await sane(page, errors);
+  // a wide window keeps the tables
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(page.locator(".inv-mt thead th").first()).toBeVisible();
+  await expect(page.locator(".inv-mt-title").first()).toBeHidden();
+});
