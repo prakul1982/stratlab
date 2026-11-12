@@ -54,7 +54,8 @@ def test_features_per_plan_once_payments_are_live(paid):
              "doc_search",       # (updated on purpose, lane b1: the filings search, and its every-year archive and CSV on Pro below)
              "tables",   # (updated on purpose: lane c-f2's company tables in full are Basic)
              "watchlist_import",   # (updated on purpose, f3: the watchlist import from a file is Basic)
-             "tax_export"}             # (updated on purpose, FREE-TIER: the tax report's downloads are Basic's)
+             "tax_export",             # (updated on purpose, FREE-TIER: the tax report's downloads are Basic's)
+             "theme_changes", "theme_workbook"}      # (updated on purpose, f4: a theme's full change log and its workbook are Basic)
     assert {f for f, on in plan_info("basic")["features"].items() if on} == basic
     assert all(plan_info("pro")["features"].values()) and set(FEATURES) == basic | {"fno", "options_signal", "fast_entries", "export", "tax_tools", "itr_export", "us_tax", "options_whatif", "strike_rules", "signal_webhooks", "assistant", "doc_search_all"}
     assert {f: FEATURE_PLAN[f] for f in ("indicators", "alerts", "scans", "fno", "export")} == {

@@ -3134,3 +3134,5 @@ tr:hover .k-report, tr:focus-within .k-report, .k-stat:hover .k-report, .k-stat:
 th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
 @media (hover: none) { .k-report { opacity: .55; } }
 @media print { .k-report { display: none; } }
+/* f4: the workbook's plan note on its own line under the theme's download buttons (components/ThemeChanges.tsx) */
+.theme-wb-lock { flex-basis: 100%; order: 1; }

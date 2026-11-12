@@ -147,6 +147,8 @@ def test_every_paid_feature_is_refused_somewhere_on_the_server():
                  # (updated on purpose) trimmed rather than refused: tests/test_company_tables.py
                  "tables": "peers, statements and shareholding views",
                  # (updated on purpose, FREE-TIER) the tax report's downloads: tests/test_free_tier.py checks the 402
-                 "tax_export": "GET /tax/export"}
+                 "tax_export": "GET /tax/export",
+                 # f4 (test_f4_theme_changes): the whole change log on the theme's dive, and GET /research/theme-dive/workbook
+                 "theme_changes": "the theme dive's change log", "theme_workbook": "GET /research/theme-dive/workbook"}
     covered = {r[0] for r in ROUTES} | set(elsewhere)
     assert covered == set(FEATURES), set(FEATURES) ^ covered

@@ -66,6 +66,7 @@ PLANS = {
                      "doc_search",
                      "tables",
                      "tax_export",
+                     "theme_changes", "theme_workbook",
                      "watchlist_import"},
     },
     "pro": {
@@ -106,6 +107,7 @@ PLANS = {
                      "doc_search", "doc_search_all",
                      "tables",
                      "tax_export",
+                     "theme_changes", "theme_workbook",
                      "watchlist_import"},
     },
 }
@@ -149,6 +151,7 @@ FEATURES = ("indicators", "fno", "group_live", "options", "options_signal", "fas
             "doc_search", "doc_search_all",
             "tables",
             "tax_export",
+            "theme_changes", "theme_workbook",
             "watchlist_import")
 # doc_search: search inside filings and call transcripts with every hit and every filter (sector, a stored theme's companies, kind
 # of document, dates), over the last year (Free: the first DOC_SEARCH["free"]["hits"] hits of a search, filtered by company only;
@@ -160,6 +163,8 @@ DOC_SEARCH = {"free": {"hits": 3, "days": 365}, "basic": {"hits": None, "days": 
 # shareholding with its chart (the three nearest peers, the latest three years of profit and loss and the latest quarter's shareholding
 # are for everyone); a company's statements as Excel or CSV and its peers as CSV are Pro's export (company_tables.py)
 # tax_export: the tax report's CSV and PDF downloads (the report on screen is for everyone)
+# theme_changes: a theme's whole change log, "What changed" (the latest refresh's counts and first 5 rows are on Free);
+# theme_workbook: a theme as an Excel workbook, counted as that theme's deck of the month (its PDF, PowerPoint and workbook are one deck)
 # the smallest plan with each feature, for upgrade messages
 FEATURE_PLAN = {f: next(p for p in ("free", "basic", "pro") if f in PLANS[p]["features"] or p == "pro") for f in FEATURES}
 

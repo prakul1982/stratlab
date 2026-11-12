@@ -25,10 +25,11 @@ export const FEATURES: Record<PlanId, string[]> = {
     // "No ads" opens the first line, with the plan's amounts: a ninth line would break the card's six to eight short lines (DK-003)
     `No ads, ${L.basic.backtests_per_month} backtests and ${L.basic.ai_builds_per_month} AI builds a month; ${L.basic.stock_alerts} stock alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings, ${L.basic.watchlists} Market Watch lists of ${L.basic.watchlist_symbols} (watchlist import from a file), drawings kept on every chart`,
     `Paper trade ${L.basic.live_limit} strategies at a time, whole groups on intraday candles and options at set times, with trade notifications and a daily report`,
-    "Trading tools: all 20+ indicators (MACD, Supertrend, VWAP and more), full trade journal, positioning history, stock futures history, closing auction history, chart replay practice, an India VIX entry filter, SIP dip rules",
-    "Alerts: F&O change alerts, ETF gap alerts, IPO alerts and market event reminders and money reminders; the daily Market Brief and My Stocks by email",
-    `${L.basic.deepdives_per_month} company deep dives, ${L.basic.decks_per_month} slide decks and ${L.basic.themes_per_month} new themes a month, ${SHARE_LINKS.basic} public share links; every peer and ten years of statements and shareholding on company pages`,
-    "Research: business updates in numbers, named-holder search, IPO offer document summaries, search inside filings and call transcripts, the market movers in full, the earnings-call calendar in full and business group figures",
+    "Trading tools: all 20+ indicators, full trade journal, positioning history, stock futures history, closing auction history, chart replay practice, an India VIX entry filter, SIP dip rules, the market movers in full",
+    "Alerts: F&O change alerts, ETF gap alerts, IPO alerts and market event reminders and money reminders; the daily Market Brief and My Stocks by email; the earnings-call calendar in full",
+    // f4: a theme's workbook counts as its deck of the month; the full change log ("What changed") is Basic (Free sees the latest refresh's summary)
+    `${L.basic.deepdives_per_month} company deep dives, ${L.basic.decks_per_month} slide decks and ${L.basic.themes_per_month} new themes a month (a theme's workbook in Excel counts as its deck), ${SHARE_LINKS.basic} public share links and theme change logs`,
+    "Company pages: every peer and ten years of statements and shareholding, business updates in numbers, named-holder search, IPO offer document summaries, search inside filings and call transcripts and business group figures",
     "Scans and watchlist: the Stage 2 scan and every other trend scan, watchlist red flags (and each holding's filings and results date), Watchlist at a glance, market breadth charts, margin funding history",
     "Money: tax report downloads, every mutual fund and net worth entry, fund capital gains, fund costs in rupees, fund behaviour, dividends with TDS, deposit rates after your own tax, a floating-rate loan check"],
   pro: ["Everything in Basic, plus:", `Unlimited backtests, deep dives and decks, with unlimited share links; up to ${AI_BUILDS_PER_DAY} AI builds a day; filings search over every year of a company's filings, with the results as a CSV`,
@@ -63,3 +64,15 @@ export const EVERYONE = ["Every market, and your own CSV",
   "IPOs in India and the US: dates, price bands, lot sizes, the bids by category while an issue is open, the offer documents' key facts, and listings against the issue price",
   "This week's earnings calls and analyst meets, each with its notice and webcast or dial-in link",
   "Business group pages: each group's listed companies, their market value and the day's change"];
+
+/** Paid features added after plans.ts's lists were held for the landing page's JavaScript budget (f4): [flag, its row in the comparison
+ * table, the cheapest plan that has it]; every plan above has it too. plans.py says the same, and backend/tests/test_plan_copy.py reads
+ * these with plans.ts's LIMITS and FLAGS. */
+export const MORE_FLAGS: [string, string, PlanId][] = [
+  ["theme_changes", "A theme's full change log: companies added, removed and moved between layers, layers renamed, split or merged, figures restated (Free: the latest refresh's summary)", "basic"],
+  ["theme_workbook", "A theme as an Excel workbook: every table of its page and deck, with sources and method (counts as the theme's deck of the month)", "basic"],
+];
+
+const RANK: Record<PlanId, number> = { free: 0, basic: 1, pro: 2 };
+/** Whether a plan has one of MORE_FLAGS. */
+export const hasMore = (plan: PlanId, flag: string) => MORE_FLAGS.some(([f, , p]) => f === flag && RANK[plan] >= RANK[p]);
