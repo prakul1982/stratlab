@@ -87,6 +87,9 @@ CARD_WORDS = {
     "loan_check": "floating-rate loan check",
     "ipo_summary": "IPO offer document summaries",
     "ipo_alerts": "IPO alerts",
+    # (updated on purpose, lane b1: two new paid features, the filings search on Basic and its every-year archive and CSV on Pro)
+    "doc_search": "search inside filings and call transcripts",
+    "doc_search_all": "every year of a company's filings",
 }
 
 

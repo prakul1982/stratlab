@@ -1,3 +1,4 @@
+import { DocSearchLink } from "./DocSearchLink";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { asOf, fmtDate, safeHref } from "../lib/format";
@@ -46,7 +47,7 @@ export function UsFilingsCards({ symbol }: { symbol: string }) {
         )}
       </Card>
       <Card id="filings" testId="us-filings">
-        <CardHead title="Filings and red flags" info={d.note} infoLabel="About these filings" />
+        <CardHead title="Filings and red flags" info={d.note} infoLabel="About these filings" actions={<DocSearchLink region="US" symbol={symbol} />} />
         {d.flags.total === 0 ? (
           <p className="k-small k-muted">No flagged Form 8-K item in the last 12 months{d.flags.as_of ? `, read through ${fmtDate(d.flags.as_of)}` : ""}. Only items such as a bankruptcy, a delisting notice, an auditor or officer change, or a material agreement are flagged; ordinary filings are not listed.</p>
         ) : (

@@ -89,6 +89,9 @@ ROUTES = [
     ("journal", "get", "/trade/journal/compare?tag=x&session=s1", None),
     ("ipo_alerts", "put", "/invest/ipos/alerts", {"on": True, "events": ["open"], "markets": ["IN"], "sme": False}),
     ("ipo_summary", "post", "/invest/ipos/in-none/summary", None),
+    # (updated on purpose, lane b1: the filings search's filters are Basic, its CSV of hits Pro; Free still searches, by company only)
+    ("doc_search", "get", "/research/docs/search?q=order&sector=Banks", None),
+    ("doc_search_all", "get", "/research/docs/export?q=order", None),
 ]
 
 

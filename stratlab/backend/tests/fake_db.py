@@ -22,6 +22,8 @@ USERS = {
     **{f"export-{i}": (f"u-export-{i}", f"export{i}@example.com", "free" if i >= 20 else "pro") for i in range(24)},
     # the R19 lane's e2e (e2e/r19-library.spec.ts): its own Free accounts, one per test, project and repeat (refreshes are counted per person)
     **{f"r19-{i}": (f"u-r19-{i}", f"r19{i}@example.com", "free") for i in range(48)},
+    # lane b1's e2e (e2e/doc-search.spec.ts): its own accounts, Free, Basic and Pro in turn, one per test and project
+    **{f"b1-{i}": (f"u-b1-{i}", f"b1{i}@example.com", ("free", "basic", "pro")[i % 3]) for i in range(18)},
     "free-token": ("u-free", "free@example.com", "free"),
     "basic-token": ("u-basic", "basic@example.com", "basic"),
     "pro-token": ("u-pro", "pro@example.com", "pro"),

@@ -30,7 +30,8 @@ export const LIMITS: Record<PlanId, Limits> = {
       "biz_updates", "holders",
       "stock_futures", "mtf",
       "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
-      "ipo_summary", "ipo_alerts"] },
+      "ipo_summary", "ipo_alerts",
+      "doc_search"] },
   pro: { backtests_per_month: null, ai_builds_per_month: null, live_limit: 10, group_size: 50, deepdives_per_month: null, decks_per_month: null,
     stock_alerts: 100, screens: 25, holdings: 300, networth_items: null, mf_schemes: null, journal_trades: null,
     watchlists: null, watchlist_symbols: null, chart_saves: null, chart_indicators: null, ai_reads_per_day: null,
@@ -43,7 +44,8 @@ export const LIMITS: Record<PlanId, Limits> = {
       "assistant",
       "stock_futures", "mtf",
       "mf_behaviour", "sip_luck", "rates_slab", "loan_check",
-      "ipo_summary", "ipo_alerts"] },
+      "ipo_summary", "ipo_alerts",
+      "doc_search", "doc_search_all"] },
 };
 
 // Free has every market and the core tools, not every tool: Replay, Forward test, the scans and the full journal are paid (DP1-021)
@@ -129,7 +131,10 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in 
   ["rates_slab", "Fixed-income rates after tax at the rate from your own tax estimate"],
   ["loan_check", "Floating-rate loans: is your rate following its benchmark, and what each change did"],
   ["ipo_summary", "IPO offer document summaries: what the company does, its figures, what the money is for, the main risk factors and the promoters"],
-  ["ipo_alerts", "IPO alerts: when an issue opens, closes, is allotted or lists"]];
+  ["ipo_alerts", "IPO alerts: when an issue opens, closes, is allotted or lists"],
+  // the filings search (doc_search.py): Free sees the first 3 results of a search, filtered by company only (plans.DOC_SEARCH)
+  ["doc_search", "Search inside filings and call transcripts: every result, with sector, theme, document and date filters (Free sees the first 3)"],
+  ["doc_search_all", "Filings search across every year stored, a company's whole archive from its page, and the results as a CSV"]];
 export const EVERYONE = ["Every market, and your own CSV",
   "Price charts: candles, Heikin-Ashi or bars, indicators, drawings kept on your account, and compare",
   "Market Watch on every page: lists across every market we cover, live prices, and charts from 1 minute to 1 month with drawings",
@@ -147,7 +152,8 @@ export const EVERYONE = ["Every market, and your own CSV",
   "Named holders above 1% and the business-update filings on every company page",
   "Stock futures today: OI buildup, rollover, basis and MWPL use for every F&O stock", "Stock lending fees that traded for your holdings",
   "Margin-funded positions per stock today, and your own MTF cost worked out",
-  "IPOs in India and the US: dates, price bands, lot sizes, the bids by category while an issue is open, the offer documents' key facts, and listings against the issue price"];
+  "IPOs in India and the US: dates, price bands, lot sizes, the bids by category while an issue is open, the offer documents' key facts, and listings against the issue price",
+  "The first 3 results of a search inside companies' filed documents and call transcripts, by company"];
 
 /** The cheapest plan that includes a feature flag ("free" when neither paid list names it). */
 export function planOf(feature: string): PlanId {

@@ -138,6 +138,7 @@ def build():
     # keep that index: the background job would rebuild it from stored pages a few minutes in, mid-run
     mp.setattr(main.screen_indexer, "loop", lambda: None)
     connect_once(mp)
+    doc_search_world()
     return w
 
 
@@ -388,6 +389,46 @@ def theme_pages(mp):
         hit = stock_pages.find("IN", sym)
         if hit:
             main.stock_page_store.get("IN", hit[0], hit[1])
+
+
+def doc_search_world():
+    """The filings search's index (doc_store.py) over made-up documents, on the in-memory store (tests/fake_doc_store.py): transcripts
+    and presentations of a few Indian companies over two years (one read from a scan, one with markup in its text), and US annual
+    reports and earnings releases, for e2e/doc-search.spec.ts. Every passage is invented for the tests."""
+    from datetime import date, timedelta
+    from app import doc_store
+    from tests.fake_doc_store import MemoryDocStore
+    s = MemoryDocStore()
+    today = date.fromisoformat(str(AT)[:10]) if AT else date.today()
+    nse = "https://nsearchives.nseindia.com/corporate/"
+    filler = " ".join(f"Management walked through the {w} segment's volumes, costs and the plan for the next quarters." for w in
+                      ("first", "second", "third", "fourth", "fifth", "sixth"))
+    docs = [
+        ("IN", "RELIANCE", "Reliance Industries Ltd", "Energy", "transcript", 20, "Transcript of the earnings call for Q2 FY27",
+         [(3, "Our order book in the new energy business stands at Rs 18,400 crore, and capacity utilisation at the refinery was 94 percent. " + filler),
+          (7, "On capex, we expect to spend about Rs 1.3 lakh crore this year across the businesses. " + filler)]),
+        ("IN", "RELIANCE", "Reliance Industries Ltd", "Energy", "presentation", 22, "Investor presentation Q2 FY27",
+         [(12, "Capacity utilisation across the petrochemical plants averaged 88 percent in the quarter. " + filler)]),
+        ("IN", "RELIANCE", "Reliance Industries Ltd", "Energy", "transcript", 480, "Transcript of the earnings call for Q2 FY26",
+         [(4, "The order book for the solar giga factory stood at Rs 9,000 crore a year ago. " + filler)]),
+        ("IN", "TCS", "Tata Consultancy Services Ltd", "Information Technology", "transcript", 15, "Transcript of the earnings call for Q2 FY27",
+         [(5, "Our order book, the total contract value, was $10 billion this quarter, and attrition fell to 13 percent. " + filler)]),
+        ("IN", "INFY", "Infosys Ltd", "Information Technology", "presentation", 30, "Investor presentation Q2 FY27",
+         [(9, "<script>alert('x')</script> Large deal wins took the order book to $3.1 billion; utilisation was 85 percent. " + filler)]),
+        ("IN", "HDFCBANK", "HDFC Bank Ltd", "Financial Services", "transcript", 40, "Transcript of the earnings call for Q2 FY27",
+         [(None, "Read from a scan: the loan book grew 9 percent and the order of priorities stays deposits first, then loans. " + filler)]),
+        ("US", "AAPL", "Apple Inc.", "Technology", "annual_report", 35, "Annual report (10-K)",
+         [(None, "We depend on component suppliers in Asia; supply constraints and tariffs could raise costs and affect our order book of devices. " + filler)]),
+        ("US", "NVDA", "NVIDIA Corp", "Technology", "earnings_release", 25, "Earnings release (8-K)",
+         [(None, "Data center revenue was a record, driven by demand for accelerated computing; our order book of systems keeps growing. " + filler)]),
+    ]
+    for n, (region, sym, name, sector, kind, ago, title, chunks) in enumerate(docs):
+        sec = region == "US"
+        url = (f"https://www.sec.gov/Archives/edgar/data/{1000 + n}/000100026{n}/doc{n}.htm" if sec else f"{nse}{sym}_{n}.pdf")
+        s.save({"url": url, "link": url, "host": "www.sec.gov" if sec else "nsearchives.nseindia.com", "region": region, "symbol": sym,
+                "company": name, "sector": sector, "kind": kind, "title": title, "filed_at": (today - timedelta(days=ago)).isoformat(),
+                "pages": None if sec or chunks[0][0] is None else 20, "ocr": sym == "HDFCBANK"}, chunks)
+    doc_store.use(s)
 
 
 def library_seeds():
