@@ -96,3 +96,19 @@ test("LIVE7B-016: Next and Monthly are one choice when they are the same contrac
   // a date picked elsewhere stays "date"
   assert.equal(expiryChoices(["2026-11-10", "2026-11-17"], "2026-12-29", fmt).value, "date");
 });
+
+test("LIVE7B-018: the year a Money page opens on says what it is", async () => {
+  const { fyRole } = await import("../src/lib/fy.ts");
+  assert.equal(fyRole(2026, 2026), "this year");
+  assert.equal(fyRole(2025, 2026), "being filed");
+  assert.equal(fyRole(2024, 2026), "");
+  assert.match(read("src/pages/money/TaxToolsPage.tsx"), /fyRole\(x\.fy, current\) \? ` \(\$\{fyRole\(x\.fy, current\)\}\)` : ""/);
+  assert.match(read("src/pages/SpaceHomes.tsx"), /, the year being filed/);
+});
+
+test("LIVE7B-019: an upload's day is India's day wherever it is read", async () => {
+  const { ago, asOf } = await import("../src/lib/format.ts");
+  const at = "2026-10-10T20:57:00Z";                                                // 11 Oct, 02:27 IST (10 Oct in UTC, this run's zone)
+  assert.equal(ago(at), "11 Oct 2026");                                             // over a week before the unit clock's 28 Oct
+  assert.match(asOf(at), /^11 Oct 2026, 02:27/);
+});

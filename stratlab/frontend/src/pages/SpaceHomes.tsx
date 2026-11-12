@@ -542,7 +542,7 @@ function TaxSummary() {
   // CK-2 (R1/R13): what the estimate assumes is behind the card's (i), not a three-line paragraph that made this card taller than My Holdings beside it
   const how = year?.total?.available ? "As the tax report works it out: the trades and other income in your files, at that year's slab and special rates, with surcharge and 4% cess." : "Assumes only the sales in the tradebooks you uploaded, matched first in, first out, at that year's rates after set-off and the yearly long-term exemption, with 4% cess and before any surcharge.";
   return (
-    <Panel title={year ? `Tax, ${year.label}` : "Tax this year"} info={how} right={<Link to={year ? fyLink("/tax-report", year.fy) : "/tax-report"} className="link" data-money="/tax-report">Tax report →</Link>}>
+    <Panel title={year ? `Tax, ${year.label}${ok && year.fy === ok.current_fy - 1 ? ", the year being filed" : ""}` : "Tax this year"} info={how} right={<Link to={year ? fyLink("/tax-report", year.fy) : "/tax-report"} className="link" data-money="/tax-report">Tax report →</Link>}>
       {t === null ? <PanelSkel figs label="Working out this year's gains" />
         : t === "error" ? <p className="small muted">The tax report couldn't be opened just now. <Link className="link" to="/tax-report">Try the page</Link>.</p>
         : !taxHasData(t) ? (

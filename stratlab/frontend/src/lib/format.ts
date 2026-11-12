@@ -297,7 +297,9 @@ export function ago(iso: string | null | undefined): string {
   if (s < 3600) return `${Math.floor(s / 60)} min ago`;
   if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
   if (s < 86400 * 7) return `${Math.floor(s / 86400)} d ago`;
-  return dateOnly(iso);
+  // the day in India time, as every "as of" stamp says it (LIVE7B-019: one upload "updated 28 Oct 2026" on My Holdings and "as of
+  // 29 Oct 2026, 02:27 IST" on the Money home, the first in the browser's own zone)
+  return fmtDate(iso, { tz: IST });
 }
 
 /** Whole days since a finding was first found (null without a usable time), and how that reads: "found today", "open 3 days" (MS1-004). */

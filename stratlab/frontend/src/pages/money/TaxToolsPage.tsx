@@ -7,7 +7,7 @@ import { Info } from "../../components/ui";
 import { Lock, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { Badge, Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, UploadButton, UploadProblem, useUploadProblem, Notes, FigureTable, Working } from "../../components/kit";
-import { fyLink, movedYearNote, openFy } from "../../lib/fy";
+import { fyLink, fyRole, movedYearNote, openFy } from "../../lib/fy";
 import { useAskedFy } from "../../lib/useFy";
 import { usSharesNote } from "../../lib/usGains";
 import { b234Note } from "../../lib/advanceTax";
@@ -102,7 +102,7 @@ export function TaxToolsPage() {
   );
 }
 
-const yearOptions = (years: { fy: number; label: string }[], current: number) => years.map((x) => ({ value: x.fy, label: `${x.label}${x.fy === current ? " (this year)" : ""}` }));
+const yearOptions = (years: { fy: number; label: string }[], current: number) => years.map((x) => ({ value: x.fy, label: `${x.label}${fyRole(x.fy, current) ? ` (${fyRole(x.fy, current)})` : ""}` }));
 const loading = (label: string) => <Card><Skeleton label={label} /></Card>;
 /** A first load that failed: what happened and a way to try again, not a skeleton for ever. */
 const failedLoad = (title: string, message: string, retry: () => void) => <ErrorState title={title} action={{ label: "Try again", onClick: retry }}>{message}</ErrorState>;
