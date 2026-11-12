@@ -19,9 +19,11 @@ Admin has a left menu of sections:
 | **Overview** | What needs your attention, worst first; today's numbers; one light per service and data feed |
 | **Users and growth** | Users, plans, invite rewards and the paper trading sessions running now |
 | **Money** | Payments, subscriptions, prices outside India and invoices |
-| **Data and jobs** | The background jobs (status, last run, schedule, a log), the India broker data login, exchange holidays, the blog and storage |
+| **Data and jobs** | The background jobs (status, last run, schedule, a log), the India broker data login, exchange holidays, the blog (each post's state, and a theme post whose figures were worked out under older theme rules) and storage |
 | **Quality** | The data audits, strategies people reported, and rates and rules |
 | **System** | Recent server errors, alert channels, which build each host runs, the AI providers' status and **Check every feature** |
+| **Library** | Everything worked out once and kept for every user (theme reads, theme figures and decks, AI reads): how often each was served, its size and date, **Refresh now** and **Remove**; each kept theme deck with its publication check; a row no longer served (kept under older rules, or an earlier day's deck) says so |
+| **Feedback** | What people sent from the Feedback button; each new one is also emailed to you |
 | **Email previews** | Every email StratLab sends, as a reader gets it |
 
 ## Checks that run by themselves
@@ -54,5 +56,10 @@ restores it into the volume (check the data after it comes back up, then run **C
 
 ## Deploys
 
-Pull requests merge once the tests pass; the hosts then deploy the new build. Run **Admin → System → Check every
-feature** after a deploy.
+Pull requests merge once the tests pass; the hosts then deploy the new build (the backend from its Dockerfile). Run
+**Admin → System → Check every feature** after a deploy.
+
+A deploy that changes the theme rules, a theme dive's sentences or the theme deck's version needs nothing by hand: kept
+theme reads, figures and decks are keyed by those versions and are worked out again when next asked for, and the blog's
+theme posts whose figures came from older rules are worked out again from the theme library's read at the next newsletter
+check (or at the theme's next read).

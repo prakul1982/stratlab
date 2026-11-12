@@ -44,6 +44,8 @@ export function BlogPanel() {
       <span className="k-stack">
         {p.published ? <Badge tone="ok">Published</Badge> : <Badge tone="warn">Hidden</Badge>}
         {!p.indexable && <span className="k-note k-muted">Not for search: too little to say</span>}
+        {p.not_shown && <span className="k-note k-muted">Not on the site: no layers to chart</span>}
+        {p.stale_figures && <span className="k-note k-muted">Figures from older theme rules: worked out again at the theme's next read</span>}
       </span>) },
     { key: "a", header: "", action: true, corner: true, cell: (p) => (
       <button type="button" className="btn quiet sm" disabled={busy === p.slug} onClick={() => void show(p)}>{p.published ? "Hide" : "Publish"}</button>) },

@@ -90,7 +90,7 @@ export function OverviewSection() {
         <FigureTable label="Money and use" rows={[
           { key: "rev30", label: "Revenue, last 30 days", value: st.revenue_30d ? revenueText(st.revenue_30d.by_currency, (v, c) => money(v, c)) : "–",
             note: st.revenue_30d ? `${st.revenue_30d.count} invoice${st.revenue_30d.count === 1 ? "" : "s"}` : "Not read" },
-          { key: "active", label: "Active users, last 7 days", value: st.active_7d ?? "–", note: st.active_7d == null ? "Not read" : "signed in, or ran an experiment or AI build" },
+          { key: "active", label: "Active users, last 7 days", value: st.active_7d ?? "–", note: st.active_7d == null ? "Not read" : "signed in, or ran an experiment, an AI build or an AI read" },
           ...(st.plan_interest != null ? [{ key: "plans", label: "Waiting for plans", value: st.plan_interest, note: st.plan_interest === 1 ? "person asked to be told when plans open" : "people asked to be told when plans open" }] : []),
           { key: "emails", label: "Emails sent today", value: sv.admin_alerts?.quota?.sent_today ?? "–",
             note: quota?.left ?? (sv.admin_alerts?.via === "Brevo" ? "Brevo didn't say" : `Not read from ${sv.admin_alerts?.via ?? "the email service"}`) },

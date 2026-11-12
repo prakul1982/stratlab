@@ -12,7 +12,7 @@ export const FEATURES: Record<PlanId, string[]> = {
     `Today's derivatives positioning and F&O contract changes, and a journal of your last ${L.free.journal_trades} trades`,
     // a deep dive on Free has the report card and checklist too (DP1-021); a company's PDF and PowerPoint are one deck (DP1-026); a theme's deck counts the same (EXPORT)
     `${L.free.deepdives_per_month} company deep dives a month, each with the report card and checklist, and ${L.free.decks_per_month} slide deck of a company or a theme (its PDF and PowerPoint count as one)`,
-    "Price charts, screens, sector rotation, today's market breadth, ETF prices against NAV and red flags on every company",
+    "Price charts, screens, themes, the heatmap, sector rotation, today's market breadth, ETF prices against NAV and red flags on every company",
     `${L.free.stock_alerts} stock alerts and ${L.free.screens} saved screens; import up to ${L.free.holdings} holdings, ${L.free.mf_schemes} mutual funds and ${L.free.networth_items} net worth entries; Market Watch with ${L.free.watchlists} list of ${L.free.watchlist_symbols} symbols and drawings kept on ${L.free.chart_saves} charts`,
     // the same words as the table's row (DP2-010: "a weekly My Stocks email" here, "Weekly Market Brief and My Stocks" there)
     "Tax report, money calendar, the Market Brief on News, the weekly Market Brief and My Stocks emails, every market we cover and your own CSV"],

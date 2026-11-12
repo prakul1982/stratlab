@@ -5,11 +5,13 @@ which plans, oldest and newest, the work the hits saved), the theme library row 
 searched, size; Refresh now and Remove), the other shared data the app already keeps in the database (company pages, deep dives,
 results, ...: counts and sizes by prefix), and how many saved searches people keep, by kind (counts only, nobody's content)."""
 import threading
+from datetime import datetime
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from . import admin, computed, db, market_store
+from .kite_service import IST
 from .responses import err
 
 router = APIRouter(prefix="/admin/stored", tags=["admin"])       # (/admin/library is the strategy library's moderation queue)
@@ -69,26 +71,43 @@ def saved_counts() -> list[dict] | None:
 
 
 def _themes(q: str = "", region: str = "") -> list[dict]:
-    from .intel import theme_library
+    """The theme library's rows. `current`: kept under today's membership rules, so a search can be served it; a row kept under older rules
+    is never served (theme_library.find reads only the current rules' rows) and says so, instead of reading as one people get (lane upd1)."""
+    from .intel import theme_base, theme_library
     rows = computed.entries(theme_library.KIND, q, region)
     for r in rows:
         m = r.get("meta") or {}
         r.update(q=m.get("q"), aliases=m.get("aliases") or [], members=m.get("members"), searched=r.get("hits") or 0,
-                 refreshing=bool(theme_library.refreshing(r.get("region") or "", m.get("q") or "")))
+                 refreshing=bool(theme_library.refreshing(r.get("region") or "", m.get("q") or "")),
+                 current=m.get("rules") == theme_base.RULES)
+    rows.sort(key=lambda r: not r["current"])            # the rows people are served first, each group newest first
     return rows
 
 
 DECKS_SHOWN = 60                 # the newest kept theme decks listed with their publication check
 
 
+def deck_served(meta: dict, at_iso: str | None, now: datetime | None = None) -> str | None:
+    """Why a kept theme deck is no longer the file people get, or None when it is: a deck is kept for the India day it was made on, under the
+    versions of the rules, the deck, the dive's sentences and the sector figures it was made with (theme_routes.theme_dive_deck's key and
+    computed.VERSIONS), so a deck from an earlier day or older code is only a record of what was sent (lane upd1: Admin listed them all alike)."""
+    if (meta or {}).get("versions") != computed.versions("deck:theme"):
+        return "older version"
+    try:
+        made = datetime.fromisoformat(str(at_iso)).astimezone(IST).date()
+    except (TypeError, ValueError):
+        return "older version"
+    return None if made == (now or datetime.now(IST)).astimezone(IST).date() else "earlier day"
+
+
 def _decks(q: str = "", region: str = "") -> list[dict]:
     """The kept theme decks, newest first, each with its publication gate's result (R27: pass or fail per item, what was dropped); a deck
-    kept before the gate existed says so (no result)."""
+    kept before the gate existed says so (no result). `stale`: why it is no longer the file people get (deck_served), None when it is."""
     rows = []
     for r in computed.entries("deck:theme", q, region)[:DECKS_SHOWN]:
         g = (r.get("meta") or {}).get("gate") or None
         rows.append({"id": r["id"], "label": r.get("label"), "region": r.get("region"), "at": r.get("at"), "size": r.get("size"), "hits": r.get("hits") or 0,
-                     "gate": g if isinstance(g, dict) and g.get("items") else None})
+                     "gate": g if isinstance(g, dict) and g.get("items") else None, "stale": deck_served(r.get("meta") or {}, r.get("at"))})
     return rows
 
 

@@ -348,10 +348,22 @@ def blog_post(slug: str):
 # ---------- admin ----------
 @admin_router.get("/admin/blog")
 def admin_blog(_=Depends(admin.admin_profile)):
-    """The posts (newest first, without their words), the last research run and the month it next runs for."""
+    """The posts (newest first, without their words), the last research run and the month it next runs for. Each theme post says whether
+    its figures were worked out under older theme rules (`stale_figures`), and a published post the public site answers "not found" for (a
+    theme post with no layers to chart: post_page) says so (`not_shown`) and isn't counted as on the site (lane upd1: Admin counted it, from
+    its flag alone, while visitors got a 404)."""
     rows = blog.admin_rows()
+    try:
+        srcs = blog.theme_sources()
+    except Exception as e:                         # the list still shows; the theme posts' notes are left out
+        print("admin blog: theme figures not read:", type(e).__name__, str(e)[:100])
+        srcs = {}
+    for r in rows:
+        src = srcs.get(r.get("slug"))
+        r["stale_figures"] = bool(src) and blog_research.stale_figures(src)
+        r["not_shown"] = bool(r.get("published")) and (not blog.shown(r) or (bool(src) and bool(blog_research.theme_problem(src))))
     return ok({"posts": rows, "run": blog_research.last_run(), "running": blog_research._lock.locked(), "site": _site(),
-               "counts": {"posts": len(rows), "shown": sum(1 for r in rows if r.get("published") and r.get("indexable")),
+               "counts": {"posts": len(rows), "shown": sum(1 for r in rows if r.get("published") and r.get("indexable") and not r["not_shown"]),
                           "hidden": sum(1 for r in rows if not r.get("published")), "not_indexed": sum(1 for r in rows if not r.get("indexable"))}})
 
 

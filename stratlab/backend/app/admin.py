@@ -112,14 +112,19 @@ def _count_since(kind: str, since_iso: str) -> int:
     return r.count or 0
 
 
+ACTIVE_KINDS = ("backtest", "ai", "research_ai")      # what counts as using StratLab beside a sign-in: an experiment, an AI build, an AI read
+
+
 def _usage_since(since_iso: str, ids: list[str], last: dict | None = None) -> dict[str, Counter]:
     """usage_events since a time for the given users, as {user_id: Counter(kind)} (only their rows are read). `last`, when
-    given, is filled with each user's newest event time (for Last active, DJ-009)."""
+    given, is filled with each user's newest event time (for Last active, DJ-009). The kinds are ACTIVE_KINDS, the ones Overview's
+    "Active users" counts, so a user Overview counts as active never reads as idle in the list (lane upd1: AI reads were counted there
+    and not here)."""
     rows = []
     for i in range(0, len(ids), 100):
         part = ids[i:i + 100]
         rows += _paged(lambda: db.sb().table("usage_events").select("id,user_id,kind,created_at").in_("user_id", part)
-                       .in_("kind", ["backtest", "ai"]).gte("created_at", since_iso))
+                       .in_("kind", list(ACTIVE_KINDS)).gte("created_at", since_iso))
     out: dict[str, Counter] = defaultdict(Counter)
     for r in rows:
         out[r["user_id"]][r["kind"]] += 1
@@ -334,7 +339,7 @@ def active_users(days: int = 7, include_test: bool = False) -> int | None:
     seen, error = sign_ins()
     ids = {uid for uid, u in seen.items() if (t := _at(u.get("last_sign_in_at") or "")) and t >= since}
     try:
-        rows = _paged(lambda: db.sb().table("usage_events").select("id,user_id").in_("kind", ["backtest", "ai", "research_ai"])
+        rows = _paged(lambda: db.sb().table("usage_events").select("id,user_id").in_("kind", list(ACTIVE_KINDS))
                       .gte("created_at", since.isoformat()))
         ids |= {r["user_id"] for r in rows if r.get("user_id")}
     except Exception as e:
