@@ -120,6 +120,10 @@ test("the tours' note: keyboard, a live region, a focus trap, and it waits for i
   assert.match(coach, /useDialogFocus\(note, true, \{ onEscape: \(\) => close\.current\(\), coach: true \}\)/);
   assert.match(coach, /const WAIT = 5000, FALLBACK_AFTER = 1800;/);
   assert.match(coach, /if \(!box \|\| !hole \|\| !found\) return;/, "nothing is placed in the middle first while the page loads");
+  // content that loads late (My Holdings' figures above its import row) brings the thing back into view, unless the person scrolled
+  assert.match(coach, /const SETTLE = 4000;/);
+  assert.match(coach, /for \(const ev of \["wheel", "touchmove", "keydown", "pointerdown"\]\) window\.addEventListener\(ev, theirs/);
+  assert.match(coach, /if \(r\.top < 0 \|\| r\.top >= vh - EDGE \|\| r\.bottom <= 0\) \{/);
   const tour = read("src/components/Tour.tsx");
   assert.match(tour, /e\.key === "ArrowRight" && !last/);
   assert.match(tour, /e\.key === "ArrowLeft" && i > 0/);

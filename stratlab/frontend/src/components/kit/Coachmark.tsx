@@ -25,6 +25,8 @@ const EDGE = 16;       // the page's side gutter
 const WAIT = 5000, FALLBACK_AFTER = 1800;
 /** A thing taller than TALL of the window is ringed over its top CAP. */
 const TALL = 0.55, CAP = 0.36;
+/** How long after a step shows its thing is kept in view while the page fills in (unless the person scrolls first). */
+const SETTLE = 4000;
 
 /** A short note pointing at one thing on the page, with the rest dimmed: one step of a tour. `anchor` lists CSS selectors any of
  * which may match (the laptop's place, then the phone's); `or` is a fallback used only once none of them has shown up for a
@@ -129,7 +131,30 @@ export function Coachmark({ anchor, or, label, labelledBy, describedBy, announce
     // the page still filling in moves the thing (a row of badges loads above a company's buttons): the ring follows
     const main = document.querySelector("main");
     if (ro && main) ro.observe(main);
-    return () => { window.clearInterval(poll); window.removeEventListener("resize", again); window.removeEventListener("scroll", again, true); ro?.disconnect(); };
+    // R42: content that loads after the step found its thing can push it out of the window (My Holdings' figures arriving above
+    // its import row put the row 2,000px down). For a few seconds after the step shows, a thing that has left the window (or was
+    // drawn again) is found and brought back into view; the person's own scrolling, a wheel, a touch or a key, ends this at once,
+    // so the page is never pulled away from where they took it
+    let mine = true;
+    const theirs = () => { mine = false; };
+    const settle = window.setInterval(() => {
+      if (!found || !mine) { if (!mine) window.clearInterval(settle); return; }
+      if (Date.now() - foundAt > SETTLE) { window.clearInterval(settle); return; }
+      if (el && (!el.isConnected || !shown(el))) el = findAnchor(anchor) ?? (or ? findAnchor([or]) : null);
+      if (!el) return;
+      const r = el.getBoundingClientRect(), vh = window.innerHeight;
+      if (r.top < 0 || r.top >= vh - EDGE || r.bottom <= 0) {
+        el.scrollIntoView({ block: r.height > vh * 0.6 ? "start" : "center", behavior: "instant" as ScrollBehavior });
+        roomForNote(el);
+        place();
+      }
+    }, 150);
+    for (const ev of ["wheel", "touchmove", "keydown", "pointerdown"]) window.addEventListener(ev, theirs, { capture: true, passive: true });
+    return () => {
+      window.clearInterval(poll); window.clearInterval(settle);
+      for (const ev of ["wheel", "touchmove", "keydown", "pointerdown"]) window.removeEventListener(ev, theirs, { capture: true });
+      window.removeEventListener("resize", again); window.removeEventListener("scroll", again, true); ro?.disconnect();
+    };
   }, [key]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // focus the step's main button each step, once the note is placed (until then it is hidden, and a hidden control
