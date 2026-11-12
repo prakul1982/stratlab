@@ -126,17 +126,52 @@ _ASKED = ("the AI's placement answer put it in \"{}\" with no model; its model, 
 _ONLINE = ("leaving \"Other\" (R41: the online layer's map name \"Online marketplaces\" states a platform's way of earning, so it took no "
            "retailer): \"Online retailers and marketplaces\" now states both ways of earning, holds its industry (catalogue and mail-order "
            "houses) and its own words say \"online\" or \"e-commerce\", what the layer's name says (R40)")
+# R40's moves (nine online sellers into "Online retailers and marketplaces", _ONLINE) are live since and so in the inputs read from the live
+# Release 41 (d1, updated on purpose): the moves below are against the exact replay of RULES 42, the live layer
+_STAYS = ("the map's own pick for this layer, moved out by the split for a way of earning no layer of the map has (it alone of the movers): "
+          "R43 keeps it in the map's layer, listed but out of its figures as another way of earning, never \"Other\"")
+_NARROW = ("an Other-mover the largest layer of its family took by its industry alone: that layer's own name states a kind of business "
+           "(\"off-price\", \"dollar\", \"discount\" / \"ferro alloy\") its own words don't say, nor any word of its description, and it "
+           "is no catch-all of its family (R43, by_model.home_of `narrow`)")
+_GROUP = ("{}; with the chains of its official industry in \"Other\" (no model, own words that say they sell in stores) it makes a layer of "
+          "that industry, {} or more of them (R43, by_model INDUSTRY_GROUP_MIN)")
 APPROVED: dict = {
-    **{f"retail:{s_}": ("Online retailers and marketplaces", f"{what}, {_ONLINE}") for s_, what in (
-        ("CHWY", "an online pet retailer"), ("RVLV", "an online fashion retailer"), ("SFIX", "an online personal styling service"),
-        ("DDL", "a fresh grocery e-commerce company"), ("NXH", "an e-commerce-focused retailer"), ("AKA", "a fashion brand selling online"),
-        ("HOUR", "an online retailer"), ("LITB", "an online clothing seller"), ("QVCG", "a video retailing and e-commerce group"))},
+    "semis:ARM": ("Design software and IP licensing", f"a licensor of processor designs, {_STAYS}"),
+    "cyber:FTNT": ("Network security appliances and subscriptions", f"a firewall maker read as making its own products, {_STAYS}"),
+    "cyber:AKAM": ("Cloud-delivered security and edge networks", f"an edge network read as selling capacity, {_STAYS}"),
+    "telecom:ROUTE": ("Enterprise connectivity and messaging", f"an enterprise messaging company, {_STAYS}; its layer, no longer reshaped, "
+                                                               "keeps the map's own name (RENAMED/ADDED)"),
+    **{f"telecom:{s_}": ("Enterprise connectivity and messaging", "name only: its layer keeps the map's own name, Route Mobile staying in it")
+       for s_ in ("RAILTEL", "RCOM", "TATACOMM")},
+    "metals:20MICRONS": ("Coal, iron ore and mineral mining", f"micronised industrial minerals from its own mines, {_NARROW}; the mining layer "
+                                                               "shares its words (minerals, mining)"),
+    "metals:GOACARBON": ("Aluminium and copper smelting", f"calcined petroleum coke for aluminium smelters, {_NARROW}; the smelting layer shares "
+                                                           "its words (aluminium, smelters)"),
+    "realty:PENINLAND": ("Residential developers", "\"in the business of real estate development\": R43 reads \"real estate development\" as a "
+                                                   "developer's words (theme_check.DEVELOPER_SAYS), so its lease rentals no longer make it a landlord"),
+    "utilities:PARACABLES": ("Cable and wire makers", "\"engaged in manufacturing of wires and cables\", read as a telecom operator for its FTTH "
+                                                      "cables: R43 makes a telecom-services model a maker's when its first sentence says it "
+                                                      "manufactures (theme_check.refine_model MAKES_OWN), so it joins the cable makers"),
+    **{f"retail:{s_}": ("Family clothing stores", _GROUP.format(f"{what}, {_NARROW}", 5)) for s_, what in (
+        ("GAP", "a clothing and accessories retailer"), ("URBN", "a lifestyle retailer"), ("ANF", "a lifestyle clothing retailer"))},
+    **{f"retail:{s_}": ("Family clothing stores", _GROUP.format(f"{what}, in \"Other\" with no model", 5)) for s_, what in (
+        ("AEO", "a clothing and accessories retailer"), ("BKE", "a fashion retailer of 451 stores"), ("DXLG", "a big and tall apparel retailer"),
+        ("LE", "a clothing retailer"))},
+    **{f"retail:{s_}": ("Other", f"{what}, {_NARROW}; fewer than 5 like it of its industry, so \"Other\"") for s_, what in (
+        ("DDS", "a department store chain"), ("M", "a department store chain"),
+        ("ZUMZ", "a specialty clothing store chain"), ("TLYS", "a specialty apparel retailer"), ("DLTH", "a workwear brand sold in its own stores"),
+        ("JL", "a garment trims distributor filed as an apparel store"))},
 }
 # R40: "theme:symbol" -> why it is no longer in the theme (theme_base.without_off_industry): a company the theme's official industry brought
 # in whose own words describe another business is dropped, never placed in "Other", and named on the theme's coverage (placements.off_industry)
 _SOLAR = "filed under semiconductors, its own words describe solar {} and no chips: another business"
 _FUEL = "filed under retail, its own words describe propane distribution and no stores, apparel or merchandise: another business"
-DROPPED = {"semis:DQ": _SOLAR.format("polysilicon"), "semis:TE": _SOLAR.format("modules"), "semis:TYGO": _SOLAR.format("power electronics"),
+_PAWN = "filed under retail, its own words describe {}: another business (R43, theme_check.OFF_INDUSTRY)"
+DROPPED = {**{f"retail:{s_}": _PAWN.format(what) for s_, what in (
+               ("FCFS", "pawn stores (loans against pledged goods)"), ("EZPW", "pawn shops"), ("CDW", "IT services to business and government"),
+               ("NSIT", "business-to-business IT"), ("TMS", "a blank check company"), ("FBCD", "a commercial bank"),
+               ("IPSI", "digital payment solutions"), ("WBUY", "a travel platform"))},
+           "semis:DQ": _SOLAR.format("polysilicon"), "semis:TE": _SOLAR.format("modules"), "semis:TYGO": _SOLAR.format("power electronics"),
            "semis:FTCI": _SOLAR.format("trackers"), "semis:SUNE": _SOLAR.format("installations"), "semis:ASTI": _SOLAR.format("panels"),
            "semis:MAXNQ": _SOLAR.format("panels"), "retail:SPH": _FUEL, "retail:FGPR": _FUEL}
 # the owner's review of Release 38: these companies' layers (or "Other") on the exact replay, whatever a later rule changes; R40 (the owner's
@@ -144,7 +179,12 @@ DROPPED = {"semis:DQ": _SOLAR.format("polysilicon"), "semis:TE": _SOLAR.format("
 REGRESSION = {"auto:BOSCHLTD": "Component and systems suppliers", "auto:ASAHIINDIA": "Component and systems suppliers",
               "retail:CHWY": "Online retailers and marketplaces", "retail:FGPR": None, "retail:SPH": None,
               "semis:MU": "Makers of their own products", "semis:INTC": "Makers of their own products",
-              "semis:QRVO": "Makers of their own products", "semis:GFS": "Contract chip foundries", "semis:TE": None}
+              "semis:QRVO": "Makers of their own products", "semis:GFS": "Contract chip foundries", "semis:TE": None,
+              # d1 (the outside review of the live Release 41 decks, updated on purpose): Arm, Fortinet, the apparel chains, the pawnbrokers
+              "semis:ARM": "Design software and IP licensing", "cyber:FTNT": "Network security appliances and subscriptions",
+              "retail:GAP": "Family clothing stores", "retail:AEO": "Family clothing stores", "retail:BKE": "Family clothing stores",
+              "retail:DDS": "Other", "retail:FCFS": None, "retail:CDW": None, "realty:PENINLAND": "Residential developers",
+              "utilities:PARACABLES": "Cable and wire makers"}
 
 
 def joined(name: str, v: dict | None = None) -> str:
@@ -152,8 +192,9 @@ def joined(name: str, v: dict | None = None) -> str:
 
 
 # live layer names a change approved here takes away, and those it adds (halves as one), by theme
-RENAMED: dict = {}
-ADDED: dict = {}
+RENAMED: dict = {"cyber": {"Other cybersecurity companies"}, "telecom": {"Business connectivity and network capacity providers"}}
+ADDED: dict = {"telecom": {"Enterprise connectivity and messaging"},
+               "retail": {"Family clothing stores"}}
 
 
 def name_only(d: dict) -> dict:
@@ -184,7 +225,10 @@ def test_the_replay_reproduces_the_live_layer_of_every_company_but_the_approved_
         want = {c["ticker"]: joined(v["layer"], v) for v in d["value_chain"] for c in v["companies"]}
         got = now_layers(key)
         gone = {k.split(":")[1] for k in DROPPED if k.startswith(f"{key}:")}
-        assert set(want) - gone == set(got) and gone <= set(want), key
+        # d1 (updated on purpose): the inputs read from the live Release 41 (RULES 42) no longer hold the companies Release 40 dropped as
+        # another business (the live placement dropped them before serving), so a dropped company is absent from the inputs or dropped
+        # by the replay, named on the coverage either way
+        assert set(want) - gone == set(got), key
         odd = RECOVERED["unexplained"].get(key) or {}
         back = name_only(d) if odd else {}
         for s_ in set(want) - gone:
@@ -194,7 +238,8 @@ def test_the_replay_reproduces_the_live_layer_of_every_company_but_the_approved_
         for s_ in odd:
             assert got[s_] != want[s_]          # still unexplained by the returned inputs: kept listed, never silently matched
         out, _ = replay(key, carried=d["kept_version"] != B.RULES)
-        assert {x["ticker"] for x in (out.get("placements") or {}).get("off_industry") or []} == gone, key      # named on the coverage
+        named = {x["ticker"] for p_ in ((out.get("placements") or {}), d["placements"]) for x in p_.get("off_industry") or []}
+        assert named == gone, key      # named on the coverage
         names = {joined(v["layer"]) for v in out["value_chain"] if v["companies"]}
         was = {joined(v["layer"]) for v in d["value_chain"] if v["companies"]}
         allowed = (was | {back[x] for x in was if x in back}) - RENAMED.get(key, set()) | ADDED.get(key, set())
@@ -216,15 +261,18 @@ def test_the_owners_regression_list_holds_on_the_exact_replay():
 def test_a_carried_answer_keeps_the_split_s_names_and_none_is_asked_again():
     """R41: the live answers kept under RULES 40 or before are carried as they are; the layers the split renamed keep the answer's names when
     the split reshapes them again (with no AI, as a page waiting reads it, and in the background check: only a reshaped layer the answer
-    never named is asked)."""
-    d = live("retail")
-    stale = {**d["kept"], "model_names": {**d["kept"]["model_names"], "sig": "stale"}}      # the split reshaped its layers again
-    m = pre_map(d, RECOVERED["origin"].get("retail"), RECOVERED["description"].get("retail"))
-    out, _ = B.place_rest(m, d["theme"], lambda s: d["evidence"].get(s), ask=None, kept=stale, carried=True)
-    names = {v["layer"] for v in out["value_chain"]}
-    assert "Off-price, dollar and discount store chains" in names and "Off-price and dollar stores" not in names
-    plain, _ = B.place_rest(m, d["theme"], lambda s: d["evidence"].get(s), ask=None, kept=stale, carried=False)
-    assert "Off-price and dollar stores" in {v["layer"] for v in plain["value_chain"]}          # not carried: renamed only on the same members
+    never named is asked). d1 (updated on purpose): the retail layer this was shown on is no longer reshaped (R43 keeps the apparel chains
+    out of it), so it is shown on the two themes whose split still renames a layer."""
+    for key, new, old in (("semis", "Contract chip foundries", "Foundry and memory manufacturing"),
+                          ("pharma", "Export-focused generic formulation makers", "Export generic formulation makers")):
+        d = live(key)
+        stale = {**d["kept"], "model_names": {**d["kept"]["model_names"], "sig": "stale"}}      # the split reshaped its layers again
+        m = pre_map(d, RECOVERED["origin"].get(key), RECOVERED["description"].get(key))
+        out, _ = B.place_rest(m, d["theme"], lambda s: d["evidence"].get(s), ask=None, kept=stale, carried=True)
+        names = {v["layer"] for v in out["value_chain"]}
+        assert new in names and old not in names, key
+        plain, _ = B.place_rest(m, d["theme"], lambda s: d["evidence"].get(s), ask=None, kept=stale, carried=False)
+        assert old in {v["layer"] for v in plain["value_chain"]}, key          # not carried: renamed only on the same members
 
 
 def test_each_recovered_layer_is_the_only_one_the_kept_answer_fits():
@@ -291,10 +339,10 @@ def test_a_carried_answer_asks_names_only_for_a_reshaped_layer_it_never_named(mo
     from app.intel import theme_check as C
     sent = []
     monkeypatch.setattr(C, "names_for_models", lambda layers, ask, theme: sent.append(sorted(v["layer"] for v in layers)) or {})
-    d = live("retail")
-    m = pre_map(d, RECOVERED["origin"].get("retail"), RECOVERED["description"].get("retail"))
+    d = live("semis")            # d1 (updated on purpose): retail's renamed layer is no longer reshaped (R43)
+    m = pre_map(d, RECOVERED["origin"].get("semis"), RECOVERED["description"].get("semis"))
     out, got = B.place_rest(m, d["theme"], lambda s: d["evidence"].get(s), ask=lambda s, t: {"models": {}}, kept=d["kept"], carried=True)
     held = set(d["kept"]["model_names"]["rename"])
     assert not any(held & set(x) for x in sent)
-    assert "Off-price, dollar and discount store chains" in {v["layer"] for v in out["value_chain"]}
+    assert "Contract chip foundries" in {v["layer"] for v in out["value_chain"]}
     assert set(got["model_names"]["rename"]) >= held & {v.get("was") for v in out["value_chain"]}

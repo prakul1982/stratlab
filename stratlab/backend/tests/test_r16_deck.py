@@ -136,7 +136,7 @@ def test_the_chain_names_a_highest_and_lowest_only_among_its_own_layers_of_two_o
     close = [{**blocks[0], "stats": {"ebitda": {"median": 14.0, "n": 3}}}, blocks[1]]
     # changed on purpose (R17-011): a gap within the rounding is said, with the layers counted, never left to a sentence that isn't checked
     assert D.chain_table(close)["highest"] is None
-    assert D.chain_table(close)["line"] == "The median EBITDA margins of the 2 layers with at least 3 companies are within 1.0 points of each other, the rounding of whole points."   # R20: a base of 3
+    assert D.chain_table(close)["line"] == "The median EBITDA margins of the 2 layers with at least 3 companies are within 1.0 point of each other: no layer stands apart."   # R20: a base of 3; lane d1: "1 point", no layer stands apart (updated on purpose)
 
 
 def test_the_valuation_says_its_bases_the_loss_makers_left_out_and_each_medians_count():
@@ -148,11 +148,12 @@ def test_the_valuation_says_its_bases_the_loss_makers_left_out_and_each_medians_
     # changed on purpose (R27, P2): how each is worked out lives on the notes page; the valuation page points there once
     assert "A loss-maker has no P/E: 2 companies left out of the P/E median." in t and "How each is worked out, and who the comparable peers are: p. " in t
     assert "Market value over net profit of the last four quarters" in t and "P/E: the price over the last four" not in t
-    layer = table_of(slides, "Layer 1 · Mining")
-    # changed on purpose (R20): a median of fewer than 3 companies isn't shown as one: "–" with its count, the companies' own values above it
-    med = next(r for r in plain(layer["rows"]) if r[0].startswith("Median"))
+    # changed on purpose (R20): a median of fewer than 3 companies isn't shown as one: "–" with its count, the companies' own values beside
+    # it (lane d1, updated on purpose: a layer of 2 is rows of "Smaller layers", its "– (2)" in the value chain's table)
     # changed on purpose (R25): a count beside the layer's own reads "N of M" ("– (1 of 2)"), the layer's full count alone ("– (2)")
-    assert med[0] == "Median (companies)" and "– (2)" in med and "– (1 of 2)" in med
+    chain = plain(table_of(slides, "The value chain by layer")["rows"])
+    assert "– (2)" in chain[0] and "– (1 of 2)" in chain[1]
+    assert [r[1] for r in plain(table_of(slides, deck.SMALL_TITLE)["rows"])][:2] == ["Mine A", "Mine B"]
     assert "P/E, the 4 companies with one (67% of 6; 2 loss-makers with none)" in [r[0] for r in table_of(slides, "Valuation")["rows"]]
 
 
@@ -211,7 +212,8 @@ def test_valuation_is_set_beside_listed_companies_of_similar_market_value_with_g
     # changed on purpose (R35): the line names the close its prices are of (the peers' and the companies' own latest price day)
     assert pp["as_of"] == "2026-10-05" and pp["symbols_n"] == 10 and pp["symbols"] == sorted(f"P{i}" for i in range(10))
     assert sub == w(f"Median P/E {pp['theme']:.1f}x for the {pp['n']} companies with comparable peers (own sector, similar market value, outside this "
-                    f"theme), {pp['premium']:.1f}% above their peers' median of 10.0x (prices at the 05 Oct 2026 close); 1 with no comparable peer set (left out)")       # LIVE6-006: one date format; lane s3-r40: "this theme" (updated on purpose)
+                    f"theme), {pp['premium']:.1f}% above their peers' median of 10.0x (peers most used: P0, P1, P2) (prices at the 05 Oct 2026 close); 1 with no "
+                    "comparable peer set (left out)")       # lane d1: the peers most used, named (updated on purpose)       # LIVE6-006: one date format; lane s3-r40: "this theme" (updated on purpose)
     row = next(r for r in val["rows"] if r[0].startswith("P/E, companies with comparable peers"))
     assert row[1] == w(f"{pp['theme']:.1f}x") and row[4] == "10x" and row[2] == w(f"{pp['premium']:.1f}% above peers")
     assert pp["premium"] == round((pp["theme"] / pp["peers"] - 1) * 100, 1)        # the ratio of the two medians the table shows
@@ -396,10 +398,11 @@ def test_the_contents_list_every_slide_of_a_long_part_and_layers_are_numbered_wi
     slides = slides_of(v)
     # changed on purpose (R18): one contents page lists every part with its first page (no divider before each part); a layer is one page
     contents = {r[0]: int(r[2]) for r in table_of(slides, "Contents")["rows"]}
-    assert slides[contents["The value chain"] - 1].title in ("The value chain by layer", "Layer 1 · Layer name 0")
-    assert [s.title for s in slides].count("Layer 14 · Layer name 13") == 1
-    nums = [int(re.match(r"Layer (\d+) ·", s.title).group(1)) for s in slides if re.match(r"Layer \d+ ·", s.title)]
-    assert sorted(set(nums)) == list(range(1, 15))                                            # Layer 4, then Layer 5: no gap for an empty layer
+    assert slides[contents["The value chain"] - 1].title in ("The value chain by layer", "Layer 1 · Layer name 0", f"{deck.SMALL_TITLE} (1 of 3)")
+    # lane d1 (updated on purpose): each of these layers has 2 confirmed companies, so they are rows of "Smaller layers", in the value chain's
+    # order, the empty one left out (no gap)
+    small = [r[0] for s in slides if s.title.startswith(deck.SMALL_TITLE) for b in s.blocks if b["kind"] == "table" for r in b["rows"] if r[0]]
+    assert small == [f"Layer name {i}" for i in range(14)] and "Financing" not in small
 
 
 def test_one_minus_sign_and_no_internal_wording_anywhere_in_the_deck():

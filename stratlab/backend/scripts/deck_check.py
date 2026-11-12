@@ -12,6 +12,8 @@ Failures (the exit code is 1 when any deck has one):
   repeated     a word said twice in a row ("outside the the theme", "Of of"), whatever the case, on one line or across a line break
                (a name such as "Bora Bora" or "R R Kabel", and "had had", are English)
   hyphen minus a figure's minus sign printed as a hyphen ("-14.1%" beside "−11%"; LIVE7A-014): the deck prints the real minus
+  no layer     a company of the appendix's table in no layer ("–" where its layer goes; d1: SAIL, GAIL, MercadoLibre in the live
+               Release 41 decks): every company is in a layer or in "Other"
 Reported, and a failure only with --strict:
   cut text     every other text ending in "…" (a label or a sentence cut to its box)
   mixed range  a range with one end whole and the other with a decimal ("19.6% to 20%"; LIVE7A-014)
@@ -27,7 +29,7 @@ import shutil
 import subprocess
 import sys
 
-FAIL = ("headline", "mid-word", "placeholder", "joining word", "count", "repeated", "hyphen minus")
+FAIL = ("headline", "mid-word", "placeholder", "joining word", "count", "repeated", "hyphen minus", "no layer")
 WARN = ("cut text", "other>40%", "mixed range")
 # LIVE7A-014: a minus sign as a hyphen before a figure with its unit (never a date's or a range's dash: it follows a space or a bracket)
 _HYPHEN_MINUS = re.compile(r"(?:(?<=\s)|(?<=[(\[])|^)-\d[\d,]*(?:\.\d+)?(?:%|x\b| ?pts\b| ?points\b)")
@@ -45,7 +47,9 @@ _N_OF_M = re.compile(r"(?<![\d.,₹$])(\d[\d,]*) of (?:the |its |their |all |the
 # "Consumer…" beside "consumers" or "consumer-facing", "Electric…" beside "electrical": a whole word, not a cut one
 _ENDINGS = ("", "s", "es", "'s", "’s", "al", "ally", "ity", "ian", "ians", "ic", "ics", "ing", "ed", "er", "ers", "ly")
 _COLUMNS = re.compile(r"\S {3,}\S")     # a table's row or two blocks side by side, in pdftotext's layout
-_OTHER = re.compile(r"(\d[\d,]*) of (\d[\d,]*)\s+companies fit none of the map's layers")
+# d1: "33 of 252 fit none of the map's layers; 82 not checked yet": the share of those that fit none (the companies not checked yet apart)
+_OTHER = re.compile(r"(\d[\d,]*) of (\d[\d,]*)\s+(?:companies\s+)?fit\s+none\s+of\s+the\s+map's\s+layers")
+_APPENDIX = "Every company's figures"
 # R40: a word said twice in a row; repeated when the second is lower case or it is a joining word ("The the"), never a name ("Bora Bora")
 _TWICE = re.compile(r"\b([A-Za-z]+)(?: (?! )|\n)\1\b", re.I)
 _TWICE_JOIN = _JOINING | {"is", "are", "was", "were", "its", "their", "this", "these", "than", "as", "be", "it"}
@@ -122,6 +126,17 @@ def check_pages(pages: list[str]) -> dict:
                     add("mid-word", n, f"{m.group(0)!r} in: {flat}")
                 elif not (head and m.end() == len(flat)):
                     add("cut text", n, flat)
+    for n, page in enumerate(pages, 1):           # d1: the appendix's rows, each in a layer
+        if _APPENDIX not in page:
+            continue
+        col = None
+        for ln in page.split("\n"):
+            cells = re.split(r"\s{2,}", ln.strip())
+            if len(cells) > 2 and cells[0] == "Company" and cells[1] == "Layer":
+                col = len(cells)          # a full row has a cell under each heading (a wrapped name's row has one fewer)
+                continue
+            if col and len(cells) == col and cells[1] == "–" and _indent(ln) <= 2:       # a name wrapped above starts at the layer's column
+                add("no layer", n, f"{cells[0]} in: {ln.strip()}")
     for n, page in enumerate(pages, 1):           # R40: the coverage's count of the "Other" group, once a deck
         m = _OTHER.search(page)
         if m:

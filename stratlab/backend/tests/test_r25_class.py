@@ -239,15 +239,20 @@ def test_on_every_synthetic_theme_an_outlier_moves_out_and_every_rule_still_hold
         assert vc == m["value_chain"]                    # the exchange's industries only (no map of its own): nothing to split by model
     else:
         home = next(v for v in vc if "ODD1" in [c["ticker"] for c in v["companies"]])
-        assert home["layer"] != big["layer"]
-        if home.get("official"):        # R27 (changed on purpose): alone in its family, the outlier joins "Other", never a one-company layer
+        odd = next(c for c in home["companies"] if c["ticker"] == "ODD1")
+        if home["layer"].removesuffix(" (larger)").removesuffix(" (smaller)") == big["layer"]:
+            # lane d1 (updated on purpose, R43): the map's own pick, alone of a way of earning no layer of the map has, stays in its layer,
+            # listed but out of its figures as another way of earning
+            assert odd.get("model_out") == "other" and not any(v.get("model", {}).get("family") == C.model_family(models["ODD1"])
+                                                                for v in vc if not v.get("official") and isinstance(v.get("model"), dict))
+        elif home.get("official"):        # R27 (changed on purpose): alone in its family, the outlier joins "Other", never a one-company layer
             assert home.get("basis") == "rest" and next(c for c in home["companies"] if c["ticker"] == "ODD1")["single"]
         else:
             assert C.model_family(models["ODD1"]) == home["model"]["family"]
         assert not any(len(v["companies"]) == 1 and v.get("by_model") for v in vc)
         total = sum(len(v["companies"]) for v in vc)
         for v in vc:
-            fams = {C.model_family(models.get(c["ticker"])) for c in v["companies"]} - {""}
+            fams = {C.model_family(models.get(c["ticker"])) for c in v["companies"] if c.get("model_out") != "other"} - {""}
             assert len(fams) <= 1, (v["layer"], fams)
             if not v.get("official") and v["companies"]:
                 assert v.get("model"), v["layer"]
@@ -257,7 +262,9 @@ def test_on_every_synthetic_theme_an_outlier_moves_out_and_every_rule_still_hold
     m["value_chain"] = vc
     v, slides = deck_of(region, m, f, **kw)
     every_rule(name, v, slides)
-    if own:
+    # lane d1 (updated on purpose): a one-layer map whose outlier now stays in its layer (R43) has one layer to show, so no value chain
+    # pages (R18) and no "In common" line to check
+    if own and any(s.title.startswith("Layer ") for s in slides):
         assert "In common: they earn mainly from" in texts(slides)
 
 
