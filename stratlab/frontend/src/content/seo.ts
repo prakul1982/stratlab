@@ -99,7 +99,7 @@ export const PAGES: PageMeta[] = [
     summary: ["StratLab has three spaces for Indian and US stocks. Trade: test trading ideas on years of real prices after costs, put them through four checks and paper trade them. Invest: research companies from their own filings. Money: track your holdings, funds and tax.",
       "Facts, not tips: StratLab never says what to buy or sell, and no real orders are placed."] },
   { path: "/help", title: "Help · StratLab", description: "Help with StratLab: the questions people ask first, and how to reach a person.", index: false, heading: "Help" },
-  { path: "/login", title: "Sign in · StratLab", description: "Sign in to StratLab with your Google account.", index: false, heading: "Sign in to StratLab" },
+  { path: "/login", title: "Sign in · StratLab", description: "StratLab signs in with your Google account: no password to set up.", index: false, heading: "Sign in to StratLab" },
   { path: "/signup", title: "Sign up · StratLab", description: "Create a free StratLab account with Google. No card needed.", index: false, heading: "Sign up for StratLab" },
 ];
 

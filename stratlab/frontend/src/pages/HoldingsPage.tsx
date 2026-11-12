@@ -14,7 +14,7 @@ import { HoldingsActionsPanel } from "../components/HoldingsActions";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge } from "../components/EtfGap";
 import { useMoreColumns } from "../components/MoreColumns";
-import { Badge, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FigureTable, FormActions, FormGrid, PageHeader, PageNav, PlanNote, Seg, ShareTable, Signed, Skeleton, StockPicker, UploadButton, type Column, UploadProblem, useUploadProblem } from "../components/kit";
+import { Badge, Card, CardHead, CsvButton, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FigureTable, FormActions, FormGrid, PageHeader, PageNav, PlanNote, Seg, ShareTable, Signed, Skeleton, StockPicker, UploadButton, type Column, UploadProblem, useUploadProblem } from "../components/kit";
 import { PlanInline } from "../components/PlanInterest";
 import { zerodhaEmpty, type ZerodhaRead } from "../lib/zerodha";
 import { orList } from "../lib/brokers";
@@ -303,15 +303,9 @@ export function HoldingsPage() {
 
   // the Zerodha chip, unless the empty state below already says Zerodha is connected and returned nothing (R35: said twice)
   const zerodhaChip = !!view?.zerodha && !(rows.length === 0 && zerodhaEmpty(view.zerodha));
-  return (
-    <div className="k-page">
-      <PageHeader eyebrow="Money · Portfolio" title="My Holdings" asOf={view?.prices_at} asOfTz={rows.length > 0 && rows.every(isUS) ? marketTz("US") : undefined}
-        asOfLabel={view?.us_prices_at ? "India prices as of" : "Prices as of"}
-        actions={view?.us_prices_at ? <Badge>US prices as of {asOfText(view.us_prices_at, { tz: marketTz("US") })}</Badge> : undefined}
-        lede="Your broker's holdings file, valued at the latest prices (the last close when the market is shut): each stock's value, gain or loss, and your sector mix."
-        info="Facts, not advice. Only you can see your holdings." infoLabel="About your holdings" />
-
-      <Card>
+  const importPart = (
+    <>
+      <Card id="h-import">
         <CardHead title="Import from your broker" info={<>Download your holdings as Excel or CSV from {BROKERS} (usually Portfolio › Holdings › Download), then upload it here (up to {MAX_MB} MB). Any other CSV works too with columns for Symbol (or ISIN), Quantity and Average price. A connected broker is read again with a tap on its chip.</>} />
         {/* R15 #4 (owner, 7 Nov: "make this whole thing small buttons and like tickers"): one row, the upload button and a chip for each
             connected broker ("● Zerodha · 13 h ago ↻", a tap reads it now, the loading bar in the chip meanwhile); wraps on a phone */}
@@ -371,6 +365,19 @@ export function HoldingsPage() {
 
       <BrokerGuide where="holdings" onUpload={() => document.querySelector<HTMLInputElement>('main input[aria-label="Holdings file"]')?.click()} />
 
+    </>
+  );
+  return (
+    <div className="k-page">
+      <PageHeader eyebrow="Money · Portfolio" title="My Holdings" asOf={view?.prices_at} asOfTz={rows.length > 0 && rows.every(isUS) ? marketTz("US") : undefined}
+        asOfLabel={view?.us_prices_at ? "India prices as of" : "Prices as of"}
+        actions={view?.us_prices_at ? <Badge>US prices as of {asOfText(view.us_prices_at, { tz: marketTz("US") })}</Badge> : undefined}
+        lede="Your broker's holdings file, valued at the latest prices (the last close when the market is shut): each stock's value, gain or loss, and your sector mix."
+        info="Facts, not advice. Only you can see your holdings." infoLabel="About your holdings" />
+
+      {/* LIVE7B-013: someone with holdings sees their own figures first; the import and the broker guide (about 420px) come after them.
+          With none yet, the import is the page's first card. Placed once the holdings are read, so it never jumps from top to bottom */}
+      {view && rows.length === 0 && importPart}
       {!view && (error
         ? <ErrorState title="Your holdings couldn't be read" action={{ label: "Try again", onClick: load }}>{error}</ErrorState>
         : <Card><Skeleton label="Opening your holdings" /></Card>)}
@@ -385,7 +392,7 @@ export function HoldingsPage() {
 
       {view && t && rows.length > 0 && (
         <>
-          <PageNav items={[{ id: "h-summary", label: "Where you stand" }, { id: "h-positions", label: "Positions" }, { id: "h-add", label: "Add a stock" }, ...(withFilings.length > 0 ? [{ id: "h-filings", label: "Filings" }] : [])]} />
+          <PageNav items={[{ id: "h-summary", label: "Where you stand" }, { id: "h-positions", label: "Positions" }, { id: "h-import", label: "Import a file" }, { id: "h-add", label: "Add a stock" }, ...(withFilings.length > 0 ? [{ id: "h-filings", label: "Filings" }] : [])]} />
           <Card id="h-summary">
             <CardHead title="Where your stocks stand" />
             {/* TABLE-SWEEP: the totals as a table (the figure, the amount and its change), not four tiles with their changes under them */}
@@ -439,8 +446,10 @@ export function HoldingsPage() {
             <CardHead title="Positions" actions={<>
               {!facts && <span className="k-note">Checking each stock's trend and filings…</span>}
               {more.toggle}
+              {/* LIVE7B-013: the CSV with the table's other controls in its header, not alone on a line under them */}
+              <CsvButton name="holdings positions" label="Positions" columns={cols} rows={rows} />
             </>} />
-            <DataTable csv="holdings positions" label="Positions" columns={cols} rows={rows} rowKey={(r) => `${r.exchange}:${r.symbol}`} stack phonePage={10} />
+            <DataTable label="Positions" columns={cols} rows={rows} rowKey={(r) => `${r.exchange}:${r.symbol}`} stack phonePage={10} />
             {facts && facts.count > facts.checked && <p className="k-note">Trend and filings are shown for the {facts.checked} largest positions.</p>}
             {/* the words Plans uses for the filings feature (DP2-009) */}
             {facts && !facts.filings && <PlanNote>Each holding's red flags, recent filings and results date are on the {facts.filings_plan} plan, with red flags across your watchlist.</PlanNote>}
@@ -448,6 +457,8 @@ export function HoldingsPage() {
 
         </>
       )}
+
+      {view && rows.length > 0 && importPart}
 
       {view && actionsReady && (
         <Card id="h-add">

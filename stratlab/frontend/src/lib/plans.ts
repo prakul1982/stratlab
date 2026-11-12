@@ -77,7 +77,8 @@ export const KEY: Record<PlanId, string[]> = {
     `Unlimited backtests, deep dives and decks; up to ${AI_BUILDS_PER_DAY} AI builds a day`,
     `Paper trade ${L.pro.live_limit} strategies at a time, groups of up to ${L.pro.group_size}`,
     "Indian F&O in notebooks, and options on your own rules' signals",
-    "Tax tools, ITR-ready export and StratLab in your AI assistant"],
+    // LIVE7B-026: Basic has Tax tools' dividends; what Pro adds there is the advance tax and the long-term exemption
+    "Advance tax, long-term exemption, ITR export, StratLab in your AI app"],
 };
 
 /** Ads (ADS-1), one row of the comparison table: Free accounts and signed-out pages may show Google ads, only after the visitor allows

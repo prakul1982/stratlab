@@ -12,8 +12,6 @@ import { homeOf, startView } from "../lib/spaces";
 import { homeRegion } from "../lib/homeMarket";
 import { usTodayNote } from "../lib/marketHours";
 import { pnlLabel, priceNote, type Closes } from "../lib/holdingsEdit";
-import { NAV } from "../lib/nav";
-import { PageTags } from "../components/PageTags";
 import { comingMarketEvents, evWhen, istHm, useEvents } from "../lib/marketEvents";
 import { useWatchlist, REGION_NAME, type Region } from "../lib/research";
 import type { LiveRow } from "../lib/types";
@@ -26,8 +24,6 @@ import { SummaryLine, type FilingSummary } from "../components/Filings";
 import { FirstSteps } from "../components/FirstSteps";
 import { BreadthCard } from "../components/BreadthCard";
 import { PromoCountdown } from "../components/PromoCountdown";
-import { Explore } from "../components/Explore";
-import { MoreTools, type ToolRow } from "../components/MoreTools";
 import { Book, Calendar, Compass, Layers, Library, Pulse, Search } from "../components/Icons";
 import { resultDay, type ResultRow } from "./Research";
 import { fyLink, movedYearNote, openFy, taxHasData, yearHasTrades } from "../lib/fy";
@@ -39,7 +35,8 @@ import { PLAN_NAME, planOf } from "../lib/plans";
  * pages' own pieces; nothing here is new data, only what those pages already show, gathered.
  *
  * Every home has the same shape: a short heading, the one next step (start, or pick up where you left off), one row of
- * four equal tool cards, then one or two live panels and, last, the rest of the space's tools. */
+ * four equal tool cards, then one or two live panels. LIVE7B-014: no table of the space's other tools at the foot: it listed the side
+ * menu's entries again (Trade "More you can do · 13 tools" and "Elsewhere in StratLab", Money's "9 tools"); the menu is on every page. */
 
 /** `/`: the home of the space showing (for "All", of what the person came for). Waits for the account on a first visit. */
 export function SpaceHome() {
@@ -84,8 +81,6 @@ function ToolStrip({ label, tools }: { label: string; tools: Tool[] }) {
 }
 
 /* ---------- Trade: the strategy lab ---------- */
-/** Tools the strip and the positioning panel already link to: "more you can do" leaves them out. */
-const TRADE_LINKED = ["/options", "/trade/positioning", "/paper", "/library", "/new", "/trade/journal"];
 type Journal = { count: number; net: number; win_rate: number | null };
 
 /** Trade's first three tools: the home's cards and the All home's row. */
@@ -128,12 +123,12 @@ export function TradeHome() {
       </Head>
       {/* today's market first, above the first-steps and "pick up" cards (RC2A-038: the data began at y=830 of a 900 px screen) */}
       <MarketStrip />
-      <Top onSteps={setSteps} />
+      {/* LIVE7B-014: the first steps in one line, as on My space and Invest (a 380px checklist here said them again) */}
+      <Top onSteps={setSteps} compact />
       {/* the checklist's first step is a first test: one guide at a time, so "Start here" waits until it's gone */}
       <NextIdea hideStart={steps} />
       <ToolStrip label="Trade tools" tools={tools} />
       <p className="k-small k-muted" data-testid="positioning-link">FII and DII flows, futures positions, PCR and India VIX are on <Link className="link tap-link" to="/trade/positioning">Positioning</Link>.</p>
-      <Explore title="More you can do" hide={TRADE_LINKED} space="trade" />
     </div>
   );
 }
@@ -225,8 +220,6 @@ function NextIdea({ count = 3, hideStart = false }: { count?: number; hideStart?
 }
 
 /* ---------- Invest: research ---------- */
-/** Tools the strip and the panels on the Invest home already link to. */
-const INVEST_LINKED = ["/invest/breadth", "/research/filings", "/research/investor", "/research/watchlist", "/research/rotation", "/research/scan", "/research", "/research/screens", "/research/corporate-actions"];
 
 /** The strip's cards; where each opens (on the market picked at the top) is lib/investUi investStrip's. */
 const INVEST_STRIP: Record<string, Omit<Tool, "to">> = {
@@ -274,7 +267,6 @@ export function InvestHome() {
       </div>
       <RedFlags region={region} />
       <BreadthCard region={region} />
-      <Explore title="More you can do" hide={INVEST_LINKED} space="invest" />
     </div>
   );
 }
@@ -453,11 +445,6 @@ type Tax = { years: TaxYear[]; current_fy: number; updated_at: string | null; la
 
 
 export function MoneyHome() {
-  // the two summaries (holdings and tax) stand for their tools; every other Money tool is one card below, under the menu entry it
-  // is a tab of (IA-1), so each feature shows once; of the shared Calendar, Money's own dates and the one list of every date
-  const PANELS = ["/holdings", "/tax-report"];
-  const tools: ToolRow[] = NAV.money.groups.flatMap((g) => g.pages.filter((p) => !PANELS.includes(p.to) && ((p.space ?? "money") === "money" || p.to === "/calendar"))
-    .map((p) => ({ id: p.to, title: p.label, line: p.line, to: p.to, group: g.label, groupId: g.id, tag: <PageTags page={p} />, attrs: { "data-money": p.to } })));
   return (
     <div className="space-home">
       <Head eyebrow="Money · seen only by you" title="Your money">
@@ -471,9 +458,6 @@ export function MoneyHome() {
         <HoldingsSummary />
         <TaxSummary />
       </div>
-      {/* the rest of Money's tools: one closed row that says how many, opened a table (owner, 5 Nov: the cards were "very filled");
-          each tool with its plan tag, as on the entry pages ("Basic for part") */}
-      {tools.length > 0 && <MoreTools id="money-tools" title="More in Money" rows={tools} />}
     </div>
   );
 }

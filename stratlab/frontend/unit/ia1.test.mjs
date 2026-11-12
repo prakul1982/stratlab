@@ -157,6 +157,7 @@ test("IA-1: the space homes and 'More you can do' follow the menu's entries", ()
   assert.match(ex, /const rows: ToolRow\[\] = sections\.flatMap\(\(\{ g, tiles \}\) => tiles\.map/);
   assert.match(read("src/components/MoreTools.tsx"), /\(firstOf\.has\(r\.id\) \? r\.group : ""\)/);
   const homes = read("src/pages/SpaceHomes.tsx");
-  assert.match(homes, /const tools: ToolRow\[\] = NAV\.money\.groups\.flatMap/);
+  // (updated on purpose, LIVE7B-014: the space homes no longer list the menu's entries again at their foot)
+  assert.doesNotMatch(homes, /<Explore|<MoreTools/);
   assert.match(homes, /<Link to="\/calendar" className="link small">Calendar →<\/Link>/);
 });

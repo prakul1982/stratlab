@@ -198,6 +198,16 @@ export function XYChart(p: XYChartProps) {
     if (!indexed) for (const v of p.include ?? []) if (v != null && Number.isFinite(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
     if (indexed) { lo = Math.min(lo, 100); hi = Math.max(hi, 100); }
     const d = niceDomain(lo, hi, H < 200 ? 4 : 5, hasBars || !!p.includeZero);
+    // LIVE7B-011: a line that goes below zero reaches a labelled tick: when the lowest tick on the axis is still above the lowest point
+    // (Net worth's −₹7.7 L under labels ₹0 / ₹10L / ₹20L), the axis goes down one more step to the next tick, so the negative side is named
+    if (lo < 0) {
+      const fmt = indexed && canIndex ? plainTick : p.axisFormat ?? format;
+      const want = H < 200 ? 4 : 5, at = (c: number) => honestTicks(d.min, d.max, c, fmt).filter((v) => v >= d.min && v <= d.max);
+      const ts = at(want);
+      // a finer step that puts a tick at or under the lowest point is found by the ticks below (LIVE1B-062); only failing that, a step down
+      const finer = Array.from({ length: 7 }, (_, k) => at(want + k)).some((alt) => alt.length && alt.length <= 9 && alt[0] <= lo);
+      if (!finer && ts.length >= 2 && ts[0] > lo) return [ts[0] - (ts[1] - ts[0]), d.max];
+    }
     return [d.min, d.max];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vals, hidden, in0, in1, refs, indexed, hasBars, p.includeZero, p.include, H]);
@@ -271,7 +281,10 @@ export function XYChart(p: XYChartProps) {
     if (T) {
       // the first and last points in the window, by position: with a numeric x (times placed by date, DA-031) the window's
       // ends are x values, not point numbers
-      const ta = T[Math.max(0, Math.min(n - 1, in0))], tb = T[Math.max(0, Math.min(n - 1, in1))];
+      // points placed by date (a numeric x of times, DA-031): the axis runs over the window itself, and each date's label sits at its own
+      // place, evenly spaced, not moved onto the nearest point (LIVE7B-011: Net worth's labels bunched where the snapshots were)
+      const byDate = !!p.x && !intraday;
+      const ta = byDate ? a : T[Math.max(0, Math.min(n - 1, in0))], tb = byDate ? b : T[Math.max(0, Math.min(n - 1, in1))];
       if (intraday && spansDays(ta, tb, p.tz)) {
         // points across days on an axis that skips the hours between sessions: each day's first point named by its day
         for (const d of dayTicks(T, in0, in1, p.tz)) push(sx(X[d.i]), d.label);
@@ -281,6 +294,7 @@ export function XYChart(p: XYChartProps) {
       // a clock-time axis in a market's zone names the zone once, on its last clock time: "12:00 IST"
       const lastClock = intraday && p.tz ? ticks.map((t) => /^\d\d:\d\d$/.test(t.label)).lastIndexOf(true) : -1;
       ticks.forEach((t, k) => {
+        if (byDate) { push(sx(t.t), t.label); return; }
         const i = lowerBound(T, t.t - (intraday ? 0 : DAY / 2));
         if (i < n) push(sx(X[i]), k === lastClock ? `${t.label} ${tzLabel(p.tz)}` : tickOnPoint(t, T[i], intraday, p.tz));
       });

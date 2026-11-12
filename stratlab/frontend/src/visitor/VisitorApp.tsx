@@ -75,7 +75,7 @@ export function VisitorApp({ userId }: { userId?: string } = {}) {
     {/* the ad landing waits on the splash: the words held for "/" are the full landing page's, not its own */}
     <Suspense fallback={view.kind === "ad" ? wait : fallback}>
       {view.kind === "ad" ? <AdLanding />
-        : view.kind === "landing" ? <Login section={view.section} panel={view.panel} heading={landingHeading(pathname)} intro={landingIntro(pathname)} plansOnly={isPlansPath(pathname)} slim={slimOf(pathname) ?? undefined} />
+        : view.kind === "landing" ? <Login section={view.section} heading={landingHeading(pathname)} intro={landingIntro(pathname)} plansOnly={isPlansPath(pathname)} slim={slimOf(pathname) ?? undefined} />
         : view.kind === "legal" ? <LegalPage />
         : view.kind === "verdict" ? <PublicVerdict token={view.token} />
         : view.kind === "library" ? <PublicLibrary />

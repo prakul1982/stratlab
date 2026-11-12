@@ -244,7 +244,10 @@ export function MetricsGrid({ groups, currency, industry }: { groups: MetricGrou
       <div className="inv-metrics">
         {groups.map((g) => (
               <div key={g.title} className="inv-mt">
-                <DataTable label={`Key numbers: ${g.title}`} rows={g.items} rowKey={(m) => m.label} stack={false}
+                {/* LIVE7B-010: on a phone each group is a list (the measure and its value on one line, the basis and the range under them), not a
+                    four-column table 322px wide with a basis wrapping to seven lines; its column header is out of sight there, so its name is here */}
+                <b className="inv-mt-title" aria-hidden="true">{g.title}</b>
+                <DataTable label={`Key numbers: ${g.title}`} rows={g.items} rowKey={(m) => m.label} stack
                   columns={[
                     { key: "m", header: g.title, rowHeader: true, cell: (m) => <span className="k-small">{m.label}</span> },
                     { key: "v", header: "Value", numeric: true, cell: (m) => <b className={`inv-metric-v ${m.unit === "%±" ? signCls(m.value) : ""}`}>{metricText(m, currency)}{mark(m) && <sup className="cmp-foot-mark" aria-label={`see note ${mark(m)!.n}`}>{mark(m)!.n}</sup>}</b> },
@@ -490,9 +493,11 @@ export function QuarterTable({ q, bank = false }: { q: NonNullable<Company["quar
     { name: bank ? "Financing margin" : "EBITDA margin", cells: q.opm.map((v) => (v == null ? "–" : `${v}%`)) },
   ].filter((r) => !(r.name === "Financing margin" && r.cells.every((c) => c === "–")));   // a bank's margin the source gets wrong is left out, not shown as dashes (R10O-011)
   return (
-    <DataTable scrollEnd label="The last quarters, in ₹ cr" rows={rows} rowKey={(r) => r.name}
-      columns={[{ key: "m", header: "₹ cr", rowHeader: true, cell: (r) => r.name },
-        ...q.cols.map((c, i) => ({ key: c, header: c, numeric: true, cell: (r: (typeof rows)[number]) => r.cells[i] }))]} />
+    // LIVE7B-010: on a phone each measure is a block with each quarter under its own name (the table was 805px in a 322px card); the unit,
+    // the table's corner header, is out of sight there, so a measure in ₹ cr says so beside its name
+    <div className="inv-q"><DataTable scrollEnd stack label="The last quarters, in ₹ cr" rows={rows} rowKey={(r) => r.name}
+      columns={[{ key: "m", header: "₹ cr", rowHeader: true, cell: (r) => <>{r.name}{/margin/i.test(r.name) ? null : <span className="inv-q-unit"> (₹ cr)</span>}</> },
+        ...q.cols.map((c, i) => ({ key: c, header: c, numeric: true, cell: (r: (typeof rows)[number]) => r.cells[i] }))]} /></div>
   );
 }
 

@@ -77,9 +77,11 @@ test("LIVE6-013: the panel opens on the prices last seen on this device, per per
 
 test("LIVE6-014: signed in, the analytics question is an overlay along the foot that never moves the app", () => {
   const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
-  assert.match(css, /body:has\(\.shell\) \.consent \{ position: fixed; \}/);
-  assert.doesNotMatch(css, /\.consent \{ position: relative/);
-  assert.doesNotMatch(css, /body:has\(\.shell\) \.mw-launch \{ bottom: calc\(16px \+ env/);   // the Markets button rises above the bar again
+  // (updated on purpose, LIVE7B-006: as an overlay it covered the Markets tiles and the P&L card) it is the first row of the page column, in
+  // the page's flow: it covers nothing, and the side menu, spanning both rows, never moves
+  assert.doesNotMatch(css, /body:has\(\.shell\) \.consent \{ position: fixed; \}/);
+  assert.match(css, /\.shell > \.sidebar \{ grid-column: 1; grid-row: 1 \/ -1; \}/);
+  assert.match(css, /\.shell > \.main \{ grid-column: -2 \/ -1; grid-row: 2; \}/);
 });
 
 test("LIVE6-016: on the Themes page only the menu's Themes entry is highlighted; the pill is a plain link there", () => {

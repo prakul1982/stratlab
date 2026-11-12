@@ -210,8 +210,7 @@ export function NewNotebook({ hide = [] }: { hide?: string[] }) {
 const VERDICT_RANK: Record<string, number> = { edge: 0, mixed: 1, not_enough: 2, luck: 3, no_edge: 4 };
 type Sort = "recent" | "name" | "verdict";
 
-/** `hide`: tools the page around it already links to, so each shows once (see Explore). */
-export function NotebooksHome({ hide = [] }: { hide?: string[] }) {
+export function NotebooksHome() {
   const { notebooks, notebooksFailed, refreshNotebooks, fail } = useApp();
   const nav = useNavigate();
   const [q, setQ] = useState("");
@@ -280,7 +279,7 @@ export function NotebooksHome({ hide = [] }: { hide?: string[] }) {
           ] as Column<(typeof shown)[number]>[])} />
         </Card>
       )}
-      <Explore hide={hide} space="trade" />
+      {/* LIVE7B-014: no "19 tools" table under the list: it was the side menu again */}
     </div>
   );
 }

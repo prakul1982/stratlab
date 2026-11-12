@@ -380,7 +380,7 @@ def test_059_the_itr_list_says_when_the_dividends_are_not_in_the_total():
     from tests.test_review_dh1 import _g
     g = {**_g(), "div_lines": [{"amount": 59540.0}], "div_in_total": False}
     labels = [k for k, _ in I.summary(g)]
-    assert "Dividends in the year (India), not in the total tax estimate below" in labels
+    assert "Dividends in the year (India), not in the total tax estimate" in labels   # (updated on purpose, LIVE7B-017: no "below")
     labels_in = [k for k, _ in I.summary({**g, "div_in_total": True})]
     assert "Dividends in the year (India)" in labels_in
 
