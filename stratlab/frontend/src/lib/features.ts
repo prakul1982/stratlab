@@ -15,16 +15,6 @@ export interface Feature {
 }
 
 export type Goal = "find" | "understand" | "test" | "trade";
-export const GOALS: Record<Goal, { title: string; sub: string }> = {
-  find: { title: "Find stocks worth a look", sub: "Trends, which sectors lead, and which companies filed red flags." },
-  understand: { title: "Understand a company", sub: "The business, its numbers and whether management delivers." },
-  test: { title: "Test a trading idea", sub: "Honest results on years of real prices, after costs." },
-  trade: { title: "Trade it with fake money", sub: "Live prices, real fills, no real money at risk." },
-};
-export const GOAL_ORDER: Record<string, Goal[]> = {
-  invest: ["find", "understand", "test", "trade"], trade: ["test", "trade", "find", "understand"],
-  money: ["find", "understand", "test", "trade"], both: ["test", "trade", "understand", "find"],
-};
 
 export const FEATURES: Feature[] = [
   { id: "trade_home", title: "Trade", what: "The strategy lab: your notebooks, paper trading and options in one place.", to: "/trade",

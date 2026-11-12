@@ -10,7 +10,6 @@ import { resultsLine } from "./mineLayout";
  * made up: a figure that cannot be read stays null and the card shows an empty state with the next step. */
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-export const todayIso = () => iso(new Date());
 export const addDaysIso = (s: string, n: number) => { const [y, m, d] = s.split("-").map(Number); const t = new Date(y, m - 1, d); t.setDate(t.getDate() + n); return iso(t); };
 
 /* ---------- the market strip ---------- */

@@ -91,7 +91,6 @@ export function pct(v: number | null | undefined, dp = 1): string {
   return (+shown === 0 ? "" : v > 0 ? "+" : "−") + text + "%";           // a change that rounds to nothing has no sign: "0.0%", not "−0.0%"
 }
 
-export const signClass = (v: number | null | undefined) => (v == null ? "" : v > 0 ? "pos" : v < 0 ? "neg" : "");
 
 /** A quantity. With `step` (the instrument's smallest unit, 0.00000001 BTC) a fractional quantity keeps that many
  *  decimals, so a column lines up (0.05013551, 0.05091380). */

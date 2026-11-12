@@ -59,7 +59,6 @@ export function revisionLines(revised: Revision[] | null | undefined, dayText: (
     .map((r) => `${dayText(r.day)} revised: ${r.after.adv} rose, ${r.after.dec} fell, ${r.after.unch} unchanged (was ${r.before.adv}, ${r.before.dec}, ${r.before.unch})`);
 }
 
-export const RANGES: [RangeId, string][] = [["3m", "3M"], ["6m", "6M"], ["1y", "1Y"], ["2y", "2Y"], ["all", "All"]];
 
 export type BreadthAlert = { id: string; group: GroupId; level: number; side: "above" | "below" | null; created_at: string; fired_at: string | null };
 export type BreadthAlerts = { items: BreadthAlert[]; limit: number; channels: string[] };
@@ -79,12 +78,6 @@ export const breadthApi = {
 /** "1,234" for counts, "62.5%" for shares, signed changes ("+3", "−1.2 pts"). */
 export const count = (v: number | null | undefined) => (v == null ? "–" : Math.round(v).toLocaleString("en-IN"));
 export const share = (v: number | null | undefined) => (v == null ? "–" : `${v.toFixed(1)}%`);
-export function delta(v: number | null | undefined, unit: "" | "pts" = "", dp = 0): string {
-  if (v == null) return "";
-  const r = Number(v.toFixed(dp));
-  if (r === 0) return "no change";
-  return `${r > 0 ? "+" : "−"}${Math.abs(r).toLocaleString("en-IN", { maximumFractionDigits: dp, minimumFractionDigits: dp })}${unit ? ` ${unit}` : ""}`;
-}
 /** The thrust days as a list: when they span more than this year, every day carries its year, so "16 Apr 2025, 8 Apr"
  *  doesn't leave the second one's year to guess (R35). */
 export function thrustDays(days: string[]): string {
