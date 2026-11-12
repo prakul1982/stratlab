@@ -168,7 +168,7 @@ def test_a_request_never_reads_descriptions_to_place_only_the_background_check_d
     from app.intel import theme_routes as TR
     calls = []
     monkeypatch.setattr(TR, "describe_unplaced", lambda *a, **k: calls.append(a) or [])
-    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None: (out, {}))
+    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None, carried=False: (out, {}))
     m = {"sector": "IT services", "generated_at": 1.0}
     TR.placed("IN", "IT services", m, _place_map(), ask=None)
     assert calls == []

@@ -30,6 +30,11 @@ APPROVED = {
     "auto:BOSCHLTD": ("Component and systems suppliers", "fuel injection systems and automotive aftermarket products: " + _KIN),
     "auto:STUDDS": ("Component and systems suppliers", "two-wheeler helmets and accessories, filed as auto components: " + _KIN),
     "auto:VELJAN": ("Component and systems suppliers", "hydraulic pumps, motors and valves, filed as auto components: " + _KIN),
+    # lane s2-exact (R41, approved on purpose): a company leaving the map layer it is in by how it earns stays there when that layer is mostly
+    # of its industry and no layer of its family is
+    "retail:AMZN": ("Online marketplaces", "an online retailer and marketplace the answer read as a retailer, leaving \"Online marketplaces\" (all "
+                    "of its industry): no retailers' layer holds its industry (\"Off-price, dollar and value-format retailers\", the largest, "
+                    "none), so it stays in the marketplaces' layer the map placed it in, left out of its figures as another way of earning"),
     "retail:BLMH": ("Other", "a cannabis products company: " + _OTHER),
     "retail:BWMX": ("Other", "a consumer products brand company (catalogue seller): " + _OTHER),
     "retail:CHWY": ("Other", "an online pet retailer: " + _OTHER),
@@ -153,14 +158,17 @@ def test_the_moves_are_the_intended_ones_only():
     by_theme = {}
     for k in APPROVED:
         by_theme.setdefault(k.split(":")[0], set()).add(k.split(":")[1])
-    assert sorted(by_theme) == ["auto", "retail"] and len(APPROVED) == 19
+    assert sorted(by_theme) == ["auto", "retail"] and len(APPROVED) == 20          # lane s2-exact approved Amazon (updated on purpose)
     every = {f"{t['key']}:{c['s']}": c for t in LAYERS["themes"] for c in t["companies"]}
     # nothing moves into the off-price layer or the equipment layer; every retail move leaves the off-price layer, every auto move tyres
     assert not any(layer.startswith("Off-price") or layer == "Semiconductor equipment" for layer, _ in APPROVED.values())
     assert all(every[f"retail:{s}"]["e"].startswith("Off-price") for s in by_theme["retail"])
     assert all(every[f"auto:{s}"]["e"] == "Tyre manufacturers" for s in by_theme["auto"])
-    # every company leaving a layer it reached by the split, never a company the map placed in its layer itself
-    assert all(every[k].get("mv") or t_layer_official(k) for k in APPROVED), [k for k in APPROVED if not every[k].get("mv") and not t_layer_official(k)]
+    # every company leaving a layer it reached by the split, never a company the map placed in its layer itself (lane s2-exact, on purpose:
+    # or one going back to the layer the live map placed it in)
+    back = lambda k: APPROVED[k][0] == t_live_layer(k)      # noqa: E731
+    assert all(every[k].get("mv") or t_layer_official(k) or back(k) for k in APPROVED), \
+        [k for k in APPROVED if not every[k].get("mv") and not t_layer_official(k) and not back(k)]
 
 
 def test_the_rejected_moves_do_not_happen():
@@ -179,6 +187,12 @@ def test_the_rejected_moves_do_not_happen():
         after = set(layer_of(replay_vc(t)).values())
         assert after <= before | {"Other"}, (key, after - before)
     assert "Retail" not in set(layer_of(replay_vc(_theme("retail"))).values())
+
+
+def t_live_layer(k):
+    key, sym = k.split(":")
+    t = _theme(key)
+    return _HALF.sub("", t["layers"][next(c for c in t["companies"] if c["s"] == sym)["x"]]["layer"])
 
 
 def t_layer_official(k):

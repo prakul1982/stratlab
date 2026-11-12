@@ -193,7 +193,7 @@ def test_a_placement_kept_under_the_rules_before_carries_over(monkeypatch):
         return {"value": {"assign": {"X": {"layer": "L", "by": "ai"}}}} if key[-1] == T.PLACE_CARRY.get(B.RULES) else None
     monkeypatch.setattr(computed, "get", get)
     got = {}
-    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None: (got.update(kept=kept), (out, kept))[1])
+    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None, carried=False: (got.update(kept=kept), (out, kept))[1])
     T.placed("IN", "Telecom", {"generated_at": 1.0}, {"value_chain": []}, ask=None)
     assert seen == [B.RULES, T.PLACE_CARRY[B.RULES]] and got["kept"]["assign"]["X"]["layer"] == "L"
 
@@ -259,16 +259,18 @@ def test_a_placement_is_carried_back_past_versions_that_kept_none_of_their_own(m
         return {"value": {"assign": {"X": {"layer": "L", "by": "ai"}}}} if key[-1] == older else None
     monkeypatch.setattr(computed, "get", get)
     got = {}
-    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None: (got.update(kept=kept), (out, kept))[1])
+    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None, carried=False:
+                        (got.update(kept=kept, carried=carried), (out, kept))[1])
     T.placed("IN", "Utilities", {"generated_at": 1.0}, {"value_chain": []}, ask=None)
-    assert B.RULES == 40 and T.PLACE_CARRY[40] == 38 and 39 not in seen
-    assert seen == [40, 38, 37] and got["kept"]["assign"]["X"]["layer"] == "L"
+    # lane s2-exact bumped RULES to 41, carrying 40 (updated on purpose)
+    assert B.RULES == 41 and T.PLACE_CARRY[41] == 40 and T.PLACE_CARRY[40] == 38 and 39 not in seen
+    assert seen == [41, 40, 38] and got["kept"]["assign"]["X"]["layer"] == "L" and got["carried"] is True
 
 
 def test_the_carry_back_stops_when_no_version_kept_a_placement(monkeypatch):
     from app import computed
     seen = []
     monkeypatch.setattr(computed, "get", lambda kind, key: seen.append(key[-1]) or None)
-    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None: (out, kept))
+    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None, carried=False: (out, kept))
     T.placed("IN", "Utilities", {"generated_at": 1.0}, {"value_chain": []}, ask=None)
     assert seen[0] == B.RULES and seen[-1] == min(T.PLACE_CARRY.values()) and len(seen) == len(set(seen))
