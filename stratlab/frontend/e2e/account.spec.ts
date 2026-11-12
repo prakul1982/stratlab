@@ -385,7 +385,7 @@ test("assistant: its own page, no longer a section of Account", async ({ page, r
 // and when; "Got it" hides it on both. (The server's own notice is tested in backend/tests/test_free_tier.py; here /me carries one.)
 test("account: the one-time notice of the Free plan's change, on Account and My space, until Got it", async ({ page, request }, info) => {
   const phone = info.project.name === "phone";
-  const u = who(301, phone);                 // a Free account
+  const u = phone ? who(291, true) : who(249, false);      // a Free account in no other spec: load-249, and load-294 on the phone
   const notice = { on: "2026-11-30T00:00:00+05:30", moves: ["The tax report's CSV and PDF downloads move to Basic (the report on screen stays free)"],
     rows: [{ key: "ai_reads_per_day", label: "Fresh AI reads a day", before: 60, after: 5 }, { key: "decks_per_month", label: "Slide decks a month", before: 1, after: 0 }] };
   await page.route(`${API}/me`, async (r) => {
