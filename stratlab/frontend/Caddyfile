@@ -17,26 +17,26 @@
 	redir @slash {re.slash.1} 308
 
 	header -Server
+	# like Vercel: a header the API sets on its own pages (their own, stricter policy) is kept; these fill what it leaves out
 
 	@notembed not path /embed/*
 	header @notembed {
 		defer
-		X-Content-Type-Options "nosniff"
-		Referrer-Policy "strict-origin-when-cross-origin"
-		X-Frame-Options "DENY"
-		Content-Security-Policy "default-src 'self'; script-src 'self' https://checkout.razorpay.com https://*.razorpay.com https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://adservice.google.com https://*.adtrafficquality.google https://connect.facebook.net https://www.clarity.ms https://*.clarity.ms; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://stratlab-production-ca25.up.railway.app https://*.stratlab.studio https://*.supabase.co wss://*.supabase.co https://*.razorpay.com https://*.sentry.io https://us.i.posthog.com https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://adservice.google.com https://*.adtrafficquality.google https://connect.facebook.net https://www.facebook.com https://www.clarity.ms https://*.clarity.ms; frame-src https://*.razorpay.com https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://www.google.com https://*.adtrafficquality.google; worker-src 'self'; manifest-src 'self'; form-action 'self' https://*.razorpay.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; upgrade-insecure-requests"
-		Permissions-Policy "camera=(), microphone=(), geolocation=()"
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		?X-Content-Type-Options "nosniff"
+		?Referrer-Policy "strict-origin-when-cross-origin"
+		?X-Frame-Options "DENY"
+		?Content-Security-Policy "default-src 'self'; script-src 'self' https://checkout.razorpay.com https://*.razorpay.com https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://adservice.google.com https://*.adtrafficquality.google https://connect.facebook.net https://www.clarity.ms https://*.clarity.ms; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://stratlab-production-ca25.up.railway.app https://*.stratlab.studio https://*.supabase.co wss://*.supabase.co https://*.razorpay.com https://*.sentry.io https://us.i.posthog.com https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://adservice.google.com https://*.adtrafficquality.google https://connect.facebook.net https://www.facebook.com https://www.clarity.ms https://*.clarity.ms; frame-src https://*.razorpay.com https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://www.google.com https://*.adtrafficquality.google; worker-src 'self'; manifest-src 'self'; form-action 'self' https://*.razorpay.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; upgrade-insecure-requests"
+		?Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		?Strict-Transport-Security "max-age=31536000; includeSubDomains"
 	}
 	@embed path /embed/*
 	header @embed {
 		defer
-		X-Content-Type-Options "nosniff"
-		Referrer-Policy "strict-origin-when-cross-origin"
-		Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors *"
-		Permissions-Policy "camera=(), microphone=(), geolocation=()"
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
-		-X-Frame-Options
+		?X-Content-Type-Options "nosniff"
+		?Referrer-Policy "strict-origin-when-cross-origin"
+		?Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors *"
+		?Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		?Strict-Transport-Security "max-age=31536000; includeSubDomains"
 	}
 
 	@assets path /assets/*
