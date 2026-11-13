@@ -558,8 +558,11 @@ async def unexpected_errors(request: Request, call_next):
         tb = traceback.extract_tb(e.__traceback__)
         own = [f for f in tb if "site-packages" not in f.filename and f.name != "unexpected_errors"] or tb   # the deepest frame of our own code
         where = f"{own[-1].filename.rsplit('/', 1)[-1]}:{own[-1].lineno} in {own[-1].name}" if own else ""
+        # with the build it happened on: the list is kept across deploys, so an error a later build fixed is told apart from one on the live
+        # build (ops49: two errors already fixed in later releases read as live ones)
         RECENT_ERRORS.append({"ref": ref, "at": datetime.now(IST).isoformat(), "method": request.method,
-                              "path": request.url.path, "error": connect_redact.mask(f"{type(e).__name__}: {str(e)[:300]}"), "where": where})
+                              "path": request.url.path, "error": connect_redact.mask(f"{type(e).__name__}: {str(e)[:300]}"), "where": where,
+                              "build": build_info.info().get("short")})
         del RECENT_ERRORS[:-25]
         _save_errors()
         report(e, ref=ref, path=f"{request.method} {request.url.path}")
@@ -5365,10 +5368,15 @@ def stock_price_refresh_once(sleep=time.sleep) -> dict:
         # India: a page read at the close before the exchange's official close was out takes it once it is (R7O-004)
         extra = {"official": lambda s, d: official_close.official(s, d, use_quote=False),
                  "official_ready": official_close.settled} if region == "IN" else {}
+        before = price_refresh_status.get(region) if isinstance(price_refresh_status.get(region), dict) else {}
         try:
             price_refresh_status[region] = stock_page_store.refresh_prices(region, bars_of, scan.analyse, limit=limit, gap=gap, sleep=sleep, **extra)
         except Exception as e:                        # a source or storage down: the next pass tries again
             price_refresh_status[region] = {"error": str(e)[:160]}
+        # passes in a row in which no page's price could be read (the source down, or no read working): a single such pass is the
+        # source not answering for a moment, cleared by the next pass a few minutes later; Admin calls it a Problem from the second
+        # (owner, 13 Nov: "Company pages' prices" opened a check that cleared by itself)
+        price_refresh_status[region]["failed_passes"] = (int(before.get("failed_passes") or 0) + 1) if price_pass_failed(price_refresh_status[region]) else 0
     try:
         rotation_after_close()
     except Exception as e:
@@ -5377,6 +5385,16 @@ def stock_price_refresh_once(sleep=time.sleep) -> dict:
     from . import job_status
     job_status.kept("page-prices", dict(price_refresh_status))       # so Admin has it after a restart (R94-001)
     return price_refresh_status
+
+
+def price_pass_failed(x: dict | None) -> bool:
+    """Whether a market's pass of the price job read no page's price: it raised, or every read raised. A pass turned away by its source
+    (India's broker before the morning login) or with only pages that have no newer close yet is not a failure."""
+    if not isinstance(x, dict):
+        return False
+    if x.get("error"):
+        return True
+    return not x.get("source_down") and bool(x.get("errors", x.get("failed", 0))) and not x.get("refreshed")
 
 
 def refresh_backlog(status: dict) -> bool:
@@ -7323,6 +7341,8 @@ def tell_admins(subject: str, text: str, label: str = "Admin alert") -> int:
 
 PLATFORM_RUN = "platform-check-run"
 PLATFORM_BUILD_RUN = "platform-check-build"
+PLATFORM_RECHECK_RUN = "platform-check-again"
+PLATFORM_RECHECK = timedelta(hours=1)             # a check that failed in an automatic run alone is run again this long after it
 PLATFORM_BUILD_AFTER = timedelta(minutes=20)      # a new build is checked once it has been up this long (its caches warm, its jobs started)
 
 
@@ -7343,6 +7363,22 @@ def platform_build_due(now: datetime) -> str | None:
     return build
 
 
+def platform_recheck_due(now: datetime) -> str | None:
+    """The kept automatic run's time when it has failing checks the run before didn't have and PLATFORM_RECHECK has passed since: the
+    check runs again once, so a failure that lasts is an issue within the hour and one that was a source's moment is not."""
+    try:
+        last = json.loads(db.get_setting(PLATFORM_LAST) or "null")
+    except (ValueError, TypeError):
+        return None
+    if not platform_unconfirmed(last):
+        return None
+    try:
+        at = datetime.fromisoformat(str(last.get("at")))
+    except ValueError:
+        return None
+    return str(last["at"]) if now >= at + PLATFORM_RECHECK else None
+
+
 def platform_pass(now: datetime) -> bool | None:
     """The day's check if it is due (PLATFORM_AT has passed) and hasn't run: a restart after that time still runs it. A new build
     is checked once too, whatever the time (platform_build_due).
@@ -7358,6 +7394,19 @@ def platform_pass(now: datetime) -> bool | None:
             except Exception as e:
                 print("platform check of the new build failed:", e)
                 db.delete_setting(PLATFORM_BUILD_RUN)
+                return True
+            run.done()
+    again = platform_recheck_due(now)
+    if again:
+        if not leader.leading():
+            return None
+        run = run_marks.claim(PLATFORM_RECHECK_RUN, again)
+        if run is not None:
+            try:
+                daily_platform_check()
+            except Exception as e:
+                print("platform check run again failed:", e)
+                db.delete_setting(PLATFORM_RECHECK_RUN)
                 return True
             run.done()
     at = now.replace(hour=PLATFORM_AT[0], minute=PLATFORM_AT[1], second=0, microsecond=0)
@@ -7397,10 +7446,28 @@ def platform_job():
         time.sleep(max(1, min(600, (at - now).total_seconds())))       # ten minutes at most: a new build is checked soon after its wait
 
 
-def platform_issue(out: dict | None) -> "autofix.Check":
+def platform_before(out: dict | None) -> list[str] | None:
+    """The checks that failed in the run before `out` (from the kept history), or None when there was none to compare with."""
+    try:
+        hist = json.loads(db.get_setting(PLATFORM_HISTORY) or "[]")
+    except (ValueError, TypeError):
+        return None
+    at = (out or {}).get("at")
+    earlier = [h for h in hist if isinstance(h, dict) and h.get("at") != at and str(h.get("at") or "") < str(at or "~")]
+    return list(earlier[-1].get("failed") or []) if earlier else None
+
+
+def platform_issue(out: dict | None, before: list[str] | None = None) -> "autofix.Check":
     """The feature check's failures as one self-healing issue: it has retried each failing check already, so what still fails goes to
-    the owner at once, and only once while it stays the same (it mailed the same EUR/USD candle two days running, 3-4 Nov)."""
-    bad = [r for r in (out or {}).get("checks") or [] if r.get("state") == "fail"]
+    the owner at once, and only once while it stays the same (it mailed the same EUR/USD candle two days running, 3-4 Nov). A check that
+    fails in one run only is a source not answering for a moment (owner, 13 Nov: "Feature check" mailed, then cleared by itself): the issue
+    names the checks failing in two runs in a row (`before`: the run before's failed checks; the run is repeated PLATFORM_RECHECK later),
+    or every failing check when a large share fail at once."""
+    rows = (out or {}).get("checks") or []
+    failing = [r for r in rows if r.get("state") == "fail"]
+    counts = {r["name"]: 2 if r["name"] in set(before or ()) else 1 for r in failing}
+    keep = set(autofix.lasting([r["name"] for r in failing], counts, len(rows)))
+    bad = [r for r in failing if r["name"] in keep]
     problem = (f"{len(bad)} check{'s' if len(bad) > 1 else ''} failing after a retry: "
                + "; ".join(f"{r['name']} ({str(r.get('detail') or '')[:140]})" for r in bad[:6])) if bad else None
     return autofix.Check(id="platform", name="Feature check", problem=problem, owner_only=True, to="/admin/system",
@@ -7408,17 +7475,26 @@ def platform_issue(out: dict | None) -> "autofix.Check":
                                 "clears by itself at the next daily check; anything else needs a developer's look.")
 
 
+def platform_unconfirmed(out: dict | None) -> bool:
+    """Whether an automatic run has failing checks that the run before didn't have (not yet an issue: they are checked again)."""
+    if not isinstance(out, dict) or not out.get("auto"):
+        return False
+    failing = {r.get("name") for r in out.get("checks") or [] if r.get("state") == "fail"}
+    return bool(failing - set(platform_before(out) or ()))
+
+
 @autofix.source
 def platform_checks_failing() -> list:
     try:
-        return [platform_issue(json.loads(db.get_setting(PLATFORM_LAST) or "null"))]
+        out = json.loads(db.get_setting(PLATFORM_LAST) or "null")
     except (ValueError, TypeError):
         return []
+    return [platform_issue(out, platform_before(out))]
 
 
 def daily_platform_check(retry_after: float = 120) -> dict:
     out = run_platform_check(retry_after=retry_after, auto=True)
-    autofix.report(platform_issue(out), send=lambda subject, text: tell_admins(subject, text) > 0)
+    autofix.report(platform_issue(out, platform_before(out)), send=lambda subject, text: tell_admins(subject, text) > 0)
     return out
 
 
