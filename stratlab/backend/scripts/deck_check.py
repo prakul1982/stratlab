@@ -177,7 +177,7 @@ def check_pages(pages: list[str]) -> dict:
             inf, b = int(c.group(1).replace(",", "")), int(c.group(2).replace(",", ""))
             a = b - inf                           # gl50: every company outside informative layers, the not checked yet too
             if b and a > OTHER_MAX * b:
-                add("other>40%", n, f"In informative layers {inf:,} of {b:,} ({round(inf / b * 100)}%); {a:,} fit none ({round(a / b * 100)}%)")
+                add("other>40%", n, f"In informative layers {inf:,} of {b:,} ({round(inf / b * 100)}%); {a:,} outside them ({round(a / b * 100)}%)")
             break
         m = _OTHER.search(page)
         if m:

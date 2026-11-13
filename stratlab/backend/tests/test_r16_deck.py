@@ -11,6 +11,7 @@ from app.intel import theme_base as B
 from app.intel import theme_data as D
 from tests.test_export import plain, table_of, texts, view
 from tests.test_theme1 import CHECKED, FACTS, TODAY, facts, src
+from tests.gl50_read import blocks as read_blocks
 
 NOW = datetime(2026, 11, 7, 6, 0, tzinfo=timezone.utc)
 ADVICE = ("buy", "sell", "avoid", "attractive", "expensive", "cheap", "undervalued", "overvalued", "recommend", "target price")
@@ -131,6 +132,7 @@ def test_the_chain_names_a_highest_and_lowest_only_among_its_own_layers_of_two_o
               {"layer": "B", "n": 3, "revenue": 1, "official": False, "stats": {"ebitda": {"median": 13.0, "n": 3}}, "companies": []},
               {"layer": "Official CV", "n": 2, "revenue": 1, "official": True, "stats": {"ebitda": {"median": 9.5, "n": 2}}, "companies": []},
               {"layer": "Lone", "n": 1, "revenue": 1, "official": False, "stats": {"ebitda": {"median": 30.0, "n": 1}}, "companies": []}]
+    blocks = read_blocks(blocks)  # gl50 (R50, updated on purpose): the layers' way of earning read, else no layer is ranked
     c = D.chain_table(blocks)
     assert (c["highest"], c["lowest"]) == ("A", "B") and c["compared"] == ["A", "B"]
     close = [{**blocks[0], "stats": {"ebitda": {"median": 14.0, "n": 3}}}, blocks[1]]

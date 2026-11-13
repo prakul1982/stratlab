@@ -948,7 +948,7 @@ WHY_KIND = {"other business": "different revenue model", "way of earning not sho
 KIND_SAID = {"different revenue model": "it earns another way than the layer's companies", "another business": "its own words describe another business",
              "insufficient evidence": "its evidence doesn't show clearly how it earns", "not confirmed in the theme": "its own words don't show this work",
              "no figure stored": "no figure of it is stored"}
-EVIDENCE_GAP = {"no_words": ("no description of its own is stored", "no description of its own"),
+EVIDENCE_GAP = {"no_words": ("not checked yet: no description of its own is stored", "not checked yet, no description of its own"),      # gl50
                 "no_model": ("its own words don't state how it earns", "its words don't state how it earns"),
                 "weak": ("its evidence shows how it earns only weakly (low confidence)", "how it earns read only weakly")}
 
@@ -980,6 +980,8 @@ def out_reason(r: dict) -> dict:
         if why == "off_industry":
             return {"kind": "another business", "label": "another business than its official industry",
                     "detail": "its own words describe another business than the one its official industry files it under"}
+        if why == "stage" and r.get("stage_out"):         # gl50 (R50): a commercial company in a clinical-stage or pre-revenue layer
+            return {"kind": "another business", "label": "another business: a commercial company, not of the layer's stage", "detail": r["stage_out"]}
         if mid and (lid or lf):
             return {"kind": "different revenue model", "label": f"different revenue model ({_model_name(mid)}, the layer's {_model_name(lid, lf)})",
                     "detail": f"the way of earning of “{_model_title(mid)}” ({_model_what(mid)}), not the layer's, that of "
@@ -1241,6 +1243,11 @@ def _chain_table(blocks: list[dict]) -> dict:
             lend = [r for r in rows if ok(r, "roe") and not r["rest"]]
         if not same_basis([r["basis"] for r in lend]):
             lend = []
+        if len(lend) >= 2 and not any(model_family_of(r["model"]) for r in lend):
+            # gl50 (R50): lenders' layers with no way of earning read are described, never ranked, as the margin's (UNREAD_SAID)
+            each = [f"{r['layer']} {pts(r['roe'], True)}" + (f" ({w[2:]})" if (w := few(r["roe_n"], r["n"])) else "") for r in lend]
+            return {"rows": rows, "line": "Median return on equity by layer: " + "; ".join(each) + f". {UNREAD_SAID}", "highest": None,
+                    "lowest": None, "measure": "roe", "compared": [], "gap": None, "not_ranked": [r["layer"] for r in lend], "unread": True}
         lend = one_basis(lend, lambda r: r["model"])
         if not comparable_intensity(lend, lambda r: r["intensity"]):
             lend = []

@@ -785,8 +785,7 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
         big = sorted(dict.fromkeys(x for x in every_sym if x), key=lambda x: (-((by_sym.get(x) or {}).get("cap") or 0), x))
         models, tags, conf, reasked = reask_unknown(models, tags, conf, reasked, big, about_of, by_sym, evidence, ask, theme)
         models = models or None
-    # gl50: and one whose own words state its model in so many words takes it, asked or not
-    models, conf, stated_ = stated_for_rest(models, conf, every_sym, evidence)
+
     out_vc = []
     for v in vc:
         if v in rest:
@@ -818,7 +817,10 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
         # placement answer put it in; one placed by its words alone, or in a layer the answer proposed for the companies that fit none of
         # the map's, moves as before
         settled |= {s_ for s_ in reasked if s_ not in got or (got[s_].get("by") == "ai" and got[s_].get("layer"))}
-        settled |= stated_
+    # gl50: one still without a model whose own words state it in so many words takes it, asked or not (after the R31 and R37 rules), and
+    # like those it never moves the company out of the map layer it is in
+    models, conf, stated_ = stated_for_rest(models, conf, every_sym, evidence)
+    settled |= stated_
     if previous:
         out_vc = held_to_previous(out_vc, map_names_of(previous, kept), about_of)
     out_vc = definition_fit(out_vc, evidence, theme)            # gl50: what the layer is, in the company's words or industry
@@ -873,21 +875,37 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
 _PARTS = re.compile(r",|&|/|\band\b|\bor\b", re.I)
 
 
+def _fit_words(text) -> set[str]:
+    """A text's words of what is made or done (kind_stems keeps them), each in lower case without a plural "s", for words_fit."""
+    out = set()
+    for w in re.findall(r"[a-z0-9]+", _short_joined(text)):
+        if len(w) >= 3 and kind_stems(w):
+            out.add(w[:-1] if w.endswith("s") and len(w) > 4 else w)
+    return out
+
+
+def _same_word(a: str, b: str) -> bool:
+    """Two words the same, or sharing their first seven letters ("refrigerant" and "refrigeration"); never "synthetic" for "synthesis" or
+    "engineering" for "engines" (five letters said those)."""
+    return a == b or (min(len(a), len(b)) >= 7 and a[:7] == b[:7])
+
+
 def distinct_stems(v: dict, layers: list[dict], theme_words: set) -> list[set]:
     """What a layer's name (its shown name, a half's "(larger)" left out) says it is apart from the map's other layers, each of its parts
-    apart ("Engines and industrial machinery makers": engines, or industrial machinery): each part's kind stems (kind_stems: no how-it-earns
-    words) less the theme's words and those of any other layer's name. [] when no part says anything of its own."""
+    apart ("Engines and industrial machinery makers": engines, or industrial machinery): each part's words of what is made or done
+    (_fit_words), less the theme's words and those another layer's name says too. [] when no part says anything of its own."""
     name = lambda x: _HALF_RX.sub("", x.get("layer") or "")      # noqa: E731
     others = set().union(*[whole_stems(name(w)) for w in layers if w is not v and name(w) != name(v)] or [set()])
-    parts = [{a for a in whole_stems(p) - theme_words if not any(_near(a, b) for b in others)} for p in _PARTS.split(name(v))]
+    parts = [{w for w in _fit_words(p) if not (kind_stems(w) & theme_words) and not any(_near(_stem(w), b) for b in others)}
+             for p in _PARTS.split(name(v))]
     return [x for x in parts if x]
 
 
 def words_fit(parts: list, text: str) -> bool:
-    """Whether a company's words say more than half of one part of a layer's distinct stems (distinct_stems): "grooming and oral care ...
+    """Whether a company's words say more than half of one part of a layer's distinct words (distinct_stems): "grooming and oral care ...
     packaged consumer goods" says one of "packaged" and "foods", which is not the layer's kind; "diesel engines" says "engines"."""
-    mine = whole_stems(text)
-    return any(sum(1 for b in x if any(_near(a, b) for a in mine)) * 2 > len(x) for x in parts)
+    mine = _fit_words(text)
+    return any(sum(1 for b in x if any(_same_word(a, b) for a in mine)) * 2 > len(x) for x in parts)
 
 
 def industry_named_by(v: dict, industry, theme_words: set) -> bool:
@@ -959,9 +977,10 @@ def definition_fit(vc: list[dict], evidence, theme: str) -> list[dict]:
     when its own words (own_text, else its line on the page) say more than half of the layer name's distinct stems (words_fit) or share a word
     of its kind with the layer's name or description (says_of_layer), or when its official industry is the layer's (industry_fits). One that
     fits by none goes to the one other layer its words say (words_fit), else to the one layer whose name or description names its industry
-    (industry_named_by), else, with words of its own, to "Other"; with none, it stays (nothing to judge it by). One the AI's answer placed
-    (having read its words) moves only to the one layer its words say. Never moved: a company whose words were checked for the layer
-    ("verified"), the companies of a layer whose name states no kind of its own or that the split made by how its companies earn, "Other".
+    (industry_named_by), else, with words of its own, to "Other"; with none, it stays (nothing to judge it by). Only a company placed by its
+    words alone ("placed": "words": no AI answer read it against the layers) is checked: never the map's own picks, a company the AI's
+    answer placed or whose words were checked for the layer ("verified"), the companies of a layer whose name states no kind of its own or
+    that the split made by how its companies earn, or "Other".
     Each moved company carries "refit": {"from": its layer, "why": the reason, said}."""
     tw = kind_stems(theme)
     own = [v for v in vc if not v.get("official") and v.get("layer")]
@@ -973,9 +992,8 @@ def definition_fit(vc: list[dict], evidence, theme: str) -> list[dict]:
         if not stems[id(v)] or v.get("by_model"):
             continue
         for c in v.get("companies") or []:
-            if c.get("verified"):
-                continue
-            ai = c.get("placed") == "ai"            # the AI placed it having read its words: moved only to the one layer its words say
+            if c.get("verified") or c.get("placed") != "words":
+                continue                # only a placement by words alone: the map's own picks and the AI's placements read more
             words = own_text(evidence(c.get("ticker"))) if evidence else ""
             if no_words(words) and c.get("what") and not str(c.get("what")).startswith(FILING_TITLES):
                 words = str(c.get("what"))
@@ -984,14 +1002,13 @@ def definition_fit(vc: list[dict], evidence, theme: str) -> list[dict]:
             if (words and (words_fit(stems[id(v)], words) or says_of_layer(v, words, tw))) or industry_fits(v, ind, tw):
                 continue
             names = lambda xs: list(dict.fromkeys(_HALF_RX.sub("", x["layer"]) for x in xs))      # noqa: E731
-            by_words = [w for w in own if w is not v and words and words_fit(stems[id(w)], words)]
+            lead = one_line(words) or words         # a move rests on what its first sentence says it does, never a list of uses or customers
+            by_words = [w for w in own if w is not v and words and words_fit(stems[id(w)], lead)]
             by_ind = [w for w in own if w is not v and industry_named_by(w, ind, tw)]
             here = _HALF_RX.sub("", v["layer"])
             if len(names(by_words)) == 1:
                 to = by_words[0]
                 why = f"its own words say what “{names(by_words)[0]}” is, not what “{here}” is"
-            elif ai:
-                continue
             elif not by_words and len(names(by_ind)) == 1:
                 to = by_ind[0]
                 why = (f"its own words don't say what “{here}” is" if words else "no words of its own") + \

@@ -38,7 +38,8 @@ def chem(debt=None, model=None):
             x["debt"] = x["years"][-1]["debt"] = sales * (debt or {}).get(pre, 1.0)
             f[sym] = x
             cos.append({"name": x["name"], "ticker": sym, "what": "makes chemicals"})
-        vc.append({"layer": lname, "description": "Makes chemicals.", "companies": cos, **({"model": dict(model)} if model else {})})
+        # gl50 (R50, updated on purpose): the layers' way of earning read by default, else no layer is ranked
+        vc.append({"layer": lname, "description": "Makes chemicals.", "companies": cos, "model": dict(model or {"id": "manufacturing", "family": "making"})})
     m = {"sector": "Chemicals", "value_chain": vc, "sub_themes": [], "placements": {"checked": True, "pending": 0, "left_out": 0,
                                                                                     "placed": sum(len(x["companies"]) for x in vc)}}
     return m, f

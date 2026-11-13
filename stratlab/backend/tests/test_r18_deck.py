@@ -112,7 +112,10 @@ def test_a_lender_theme_shows_lenders_measures_and_never_a_column_that_is_empty_
     # of 5 (HEADLINE_MIN) on the same fixtures is tested in tests/test_r31_bound.py
     monkeypatch.setattr("app.intel.theme_data.HEADLINE_MIN", 3)
     region, m, f, _, _ = bank_theme()
-    v, slides = deck_of(region, m, f)
+    bare, _ = deck_of(region, m, f)              # gl50 (R50, updated on purpose): no way of earning read: shown, not ranked
+    assert bare["chain"]["highest"] is None and bare["chain"]["line"].endswith(D.UNREAD_SAID)
+    from tests.gl50_read import read
+    v, slides = deck_of(region, read(m, model={"id": "lending", "family": "lending"}), f)
     chain = table_of(slides, "The value chain by layer")
     assert "EBITDA margin" not in chain["head"] and "ROCE" not in chain["head"]
     for col in ("ROE", "NII / assets", "Gross NPA", "P/B"):

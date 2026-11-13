@@ -35,7 +35,9 @@ def steel():
 
 
 def lender_block(name, n, roe, k=None):
-    return {"layer": name, "n": n, "revenue": 100.0, "official": False, "stats": {"roe": {"median": roe, "n": k if k is not None else n}}, "companies": []}
+    # gl50 (R50, updated on purpose): the layers' way of earning read (lending), else no layer is ranked
+    return {"layer": name, "n": n, "revenue": 100.0, "official": False, "stats": {"roe": {"median": roe, "n": k if k is not None else n}}, "companies": [],
+            "model": {"id": "lending", "family": "lending"}}
 
 
 def said(slides) -> list[str]:

@@ -37,8 +37,13 @@ EVERY = [(n, v, s) for n, (v, s) in list(ALL) + list(families())]
 IDS = [n for n, _, _ in EVERY]
 
 
+# gl50 (R50, updated on purpose): a chain whose layers have no way of earning read is never ranked, so the fixture's layers carry one
+READ = {"id": "manufacturing", "family": "making"}
+
+
 def block(name, n, med, k=None, official=False, revenue=100.0):
-    return {"layer": name, "n": n, "revenue": revenue, "official": official, "stats": {"ebitda": {"median": med, "n": k if k is not None else n}}, "companies": []}
+    return {"layer": name, "n": n, "revenue": revenue, "official": official, "stats": {"ebitda": {"median": med, "n": k if k is not None else n}}, "companies": [],
+            "model": dict(READ)}
 
 
 def chain_of(v, *specs):
@@ -106,6 +111,8 @@ def test_a_median_of_fewer_companies_than_its_group_reads_n_of_m_in_tables_chart
     assert D.few(3, 5) == ", 3 of 5 companies" and D.few(3, 3) == ", 3 companies" and D.few(9, 9) == ""
     assert D.of_words(4, 6) == "4 of 6 companies" and D.of_words(1, None) == "1 company"
     v = full_view()
+    for x in v["layers"]:              # gl50 (updated on purpose): the layers' way of earning read, as the chain's (READ)
+        x["model"] = x.get("model") or dict(READ)
     v["chain"] = D.chain_table([block("Mining", 6, 30.0, 5), block("Cells", 4, 12.0, 3)])
     slides = deck.theme_plan(v)[0]
     s = next(x for x in slides if x.title == "The value chain by layer")
@@ -242,7 +249,7 @@ def test_the_contents_lists_the_notes_page_and_references_point_at_it():
 
 # ---------- 5. the version ----------
 def test_the_deck_version_is_27_so_kept_deck_files_are_made_again_once():
-    assert deck.THEME_DECK_VERSION == 59                     # ex49 (R49): RULES 48, PLACE_CARRY[48] = 47, deck 59, dive text 19, precise exclusion reasons, the business-model ranking rule (updated on purpose); vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R48): deck 58, dive text 18, the coverage flag row and who earns another way said in layer lines (updated on purpose); vf46 (R46): dive text 17, each checked figure's source record, net above EBITDA reconciled line by line (updated on purpose); tx2 (R45/R46): RULES 45, PLACE_CARRY[45] = 44, deck 57 (dive text 17 from vf46), the taxonomy regression guard and the screening populations (updated on purpose); c1 (R44): RULES 44, PLACE_CARRY[44] = 43, deck 56, dive text 16 (55 and 15 are R44.1's), classification coverage from evidence (updated on purpose); R44 (lane v1): deck 54, dive text 14, verification states (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane t1: deck 52, dive text 11 (LIVE7A, updated on purpose); R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); R35 bumped it (R25's test, updated: a new release makes kept files again)
+    assert deck.THEME_DECK_VERSION == 60                     # gl50 (R50): RULES 49, PLACE_CARRY[49] = 48, deck 60, dive text 20 (updated on purpose); ex49 (R49): RULES 48, PLACE_CARRY[48] = 47, deck 59, dive text 19, precise exclusion reasons, the business-model ranking rule (updated on purpose); vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R48): deck 58, dive text 18, the coverage flag row and who earns another way said in layer lines (updated on purpose); vf46 (R46): dive text 17, each checked figure's source record, net above EBITDA reconciled line by line (updated on purpose); tx2 (R45/R46): RULES 45, PLACE_CARRY[45] = 44, deck 57 (dive text 17 from vf46), the taxonomy regression guard and the screening populations (updated on purpose); c1 (R44): RULES 44, PLACE_CARRY[44] = 43, deck 56, dive text 16 (55 and 15 are R44.1's), classification coverage from evidence (updated on purpose); R44 (lane v1): deck 54, dive text 14, verification states (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane t1: deck 52, dive text 11 (LIVE7A, updated on purpose); R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); R35 bumped it (R25's test, updated: a new release makes kept files again)
 
 
 # ---------- 6. the live R24 decks: a layer's columns follow its family; notes name only the families shown ----------
