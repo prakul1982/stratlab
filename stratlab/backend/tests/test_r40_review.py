@@ -201,17 +201,19 @@ def test_the_coverage_says_how_many_companies_fit_none_of_the_map_s_layers_and_d
     v["members"] = ([{"symbol": f"A{i}", "layer": "Makers"} for i in range(6)]
                     + [{"symbol": f"O{i}", "layer": "Other test companies", "rest": True} for i in range(4)]
                     + [{"symbol": "S1", "layer": "Named in a sub-theme only"}])
+    v["coverage"] = None          # R44 (updated on purpose): the members set by hand here, so the count is taken from them (rest_count)
     v["placements"] = {**(v.get("placements") or {}), "off_industry": [{"ticker": "PRO", "name": "Propane Co", "industry": "Retail-Miscellaneous Retail"}]}
     # lane d1 (updated on purpose): every company is counted (a company named in a sub-theme only is in "Other" on a real map), and the row
     # says those that fit none apart from those not checked yet
     assert deck.rest_count(v) == (4, 11, "Other test companies", 0)
     slides = deck.theme_plan(v)[0]
     t = texts(slides)
-    assert "in “Other test companies”, listed, never compared: 4 of 11 fit none of the map's layers" in t
+    # R44 (updated on purpose): the companies placed counted once, in the row's "In informative layers 7 of 11 (64%)"
+    assert "in a layer the map names; the other 4 in “Other test companies”, listed, never compared: 4 fit none of the map's layers" in t
     assert "Filed under Retail-Miscellaneous Retail but in another business: Propane Co." in t
     conf = next(s for s in slides if s.title == "Data confidence")
     rows = [r for b in conf.blocks if b["kind"] == "table" and b["head"] == deck.COVERAGE_HEAD for r in b["rows"]]
-    assert ["In no layer", "4 of 11"] == rows[[r[0] for r in rows].index("In no layer")][:2]
+    assert ["In informative layers", "7 of 11 (64%)"] == rows[[r[0] for r in rows].index("In informative layers")][:2]       # R44 (updated on purpose)
     assert deck.coverage_table_flags(rows, v, deck.coverage(v)) == []
     low = DC.check_text("A\nB\n In no layer   40 of 100   companies fit none of the map's layers (in “Other”)\n\f")
     high = DC.check_text("A\nB\n In no layer   50 of 100   companies fit none of the map's layers (in “Other”)\n\f")

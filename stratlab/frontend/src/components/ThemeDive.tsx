@@ -254,7 +254,7 @@ export function LayerCard({ layer, i, region, business }: { layer: Layer; i: num
           )}</Fold>
           {layer.line && <p className="k-small">{layer.line}</p>}
           {wide.size > 0 && <p className="k-note">"Whole-company figures": the company runs other businesses too, so its figures are the whole company's, not this layer's own.</p>}
-          {layer.companies.some((c) => c.one_off && c.net != null) && <p className="k-note">†: net margin above the EBITDA margin (a one-off gain in the year), left out of the net margin's median.</p>}
+          {layer.companies.some((c) => c.one_off && c.net != null) && <p className="k-note">†: net margin above the EBITDA margin, or unusual, that the company's own filed figures don't give; left out of the net margin's median.</p>}
         </>}
       {hist && hist.years.length >= 2 && hist.n >= MIN_BASE && (
         <>
