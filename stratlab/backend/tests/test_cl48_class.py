@@ -241,3 +241,27 @@ def test_the_deck_carries_the_dive_s_control_only_for_the_same_count(monkeypatch
     monkeypatch.setattr(TR, "map_coverage", lambda m: {"informative": 58, "placed": 98, "share": 59})
     assert TR.coverage_of(m, {"coverage": {"informative": 58, "placed": 98, "control": {"low": True}}})["control"] == {"low": True}
     assert "control" not in TR.coverage_of(m, {"coverage": {"informative": 60, "placed": 98, "control": {"low": True}}})
+
+
+def test_a_coverage_flag_is_listed_in_admin_and_never_mailed(monkeypatch):
+    # the owner's choice (13 Nov): the coverage control shows on the deck and under Needs your attention, without an email
+    from app import autofix, db
+    store = {}
+
+    def update(k, fn, tries=10):
+        new = fn(store.get(k))
+        if new is not None:
+            store[k] = new
+        return store.get(k)
+    monkeypatch.setattr(db, "update_setting", update)
+    monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
+    C.flag("US", "Consumer retail", {"informative": 58, "placed": 98, "share": 59, "control": {"low": True}})
+    checks = TR.coverage_checks()
+    assert checks and all(c.mail is False for c in checks)
+    sent = []
+    st, now = autofix._empty(), datetime.now(timezone.utc)
+    for later in (0, 3600 * 6, 3600 * 30):                           # past every escalation window, across two days
+        st = autofix.sweep(checks, now=now + timedelta(seconds=later), st=st, send=lambda s, t: sent.append(s) or True)
+    issue = st["open"][checks[0].id]
+    assert sent == [] and issue.get("escalated") and not issue.get("mailed")
+    assert autofix.Check(id="x", name="x", problem="p").mail is True      # every other check still mails as before

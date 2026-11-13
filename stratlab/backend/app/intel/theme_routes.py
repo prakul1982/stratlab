@@ -1140,7 +1140,8 @@ def coverage_of(m: dict, dive: dict) -> dict | None:
 
 def coverage_checks() -> list:
     """cl48 (R47, the outside review's P1 taxonomy coverage control): one Admin check a theme flagged on its coverage (theme_changes.flag):
-    its problem the coverage control in words; listed under Needs your attention and mailed once an issue by the autofix sweep."""
+    its problem the coverage control in words; listed under Needs your attention by the autofix sweep, never mailed (mail=False: the
+    owner sees it in Admin and on the deck's coverage page)."""
     from .. import autofix
     out = []
     for k, x in sorted(theme_changes.flags().items()):
@@ -1148,7 +1149,7 @@ def coverage_checks() -> list:
             continue
         out.append(autofix.Check(id=f"theme-coverage:{k}", name=f"Theme coverage: {x.get('name') or k} ({x.get('region') or ''})",
                                  problem=x.get("problem") or None, action="Open the theme's deck: its coverage page says how many "
-                                 "companies are in informative layers and which are in \"Other\".", to="/admin"))
+                                 "companies are in informative layers and which are in \"Other\".", to="/admin", mail=False))
     return out
 
 

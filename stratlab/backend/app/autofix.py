@@ -59,6 +59,7 @@ class Check:
     action: str = "Open Admin to see what failed."
     to: str = "/admin"
     owner_only: bool = False        # only the owner can fix it (a key, a payment, a setting): escalates at once
+    mail: bool = True               # False: escalates into Needs your attention only, never mailed
     tries: int = TRIES
     backoff: tuple = BACKOFF
     settle: float = SETTLE
@@ -152,6 +153,8 @@ def escalate(st: dict, now: datetime, check: Check, issue: dict, send: Callable[
     mail = st["mail"] if st["mail"].get("day") == day else {"day": day, "sent": 0}
     st["mail"] = mail
     issue["escalated"] = issue.get("escalated") or _at(now)
+    if not check.mail:                      # listed under Needs your attention only: no mail (the owner's choice for this kind of check)
+        return False
     if mail["sent"] >= MAILS_PER_DAY:
         issue["held"] = True                # over today's cap: it stays in Needs your attention, mailed tomorrow if still open
         return False
