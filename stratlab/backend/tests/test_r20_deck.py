@@ -170,7 +170,8 @@ def test_every_rule_holds_on_every_synthetic_theme(name, v, slides):
         assert any(b["kind"] in IMPORTANT and (b.get("rows") or b.get("items") or b.get("vals") or b.get("series")) for b in s.blocks), s.title
     at = next(i for i, s in enumerate(slides) if s.title.startswith("Every company's figures"))
     # changed on purpose (R35): where a layer's page left names off, "Who is in each layer's calculations" follows it, a table too
-    assert all(s.title.startswith(("Every company's figures", deck.ROLL_TITLE)) and [b["kind"] for b in s.blocks if b["kind"] != "text"] == ["table"]
+    # changed on purpose (R46): each checked figure's source record follows them, a table too
+    assert all(s.title.startswith(("Every company's figures", deck.ROLL_TITLE, deck.SOURCES_TITLE)) and [b["kind"] for b in s.blocks if b["kind"] != "text"] == ["table"]
                for s in slides[at:])
     # R21: a theme with layers of its own has no exchange-industry layer beside them; a chart plots no layer median under 3
     lays = v.get("layers") or []

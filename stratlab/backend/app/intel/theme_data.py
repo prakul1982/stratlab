@@ -37,7 +37,7 @@ FEW_BASE = 4                  # a highest or lowest median on this many companie
 COMPARE_MIN = MIN_BASE
 # R31 (the owner's review of the live R30 decks): a layer-vs-layer headline (the value chain's line, findings, questions) needs at least this
 # many companies with the figure in each layer it compares; tables still show every layer and mark (green, red) those of COMPARE_MIN or more
-DIVE_TEXT = 16         # c1 (R44): each company's place in the theme with its reason ("theme": theme_record) apart from its comparison decision ("comparison"), a layer named by how its companies earn says why it is never ranked; R44.1: a loss in a verification reason printed with the real minus (deck 55, dive text 15, updated on purpose); R44 (lane v1): each unusual figure verified against its own filed figures, not reconciled or invalid (verify_net, figure_states), never dropped by a cutoff alone; the dive's coverage of informative layers; R43.1: the whole-point margins counted among the margins there are ("3 of the 1" on the live Insurance deck); d1: halves of a split layer never ranked, no ranking on a gap under a point, peers named and like for like, every company in a layer or "Other", the not-checked-yet mark; LIVE7A (lane t1): every company at the index's newest close and one price date, own words without encyclopedia leads or a cut word, whole-point margins and gaps printed whole, operating figures of old periods left out and listed once, click-bait headlines left out, "Dividend: Dividend" said once; R40: a layer the split named only by how its companies earn is never ranked ("a group by how they earn, of different businesses"), a market-value half with fewer than 3 companies in its figures undone; LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
+DIVE_TEXT = 17         # vf46 (R46): each checked figure's source record and statement lines, a net margin above EBITDA reconciled line by line; c1 (R44): each company's place in the theme with its reason ("theme": theme_record) apart from its comparison decision ("comparison"), a layer named by how its companies earn says why it is never ranked; R44.1: a loss in a verification reason printed with the real minus (deck 55, dive text 15, updated on purpose); R44 (lane v1): each unusual figure verified against its own filed figures, not reconciled or invalid (verify_net, figure_states), never dropped by a cutoff alone; the dive's coverage of informative layers; R43.1: the whole-point margins counted among the margins there are ("3 of the 1" on the live Insurance deck); d1: halves of a split layer never ranked, no ranking on a gap under a point, peers named and like for like, every company in a layer or "Other", the not-checked-yet mark; LIVE7A (lane t1): every company at the index's newest close and one price date, own words without encyclopedia leads or a cut word, whole-point margins and gaps printed whole, operating figures of old periods left out and listed once, click-bait headlines left out, "Dividend: Dividend" said once; R40: a layer the split named only by how its companies earn is never ranked ("a group by how they earn, of different businesses"), a market-value half with fewer than 3 companies in its figures undone; LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
 HEADLINE_MIN = 5
 # R27 (headline eligibility): a comparison is said as a headline only on a figure for at least this share of the companies of each group it
 # compares (a layer, a family); one with less is shown as data, never ranked (the live R26 Semis deck: "RPO growth -3.9%" of 21 of 53)
@@ -275,8 +275,13 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
         # gain (a demerger, an asset sale) is in it (the owner, 7 Nov: Tata Motors PV's 24.6% net on a 6% EBITDA margin)
         "one_off": one_off(shown_e, shown_n),            # R44: kept only when nothing stored explains it (verify_net)
         # R44: the year's own filed figures, in the filing's unit, that an unusual margin is reconciled with (verify_net)
+        # R46: with the statement's lines between EBITDA and net profit the page keeps (operating profit, interest, depreciation, profit
+        # before tax, tax rate); a line the page was built without is absent, one the source gives none for is None (bridge, source_lines)
         "filed": {"sales": num(last.get("sales")), "profit": num(last.get("profit")), "opm": num(last.get("opm")),
-                  "other_income": num(last.get("other_income")), "unit": f.get("unit")} if last else None,
+                  "other_income": num(last.get("other_income")), **{k: num(last.get(k)) for k in BRIDGE_KEYS if k in last},
+                  "unit": f.get("unit")} if last else None,
+        # R46 (the outside review of the live R45 decks): where the year's figures come from, for each checked figure's source record
+        "source": source_record(region, symbol, f, last),
         # the page files the EBITDA margin in whole points (13, never 13.04): printed as 13%, not 13.0% (false precision)
         "ebitda_dp": 0 if opms and all(float(x).is_integer() for x in opms) else 1,
         "roce": None if lender or old else r1(num(f.get("roce"))),
@@ -297,7 +302,8 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
         "high52": num(f.get("high52")), "low52": num(f.get("low52")), "st_up": f.get("st_up"),
         "red_flags": base.get("red_flags"), "basis": f.get("basis"), "industry": f.get("industry") or [],
         "years": [{"year": y["year"], "sales": money(num(y.get("sales"))), "profit": money(num(y.get("profit"))), "opm": None if lender else num(y.get("opm")),
-                   "other_income": money(num(y.get("other_income")))} for y in years],
+                   "other_income": money(num(y.get("other_income"))),
+                   **{k: (num(y.get(k)) if k == "tax_pct" else money(num(y.get(k)))) for k in BRIDGE_KEYS if k in y}} for y in years],
         # R30: capital (book equity and debt) for each unit of revenue, how asset-heavy the business is (a layer-vs-layer headline needs it comparable)
         "capital_rev": None if lender else capital_per_revenue(cap, num(f.get("pb")), debt, base.get("debt_equity"), sales),
     }, f, last)
@@ -382,16 +388,95 @@ def amount(v, unit) -> str:
     return ("−" if v < 0 else "") + (f"{sym}{x} {rest}".strip() if sym in ("$", "₹", "€", "£", "¥") else f"{x} {unit}".strip())
 
 
-def gap_explained(sales, profit, opm, other) -> bool | None:
-    """Whether a year's net profit above its EBITDA is covered by its stored income outside operations (R44); None when the year has no
-    income outside operations stored. (Exceptional gains, tax credits and shares of associates are not stored apart: other income is the
-    one component the stored years hold.)"""
-    s, p, e, o = num(sales), num(profit), num(opm), num(other)
-    if None in (s, p, e) or s <= 0:
+BRIDGE_KEYS = ("op", "interest", "dep", "pbt", "tax_pct")      # R46: the lines between EBITDA and net profit a page keeps (stock_pages.YEAR_KEYS)
+TAX_ROUND = 0.5               # R46: the tax rate is filed in whole points: the tax worked out from it is within this share of profit before tax
+# R46: each line of a year's statement as a source record names it, in the order a reader works the net margin out
+LINE_WORDS = {"sales": "revenue", "profit": "net profit", "op": "operating profit (EBITDA)", "opm": "EBITDA margin", "other_income": "other income",
+              "interest": "interest", "dep": "depreciation", "pbt": "profit before tax", "tax_pct": "tax rate"}
+# R46: what lifts a net profit above EBITDA, each as the stored lines show it
+LIFT_WORDS = {"other_income": "income outside operations", "before_tax": "other items before tax (exceptional items)", "tax_credit": "a tax credit",
+              "after_tax": "net profit beyond profit before tax less its tax (a share of associates' or joint ventures' profit, or another item after tax)"}
+
+
+def bridge(y: dict | None) -> dict | None:
+    """R46: a year's net profit above its EBITDA, line by line from the year's stored statement (the outside review of the live R45 decks: 17
+    Real estate net margins above their EBITDA margins left out, other income the only line checked). EBITDA is the year's operating profit
+    where stored, else revenue times the EBITDA margin (whole points); what lifts the net profit above it is each stored line that does:
+    income outside operations, other items before tax (profit before tax beyond EBITDA, other income, interest and depreciation), a tax credit
+    (a negative tax on the profit before tax) and net profit beyond profit before tax less its tax (a share of associates or joint ventures,
+    or another item after tax). {"ebitda", "from_op", "gap", "items": [(key, amount)], "covered", "missing": [line keys not stored],
+    "unkept": [line keys the page was built without]}; "covered" is True when the lifts cover the gap (or there is none, on an exact operating
+    profit), False when they don't, None when no line beyond EBITDA is stored. None without a positive revenue, a net profit or an EBITDA."""
+    if not isinstance(y, dict):
         return None
-    if o is None:
+    s, p, e, op = num(y.get("sales")), num(y.get("profit")), num(y.get("opm")), num(y.get("op"))
+    if s is None or p is None or s <= 0:
         return None
-    return o >= p - s * e / 100 - RECONCILE_TOL * s / 100
+    ebitda = op if op is not None else (s * e / 100 if e is not None else None)
+    if ebitda is None:
+        return None
+    o, i, d, b, t = (num(y.get(k)) for k in ("other_income", "interest", "dep", "pbt", "tax_pct"))
+    tol = RECONCILE_TOL * s / 100
+    items = []
+    if o is not None and o > 0:
+        items.append(("other_income", o))
+    if b is not None and op is not None and None not in (o, i, d):
+        pre = b - (op + o - i - d)
+        if pre > tol:
+            items.append(("before_tax", pre))
+    if b is not None and t is not None:
+        tax = b * t / 100
+        if tax < 0:
+            items.append(("tax_credit", -tax))
+        tol += abs(b) * TAX_ROUND / 100
+        after = p - (b - tax)
+        if after > tol:
+            items.append(("after_tax", after))
+    gap = p - ebitda
+    stored = o is not None or b is not None
+    covered = True if op is not None and gap <= 0 else (sum(v for _, v in items) >= gap - tol if stored else None)
+    return {"ebitda": ebitda, "from_op": op is not None, "gap": gap, "items": items, "covered": covered,
+            "missing": [k for k in ("other_income", "pbt", "tax_pct") if num(y.get(k)) is None],
+            "unkept": [k for k in ("op", "pbt", "tax_pct") if k not in y]}
+
+
+def gap_explained(sales, profit, opm, other, **lines) -> bool | None:
+    """Whether a year's net profit above its EBITDA is covered by its stored lines (R44: income outside operations; R46: with other items
+    before tax, a tax credit and items after tax, where the year's statement is stored: bridge); None when no line beyond EBITDA is stored."""
+    got = bridge({"sales": sales, "profit": profit, "opm": opm, "other_income": other, **lines})
+    return got["covered"] if got else None
+
+
+def source_record(region: str, symbol: str, f: dict, last: dict | None) -> dict | None:
+    """R46 (the outside review of the live R45 decks: "verified extremes are kept, but the explanation does not always give a filing reference
+    and a traceable extraction record"): where a company's year of figures comes from, as its stored page holds it: the document (an Indian
+    company's annual results, consolidated or standalone; a US company's annual report filed with the SEC, its form and filing day where the
+    page keeps them), the period, the page the figures were read from and the day it was built, the unit. A part the page doesn't hold is said
+    to be not stored, never filled in."""
+    if not isinstance(f, dict) or not last:
+        return None
+    if region == "US":
+        form, filed = f.get("annual_form"), str(f.get("annual_filed") or "")[:10] or None
+        doc = (f"{form} annual report filed with the SEC" if form else "annual report filed with the SEC (its form is not stored on the page)")
+    else:
+        basis, filed = f.get("basis"), None
+        doc = (f"annual results, {basis}" if basis in ("consolidated", "standalone") else
+               "annual results (consolidated or standalone is not stored on the page)")
+    return {"document": doc, "period": last.get("year"), "filed": filed, "page": stock_pages.path(region, symbol),
+            "built": str(f.get("built_at") or "")[:10] or None, "unit": f.get("unit")}
+
+
+def source_lines(fd: dict | None) -> list[dict]:
+    """R46: the year's statement lines a figure is worked out from, as stored, in the filing's unit (the tax rate in %): each with its name
+    and value, a line the source gives none for or the page was built without said "not stored"."""
+    fd = fd or {}
+    out = []
+    for k in ("sales", "profit", "op", "opm", "other_income", "interest", "dep", "pbt", "tax_pct"):
+        v = num(fd.get(k))
+        if v is None and k in ("op", "interest", "dep") and k not in fd:
+            continue                      # (a page built before R46 keeps none of these; the record says so through pbt and tax_pct)
+        out.append({"key": k, "line": LINE_WORDS[k], "value": v, **({"pct": True} if k in ("opm", "tax_pct") else {})})
+    return out
 
 
 def year_gap(r: dict) -> bool:
@@ -427,20 +512,33 @@ def verify_net(r: dict) -> None:
         return hold(r, "net", "year_gap")
     u, yr = fd.get("unit"), r.get("year") or "the latest year"
     base = (f"net profit {amount(p, u)} over revenue {amount(s, u)}, {yr}: {pts(net)}" if s and p is not None else "")
-    why, ok = [], True
+    why, ok, bits = [], True, {}
     if s is None or p is None or s <= 0:
         ok, why = False, ["the year's net profit or revenue is not stored"]
     elif abs(p / s * 100 - net) > RECONCILE_TOL:
         ok, why = False, [f"net profit over revenue gives {pts(p / s * 100)}, not {pts(net)}"]
     elif "net_above_ebitda" in flags:
-        need = p - s * e / 100
-        if gap_explained(s, p, e, o):
-            why.append(f"above its {gpts(e)} EBITDA margin by {amount(need, u)}, covered by income outside operations of {amount(o, u)}")
+        br = bridge(fd)
+        need = br["gap"] if br else p - s * e / 100
+        lifts = [f"{LIFT_WORDS[k]} of {amount(v, u)}" for k, v in (br or {}).get("items") or []]
+        said = (", ".join(lifts[:-1]) + " and " + lifts[-1]) if len(lifts) > 1 else "".join(lifts)
+        ebit = f"its {gpts(e)} EBITDA margin" + (f" (operating profit {amount(br['ebitda'], u)})" if br and br["from_op"] else "")
+        bits = {"bridge": {"gap": need, "ebitda": br["ebitda"] if br else None, "from_op": bool(br and br["from_op"]),
+                           "items": [{"key": k, "value": v} for k, v in (br or {}).get("items") or []], "missing": (br or {}).get("missing") or [],
+                           "unkept": (br or {}).get("unkept") or []}}
+        if br and br["covered"] and need <= 0:
+            why.append(f"at or below {ebit}: net profit {amount(p, u)} against operating profit {amount(br['ebitda'], u)}")
+        elif br and br["covered"]:
+            why.append(f"above {ebit} by {amount(need, u)}, covered by {said}")
         else:
             ok = False
+            gone = [LINE_WORDS[k] for k in (br or {}).get("missing") or []]
             why.append(f"net profit {amount(need, u)} above EBITDA ({pts(net)} net, {gpts(e)} EBITDA)" + (
-                f"; income outside operations of {amount(o, u)} covers part of it" if o is not None else
-                "; no income outside operations, exceptional gain, tax credit or share of associates is stored to explain it"))
+                f"; {said} covers part of it" if lifts else "") + (
+                "; no income outside operations, exceptional gain, tax credit or share of associates is stored to explain it" if br and br["covered"] is None else
+                f"; no {' or '.join(gone)} is stored for the year" + (" (the stored page was built before these lines were kept)"
+                                                                       if set((br or {}).get("unkept") or []) & {"pbt", "tax_pct"} else "") if gone else
+                "; the year's stored lines don't add up to it"))
     elif "net_unusual" in flags:
         if e is None:
             ok, why = False, ["no EBITDA margin is stored for the year to check it against"]
@@ -450,7 +548,7 @@ def verify_net(r: dict) -> None:
         why.append(f"income outside operations of {amount(o, u)} is {o / p * 100:.0f}% of the net profit")
     why = [w for w in why if w]
     r.setdefault("verify", {})["net"] = {"state": VERIFIED if ok else UNVERIFIED, "value": net, "checks": [CHECKS[k] for k in flags],
-                                         "why": "; ".join(([base] if ok and base else []) + why)}
+                                         "why": "; ".join(([base] if ok and base else []) + why), **(bits if "net_above_ebitda" in flags else {})}
     r["one_off"] = not ok                       # shown with †, out of every median (in_median)
 
 
@@ -527,9 +625,12 @@ def validate_model(r: dict, family: str) -> None:
 
 def figure_states(rows: list[dict]) -> list[dict]:
     """Every figure a check looked at, with its state (R44), for the data-confidence page and the dive: company, figure, value, state,
-    the checks that flagged it and why it is in or out. One list, so every page counts the same records."""
+    the checks that flagged it and why it is in or out, and (R46) its source record: the document, period and stored page, and the statement
+    lines with their values and unit, so a reader can work the figure out again. One list, so every page counts the same records."""
     return [{"symbol": r["symbol"], "name": r["name"], "key": k, "value": x["value"], "state": x["state"], "checks": list(x.get("checks") or []),
-             "why": x.get("why") or "", **({"ebitda": r.get("ebitda"), "net": r.get("net")} if k == "net" else {})}
+             "why": x.get("why") or "", **({"ebitda": r.get("ebitda"), "net": r.get("net")} if k == "net" else {}),
+             # R46: its source record: the document, period and page the year's figures come from, and the statement lines used, as stored
+             "source": r.get("source"), "lines": source_lines(r.get("filed")), **({"bridge": x["bridge"]} if x.get("bridge") else {})}
             for r in rows if r.get("status") != "unverified" for k, x in (r.get("verify") or {}).items()]
 
 
@@ -1033,11 +1134,11 @@ def layer_history(rows: list[dict]) -> dict | None:
         return next(y for y in r["years"] if y["year"] == lb)
     # a company with a one-off gain in any year of the span (net margin above its EBITDA margin) is left out of the net line, so the theme's
     # net margin never tops its EBITDA margin on a demerger gain (the owner, 7 Nov: 12.0% net on 11.8% EBITDA in Mar 2026)
-    # R44: unless the year's stored income outside operations covers the profit above EBITDA (gap_explained), as the company row's check
+    # R44: unless the year's stored income outside operations covers the profit above EBITDA, as the company row's check (R46: with the year's
+    # other stored lines, bridge)
     clean = [r for r in keep if not any(one_off(year_of(r, lb)["opm"], year_of(r, lb)["profit"] / year_of(r, lb)["sales"] * 100
                                                 if year_of(r, lb)["profit"] is not None else None)
-                                        and not gap_explained(year_of(r, lb)["sales"], year_of(r, lb)["profit"], year_of(r, lb)["opm"],
-                                                              year_of(r, lb).get("other_income")) for lb in span)]
+                                        and not (bridge(year_of(r, lb)) or {}).get("covered") for lb in span)]
     ebitda, net = [], []
     for lb in span:
         ys = [year_of(r, lb) for r in keep]
@@ -2050,7 +2151,10 @@ def data_checks(rows: list[dict], blocks: list[dict], dive: dict) -> dict:
         # read from the same records, so every page counts the same companies
         "states": figure_states(rows),
         # a net margin not reconciled (above the EBITDA margin, or unusual, with nothing stored to give it): shown with †, out of the medians
-        "one_off": [{"symbol": r["symbol"], "name": r["name"], "ebitda": r["ebitda"], "net": r["net"], "why": ((r.get("verify") or {}).get("net") or {}).get("why") or ""}
+        "one_off": [{"symbol": r["symbol"], "name": r["name"], "ebitda": r["ebitda"], "net": r["net"], "why": ((r.get("verify") or {}).get("net") or {}).get("why") or "",
+                     # R46: the line-by-line record of why the stored lines don't explain it, and where the year's figures come from
+                     **({"bridge": r["verify"]["net"]["bridge"]} if ((r.get("verify") or {}).get("net") or {}).get("bridge") else {}),
+                     "source": r.get("source"), "lines": source_lines(r.get("filed"))}
                     for r in rows if r.get("one_off") and r.get("status") != "unverified"],
         "held": held_rows(rows),            # R30: figures a check held back (validate_row, validate_model)
         "verified": [x for x in figure_states(rows) if x["state"] == VERIFIED],

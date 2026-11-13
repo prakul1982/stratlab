@@ -61,7 +61,11 @@ SETTLE_BY = {"IN": 3 * 3600}
 # where that's cheap (main.stock_page_older_facts), and the screens' indexer rebuilds the largest first (R8V-003)
 # (9: or before a US page kept each quarter's filed EPS and whether its annual report gives an interest expense, which the
 # app's results rows are checked by: RC1 DD-030, AAPL's Jun 2026 quarter stayed 1.91 against a filed 2.02)
-FACTS_VERSION = 9
+# (10: or before a page kept each year's operating profit, interest, depreciation, profit before tax and tax rate beside its other income,
+# which a theme reconciles a net margin above the EBITDA margin with: R46, the outside review of the live R45 decks, 17 Real estate net
+# margins above their EBITDA margins left out with nothing stored to explain them; pages stored before 8 Nov hold no other income either)
+FACTS_VERSION = 10
+YEAR_KEYS = ("year", "sales", "profit", "opm", "debt", "cfo", "other_income", "capex_pct_sales", "op", "interest", "dep", "pbt", "tax_pct")
 ADR_CHECKED = 3                # the version from which a depositary share's market value was checked (screens.row)
 PE_BASIS_KEPT = 4              # the version from which a page keeps what its P/E's earnings cover (pe_basis, pe_end)
 PE_STALE_DAYS = 456            # a P/E on a year that ended more than about 15 months before the price is n/a (R7V-003)
@@ -1337,7 +1341,9 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
     "cap_unverified" (depositary shares whose ratio couldn't be read) and "not_company" (what the symbol is instead)."""
     # (cash from operations too, for a theme's cash-against-profit line: THEME-1; a page stored before has none, and the line says how many it counts)
     # R30: and income outside operations and capex over revenue, for a theme's checks of a figure before it is used (theme_data.validate_row)
-    years = [{k: y.get(k) for k in ("year", "sales", "profit", "opm", "debt", "cfo", "other_income", "capex_pct_sales")} for y in (nums.get("years") or [])[-5:]]
+    # R46: and the statement's lines between EBITDA and net profit (operating profit, interest, depreciation, profit before tax, tax rate), so
+    # a theme reconciles a net margin above its EBITDA margin from the year's own lines and names the line that covers the gap
+    years = [{k: y.get(k) for k in YEAR_KEYS} for y in (nums.get("years") or [])[-5:]]
     prices = dict(prices or {})
     checks = checks or {}
     if _num(prices.get("price")) is None and _num(snap.get("price")) is not None:
@@ -1359,7 +1365,7 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
         name = strip_registration(name)
     return {
         "v": FACTS_VERSION, **{k: checks[k] for k in ("sales_usd", "cap_unverified", "not_company", "divs_paid", "pe_basis", "pe_end", "eps",
-                                                      "foreign", "profit_usd", "annual_unread", "annual_filed", "no_numbers", "cap_why",
+                                                      "foreign", "profit_usd", "annual_unread", "annual_filed", "annual_form", "no_numbers", "cap_why",
                                                       "type_unread", "eps_q", "no_interest", "pe_oneoff")
                                if checks.get(k) is not None},
         "region": region, "symbol": symbol, "name": name, "exchange": exchange,
