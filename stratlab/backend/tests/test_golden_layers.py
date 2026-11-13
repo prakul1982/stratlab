@@ -113,9 +113,11 @@ APPROVED_LAYER = {
 # R40 (lane s3-r40, the owner's review of the live Release 39 decks, on purpose): companies the theme's official industry brought in whose own
 # words describe another business are dropped from the theme, never placed in "Other" (theme_base.without_off_industry): solar makers filed
 # as semiconductors, propane distributors filed as retail. "theme:symbol" -> why
+_C1_OFF = "c1 (R44, approved on purpose): filed under retail, its own words describe another business (theme_check.OFF_INDUSTRY)"
 DROPPED = {**{f"semis:{s_}": "solar products and no chips, filed as semiconductors: another business" for s_ in ("TE", "TYGO", "FTCI", "MAXNQ", "DQ", "ASTI")},
            **{f"retail:{s_}": "propane distribution and no stores, filed as retail: another business" for s_ in ("SPH", "FGPR")},
-           **{f"retail:{s_}": 'filed under retail, its own words describe another business (pawnbroking, IT services to business, a blank-check company, a bank, payments or travel): R43, theme_check.OFF_INDUSTRY' for s_ in ('CDW', 'EZPW', 'FBCD', 'FCFS', 'IPSI', 'NSIT', 'TMS')}}
+           **{f"retail:{s_}": 'filed under retail, its own words describe another business (pawnbroking, IT services to business, a blank-check company, a bank, payments or travel): R43, theme_check.OFF_INDUSTRY' for s_ in ('CDW', 'EZPW', 'FBCD', 'FCFS', 'IPSI', 'NSIT', 'TMS')},
+           **{f"retail:{s_}": _C1_OFF for s_ in ('AMZE', 'ESSI')}}
 # lane d1 (R43, the outside review of the live Release 41 decks, approved on purpose): the moves its rules make on this older fixture,
 # each with why; kept apart from APPROVED_LAYER so the earlier lanes' checks of their own moves stand
 _D1_NARROW = 'R43 (lane d1, approved on purpose): the largest layer of its family took it by its industry alone, but that layer\'s own name states a kind of business its own words don\'t say, nor any word of its description, and it is no catch-all of its family (by_model.home_of `narrow`): the layer of its family it fits, else "Other"'
@@ -132,6 +134,15 @@ D1 = {
     'metals:MMP': ('Other', _D1_NARROW),
     'retail:BWMX': ('Other', _D1_NARROW),
     'retail:HEPS': ('Other', _D1_NARROW),
+}
+
+# c1 (R44, the outside review of the live Release 43 decks, approved on purpose): the moves its rules make on this older fixture, each with why
+_C1_IND = ("c1 (R44, approved on purpose): no words of its own and no way of earning shown: placed by its official industry in the one layer "
+           "whose name says all that industry's name says, which holds most of the theme's companies of that industry with words "
+           "(theme_base.from_other 1)")
+C1 = {
+    'defence:LAXMIPATI': ('Naval shipbuilding', _C1_IND),
+    'metals:SIZEMASTER': ('Zinc, lead and silver mining and smelting', _C1_IND),
 }
 
 
@@ -175,7 +186,7 @@ def test_no_company_in_any_theme_changes_its_layer_unless_approved():
         got = replay_theme(t)
         for c in t["companies"]:
             k = f"{t['key']}:{c['s']}"
-            want = None if k in DROPPED else D1[k][0] if k in D1 else APPROVED_LAYER[k][0] if k in APPROVED_LAYER else c["e"]          # lane d1: D1 (updated on purpose)
+            want = None if k in DROPPED else C1[k][0] if k in C1 else D1[k][0] if k in D1 else APPROVED_LAYER[k][0] if k in APPROVED_LAYER else c["e"]          # lane d1: D1 (updated on purpose)
             if got.get(c["s"]) != want:
                 moved.append(f"{k} ({c['n']}): expected {want!r}, got {got.get(c['s'])!r}")
     assert not moved, "a rule change moved these companies to another layer (edit APPROVED_LAYER, with the reason, if on purpose):\n" + "\n".join(moved)

@@ -37,7 +37,7 @@ FEW_BASE = 4                  # a highest or lowest median on this many companie
 COMPARE_MIN = MIN_BASE
 # R31 (the owner's review of the live R30 decks): a layer-vs-layer headline (the value chain's line, findings, questions) needs at least this
 # many companies with the figure in each layer it compares; tables still show every layer and mark (green, red) those of COMPARE_MIN or more
-DIVE_TEXT = 15         # R44.1: a loss in a verification reason printed with the real minus (gpts, pts); R44 (lane v1): each unusual figure verified against its own filed figures, not reconciled or invalid (verify_net, figure_states), never dropped by a cutoff alone; the dive's coverage of informative layers; R43.1: the whole-point margins counted among the margins there are ("3 of the 1" on the live Insurance deck); d1: halves of a split layer never ranked, no ranking on a gap under a point, peers named and like for like, every company in a layer or "Other", the not-checked-yet mark; LIVE7A (lane t1): every company at the index's newest close and one price date, own words without encyclopedia leads or a cut word, whole-point margins and gaps printed whole, operating figures of old periods left out and listed once, click-bait headlines left out, "Dividend: Dividend" said once; R40: a layer the split named only by how its companies earn is never ranked ("a group by how they earn, of different businesses"), a market-value half with fewer than 3 companies in its figures undone; LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
+DIVE_TEXT = 16         # c1 (R44): each company's place in the theme with its reason ("theme": theme_record) apart from its comparison decision ("comparison"), a layer named by how its companies earn says why it is never ranked; R44.1: a loss in a verification reason printed with the real minus (deck 55, dive text 15, updated on purpose); R44 (lane v1): each unusual figure verified against its own filed figures, not reconciled or invalid (verify_net, figure_states), never dropped by a cutoff alone; the dive's coverage of informative layers; R43.1: the whole-point margins counted among the margins there are ("3 of the 1" on the live Insurance deck); d1: halves of a split layer never ranked, no ranking on a gap under a point, peers named and like for like, every company in a layer or "Other", the not-checked-yet mark; LIVE7A (lane t1): every company at the index's newest close and one price date, own words without encyclopedia leads or a cut word, whole-point margins and gaps printed whole, operating figures of old periods left out and listed once, click-bait headlines left out, "Dividend: Dividend" said once; R40: a layer the split named only by how its companies earn is never ranked ("a group by how they earn, of different businesses"), a market-value half with fewer than 3 companies in its figures undone; LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
 HEADLINE_MIN = 5
 # R27 (headline eligibility): a comparison is said as a headline only on a figure for at least this share of the companies of each group it
 # compares (a layer, a family); one with less is shown as data, never ranked (the live R26 Semis deck: "RPO growth -3.9%" of 21 of 53)
@@ -1683,6 +1683,56 @@ def membership(c: dict, words: set[str]) -> str:
     return "exposure" if c.get("verified") else "unverified"
 
 
+def theme_record(c: dict, status: str) -> dict:
+    """c1 (R44, the outside review of the live Release 43 decks, ask 3: "keep theme membership separate from comparison eligibility, each with
+    its reason"): a company's place in the theme, {"in", "status", "by", "why"}, decided apart from whether its figures are compared
+    (calc_record, comparison_said). "in": confirmed in the theme (membership "core" or "exposure"); a company "unverified" is listed, never in
+    a figure. "by": what put it in the theme: "industry" (filed under one of the theme's official industries), "list" (the theme's own list),
+    "other_industry" (the theme's map named it from another industry) or "map". A company dropped from the theme is named on its coverage
+    with its own reason (theme_base.without_off_industry)."""
+    from .theme_base import plain_industry
+    ind = plain_industry(c.get("industry")) if c.get("industry") else ""
+    if c.get("base") is None and c.get("verified") is None:
+        by, why = "map", "placed in the theme's map"
+    elif c.get("base"):
+        if c.get("basis") == "list":
+            by, why = "list", "named in the theme's own list"
+        else:
+            by = "industry"
+            why = f"filed under {ind}, an official industry of the theme" if ind else "filed under an official industry of the theme"
+            if status == "unverified":
+                why += ", but its own words describe other work"
+    else:
+        by = "other_industry"
+        frm = f"from another industry ({ind})" if ind else "from another industry"
+        if c.get("verified_by") == "words":
+            why = f"the theme's map names it in one of its own layers, {frm}; its own words say what that layer's name says"
+        elif status == "exposure":
+            why = f"the theme's map names it, {frm}; its own words were checked to show the theme's work"
+        else:
+            why = f"the theme's map names it, {frm}; its own words are not confirmed to show the theme's work yet"
+    return {"in": status != "unverified", "status": status, "by": by, "why": why}
+
+
+def comparison_said(rec: dict, b: dict) -> str:
+    """c1 (R44, ask 3): a company's comparison decision as one sentence, from its kept record (calc_record) and its layer: in its layer's
+    figures or not and why, and whether those figures are compared with other layers' (the "Other" group never is, nor a half of a layer by
+    market value alone, nor a group made by how its companies earn)."""
+    if not rec.get("in"):
+        return {"not confirmed": "left out of every figure: not confirmed in the theme",
+                "other business": "listed in its layer, left out of its figures: it earns another way than the layer's companies",
+                "way of earning not shown": "listed in its layer, left out of its figures: its own words don't show how it earns",
+                "no revenue figure": "listed in its layer, left out of its figures: no figure of it is stored"}.get(rec.get("why"), "left out of its layer's figures")
+    m = b.get("model") or {}
+    if b.get("basis") == "rest":
+        return "in the “Other” group's figures, which are never compared with the layers'"
+    if b.get("scale"):
+        return "in its layer's figures; the layer is half of a group split by market value, never ranked alone"
+    if isinstance(m, dict) and m.get("by_how"):
+        return "in its layer's figures; the layer is a group by how its companies earn, of different businesses, shown and never ranked"
+    return "in its layer's figures: confirmed, how it earns shown and of the layer's kind, with a figure"
+
+
 def slug(theme: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", str(theme or "").lower()).strip("-")[:60]
 
@@ -1760,6 +1810,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         if s in rows:
             rows[s]["name"] = shown_name(c.get("name"), rows[s]["name"]) or rows[s]["name"]
             rows[s]["status"] = membership(c, words)
+            rows[s]["theme"] = theme_record(c, rows[s]["status"])     # c1: in the theme, with its reason (apart from any comparison)
             rows[s]["map_industry"] = c.get("industry") or ""          # the exchange's (or the SEC's) industry the map gives (R27: metric_registry)
             rows[s]["map_what"] = c.get("what") or ""                  # what the map says the company does (an insurer's type: metric_registry)
             if c.get("unread"):        # d1: in "Other" because nothing it says was read yet (theme_base.place_rest), not because it fits no layer
@@ -1818,6 +1869,10 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         ins = {r["symbol"] for r in b["companies"] if in_calc(r)}       # the layer's one record of who is in its calculations
         sure = [r for r in mine if r["symbol"] in ins]
         histories[b["layer"]] = layer_history([r for r in sure if r["symbol"] not in wide] or sure)
+    for b in blocks:                        # c1: each company's comparison decision, said with its reason beside the in-theme one
+        for r in b["companies"]:
+            if isinstance(r.get("calc"), dict):
+                r["comparison"] = comparison_said(r["calc"], b)
     chain = chain_table(blocks)
     counted = [r for b in blocks for r in b["companies"] if r.get("status") != "unverified"]
     pool = [r for r in counted if not r["company_wide"]] or counted

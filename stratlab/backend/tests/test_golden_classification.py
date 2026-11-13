@@ -39,6 +39,10 @@ APPROVED = {
     "retail:NSIT": ("managed_services", "other"),
     "retail:TMS": ("holding", "other"),
     "retail:FBCD": ("lending", "other"),
+    # c1 (R44, the outside review of the live Release 43 Consumer retail deck, on purpose): a virtual-reality concert producer and an
+    # enterprise software house filed as retail are another business by their own words (theme_check.OFF_INDUSTRY)
+    "retail:AMZE": ("media", "other"),
+    "retail:ESSI": ("software", "other"),
     # R36 fix 4: Amazon sells goods it owns ("products to be sold by us and by third parties"): a retailer with a marketplace beside it
     "retail:AMZN": ("retail", ""),
     # ---- R37 lane r2 (the owner: the remaining misclassifications across all themes) ----

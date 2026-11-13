@@ -238,7 +238,7 @@ def test_every_deck_rule_holds_on_the_new_structures(name):
 
 
 def test_the_deck_version_is_27():
-    assert deck.THEME_DECK_VERSION == 55 and S.VERSION == 2          # R44.1: deck 55, dive text 15, a loss in a verification reason with the real minus (updated on purpose); R44 (lane v1): deck 54, dive text 14, verification states (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane t1: deck 52, dive text 11 (LIVE7A, updated on purpose); R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); R35 bumped the deck version (updated on purpose)
+    assert deck.THEME_DECK_VERSION == 56 and S.VERSION == 2          # c1 (R44): RULES 44, PLACE_CARRY[44] = 43, deck 56, dive text 16 (55 and 15 are R44.1's), classification coverage from evidence (updated on purpose); R44 (lane v1): deck 54, dive text 14, verification states (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane t1: deck 52, dive text 11 (LIVE7A, updated on purpose); R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); R35 bumped the deck version (updated on purpose)
 
 
 def test_a_software_companys_unusual_rpo_growth_is_listed_with_its_base_and_kept_out_of_the_headline_when_it_dominates():

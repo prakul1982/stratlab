@@ -310,4 +310,4 @@ def test_unknown_models_fall_in_every_theme_and_rise_in_none():
 
 
 def test_the_rules_version_moved_with_its_carry():
-    assert B.RULES == 43 and TR.PLACE_CARRY[43] == 42 and TR.PLACE_CARRY[42] == 41 and TR.PLACE_CARRY[41] == 40 and TR.PLACE_CARRY[38] == 37 and TR.PLACE_CARRY[39] == 38   # lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); lane s2-exact and lane s1-fit bumped RULES (updated on purpose)
+    assert B.RULES == 44 and TR.PLACE_CARRY[44] == 43 and TR.PLACE_CARRY[43] == 42 and TR.PLACE_CARRY[42] == 41 and TR.PLACE_CARRY[41] == 40 and TR.PLACE_CARRY[38] == 37 and TR.PLACE_CARRY[39] == 38   # c1 (R44): RULES 44, PLACE_CARRY[44] = 43, deck 56, dive text 16 (55 and 15 are R44.1's), classification coverage from evidence (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); lane s2-exact and lane s1-fit bumped RULES (updated on purpose)
