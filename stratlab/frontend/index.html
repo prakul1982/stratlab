@@ -38,7 +38,10 @@
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --b-paper: #141311; --b-card: #1F1D1A; --b-ink: #EFE9DC; --b-muted: #B3AC9C; --b-line: #34312A; --b-on-ink: #141311; color-scheme: dark; } }
 :root[data-theme="dark"] { --b-paper: #141311; --b-card: #1F1D1A; --b-ink: #EFE9DC; --b-muted: #B3AC9C; --b-line: #34312A; --b-on-ink: #141311; color-scheme: dark; }
 html, body { margin: 0; background: var(--b-paper); }
-.boot-head { max-width: 720px; margin: 0 auto; padding: 14px 16px; font: 600 18px/1 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.boot-head { max-width: 720px; margin: 0 auto; padding: 14px 16px; font: 600 18px/1 system-ui, -apple-system, "Segoe UI", sans-serif; display: flex; flex-wrap: wrap; align-items: center; column-gap: 20px; }
+/* the site's public pages, for a reader or a crawler that runs no script (AS1): the same list as the pages the server draws */
+.boot-nav { display: flex; flex-wrap: wrap; column-gap: 14px; font: 500 15px/1 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.boot-head .boot-nav a { gap: 0; color: var(--b-muted); }
 .boot-head a { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: var(--b-ink); text-decoration: none; }
 .boot-head img { width: 28px; height: 28px; }
 .boot { max-width: 520px; margin: 0 auto; padding: 18vh 16px 0; display: flex; flex-direction: column; gap: 12px; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--b-ink); }
@@ -74,12 +77,12 @@ html[data-saved] [data-boot]::before { content: "Opening StratLab…"; font: 600
 </head>
 <body>
 <div id="root">
-<header class="boot-head"><a href="/" aria-label="StratLab home"><img src="/favicon.svg" alt="" width="28" height="28"><span>StratLab</span></a></header>
+<header class="boot-head"><a href="/" aria-label="StratLab home"><img src="/favicon.svg" alt="" width="28" height="28"><span>StratLab</span></a><nav class="boot-nav" aria-label="Site"><a href="/library">Library</a><a href="/stocks">Companies</a><a href="/themes">Themes</a><a href="/blog">Blog</a><a href="/pricing">Plans</a><a href="/about">About</a><a href="/contact">Contact</a></nav></header>
 <main>
 <div class="boot boot-wait" data-boot>
 <h1>Test it, research it, track it.</h1>
 <p>Backtest trading ideas on years of real prices and paper trade them; options are paper trading only. Research companies, track your money. Facts, not tips.</p>
-<p class="boot-foot"><a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/contact">Contact</a></p>
+<p class="boot-foot"><a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/contact">Contact</a> · <a href="/about">About</a></p>
 </div>
 </main>
 </div>

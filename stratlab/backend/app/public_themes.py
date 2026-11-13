@@ -245,6 +245,7 @@ def _missing():
 
 
 @router.get("/themes")
+@router.get("/themes/", include_in_schema=False)       # the site's host forwards /themes as /themes/: answered here, never a redirect to the API's own host (AS1)
 def themes_all():
     return HTMLResponse(directory(None), headers={"Cache-Control": CACHE})
 

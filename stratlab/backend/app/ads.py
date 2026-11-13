@@ -9,8 +9,10 @@ visitor's answer through the same localStorage key.
 
 Never call it from a page that shows someone's own money or account, or from an email: those carry personal financial data.
 How to use it from another server-rendered page: `html = ads.add_to_page(html, "blog")` puts the ad above `</main>` and the
-script before `</body>`, or place `ads.ad_slot_html("blog")` by hand, once per page, below the fold and away from buttons."""
+script before `</body>`, or place `ads.ad_slot_html("blog", page=html)` by hand, once per page, below the fold and away from
+buttons. Either way the page must have enough original content (MIN_ORIGINAL_WORDS) or it gets no ad."""
 import re
+from html.parser import HTMLParser
 
 from .config import settings
 
@@ -32,6 +34,64 @@ STYLE = (".ad{margin:40px 0 8px;padding-top:8px;border-top:1px solid var(--line,
          ".ad-ask button{min-width:112px}")       # the two answers, one width (VR4-015)
 
 
+# AdSense allows no ad on auto-generated pages or pages with little to no original content. A page carries the ad only when its
+# main content holds at least MIN_ORIGINAL_WORDS words of its own text (original_words): the words in <main> outside navigation,
+# header and footer, forms, tables, charts, buttons and link text, and outside any element marked data-shared (wording that is
+# the same on every page of its kind, or a template's sentences filled in with figures the page already shows). A word has a
+# letter in it, so a number or a date is not one. docs/ADMIN.md has the rule.
+MIN_ORIGINAL_WORDS = 300
+_SKIP = {"script", "style", "noscript", "template", "nav", "header", "footer", "form", "table", "svg", "button", "select", "a", "aside"}
+_VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+_WORD = re.compile(r"\S*[^\W\d_]\S*")
+
+
+class _Words(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.in_main = 0
+        self.skip: list[str] = []          # the open tags being left out, innermost last
+        self.words = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in _VOID:
+            return
+        if tag == "main":
+            self.in_main += 1
+        if self.skip:
+            self.skip.append(tag)
+        elif self.in_main and (tag in _SKIP or any(k in ("data-shared", "hidden") for k, _ in attrs) or ("aria-hidden", "true") in attrs):
+            self.skip.append(tag)
+
+    def handle_endtag(self, tag):
+        if tag in _VOID:
+            return
+        if self.skip and tag in self.skip:
+            while self.skip and self.skip.pop() != tag:
+                pass
+        if tag == "main" and self.in_main:
+            self.in_main -= 1
+
+    def handle_data(self, data):
+        if self.in_main and not self.skip:
+            self.words += len(_WORD.findall(data))
+
+
+def original_words(page: str) -> int:
+    """How many words of the page's own text its <main> holds (see MIN_ORIGINAL_WORDS)."""
+    p = _Words()
+    try:
+        p.feed(page or "")
+        p.close()
+    except Exception:                      # a page the parser can't read carries no ad
+        return 0
+    return p.words
+
+
+def enough_content(page: str) -> bool:
+    """The page has enough original content to carry an ad (AdSense: no ads on pages with little to no original content)."""
+    return original_words(page) >= MIN_ORIGINAL_WORDS
+
+
 def client() -> str:
     """The publisher ID, or "" when it isn't a ca-pub-… ID (a pasted mistake must never reach a page's HTML)."""
     c = (settings.ADSENSE_CLIENT or "").strip()
@@ -51,9 +111,10 @@ def enabled(slot_name: str = "public") -> bool:
     return bool(settings.ADS_ENABLED and client() and slot_id(slot_name))
 
 
-def ad_slot_html(slot_name: str = "public") -> str:
-    """The labelled ad box and the script that fills it, or "" when ads are off. Once per page."""
-    if not enabled(slot_name):
+def ad_slot_html(slot_name: str = "public", page: str | None = None) -> str:
+    """The labelled ad box and the script that fills it, for the finished `page` it goes on. "" when ads are off, and when the page
+    is not given or has too little original content (enough_content). Once per page."""
+    if not enabled(slot_name) or page is None or not enough_content(page):
         return ""
     name = slot_name if NAME.match(slot_name or "") else "public"
     return (f"<style>{STYLE}</style>"
@@ -64,10 +125,10 @@ def ad_slot_html(slot_name: str = "public") -> str:
 
 def add_to_page(page: str, slot_name: str = "public") -> str:
     """A finished page with its ad added at the end of the main content (below the fold, clear of the page's buttons), or the
-    page unchanged when ads are off or the page has no `</main>`. Done as the page is sent, never stored with it: the stored copy
+    page unchanged when ads are off, the page has no `</main>` or too little original content (enough_content). Done as the page is sent, never stored with it: the stored copy
     never carries an ad, and switching ads on or off shows on the next request the API answers. The site's cache keeps a company
     or blog page up to a day (stock_pages.CACHE_CONTROL), so a copy it holds changes within that day (RC4-010)."""
-    block = ad_slot_html(slot_name)
     i = page.rfind("</main>")
-    return page if not block or i < 0 else page[:i] + block + page[i:]
+    block = ad_slot_html(slot_name, page) if i >= 0 else ""
+    return page if not block else page[:i] + block + page[i:]
 

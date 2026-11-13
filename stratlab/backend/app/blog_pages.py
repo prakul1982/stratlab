@@ -276,11 +276,14 @@ def post_page(slug: str) -> HTMLResponse:
             f'{" · " + e(where) if where else ""}</p><h1>{e(post["title"])}</h1>'
             f'<p class="byline">By StratLab · <time datetime="{e(published)}">Published {e(_when(published))}</time>'
             + (f' · <time datetime="{e(modified)}">Updated {e(_when(modified))}</time>' if changed else "") + "</p>"
-            f'<p class="facts">{e(FACTS)}</p>' + blog.blocks_html(blocks)
+            f'<p class="facts" data-shared>{e(FACTS)}</p>' + blog.blocks_html(blocks)
             + '<section class="more" aria-label="More on StratLab"><h2>More on StratLab</h2><ul>'
             + "".join(f'<li><a href="{e(h)}">{e(t)}</a></li>' for h, t in more) + "</ul></section>" + nav + "</article>")
     head = sp._head(title, desc, canonical, extra, robots=robots, og_type="article")
-    page = ads.add_to_page(sp._page(head, None, body), "blog")        # ADS-1: as the page is sent; unchanged while ads are off
+    # AS1: a market brief and a theme post are each one template filled in with the day's or the theme's figures, so their words are
+    # template wording and they carry no ad; a research post written for its one subject is counted (ads.enough_content)
+    template = post["kind"] == "brief" or str(post.get("slug") or "").startswith(blog_research.THEME_PREFIX)
+    page = ads.add_to_page(sp._page(head, None, body, template=template), "blog")        # ADS-1: as the page is sent; unchanged while ads are off
     return _html(page, headers={"Cache-Control": CACHE, **({} if indexable else {"X-Robots-Tag": "noindex, follow"})})
 
 

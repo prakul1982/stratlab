@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { CONFIG } from "../lib/adsConfig";
 import { adMode, CHOICE_KEY, googleMessageShown, onChoice, readChoice, type AdSlotName, type Choice } from "../lib/ads";
 import { houseCard } from "../lib/houseAds";
+import { originalWords, withContent } from "../lib/adContent";
 import { signedInHere } from "../lib/signin";
 import { doNotTrack } from "../lib/analytics";
 
@@ -78,6 +79,23 @@ function House({ seed }: { seed: string }) {
   );
 }
 
+/** The words of the page's own text (lib/adContent.ts), counted again as the page fills in, until there are enough. */
+function usePageWords(want: boolean): number {
+  const [words, setWords] = useState(0);
+  useEffect(() => {
+    if (!want) return;
+    const main = document.querySelector("main");
+    let frame = 0;
+    const count = () => { frame = 0; setWords(originalWords(main)); };
+    count();
+    if (!main || typeof MutationObserver !== "function") return;
+    const mo = new MutationObserver(() => { if (!frame) frame = requestAnimationFrame(count); });
+    mo.observe(main, { childList: true, subtree: true, characterData: true });
+    return () => { mo.disconnect(); if (frame) cancelAnimationFrame(frame); };
+  }, [want]);
+  return words;
+}
+
 export function AdUnit({ slot, plan = null, seed = "" }: { slot: AdSlotName; plan?: "free" | "basic" | "pro" | null; seed?: string }) {
   const { pathname } = useLocation();
   const [choice, setChoice] = useState<Choice>(readChoice);
@@ -88,7 +106,9 @@ export function AdUnit({ slot, plan = null, seed = "" }: { slot: AdSlotName; pla
     const off = onChoice(() => setChoice(readChoice()));          // answered or taken back on this page
     return () => { window.removeEventListener("storage", on); off(); };
   }, []);
-  const mode = adMode({ slot, cfg: CONFIG, path: pathname, choice, signedIn: slot === "public" && signedInHere(), plan, cmp: googleMessageShown(), dnt: doNotTrack() });
+  const asked = adMode({ slot, cfg: CONFIG, path: pathname, choice, signedIn: slot === "public" && signedInHere(), plan, cmp: googleMessageShown(), dnt: doNotTrack() });
+  // AS1: Google's ad only on a page with enough original content (AdSense program policies); the count runs only when an ad could show
+  const mode = withContent(asked, slot, usePageWords(asked === "ad"));
   if (mode === "none") return null;
   if (mode === "house") return <House seed={seed || pathname} />;
   return <AdBox client={CONFIG.client} slot={CONFIG.slots[slot]} />;

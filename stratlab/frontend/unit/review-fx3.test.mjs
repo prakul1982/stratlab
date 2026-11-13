@@ -56,7 +56,7 @@ test("RC2B-029: the live row says what its price is against, and never changes t
 test("RC2B-032: /help, /faq, /about, /login and /pricing each draw their own part of the page", () => {
   assert.equal(slimOf("/help"), "faq");
   assert.equal(slimOf("/faq/"), "faq");
-  assert.equal(slimOf("/about"), "about");
+  assert.equal(slimOf("/about"), null);       // (updated on purpose, AS1: /about is its own page now, drawn like the policies and indexed, for AdSense's publisher-identity check)
   assert.equal(slimOf("/login"), "login");
   assert.equal(slimOf("/signup"), "login");
   assert.equal(slimOf("/"), null);

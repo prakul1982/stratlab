@@ -31,7 +31,7 @@ const PATTERNS = APP_ROUTES.map((r) => new RegExp("^" + r.replace(/\/\*$/, "(/.*
 
 /** The landing page and its sections: shown to a visitor as the landing page, scrolled to the section. */
 export const LANDING_SECTIONS: Record<string, string | null> = { "/": null, "/pricing": "pricing", "/plans": "pricing", "/upgrade": "pricing", "/help": "faq", "/faq": "faq", "/features": "trade",
-  "/login": null, "/signup": null, "/about": "about" };
+  "/login": null, "/signup": null };
 
 const clean = (path: string) => path.split(/[?#]/)[0] || "/";
 
@@ -49,7 +49,7 @@ export const isPlansPath = (path: string): boolean => ["/plans", "/pricing", "/u
  * the questions (/help, /faq), the three spaces (/about) and the way in (/login, /signup). */
 export function slimOf(path: string): "faq" | "about" | "login" | null {
   const p = clean(path).replace(/(.)\/$/, "$1");
-  return p === "/help" || p === "/faq" ? "faq" : p === "/about" ? "about" : p === "/login" || p === "/signup" ? "login" : null;
+  return p === "/help" || p === "/faq" ? "faq" : p === "/login" || p === "/signup" ? "login" : null;
 }
 
 /** A landing-page address for a visitor: "/", "/pricing", "/help"… (the section to scroll to, or null for the top). */
@@ -104,7 +104,7 @@ export type VisitorView =
   | { kind: "gate" } | { kind: "notfound" } | { kind: "ad" };
 
 
-const LEGAL = /^\/(terms|privacy|refunds|contact)$/;
+const LEGAL = /^\/(about|terms|privacy|refunds|contact)$/;
 
 export function visitorView(path: string, search = ""): VisitorView {
   const p = clean(path).replace(/(.)\/$/, "$1");

@@ -103,7 +103,8 @@ test("a finished theme is shared as a teaser of its layers, and its public pages
   const themePage = await page.goto(path);
   expect(themePage?.status()).toBe(200);
   await expect(page.locator("[data-layer]").first()).toBeVisible();
-  await expect(page.locator("[data-cta]").getByRole("link", { name: /^Open the .+ theme$/ })).toBeVisible();
+  // (updated on purpose, R44/AS1: a link from a public page into the app says so, "(needs sign-in)", and carries rel="nofollow")
+  await expect(page.locator("[data-cta]").getByRole("link", { name: /^Open the .+ theme \(needs sign-in\)$/ })).toBeVisible();
   const text = await page.locator("main").innerText();
   expect(text).not.toMatch(/median/i);
   expect(text).not.toMatch(PROVIDERS);

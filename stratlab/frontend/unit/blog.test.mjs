@@ -14,7 +14,7 @@ const vercel = JSON.parse(read("vercel.json"));
 
 test("Blog is in the public header menu, the public footer and the landing page's header, and is a plain link (the API serves it)", () => {
   const frame = read("src/components/PublicFrame.tsx");
-  assert.match(frame, /\["\/stocks", "Companies"\], \["\/blog", "Blog"\]\];/);
+  assert.match(frame, /\["\/stocks", "Companies"\], \["\/themes", "Themes"\], \["\/blog", "Blog"\],/);      // (updated on purpose, AS1: the public menu is the site's public pages, the same on every page: Home, Library, Companies, Themes, Blog, Plans, About, Contact)
   assert.match(frame, /<a className="muted" href="\/blog">Blog<\/a>/);
   assert.doesNotMatch(frame, /to="\/blog"/);                                  // not a route of the app
   const login = read("src/pages/Login.tsx");

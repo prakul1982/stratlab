@@ -553,16 +553,27 @@ def test_generate_reads_the_apps_own_library_ipo_tracker_and_index_history(w, mo
 
 def test_a_post_carries_the_ad_slot_only_while_ads_are_on(w, monkeypatch):
     # ADS-1 on the blog: the slot is added as the page is sent, so it follows the switch and a stored post never holds one
+    # (updated on purpose, AS1: a market brief and a theme post are each one template filled in with figures, so they carry no ad
+    # even with ads on; a research post written for its one subject, with enough of its own words, carries it)
+    from app import ads
     from app.config import settings
     blog.save_brief(issue_for("IN"), datetime(2026, 10, 1, 11, 0, tzinfo=timezone.utc))
+    post = blog_research.ipo_listing_day(ipo_facts(), datetime(2026, 11, 3, tzinfo=timezone.utc))
+    blog.upsert_research({**post, "published": True}, datetime(2026, 11, 3, 5, 0, tzinfo=timezone.utc))
+    blog.upsert_research({**LEGACY_THEME, "published": True}, datetime(2026, 11, 5, 10, tzinfo=timezone.utc))
     c = w["client"]
+    research = "/blog/" + post["slug"]
     monkeypatch.setattr(settings, "ADS_ENABLED", False)
-    assert 'class="ad"' not in c.get("/blog/india-market-brief-2026-10-01").text
+    assert 'class="ad"' not in c.get(research).text
     monkeypatch.setattr(settings, "ADS_ENABLED", True)
     monkeypatch.setattr(settings, "ADSENSE_CLIENT", "ca-pub-8125241692814953")
     monkeypatch.setattr(settings, "ADSENSE_SLOT_PUBLIC", "1234567890")
-    html = c.get("/blog/india-market-brief-2026-10-01").text
+    html = c.get(research).text
+    assert ads.original_words(html) >= ads.MIN_ORIGINAL_WORDS
     assert html.count('class="ad"') == 1 and '/ads.js' in html
+    for url in ("/blog/india-market-brief-2026-10-01", "/blog/theme-cybersecurity-margins-us"):
+        t = c.get(url).text
+        assert '<main id="main" data-shared>' in t and ads.original_words(t) == 0 and 'class="ad"' not in t, url
     assert 'class="ad"' not in c.get("/blog").text                  # the lists stay plain
 
 

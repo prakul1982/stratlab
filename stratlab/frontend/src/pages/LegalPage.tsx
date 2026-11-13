@@ -5,7 +5,7 @@ import { publicGet } from "../lib/http";
 import { LEGAL_PAGES } from "../components/LegalLinks";
 import { PublicFrame } from "../components/PublicFrame";
 import { ChoiceControl } from "../components/Tracking";
-import { DEFAULT_BUSINESS, inline, LEGAL_BLOCKS, LEGAL_UPDATED, type Business } from "../content/legal";
+import { DEFAULT_BUSINESS, inline, LEGAL_BLOCKS, LEGAL_UPDATED, type Block, type Business } from "../content/legal";
 
 /** Who runs the site, from config.js, so the policies name the real business without a code change. */
 const BUSINESS: Business = {
@@ -17,17 +17,21 @@ const BUSINESS: Business = {
   gstin: CFG.BUSINESS_GSTIN || "",
 };
 
+/** The pages the server draws (vercel.json sends them to the API): a plain link, a whole page load, not one of the app's routes. */
+const SERVER_PAGE = /^\/(stocks|themes|blog|status)(\/|$)/;
+
 /** One string of the policy text (content/legal.ts, also written into each page's HTML at build time) as React nodes. */
 const Inline = ({ text }: { text: string }) => (
   <>{inline(text, BUSINESS).map((t, i) => t.t === "b" ? <b key={i}>{t.s}</b> : t.t === "code" ? <code key={i}>{t.s}</code>
     : t.t === "mail" ? <a key={i} className="link" href={`mailto:${t.to}`}>{t.s}</a>
-    : t.t === "link" ? <Link key={i} className="link" to={t.to}>{t.s}</Link> : <span key={i}>{t.s}</span>)}</>
+    : t.t === "link" ? (SERVER_PAGE.test(t.to) ? <a key={i} className="link" href={t.to}>{t.s}</a> : <Link key={i} className="link" to={t.to}>{t.s}</Link>)
+    : <span key={i}>{t.s}</span>)}</>
 );
 
-function Policy({ path }: { path: string }) {
+function Policy({ blocks }: { blocks: Block[] }) {
   return (
     <>
-      {LEGAL_BLOCKS[path].map((b, i) => "h" in b ? <h2 key={i} className="h3">{b.h}</h2>
+      {blocks.map((b, i) => "h" in b ? <h2 key={i} className="h3">{b.h}</h2>
         : "p" in b ? <p key={i} className={b.small ? "small muted" : undefined}><Inline text={b.p} /></p>
         : <ul key={i}>{b.ul.filter((li) => typeof li === "string" || BUSINESS[li.when]).map((li, j) => <li key={j}><Inline text={typeof li === "string" ? li : li.text} /></li>)}</ul>)}
     </>
@@ -55,6 +59,16 @@ export function LegalPage() {
     return () => { live = false; window.clearTimeout(slow); };
   }, []);
   const page = LEGAL_PAGES.find((p) => p.path === pathname) ?? LEGAL_PAGES[0];
+  // /about's text comes in its own file, so a policy page doesn't download it (the policy pages' JS budget, e2e/review-r5)
+  const [about, setAbout] = useState<Block[] | null>(null);
+  useEffect(() => {
+    if (page.path !== "/about" || about) return;
+    let live = true;
+    import("../content/about").then((m) => { if (live) setAbout(m.ABOUT_BLOCKS); }).catch(() => { if (live) setAbout([]); });
+    return () => { live = false; };
+  }, [page.path, about]);
+  const blocks = page.path === "/about" ? about : LEGAL_BLOCKS[page.path] ?? [];
+  const ready = loaded && blocks != null;
   // the same frame as every other public page (header with the site's links and Sign in, the policies and the explore links at the
   // bottom), not a header of its own with four small links (PUB-1: the policies were the one public page with no way to the rest)
   return (
@@ -69,9 +83,9 @@ export function LegalPage() {
         <p className="small muted">Last updated {LEGAL_UPDATED[page.path]}</p>
         {/* laid out from the first frame and shown once the seller's details are in, so the page's height never changes when it
             appears (LIVE3-012: "Loading…" swapped for the whole policy moved the footer, CLS 0.14) */}
-        {!loaded && <p className="sr-only" role="status">Loading…</p>}
-        <div className={loaded ? "legal-text" : "legal-text legal-wait"} aria-hidden={loaded ? undefined : true}><Policy path={page.path} /></div>
-        {loaded && page.path === "/privacy" && <ChoiceControl />}{/* ADS-1: the answer about ads and analytics, and a way to change it */}
+        {!ready && <p className="sr-only" role="status">Loading…</p>}
+        <div className={ready ? "legal-text" : "legal-text legal-wait"} aria-hidden={ready ? undefined : true}><Policy blocks={blocks ?? []} /></div>
+        {ready && page.path === "/privacy" && <ChoiceControl />}{/* ADS-1: the answer about ads and analytics, and a way to change it */}
       </article>
     </PublicFrame>
   );

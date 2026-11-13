@@ -90,14 +90,13 @@ export const PAGES: PageMeta[] = [
     heading: "Contact us",
     summary: [CONTACT_LINE,
       "Help: support@stratlab.studio. Billing and refunds: billing@stratlab.studio. Privacy requests: privacy@stratlab.studio."] },
-  // addresses that open the landing page at a place, or ask for sign-in: not pages of their own, so not indexed (R10V-005
-  // checked /about: the app sends it to /features signed in, scrolls the landing page to its About place signed out, and
-  // vercel.json and unit/seo.test.mjs both list it with the pages kept out of search results; the landing page is what
-  // search engines list: /features is also kept out, by vercel.json's noindex header). Not indexed, so no canonical address either.
-  { path: "/about", title: "About · StratLab", description: "What StratLab is: three spaces, Trade, Invest and Money, for Indian and US stocks.", index: false,
-    heading: "About StratLab",
-    summary: ["StratLab has three spaces for Indian and US stocks. Trade: test trading ideas on years of real prices after costs, put them through four checks and paper trade them. Invest: research companies from their own filings. Money: track your holdings, funds and tax.",
-      "Facts, not tips: StratLab never says what to buy or sell, and no real orders are placed."] },
+  // AS1: /about is a page of its own (content/legal.ts, drawn by LegalPage like the policies and written whole into its HTML): what
+  // StratLab is, who runs it, where the figures come from and how they are checked. Indexed, linked from every footer
+  // (R10V-005 had kept it out of search results while it only scrolled the landing page to its three spaces)
+  { path: "/about", title: "About · StratLab", description: "What StratLab is and who runs it, where its figures come from and how they are checked, and how to reach it. Facts, not advice.", index: true, updated: "2026-11-13",
+    heading: "About StratLab" },
+  // addresses that open the landing page at a place, or ask for sign-in: not pages of their own, so not indexed (the landing page is
+  // what search engines list: /features is also kept out, by vercel.json's noindex header). Not indexed, so no canonical address either.
   { path: "/help", title: "Help · StratLab", description: "Help with StratLab: the questions people ask first, and how to reach a person.", index: false, heading: "Help" },
   { path: "/login", title: "Sign in · StratLab", description: "StratLab signs in with your Google account: no password to set up.", index: false, heading: "Sign in to StratLab" },
   { path: "/signup", title: "Sign up · StratLab", description: "Create a free StratLab account with Google. No card needed.", index: false, heading: "Sign up for StratLab" },

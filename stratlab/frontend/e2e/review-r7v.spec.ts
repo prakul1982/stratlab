@@ -52,7 +52,7 @@ test("the library and policy pages' own HTML has their heading and words, one h1
     ["contact/index.html", "Contact us", /support@stratlab\.studio/],
     ["pricing/index.html", "Plans and prices", /Free, Basic and Pro/],
     ["faq/index.html", "Questions", /Does StratLab tell me what to buy\?/],
-    ["about/index.html", "About StratLab", /Facts, not tips/],
+    ["about/index.html", "About StratLab", /Facts, not advice/],          // (updated on purpose, R44/AS1: the About page was rewritten whole)
   ];
   for (const [file, heading, words] of pages) {
     const raw = built(file);
