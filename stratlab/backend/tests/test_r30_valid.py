@@ -98,13 +98,17 @@ def test_a_net_profit_lifted_on_a_negative_return_and_negative_equity_is_held_wi
     r = _row(book_value=-3.3)
     assert r["net"] is None and not r["one_off"] and r["roe"] is None
     assert r["held"]["net"]["value"] == 82.2
-    assert r["held"]["net"]["checks"] == [D.CHECKS["sign"], D.CHECKS["net_unusual"]]
+    # (updated on purpose, R44): the sign check makes the net margin invalid; an invalid figure is not checked for being unusual as well
+    assert r["held"]["net"]["checks"] == [D.CHECKS["sign"]] and r["verify"]["net"]["state"] == D.INVALID
     assert r["held"]["roe"]["checks"] == [D.CHECKS["neg_equity"]]
 
 
 def test_other_income_sign_and_ebitda_checks():
     r = _row(profits=[1, 1, 1, 9000], roce=5.0, other_income=6000)         # 20% net, of which income outside operations is two thirds
-    assert r["net"] is None and r["held"]["net"]["checks"] == [D.CHECKS["other_income"]]
+    # (updated on purpose, R44): income outside operations above half the net profit is a component that explains the margin, said, not
+    # a cutoff: the 20% net margin is verified against the company's own filed figures and kept in the medians
+    assert r["net"] == 20.0 and "net" not in (r.get("held") or {}) and r["verify"]["net"]["state"] == D.VERIFIED
+    assert "income outside operations of ₹6,000 crore is 67% of the net profit" in r["verify"]["net"]["why"] and not r["one_off"]
     assert _row(profits=[1, 1, 1, 9000], roce=5.0, other_income=1000)["net"] == 20.0
     r = _row(profits=[1, 1, 1, 9000], roce=5.0, net_margin=-4.0)
     assert r["held"]["net"]["checks"] == [D.CHECKS["sign_page"]]
@@ -112,6 +116,7 @@ def test_other_income_sign_and_ebitda_checks():
     D.validate_model(a, "services")
     D.validate_model(b, "royalties")
     assert a["ebitda"] is None and a["held"]["ebitda"]["checks"] == [D.CHECKS["ebitda_unusual"]] and b["ebitda"] == 95.0
+    assert a["verify"]["ebitda"]["state"] == D.UNVERIFIED and "no operating profit to check it against" in a["verify"]["ebitda"]["why"]
 
 
 def test_a_held_figure_leaves_medians_and_is_named_on_the_data_confidence_page():
@@ -133,8 +138,10 @@ def test_a_held_figure_leaves_medians_and_is_named_on_the_data_confidence_page()
 # ---------- 3. coverage: one table, four kinds ----------
 def test_every_synthetic_deck_has_the_coverage_table_and_it_reconciles():
     for name, v, slides in S.decks():
-        conf = next(s for s in slides if s.title == "Data confidence")
-        tab = next(b for b in conf.blocks if b["kind"] == "table" and b.get("head") == deck.COVERAGE_HEAD)
+        # R44 (updated on purpose): the checks' longer rows (verified figures, the coverage of informative layers) can need the room, and the
+        # coverage then has a page of its own (d1); the table is checked wherever it is
+        tab = next(b for s in slides if s.title in ("Data confidence", "Coverage") for b in s.blocks
+                   if b["kind"] == "table" and b.get("head") == deck.COVERAGE_HEAD)
         kinds = [r[0] for r in tab["rows"]]
         assert kinds[0] == "Companies, by count" and "Each figure" in kinds and "Each layer" in kinds, name
         mv = next((r for r in tab["rows"] if r[0] == "Market value"), None)

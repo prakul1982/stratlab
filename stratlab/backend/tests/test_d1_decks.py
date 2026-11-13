@@ -66,9 +66,10 @@ def test_a_company_with_no_words_in_no_layer_is_not_checked_yet_and_the_coverage
     rc = deck.rest_count(v)
     assert rc == (2, 3, "Other x", 1)
     words = deck.rest_words(rc, v)
-    assert "1 of 3 fit none of the map's layers" in words and "1 not checked yet" in words
+    # R44 (updated on purpose): the count of the companies placed is said once, as "In informative layers 1 of 3 (33%)"
+    assert "1 fit none of the map's layers" in words and "1 not checked yet" in words and " of 3" not in words
     # deck_check flags only the share that fits none
-    page = f"In no layer   2 of 3   {words}"
+    page = f"In informative layers   1 of 3 (33%)   {words}"
     got = deck_check.check_pages([page])
     assert got["counts"]["other>40%"] == 0
     assert deck_check.check_pages(["In no layer 3 of 4 in “Other”, listed, never compared: 3 of 4 fit none of the map's layers"])["counts"]["other>40%"] == 1
