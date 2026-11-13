@@ -801,6 +801,8 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
         out_vc.append({"layer": other_label(theme), "description": "", "official": True, "basis": "rest",
                        "companies": sorted(other, key=lambda c: (-(c.get("cap") or 0), c["ticker"]))})
     model_names = None
+    # gl50: with no model from any answer, the models the companies' own words state (R37's rule, which ran only beside answered models)
+    models, conf, stated_ = stated_for_rest(models, conf, [c.get("ticker") for v in out_vc for c in v.get("companies") or []], evidence)
     if models:
         # R32: a company whose own stored words say nothing of how it earns takes the model its map layer's name states (live R31 semis:
         # Qualcomm, Broadcom, AMD... with only "From its own filings: Quarterly report" as evidence sat unknown in "Fabless chip design")
@@ -817,10 +819,8 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
         # placement answer put it in; one placed by its words alone, or in a layer the answer proposed for the companies that fit none of
         # the map's, moves as before
         settled |= {s_ for s_ in reasked if s_ not in got or (got[s_].get("by") == "ai" and got[s_].get("layer"))}
-    # gl50: one still without a model whose own words state it in so many words takes it, asked or not (after the R31 and R37 rules), and
-    # like those it never moves the company out of the map layer it is in
-    models, conf, stated_ = stated_for_rest(models, conf, every_sym, evidence)
-    settled |= stated_
+        settled |= stated_
+
     if previous:
         out_vc = held_to_previous(out_vc, map_names_of(previous, kept), about_of)
     out_vc = definition_fit(out_vc, evidence, theme)            # gl50: what the layer is, in the company's words or industry
@@ -1023,7 +1023,7 @@ def definition_fit(vc: list[dict], evidence, theme: str) -> list[dict]:
         return vc
     gone = {id(c) for _, c, _, _ in moves}
     pos = {id(v): i for i, v in enumerate(vc)}
-    out = [{**v, "companies": [c for c in v.get("companies") or [] if id(c) not in gone]} if v in own else v for v in vc]
+    out = [{**v, "companies": [c for c in v.get("companies") or [] if id(c) not in gone]} for v in vc]       # never the caller's layers
     other = next((x for x in out if x.get("official") and x.get("basis") == "rest"), None)
     for v, c, to, why in moves:
         moved = {**c, "refit": {"from": _HALF_RX.sub("", v["layer"]), "to": _HALF_RX.sub("", to["layer"]) if to is not None else "", "why": why}}
@@ -1135,22 +1135,18 @@ def reask_unknown(models: dict, tags: dict, conf, reasked: list, syms: list, abo
 
 
 def stated_for_rest(models: dict | None, conf, syms, evidence) -> tuple[dict | None, dict | None, set]:
-    """gl50 (R50): a company no answer gave a model whose own words state one in so many words (theme_check.stated_model, R37) gets it
-    ("medium"), whether or not the placement's answer gave any models: it ran only for the companies the answer was asked about, and only when
-    that answer had models, so a theme whose answer failed had none at all. Never asks anything. (models, confidence, the symbols given one);
-    as given when none is stated. Like R37's, a model only its words state never moves a company out of the map layer it is in (settled)."""
-    from .theme_check import model_supported, stated_model
-    add = {}
-    for s_ in dict.fromkeys(x for x in syms if x):
-        if (models or {}).get(s_) not in (None, "", "unknown"):
-            continue
-        ev = evidence(s_)
-        md = stated_model(ev)
-        if md and model_supported(md, ev):
-            add[s_] = md
+    """gl50 (R50): when no answer gave any company a model (the placement's answer failed: the live Biotech and Capital goods maps had none,
+    so nothing of R37 ran either, refine_kept running only beside models), each company whose own words state its model in so many words
+    takes it ("medium"), by refine_kept's own R37 rule (stated, made exact, kept only where its words show it). Never asks anything.
+    (models, confidence, the symbols given one); as given when any model is there already (refine_kept reads those) or none is stated.
+    Like R37's, a model only its words state never moves a company out of the map layer it is in (settled)."""
+    if models:
+        return models, conf, set()
+    got, cf = refine_kept({}, {}, evidence, list(dict.fromkeys(x for x in syms if x)))
+    add = {s_: m_ for s_, m_ in got.items() if m_ not in ("", "unknown")}
     if not add:
         return models, conf, set()
-    return {**(models or {}), **add}, {**(conf or {}), **{s_: "medium" for s_ in add}}, set(add)
+    return add, {**(conf or {}), **{s_: (cf or {}).get(s_) or "medium" for s_ in add}}, set(add)
 
 
 def model_names_signature(layers: list[dict]) -> str:
