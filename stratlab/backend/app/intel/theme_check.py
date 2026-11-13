@@ -608,6 +608,39 @@ def name_models(name) -> set[str]:
     return got | ({one} if one else set())
 
 
+# rv51 (R51, the outside review of the live Release 49 Consumer retail deck: "Online stock-holding retailers ..., a different business model:
+# platforms and marketplaces (the map's name for the layer)" and "Store retailers of home, auto and beauty goods ..., a different business model:
+# parts, component and ingredient makers": a label the map gave a layer before it was renamed for the retailers it holds, and a parts maker's
+# model read from "auto parts", the goods a store sells): the families of making, whose vocabulary names what a seller sells or a servicer
+# serves, never how a retailer or a service firm earns
+MAKING_FAMILIES = {"making", "components", "contract_making"}
+_HALF_NAME = re.compile(r" \((?:larger|smaller)\)$")
+
+
+def layer_business(named: str, name: str, was: str = "", description: str = "", family: str = "") -> tuple[str, str]:
+    """rv51: the business model a layer is compared on apart from how its companies earn (ex49's "named"), as its own canonical records
+    support it: (model, where), where is "name" (the layer's own name states it) or "map" (the map's earlier name for the layer states it and
+    the layer's own description states it too); ("", "") when they don't. A map label is used only for the same layer (the name it was read from
+    is the layer's own) or when its vocabulary fits the layer's definition (its description states the same model and nothing else). Never a
+    model of making for a layer whose companies earn otherwise (`family`, how they are read to earn: a retailer of auto parts is no parts
+    maker), nor one the layer's own name contradicts by stating another way of earning ("Online stock-holding retailers" is no platform)."""
+    if named not in MODELS:
+        return "", ""
+    fam = model_family(named)
+    if fam in MAKING_FAMILIES and family and family not in MAKING_FAMILIES:
+        return "", ""
+    own = _HALF_NAME.sub("", str(name or "")).removesuffix(", by revenue model")
+    says = name_models(own)
+    if any(model_family(m_) != fam for m_ in says):
+        return "", ""
+    if named in says:
+        return named, "name"
+    defined = name_models(description)
+    if was and named in name_models(was) and named in defined and all(model_family(m_) == fam for m_ in defined):
+        return named, "map"
+    return "", ""
+
+
 # ---------- q1: a network operator's subscriptions are for a service it runs, not software (the GPT review of the live R34 Telecom deck) ----------
 # Its customers named are never what it is: a tower company leases "to wireless telecom operators", a messaging platform caters "to mobile network
 # operators (MNOs)"
