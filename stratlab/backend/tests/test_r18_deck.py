@@ -112,10 +112,10 @@ def test_a_lender_theme_shows_lenders_measures_and_never_a_column_that_is_empty_
     # of 5 (HEADLINE_MIN) on the same fixtures is tested in tests/test_r31_bound.py
     monkeypatch.setattr("app.intel.theme_data.HEADLINE_MIN", 3)
     region, m, f, _, _ = bank_theme()
-    bare, _ = deck_of(region, m, f)              # gl50 (R50, updated on purpose): no way of earning read: shown, not ranked
-    assert bare["chain"]["highest"] is None and bare["chain"]["line"].endswith(D.UNREAD_SAID)
-    from tests.gl50_read import read
-    v, slides = deck_of(region, read(m, model={"id": "lending", "family": "lending"}), f)
+    # gl50 (R50, updated on purpose): with no model from any answer, each bank's own words ("lends to ...") state its way of earning (R37's
+    # rule, which ran only beside answered models), so the layers are of one way of earning, read, and ranked
+    assert {(c.get("model") or "") for x in m["value_chain"] for c in x["companies"]} == {"lending"}
+    v, slides = deck_of(region, m, f)
     chain = table_of(slides, "The value chain by layer")
     assert "EBITDA margin" not in chain["head"] and "ROCE" not in chain["head"]
     for col in ("ROE", "NII / assets", "Gross NPA", "P/B"):
@@ -174,7 +174,10 @@ def test_layers_are_one_scheme_the_maps_own_with_the_rest_in_the_appendix():
     # changed on purpose (R21): the two companies no layer fits are one "Other ..." layer, never the exchange's industry beside the map's
     # lane d1 (updated on purpose): the "Other" group of two is rows of "Smaller layers"
     assert layer_titles == ["Layer 1 · Deposit gathering", "Layer 2 · Retail and SME lending"]
-    assert "Other private bank companies" in [r[0] for s in slides if s.title.startswith(deck.SMALL_TITLE) for b in s.blocks if b["kind"] == "table" for r in b["rows"]]
+    # gl50 (R50, updated on purpose): the two banks no layer's name fitted now have their way of earning read from their own words
+    # (lending, R37 with no answered model), so they join the largest lenders' layer, which holds their industry (by_model.home_of)
+    assert not [s for s in slides if s.title.startswith(deck.SMALL_TITLE)]
+    assert {"PVT6", "PVT7"} <= {c["symbol"] for x in v["layers"] if x["layer"] == "Deposit gathering" for c in x["companies"]}
     assert "Private Sector Bank" not in [r[0] for r in table_of(slides, "The value chain by layer")["rows"]]
     t = texts(slides)
     # R19: the unplaced companies are a count and their names (up to five), and rows of the appendix's one table; no list page of their own

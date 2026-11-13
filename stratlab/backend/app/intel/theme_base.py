@@ -802,7 +802,9 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
                        "companies": sorted(other, key=lambda c: (-(c.get("cap") or 0), c["ticker"]))})
     model_names = None
     # gl50: with no model from any answer, the models the companies' own words state (R37's rule, which ran only beside answered models)
-    models, conf, stated_ = stated_for_rest(models, conf, [c.get("ticker") for v in out_vc for c in v.get("companies") or []], evidence)
+    # (the companies of the map's own layers only: they are for its figures, and move nobody out of "Other" or a layer: settled)
+    models, conf, stated_ = stated_for_rest(models, conf, [c.get("ticker") for v in out_vc if not v.get("official") for c in v.get("companies") or []],
+                                            evidence)
     if models:
         # R32: a company whose own stored words say nothing of how it earns takes the model its map layer's name states (live R31 semis:
         # Qualcomm, Broadcom, AMD... with only "From its own filings: Quarterly report" as evidence sat unknown in "Fabless chip design")

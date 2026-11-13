@@ -60,7 +60,7 @@ _COLUMNS = re.compile(r"\S {3,}\S")     # a table's row or two blocks side by si
 # d1: "33 of 252 fit none of the map's layers; 82 not checked yet": the share of those that fit none (the companies not checked yet apart)
 _OTHER = re.compile(r"(\d[\d,]*) of (\d[\d,]*)\s+(?:companies\s+)?fit\s+none\s+of\s+the\s+map's\s+layers")
 # R44: the coverage's one count of the companies placed, "In informative layers 137 of 252 (54%)", and how many of the rest fit none
-_INFORMATIVE = re.compile(r"In informative layers")
+_INFORMATIVE = re.compile(r"(?m)^\s*In informative(?: layers)?\b")     # gl50: the label wrapped ("In informative" above "layers": the live Biotech deck)
 _INF_COUNT = re.compile(r"(?<![\w.,])(\d[\d,]*) of (\d[\d,]*)(?![\d,])")    # its count, a cell that may wrap above or below the label's line
 _FIT_NONE = re.compile(r"(\d[\d,]*)\s+fit\s+none\s+of\s+the\s+map's")     # (the row's text wraps around its label's line)
 _APPENDIX = "Every company's figures"

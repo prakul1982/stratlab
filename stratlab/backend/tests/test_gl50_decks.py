@@ -280,3 +280,12 @@ def test_deck_check_fails_a_ranking_and_a_kind_beside_no_way_of_earning_read_and
 def test_the_versions_moved():
     assert B.RULES == 49 and TR.PLACE_CARRY[49] == 48 and TR.PLACE_CARRY[48] == 47
     assert deck.THEME_DECK_VERSION == 60 and D.DIVE_TEXT == 20
+
+
+def test_deck_check_counts_the_not_checked_yet_in_other_and_reads_a_wrapped_label():
+    """The live Biotech deck: "In informative" and "layers" on two lines, 225 of 821 in informative layers, 594 not checked yet: it passed."""
+    page = (" Coverage flag                 27%                   27% of the companies placed are in informative layers\n"
+            " In informative                225 of 821            in a layer the map names; the other 596 in “Other”: 2 fit none of the map's\n"
+            " layers                        (27%)                 layers; 594 not checked yet\n")
+    got = deck_check.check_pages([page])
+    assert got["counts"]["other>40%"] == 1 and "596 outside them (73%)" in got["findings"][0]["text"]
