@@ -7,9 +7,9 @@ import { signedInHere, signIn, warmSignIn } from "../lib/signin";
 import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 import { BROWSE_COMPANIES } from "../content/seo";
 
-/** The landing page's sections, Plans, the library, the companies and the blog, for the phone Menu (the company pages carry the same links). */
-export const PUBLIC_MENU: [string, string][] = [["/#trade", "Trade"], ["/#invest", "Invest"], ["/#money", "Money"], ["/#alerts", "Alerts"], ["/pricing", "Plans"], ["/#faq", "FAQ"],
-  ["/library", "Library"], ["/stocks", "Companies"], ["/blog", "Blog"]];
+/** The site's public pages, the same list as the pages the server draws (backend stock_pages.PUBLIC_MENU, AS1): none asks for sign-in. */
+export const PUBLIC_MENU: [string, string][] = [["/", "Home"], ["/library", "Library"], ["/stocks", "Companies"], ["/themes", "Themes"], ["/blog", "Blog"],
+  ["/pricing", "Plans"], ["/about", "About"], ["/contact", "Contact"]];
 
 /** The footer's way to the public pages that show real work: the strategy library with the verdict each earned, the
  * company pages (DK-008: the library was reachable from one link far down the landing page) and the blog, the daily

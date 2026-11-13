@@ -36,6 +36,8 @@ PUBLIC = {"/health", "/version", "/plans", "/pricing", "/markets", "/public/v/{t
           # (updated on purpose, bet 3) public research: a share link's page (its random token is the key), the public theme pages and
           # the embeddable charts; making, listing and turning off links needs sign-in
           "/r/{token}", "/themes", "/themes/{region}", "/themes/{region}/{s}",
+          # (updated on purpose, AS1) /themes/ is the same public directory: the site's host forwards /themes with the slash
+          "/themes/",
           "/embed/price/{region}/{symbol}", "/embed/price/{symbol}", "/embed/theme/{region}/{slug}"}
 
 

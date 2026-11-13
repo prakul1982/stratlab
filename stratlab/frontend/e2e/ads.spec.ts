@@ -193,10 +193,20 @@ test("ads on: the public library asks a visitor first; No thanks leaves no gap a
   expect(google).toEqual([]);
 });
 
-test("ads on: the public library shows one ad after Allow in the banner, below the strategies", async ({ page }) => {
+test("ads on: the public library shows one ad after Allow in the banner, below the strategies, once the page has enough of its own words", async ({ page }) => {
+  // (updated on purpose, AS1: Google's ad shows only on a page with at least 300 words of its own text, AdSense's rule against pages with
+  // little original content; the list's names are links and its figures numbers, so the slot waits until the page has enough words)
   const { errors } = await open(page, "/library", "StratLab's own strategies", { ads: true, choice: "yes" });
   await expect(page.locator(".lib-table tbody tr:not(.k-detail-row)").first()).toBeVisible({ timeout: 30_000 });
   const slot = page.getByTestId("ad-slot");
+  await page.waitForTimeout(800);
+  await expect(slot).toHaveCount(0);
+  await expect(page.locator(".ad")).toHaveCount(0);
+  await page.evaluate(() => {
+    const p = document.createElement("p");
+    p.textContent = Array.from({ length: 40 }, (_, i) => `Sentence ${i} of words written for this page alone.`).join(" ");
+    document.querySelector("main")!.prepend(p);
+  });
   await slot.scrollIntoViewIfNeeded();
   await expect(slot.locator("[data-fake-ad]")).toBeVisible();
   await expect(slot.locator("ins.adsbygoogle")).toHaveAttribute("data-ad-slot", "1111111111");

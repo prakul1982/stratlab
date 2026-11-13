@@ -12,7 +12,6 @@ import { Google } from "../components/Icons";
 import { LegalLinks } from "../components/LegalLinks";
 import { Logo } from "../components/Logo";
 import { PUBLIC_MENU, SiteLinks } from "../components/PublicFrame";
-import { PublicAd } from "../components/AdUnit";
 import { SkipLink } from "../components/SkipLink";
 import { Seg } from "../components/kit/Seg";
 import { publicGet } from "../lib/http";
@@ -20,11 +19,17 @@ import { plainTerms } from "../lib/plainTerms";
 import { checksLine, LOST_CHECKS, lostMoney, underHeadline } from "../lib/tradeUi";
 import type { LibEntry } from "../components/LibraryBits";
 import { importWithRetry } from "../lib/lazyRetry";
+import { adsLive } from "../lib/ads";
+import { CONFIG } from "../lib/adsConfig";
 
 /** A landing card's checks line, unless its headline already gives the count (R61-007). */
 const cardChecks = (e: LibEntry) => underHeadline(lostMoney(e.verdict.verdict, e.stats?.ret) ? LOST_CHECKS : checksLine(e.verdict.passed, e.verdict.total),
   e.verdict.fact_headline ?? e.verdict.headline);
 // asked for again when its download fails, like every other lazy piece (R64-005: a 502 on a chunk just after a deploy)
+// ADS-1, AS1: the ad slot's code loads only when ads can draw here; with ads off (the default) the landing page asks for no extra file
+const ADS_HERE = adsLive(CONFIG, "public");
+const PublicAdLazy = lazy(() => import("../components/AdUnit").then((m) => ({ default: m.PublicAd })));
+const PublicAd = () => (ADS_HERE ? <Suspense fallback={null}><PublicAdLazy /></Suspense> : null);
 const PlanCompare = lazy(() => importWithRetry(() => import("../components/PlanCompare")).then((m) => ({ default: m.PlanCompare })));
 
 /* The public landing page: what StratLab does, in its three spaces (Trade, the strategy lab it began as, first; then

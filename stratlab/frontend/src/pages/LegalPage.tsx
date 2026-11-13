@@ -17,11 +17,15 @@ const BUSINESS: Business = {
   gstin: CFG.BUSINESS_GSTIN || "",
 };
 
+/** The pages the server draws (vercel.json sends them to the API): a plain link, a whole page load, not one of the app's routes. */
+const SERVER_PAGE = /^\/(stocks|themes|blog|status)(\/|$)/;
+
 /** One string of the policy text (content/legal.ts, also written into each page's HTML at build time) as React nodes. */
 const Inline = ({ text }: { text: string }) => (
   <>{inline(text, BUSINESS).map((t, i) => t.t === "b" ? <b key={i}>{t.s}</b> : t.t === "code" ? <code key={i}>{t.s}</code>
     : t.t === "mail" ? <a key={i} className="link" href={`mailto:${t.to}`}>{t.s}</a>
-    : t.t === "link" ? <Link key={i} className="link" to={t.to}>{t.s}</Link> : <span key={i}>{t.s}</span>)}</>
+    : t.t === "link" ? (SERVER_PAGE.test(t.to) ? <a key={i} className="link" href={t.to}>{t.s}</a> : <Link key={i} className="link" to={t.to}>{t.s}</Link>)
+    : <span key={i}>{t.s}</span>)}</>
 );
 
 function Policy({ path }: { path: string }) {

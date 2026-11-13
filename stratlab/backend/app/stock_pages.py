@@ -1547,11 +1547,19 @@ def has_content(f: dict | None) -> bool:
     return bool(f) and not f.get("not_company") and not f.get("no_numbers")
 
 
+def indexable(f: dict | None) -> bool:
+    """Whether a company's page is offered to search engines: it has reported numbers to show (has_content) AND a recent share
+    price. A page with only one of the two (no recent price: suspended, delisted or untraded; or no reported numbers) is thin,
+    so it is noindex and left out of the sitemap; a visitor who opens it still reads what there is (AS1: AdSense's
+    low-value-content rule, docs/ADMIN.md)."""
+    return has_content(f) and _num((f or {}).get("price")) is not None
+
+
 def sitemap_ok(f: dict | None) -> bool:
-    """Whether a stored page may be listed in the sitemap: it has something to show (has_content), and the build knew
+    """Whether a stored page may be listed in the sitemap: it is indexable, and the build knew
     what the ticker is, so it can't turn out to be a fund's 404 when next built (R12-013: GSMT). A page whose build
     couldn't read that is built again within the hour when opened, like one whose annual report couldn't be read."""
-    return has_content(f) and not (f or {}).get("type_unread")
+    return indexable(f) and not (f or {}).get("type_unread")
 
 
 _thin: set[tuple[str, str]] = set()          # companies already marked in this process
@@ -1686,7 +1694,7 @@ class Pages:
             if got:
                 got["symbol"] = symbol
             _put(key, {"ts": time.time(), "facts": got})
-            _mark_thin(region, symbol, not has_content(got))         # nothing to show (or a fund): not in the sitemap
+            _mark_thin(region, symbol, not indexable(got))         # nothing to show, no recent price (or a fund): not in the sitemap
             self.mem.set(key, got or {}, 600)
             if self.on_built:
                 try:
@@ -2440,20 +2448,48 @@ def _links(region: str, rows: list[tuple[str, str]]) -> str:
     return '<div class="links">' + "".join(f'<a href="{e(path(region, s))}">{e(n if n == s else f"{tidy(n)} ({s})")}</a>' for s, n in rows) + "</div>"
 
 
+PUBLIC_MENU = (("/", "Home"), ("/library", "Library"), ("/stocks", "Companies"), ("/themes", "Themes"), ("/blog", "Blog"),
+               ("/pricing", "Plans"), ("/about", "About"), ("/contact", "Contact"))
+# the app's own addresses, which ask a signed-out visitor to sign in (frontend vercel.json sends them to the app): a link to one from a
+# public page says so and carries rel="nofollow", so neither a reader nor a crawler is led to a sign-in wall unawares (AS1)
+APP_PATH = re.compile(r"^(?:https?://[^/\"]+)?/(?:mine|all|trade|invest|money|notebooks|new|n|import|options|paper|upgrade|account|settings|assistant|app|"
+                      r"news|holdings|tax-report|alerts|research|chart|scans|watchlist|calendar|login|signup)(?:[/?#]|$)")
+_ANCHOR = re.compile(r'<a ([^>]*?)href="([^"]*)"([^>]*)>(.*?)</a>', re.S)
+SIGN_IN_NOTE = " (needs sign-in)"
+
+
+def _mark_app_links(page: str) -> str:
+    """Every link from a public page into the app (APP_PATH) gets rel="nofollow" and, unless its words already say sign-in,
+    " (sign-in)" at the end of its words."""
+    site = settings.PUBLIC_SITE_URL
+
+    def one(m):
+        pre, href, post, words = m.groups()
+        if not APP_PATH.match(href) or (href.startswith("http") and not href.startswith(site)):
+            return m.group(0)
+        attrs = pre + post
+        rel = "" if "rel=" in attrs else ' rel="nofollow"'
+        if "rel=" in attrs and "nofollow" not in attrs:
+            pre, post = re.sub(r'rel="([^"]*)"', r'rel="\1 nofollow"', pre), re.sub(r'rel="([^"]*)"', r'rel="\1 nofollow"', post)
+        said = re.search(r"sign[ -]?in|sign[ -]?up", re.sub(r"<[^>]+>", " ", words), re.I)
+        return f'<a {pre}href="{href}"{post}{rel}>{words}{"" if said else SIGN_IN_NOTE}</a>'
+    return _ANCHOR.sub(one, page)
+
+
 def _top(sign_in: str | None = None) -> str:
     """The site's header: the logo home, the landing page's sections, company search, and Sign in. Sign in opens the
     app's own address for what the visitor is looking at (a company's page in the app), whose "Sign in to see …" screen
     signs in with Google and comes back to it."""
     site = settings.PUBLIC_SITE_URL
     sign_in = sign_in or f"{site}/mine"
-    # the landing page's own sections, in its order, then company search (R43B-007: the two menus differed)
-    links = "".join(f'<a href="{site}/#{k}">{v}</a>' for k, v in (("trade", "Trade"), ("invest", "Invest"), ("money", "Money"), ("alerts", "Alerts")))
-    # the strategy library beside Companies, as on the landing page and the other public pages (DK-008)
-    menu = f'{links}<a href="{site}/pricing">Plans</a><a href="{site}/#faq">FAQ</a><a href="{site}/library">Library</a><a href="/stocks">Companies</a><a href="/blog">Blog</a>'
+    # AS1: the site's public pages, the same on every page the server draws and in the app's public frame (PublicFrame.tsx
+    # PUBLIC_MENU): Home, the strategy library beside Companies (DK-008), Themes, Blog, Plans, About and Contact. Nothing in it
+    # leads to a page that asks for sign-in; Sign in says so itself
+    menu = "".join(f'<a href="{h}">{t}</a>' for h, t in PUBLIC_MENU)
     return (f'<a class="skip" href="#main">Skip to main content</a><header class="nav"><a class="brand" href="{site}/" aria-label="StratLab home">'
             f'{LOGO}<span class="word"><b>Strat</b>Lab</span></a><nav aria-label="Site">{menu}</nav>'
             f'<details class="menu"><summary>Menu</summary><nav aria-label="Site (menu)">{menu}</nav></details>'
-            f'<a class="btn ghost sm" href="{e(sign_in)}">Sign in</a></header>')
+            f'<a class="btn ghost sm" href="{e(sign_in)}" rel="nofollow">Sign in</a></header>')
 
 
 INSTAGRAM = "https://www.instagram.com/stratlab.studio/"      # the same address as the app's footers (content/seo.ts)
@@ -2474,8 +2510,12 @@ def _foot() -> str:
             f'<nav aria-label="Explore">{explore}</nav><nav aria-label="Policies">{policies}</nav></div></footer>')
 
 
-def _page(head: str, sign_in: str | None, body: str) -> str:
-    return head + "<body>" + _top(sign_in) + f'<main id="main">{body}</main>' + _foot() + "</body></html>"
+def _page(head: str, sign_in: str | None, body: str, template: bool = False) -> str:
+    """A whole page the server draws: the site's header and menu, the page in `main`, the footer. `template`: the page is one
+    template filled in with figures (a company page, a market brief), so its words are marked as template wording (data-shared)
+    and it never carries an ad (ads.enough_content). Links into the app say they ask for sign-in (_mark_app_links)."""
+    main = '<main id="main" data-shared>' if template else '<main id="main">'
+    return head + "<body>" + _top(sign_in) + _mark_app_links(f"{main}{body}</main>") + _foot() + "</body></html>"
 
 
 def _find_form(region: str | None, q: str = "") -> str:
@@ -2662,7 +2702,7 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
         desc = f"{name} ({symbol}), listed in {country}. Test a trading idea on it or read its numbers on StratLab."
         body = f"""<h1>{e(name)} <span class="muted">({e(symbol)})</span></h1>
 <p class="muted">Listed in {country}. Its reported numbers aren't available to show here right now.</p>"""
-        return _page(_head(title, desc, canonical, robots="noindex,follow"), app, body + _cta(symbol, test, deep))
+        return _page(_head(title, desc, canonical, robots="noindex,follow"), app, body + _cta(symbol, test, deep), template=True)
     if f.get("not_company"):
         return _not_company_page(region, symbol, str(f["not_company"]))
     desc = description({**f, "name": name})          # the tidied name, as in the title and the h1 (a filing's capitals stay out of the snippet)
@@ -2704,7 +2744,9 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
     parts.append(_how(f, [n for n in notes if _is_basis(n)]))       # PUB-2: how each figure is worked out, last and folded
     # a company with a price but no reported numbers to show (a filer whose results aren't filed as data) is a short page
     # for a visitor who looks it up, kept out of search results and the sitemap (see has_content)
-    return _page(_head(title, desc, canonical, ld, robots="noindex,follow" if f.get("no_numbers") else "index,follow"), app, "".join(parts))
+    # AS1: a company page is one template filled in with the company's figures, so all of its words are template wording (data-shared
+    # on its main): it carries no ad (ads.enough_content); one without a recent price is thin and kept out of search results too
+    return _page(_head(title, desc, canonical, ld, robots="index,follow" if indexable(f) else "noindex,follow"), app, "".join(parts), template=True)
 
 
 def _cta(symbol: str, test: str, deep: str) -> str:

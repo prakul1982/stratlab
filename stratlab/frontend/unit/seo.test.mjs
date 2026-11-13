@@ -86,10 +86,10 @@ test("every public page has its own title, description and one canonical address
   const theirs = [...py.matchAll(/\("(\/[a-z/]*)", "(\d{4}-\d{2}-\d{2})"\)/g)].map((m) => [m[1], m[2]]);
   assert.deepEqual(theirs, seo.sitemapPages().map((p) => [p.path, p.updated]));
   // an alias names the page it repeats, and the sign-in addresses stay out of search
-  for (const p of seo.PAGES.filter((x) => !x.index)) assert.ok(["/about", "/help", "/login", "/signup"].includes(p.path), p.path);
+  for (const p of seo.PAGES.filter((x) => !x.index)) assert.ok(["/help", "/login", "/signup"].includes(p.path), p.path);      // (updated on purpose, AS1: /about is its own page now, drawn like the policies and indexed, for AdSense's publisher-identity check)
   // changed on purpose in R10V-005: a page kept out of search results names no canonical address (/help named /faq, /about named /)
   assert.equal(seo.pageMeta("/help").canonical, undefined);
-  assert.equal(seo.pageMeta("/about").canonical, undefined);
+  assert.equal(seo.pageMeta("/about").index, true);      // (updated on purpose, AS1: /about is its own page now, drawn like the policies and indexed, for AdSense's publisher-identity check)
   for (const p of seo.PAGES.filter((x) => !x.index)) assert.equal(p.canonical, undefined, p.path);
 });
 
@@ -130,7 +130,9 @@ test("each page's own HTML is written at build time, with structured data on the
   assert.match(files["404.html"], /content="noindex, follow"/);
   assert.match(files["login/index.html"], /content="noindex, follow"/);
   assert.doesNotMatch(files["help/index.html"], /rel="canonical"/);     // changed on purpose in R10V-005: noindex, so no canonical
-  assert.doesNotMatch(files["about/index.html"], /rel="canonical"/);
+  assert.match(files["about/index.html"], /<link rel="canonical" href="https:\/\/stratlab\.studio\/about">/);      // (updated on purpose, AS1: /about is its own page now, drawn like the policies and indexed, for AdSense's publisher-identity check)
+  assert.match(files["about/index.html"], /content="index, follow"/);
+  assert.match(files["about/index.html"], /Where the figures come from/);
   const ld = JSON.parse(files["index.html"].match(/<script type="application\/ld\+json">(.*?)<\/script>/s)[1]);
   assert.deepEqual(ld.map((x) => x["@type"]), ["Organization", "WebSite", "FAQPage"]);
   assert.deepEqual(ld[2].mainEntity.map((q) => q.name), FAQ.map((f) => f.q));
@@ -236,7 +238,7 @@ test("the visitor routes: /faq, /library and a strategy, a made-up market, a gat
   assert.deepEqual(links.visitorView("/faq"), { kind: "landing", section: "faq", panel: undefined });
   assert.equal(links.visitorView("/login").panel, "login");
   assert.equal(links.visitorView("/signup").panel, "signup");
-  assert.equal(links.visitorView("/about").section, "about");
+  assert.equal(kind("/about"), "legal");      // (updated on purpose, AS1: /about is its own page now, drawn like the policies and indexed, for AdSense's publisher-identity check)
   assert.equal(kind("/terms"), "legal");
   assert.equal(kind("/library"), "library");
   assert.deepEqual(links.visitorView("/library/seed-ema-20-50-nifty50"), { kind: "libraryEntry", id: "seed-ema-20-50-nifty50" });

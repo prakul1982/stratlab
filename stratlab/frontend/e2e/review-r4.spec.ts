@@ -120,8 +120,11 @@ test("R4-017: every public page has its own tab title, and /login, /signup, /abo
   await expect(page).toHaveTitle("Contact · StratLab");
   // changed on purpose in R8V-008: the landing page at these addresses has the address's own heading as its h1 (the one its
   // HTML carries for crawlers), with the tagline still shown beside it
-  for (const [path, title, h1] of [["/login", "Sign in · StratLab", "Sign in to StratLab"], ["/signup", "Sign up · StratLab", "Sign up for StratLab"],
-    ["/about", "About · StratLab", "About StratLab"]] as const) {
+  // (updated on purpose, AS1: /about is its own page, drawn like the policies and indexed)
+  await page.goto("/about");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("About StratLab", { timeout: 30_000 });
+  await expect(page).toHaveTitle("About · StratLab");
+  for (const [path, title, h1] of [["/login", "Sign in · StratLab", "Sign in to StratLab"], ["/signup", "Sign up · StratLab", "Sign up for StratLab"]] as const) {
     await page.goto(path);
     await expect(page.locator(".lp").getByRole("heading", { level: 1 })).toHaveText(h1, { timeout: 30_000 });
     await expect(page.locator(".lp").getByText("it, research it, track it.").first()).toBeVisible();
@@ -142,8 +145,9 @@ test("R4-017: signed in, the policies and a missing page keep their own titles, 
   await expect(page).toHaveTitle("Page not found · StratLab");
   await page.goto("/login");
   await expect(page).not.toHaveURL(/\/login$/, { timeout: 30_000 });
-  await page.goto("/about");
-  await expect(page).toHaveURL(/\/features$/, { timeout: 30_000 });
+  await page.goto("/about");      // (updated on purpose, AS1: /about is its own page, drawn like the policies and indexed): the same page signed in
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("About StratLab", { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/about$/);
   expect(errors).toEqual([]);
 });
 

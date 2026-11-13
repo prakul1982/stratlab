@@ -31,7 +31,9 @@ def test_the_pages_sitemap_lists_every_public_page_with_the_day_it_changed(w):
     assert "https://stratlab.studio/pricing" not in got       # R26-006: its canonical address is /, so only / is listed
     for url, day in got.items():
         assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", day or ""), (url, day)
-    assert [p for p, _ in site_pages.PAGES] == ["/", "/plans", "/faq", "/library", "/terms", "/privacy", "/refunds", "/contact"]
+    # (updated on purpose, AS1: /about is a page of its own now, indexed and listed)
+    assert [p for p, _ in site_pages.PAGES] == ["/", "/plans", "/faq", "/library", "/terms", "/privacy", "/refunds", "/contact", "/about"]
+    assert "https://stratlab.studio/about" in got
 
 
 def test_stratlabs_own_strategies_are_listed_and_a_users_are_not(w):
