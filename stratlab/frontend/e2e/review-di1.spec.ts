@@ -142,8 +142,14 @@ test("DI-014, DI-022: Help is in the account menu and lists the explanations; Se
 
 test("DI-005, DI-006: My space keeps the chosen order, and the layout is kept on the account", async ({ page, request }, info) => {
   const phone = info.project.name === "phone";
-  const u = who(118, phone);
+  // its own account for each project and repeat (backend tests/fake_db.py's di6-*): two repeats running at once on one account
+  // reset and moved each other's cards (13 Nov, --repeat-each with two workers)
+  const i = (info.repeatEachIndex % 12) * 2 + (phone ? 1 : 0);
+  const u: Who = { token: `di6-${i}`, id: `u-di6-${i}`, email: `di6${i}@example.com` };
   await answer(request, u, "money");
+  // and from the cards' own order on it, whatever an earlier run left there: with the account's order already moved, the first
+  // "Move Markets up" put Markets on top and left the second with nothing to move (more than 12 repeats come back to an account)
+  expect((await request.put(`${API}/me/prefs`, { headers: auth(u), data: { mine: { order: ["networth", "pnl", "paper", "markets", "coming", "watch", "saved"], hidden: [] } } })).ok()).toBeTruthy();
   const errors = await signIn(page, u, "/mine");
   await expect(page.getByTestId("mine-home")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Customise", exact: true }).click();

@@ -16,6 +16,7 @@ import { emailLinkIn, hasSavedSession, hasSignInCode, withoutEmailLink, withoutS
 import { useLiveRefresh } from "./liveRefresh";
 import { saveView, savedView, viewForFocus, viewFromSaved, viewToServer, type SpaceView } from "./spaces";
 import { toastMs } from "./toastTime";
+import { prefsSync } from "./prefsSync";
 
 const ME_RETRY_MS = 1500;
 const SESSION_RETRY_MS = [2000, 5000];
@@ -86,6 +87,7 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
   const [me, setMe] = useState<Me | null>(null);
+  const prefsQueue = useRef(prefsSync());
   const [meError, setMeError] = useState<string | null>(null);
   const [notebooks, setNotebooks] = useState<NotebookItem[] | null>(null);
   const [notebooksFailed, setNotebooksFailed] = useState(false);
@@ -127,6 +129,7 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
   }, [notify]);
 
   const refreshMe = useCallback(async () => {
+    const since = prefsQueue.current.mark();       // a preference changed while this is read is kept over the answer
     try {
       // one quiet second try when the server or the network had a moment (a 503 or no answer): the person sees the
       // error and its Retry button only if that fails too (R5O-002)
@@ -135,7 +138,7 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
         await new Promise((ok) => window.setTimeout(ok, ME_RETRY_MS));
         return api<Me>("/me");
       });
-      setMe(m);
+      setMe(m.prefs ? { ...m, prefs: prefsQueue.current.overlay(m.prefs, since) } : m);
       setMeError(null);
       setDataOffline(!m.data_online);
     } catch (e) {
@@ -229,11 +232,14 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
     applyThemeColor(t);
   }, []);
 
-  /** Save some of the preferences in one request (two at once could each overwrite the other's change). */
+  /** Save some of the preferences in one request (two at once could each overwrite the other's change), each after the one
+   * before it is answered, so the account ends on the last change (lib/prefsSync). */
   const savePrefs = useCallback(async (p: Prefs, quiet = false) => {
     if (p.space) { setSpaceHere(p.space); saveView(p.space); }
-    setMe((m) => (m ? { ...m, prefs: { level: m.prefs?.level ?? null, ...(m.prefs ?? {}), ...p, space: p.space ? viewToServer(p.space) : m.prefs?.space } } : m));
-    try { await api("/me/prefs", { method: "PUT", body: p.space ? { ...p, space: viewToServer(p.space) } : p }); } catch (e) { if (!quiet) fail(e); }
+    const { space: view, ...rest } = p;           // (a space left out or empty changes nothing on the server either)
+    const body: Partial<NonNullable<Me["prefs"]>> = view ? { ...rest, space: viewToServer(view) } : rest;
+    setMe((m) => (m ? { ...m, prefs: { level: m.prefs?.level ?? null, ...(m.prefs ?? {}), ...body } } : m));
+    try { await prefsQueue.current.save(body, (b) => api("/me/prefs", { method: "PUT", body: b })); } catch (e) { if (!quiet) fail(e); }
   }, [fail]);
   const setLevel = useCallback((l: Level) => savePrefs({ level: l }), [savePrefs]);
   const setFocus = useCallback((f: Focus) => savePrefs({ focus: f }), [savePrefs]);
