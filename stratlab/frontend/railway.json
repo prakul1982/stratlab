@@ -1,0 +1,12 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
+  },
+  "deploy": {
+    "healthcheckPath": "/favicon.svg",
+    "restartPolicyType": "ON_FAILURE",
+    "numReplicas": 1
+  }
+}

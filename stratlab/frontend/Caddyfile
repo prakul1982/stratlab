@@ -1,0 +1,85 @@
+# The site's web server on Railway (replaces Vercel's hosting; same rules as vercel.json, which stays for reference until the switch).
+# Serves the built app from /srv, forwards the server-drawn paths to the API service, and sets the same headers.
+# Keep the forwarded paths, the app routes and the headers in step with vercel.json (unit/web-server.test.mjs checks it).
+{
+	admin off
+	auto_https off
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+:{$PORT:8080} {
+	encode zstd gzip
+
+	# trailingSlash: false
+	@slash path_regexp slash ^(.+)/$
+	redir @slash {re.slash.1} 308
+
+	header -Server
+
+	@notembed not path /embed/*
+	header @notembed {
+		defer
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		Content-Security-Policy "default-src 'self'; script-src 'self' https://checkout.razorpay.com https://*.razorpay.com https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://adservice.google.com https://*.adtrafficquality.google https://connect.facebook.net https://www.clarity.ms https://*.clarity.ms; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://stratlab-production-ca25.up.railway.app https://*.stratlab.studio https://*.supabase.co wss://*.supabase.co https://*.razorpay.com https://*.sentry.io https://us.i.posthog.com https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://adservice.google.com https://*.adtrafficquality.google https://connect.facebook.net https://www.facebook.com https://www.clarity.ms https://*.clarity.ms; frame-src https://*.razorpay.com https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://www.google.com https://*.adtrafficquality.google; worker-src 'self'; manifest-src 'self'; form-action 'self' https://*.razorpay.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; upgrade-insecure-requests"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+	@embed path /embed/*
+	header @embed {
+		defer
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors *"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-X-Frame-Options
+	}
+
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+	@fonts path /fonts/*
+	header @fonts Cache-Control "public, max-age=2592000"
+	@config path /config.js
+	header @config Cache-Control "public, max-age=60, must-revalidate"
+	@bootjs path /boot.js /theme.js
+	header @bootjs Cache-Control "public, max-age=300, must-revalidate"
+	@sw path /sw.js
+	header @sw Cache-Control "no-cache"
+	@pages path_regexp pages ^/((index\.html)?|(mine|all|features|trade|invest|money|notebooks|new|n|import|options|paper|plans|upgrade|help|tour|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|chart|scans|watchlist|dev|login|signup|about|verdict|calendar|start|pricing|faq|terms|privacy|refunds|contact)(/.*)?)$
+	header @pages Cache-Control "no-cache"
+	@noindex path_regexp noindex ^/(mine|all|features|trade|invest|money|notebooks|new|n|import|options|paper|plans/.+|upgrade|help|tour|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|chart|scans|watchlist|dev|login|signup|verdict|calendar|v|c|r|embed)(/.*)?$
+	header @noindex X-Robots-Tag "noindex, follow"
+
+	# Paths the API draws (vercel.json rewrites to the API host)
+	@api path /v/* /c/* /r/* /themes /themes/* /embed /embed/* /money/calendar/feed/* /stocks /stocks/* /blog /blog/* /status /sitemap.xml /sitemaps /sitemaps/* /unsubscribe /email/confirm /news-link/*
+	handle @api {
+		reverse_proxy {$API_UPSTREAM:https://stratlab-production-ca25.up.railway.app} {
+			header_up Host {upstream_hostport}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	handle {
+		root * /srv
+		# the app's own routes are answered by index.html unless a pre-built page exists for them (vercel.json's /index.html rewrite)
+		@app {
+			path_regexp app ^/((mine|all|features|trade|invest|money|notebooks|new|n|import|options|paper|plans|upgrade|help|tour|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|chart|scans|watchlist|dev|login|signup|about|verdict|calendar)(/.*)?|start|pricing|faq|terms|privacy|refunds|contact)$
+			not file {path} {path}/index.html
+		}
+		rewrite @app /index.html
+		try_files {path} {path}/index.html
+		file_server
+	}
+
+	handle_errors 404 {
+		root * /srv
+		rewrite * /404.html
+		file_server {
+			status 404
+		}
+	}
+}
