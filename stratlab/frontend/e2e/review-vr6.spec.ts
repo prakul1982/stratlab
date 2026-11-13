@@ -156,10 +156,22 @@ test("VR6-018: on a wide screen the chart's view buttons are with the scale butt
 });
 
 test("VR6-014: Account's usage list leaves no row alone beside an empty cell", async ({ page }) => {
+  // the list is drawn twice: first from /me, then again with the kept-count rows once /me/limits answers. Measuring across
+  // that second draw (Playwright's evaluateAll takes the rows of the first and reads them after the second) showed a row
+  // alone that neither draw has, so wait for the limits and measure the whole list in one go, once it has stopped changing
+  const limits = page.waitForResponse((r) => new URL(r.url()).pathname === "/me/limits", { timeout: 30_000 });
   await open(page, "/account", ADMIN, 1440);
-  const rows = page.locator("#plan .k-rows.two > div");
-  await expect(rows.first()).toBeVisible({ timeout: 30_000 });
-  const tops = await rows.evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.width)]; }));
+  const list = page.locator("#plan .k-rows.two");
+  await expect(list.locator("> div").first()).toBeVisible({ timeout: 30_000 });
+  await limits;
+  const measure = () => list.evaluate((l) => Array.from(l.children, (e) => { const r = e.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.width)]; }));
+  let tops: number[][] = [];
+  await expect.poll(async () => {
+    const a = JSON.stringify(await measure());
+    await page.waitForTimeout(300);
+    tops = await measure();
+    return a === JSON.stringify(tops);
+  }, { timeout: 15_000, message: "the usage list stops changing" }).toBe(true);
   const byRow = new Map<number, number>();
   for (const [t] of tops) byRow.set(t, (byRow.get(t) ?? 0) + 1);
   const narrowAlone = tops.filter(([t, w]) => byRow.get(t) === 1 && w < 700).length;
