@@ -1495,6 +1495,7 @@ class SEC(Source):
             latest = latest_filing(subs, ANNUAL_FORMS)
             if latest:
                 p["annual_filed"] = latest["filed"]       # the page tells a table a year behind its newest report (annual_behind)
+                p["annual_form"] = latest["form"]         # R46: and which report it is (10-K, 20-F, 40-F), for a theme's figure source record
             if p.get("shares") is None and latest:
                 # no share count in the SEC's facts (a cover page that gives one per class or per kind of security, which
                 # the facts leave out): the count on the newest annual report's cover page (R10V-004: Baidu, BP)
