@@ -19,15 +19,20 @@ async function open(page: Page, path: string, ready: string, n: number) {
     return host === "127.0.0.1" || host === "localhost" ? r.fallback() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" });
   });
   await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, sessionFor(n));
+  // whether the welcome question will be asked is the account's to say (lib/onboarding's welcomePending), not "did it show within
+  // 4 seconds": on a loaded machine it came later, over the page, and took the next click (money calendar from the menu, 13 Nov)
+  const me = await (await page.request.get(`${API}/me`, { headers: { Authorization: `Bearer load-${n}` } })).json();
+  const asked = !me.established && !(me.prefs?.level && me.prefs?.focus) && !me.onboarding?.welcome && ["/", "/trade", "/invest", "/money", "/mine"].includes(path);
   await page.goto(path);
-  // the welcome question (one step): answering it opens that space's home, so come back to the page after
-  const welcome = page.getByRole("dialog", { name: "What brings you here?" });
-  const answered = await welcome.waitFor({ timeout: 4000 }).then(async () => {
-    await welcome.getByRole("button", { name: /^All of it/ }).click();
+  if (asked) {
+    // the welcome question (one step): answering it opens that space's home, so come back to the page once the answer is kept
+    // (reloading before the save landed asked it again)
+    const welcome = page.getByRole("dialog", { name: "What brings you here?" });
+    await welcome.getByRole("button", { name: /^All of it/ }).click({ timeout: 30_000 });
     await expect(welcome).toHaveCount(0);
-    return true;
-  }).catch(() => false);
-  if (answered) await page.goto(path);
+    await expect.poll(async () => (await (await page.request.get(`${API}/me`, { headers: { Authorization: `Bearer load-${n}` } })).json()).onboarding?.welcome, { timeout: 15_000 }).toBeTruthy();
+    await page.goto(path);
+  }
   await expect(page.getByText(ready, { exact: false }).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
   await page.waitForTimeout(400);
   return errors;

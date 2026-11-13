@@ -30,6 +30,9 @@ USERS = {
     **{f"cf2-{i}": (f"u-cf2-{i}", f"cf2{i}@example.com", ("free", "basic", "pro")[i // 8]) for i in range(24)},
     # the F3 lane's e2e (e2e/f3-import-report.spec.ts): its own accounts, one per test and project (free, basic, pro in turn)
     **{f"f3-{i}": (f"u-f3-{i}", f"f3{i}@example.com", ("free", "basic", "pro")[i % 3]) for i in range(12)},
+    # My space's order on the account (e2e/review-di1.spec.ts, DI-005/006): its own accounts, one per project and repeat, as
+    # load-118/119 were (Basic on a laptop, Free on a phone); two repeats on one account moved each other's cards
+    **{f"di6-{i}": (f"u-di6-{i}", f"di6{i}@example.com", ("basic", "free")[i % 2]) for i in range(24)},
     "free-token": ("u-free", "free@example.com", "free"),
     "basic-token": ("u-basic", "basic@example.com", "basic"),
     "pro-token": ("u-pro", "pro@example.com", "pro"),
