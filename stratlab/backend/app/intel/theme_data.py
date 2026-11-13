@@ -37,7 +37,7 @@ FEW_BASE = 4                  # a highest or lowest median on this many companie
 COMPARE_MIN = MIN_BASE
 # R31 (the owner's review of the live R30 decks): a layer-vs-layer headline (the value chain's line, findings, questions) needs at least this
 # many companies with the figure in each layer it compares; tables still show every layer and mark (green, red) those of COMPARE_MIN or more
-DIVE_TEXT = 18         # vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R47): a company listed in its layer as another way of earning is said so in the layer's line, the coverage control (theme_changes.coverage_control); vf46 (R46): each checked figure's source record and statement lines, a net margin above EBITDA reconciled line by line; c1 (R44): each company's place in the theme with its reason ("theme": theme_record) apart from its comparison decision ("comparison"), a layer named by how its companies earn says why it is never ranked; R44.1: a loss in a verification reason printed with the real minus (deck 55, dive text 15, updated on purpose); R44 (lane v1): each unusual figure verified against its own filed figures, not reconciled or invalid (verify_net, figure_states), never dropped by a cutoff alone; the dive's coverage of informative layers; R43.1: the whole-point margins counted among the margins there are ("3 of the 1" on the live Insurance deck); d1: halves of a split layer never ranked, no ranking on a gap under a point, peers named and like for like, every company in a layer or "Other", the not-checked-yet mark; LIVE7A (lane t1): every company at the index's newest close and one price date, own words without encyclopedia leads or a cut word, whole-point margins and gaps printed whole, operating figures of old periods left out and listed once, click-bait headlines left out, "Dividend: Dividend" said once; R40: a layer the split named only by how its companies earn is never ranked ("a group by how they earn, of different businesses"), a market-value half with fewer than 3 companies in its figures undone; LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
+DIVE_TEXT = 20         # gl50 (R50): a chain with no way of earning read shown, not ranked; a parent's listed subsidiary out of totals adding both; the latest quarter most companies report; a clinical-stage layer's commercial companies out of its figures; vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R47): a company listed in its layer as another way of earning is said so in the layer's line, the coverage control (theme_changes.coverage_control); vf46 (R46): each checked figure's source record and statement lines, a net margin above EBITDA reconciled line by line; c1 (R44): each company's place in the theme with its reason ("theme": theme_record) apart from its comparison decision ("comparison"), a layer named by how its companies earn says why it is never ranked; R44.1: a loss in a verification reason printed with the real minus (deck 55, dive text 15, updated on purpose); R44 (lane v1): each unusual figure verified against its own filed figures, not reconciled or invalid (verify_net, figure_states), never dropped by a cutoff alone; the dive's coverage of informative layers; R43.1: the whole-point margins counted among the margins there are ("3 of the 1" on the live Insurance deck); d1: halves of a split layer never ranked, no ranking on a gap under a point, peers named and like for like, every company in a layer or "Other", the not-checked-yet mark; LIVE7A (lane t1): every company at the index's newest close and one price date, own words without encyclopedia leads or a cut word, whole-point margins and gaps printed whole, operating figures of old periods left out and listed once, click-bait headlines left out, "Dividend: Dividend" said once; R40: a layer the split named only by how its companies earn is never ranked ("a group by how they earn, of different businesses"), a market-value half with fewer than 3 companies in its figures undone; LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
 HEADLINE_MIN = 5
 # R27 (headline eligibility): a comparison is said as a headline only on a figure for at least this share of the companies of each group it
 # compares (a layer, a family); one with less is shown as data, never ranked (the live R26 Semis deck: "RPO growth -3.9%" of 21 of 53)
@@ -779,6 +779,34 @@ def validate_model(r: dict, family: str) -> None:
         verify_net(r)
 
 
+# gl50 (R50, the rotating review of the live Biotech deck: Merck, Novartis and Amgen in "Clinical-stage platform developers", the headline's top
+# layer at 35.0%): a layer whose name or description says its companies have no products on sale yet
+PRE_REVENUE = r"\bpre-?revenue\b|\bclinical[- ]stage\b|\bdevelopment[- ]stage\b|\bpre-?commercial\b|\bpre-?clinical\b|\bno (?:approved )?products? on (?:the )?market\b"
+STAGE_FACTOR = 10.0           # ...holds no company with an operating profit and revenue this many times the layer's median company's
+
+
+def stage_check(layer: dict, rows: list[dict]) -> list[str]:
+    """gl50 (R50): in a layer whose name or description states its companies are clinical-stage or pre-revenue (PRE_REVENUE), a company with a
+    positive EBITDA margin and revenue STAGE_FACTOR times the layer's median company's or more is a commercial business, not of the layer's
+    stage: listed, left out of its figures as another business ("model_out" other), with why ("stage_out"). The symbols marked."""
+    said = " ".join(str(layer.get(k) or "") for k in ("layer", "was", "description"))
+    m = re.search(PRE_REVENUE, said, re.I)
+    if not m:
+        return []
+    revs = sorted(r["revenue"] for r in rows if (r.get("revenue") or 0) > 0)
+    if len(revs) < 3:
+        return []
+    mid = revs[len(revs) // 2]
+    out = []
+    for r in rows:
+        if (r.get("revenue") or 0) >= STAGE_FACTOR * mid and (r.get("ebitda") or 0) > 0:
+            r["model_out"], r["out_why"] = "other", "stage"
+            r["stage_out"] = (f"an operating profit (EBITDA margin {pts(r['ebitda'])}) on revenue {STAGE_FACTOR:g} times the layer's median company's "
+                              f"or more: a commercial company, not of the {m.group(0).lower()} the layer's name or description states")
+            out.append(r["symbol"])
+    return out
+
+
 def figure_states(rows: list[dict]) -> list[dict]:
     """Every figure a check looked at, with its state (R44), for the data-confidence page and the dive: company, figure, value, state,
     the checks that flagged it and why it is in or out, and (R46) its source record: the document, period and stored page, and the statement
@@ -848,6 +876,13 @@ def model_fields(layer: dict, sym: str) -> dict:
             **({"model_out": c.get("model_out")} if c.get("model_out") else {}), **({"on_industry": True} if c.get("on_industry") else {})}
 
 
+def refit_of(layer: dict, sym: str) -> dict:
+    """gl50 (R50): {"refit": {"from", "why"}} for a company moved by what its layer is (theme_base.definition_fit), or {}."""
+    c = next((c for c in layer.get("companies") or [] if c.get("ticker") == sym), None) or {}
+    r = c.get("refit")
+    return {"refit": {"from": str(r.get("from") or ""), "why": str(r.get("why") or "")}} if isinstance(r, dict) and r.get("why") else {}
+
+
 # ---------- one record of who is in a layer's calculations (lane m1: the outside review of the live R32 decks, "15 equipment companies" in
 # the value-chain table beside "14 of 17" on the layer's page and in the appendix) ----------
 # why a listed company is left out of its layer's calculations, in the order the pages say them
@@ -902,6 +937,12 @@ def one_row_each(rows: list[dict]) -> list[dict]:
     return out
 
 
+def consolidated_in(r: dict, rows: list[dict]) -> bool:
+    """gl50: whether a company is a listed subsidiary (parents_of) whose parent is among `rows`."""
+    p = r.get("parent") if isinstance(r.get("parent"), dict) else None
+    return bool(p) and any(x.get("symbol") == p.get("parent") for x in rows)
+
+
 def layer_block(name: str, rows: list[dict], wide: set[str]) -> dict:
     """A layer's table and its median and range for each figure. A company-wide figure (a group that runs other businesses too) is
     marked and left out of the median when the layer has any company that is its own; the layer says how many were left out. A company
@@ -922,7 +963,11 @@ def layer_block(name: str, rows: list[dict], wide: set[str]) -> dict:
     stats.update({k: stat(r.get(k) for r in pool) for k in sector_metrics.KEYS if any(r.get(k) is not None for r in pool)})    # R23: filed sector figures
     return {"layer": name, "companies": rows, "stats": stats, "n": len(sure), "listed": len(rows),
             "net_all": stat(r.get("net") for r in pool), "one_off": sorted(r["symbol"] for r in pool if r.get("one_off")),
-            "revenue": sum(r["revenue"] for r in sure if r.get("revenue")) or None,
+            # gl50: a listed subsidiary whose parent is in the layer's calculations too is left out of its revenue total (the parent's
+            # figures consolidate it), and named ("double")
+            "revenue": sum(r["revenue"] for r in sure if r.get("revenue") and not consolidated_in(r, sure)) or None,
+            "double": [{"symbol": r["symbol"], "name": r["name"], "parent": r["parent"]["parent_name"], "pct": r["parent"]["pct"], "revenue": r["revenue"]}
+                       for r in sure if r.get("revenue") and consolidated_in(r, sure)],
             "company_wide": sorted(r["symbol"] for r in sure if r["symbol"] in wide),
             "unverified": sorted(r["symbol"] for r in rows if r.get("status") == "unverified"),
             "model_out": sorted(r["symbol"] for r in rows if r.get("model_out") and r.get("status") != "unverified"),
@@ -979,7 +1024,7 @@ def chain_table(blocks: list[dict]) -> dict:
                    "listed": listed_names(by.get(r["layer"]))}
                   for r in out["rows"] if r["layer"] in names]
         line = str(out.get("line") or "")
-        why = ("" if out.get("highest") else "their commodities differ" if "commodities differ" in line else
+        why = ("" if out.get("highest") else UNREAD_WHY if out.get("unread") else "their commodities differ" if "commodities differ" in line else
                f"capital for each unit of revenue differs more than {INTENSITY_WORD}" if INTENSITY_WORD in line else
                "their medians are within a point of each other" if "no layer stands apart" in line or "is the same" in line else "")
         out["basis"] = comparison_basis("chain", "return on equity" if key == "roe" else "EBITDA margin", groups, made=bool(out.get("highest")),
@@ -1013,6 +1058,15 @@ def _chain_table(blocks: list[dict]) -> dict:
         have = [r for r in rows if ok(r, "ebitda") and not r["rest"]]
     if not same_basis([r["basis"] for r in have]):
         have = []
+    if len(have) >= 2 and not any(model_family_of(r["model"]) for r in have):
+        # gl50 (R50, the rotating review of six unseen themes: the Biotech and Capital goods decks ranked their layers, "highest in
+        # Clinical-stage platform developers (35.0%)", with no company's way of earning read): layers whose companies' ways of earning
+        # were never read are described, each with its own figure, never ranked
+        whole = whole_points([c for b in blocks for c in b["companies"]])
+        each = [f"{r['layer']} {pts(r['ebitda'], whole)}" + (f" ({w[2:]})" if (w := few(r["ebitda_n"], r["n"])) else "") for r in have]
+        line = "Median EBITDA margin by layer: " + "; ".join(each) + f". {UNREAD_SAID}"
+        return {"rows": rows, "line": line, "highest": None, "lowest": None, "measure": "ebitda", "compared": [], "gap": None,
+                "not_ranked": [r["layer"] for r in have], "unread": True}
     have = one_family(have, lambda r: model_family_of(r["model"]))          # R29: layers of one business-model family only
     line, hi, lo, out, beyond = None, None, None, [], ""
     if len(have) >= 2 and len(one_sub(have, lambda r: r["model"])) < 2:
@@ -1094,13 +1148,16 @@ RANK_WHY = {"cover": "the figure for under half its companies",
             "sparse": "how most of its companies earn is not shown", "family": "a different kind of business", "sub": "a different commodity",
             "official": "an exchange industry, not one of the map's layers", "rest": "companies outside the map's layers",
             "how": "a group by how they earn, of different businesses", "other": "not comparable with the ranked layers",
-            "half": "one half of a layer split by market value"}
+            "half": "one half of a layer split by market value", "unread": "how its companies earn is not read"}
+# gl50 (R50): what a chain of layers whose companies' ways of earning were never read says in place of a ranking
+UNREAD_SAID = "How these layers' companies earn is not read, so they are shown, not ranked."
+UNREAD_WHY = "how their companies earn is not read"
 
 
 def rank_scope(n: int, out: list | None = None) -> str:
     """How a ranking headline opens (m2): "Among the 4 layers with at least 5 companies with the figure", and " and one kind of business"
     when a layer shown beside them is left out for how it earns. Said in the headline's own sentence, wherever the headline is shown."""
-    kind = any(r.get("why") in (RANK_WHY["family"], RANK_WHY["sub"], RANK_WHY["sparse"], RANK_WHY["how"]) for r in out or [])
+    kind = any(r.get("why") in (RANK_WHY["family"], RANK_WHY["sub"], RANK_WHY["sparse"], RANK_WHY["how"], RANK_WHY["unread"]) for r in out or [])
     return f"Among the {n} layers with at least {HEADLINE_MIN} companies with the figure" + (" and one kind of business" if kind else "")
 
 
@@ -1127,6 +1184,8 @@ def unranked_rows(rows: list, have: list, key: str) -> list[dict]:
             why = "few"
         elif r.get("n") and n < r["n"] * COVERAGE_MIN:
             why = "cover"
+        elif not model_family_of(m) and not (isinstance(m, dict) and m.get("sparse")):
+            why = "unread"
         elif isinstance(m, dict) and m.get("sparse"):
             why = "sparse"
         elif isinstance(m, dict) and m.get("by_how"):
@@ -1207,12 +1266,14 @@ def same_basis(groups: list) -> bool:
 def one_family(rows: list, family) -> list:
     """The rows that may be set side by side in a headline (R29, the owner's review: no headline compares layers of different business-model
     families, a regulated network beside a generator or a miner beside a fabricator): those of the family most of them have (`family(row)`,
-    theme_base.by_model's), a row of no family left out; every row when none has a family; [] when the most common family is tied."""
+    theme_base.by_model's), a row of no family left out; [] when none has a family (gl50: no way of earning read ranks nothing) or the most
+    common family is tied."""
     from collections import Counter
     fams = [family(r) or "" for r in rows]
     c = Counter(f for f in fams if f).most_common()
     if not c:
-        return list(rows)
+        # gl50 (R50): no row's way of earning read is no basis to rank on: nothing is set side by side (it was every row)
+        return []
     if len(c) > 1 and c[0][1] == c[1][1]:
         return []
     return [r for r, f in zip(rows, fams) if f == c[0][0]]
@@ -1277,7 +1338,9 @@ def comparison_basis(claim: str, metric: str, groups: list, made: bool = True, w
                                                 f"{COVERAGE_MIN * 100:.0f}% of its companies", "passed": all((g.get("n") or 0) >= floor and (not g.get("of") or g["n"] >= g["of"] * COVERAGE_MIN) for g in groups)},
              {"rule": "like-for-like model", "text": (f"one way of earning: {ways[0]}" if len(ways) == 1 else
                                                       f"ways of earning: {'; '.join(ways)}" if ways else "no way of earning read for these companies")
-              + (f" (one kind of business: {fams[0]})" if len(fams) == 1 and len(ways) > 1 else ""), "passed": len(fams) <= 1 and len(subs) <= 1},
+              + (f" (one kind of business: {fams[0]})" if len(fams) == 1 and len(ways) > 1 else ""),
+              # gl50 (R50): no way of earning read fails the rule (it passed: nothing read was taken for one model)
+              "passed": bool(fams) and len(fams) <= 1 and len(subs) <= 1},
              {"rule": "period basis", "text": "full years" if periods == ["full"] else ", ".join(periods) or "not stored", "passed": len(periods) <= 1 and "mixed" not in periods}]
     if it:
         each = "; ".join(f"{x['layer']} {x['value']:.2f}" + (f" ({x['n']} companies)" if x.get("n") else "") for x in it["values"])
@@ -1669,16 +1732,23 @@ def quarter_end(label) -> date | None:
     return (date(y + (mo == 12), mo % 12 + 1, 1) - timedelta(days=1))
 
 
+QUARTER_SHARE = 1 / 3        # gl50: the share of the companies with a quarter that the median's quarter end needs
+
+
 def quarter_section(rows: list[dict], filed: list[dict] | None = None) -> dict:
     """The latest reported quarter of each company against the same quarter a year before (revenue and net profit change), as the company page's
     "Latest YoY" gives it, with how many are up and down. One quarter per median (the owner, 7 Nov: June and September mixed in one median): the
-    newest quarter at least MIN_LAYER companies report is the median's; a company still on an earlier quarter is listed apart, and one whose
+    newest quarter at least a third of them and MIN_LAYER report is the median's (gl50), else the one most report; a company still on an earlier quarter is listed apart, and one whose
     newer results were filed (`filed`: the events' results filed) but aren't in its figures yet is marked with the filing's day. Facts only: it
     compares a company with its own year-ago quarter, not with anyone's estimate."""
     have = [r for r in rows if r.get("quarter") and (r["quarter"]["sales"] is not None or r["quarter"]["profit"] is not None)]
     ends = Counter(quarter_end(r["quarter"]["of"]) for r in have)
     ends.pop(None, None)
-    usual = max((d for d, k in ends.items() if k >= MIN_LAYER), default=None) or (max(ends, key=lambda d: (ends[d], d)) if ends else None)
+    # gl50 (R50, the rotating review: the live Software deck's median was of "Oct 2026", 2 companies whose fiscal quarter ends in October, and
+    # 90 on the September quarter were "still on an earlier quarter"; Cybersecurity 6 of 15, Consumer retail 16 of 91): the newest quarter
+    # end at least QUARTER_SHARE of the companies with one report, and MIN_LAYER; else the one most of them report
+    usual = max((d for d, k in ends.items() if k >= MIN_LAYER and k >= QUARTER_SHARE * len(have)), default=None) or \
+        (max(ends, key=lambda d: (ends[d], d)) if ends else None)
     cur = [r for r in have if quarter_end(r["quarter"]["of"]) == usual] if usual else have
     late = {f["symbol"]: f["date"] for f in filed or [] if f.get("date")}
     earlier = []
@@ -1715,6 +1785,50 @@ def leaders(rows: list[dict]) -> list[dict]:
     """The table of every company in the theme with the figures to sort it by."""
     return [{k: r.get(k) for k in ("symbol", "name", "cap", "revenue", "year", "ebitda", "net", "roce", "sales_1y", "sales_3y", "profit_1y", "profit_3y",
                                     "pe", "pb", "ev_ebitda", "debt_equity", "stage", "from_high", "one_off", "ebitda_dp", "status", "bank", "profit") + LENDER_KEYS} for r in rows]
+
+
+# ---------- gl50 (R50): a parent and its listed subsidiary in one theme ----------
+# The rotating review of the live Cement deck: Grasim (whole company, consolidating UltraTech) and UltraTech, and Ambuja and ACC (consolidated
+# with it), each added into revenue totals. The generic signal in stored data: the exchange's shareholding filing names a company's promoter
+# holders; one that is another company of the theme holding more than half of it controls it, and so consolidates it.
+CONTROL_PCT = 50.0
+_ENTITY_END = re.compile(r"\b(?:limited|ltd|inc|incorporated|corp|corporation|co|company|plc|llc|pvt|private|the)\b\.?", re.I)
+
+
+def entity_key(name) -> str:
+    """A company's name for matching a holder to a company: lower case, legal words and punctuation left out ("Grasim Industries Limited" and
+    "Grasim Industries Ltd" meet)."""
+    return " ".join(re.sub(r"[^a-z0-9 ]", " ", _ENTITY_END.sub(" ", str(name or "").lower().replace("&", " and "))).split())
+
+
+def parents_of(symbols: list[str], names: dict, src) -> dict:
+    """{subsidiary symbol: {"parent", "parent_name", "pct", "quarter"}} for each of `symbols` whose latest stored shareholding filing names
+    another of `symbols` (by name, entity_key) among its promoter holders with more than CONTROL_PCT of its shares. {} where no filing is
+    stored (the US: none is read), never a guess from names alone."""
+    by_key = {entity_key(names.get(s) or s): s for s in symbols if entity_key(names.get(s) or s)}
+    out = {}
+    for sym in symbols:
+        try:
+            co = src.shareholding(sym)
+        except Exception as e:
+            print("theme data: holdings not read:", sym, type(e).__name__, str(e)[:100])
+            co = None
+        qs = sorted((co or {}).get("q") or {})
+        if not qs:
+            continue
+        best = None
+        for r in (co["q"].get(qs[-1]) or {}).get("rows") or []:
+            try:
+                name, _, group, _, pct = r[:5]
+                pct = float(pct)
+            except (TypeError, ValueError):
+                continue
+            p = by_key.get(entity_key(name))
+            if group == "promoter" and p and p != sym and pct > CONTROL_PCT and (best is None or pct > best[1]):
+                best = (p, pct)
+        if best:
+            out[sym] = {"parent": best[0], "parent_name": names.get(best[0]) or best[0], "pct": round(best[1], 1), "quarter": qs[-1]}
+    return out
 
 
 # ---------- stored events, holdings and cards ----------
@@ -1861,6 +1975,7 @@ def notable_items(blocks: list[dict], chain: dict, histories: dict) -> list[dict
     # the posts keep the marks' floor (COMPARE_MIN), as blog_research._theme_gap does: R31's headline floor is the decks'
     have = [r for r in chain["rows"] if r["ebitda"] is not None and headline_ok(r["ebitda_n"], r["n"], r.get("model"), floor=COMPARE_MIN)
             and r["layer"] not in apart]
+    have = one_family(have, lambda r: model_family_of(r.get("model")))       # gl50: of one kind of business, and never with none read
     if len(have) >= 2:
         hi, lo = max(have, key=lambda r: r["ebitda"]), min(have, key=lambda r: r["ebitda"])
         if hi["ebitda"] - lo["ebitda"] >= NOTABLE_GAP:
@@ -2078,6 +2193,10 @@ def comparison_said(rec: dict, b: dict) -> str:
         return "in its layer's figures; the layer is half of a group split by market value, never ranked alone"
     if isinstance(m, dict) and m.get("by_how"):
         return "in its layer's figures; the layer is a group by how its companies earn, of different businesses, shown and never ranked"
+    if not model_family_of(m):
+        # gl50 (R50, the live Capital goods deck said "how it earns shown and of the layer's kind" of every company beside "no way of earning
+        # read for these companies"): with no way of earning read, nothing is said of the layer's kind, and the layer is never ranked
+        return "in its layer's figures: confirmed, with a figure; how its layer's companies earn is not read, so the layer is shown, not ranked"
     return "in its layer's figures: confirmed, how it earns shown and of the layer's kind, with a figure"
 
 
@@ -2187,6 +2306,10 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     wide = {s for s, r in rows.items() if is_diversified(r, segs(s))}
     names = {s: r["name"] for s, r in rows.items()}
     market = [m for m in (src.index_rows() or []) if isinstance(m, dict)]
+    # gl50: each listed subsidiary of another company of the theme, from the stored shareholding filings (parents_of)
+    parents = parents_of(sorted(s for s, r in rows.items() if r.get("status") != "unverified"), names, src)
+    for s, p in parents.items():
+        rows[s]["parent"] = p
 
     blocks, histories = [], {}
     # R32: a split by market value one of whose halves shows no company is undone (theme_base.unsplit_unshown)
@@ -2201,8 +2324,9 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         from .theme_check import model_family
         for r in mine:                     # R30: an EBITDA margin checked against how the company earns
             validate_model(r, model_family(model_fields(v, r["symbol"]).get("model") or "") or ((v.get("model") or {}).get("family") or ""))
+        stage_check(v, mine)               # gl50: a clinical-stage or pre-revenue layer's commercial companies, out of its figures
         b = layer_block(v.get("layer") or "", [{**r, "what": own_words(what.get(r["symbol"]), r.get("name") or "", r["symbol"]) or None, "company_wide": r["symbol"] in wide, "official_industry": ind.get(r["symbol"]) or "",
-                                                **model_fields(v, r["symbol"])} for r in mine], wide)
+                                                **model_fields(v, r["symbol"]), **refit_of(v, r["symbol"])} for r in mine], wide)
         b["description"] = v.get("description") or ""
         b["policy"] = v.get("policy")
         b["official"], b["basis"] = bool(v.get("official")), v.get("basis")     # a layer that is one official industry's companies the AI didn't place (theme_base.py)
@@ -2278,7 +2402,9 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         "members": sum(1 for r in members if has_figures(r)),
         "sections": {
             "size": size_section(members), "medians": {k: stat(in_median(r, k) for r in own) for k in ("ebitda", "net", "roce", "roe")},
-            "growth": aggregate_growth([r for r in own if not r.get("series_break")]), "margins": margin_history(own), "valuation": val,
+            # gl50: totals that add companies together leave out a listed subsidiary whose parent is added too (consolidated_in)
+            "growth": aggregate_growth([r for r in own if not r.get("series_break") and not consolidated_in(r, own)]),
+            "margins": margin_history([r for r in own if not consolidated_in(r, own)]), "valuation": val,
             "balance": balance_section(own), "price": stored_price_section(members), "market": market_med,
             "ownership": ownership_section(syms, names, src), "events": events_section(syms, names, src),
             "management": management_section(syms, names, rows, src), "leaders": leaders(listed)},
@@ -2292,6 +2418,11 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     }
     out["sections"]["medians"]["net_all"] = stat(r.get("net") for r in own)
     layer_of = {c["symbol"]: b["layer"] for b in blocks for c in b["companies"]}
+    # gl50: the parent and listed subsidiary pairs, and whether the parent's stored figures are consolidated (its basis) or the whole company's
+    out["parents"] = [{"symbol": s, "name": rows[s]["name"], "parent": p["parent"], "parent_name": rows[p["parent"]]["name"] if p["parent"] in rows else p["parent_name"],
+                       "pct": p["pct"], "quarter": p["quarter"], "basis": (rows.get(p["parent"]) or {}).get("basis") or "",
+                       "parent_wide": p["parent"] in wide, "same_layer": layer_of.get(s) == layer_of.get(p["parent"])}
+                      for s, p in sorted(parents.items()) if s in layer_of and p["parent"] in layer_of]
     out["sections"]["margin_drivers"] = margin_drivers(out["sections"]["margins"], rows, layer_of)
     out["sections"]["quarter"] = quarter_section(members, out["sections"]["events"].get("results_filed"))
     # each company's revenue model family: its layer's (theme_base.by_model), unless the layer's model rests on too few of its companies

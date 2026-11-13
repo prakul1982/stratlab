@@ -14,13 +14,20 @@ Failures (the exit code is 1 when any deck has one):
   hyphen minus a figure's minus sign printed as a hyphen ("-14.1%" beside "−11%"; LIVE7A-014): the deck prints the real minus
   no layer     a company of the appendix's table in no layer ("–" where its layer goes; d1: SAIL, GAIL, MercadoLibre in the live
                Release 41 decks): every company is in a layer or in "Other"
+  unread ranked  gl50 (R50, the live Biotech and Capital goods decks): a layer ranked ("highest in", "lowest in") in a deck whose comparison
+               basis says no way of earning was read for its companies
+  unread kind  gl50: a company said to be "of the layer's kind" in a deck that says no way of earning was read
+  left out>50% gl50 (the live FMCG deck, "2 of 12" in a layer's calculations; Software "2 of 11"): a layer whose calculations hold fewer than
+               half of its companies (a layer of 4 or more)
+  unchecked as 0  gl50 (the live decks' "100 of the 100 checked confirmed by their own description, 0 not yet" of 821): the companies past
+               the membership check folded into "0 not yet"
 Reported, and a failure only with --strict:
   cut text     every other text ending in "…" (a label or a sentence cut to its box)
   mixed range  a range with one end whole and the other with a decimal ("19.6% to 20%"; LIVE7A-014)
   other>40%    a theme whose "Other" group holds over 40% of the companies placed, as its coverage says: R44, "In informative layers
-               137 of 252 (54%) ... 33 fit none of the map's layers; 82 not checked yet" (those that fit none, the companies not checked
-               yet apart, as d1; the companies outside informative layers when the row doesn't split them); before R44, "50 of 100
-               companies fit none of the map's layers": a map that places too few of its companies
+               137 of 252 (54%) ... 33 fit none of the map's layers; 82 not checked yet" (gl50: the companies not checked yet counted
+               too, every company outside informative layers: the live Biotech deck's 73% passed on its 3% that fit none); before R44, "50
+               of 100 companies fit none of the map's layers": a map that places too few of its companies
 
 A PDF that can't be read is a failure of its own (UNREADABLE). A folder with no PDF is read from its .txt files (pdftotext -layout output, pages separated by form feeds), so a saved extract can be
 checked again. Standalone: nothing of the app is imported; pdftotext (poppler) must be on the PATH to read PDFs. Exit 2: nothing to read."""
@@ -31,7 +38,8 @@ import shutil
 import subprocess
 import sys
 
-FAIL = ("headline", "mid-word", "placeholder", "joining word", "count", "repeated", "hyphen minus", "no layer")
+FAIL = ("headline", "mid-word", "placeholder", "joining word", "count", "repeated", "hyphen minus", "no layer", "unread ranked", "unread kind",
+        "left out>50%", "unchecked as 0")
 WARN = ("cut text", "other>40%", "mixed range")
 # LIVE7A-014: a minus sign as a hyphen before a figure with its unit (never a date's or a range's dash: it follows a space or a bracket)
 _HYPHEN_MINUS = re.compile(r"(?:(?<=\s)|(?<=[(\[])|^)-\d[\d,]*(?:\.\d+)?(?:%|x\b| ?pts\b| ?points\b)")
@@ -56,6 +64,12 @@ _INFORMATIVE = re.compile(r"In informative layers")
 _INF_COUNT = re.compile(r"(?<![\w.,])(\d[\d,]*) of (\d[\d,]*)(?![\d,])")    # its count, a cell that may wrap above or below the label's line
 _FIT_NONE = re.compile(r"(\d[\d,]*)\s+fit\s+none\s+of\s+the\s+map's")     # (the row's text wraps around its label's line)
 _APPENDIX = "Every company's figures"
+_UNREAD = re.compile(r"no way of earning read|How these layers' companies earn is not read", re.I)
+_RANKED = re.compile(r"\b(?:highest|lowest) in [A-Z]")
+_KIND = re.compile(r"of the layer's\s+kind")
+_IN_CALC = re.compile(r"In the layer's calculations \((\d[\d,]*) of (\d[\d,]*)\)")
+_ZERO_NOT_YET = re.compile(r"(\d[\d,]*) of the (\d[\d,]*) checked confirmed by their own description, 0 not yet")
+LEFT_MIN = 4                    # gl50: a layer of this many companies or more is flagged when fewer than half are in its calculations
 # R40: a word said twice in a row; repeated when the second is lower case or it is a joining word ("The the"), never a name ("Bora Bora")
 _TWICE = re.compile(r"\b([A-Za-z]+)(?: (?! )|\n)\1\b", re.I)
 _TWICE_JOIN = _JOINING | {"is", "are", "was", "were", "its", "their", "this", "these", "than", "as", "be", "it"}
@@ -161,8 +175,7 @@ def check_pages(pages: list[str]) -> dict:
         c = _informative_count(page, i) if i else None
         if c:                                     # R44: read from the coverage's "In informative layers" row
             inf, b = int(c.group(1).replace(",", "")), int(c.group(2).replace(",", ""))
-            fn = _FIT_NONE.search(page[max(0, i.start() - 400):i.end() + 600])
-            a = int(fn.group(1).replace(",", "")) if fn else b - inf
+            a = b - inf                           # gl50: every company outside informative layers, the not checked yet too
             if b and a > OTHER_MAX * b:
                 add("other>40%", n, f"In informative layers {inf:,} of {b:,} ({round(inf / b * 100)}%); {a:,} fit none ({round(a / b * 100)}%)")
             break
@@ -172,6 +185,23 @@ def check_pages(pages: list[str]) -> dict:
             if b and a > OTHER_MAX * b:
                 add("other>40%", n, f"{m.group(0)} ({round(a / b * 100)}%)")
             break
+    # gl50 (R50): what a classification says, checked from the text
+    unread = next((n for n, p in enumerate(pages, 1) if _UNREAD.search(p)), None)
+    if unread:
+        for n, page in enumerate(pages, 1):
+            for ln in page.split("\n"):
+                if _RANKED.search(ln) and not _UNREAD.search(ln):
+                    add("unread ranked", n, f"{ln.strip()} (no way of earning read: p.{unread})")
+                if _KIND.search(ln):
+                    add("unread kind", n, f"{ln.strip()} (no way of earning read: p.{unread})")
+    for n, page in enumerate(pages, 1):
+        flat = re.sub(r"\s+", " ", page)
+        for m in _IN_CALC.finditer(flat):
+            a, b = int(m.group(1).replace(",", "")), int(m.group(2).replace(",", ""))
+            if b >= LEFT_MIN and a * 2 < b:
+                add("left out>50%", n, flat[m.start():m.start() + 140])
+        for m in _ZERO_NOT_YET.finditer(flat):
+            add("unchecked as 0", n, m.group(0))
     counts = {k: sum(1 for f in findings if f["kind"] == k) for k in FAIL + WARN}
     return {"pages": len(pages), "counts": counts, "findings": findings}
 
