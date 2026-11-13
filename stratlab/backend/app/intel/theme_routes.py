@@ -281,9 +281,28 @@ def _rows(region: str) -> list[dict]:
     return theme_base.with_sic(rows, _sic_stored()) if region == "US" else rows
 
 
-def _industries(region: str, theme: str) -> dict:
-    """The theme's official industries (theme_base.industries_for), on the market's stored index."""
-    return theme_base.industries_for(region, theme, _rows(region), _ask, db.get_setting, db.set_setting)
+def _industries(region: str, theme: str, m: dict | None = None) -> dict:
+    """The theme's official industries (theme_base.industries_for), on the market's stored index; with the map, an industry of a pick made
+    again is kept on the evidence of the previous live placement (held_industries)."""
+    rows = _rows(region)
+    held = (lambda dropped: held_industries(region, theme, m, dropped, rows)) if m is not None else None      # noqa: E731
+    return theme_base.industries_for(region, theme, rows, _ask, db.get_setting, db.set_setting, held=held)
+
+
+def held_industries(region: str, theme: str, m: dict, dropped: list[str], rows: list[dict]) -> list[str]:
+    """cl48 (R47): of the industries a pick made again leaves out, those most of whose companies were in an informative layer (any layer
+    but the theme's "Other" group) in the theme's previous live placement of the same map (previous_layers)."""
+    prev = previous_layers(region, theme, m)
+    if not prev:
+        return []
+    other = theme_base.other_label(theme)              # the name place_rest gives the group
+    ind = {r.get("symbol"): theme_base.key(r.get("industry")) for r in rows or [] if r.get("symbol")}
+    out = []
+    for i in dropped:
+        mine = [s_ for s_ in prev if ind.get(s_) == theme_base.key(i)]
+        if mine and 2 * sum(1 for s_ in mine if prev[s_] != other) > len(mine):
+            out.append(i)
+    return out
 
 
 # ---------- the AI parts, worked out behind the page (LIVE3-001) ----------
@@ -366,7 +385,7 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
 def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
@@ -659,7 +678,7 @@ def _check(region: str, theme: str, m: dict) -> dict:
                 missing = fill_us_industries()
             except Exception as e:
                 print("theme: SEC codes not filled:", type(e).__name__, str(e)[:100])
-        inds = _industries(region, theme)
+        inds = _industries(region, theme, m)
         out = theme_base.with_base(m, out, _rows(region), inds["industries"], grounding.listed_name, **_base_args(region, theme, inds))
         out = placed(region, theme, m, out, ask=_ask)
         claims = A.get("sector_claims", key)
@@ -992,6 +1011,10 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
     hit = theme_data.build(r, theme, fm, src)
     hit["placements"], hit["figures"] = m.get("placements"), figures
     hit["coverage"] = map_coverage(m)          # R44: of every company the map places, not only those the figures were read for
+    # cl48 (R47): the coverage control, against the previous live read of the theme (theme_changes' snapshot, stored before this one)
+    ctl = theme_changes.coverage_control(hit["coverage"], theme_changes.stored(r, m.get("_library") or theme).get("snap"))
+    if ctl:
+        hit["coverage"] = {**hit["coverage"], "control": ctl}
     late = {x["symbol"]: x["filed_unread"] for x in ((hit.get("sections") or {}).get("quarter") or {}).get("earlier") or [] if x.get("filed_unread")}
     if late:                      # results filed since the stored page was built: the screens' sweep builds those pages first (R18)
         try:
@@ -1004,6 +1027,7 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
         computed.put(theme_library.DIVE, key, {"dive": hit, "pieces": pieces, "priced": priced_mark(r, list(pieces))}, label=m.get("sector") or theme,
                      region=r, by=by)
         theme_changes.record(r, m.get("_library") or theme, hit, _map_names(fm), m.get("generated_at"), theme_base.RULES, refresh)   # f4: "What changed"
+        theme_changes.flag(r, m.get("_library") or theme, hit.get("coverage"))          # cl48: the admins' alert (coverage_checks)
         auto_post(r, theme, hit)
     return hit
 
@@ -1104,6 +1128,30 @@ def members_of(m: dict, dive: dict) -> list[dict]:
     return out
 
 
+def coverage_of(m: dict, dive: dict) -> dict | None:
+    """The map's coverage (map_coverage) with the coverage control the dive worked out against the previous live read (cl48), when the
+    dive counted the same companies."""
+    cov = map_coverage(m)
+    d = (dive or {}).get("coverage") or {}
+    if cov and d.get("control") and (d.get("informative"), d.get("placed")) == (cov.get("informative"), cov.get("placed")):
+        cov = {**cov, "control": d["control"]}
+    return cov
+
+
+def coverage_checks() -> list:
+    """cl48 (R47, the outside review's P1 taxonomy coverage control): one Admin check a theme flagged on its coverage (theme_changes.flag):
+    its problem the coverage control in words; listed under Needs your attention and mailed once an issue by the autofix sweep."""
+    from .. import autofix
+    out = []
+    for k, x in sorted(theme_changes.flags().items()):
+        if not isinstance(x, dict):
+            continue
+        out.append(autofix.Check(id=f"theme-coverage:{k}", name=f"Theme coverage: {x.get('name') or k} ({x.get('region') or ''})",
+                                 problem=x.get("problem") or None, action="Open the theme's deck: its coverage page says how many "
+                                 "companies are in informative layers and which are in \"Other\".", to="/admin"))
+    return out
+
+
 def map_coverage(m: dict) -> dict | None:
     """R44: "In informative layers: N of M (P%)" of the whole map, every company in a layer or in "Other" (theme_data.layer_coverage), as
     the dive and the deck both say it."""
@@ -1123,7 +1171,7 @@ def deck_view(r: str, m: dict, dive: dict, extra: dict | None = None) -> dict:
             "members": members_of(m, dive), "tailwinds": m.get("tailwinds") or [], "risks": m.get("risks") or [],
             "placements": m.get("placements") or {}, "figures": dive.get("figures") or {}, "median_ebitda": med.get("median"),
             "checks": dive.get("checks") or {}, "status": dive.get("status") or {}, "with_figures": dive.get("with_figures"),
-            "membership": dive.get("membership") or {}, "coverage": map_coverage(m),
+            "membership": dive.get("membership") or {}, "coverage": coverage_of(m, dive),
             "news": None, "listings": None, "prices": None, "business": None, **(extra or {})}
 
 
@@ -1676,3 +1724,12 @@ def theme_library_suggest(q: str = "", region: str = "IN", profile=Depends(curre
     search would be served from first, then names that start with or contain it; with nothing typed, the most searched."""
     R = _routes()
     return R.ok({"items": theme_library.suggest(R.region_of(region), q[:80])})
+
+
+def _coverage_source() -> None:
+    from .. import autofix
+    if not any(getattr(f, "__name__", "") == "coverage_checks" for f in autofix._sources):        # once, however often this is imported
+        autofix.source(coverage_checks)          # cl48: the theme coverage control, in the self-healing sweep's Needs your attention
+
+
+_coverage_source()
