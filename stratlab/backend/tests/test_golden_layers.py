@@ -145,6 +145,14 @@ C1 = {
     'metals:SIZEMASTER': ('Zinc, lead and silver mining and smelting', _C1_IND),
 }
 
+# cv47 (R46, approved on purpose): the titles of a company's filings are no words of its own (theme_base.own_text); the one move on this
+# older fixture
+CV47 = {
+    'utilities:TRIVENIPT': ('Other', "cv47 (R46, approved on purpose): its only words are the titles of its filings (\"From its own filings: "
+                            "Analyst or investor meeting...\"), whose \"own\" alone said the name \"Network tariff earners with own "
+                            "generation\"; with no words of its own the split's move into that layer has no evidence, so \"Other\""),
+}
+
 
 
 def replay_theme(t) -> dict:
@@ -186,7 +194,7 @@ def test_no_company_in_any_theme_changes_its_layer_unless_approved():
         got = replay_theme(t)
         for c in t["companies"]:
             k = f"{t['key']}:{c['s']}"
-            want = None if k in DROPPED else C1[k][0] if k in C1 else D1[k][0] if k in D1 else APPROVED_LAYER[k][0] if k in APPROVED_LAYER else c["e"]          # lane d1: D1 (updated on purpose)
+            want = None if k in DROPPED else CV47[k][0] if k in CV47 else C1[k][0] if k in C1 else D1[k][0] if k in D1 else APPROVED_LAYER[k][0] if k in APPROVED_LAYER else c["e"]          # cv47: CV47 (updated on purpose); lane d1: D1 (updated on purpose)
             if got.get(c["s"]) != want:
                 moved.append(f"{k} ({c['n']}): expected {want!r}, got {got.get(c['s'])!r}")
     assert not moved, "a rule change moved these companies to another layer (edit APPROVED_LAYER, with the reason, if on purpose):\n" + "\n".join(moved)

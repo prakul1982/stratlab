@@ -161,7 +161,10 @@ APPROVED: dict = {
     "retail:ZUMZ": ("Family clothing stores", _C1_WORDS.format("\"a specialty clothing store\"")),
     "retail:TLYS": ("Family clothing stores", _C1_WORDS.format("\"a specialty retailer of casual apparel\"")),
     "retail:DLTH": ("Family clothing stores", _C1_WORDS.format("\"workwear, casual wear, outdoor apparel\"")),
-    # Utilities: the cable makers and the electrical equipment makers, apart from each other by their official industry
+    # Utilities: the cable makers and the electrical equipment makers, apart from each other by their official industry. cv47 (R46): these
+    # 52 are also exactly the moves against the live Release 46 placement (inputs_r46/utilities.json, with each company's stored facts), where
+    # the titles of its filings had been read as a company's own words ("From its own filings" said "Makers of their own products"):
+    # test_cv47_coverage holds each of them to its entry here; no other company of the 14 themes' live Release 46 inputs moves
     **{f"utilities:{s_}": ("Electrical cables", _C1_GROUP.format("Cables - Electricals", _FROM_MAKERS)) for s_ in (
         "CMICABLES", "CORDSCABLE", "DYCL", "FINCABLES", "KEI", "KSHINTL", "LASERPOWER", "LUMINO", "PARACABLES", "POLYCAB", "QUADFUTURE",
         "UNIVCABLES")},
