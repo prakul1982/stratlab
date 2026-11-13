@@ -22,7 +22,8 @@ def _with_debt(fn, ratios: dict):
             if s_.startswith(p_):
                 # (updated on purpose, ex49: the debt of the revenue's own year is the one the capital proxy reads, theme_data.capital_inputs)
                 x["debt"] = x["years"][-1]["debt"] = x["years"][-1]["sales"] * k
-    return region, m, f, market
+    from tests.gl50_read import read
+    return region, read(m), f, market        # gl50 (R50, updated on purpose): the layers' way of earning read, so the capital rule is what decides
 
 
 def _texts(slides):
@@ -66,7 +67,9 @@ def test_layers_alike_in_capital_needs_are_still_ranked(monkeypatch):
         assert v["chain"]["highest"] and "highest" in v["chain"]["line"], name
     # no capital figure at all (no debt or price to book): nothing to compare, the R29 rules alone decide
     region, m, f, _ = S.utilities_in()
-    assert deck_of(region, m, f)[0]["chain"]["highest"]
+    from tests.gl50_read import read
+    assert deck_of(region, read(m), f)[0]["chain"]["highest"]           # gl50 (updated on purpose): the way of earning read
+    assert deck_of(region, m, f)[0]["chain"]["highest"] is None         # gl50 (R50): none read, none ranked
 
 
 def test_capital_per_revenue_and_the_threefold_rule(monkeypatch):
@@ -76,7 +79,8 @@ def test_capital_per_revenue_and_the_threefold_rule(monkeypatch):
     assert D.capital_per_revenue(1000, 2.0, 500, None, 1000) == 1.0         # equity 500 + debt 500 over revenue 1,000
     assert D.capital_per_revenue(None, None, 600, 2.0, 300) == 3.0          # equity from debt over debt to equity
     assert D.capital_per_revenue(1000, -1.0, None, None, 1000) is None and D.capital_per_revenue(1000, 2.0, 0, None, 0) is None
-    rows = [("A", 30.0, 3, 3, None, "full", 0.5), ("B", 10.0, 3, 3, None, "full", 1.4)]
+    read_ = {"id": "manufacturing", "family": "making"}        # gl50 (R50, updated on purpose): a way of earning read, else nothing is ranked
+    rows = [("A", 30.0, 3, 3, read_, "full", 0.5), ("B", 10.0, 3, 3, read_, "full", 1.4)]
     pick = dict(of=lambda t: t[3], model=lambda t: t[4], basis=lambda t: t[5], intensity=lambda t: t[6])
     assert D.rank_pair(rows, lambda t: t[1], lambda t: t[2], **pick)[0][0] == "A"
     assert D.rank_pair([rows[0], rows[1][:6] + (2.0,)], lambda t: t[1], lambda t: t[2], **pick) is None
@@ -194,10 +198,13 @@ def test_unknown_models_with_descriptions_now_kept_are_asked_once_in_one_bounded
     ev = lambda s: about.get(s) or ""                     # noqa: E731
     calls = []
     out, _, conf, reasked = B.reask_unknown(models, {}, {}, [], list(models), about.get, {}, ev, _ask(calls), "Telecom")
-    assert len(calls) == 1 and len(calls[0]) == B.REASK_MAX and "T0" not in calls[0] and "T49" not in calls[0]
-    assert all(out[s] == "property" and conf[s] for s in calls[0]) and reasked == sorted(calls[0])
+    # gl50 (R50, updated on purpose): REASK_MAX a check (60), in answers of REASK_BATCH (20) each, never hundreds in one answer
+    asked = [s for c in calls for s in c]
+    assert all(len(c) <= B.REASK_BATCH for c in calls) and len(asked) == min(B.REASK_MAX, 48) and "T0" not in asked and "T49" not in asked
+    assert all(out[s] == "property" and conf[s] for s in asked) and reasked == sorted(asked)
+    n = len(calls)
     again = B.reask_unknown(out, {}, conf, reasked, list(models), about.get, {}, ev, _ask(calls), "Telecom")[3]
-    assert len(calls) == 2 and not set(calls[1]) & set(calls[0]) and set(again) >= set(reasked)
+    assert not {s for c in calls[n:] for s in c} & set(asked) and set(again) >= set(reasked)
     calls.clear()
     B.reask_unknown(out, {}, conf, [f"T{i}" for i in range(50)], list(models), about.get, {}, ev, _ask(calls), "Telecom")
     assert calls == []                                    # every one asked before: never again
@@ -284,8 +291,8 @@ def test_a_placement_is_carried_back_past_versions_that_kept_none_of_their_own(m
                         (got.update(kept=kept, carried=carried), (out, kept))[1])
     T.placed("IN", "Utilities", {"generated_at": 1.0}, {"value_chain": []}, ask=None)
     # lane s2-exact bumped RULES to 41, carrying 40; lane s3-r40 to 42, carrying 41: found at 40 (updated on purpose)
-    assert B.RULES == 48 and T.PLACE_CARRY[48] == 47 and T.PLACE_CARRY[47] == 46 and T.PLACE_CARRY[46] == 45 and T.PLACE_CARRY[45] == 44 and T.PLACE_CARRY[44] == 43 and T.PLACE_CARRY[43] == 42 and T.PLACE_CARRY[42] == 41 and T.PLACE_CARRY[41] == 40 and T.PLACE_CARRY[40] == 38 and 39 not in seen          # ex49 (R49): RULES 48, PLACE_CARRY[48] = 47, deck 59, dive text 19, precise exclusion reasons, the business-model ranking rule (updated on purpose); cl48 (R48): RULES 47, PLACE_CARRY[47] = 46, deck 58, dive text 18, primary-business validation and the coverage control (updated on purpose); cv47 (R47): RULES 46, PLACE_CARRY[46] = 45, filing titles are no words of a company's own, the AI's industry pick kept across rules changes (PICK_RULES); deck and dive text unchanged (updated on purpose); tx2 (R45/R46): RULES 45, PLACE_CARRY[45] = 44, deck 57 (dive text stays 16), the taxonomy regression guard and the screening populations (updated on purpose); c1 (R44): RULES 44, PLACE_CARRY[44] = 43, deck 56, dive text 16 (55 and 15 are R44.1's), classification coverage from evidence (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)
-    assert seen == [48, 47, 46] and got["kept"]["assign"]["X"]["layer"] == "L" and got["carried"] is True          # ex49 (R49): from 48 (updated on purpose); cl48 (R47): from 47 (updated on purpose); cv47 (R46): from 46 (updated on purpose); tx2 (R45): from 45 (updated on purpose); c1 (R44): from 44 (updated on purpose); lane d1: from 43
+    assert B.RULES == 49 and T.PLACE_CARRY[49] == 48 and T.PLACE_CARRY[48] == 47 and T.PLACE_CARRY[47] == 46 and T.PLACE_CARRY[46] == 45 and T.PLACE_CARRY[45] == 44 and T.PLACE_CARRY[44] == 43 and T.PLACE_CARRY[43] == 42 and T.PLACE_CARRY[42] == 41 and T.PLACE_CARRY[41] == 40 and T.PLACE_CARRY[40] == 38 and 39 not in seen          # gl50 (R50): RULES 49, PLACE_CARRY[49] = 48, deck 60, dive text 20 (updated on purpose); ex49 (R49): RULES 48, PLACE_CARRY[48] = 47, deck 59, dive text 19, precise exclusion reasons, the business-model ranking rule (updated on purpose); cl48 (R48): RULES 47, PLACE_CARRY[47] = 46, deck 58, dive text 18, primary-business validation and the coverage control (updated on purpose); cv47 (R47): RULES 46, PLACE_CARRY[46] = 45, filing titles are no words of a company's own, the AI's industry pick kept across rules changes (PICK_RULES); deck and dive text unchanged (updated on purpose); tx2 (R45/R46): RULES 45, PLACE_CARRY[45] = 44, deck 57 (dive text stays 16), the taxonomy regression guard and the screening populations (updated on purpose); c1 (R44): RULES 44, PLACE_CARRY[44] = 43, deck 56, dive text 16 (55 and 15 are R44.1's), classification coverage from evidence (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)
+    assert seen == [49, 48, 47] and got["kept"]["assign"]["X"]["layer"] == "L" and got["carried"] is True          # gl50 (R50): RULES 49, PLACE_CARRY[49] = 48, deck 60, dive text 20 (updated on purpose); ex49 (R49): from 48 (updated on purpose); cl48 (R47): from 47 (updated on purpose); cv47 (R46): from 46 (updated on purpose); tx2 (R45): from 45 (updated on purpose); c1 (R44): from 44 (updated on purpose); lane d1: from 43
 
 
 def test_the_carry_back_stops_when_no_version_kept_a_placement(monkeypatch):

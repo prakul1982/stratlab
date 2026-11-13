@@ -77,7 +77,8 @@ def test_lululemon_is_in_the_brand_owners_figures_on_the_live_release_46_inputs(
 def test_no_other_exclusion_changes_on_the_live_utilities_inputs_and_each_says_what_is_missing():
     got = outs_of(replay46("utilities")["value_chain"])
     assert len(got) == 8 and {r["kind"] for _, r in got.values()} == {"insufficient evidence"}
-    assert all(r["label"] in ("insufficient evidence (no description of its own)", "insufficient evidence (how it earns read only weakly)")
+    # gl50 (R50, updated on purpose): a company with no description of its own read is "not checked yet"
+    assert all(r["label"] in ("insufficient evidence (not checked yet, no description of its own)", "insufficient evidence (how it earns read only weakly)")
                for _, r in got.values())
 
 
@@ -107,7 +108,7 @@ def test_each_left_out_reason_is_one_precise_kind_and_old_records_get_theirs():
     r = D.calc_record({"revenue": 5, "model_out": "other", "out_why": "model", "model": "distribution", **lay})
     assert r["why"] == "other business" and r["kind"] == "different revenue model"
     assert r["label"] == "different revenue model (distribution and trading, the layer's makers of their own products)"
-    assert D.calc_record({"revenue": 5, "model_out": "unknown", "out_why": "no_words"})["label"] == "insufficient evidence (no description of its own)"
+    assert D.calc_record({"revenue": 5, "model_out": "unknown", "out_why": "no_words"})["label"] == "insufficient evidence (not checked yet, no description of its own)"
     assert D.calc_record({"revenue": 5, "model_out": "unknown", "out_why": "no_model"})["detail"] == "its own words don't state how it earns"
     assert D.calc_record({"revenue": 5, "status": "unverified"})["kind"] == "not confirmed in the theme"
     assert D.calc_record({"revenue": None})["kind"] == "no figure stored"
@@ -117,10 +118,10 @@ def test_each_left_out_reason_is_one_precise_kind_and_old_records_get_theirs():
     assert D.comparison_said({"in": False, "why": "way of earning not shown"}, {}) == \
         "listed in its layer, left out of its figures: insufficient evidence, its evidence doesn't show clearly how it earns"
     # and never "other business" for an insufficient evidence or the reverse: the roll groups by the precise label, kinds in order
-    _, line = None, deck.roll_line([("A", "")], [("B", "insufficient evidence (no description of its own)"),
+    _, line = None, deck.roll_line([("A", "")], [("B", "insufficient evidence (not checked yet, no description of its own)"),
                                                  ("C", "different revenue model (retail, the layer's makers of their own products)")])[0]
     assert line.startswith("In the layer's calculations (1 of 3): A. Left out (2): different revenue model (retail, the layer's makers of their "
-                           "own products): C; insufficient evidence (no description of its own): B.")
+                           "own products): C; insufficient evidence (not checked yet, no description of its own): B.")
 
 
 def test_a_company_in_the_figures_in_part_says_which_part():
@@ -289,8 +290,8 @@ def test_each_comparison_is_one_page_with_its_rules_in_larger_type_and_one_table
 
 
 def test_the_versions_moved():
-    assert B.RULES == 48 and TR.PLACE_CARRY[48] == 47 and B.PICK_RULES == 45
-    assert deck.THEME_DECK_VERSION == 59 and D.DIVE_TEXT == 19
+    assert B.RULES == 49 and TR.PLACE_CARRY[49] == 48 and TR.PLACE_CARRY[48] == 47 and B.PICK_RULES == 45          # gl50 (R50): RULES 49, PLACE_CARRY[49] = 48, deck 60, dive text 20 (updated on purpose)
+    assert deck.THEME_DECK_VERSION == 60 and D.DIVE_TEXT == 20          # gl50 (R50): RULES 49, PLACE_CARRY[49] = 48, deck 60, dive text 20 (updated on purpose)
 
 
 # ---------- G3 (the rotating review of the live R48 decks): the same exclusion beyond Consumer retail ----------

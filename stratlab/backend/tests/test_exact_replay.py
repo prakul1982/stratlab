@@ -160,7 +160,11 @@ _CL48_OFF = ("in \"Other\" with its way of earning shown (retail): \"branched of
              "word is one word, as name_says reads it), so neither \"Off-price and dollar stores\" (its words say neither its name nor its "
              "description) nor from_other 2 takes it there by chance; its words (\"plus-size clothing\", \"store\") say most of \"Family "
              "clothing stores\", the one layer of its way of earning that they do (cl48, R47, theme_base.from_other 2)")
+_GL50_FIT = ("placed by its words alone in {}, whose name its own words don't say (more than half of a part of it) nor share a word of "
+             "its kind with the layer's description, its official industry ({}) not the layer's: no layer's name its first sentence says, "
+             "no layer naming its industry: \"Other\" (gl50, R50, theme_base.definition_fit)")
 APPROVED: dict = {
+    "realty:SIL": ("Other", _GL50_FIT.format("\"Rent-yielding commercial property trusts\"", "Real Estate related services")),
     **{f"it:{s_}": ("Software products and SaaS platforms", _C1_IND.format("Software Products")) for s_ in ("ACESOFT", "SOTEFIN")},
     "defence:LAXMIPATI": ("Naval shipbuilding", _C1_IND.format("Ship Building & Allied Services")),
     "metals:SIZEMASTER": ("Zinc, lead and silver mining and smelting", _C1_IND.format("Zinc")),
@@ -393,8 +397,15 @@ def test_a_carried_answer_asks_no_unknown_model_again_and_keeps_its_models():
                 "models": {"EL2": "manufacturing"}}
     _, got = B.place_rest(mapped(), "Defence", ABOUT.get, ask=first)
     assert "SH2" not in got["models"]
-    _, same = B.place_rest(mapped(), "Defence", ABOUT.get, ask=lambda s, t: pytest.fail("asked again"), kept=got, carried=True)
-    assert "SH2" not in same["models"] and "reasked" not in same
+    # gl50 (R50, updated on purpose): every kept placement is carried after a rules bump, so "never asked again" left a theme whose answer
+    # gave few models without them for good (the live FMCG deck: 37 of 48 left out). A carried answer now asks each unknown model once
+    # (kept in "reasked", never asked twice), its own models kept; a model asked apart never moves a company out of the layer the map or
+    # the AI's answer put it in (settled: Hikal and Brooks stay)
+    once = []
+    _, same = B.place_rest(mapped(), "Defence", ABOUT.get, ask=lambda s, t: once.append(s) or {"models": {}}, kept=got, carried=True)
+    assert once == [C.MODEL_SYSTEM] and "SH2" in same["reasked"] and same["models"]["EL2"] == "manufacturing"
+    _, again = B.place_rest(mapped(), "Defence", ABOUT.get, ask=lambda s, t: pytest.fail("asked again"), kept=same, carried=True)
+    assert "SH2" not in again["models"]
     asked = []
     B.place_rest(mapped(), "Defence", ABOUT.get, ask=lambda s, t: asked.append(s) or {"models": {}}, kept=got)
     assert asked == [C.MODEL_SYSTEM]                 # its own rules: the unknown model asked once (R30)

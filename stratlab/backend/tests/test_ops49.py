@@ -36,6 +36,7 @@ def _sec_down_for(monkeypatch, edgar, names):
 
 def test_a_filing_page_that_did_not_answer_once_is_no_check_and_two_runs_running_is_one(w, monkeypatch):  # noqa: F811
     job = I.Job(sleep=lambda s: None)
+    monkeypatch.setattr(I, "job", job)                                  # Admin reads the module's job: this one, not one another test left a gap in
     real = w["edgar"].docs_for
     _sec_down_for(monkeypatch, w["edgar"], lambda: ["iambic"])          # one company's page of the ten looked up
     job.read("US", NOW)

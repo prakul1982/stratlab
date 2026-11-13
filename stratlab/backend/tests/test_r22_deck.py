@@ -15,6 +15,7 @@ from tests.test_export import plain, table_of, texts
 from tests.test_r18_deck import deck_of
 from tests.test_r20_deck import ALL, test_every_rule_holds_on_every_synthetic_theme as every_rule
 from tests.test_theme1 import facts
+from tests.gl50_read import blocks as read_blocks
 
 
 def co(sym, name, what="", industry="", base=True):
@@ -161,6 +162,7 @@ def test_the_other_group_is_never_called_highest_and_a_small_base_says_its_count
     blocks = [{"layer": "A", "n": 3, "revenue": 1, "official": False, "stats": {"ebitda": {"median": 22.0, "n": 3}}, "companies": []},
               {"layer": "B", "n": 6, "revenue": 1, "official": False, "stats": {"ebitda": {"median": 12.0, "n": 6}}, "companies": []},
               {"layer": "Other defence companies", "n": 9, "revenue": 1, "official": True, "basis": "rest", "stats": {"ebitda": {"median": 24.5, "n": 9}}, "companies": []}]
+    blocks = read_blocks(blocks)  # gl50 (R50, updated on purpose): the layers' way of earning read, else no layer is ranked
     c = D.chain_table(blocks)
     assert (c["highest"], c["lowest"]) == ("A", "B")
     # changed on purpose (m2): the headline says in its own sentence which layers it ranks
