@@ -12,6 +12,10 @@
 :{$PORT:8080} {
 	encode zstd gzip
 
+	# www goes to the bare domain, as on Vercel
+	@www host www.stratlab.studio
+	redir @www https://stratlab.studio{uri} 308
+
 	# trailingSlash: false
 	@slash path_regexp slash ^(.+)/$
 	redir @slash {re.slash.1} 308
