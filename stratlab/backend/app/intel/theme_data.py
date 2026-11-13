@@ -37,7 +37,7 @@ FEW_BASE = 4                  # a highest or lowest median on this many companie
 COMPARE_MIN = MIN_BASE
 # R31 (the owner's review of the live R30 decks): a layer-vs-layer headline (the value chain's line, findings, questions) needs at least this
 # many companies with the figure in each layer it compares; tables still show every layer and mark (green, red) those of COMPARE_MIN or more
-DIVE_TEXT = 18         # vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R47): a company listed in its layer as another way of earning is said so in the layer's line, the coverage control (theme_changes.coverage_control); vf46 (R46): each checked figure's source record and statement lines, a net margin above EBITDA reconciled line by line; c1 (R44): each company's place in the theme with its reason ("theme": theme_record) apart from its comparison decision ("comparison"), a layer named by how its companies earn says why it is never ranked; R44.1: a loss in a verification reason printed with the real minus (deck 55, dive text 15, updated on purpose); R44 (lane v1): each unusual figure verified against its own filed figures, not reconciled or invalid (verify_net, figure_states), never dropped by a cutoff alone; the dive's coverage of informative layers; R43.1: the whole-point margins counted among the margins there are ("3 of the 1" on the live Insurance deck); d1: halves of a split layer never ranked, no ranking on a gap under a point, peers named and like for like, every company in a layer or "Other", the not-checked-yet mark; LIVE7A (lane t1): every company at the index's newest close and one price date, own words without encyclopedia leads or a cut word, whole-point margins and gaps printed whole, operating figures of old periods left out and listed once, click-bait headlines left out, "Dividend: Dividend" said once; R40: a layer the split named only by how its companies earn is never ranked ("a group by how they earn, of different businesses"), a market-value half with fewer than 3 companies in its figures undone; LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
+DIVE_TEXT = 19         # ex49 (R49): each company left out of a layer's figures with its precise reason (a different revenue model with both models, insufficient evidence with what is missing, the part of a partial one), the capital-intensity proxy labelled and its inputs checked, layers ranked only of one business model the map's words support, which net-above-EBITDA lines are still missing; vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R47): a company listed in its layer as another way of earning is said so in the layer's line, the coverage control (theme_changes.coverage_control); vf46 (R46): each checked figure's source record and statement lines, a net margin above EBITDA reconciled line by line; c1 (R44): each company's place in the theme with its reason ("theme": theme_record) apart from its comparison decision ("comparison"), a layer named by how its companies earn says why it is never ranked; R44.1: a loss in a verification reason printed with the real minus (deck 55, dive text 15, updated on purpose); R44 (lane v1): each unusual figure verified against its own filed figures, not reconciled or invalid (verify_net, figure_states), never dropped by a cutoff alone; the dive's coverage of informative layers; R43.1: the whole-point margins counted among the margins there are ("3 of the 1" on the live Insurance deck); d1: halves of a split layer never ranked, no ranking on a gap under a point, peers named and like for like, every company in a layer or "Other", the not-checked-yet mark; LIVE7A (lane t1): every company at the index's newest close and one price date, own words without encyclopedia leads or a cut word, whole-point margins and gaps printed whole, operating figures of old periods left out and listed once, click-bait headlines left out, "Dividend: Dividend" said once; R40: a layer the split named only by how its companies earn is never ranked ("a group by how they earn, of different businesses"), a market-value half with fewer than 3 companies in its figures undone; LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
 HEADLINE_MIN = 5
 # R27 (headline eligibility): a comparison is said as a headline only on a figure for at least this share of the companies of each group it
 # compares (a layer, a family); one with less is shown as data, never ranked (the live R26 Semis deck: "RPO growth -3.9%" of 21 of 53)
@@ -305,8 +305,33 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
                    "other_income": money(num(y.get("other_income"))),
                    **{k: (num(y.get(k)) if k == "tax_pct" else money(num(y.get(k)))) for k in BRIDGE_KEYS if k in y}} for y in years],
         # R30: capital (book equity and debt) for each unit of revenue, how asset-heavy the business is (a layer-vs-layer headline needs it comparable)
-        "capital_rev": None if lender else capital_per_revenue(cap, num(f.get("pb")), debt, base.get("debt_equity"), sales),
+        # ex49 (R48): a proxy, its inputs checked: both parts stored, debt and revenue of one year, a positive revenue; what is missing said
+        **({} if lender else capital_inputs(cap, num(f.get("pb")), debt, base.get("debt_equity"), sales,
+                                            money(num(last.get("debt"))) if last else None, last.get("year") if last else None)),
     }, f, last)
+
+
+CAPITAL_PROXY = "book equity plus debt over revenue, a proxy for capital needs"      # ex49: how every page that uses it labels it
+
+
+def capital_inputs(cap, pb, debt, de, sales, year_debt=None, year=None) -> dict:
+    """ex49 (R48, the outside review of the live R48 decks: "the capital-intensity check is a proxy: label it as one, validate its inputs"):
+    {"capital_rev": capital_per_revenue or None, "capital_missing": [the inputs missing or not usable]}. Both parts must be stored (book
+    equity, from the market value over the price to book, else debt over debt to equity; and debt), the debt of the revenue's own year (the
+    year's stored debt where the page keeps one), and the year's revenue positive."""
+    missing = []
+    if num(year_debt) is not None and num(debt) is not None and abs(num(year_debt) - num(debt)) > 0.01 * max(abs(num(debt)), 1.0):
+        debt = year_debt                       # the revenue's own year: its stored debt, not a later balance sheet's
+    elif num(debt) is None and num(year_debt) is not None:
+        debt = year_debt
+    if num(debt) is None:
+        missing.append("debt")
+    eq = cap / pb if cap and pb and pb > 0 else (num(debt) / de if num(debt) and num(de) and de > 0 else None)
+    if not eq or eq <= 0:
+        missing.append("book equity")
+    if not sales or sales <= 0:
+        missing.append(f"a positive revenue for {year}" if year else "a positive revenue for the latest full year")
+    return {"capital_rev": None if missing else capital_per_revenue(cap, pb, debt, de, sales), "capital_missing": missing}
 
 
 def capital_per_revenue(cap, pb, debt, de, sales) -> float | None:
@@ -446,6 +471,26 @@ def bridge(y: dict | None) -> dict | None:
     return {"ebitda": ebitda, "from_op": op is not None, "gap": gap, "items": items, "covered": covered,
             "missing": [k for k in ("other_income", "pbt", "tax_pct") if num(y.get(k)) is None],
             "unkept": [k for k in ("op", "pbt", "tax_pct") if k not in y]}
+
+
+def _and(xs: list) -> str:
+    return xs[0] if len(xs) == 1 else ", ".join(xs[:-1]) + " and " + xs[-1] if xs else ""
+
+
+def missing_said(br: dict | None) -> str:
+    """ex49 (R48, the outside review of the live R48 Chemicals deck: 4 net margins above EBITDA left out "pending lines"): which of the
+    year's lines a net margin above its EBITDA margin still needs, and why: "still missing: other income, profit before tax and tax rate (the
+    stored page was built before profit before tax and tax rate were kept; read again once it is rebuilt)", or "(none stored for the year)"
+    where the page keeps the line and the source gives none. The rule is unchanged (bridge); "" when no line is missing."""
+    br = br or {}
+    gone = [LINE_WORDS[k] for k in br.get("missing") or []]
+    if not gone:
+        return ""
+    old = [LINE_WORDS[k] for k in ("pbt", "tax_pct") if k in (br.get("unkept") or [])]
+    if old:
+        return (f"still missing: {_and(gone)} (the stored page was built before {_and(old)} {'was' if len(old) == 1 else 'were'} kept; "
+                "read again once it is rebuilt)")
+    return f"still missing: {_and(gone)} (none stored for the year)"
 
 
 def gap_explained(sales, profit, opm, other, **lines) -> bool | None:
@@ -655,13 +700,12 @@ def verify_net(r: dict) -> None:
             why.append(f"above {ebit} by {amount(need, u)}, covered by {said}")
         else:
             ok = False
-            gone = [LINE_WORDS[k] for k in (br or {}).get("missing") or []]
+            gone = missing_said(br)               # ex49 (R48): which line is still missing, and why, per company
             why.append(f"net profit {amount(need, u)} above EBITDA ({pts(net)} net, {gpts(e)} EBITDA)" + (
                 f"; {said} covers part of it" if lifts else "") + (
-                "; no income outside operations, exceptional gain, tax credit or share of associates is stored to explain it" if br and br["covered"] is None else
-                f"; no {' or '.join(gone)} is stored for the year" + (" (the stored page was built before these lines were kept)"
-                                                                       if set((br or {}).get("unkept") or []) & {"pbt", "tax_pct"} else "") if gone else
-                "; the year's stored lines don't add up to it"))
+                "; no income outside operations, exceptional gain, tax credit or share of associates is stored to explain it"
+                + (f"; {gone}" if gone else "") if br and br["covered"] is None else
+                f"; {gone}" if gone else "; the year's stored lines don't add up to it"))
     elif "net_unusual" in flags:
         if e is None:
             ok, why = False, ["no EBITDA margin is stored for the year to check it against"]
@@ -844,8 +888,14 @@ def model_fields(layer: dict, sym: str) -> dict:
     c = next((c for c in layer.get("companies") or [] if c.get("ticker") == sym), None) or {}
     if "model" not in c:
         return {}
+    lm = layer.get("model") if isinstance(layer.get("model"), dict) else {}
+    # ex49 (R48): why it is left out, precisely (theme_base.by_model's "out_why"), with the layer's own way of earning to state both models;
+    # one in the figures as a seller of goods of its own design says so ("own_goods")
+    out = {k: x for k, x in (("out_why", c.get("out_why")), ("layer_model", lm.get("id")), ("layer_family", lm.get("family"))) if x} \
+        if c.get("model_out") else {}
     return {"model": c.get("model") or "", "model_tags": list(c.get("model_tags") or []), "model_confidence": c.get("model_confidence") or "",
-            **({"model_out": c.get("model_out")} if c.get("model_out") else {}), **({"on_industry": True} if c.get("on_industry") else {})}
+            **({"model_out": c.get("model_out")} if c.get("model_out") else {}), **({"on_industry": True} if c.get("on_industry") else {}),
+            **({"own_goods": True} if c.get("own_goods") else {}), **({"by_words": True} if c.get("by_words") else {}), **out}
 
 
 # ---------- one record of who is in a layer's calculations (lane m1: the outside review of the live R32 decks, "15 equipment companies" in
@@ -854,24 +904,87 @@ def model_fields(layer: dict, sym: str) -> dict:
 CALC_WHY = ("other business", "way of earning not shown", "not confirmed", "no revenue figure")
 
 
+# ex49 (R48, the outside review of the live Release 48 decks: lululemon left out of "Apparel and consumer brand owners" as "another business";
+# "distinguish a real difference in revenue model from insufficient evidence or partial comparability; never use them interchangeably"):
+# each left-out company's one reason category, in the order the pages say them, and what exactly it is (calc_record "kind", "label", "detail")
+CALC_KINDS = ("different revenue model", "another business", "insufficient evidence", "not confirmed in the theme", "no figure stored")
+WHY_KIND = {"other business": "different revenue model", "way of earning not shown": "insufficient evidence", "not confirmed": "not confirmed in the theme",
+            "no revenue figure": "no figure stored"}         # a kept key (CALC_WHY) -> its kind, for a record kept before ex49
+KIND_SAID = {"different revenue model": "it earns another way than the layer's companies", "another business": "its own words describe another business",
+             "insufficient evidence": "its evidence doesn't show clearly how it earns", "not confirmed in the theme": "its own words don't show this work",
+             "no figure stored": "no figure of it is stored"}
+EVIDENCE_GAP = {"no_words": ("no description of its own is stored", "no description of its own"),
+                "no_model": ("its own words don't state how it earns", "its words don't state how it earns"),
+                "weak": ("its evidence shows how it earns only weakly (low confidence)", "how it earns read only weakly")}
+
+
+def _model_name(mid: str, family: str = "") -> str:
+    from .theme_check import FAMILIES, MODELS
+    return (MODELS[mid][1] if mid in MODELS else FAMILIES.get(family, ("",))[0] or "").lower()
+
+
+def _model_title(mid: str, family: str = "") -> str:
+    from .theme_check import FAMILIES, MODELS
+    return MODELS[mid][1] if mid in MODELS else FAMILIES.get(family, ("",))[0] or ""
+
+
+def _model_what(mid: str, family: str = "") -> str:
+    from .theme_check import FAMILIES, MODELS
+    return MODELS[mid][2] if mid in MODELS else FAMILIES.get(family, ("", ""))[1]
+
+
+def out_reason(r: dict) -> dict:
+    """ex49 (R48): a left-out company's precise reason: {"kind": one of CALC_KINDS, "label": the kind with what exactly (as a roll groups
+    companies), "detail": one sentence}. A different revenue model states both models, the company's and the layer's; insufficient evidence
+    says what is missing; another business, that its own words describe another business than its official industry files it under."""
+    if r.get("status") == "unverified":
+        return {"kind": "not confirmed in the theme", "label": "not confirmed in the theme",
+                "detail": "its own words are not confirmed to show the theme's work, so it is in no figure of the theme"}
+    why, mid, lid, lf = r.get("out_why") or "", r.get("model") or "", r.get("layer_model") or "", r.get("layer_family") or ""
+    if r.get("model_out") == "other":
+        if why == "off_industry":
+            return {"kind": "another business", "label": "another business than its official industry",
+                    "detail": "its own words describe another business than the one its official industry files it under"}
+        if mid and (lid or lf):
+            return {"kind": "different revenue model", "label": f"different revenue model ({_model_name(mid)}, the layer's {_model_name(lid, lf)})",
+                    "detail": f"the way of earning of “{_model_title(mid)}” ({_model_what(mid)}), not the layer's, that of "
+                              f"“{_model_title(lid, lf)}” ({_model_what(lid, lf)})"}
+        if mid:
+            return {"kind": "different revenue model", "label": f"different revenue model ({_model_name(mid)})",
+                    "detail": f"the way of earning of “{_model_title(mid)}” ({_model_what(mid)}), not the layer's companies'"}
+        return {"kind": "different revenue model", "label": "different revenue model",
+                "detail": "it earns another way than the layer's companies"}
+    if r.get("model_out"):
+        full, short = EVIDENCE_GAP.get(why) or ("its evidence doesn't show clearly how it earns", "")
+        if why == "weak" and mid:
+            full = f"its evidence shows how it earns only weakly (read as {_model_name(mid)}, low confidence)"
+        return {"kind": "insufficient evidence", "label": "insufficient evidence" + (f" ({short})" if short else ""), "detail": full}
+    return {"kind": "no figure stored", "label": "no figure stored", "detail": "no revenue or other figure of it is stored"}
+
+
 def calc_record(r: dict) -> dict:
     """One company's place in its layer's calculations: {"in": True, "why": ""}, or {"in": False, "why": one of CALC_WHY}. In: confirmed, how
     it earns shown and of the layer's kind, with a figure (a company with neither revenue nor any figure a median is taken of has none).
     Worked out once (layer_block) and kept on the company's row as "calc": every count of a layer (its "n", the value chain's and the
-    economics' tables, the layer page's head, its roll and the appendix's) is taken from these rows, never worked out again by a page."""
+    economics' tables, the layer page's head, its roll and the appendix's) is taken from these rows, never worked out again by a page.
+    ex49 (R48): a left-out one also carries its precise reason (out_reason: "kind", "label", "detail")."""
     if r.get("status") == "unverified":
-        return {"in": False, "why": "not confirmed"}
-    if r.get("model_out"):
-        return {"in": False, "why": "other business" if r["model_out"] == "other" else "way of earning not shown"}
-    if r.get("revenue") is None and not any(r.get(k) is not None for k in STAT_KEYS + tuple(sector_metrics.KEYS)):
-        return {"in": False, "why": "no revenue figure"}
-    return {"in": True, "why": ""}
+        why = "not confirmed"
+    elif r.get("model_out"):
+        why = "other business" if r["model_out"] == "other" else "way of earning not shown"
+    elif r.get("revenue") is None and not any(r.get(k) is not None for k in STAT_KEYS + tuple(sector_metrics.KEYS)):
+        why = "no revenue figure"
+    else:
+        return {"in": True, "why": ""}
+    return {"in": False, "why": why, **out_reason(r)}
 
 
 def calc_of(c: dict) -> dict:
     """A company row's kept record (calc_record), worked out for a row of a dive kept before the record was."""
     rec = c.get("calc")
-    return rec if isinstance(rec, dict) and "in" in rec else calc_record(c)
+    if isinstance(rec, dict) and "in" in rec:
+        return rec if rec["in"] or rec.get("kind") else {**rec, **out_reason(c)}      # ex49: a record kept before its precise reason
+    return calc_record(c)
 
 
 def in_calc(c: dict) -> bool:
@@ -931,6 +1044,9 @@ def layer_block(name: str, rows: list[dict], wide: set[str]) -> dict:
             "intensity": (stat(r.get("capital_rev") for r in pool) or {}).get("median"),
             # R48: how many companies that median is of, and who is in each median a comparison reads, by name (comparison_basis)
             "intensity_n": sum(1 for r in pool if r.get("capital_rev") is not None),
+            # ex49: each company of that pool without the figure, and which input it lacks (capital_inputs)
+            "intensity_missing": [[r["name"], list(r.get("capital_missing") or [])] for r in pool
+                                  if r.get("capital_rev") is None and r.get("capital_missing")],
             "in_stats": {k: [r["name"] for r in pool if in_median(r, k) is not None] for k in ("ebitda", "net", "roce", "roe")}}
 
 
@@ -975,11 +1091,13 @@ def chain_table(blocks: list[dict]) -> dict:
         by = {b["layer"]: b for b in blocks}
         groups = [{"layer": r["layer"], "value": r.get(key), "n": r.get(f"{key}_n") or 0, "of": r.get("n"), "model": r.get("model"),
                    "basis": r.get("basis"), "intensity": r.get("intensity"), "intensity_n": (by.get(r["layer"]) or {}).get("intensity_n"),
+                   "intensity_missing": (by.get(r["layer"]) or {}).get("intensity_missing") or [],
                    "names": list(((by.get(r["layer"]) or {}).get("in_stats") or {}).get(key) or []),
                    "listed": listed_names(by.get(r["layer"]))}
                   for r in out["rows"] if r["layer"] in names]
         line = str(out.get("line") or "")
         why = ("" if out.get("highest") else "their commodities differ" if "commodities differ" in line else
+               "their business models differ by the map's own words" if "business models differ" in line else
                f"capital for each unit of revenue differs more than {INTENSITY_WORD}" if INTENSITY_WORD in line else
                "their medians are within a point of each other" if "no layer stands apart" in line or "is the same" in line else "")
         out["basis"] = comparison_basis("chain", "return on equity" if key == "roe" else "EBITDA margin", groups, made=bool(out.get("highest")),
@@ -1023,6 +1141,16 @@ def _chain_table(blocks: list[dict]) -> dict:
         return {"rows": rows, "line": line, "highest": None, "lowest": None, "measure": "ebitda", "compared": [], "gap": None,
                 "not_ranked": [r["layer"] for r in have]}
     have = one_sub(have, lambda r: r["model"])
+    if len(have) >= 2 and len(one_business(have, lambda r: r["model"])) < 2:
+        # ex49 (R48, the outside review of the live R48 Chemicals deck: custom synthesis ranked against commodity intermediates): layers whose
+        # business models differ by the map's own words, none of them most, are described, each with its own figure, never ranked
+        whole = whole_points([c for b in blocks for c in b["companies"]])
+        each = [f"{r['layer']} {pts(r['ebitda'], whole)}" + (f" ({w[2:]})" if (w := few(r["ebitda_n"], r["n"])) else "") for r in have]
+        line = ("Median EBITDA margin by layer: " + "; ".join(each) + ". Their business models differ ("
+                + "; ".join(f"{r['layer']}: {business_words(r['model'])}" for r in have) + "), so these layers are not ranked.")
+        return {"rows": rows, "line": line, "highest": None, "lowest": None, "measure": "ebitda", "compared": [], "gap": None,
+                "not_ranked": [r["layer"] for r in have]}
+    have = one_business(have, lambda r: r["model"])
     apart = have if len(have) >= 2 and not comparable_intensity(have, lambda r: r["intensity"]) else []
     if apart:
         # R30 (the owner's review of the live R28 Utilities deck: "renewable producers 83% vs cables 10%"): layers that need very different
@@ -1030,7 +1158,7 @@ def _chain_table(blocks: list[dict]) -> dict:
         whole = whole_points([c for b in blocks for c in b["companies"]])
         each = [f"{r['layer']} {pts(r['ebitda'], whole)}" + (f" ({w[2:]})" if (w := few(r["ebitda_n"], r["n"])) else "") for r in apart]
         line = ("Median EBITDA margin by layer: " + "; ".join(each)
-                + f". Capital for each unit of revenue differs more than {INTENSITY_WORD} between these layers, so they are not ranked.")
+                + f". Capital for each unit of revenue ({CAPITAL_PROXY}) differs more than {INTENSITY_WORD} between these layers, so they are not ranked.")
         return {"rows": rows, "line": line, "highest": None, "lowest": None, "measure": "ebitda", "compared": [], "gap": None,
                 "not_ranked": [r["layer"] for r in apart]}
     if len(have) >= 2:
@@ -1100,7 +1228,8 @@ RANK_WHY = {"cover": "the figure for under half its companies",
 def rank_scope(n: int, out: list | None = None) -> str:
     """How a ranking headline opens (m2): "Among the 4 layers with at least 5 companies with the figure", and " and one kind of business"
     when a layer shown beside them is left out for how it earns. Said in the headline's own sentence, wherever the headline is shown."""
-    kind = any(r.get("why") in (RANK_WHY["family"], RANK_WHY["sub"], RANK_WHY["sparse"], RANK_WHY["how"]) for r in out or [])
+    kind = any(r.get("why") in (RANK_WHY["family"], RANK_WHY["sub"], RANK_WHY["sparse"], RANK_WHY["how"])
+               or str(r.get("why") or "").startswith("a different business model") for r in out or [])
     return f"Among the {n} layers with at least {HEADLINE_MIN} companies with the figure" + (" and one kind of business" if kind else "")
 
 
@@ -1110,6 +1239,7 @@ def unranked_rows(rows: list, have: list, key: str) -> list[dict]:
     names = {r["layer"] for r in have}
     fam = Counter(f for f in (model_family_of(r["model"]) for r in have) if f).most_common(1)
     sub = Counter(x for x in (sub_of(r["model"]) for r in have) if x).most_common(1)
+    biz = Counter(x for x in (business_of(r["model"]) for r in have) if x).most_common(1)
     own = any(not r["official"] for r in have)
     out = []
     for r in rows:
@@ -1135,9 +1265,12 @@ def unranked_rows(rows: list, have: list, key: str) -> list[dict]:
             why = "family"
         elif sub and sub_of(m) != sub[0][0]:
             why = "sub"
+        elif biz and business_of(m) != biz[0][0] and (named_model(m) or any(named_model(x["model"]) for x in have)):
+            why = f"a different business model: {business_words(m)}"          # ex49: said with where it is read
         else:
             why = "other"
-        out.append({**r, "why": RANK_WHY.get(why) or f"fewer than {HEADLINE_MIN} companies with the figure"})
+        out.append({**r, "why": RANK_WHY.get(why) or (why if why.startswith("a different business model") else
+                                                      f"fewer than {HEADLINE_MIN} companies with the figure")})
     return out
 
 
@@ -1273,21 +1406,36 @@ def comparison_basis(claim: str, metric: str, groups: list, made: bool = True, w
     ways = sorted({model_words(g.get("model")).split(", shown for")[0] for g in groups} - {""})
     periods = sorted({g.get("basis") or "" for g in groups} - {""})
     it = intensity_test(groups)
+    bizs = [business_words(g.get("model")) for g in groups]
     rules = [{"rule": "headline floor", "text": f"each layer with at least {floor} companies with the figure and at least "
                                                 f"{COVERAGE_MIN * 100:.0f}% of its companies", "passed": all((g.get("n") or 0) >= floor and (not g.get("of") or g["n"] >= g["of"] * COVERAGE_MIN) for g in groups)},
              {"rule": "like-for-like model", "text": (f"one way of earning: {ways[0]}" if len(ways) == 1 else
                                                       f"ways of earning: {'; '.join(ways)}" if ways else "no way of earning read for these companies")
               + (f" (one kind of business: {fams[0]})" if len(fams) == 1 and len(ways) > 1 else ""), "passed": len(fams) <= 1 and len(subs) <= 1},
-             {"rule": "period basis", "text": "full years" if periods == ["full"] else ", ".join(periods) or "not stored", "passed": len(periods) <= 1 and "mixed" not in periods}]
+             {"rule": "period basis", "text": "full years" if periods == ["full"] else ", ".join(periods) or "not stored", "passed": len(periods) <= 1 and "mixed" not in periods},
+             # ex49 (R48): the business model apart from the way of earning: the map's own name for a layer may state one (custom synthesis,
+             # contract manufacturing) its companies' way of earning doesn't (one_business)
+             {"rule": "business model", "text": ("one business model: " + next(iter(set(bizs))) if len(set(bizs) - {""}) == 1 and "" not in bizs else
+                                                 "none read apart from how the companies earn" if not any(bizs) else
+                                                 "business models: " + "; ".join(f"{g['layer']}, {b or 'not read'}" for g, b in zip(groups, bizs))),
+              "passed": len({business_of(g.get("model")) for g in groups} - {""}) <= 1}]
+    # ex49 (R48): the capital-intensity check is a proxy for capital needs, its inputs checked (capital_inputs); passing it alone never
+    # makes layers comparable: the way of earning and the business model decide that
+    gaps = [(g["layer"], nm, miss) for g in groups for nm, miss in g.get("intensity_missing") or []]
+    gap_text = ("; inputs missing: " + "; ".join(f"{nm} ({' and '.join(miss)})" for _, nm, miss in gaps[:8])
+                + (f" and {len(gaps) - 8} more" if len(gaps) > 8 else "")) if gaps else ""
     if it:
         each = "; ".join(f"{x['layer']} {x['value']:.2f}" + (f" ({x['n']} companies)" if x.get("n") else "") for x in it["values"])
-        rules.append({"rule": "capital intensity", "text": f"capital for each unit of revenue (book equity plus debt over the latest year's revenue, the "
-                                                           f"layer's median company): {each}; the highest is {it['ratio']:.1f} times the lowest, ranked only "
-                                                           f"at {INTENSITY_FACTOR:g} times or less", "passed": it["passed"], "test": it})
+        rules.append({"rule": "capital intensity", "text": f"capital for each unit of revenue ({CAPITAL_PROXY}; the layer's median company, of the companies "
+                                                           f"with both parts stored for the year): {each}; the highest is {it['ratio']:.1f} times the lowest, "
+                                                           f"ranked only at {INTENSITY_FACTOR:g} times or less; never comparability on its own" + gap_text,
+                      "passed": it["passed"], "test": it, "proxy": True, "missing": [[lay, nm, miss] for lay, nm, miss in gaps]})
     else:
-        rules.append({"rule": "capital intensity", "text": "fewer than two layers with a capital figure: the test says nothing either way", "passed": True})
+        rules.append({"rule": "capital intensity", "text": f"fewer than two layers with a capital figure ({CAPITAL_PROXY}): the test says nothing either way"
+                                                           + gap_text, "passed": True, "proxy": True, "missing": [[lay, nm, miss] for lay, nm, miss in gaps]})
     return {"claim": claim, "metric": metric, "made": made, "why": why, "high": high, "low": low,
             "groups": [{k: g.get(k) for k in ("layer", "value", "n", "of", "intensity", "intensity_n")} | {"names": list(g.get("names") or []),
+                                                                                                         "business": business_words(g.get("model")),
                                                                                                          "listed": list(g.get("listed") or []),
                                                                                                          "model": model_words(g.get("model"))} for g in groups],
             "rules": rules, "left": [{"layer": x["layer"], "why": x["why"]} for x in left or []]}
@@ -1317,8 +1465,50 @@ def one_sub(rows: list, model) -> list:
 
 
 def one_basis(rows: list, model) -> list:
-    """one_family, then one_sub: the rows of one family and, where it declares one, one sub-basis (R29, R31)."""
-    return one_sub(one_family(rows, lambda r: model_family_of(model(r))), model)
+    """one_family, then one_sub: the rows of one family and, where it declares one, one sub-basis (R29, R31); ex49: then one business model
+    (one_business)."""
+    return one_business(one_sub(one_family(rows, lambda r: model_family_of(model(r))), model), model)
+
+
+def named_model(model) -> str:
+    """ex49: the business model the map's own name for a layer states, of another family than how its companies earn (theme_base.by_model
+    "named"), or ""."""
+    return (model.get("named") or "") if isinstance(model, dict) else ""
+
+
+def business_of(model) -> str:
+    """ex49 (R48, the outside review of the live R48 Chemicals deck: custom synthesis ranked against commodity intermediates): a layer's
+    business model as the map's words and its companies support it: the family of the model its name states (named_model), else the family
+    of how its companies earn; "" when neither is read."""
+    from .theme_check import model_family
+    return model_family(named_model(model)) or model_family_of(model)
+
+
+def one_business(rows: list, model) -> list:
+    """ex49: the rows that may be ranked against each other on their business model (business_of): those of the one most of them have; every
+    row when none declares one apart from how it earns; [] on a tie. Separate from the way of earning (one_family) and the capital-intensity
+    proxy, which alone never makes layers comparable."""
+    if not any(named_model(model(r)) for r in rows):
+        return list(rows)
+    bs = [business_of(model(r)) for r in rows]
+    c = Counter(b for b in bs if b).most_common()
+    if not c or (len(c) > 1 and c[0][1] == c[1][1]):
+        return []
+    return [r for r, b in zip(rows, bs) if b == c[0][0]]
+
+
+def business_words(model) -> str:
+    """ex49: a layer's business model as the comparison basis says it, with where it is read: "contract manufacturing (the map's name for the
+    layer)" or "makers of their own products (how its companies earn)"."""
+    from .theme_check import FAMILIES, MODELS
+    n = named_model(model)
+    if n in MODELS:
+        return f"{MODELS[n][1].lower()} (the map's name for the layer)"
+    if not isinstance(model, dict) or not (model.get("id") or model.get("family")):
+        return ""
+    mid, f = model.get("id") or "", model.get("family") or ""
+    name = MODELS[mid][1] if mid in MODELS else FAMILIES.get(f, (f,))[0]
+    return f"{name.lower()} (how its companies earn)"
 
 
 def rank_pair(rows: list, value, count, floor: int | None = None, of=None, model=None, basis=None, intensity=None):
@@ -2067,10 +2257,13 @@ def comparison_said(rec: dict, b: dict) -> str:
     figures or not and why, and whether those figures are compared with other layers' (the "Other" group never is, nor a half of a layer by
     market value alone, nor a group made by how its companies earn)."""
     if not rec.get("in"):
-        return {"not confirmed": "left out of every figure: not confirmed in the theme",
-                "other business": "listed in its layer, left out of its figures: it earns another way than the layer's companies",
-                "way of earning not shown": "listed in its layer, left out of its figures: its own words don't show how it earns",
-                "no revenue figure": "listed in its layer, left out of its figures: no figure of it is stored"}.get(rec.get("why"), "left out of its layer's figures")
+        # ex49 (R48): its precise reason, kind first (a different revenue model with both models; insufficient evidence with what is missing)
+        if rec.get("kind") == "not confirmed in the theme" or rec.get("why") == "not confirmed":
+            return "left out of every figure: not confirmed in the theme"
+        kind = rec.get("kind") or WHY_KIND.get(rec.get("why"))
+        if kind:
+            return f"listed in its layer, left out of its figures: {kind}, {rec.get('detail') or KIND_SAID[kind]}"
+        return "left out of its layer's figures"
     m = b.get("model") or {}
     if b.get("basis") == "rest":
         return "in the “Other” group's figures, which are never compared with the layers'"
@@ -2078,6 +2271,12 @@ def comparison_said(rec: dict, b: dict) -> str:
         return "in its layer's figures; the layer is half of a group split by market value, never ranked alone"
     if isinstance(m, dict) and m.get("by_how"):
         return "in its layer's figures; the layer is a group by how its companies earn, of different businesses, shown and never ranked"
+    if rec.get("by_words"):             # ex49 (R48, G3): the map's pick, its own words say the layer's name and no other way of earning
+        return ("in its layer's figures: confirmed, with a figure; the map placed it here and its own words say the layer's name and no other "
+                "way of earning; only the AI's read gave it another")
+    if rec.get("own_goods"):            # ex49 (R48): read as a retailer of them, its own words say it designs the goods it sells
+        return ("in its layer's figures: confirmed, with a figure; read as a retailer, its own words say it designs the goods it sells, "
+                "so it sells products of its own, as the layer's companies do")
     return "in its layer's figures: confirmed, how it earns shown and of the layer's kind, with a figure"
 
 
@@ -2220,7 +2419,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     for b in blocks:                        # c1: each company's comparison decision, said with its reason beside the in-theme one
         for r in b["companies"]:
             if isinstance(r.get("calc"), dict):
-                r["comparison"] = comparison_said(r["calc"], b)
+                r["comparison"] = comparison_said({**calc_of(r), **({k: True for k in ("own_goods", "by_words") if r.get(k)})}, b)
     chain = chain_table(blocks)
     counted = [r for b in blocks for r in b["companies"] if r.get("status") != "unverified"]
     pool = [r for r in counted if not r["company_wide"]] or counted

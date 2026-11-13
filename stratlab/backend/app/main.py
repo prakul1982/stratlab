@@ -81,7 +81,7 @@ from .data import calendar as trading_calendar
 from .intel import routes as research_routes
 from .intel.company import Research, at_live_price
 from .intel.net import RequestWaits, TTLCache
-from .intel import filings, sec
+from .intel import filings, sec, theme_routes
 from .intel.sec import SEC
 from .intel.us_calendar import USCalendar
 from .intel.net import SourceError
@@ -536,6 +536,7 @@ from . import embeds, public_themes, share  # noqa: E402  (bet 3: public, sharea
 app.include_router(share.router)               # /research/share/..., /research/shares: share links to a deep dive or a theme
 app.include_router(share.page_router)          # /r/<token>: a share link's public page
 app.include_router(public_themes.router)       # /themes, /themes/<in|us>/<slug>: public theme pages
+app.include_router(theme_routes.admin_router)  # /admin/themes/industries/repick: the owner's switch to have the AI pick a theme's industries again (ex49)
 app.include_router(embeds.router)              # /embed/price/..., /embed/theme/...: charts other sites may frame
 app.include_router(supply_links.router)        # /research/links: customers and suppliers named in filings
 app.include_router(supply_links.admin_router)  # /admin/supply-links: the nightly job's switch, AI cap and review queue

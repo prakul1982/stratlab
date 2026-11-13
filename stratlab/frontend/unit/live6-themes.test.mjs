@@ -27,7 +27,12 @@ test("LIVE6-001: a layer's median is of the companies in its calculations, never
   assert.equal(TF.CALC_WORDS["other business"], "it earns another way than most of this layer's companies");
   // the page marks the row and the chain's count is "N of M"
   const src = read("src/components/ThemeDive.tsx");
-  assert.match(src, /Left out of the layer's calculations: \{CALC_WORDS\[c\.why\]/);
+  // (updated on purpose, ex49: the server's precise reason where it keeps one, theme_data.out_reason; CALC_WORDS for a record kept before)
+  assert.match(src, /Left out of the layer's calculations: \{calcWords\(c\)\}/);
+  assert.equal(TF.calcWords({ why: "other business" }), "it earns another way than most of this layer's companies");
+  assert.equal(TF.calcWords({ why: "other business", kind: "different revenue model",
+    detail: "the way of earning of “Platforms and marketplaces” (commissions), not the layer's, that of “Retail” (the margin on goods)" }),
+  "different revenue model: the way of earning of “Platforms and marketplaces” (commissions), not the layer's, that of “Retail” (the margin on goods)");
   assert.match(src, /x\.listed && x\.listed > x\.n \? `\$\{x\.n\} of \$\{x\.listed\}`/);
 });
 

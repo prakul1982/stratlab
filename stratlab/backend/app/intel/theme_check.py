@@ -1381,3 +1381,37 @@ def match_listings(items: list[dict], out: dict, ask, theme: str, cache=None) ->
         if hits:
             result.append({"id": i["id"], "groups": [h[0] for h in hits], "what": hits[0][1].strip(" ,;:-–—")})
     return result
+
+
+# ---------- ex49 (R48): a seller of goods of its own design (the outside review of the live R48 Consumer retail deck) ----------
+# lululemon ("principally a designer, distributor, and retailer of technical athletic apparel, footwear, and accessories") sat in "Apparel and
+# consumer brand owners" by its own words and was left out of that layer's figures as "another business": the answer read it as a retailer,
+# whose way of earning (MODELS["retail"]) is the margin on goods bought from others. A company that designs what it sells, or makes it and
+# sells it under its own brand, sells products of its own (the making family: "selling products of their own, made in their own plants or by
+# contract makers"), whatever share of them it sells in its own stores.
+DESIGNS_SELLS = (r"\bdesigners?,? (?:[\w-]+,? ){0,3}(?:and )?(?:retailers?|marketers?|distributors?|sellers?|makers?|manufacturers?) of\b|"
+                 r"\bdesigns?,? (?:develops?,? )?(?:and )?(?:markets?|sells?|retails?|distributes?|manufactures?)\b")
+MAKES_OWN_GOODS = r"\bmanufactures\b|\bmanufacturers? (?:and \w+ )?of\b|\bmakes\b|\bproduces\b"
+OWN_BRAND = (r"\bunder (?:the |its |our |their )?(?:own )?[\w&'’.-]+(?: [\w&'’.-]+){0,2} brands?\b|\b(?:its|our|their) own brands?\b|"
+             r"\bproprietary brands?\b|\bown[- ]brand(?:ed)?\b")
+
+
+def own_goods(evidence) -> bool:
+    """Whether a company's own words say it designs the goods it sells (a designer and retailer of them), or makes them and sells them under
+    its own brand (ex49); its official industry and the customers it names left out. A retailer of goods others design says neither."""
+    _, own = _split_evidence(evidence)
+    own = _SOLD_TO.sub(" ", not_customers(own))
+    return bool(re.search(DESIGNS_SELLS, own, re.I) or (re.search(MAKES_OWN_GOODS, own, re.I) and re.search(OWN_BRAND, own, re.I)))
+
+
+def words_models(evidence) -> set[str]:
+    """ex49 (R48): every way of earning a company's own words name (MODEL_SAYS, OWN_SAYS, a chip designer's own words, making words without
+    trading words), its official industry and the customers it names left out: what stated_model reads, before it settles on one."""
+    _, own = _split_evidence(evidence)
+    own = _SOLD_TO.sub(" ", not_customers(own))
+    if not own.strip():
+        return set()
+    hits = {m_ for m_, rx in list(MODEL_SAYS.items()) + list(OWN_SAYS.items()) if re.search(rx, own, re.I)}
+    one = stated_model(evidence)
+    shop = {"retail"} if re.search(NAME_STATES["retail"], own, re.I) else set()        # stores, shops, retailing: a retailer's own words
+    return hits | ({one} if one else set()) | shop

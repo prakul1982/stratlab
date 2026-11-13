@@ -106,7 +106,7 @@ def test_no_materials_supplier_sits_under_an_equipment_layer_whatever_model_it_w
 def test_the_rules_version_moved_so_kept_checks_and_dives_are_worked_out_again_and_placements_carry():
     """The cause on live: the materials rule came in without a new rules version, so the check kept under the old one (and the theme library's
     read of it) was served as it stood. The version is part of every kept check's, library read's and dive's key."""
-    assert B.RULES == 47 and T.PLACE_CARRY[47] == 46 and T.PLACE_CARRY[46] == 45 and T.PLACE_CARRY[45] == 44 and T.PLACE_CARRY[44] == 43 and T.PLACE_CARRY[43] == 42 and T.PLACE_CARRY[42] == 41 and T.PLACE_CARRY[41] == 40 and T.PLACE_CARRY[34] == 33 and T.PLACE_CARRY[35] == 34 and T.PLACE_CARRY[36] == 35 and T.PLACE_CARRY[37] == 36 and T.PLACE_CARRY[38] == 37 and T.PLACE_CARRY[39] == 38   # cl48 (R48): RULES 47, PLACE_CARRY[47] = 46, deck 58, dive text 18, primary-business validation and the coverage control (updated on purpose); cv47 (R47): RULES 46, PLACE_CARRY[46] = 45, filing titles are no words of a company's own, the AI's industry pick kept across rules changes (PICK_RULES); deck and dive text unchanged (updated on purpose); tx2 (R45/R46): RULES 45, PLACE_CARRY[45] = 44, deck 57 (dive text stays 16), the taxonomy regression guard and the screening populations (updated on purpose); c1 (R44): RULES 44, PLACE_CARRY[44] = 43, deck 56, dive text 16 (55 and 15 are R44.1's), classification coverage from evidence (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); lane s2-exact and lane s1-fit bumped RULES (updated on purpose); lane r2, lane r1, lane n2, q1 bumped RULES (updated on purpose)
+    assert B.RULES == 48 and T.PLACE_CARRY[48] == 47 and T.PLACE_CARRY[47] == 46 and T.PLACE_CARRY[46] == 45 and T.PLACE_CARRY[45] == 44 and T.PLACE_CARRY[44] == 43 and T.PLACE_CARRY[43] == 42 and T.PLACE_CARRY[42] == 41 and T.PLACE_CARRY[41] == 40 and T.PLACE_CARRY[34] == 33 and T.PLACE_CARRY[35] == 34 and T.PLACE_CARRY[36] == 35 and T.PLACE_CARRY[37] == 36 and T.PLACE_CARRY[38] == 37 and T.PLACE_CARRY[39] == 38   # ex49 (R49): RULES 48, PLACE_CARRY[48] = 47, deck 59, dive text 19, precise exclusion reasons, the business-model ranking rule (updated on purpose); cl48 (R48): RULES 47, PLACE_CARRY[47] = 46, deck 58, dive text 18, primary-business validation and the coverage control (updated on purpose); cv47 (R47): RULES 46, PLACE_CARRY[46] = 45, filing titles are no words of a company's own, the AI's industry pick kept across rules changes (PICK_RULES); deck and dive text unchanged (updated on purpose); tx2 (R45/R46): RULES 45, PLACE_CARRY[45] = 44, deck 57 (dive text stays 16), the taxonomy regression guard and the screening populations (updated on purpose); c1 (R44): RULES 44, PLACE_CARRY[44] = 43, deck 56, dive text 16 (55 and 15 are R44.1's), classification coverage from evidence (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); lane s2-exact and lane s1-fit bumped RULES (updated on purpose); lane r2, lane r1, lane n2, q1 bumped RULES (updated on purpose)
     assert T.check_key("US", "Semiconductors", {"generated_at": 5})[-1] == B.RULES
 
 
@@ -155,11 +155,14 @@ def test_every_count_of_the_live_shaped_layer_comes_from_its_rows_records():
 
 def test_a_company_with_a_figure_but_no_revenue_stays_in_and_one_with_none_is_out():
     assert D.calc_record({"revenue": None, "roe": 11.0}) == {"in": True, "why": ""}                 # a lender's return with no revenue stored
-    assert D.calc_record({"revenue": None}) == {"in": False, "why": "no revenue figure"}
+    # (updated on purpose, ex49: a left-out record also carries its precise reason: kind, label, detail)
+    assert D.calc_record({"revenue": None}) == {"in": False, "why": "no revenue figure", "kind": "no figure stored", "label": "no figure stored",
+                                                "detail": "no revenue or other figure of it is stored"}
     assert D.calc_record({"revenue": 5, "status": "unverified", "model_out": "unknown"})["why"] == "not confirmed"
     assert D.calc_record({"revenue": 5, "model_out": "other"})["why"] == "other business"
     assert D.calc_record({"revenue": 5, "model_out": True})["why"] == "way of earning not shown"   # a dive kept before the reason was named
-    assert set(D.CALC_WHY) == {"other business", "way of earning not shown", "not confirmed", "no revenue figure"} and deck.ROLL_WHY is D.CALC_WHY
+    # (updated on purpose, ex49: the deck's rolls order the reasons by their precise kinds, one list: theme_data.CALC_KINDS)
+    assert set(D.CALC_WHY) == {"other business", "way of earning not shown", "not confirmed", "no revenue figure"} and deck.ROLL_WHY is D.CALC_KINDS
     # a row of a dive kept before the record is read the same way
     assert not D.in_calc({"revenue": 5, "model_out": "unknown"}) and D.in_calc({"revenue": 5})
     assert D.in_calc({"revenue": None, "calc": {"in": True, "why": ""}})                         # the kept record is the one read
@@ -240,9 +243,11 @@ def _left_out_named(slides, title):
     for t in texts:
         body = t.split("Left out (", 1)[-1].split("): ", 1)[-1] if "Left out (" in t else t.split(": ", 1)[-1]
         body = body.split(". Every one:")[0].rstrip(".")
-        for part in re.split(r"; (?=(?:" + "|".join(D.CALC_WHY) + "): )", body):
-            why, _, names = part.partition(": ")
-            assert why in D.CALC_WHY, (why, t)
+        # (updated on purpose, ex49: each reason is its kind with what exactly, "different revenue model (platforms ..., the layer's retail)")
+        for part in re.split(r"; (?=(?:" + "|".join(D.CALC_KINDS) + r")(?: \([^)]*\))?: )", body):
+            why, _, names = part.partition("): ") if re.match(r"[^:]*\(", part.split(": ")[0]) else part.partition(": ")
+            why = why + ")" if "(" in why and not why.endswith(")") else why
+            assert any(why.startswith(k) for k in D.CALC_KINDS), (why, t)
             for nm in names.split(", "):
                 if not re.match(r"(?:and )?\d+ more$", nm.split(" and ")[-1] if " and " in nm and nm.split(" and ")[-1].endswith("more") else nm):
                     got[nm.split(" and ")[0] if nm.endswith("more") else nm] = why
@@ -253,15 +258,16 @@ def _reasons_carried(v, slides) -> int:
     """How many left-out companies the deck names with the reason their row keeps, on their own row or in a roll; fails on one without."""
     seen = 0
     for layer in [x for x in v["layers"] if any(not D.in_calc(c) for c in x["companies"])]:
-        out = {deck._LEGAL.sub("", c["name"]).strip(" ,."): (c["name"], c["calc"]["why"]) for c in layer["companies"] if not c["calc"]["in"]}
-        assert all(w in D.CALC_WHY for _, w in out.values())                                # kept on the row, one of the four reasons
+        out = {deck._LEGAL.sub("", c["name"]).strip(" ,."): (c["name"], deck.why_label(c["calc"])) for c in layer["companies"] if not c["calc"]["in"]}
+        # (updated on purpose, ex49: the row keeps one of the four reasons and its precise kind and label)
+        assert all(c["calc"]["why"] in D.CALC_WHY and c["calc"]["kind"] in D.CALC_KINDS for c in layer["companies"] if not c["calc"]["in"])
         page = next((s for s in slides if deck._LAYER_PAGE.match(s.title or "") and s.title.endswith("· " + layer["layer"])), None)
         if page is None:               # a layer with no page of its own (one confirmed company, or the companies the map doesn't place)
             continue
         named = _left_out_named(slides, page.title)
         rows = [str(r[0]) for b in page.blocks if b["kind"] == "table" for r in b["rows"]]
         for nm, (full, why) in out.items():
-            on_row = any(r == f"{full} ({deck.ROLL_TAG[why]})" for r in rows)
+            on_row = any(r == f"{full} ({deck.ROLL_TAG[deck.label_kind(why)]})" for r in rows)
             assert on_row or named.get(nm) == why, (layer["layer"], nm, why, named, rows)
             seen += 1
     return seen
@@ -286,11 +292,12 @@ def test_every_left_out_company_of_every_structure_carries_its_stored_reason():
 
 
 def test_the_roll_says_each_reason_before_the_companies_it_is_of():
-    outs = [("Tata Consultancy Services", "way of earning not shown"), ("Wipro", "way of earning not shown"),
-            ("Tech Mahindra", "way of earning not shown"), ("Black Box", "no revenue figure")]
+    # (updated on purpose, ex49: the reasons are their kinds with what exactly, theme_data.out_reason)
+    outs = [("Tata Consultancy Services", "insufficient evidence (no description of its own)"), ("Wipro", "insufficient evidence (no description of its own)"),
+            ("Tech Mahindra", "insufficient evidence (no description of its own)"), ("Black Box", "no figure stored")]
     line, _ = deck.roll_line([("Infosys", ""), ("HCL Technologies", "")], outs)
-    assert line == ("In the layer's calculations (2 of 6): Infosys, HCL Technologies. Left out (4): way of earning not shown: Tata Consultancy "
-                    "Services, Wipro, Tech Mahindra; no revenue figure: Black Box.")
+    assert line == ("In the layer's calculations (2 of 6): Infosys, HCL Technologies. Left out (4): insufficient evidence (no description of "
+                    "its own): Tata Consultancy Services, Wipro, Tech Mahindra; no figure stored: Black Box.")
 
 
 def test_a_company_with_no_figures_carries_its_reason_on_its_row():
@@ -303,17 +310,17 @@ def test_a_company_with_no_figures_carries_its_reason_on_its_row():
     row = next((c for x in v["layers"] for c in x["companies"] if c["symbol"] == sym), None)
     if row is None or row["calc"]["in"]:
         pytest.skip("the synthetic store keeps a figure for it")
-    assert row["calc"] == {"in": False, "why": "no revenue figure"}
+    assert {k: row["calc"][k] for k in ("in", "why", "kind")} == {"in": False, "why": "no revenue figure", "kind": "no figure stored"}      # (updated on purpose, ex49: its kind too)
     page = next(s for s in slides if any(str(r[0]).startswith(name) for b in s.blocks if b["kind"] == "table" for r in b["rows"])
                 and deck._LAYER_PAGE.match(s.title or ""))
     cell = next(str(r[0]) for b in page.blocks if b["kind"] == "table" for r in b["rows"] if str(r[0]).startswith(name))
     notes = " ".join(p for b in page.blocks if b["kind"] == "text" for p in b["paras"])
-    assert cell.endswith("(no figures)") and "(no figures): no revenue figure is stored" in notes or "no revenue figure: " in notes
+    assert cell.endswith("(no figures)") and "(no figures): no revenue or other figure is stored" in notes or "no figure stored: " in notes      # (updated on purpose, ex49)
     assert deck.layer_count_flags(slides) == []
 
 
 def test_the_versions_moved_with_the_records():
-    assert D.DIVE_TEXT == 18 and deck.THEME_DECK_VERSION == 58          # vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R48): deck 58, dive text 18, the coverage flag row and who earns another way said in layer lines (updated on purpose); vf46 (R46): dive text 17, each checked figure's source record, net above EBITDA reconciled line by line (updated on purpose); tx2 (R45/R46): RULES 45, PLACE_CARRY[45] = 44, deck 57 (dive text 17 from vf46), the taxonomy regression guard and the screening populations (updated on purpose); c1 (R44): RULES 44, PLACE_CARRY[44] = 43, deck 56, dive text 16 (55 and 15 are R44.1's), classification coverage from evidence (updated on purpose); R44 (lane v1): deck 54, dive text 14, verification states (updated on purpose); R43.1: dive text 13 (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane t1: deck 52, dive text 11 (LIVE7A, updated on purpose); R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)
+    assert D.DIVE_TEXT == 19 and deck.THEME_DECK_VERSION == 59          # ex49 (R49): RULES 48, PLACE_CARRY[48] = 47, deck 59, dive text 19, precise exclusion reasons, the business-model ranking rule (updated on purpose); vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R48): deck 58, dive text 18, the coverage flag row and who earns another way said in layer lines (updated on purpose); vf46 (R46): dive text 17, each checked figure's source record, net above EBITDA reconciled line by line (updated on purpose); tx2 (R45/R46): RULES 45, PLACE_CARRY[45] = 44, deck 57 (dive text 17 from vf46), the taxonomy regression guard and the screening populations (updated on purpose); c1 (R44): RULES 44, PLACE_CARRY[44] = 43, deck 56, dive text 16 (55 and 15 are R44.1's), classification coverage from evidence (updated on purpose); R44 (lane v1): deck 54, dive text 14, verification states (updated on purpose); R43.1: dive text 13 (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane t1: deck 52, dive text 11 (LIVE7A, updated on purpose); R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)
 
 
 # ---------- 4. only layers of one way of earning are ranked together ----------

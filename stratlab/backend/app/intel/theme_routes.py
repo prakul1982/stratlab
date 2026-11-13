@@ -17,8 +17,10 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
 from .. import computed, db
+from ..admin import admin_profile
 from ..ai_providers import AIError
 from ..auth import current_profile
 from ..guard import Window
@@ -30,6 +32,7 @@ from .net import SourceError, TTLCache
 from .news import aggregator_url, company_headline, company_text, fits_company, plain_headline, publisher_url
 
 router = APIRouter(tags=["research"])
+admin_router = APIRouter(tags=["admin"])      # ex49: the owner's theme switches, at /admin/... (main)
 
 DIVE_TTL = 30 * 60
 DIVE_CACHE = TTLCache(max_items=24, max_bytes=3 * 1024 * 1024)            # a dive is about 60 KB of numbers
@@ -385,7 +388,7 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
 def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
@@ -780,12 +783,48 @@ def facts_piece(region: str, sym: str, fresh: bool = False) -> tuple[dict | None
     if not fresh:
         hit = computed.get(theme_library.FACTS, [region, sym])
         if hit is not None and isinstance(hit.get("value"), dict):
-            return hit["value"], hit.get("at")
+            # ex49 (R48, the outside review of the live R48 Chemicals deck: 4 net margins above EBITDA left out "pending lines" while the
+            # company pages were being rebuilt to keep them, FACTS_VERSION 10): a piece kept from a page built before the current version is
+            # taken again once its stored page has been rebuilt, so a theme reads the year's profit before tax, tax and other income as
+            # soon as the page keeps them, with no Refresh
+            if (hit["value"].get("v") or 1) >= _facts_version() or not callable(R.public_facts):
+                return hit["value"], hit.get("at")
+            page = R.public_facts(region, sym)
+            if not page or (page.get("v") or 1) <= (hit["value"].get("v") or 1):
+                return hit["value"], hit.get("at")
+            kept = computed.put(theme_library.FACTS, [region, sym], page, label=sym, region=region)
+            return page, (kept or {}).get("at")
     f = R.public_facts(region, sym) if callable(R.public_facts) else None
     if not f:
         return None, None
     kept = computed.put(theme_library.FACTS, [region, sym], f, label=sym, region=region)
     return f, (kept or {}).get("at")
+
+
+def _facts_version() -> int:
+    from ..stock_pages import FACTS_VERSION
+    return FACTS_VERSION
+
+
+def pages_rebuilt(region: str, dive: dict) -> list[str]:
+    """ex49 (R48): the companies of a kept dive whose checked figure was reconciled on a stored page built before the year's lines were
+    kept (its record's bridge "unkept": profit before tax, tax rate) and whose stored page now keeps them (rebuilt at the current
+    FACTS_VERSION): the dive is worked out again for them (dive_of), so the reconciliation uses the lines. Only those few pages are read."""
+    R = _routes()
+    if not callable(R.public_facts):
+        return []
+    syms = sorted({x.get("symbol") for x in ((dive or {}).get("checks") or {}).get("states") or []
+                   if {"pbt", "tax_pct"} & set(((x.get("bridge") or {}).get("unkept")) or []) and x.get("symbol")})
+    out = []
+    for s_ in syms:
+        try:
+            f = R.public_facts(region, s_) or {}
+        except Exception:
+            continue
+        # rebuilt, and its years keep the lines (never a page whose rebuild still lacks them: the dive would be worked out on every read)
+        if (f.get("v") or 1) >= _facts_version() and any(isinstance(y, dict) and ("pbt" in y or "tax_pct" in y) for y in f.get("years") or []):
+            out.append(s_)
+    return out
 
 
 def pieces_moved(region: str, pieces: dict) -> bool:
@@ -1004,7 +1043,8 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
     if not refresh:
         kept = computed.get(theme_library.DIVE, key)
         if kept is not None and isinstance((kept.get("value") or {}).get("dive"), dict) and not pieces_moved(r, kept["value"].get("pieces") or {}) \
-                and not sector_metrics.any_stored(r, kept["value"]["dive"].get("metrics_pending") or []) and not prices_moved(r, kept):
+                and not sector_metrics.any_stored(r, kept["value"]["dive"].get("metrics_pending") or []) and not prices_moved(r, kept) \
+                and not pages_rebuilt(r, kept["value"]["dive"]):          # ex49: a page rebuilt with the lines a checked figure waits for
             requeue(r, kept["value"]["dive"])
             return kept["value"]["dive"]
     src = sources(r, theme, fresh=True) if refresh else sources(r, theme)
@@ -1725,6 +1765,67 @@ def theme_library_suggest(q: str = "", region: str = "IN", profile=Depends(curre
     search would be served from first, then names that start with or contain it; with nothing typed, the most searched."""
     R = _routes()
     return R.ok({"items": theme_library.suggest(R.region_of(region), q[:80])})
+
+
+# ---------- ex49 (R49, owner ask): an owner-only switch that has the AI pick a theme's industries again ----------
+REPICK_LOG = "theme:industries:repicked"       # the audit lines of every pick cleared: when, by whom, the market, the theme and the pick it held
+REPICK_KEEP = 50                               # audit lines kept, the newest last
+
+
+class RepickBody(BaseModel):
+    region: str
+    theme: str
+
+
+def repick_industries(region: str, theme: str, by: str = "") -> dict:
+    """ex49 (R49, the owner: production had no switch to have the AI pick a theme's official industries again; the advice was "delete the
+    stored setting"): clears the theme's stored industry pick (setting theme:industries:<REGION>:<slug>, theme_base.industries_for), so the
+    AI picks again on the next read, and drops the theme's checked maps kept under that pick (the shared store's "ai:sector_checked3"
+    entries of the theme, and this server's memory of them), so the next read checks the theme again on the new pick. One audit line
+    (REPICK_LOG and the server's log) says when, by whom, which theme and the pick it held. Nothing is asked of the AI here."""
+    r = str(region or "").strip().upper()
+    slug = theme_base._slug(theme)
+    if r not in ("IN", "US") or not slug:
+        err(400, "bad_theme", "Give the market (IN or US) and the theme's name.")
+    skey = f"theme:industries:{r}:{slug}"
+    try:
+        raw = db.get_setting(skey)
+    except Exception:
+        raw = None
+    was = db.json_value(raw, {}) if raw else None          # a stored value, damaged or not, is cleared
+    if raw:
+        db.delete_setting(skey)
+    dropped = 0
+    ix = computed.index("ai:sector_checked3")["entries"]
+    for hk, e in list(ix.items()):
+        parts = str((e or {}).get("label") or "").split(" · ")
+        if (e or {}).get("region") != r or theme_base._slug(parts[0]) != slug:
+            continue
+        if computed.remove("ai:sector_checked3", hk):
+            dropped += 1
+        try:                  # this server's memory of it (key: market, theme, the map's time, the rules: check_key)
+            A._cache.pop(A._key("sector_checked3", r, parts[0], int(parts[1]), int(parts[2])))
+        except (IndexError, ValueError):
+            pass
+    line = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "by": str(by or ""), "region": r, "theme": slug,
+            "cleared": was is not None, "industries": list((was or {}).get("industries") or []), "picked_at": (was or {}).get("at"),
+            "checked_maps_dropped": dropped}
+    try:
+        log = db.json_value(db.get_setting(REPICK_LOG), []) or []
+        db.set_setting(REPICK_LOG, json.dumps(([x for x in log if isinstance(x, dict)] + [line])[-REPICK_KEEP:], ensure_ascii=False))
+    except Exception as e:
+        print("theme: industry repick not logged:", type(e).__name__, str(e)[:100])
+    print("admin: theme industry pick cleared:", json.dumps(line, ensure_ascii=False))
+    return line
+
+
+@admin_router.post("/admin/themes/industries/repick")
+def admin_repick_industries(body: RepickBody, profile=Depends(admin_profile)):
+    """ex49 (R49): the owner's switch (repick_industries): the theme's stored industry pick cleared, the AI picks again on the next read."""
+    line = repick_industries(body.region, body.theme, profile.get("email") or profile.get("id") or "")
+    msg = (f"The stored industry pick of {line['theme']} ({line['region']}) is cleared: the AI picks its industries again on the next read."
+           if line["cleared"] else f"No industry pick is stored for {line['theme']} ({line['region']}); the next read picks one.")
+    return {"ok": True, "message": msg, **line}
 
 
 def _coverage_source() -> None:
