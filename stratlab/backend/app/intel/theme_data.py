@@ -1528,6 +1528,50 @@ def membership(c: dict, words: set[str]) -> str:
     return "exposure" if c.get("verified") else "unverified"
 
 
+def theme_record(c: dict, status: str) -> dict:
+    """c1 (R44, the outside review of the live Release 43 decks, ask 3: "keep theme membership separate from comparison eligibility, each with
+    its reason"): a company's place in the theme, {"in", "status", "why"}, decided apart from whether its figures are compared (calc_record,
+    comparison_said). "in": confirmed in the theme (membership "core" or "exposure"); a company "unverified" is listed, never in a figure. A
+    company dropped from the theme is named on its coverage with its own reason (theme_base.without_off_industry)."""
+    from .theme_base import industry_label
+    ind = industry_label(c.get("industry")) if c.get("industry") else ""
+    if c.get("base") is None and c.get("verified") is None:
+        why = "placed in the theme's map"
+    elif c.get("base"):
+        if c.get("basis") == "list":
+            why = "named in the theme's own list"
+        elif status == "unverified":
+            why = f"filed under the theme's official industry{f' {ind}' if ind else ''}, but its own words describe other work"
+        else:
+            why = f"filed under the theme's official industry{f' {ind}' if ind else ''}"
+    elif c.get("verified_by") == "words":
+        why = "added from another industry into one of the map's own layers; its own words say what that layer's name says"
+    elif status == "exposure":
+        why = "added from another industry; its own words were checked to show the theme's work"
+    else:
+        why = "added from another industry; its own words are not confirmed to show the theme's work yet"
+    return {"in": status != "unverified", "status": status, "why": why}
+
+
+def comparison_said(rec: dict, b: dict) -> str:
+    """c1 (R44, ask 3): a company's comparison decision as one sentence, from its kept record (calc_record) and its layer: in its layer's
+    figures or not and why, and whether those figures are compared with other layers' (the "Other" group never is, nor a half of a layer by
+    market value alone, nor a group made by how its companies earn)."""
+    if not rec.get("in"):
+        return {"not confirmed": "left out of every figure: not confirmed in the theme",
+                "other business": "listed in its layer, left out of its figures: it earns another way than the layer's companies",
+                "way of earning not shown": "listed in its layer, left out of its figures: its own words don't show how it earns",
+                "no revenue figure": "listed in its layer, left out of its figures: no figure of it is stored"}.get(rec.get("why"), "left out of its layer's figures")
+    m = b.get("model") or {}
+    if b.get("basis") == "rest":
+        return "in the “Other” group's figures, which are never compared with the layers'"
+    if b.get("scale"):
+        return "in its layer's figures; the layer is half of a group split by market value, never ranked alone"
+    if isinstance(m, dict) and m.get("by_how"):
+        return "in its layer's figures; the layer is a group made by how its companies earn, of different businesses, shown and never ranked"
+    return "in its layer's figures and comparisons: confirmed, how it earns shown and of the layer's kind, with a figure"
+
+
 def slug(theme: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", str(theme or "").lower()).strip("-")[:60]
 
@@ -1580,6 +1624,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         if s in rows:
             rows[s]["name"] = shown_name(c.get("name"), rows[s]["name"]) or rows[s]["name"]
             rows[s]["status"] = membership(c, words)
+            rows[s]["theme"] = theme_record(c, rows[s]["status"])     # c1: in the theme, with its reason (apart from any comparison)
             rows[s]["map_industry"] = c.get("industry") or ""          # the exchange's (or the SEC's) industry the map gives (R27: metric_registry)
             rows[s]["map_what"] = c.get("what") or ""                  # what the map says the company does (an insurer's type: metric_registry)
             if c.get("unread"):        # d1: in "Other" because nothing it says was read yet (theme_base.place_rest), not because it fits no layer
@@ -1638,6 +1683,10 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         ins = {r["symbol"] for r in b["companies"] if in_calc(r)}       # the layer's one record of who is in its calculations
         sure = [r for r in mine if r["symbol"] in ins]
         histories[b["layer"]] = layer_history([r for r in sure if r["symbol"] not in wide] or sure)
+    for b in blocks:                        # c1: each company's comparison decision, said with its reason beside the in-theme one
+        for r in b["companies"]:
+            if isinstance(r.get("calc"), dict):
+                r["calc"] = {**r["calc"], "said": comparison_said(r["calc"], b)}
     chain = chain_table(blocks)
     counted = [r for b in blocks for r in b["companies"] if r.get("status") != "unverified"]
     pool = [r for r in counted if not r["company_wide"]] or counted

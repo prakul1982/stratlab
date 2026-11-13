@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 
 # the version of the membership rules (who is in a theme, which industries, which layers): part of every cached read's key, so a read kept
 # from before a deploy never keeps the old rules' companies or figures (R18: "Private banks" kept the public banks after the fix)
-RULES = 43                       # R43 (lane d1, the outside review of the live Release 41 decks, proven on the exact replay of its placement inputs): a company the map named in a layer whose way of earning no layer of the map has stays in that layer, out of its figures (Arm, Fortinet); the largest layer of a family whose name states a kind of business the company's words don't say takes it by industry only as the family's catch-all, and such companies of one official industry with the like of them in "Other" make a layer of that industry (the apparel chains); a company named in a sub-theme only is placed like the theme's own; a company in no layer with no words of its own is "not checked yet" ("unread"); a weak-evidence company of the layer's industry is in its figures on its industry (Mahindra & Mahindra); pawnbrokers, IT resellers to business, blank-check companies, banks, payments and travel firms filed as retail are another business; "real estate development" is a developer's words; a maker read as a telecom operator makes its own products; R40 (lane s3-r40, the owner's review of the live Release 39 decks, proven on the exact replay of its placement inputs): a layer whose shown name states two ways of earning takes a company of either that holds its industry and whose words say what its name says (online sellers into "Online retailers and marketplaces"); a company the theme's industry brought in whose own words describe another business is dropped from the theme and named on its coverage (propane distributors under retail, solar makers under semiconductors: theme_base.without_off_industry); in a layer of one official industry a company of the layer's kin of making is in its figures (Bosch, Asahi India Glass: by_model KIN_FAMILIES); a layer the split named only by how its companies earn is never ranked ("by_how"); R41 (lane s2-exact, exact replays of the live Release 38.1 placement from its placement inputs): a company leaving a map layer by how it earns stays in it, out of its figures, when that layer is mostly of its industry and no layer of its family is (Bosch, Asahi India Glass); a layer whose name states another way of earning is not the map's layer of a company's industry, and the largest stands by default only as its family's catch-all (online sellers in "Off-price"); a company the split by model moved joins a map layer in 3b only when it fits (Qorvo in "Semiconductor equipment"); a model asked apart from the placement moves no company out of the map layer the placement put it in, and an answer carried from earlier rules sticks: nothing it answered is asked again (place_rest `carried`; Hikal and Brooks); R38.1: a kept placement carried back through every version that kept none of its own (theme_routes.placed), past 39's placements asked again from nothing; R38 (lane s1-fit, the outside review of the live R37 decks: 34 companies moved into "Off-price, dollar and value-format retailers", Micron, Intel and SK Hynix into "Semiconductor equipment"): a company leaving "Other" that the largest layer of its family neither holds by industry nor by words goes to the layer of its family that fits it, else stays in "Other", never the largest by default; a split-made layer joins a map layer of the same model only with the companies whose words fit it (by_model.home_of, fits). R37 (lane r2, the owner: misclassifications across all themes): a company no answer gave a model takes the one its own words state in so many words, read since (theme_check.stated_model, refine_kept), a bank's or lender's industry is lending, a landlord's own words make it one whatever its industry, OSAT and ESDM words are contract making, own-fab words read in an annual report make a chip maker no fabless one, a company leaving "Other" joins the largest layer of its family only when that holds its industry or words, else a layer all of its industry sharing its words, else stays in "Other" when no layer holds either (by_model.home_of), a contract maker joins only a contract layer of its kind (theme_check.contract_kind), a company the map placed whose model only its words state stays in its layer (by_model settled); R36 (GPT review of the live R35 decks): foundry words with products of its own named are no contract maker's and a chip maker naming its own products given contract manufacturing is a maker (theme_check.chip_idm), chips made using specialty process technologies are a foundry's, a seller of its own goods given platform is a retailer, a company of another business filed under the theme's industry (solar under semiconductors) stays in "Other" (theme_check.off_industry), a company leaving a map layer for its family goes to the family's layer of its own industry (by_model); q1: a network operator given software or capacity is telecom_services (theme_check.telecom_operator), a rule-made model of another family not held at the answer's "low" (said_for), foundry words read in a 10-K/20-F as contract making; lane n2: a kept model of low confidence read again from the evidence as it is now (refine_kept), foundry words as contract making, family words (theme_check.model_confidence), retail vs platform (refine_model); R34: the model rules that changed after R33 (a chip materials supplier is an ingredient maker; a model-named layer joins a map layer only when one layer has its model) apply to every kept check, placement and dive: whenever refine_model, by_model or a model rule changes, bump this; R33: a company with no model takes the one its map layer's name states (models_from_layer); R32: chip designers without fabs as fabless (theme_check.chip_designer), a layer named by how it earns joins the map's layer of its primary model, a market-value half with no shown company undone (unsplit_unshown); R31: lenders apart from developers and landlords, fabless vs IDM by owned fabs (theme_check.refine_model), a metals family's commodity as its sub-basis, a split-made layer of one primary model joins the map's (by_model 3b); R30: a kept placement's unknown models asked again once the companies' descriptions are kept (reask_unknown); R29: kinds of utility and of metals business as their own models (theme_check.refine_model); R21: every confirmed company in one of the map's layers (place_rest); R22: layer names fit, currencies, extra layers; R25: one revenue model a layer; R26: models from more evidence and checked by it, names after the split; R27: primary model, tags and confidence, comparable segments, no one-company layer; R28: the companies to place carry their own descriptions (theme_routes.describe_unplaced)
+RULES = 44                       # R43 (lane d1, the outside review of the live Release 41 decks, proven on the exact replay of its placement inputs): a company the map named in a layer whose way of earning no layer of the map has stays in that layer, out of its figures (Arm, Fortinet); the largest layer of a family whose name states a kind of business the company's words don't say takes it by industry only as the family's catch-all, and such companies of one official industry with the like of them in "Other" make a layer of that industry (the apparel chains); a company named in a sub-theme only is placed like the theme's own; a company in no layer with no words of its own is "not checked yet" ("unread"); a weak-evidence company of the layer's industry is in its figures on its industry (Mahindra & Mahindra); pawnbrokers, IT resellers to business, blank-check companies, banks, payments and travel firms filed as retail are another business; "real estate development" is a developer's words; a maker read as a telecom operator makes its own products; R40 (lane s3-r40, the owner's review of the live Release 39 decks, proven on the exact replay of its placement inputs): a layer whose shown name states two ways of earning takes a company of either that holds its industry and whose words say what its name says (online sellers into "Online retailers and marketplaces"); a company the theme's industry brought in whose own words describe another business is dropped from the theme and named on its coverage (propane distributors under retail, solar makers under semiconductors: theme_base.without_off_industry); in a layer of one official industry a company of the layer's kin of making is in its figures (Bosch, Asahi India Glass: by_model KIN_FAMILIES); a layer the split named only by how its companies earn is never ranked ("by_how"); R41 (lane s2-exact, exact replays of the live Release 38.1 placement from its placement inputs): a company leaving a map layer by how it earns stays in it, out of its figures, when that layer is mostly of its industry and no layer of its family is (Bosch, Asahi India Glass); a layer whose name states another way of earning is not the map's layer of a company's industry, and the largest stands by default only as its family's catch-all (online sellers in "Off-price"); a company the split by model moved joins a map layer in 3b only when it fits (Qorvo in "Semiconductor equipment"); a model asked apart from the placement moves no company out of the map layer the placement put it in, and an answer carried from earlier rules sticks: nothing it answered is asked again (place_rest `carried`; Hikal and Brooks); R38.1: a kept placement carried back through every version that kept none of its own (theme_routes.placed), past 39's placements asked again from nothing; R38 (lane s1-fit, the outside review of the live R37 decks: 34 companies moved into "Off-price, dollar and value-format retailers", Micron, Intel and SK Hynix into "Semiconductor equipment"): a company leaving "Other" that the largest layer of its family neither holds by industry nor by words goes to the layer of its family that fits it, else stays in "Other", never the largest by default; a split-made layer joins a map layer of the same model only with the companies whose words fit it (by_model.home_of, fits). R37 (lane r2, the owner: misclassifications across all themes): a company no answer gave a model takes the one its own words state in so many words, read since (theme_check.stated_model, refine_kept), a bank's or lender's industry is lending, a landlord's own words make it one whatever its industry, OSAT and ESDM words are contract making, own-fab words read in an annual report make a chip maker no fabless one, a company leaving "Other" joins the largest layer of its family only when that holds its industry or words, else a layer all of its industry sharing its words, else stays in "Other" when no layer holds either (by_model.home_of), a contract maker joins only a contract layer of its kind (theme_check.contract_kind), a company the map placed whose model only its words state stays in its layer (by_model settled); R36 (GPT review of the live R35 decks): foundry words with products of its own named are no contract maker's and a chip maker naming its own products given contract manufacturing is a maker (theme_check.chip_idm), chips made using specialty process technologies are a foundry's, a seller of its own goods given platform is a retailer, a company of another business filed under the theme's industry (solar under semiconductors) stays in "Other" (theme_check.off_industry), a company leaving a map layer for its family goes to the family's layer of its own industry (by_model); q1: a network operator given software or capacity is telecom_services (theme_check.telecom_operator), a rule-made model of another family not held at the answer's "low" (said_for), foundry words read in a 10-K/20-F as contract making; lane n2: a kept model of low confidence read again from the evidence as it is now (refine_kept), foundry words as contract making, family words (theme_check.model_confidence), retail vs platform (refine_model); R34: the model rules that changed after R33 (a chip materials supplier is an ingredient maker; a model-named layer joins a map layer only when one layer has its model) apply to every kept check, placement and dive: whenever refine_model, by_model or a model rule changes, bump this; R33: a company with no model takes the one its map layer's name states (models_from_layer); R32: chip designers without fabs as fabless (theme_check.chip_designer), a layer named by how it earns joins the map's layer of its primary model, a market-value half with no shown company undone (unsplit_unshown); R31: lenders apart from developers and landlords, fabless vs IDM by owned fabs (theme_check.refine_model), a metals family's commodity as its sub-basis, a split-made layer of one primary model joins the map's (by_model 3b); R30: a kept placement's unknown models asked again once the companies' descriptions are kept (reask_unknown); R29: kinds of utility and of metals business as their own models (theme_check.refine_model); R21: every confirmed company in one of the map's layers (place_rest); R22: layer names fit, currencies, extra layers; R25: one revenue model a layer; R26: models from more evidence and checked by it, names after the split; R27: primary model, tags and confidence, comparable segments, no one-company layer; R28: the companies to place carry their own descriptions (theme_routes.describe_unplaced)
 INDUSTRIES_DAYS = 30            # the AI's pick of a free-text theme's industries is made again after this long (at most monthly)
 FIGURES_MAX = 100               # companies the dive works figures out for: every one the AI named, then the largest of the base (R31: 60 -> 100; stored reads only, the deck built in under a second for 100 synthetic companies, the sector-figure worker bounded by its queue)
 DESCRIBE_MAX = 120              # base companies whose own one-line description is looked up for the page, largest first
@@ -181,6 +181,8 @@ PLAIN_INDUSTRY = {
     "non banking financial company (nbfc)": "Non-bank lenders (NBFC)", "aerospace & defense": "Aerospace and defence",
     "ship building & allied services": "Shipbuilding", "telecom - cellular & fixed line services": "Telecom services",
     "residential, commercial projects": "Real estate developers", "road assetstoll, annuity, hybrid-annuity": "Road assets",
+    # c1 (R44): names a layer of one official industry shows (theme_base.from_other)
+    "cables - electricals": "Electrical cables", "ferro & silica manganese": "Ferro alloys",
 }
 
 
@@ -811,6 +813,10 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
             out_vc = renamed_after_split(out_vc, {v["layer"] for v in reshaped}, model_names["rename"])
     out_vc, off = without_off_industry(out_vc, {c.get("ticker") for c in todo}, evidence)
     placements = m.get("placements")
+    out_vc, sure = confirmed_by_words(out_vc, about_of, theme)
+    if sure and placements is not None:
+        placements = {**placements, "confirmed": (placements.get("confirmed") or 0) + sure,
+                      "unconfirmed": max(0, (placements.get("unconfirmed") or 0) - sure)}
     if off:
         placements = {**(placements or {}), "off_industry": off}
         for k_ in ("placed", "total", "base"):
@@ -821,6 +827,35 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
                                           **({"model_tags": tags} if models is not None and tags else {}),
                                           **({"model_confidence": conf} if models is not None and conf is not None else {}),
                                           **({"reasked": reasked} if reasked else {})}
+
+
+def confirmed_by_words(vc: list[dict], about_of, theme: str) -> tuple[list[dict], int]:
+    """(the layers, how many companies they confirm) (c1, R44: the live Release 43 Insurance deck listed PB Fintech, the map's own pick for
+    "Distribution and aggregation", as "not confirmed", its words said to "describe other work", because the check of its words timed out):
+    a company the AI added from another industry into one of the map's own layers (never one placed after the map) whose own words say what
+    that layer's name says ("distributing and servicing financial products" says "Distribution") is in the theme by its own words: confirmed
+    ("verified", "verified_by": "words"), whatever check did not answer. Which comparisons it is in is decided apart (by_model, calc_record):
+    a distributor in its own layer is never among the underwriters."""
+    tw = kind_stems(theme)
+    n, out = 0, []
+    for v in vc:
+        if v.get("official") or v.get("by_model") or v.get("industry_group"):
+            out.append(v)
+            continue
+        cos = []
+        for c in v.get("companies") or []:
+            if not c.get("base", True) and not c.get("verified") and not c.get("placed") and not c.get("moved"):
+                words = own_text(about_of(c.get("ticker")) or c.get("what") or "")
+                name = v.get("was") or v.get("layer") or ""
+                head = next((_stem(w) for w in re.findall(r"[a-z]+", name.lower()) if len(w) >= 4 and w not in _PLAIN), "")
+                # its words say a word of what the name says is done (name_says), or the name's head word ("Distribution", a way of earning
+                # name_says leaves to the models)
+                if words and not no_words(words) and (name_says(name, words, tw)[1] or (head and head in _stems(words))):
+                    c = {**c, "verified": True, "verified_by": "words"}
+                    n += 1
+            cos.append(c)
+        out.append({**v, "companies": cos})
+    return out, n
 
 
 def without_off_industry(vc: list[dict], todo: set, evidence) -> tuple[list[dict], list[dict]]:
@@ -837,7 +872,9 @@ def without_off_industry(vc: list[dict], todo: set, evidence) -> tuple[list[dict
             s_ = c.get("ticker")
             if s_ in todo and s_ not in seen and off_industry(evidence(s_)):
                 seen.add(s_)
-                off.append({"ticker": s_, "name": c.get("name") or s_, "industry": c.get("industry") or ""})
+                off.append({"ticker": s_, "name": c.get("name") or s_, "industry": c.get("industry") or "",
+                            # c1 (R44, reviewer ask 3): the reason it is out of the theme, kept beside it
+                            "why": f"filed under {industry_label(c.get('industry')) or 'the theme’s industry'}, its own words describe another business"})
     if not off:
         return vc, []
     out = [{**v, "companies": [c for c in v.get("companies") or [] if c.get("ticker") not in seen]} for v in vc]
@@ -1376,6 +1413,8 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
     # 3. no layer of one company made by the split (R27: the live R26 IT deck had a visa and e-governance firm alone, a full page, as
     # "Hotels, travel and consumer services")
     out = _no_single_layers(out, before, main, fam, theme, fits)
+    # c1 (R44): the companies left in "Other" placed where their own words or official industry name a layer's business (from_other)
+    out = from_other(out, models, conf, every, fam, main, ev, theme_words, outside)
 
     # 3b. R31: no two layers of one primary model (the live R30 Semiconductors deck had "Fabless chip design" beside "Product designers that
     # outsource making"): a layer the split made joins the map's own layer of its primary model, family and sub-basis
@@ -1500,6 +1539,10 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
         # companies earn is shown, never ranked (theme_data.headline_ok)
         if v.get("by_model") and not v.get("scale") and v["layer"].removesuffix(", by revenue model") in model_names:
             v["model"]["by_how"] = True
+            # c1 (R44, the outside review of the live Release 43 Semiconductors deck: "Makers of their own products" mixes memory, processor,
+            # laser and optics makers): the reason it is never ranked, on its own page (no group of it holds the 5 companies a ranking needs)
+            v["model"]["line"] += (" Shown, never ranked: a group made by how its companies earn, of different businesses, so its figures are "
+                                   "no one business's.")
     # R31: two of the map's own layers of one primary model, family and sub-basis both stay (the map groups them by what they make or serve);
     # each one's line says so, so no reader takes them for two ways of earning
     mine = [v for v in out if not v.get("official") and not v.get("scale") and (v.get("model") or {}).get("id") and not v["model"].get("sparse")
@@ -1608,6 +1651,119 @@ def shown_model(model: dict | None, rows: list[dict]) -> dict | None:
     out = {**model, "line": line, "known": len(known), "of": n, "out": len(rest), "also": [{"id": also[1], "n": also[0]}] if also else []}
     out.pop("sparse", None)
     return {**out, "sparse": True} if sparse else out
+
+
+# c1 (R44, the outside review of the live Release 43 decks: 29 of 90 Consumer retail companies and 32 of 65 Metals companies in "Other"):
+# words that name one kind of goods ("apparel" says what "clothing" says), for a company's words read against a layer's name
+SAME_KIND = ((r"\bapparel\b|\bgarments?\b", "clothing"),)
+NO_ONE_BUSINESS = r"\b(?:misc\w*|other|others|diversified|nec|general)\b"      # an official industry naming no one kind of business
+
+
+def no_words(evidence) -> bool:
+    """Whether a company's evidence holds no words of its own about its work: none, or only the titles of its filings (theme_routes)."""
+    t = own_text(evidence).strip()
+    return not t or t.startswith("From its own filings:")
+
+
+def from_other(out: list[dict], models: dict, conf: dict, every: dict, fam, main, ev, theme_words: set, outside: set) -> list[dict]:
+    """c1 (R44, the outside review of the live Release 43 decks: "improve coverage only with evidence; never force"): the companies left in
+    the "Other" group after the split by how companies earn, placed where their own words or official industry name a business a layer
+    covers, each marked with how ("by_industry" or "by_words"); every other one stays in "Other".
+    1. One with no words of its own and no way of earning shown goes to the layer made of its official industry and named by it (by_model's
+       industry group), else to the one layer whose name its official industry's name says (theme_routes' industry "Coal" says "Mining of coal
+       and iron ore") when that layer holds more than half of the theme's companies of that industry that have words of their own: an
+       industry named by two layers ("Aluminium": a smelter's and a product maker's) or held mostly elsewhere places nothing.
+    2. One whose way of earning is shown (not at "low") goes to the one layer of that way of earning whose name its own words say (name_says:
+       "a specialty clothing store" says "Family clothing stores"; "apparel" says "clothing", SAME_KIND), and, in a family whose layers differ
+       by a sub-basis (theme_check.SUB_BASIS: a metals company's commodity), only to a layer of its own (a ferro chrome maker never joins
+       steelmaking by the word "steel").
+    3. The companies of one official industry naming one kind of business (not "Miscellaneous", "Diversified"...) left in "Other" with no
+       words or with words of one way of earning, with those of it the split moved from "Other" by that way of earning alone into a layer
+       whose name their words don't say, make a layer of that industry when they are INDUSTRY_GROUP_MIN or more and SPLIT_PART or more of them
+       have words of their own (never a layer of unread companies), and no company of that industry with words sits elsewhere (Metals: ten ferro
+       alloy makers, five of them in "Mining of coal and iron ore" or "Other" by how they earn, five with no words, all "Ferro & Silica
+       Manganese")."""
+    from collections import Counter
+
+    from .theme_check import SUB_BASIS, SUB_OF, off_industry, sub_basis
+    rest_v = next((v for v in out if v.get("official") and v.get("basis") == "rest"), None)
+    if rest_v is None or not rest_v["companies"]:
+        return out
+    layers = [v for v in out if not v.get("official") and v["companies"] and not v.get("scale")]      # never a half of a layer split by size
+    name_of = lambda v: v.get("was") or v["layer"]          # noqa: E731
+    group_ind = lambda v: key(v["companies"][0].get("industry")) if v.get("industry_group") else None      # noqa: E731
+    worded: dict = {}
+    for v in out:
+        for c in v["companies"]:
+            if c.get("industry") and not no_words(ev(c)):
+                worded.setdefault(key(c["industry"]), Counter())[id(v)] += 1
+
+    def kinded(text: str) -> str:
+        for rx, to in SAME_KIND:
+            text = re.sub(rx, to, text, flags=re.I)
+        return text
+
+    def sub_ok(c, v, f) -> bool:
+        k_ = SUB_BASIS.get(f)
+        if not k_:
+            return True
+        return SUB_OF[k_](ev(c)) == sub_basis(f, [ev(x) for x in v["companies"] if fam(x) == f])
+
+    left = []
+    for c in rest_v["companies"]:
+        ind = key(c.get("industry")) if c.get("industry") else ""
+        target, how = None, ""
+        if c.get("ticker") in outside or off_industry(ev(c)):
+            pass
+        elif no_words(ev(c)) and not fam(c) and not every.get(c.get("ticker")) and ind:
+            grp = [v for v in layers if group_ind(v) == ind]
+            if grp:
+                target, how = grp[0], "by_industry"
+            elif not re.search(NO_ONE_BUSINESS, industry_label(c.get("industry")), re.I):
+                said = [v for v in layers if name_says(name_of(v), plain_industry(c.get("industry")), theme_words)[1]]
+                held = worded.get(ind) or Counter()
+                if len(said) == 1 and held[id(said[0])] * 2 > sum(held.values()):
+                    target, how = said[0], "by_industry"
+        elif fam(c):
+            f = fam(c)
+            text = kinded(own_text(ev(c)))
+            said = [v for v in layers if main(v["companies"]) == f and name_says(name_of(v), text, theme_words)[1] and sub_ok(c, v, f)]
+            if len(said) == 1:
+                target, how = said[0], "by_words"
+        if target is None:
+            left.append(c)
+        else:
+            target["companies"].append({**c, "moved": True, "placed_by": how})
+    rest_v["companies"] = left
+    # 3. a layer of one official industry from "Other" and the companies the split moved by how they earn alone
+    for ind in sorted({key(c.get("industry")) for c in left if c.get("industry")}):
+        mine = [c for c in left if key(c.get("industry")) == ind]
+        label = industry_label(mine[0].get("industry"))
+        if re.search(NO_ONE_BUSINESS, label, re.I):
+            continue
+        fams = Counter(fam(c) for c in mine if fam(c))
+        # moved by how it earns alone: the layer's name isn't said by its words, or its commodity isn't the layer's (SUB_BASIS)
+        moved_in = [(v, c) for v in layers for c in v["companies"] if key(c.get("industry")) == ind and c.get("moved") and c.get("placed")
+                    and fam(c) and not v.get("industry_group") and not v.get("scale")
+                    and (not name_says(name_of(v), own_text(ev(c)), theme_words)[1] or not sub_ok(c, v, fam(c)))]
+        fams.update(fam(c) for _, c in moved_in)
+        if len(fams) != 1:
+            continue
+        f = next(iter(fams))
+        grp = [c for c in mine if fam(c) == f or (no_words(ev(c)) and not every.get(c.get("ticker")))] + [c for _, c in moved_in]
+        has_words = [c for c in grp if not no_words(ev(c))]
+        ids = {id(c) for c in grp}
+        elsewhere = sum(1 for v in out for c in v["companies"] if key(c.get("industry")) == ind and id(c) not in ids and not no_words(ev(c))
+                        and fam(c) == f)
+        if len(grp) < INDUSTRY_GROUP_MIN or len(has_words) < SPLIT_PART or elsewhere:
+            continue
+        for v, c in moved_in:
+            v["companies"] = [x for x in v["companies"] if x is not c]
+        rest_v["companies"] = [c for c in rest_v["companies"] if id(c) not in ids]
+        out.insert(next((i for i, v in enumerate(out) if v.get("official")), len(out)),
+                   {"layer": label, "description": "", "industry_group": True,
+                    "companies": [{**c, "moved": True, "placed_by": "by_industry" if no_words(ev(c)) else "by_words"} for c in grp]})
+    return out
 
 
 def _no_single_layers(out: list[dict], before: dict, main, fam, theme: str, fits=None) -> list[dict]:

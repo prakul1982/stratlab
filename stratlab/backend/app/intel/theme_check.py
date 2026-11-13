@@ -917,6 +917,13 @@ OFF_INDUSTRY = ((r"semiconductor|\bchips?\b|integrated circuits?",
                  r"\bpawn|blank check company|special purpose acquisition|\bcommercial bank\b|licensed by the reserve bank|"
                  r"digital payment solutions|travel (?:services|platform)",
                  r"(?!)"),
+                # c1 (R44, the outside review of the live Release 43 Consumer retail deck: 29 of 90 in "Other"): a sportsbook, a virtual-reality
+                # concert producer, an enterprise software house, a broadcast network and a diversified holding company filed as retail are
+                # another business by their own words
+                (r"\bretail",
+                 r"\bsportsbook|sports betting|virtual reality concert|concert production compan|enterprise software|live broadcast network|"
+                 r"diversified holding company",
+                 r"(?!)"),
                 (r"\bretail",
                  r"information technology (?:services|solutions)|\bit (?:solutions|services) provider|business-to-business (?:and )?(?:it|information)|"
                  r"serving business, government",
