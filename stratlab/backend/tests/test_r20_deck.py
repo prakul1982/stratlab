@@ -171,7 +171,8 @@ def test_every_rule_holds_on_every_synthetic_theme(name, v, slides):
     at = next(i for i, s in enumerate(slides) if s.title.startswith("Every company's figures"))
     # changed on purpose (R35): where a layer's page left names off, "Who is in each layer's calculations" follows it, a table too
     # changed on purpose (R46): each checked figure's source record follows them, a table too
-    assert all(s.title.startswith(("Every company's figures", deck.ROLL_TITLE, deck.SOURCES_TITLE)) and [b["kind"] for b in s.blocks if b["kind"] != "text"] == ["table"]
+    # changed on purpose (R48): and each comparison's basis (its metric, rule and each layer's companies), a table too
+    assert all(s.title.startswith(("Every company's figures", deck.ROLL_TITLE, deck.SOURCES_TITLE, deck.COMPARE_TITLE)) and [b["kind"] for b in s.blocks if b["kind"] != "text"] == ["table"]
                for s in slides[at:])
     # R21: a theme with layers of its own has no exchange-industry layer beside them; a chart plots no layer median under 3
     lays = v.get("layers") or []
