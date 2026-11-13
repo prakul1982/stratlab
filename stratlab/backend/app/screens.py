@@ -295,12 +295,13 @@ def build_index(region: str, store: bool = True) -> dict:
     rows, ages, empty, old = [], {}, set(), {}
     bought = deals.buys()["buys"] if region == "IN" else {}
     marks = stock_pages.due_marks(region)          # pages behind a results filing a theme saw (stock_pages.mark_due)
-    shown = []
+    shown, versions = [], []
     for key, raw in db.all_settings_with_prefix(prefix):
         stored = db.json_value(raw, {})
         sym = key[len(prefix):]
         ages[sym] = stored.get("ts") or 0
         facts = stored.get("facts") or {}
+        versions.append({"v": facts.get("v"), "not_company": facts.get("not_company"), "no_numbers": facts.get("no_numbers")} if facts else None)
         # built again first when a large company's (see Indexer._due): nothing stored, or a page from before the facts
         # it shows now (every class of shares counted, one P/E: R7V-001, R7V-002; India's yield from its own dividends
         # list: R8O-001)
@@ -343,6 +344,11 @@ def build_index(region: str, store: bool = True) -> dict:
             db.set_setting(stock_pages.BUILT_KEY + region, json.dumps({"at": index["at"], "pages": sorted(ages), "shown": sorted(shown)}))
         except Exception as e:
             print("screens: could not save the built pages list", region, str(e)[:120])
+        # how far the pages are rebuilt to the facts a page shows now, for Admin (stock_pages.rebuild_progress)
+        try:
+            db.set_setting(stock_pages.REBUILD_KEY + region, json.dumps({"at": index["at"], "pages": len(ages), **stock_pages.rebuild_counts(versions)}))
+        except Exception as e:
+            print("screens: could not save the rebuild count", region, str(e)[:120])
     index["_ages"], index["_empty"], index["_old"] = ages, empty, old
     return index
 
