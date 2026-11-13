@@ -172,7 +172,9 @@ def test_a_comparison_headlines_only_on_sample_coverage_one_model_and_one_period
 
 
 def block(name, n, k, med, model=None, year="Mar 2026"):
-    return {"layer": name, "n": n, "revenue": 100.0, "official": False, "model": model, "stats": {"ebitda": {"median": med, "n": k}},
+    # gl50 (R50, updated on purpose): a layer given no model has its way of earning read (READ), else no layer is ranked
+    from tests.gl50_read import READ
+    return {"layer": name, "n": n, "revenue": 100.0, "official": False, "model": dict(READ) if model is None else model, "stats": {"ebitda": {"median": med, "n": k}},
             "companies": [{"symbol": f"{name}{i}", "year": year} for i in range(n)]}
 
 

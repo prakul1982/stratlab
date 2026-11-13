@@ -60,8 +60,12 @@ def test_one_ai_answer_places_them_and_a_kept_answer_is_never_asked_again():
     assert len(asked) == 1 and [c["symbol"] for c in asked[0]["companies"]] == ["EL2", "MS2", "SH2", "XX1"]       # one batch, largest first
     a_ = got["assign"]
     assert a_["MS2"] == {"layer": "Missiles and rockets", "by": "ai"} and a_["XX1"] == {"layer": "", "by": "ai"} and "NOTASKED" not in a_
-    again, _ = B.place_rest(mapped(), "Defence", ABOUT.get, ask=lambda s, t: pytest.fail("asked again"), kept=got)
-    assert again == out
+    # gl50 (R50, updated on purpose): the placement is never asked again; the models its answer didn't give are asked once (MODEL_SYSTEM),
+    # kept in "reasked", and move no company
+    from app.intel import theme_check as C
+    again, got_again = B.place_rest(mapped(), "Defence", ABOUT.get, ask=lambda s, t: {"models": {}} if s == C.MODEL_SYSTEM else pytest.fail("asked again"), kept=got)
+    assert again == out and got_again["reasked"]
+    B.place_rest(mapped(), "Defence", ABOUT.get, ask=lambda s, t: pytest.fail("asked again"), kept=got_again)
     # the AI busy: the words place them now
     busy, got2 = B.place_rest(mapped(), "Defence", ABOUT.get, ask=lambda s, t: (_ for _ in ()).throw(RuntimeError("busy")))
     assert all(x["by"] == "words" for x in got2["assign"].values()) and busy == B.place_rest(mapped(), "Defence", ABOUT.get)[0]
@@ -75,14 +79,20 @@ def test_the_answer_is_kept_in_the_shared_store_with_the_map(monkeypatch):
     monkeypatch.setattr(T, "_about_reader", lambda region, names, limit=0: (lambda s: ABOUT.get(s)))
     calls = []
 
+    from app.intel import theme_check as C
+
     def ask(system, text):
-        calls.append(1)
+        calls.append("models" if system == C.MODEL_SYSTEM else "place")
+        if system == C.MODEL_SYSTEM:
+            return {"models": {}}
         return {"place": [{"symbol": "EL2", "layer": "L2"}, {"symbol": "MS2", "layer": "L0"}, {"symbol": "SH2", "layer": "L1"}, {"symbol": "XX1", "layer": "none"}]}
     m = {"sector": "Defence", "generated_at": 7.0}
     first = T.placed("IN", "Defence", m, mapped(), ask=ask)
     second = T.placed("IN", "Defence", m, mapped(), ask=ask)
+    third = T.placed("IN", "Defence", m, mapped(), ask=ask)
     page = T.placed("IN", "Defence", m, mapped(), ask=None)                # the page's quick read: the kept answer, no AI
-    assert calls == [1] and first == second == page
+    # gl50 (R50, updated on purpose): the placement asked once; the models it didn't give asked once on the next check, then never again
+    assert calls == ["place", "models"] and first == second == third == page
     assert ("theme:place", json.dumps(["place", "IN", "defence", 7, B.RULES])) in store
 
 

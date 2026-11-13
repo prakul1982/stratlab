@@ -1,6 +1,7 @@
 """Release 17 fixes: the business-update reader's year-ago column (a group's filing listing two companies' volumes; a table whose other
 column is the month before), demergers from corporate-action filings, and the theme deck's layout and wording on synthetic themes."""
 from app import biz_updates as B
+from tests.gl50_read import read_args
 
 
 # ---------- R17-005 (a): the year-ago figure is the year-ago column's ----------
@@ -166,7 +167,10 @@ def test_the_highest_and_lowest_layer_are_named_when_every_layer_is_an_official_
     # R31: a test of the ranking rules on fixtures of 3 or 4 companies a layer, run at the marks' floor (COMPARE_MIN); the headline floor
     # of 5 (HEADLINE_MIN) on the same fixtures is tested in tests/test_r31_bound.py
     monkeypatch.setattr("app.intel.theme_data.HEADLINE_MIN", 3)
-    v, slides = deck_of(*theme_a())
+    # gl50 (R50, updated on purpose): with no way of earning read for the layers' companies, none is ranked and the line says why
+    bare, _ = deck_of(*theme_a())
+    assert (bare["chain"]["highest"], bare["chain"]["lowest"]) == (None, None) and bare["chain"]["line"].endswith(D.UNREAD_SAID)
+    v, slides = deck_of(*read_args(theme_a()))
     chain = v["chain"]
     assert (chain["highest"], chain["lowest"]) == ("Film", "Converters") and chain["gap"] == 7.0
     cards = next(b for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards")["items"]
@@ -215,7 +219,7 @@ def test_industry_economics_is_computed_and_traceable(monkeypatch):
     # R31: a test of the ranking rules on fixtures of 3 or 4 companies a layer, run at the marks' floor (COMPARE_MIN); the headline floor
     # of 5 (HEADLINE_MIN) on the same fixtures is tested in tests/test_r31_bound.py
     monkeypatch.setattr("app.intel.theme_data.HEADLINE_MIN", 3)
-    v, slides = deck_of(*theme_a())
+    v, slides = deck_of(*read_args(theme_a()))           # gl50 (R50, updated on purpose): the layers' way of earning read, else none is ranked
     md = v["sections"]["margin_drivers"]
     assert md and abs(sum(x["part"] for x in md["layers"]) - md["change"]) < 0.1             # the parts add up to the change
     titles = [s.title for s in slides]

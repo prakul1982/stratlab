@@ -199,10 +199,10 @@ def test_the_coverage_says_the_share_in_informative_layers_once_and_deck_check_r
     assert row[2].startswith("in a layer the map names; the other 2 in “Other x”, listed, never compared: 1 fit none of the map's layers; "
                              "1 not checked yet")
     page = f"In informative layers   {row[1]}   {row[2]}"
-    assert deck_check.check_pages([page])["counts"]["other>40%"] == 0            # 1 of 5 fits none: 20%
+    assert deck_check.check_pages([page])["counts"]["other>40%"] == 0            # 2 of 5 outside: 40%, not over it # gl50 (R50, updated on purpose): every company outside informative layers counts, the not checked yet too
     hi = "In informative layers   40 of 100 (40%)   in a layer the map names; the other 60 in “Other”, listed, never compared: 45 fit none of the map's layers; 15 not checked yet"
     got = deck_check.check_pages([hi])
-    assert got["counts"]["other>40%"] == 1 and "In informative layers 40 of 100 (40%); 45 fit none (45%)" in got["findings"][0]["text"]
+    assert got["counts"]["other>40%"] == 1 and "In informative layers 40 of 100 (40%); 60 outside them (60%)" in got["findings"][0]["text"]          # gl50 (R50, updated on purpose): every company outside informative layers counts, the not checked yet too
 
 
 def test_the_dive_and_the_deck_take_the_coverage_of_the_whole_map():
@@ -218,9 +218,10 @@ def test_deck_check_reads_the_count_when_its_cell_wraps_around_the_label():
         return ("                                                         in a layer the map names; the other 115 in “Other”, listed, never "
                 f"compared: {fit} fit none of the map's\n                               137 of 252\n"
                 f" In informative layers                                   layers; {115 - fit} not checked yet\n                               (54%)\n")
-    assert deck_check.check_pages([page(60)])["counts"]["other>40%"] == 0
-    got = deck_check.check_pages([page(110)])
-    assert got["counts"]["other>40%"] == 1 and "In informative layers 137 of 252 (54%); 110 fit none (44%)" in got["findings"][0]["text"]
+    # gl50 (R50, updated on purpose): every company outside informative layers counts, the not checked yet too: 115 of 252 outside is 46%, whatever the split
+    for fit in (60, 110):
+        got = deck_check.check_pages([page(fit)])
+        assert got["counts"]["other>40%"] == 1 and "In informative layers 137 of 252 (54%); 115 outside them (46%)" in got["findings"][0]["text"]
 
 
 # ---------- R44.1: the reasons print a loss with the real minus, as every other figure in the deck (the live R44 decks: "-81.4%") ----------

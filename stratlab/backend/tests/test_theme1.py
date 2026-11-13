@@ -363,7 +363,10 @@ def dive():
 
 @pytest.mark.usefixtures("two_company_layers")
 def test_a_draft_post_is_made_only_when_the_data_is_notable_and_is_never_published():
-    d = dive()
+    # gl50 (R50, updated on purpose): a gap between layers is notable only where their companies' ways of earning are read
+    assert not [x for x in dive()["notable"] if x["kind"] == "gap"]
+    from tests.gl50_read import read
+    d = D.build("IN", "Test theme", read(CHECKED), src())
     assert d["notable"] and d["notable"][0]["kind"] == "gap"
     post = blog_research.theme_post(d, "Test theme", "IN", datetime(2026, 10, 5, tzinfo=timezone.utc))
     assert post["published"] is False and post["kind"] == "research" and post["slug"] == "theme-test-theme-margins-in"
