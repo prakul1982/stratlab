@@ -90,7 +90,8 @@ def test_it_services_mixed_layers_are_split_by_how_they_earn():
         if not v.get("official"):
             assert v["model"]["line"].startswith("They earn mainly from"), v["layer"]
     hw = next(v for v in vc if v["layer"] == "Hardware resale and integration")
-    assert hw["model"]["line"] == "They earn mainly from selling and installing hardware that others make." and not hw.get("official")
+    # c1 (R44, updated on purpose): a layer the split named only by how its companies earn says on its page why it is never ranked
+    assert hw["model"]["line"] == ("They earn mainly from selling and installing hardware that others make. " + B.BY_HOW_SAID) and not hw.get("official")
     # the "Other" group stays last
     assert vc[-1]["layer"] == "Other IT service companies"
 

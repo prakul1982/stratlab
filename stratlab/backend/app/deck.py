@@ -2692,7 +2692,7 @@ HELD_WORDS = {"net": "net margin", "ebitda": "EBITDA margin", "roe": "return on 
 STATE_WORDS = {"verified_extreme": "verified", "unverified_extreme": "not reconciled", "invalid": "invalid"}      # R44: theme_data's states
 COVERAGE_HEAD = ["Coverage", "Covered", "Of what"]
 COVERAGE_KINDS = ("Companies, by count", "Market value", "Each figure", "Each layer", "Partly read", "Not in the sources", "In informative layers",
-                  "Another business")
+                  "Another business", "From other industries")
 # R31 (the owner's review of the live R30 Insurance and Real estate decks): the model-specific figures the app's sources don't hold, and why,
 # by business-model family (theme_check.MODELS); said once, on the coverage table (an insurer's, when the sector table doesn't say it)
 NOT_IN_SOURCES = {
@@ -2785,7 +2785,35 @@ def coverage_table(v: dict, cov: dict) -> list[list[str]]:
     off = off_industry_line(v)
     if off:                        # R40: companies of the theme's industries in another business, left out of the theme
         rows.append([COVERAGE_KINDS[7], str(len((v.get("placements") or {}).get("off_industry") or [])), off])
+    n_other, other = other_industry_line(v)
+    if other:                      # c1 (R44): companies the map names from other industries, why each is in the theme, apart from its figures
+        rows.append([COVERAGE_KINDS[8], str(n_other), other])
     return rows
+
+
+def other_industry_line(v: dict) -> tuple[int, str]:
+    """(how many, what is said) of the companies in the theme that the theme's map names from industries other than the theme's own (c1, R44:
+    the outside review of the live Release 43 Insurance deck, "say explicitly whether insurance distribution belongs in the theme"): by layer,
+    each with why it is in the theme (theme_data.theme_record) and, apart from that, whether it is in its layer's figures (theme_data.
+    comparison_said); a layer all of whose companies are of other industries says so. (0, "") when there are none."""
+    from .intel.theme_base import plain_industry
+    out, n = [], 0
+    for b in v.get("layers") or []:
+        cos = b.get("companies") or []
+        mine = [c for c in cos if isinstance(c.get("theme"), dict) and c["theme"].get("by") == "other_industry"]
+        if not mine:
+            continue
+        n += len(mine)
+        groups: dict = {}
+        for c in mine:
+            said = c.get("comparison") or ""
+            why = re.sub(r", from another industry \((?:[^()]|\([^()]*\))*\)", ", from another industry", c["theme"].get("why") or "")
+            ind = plain_industry(c.get("map_industry")) if c.get("map_industry") else ""      # each company's industry, by its name
+            groups.setdefault((why, said or ""), []).append(clean_name(c.get("name") or c.get("symbol") or "") + (f" ({ind})" if ind else ""))
+        head = f"In “{b.get('layer')}”" + (", a layer of the theme's map, all its companies of other industries" if len(mine) == len(cos) else "")
+        parts = [f"{', '.join(names)}: membership: {why}" + (f"; comparison: {said}" if said else "") for (why, said), names in groups.items()]
+        out.append(f"{head}: " + ". ".join(parts) + ".")
+    return n, " ".join(out)
 
 
 def informative_share(n: int, of: int) -> int:
@@ -2837,7 +2865,8 @@ def off_industry_line(v: dict) -> str:
     for x in (v.get("placements") or {}).get("off_industry") or []:
         if isinstance(x, dict) and x.get("ticker"):
             by.setdefault(x.get("industry") or "the theme's industries", []).append(clean_name(x.get("name") or x["ticker"]))
-    return " ".join(f"Filed under {ind} but in another business: {', '.join(names)}." for ind, names in by.items())
+    # c1: a name ending in a full stop ("Amaze Holdings, Inc.") ends the sentence, never with a second one
+    return " ".join(f"Filed under {ind} but in another business: {', '.join(names).rstrip('.')}." for ind, names in by.items())
 
 
 _COV_OF = re.compile(r"(\d[\d,]*) of (\d[\d,]*)")
@@ -3089,7 +3118,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 54                  # R44 (lane v1, the outside review of the live R43 decks): each unusual figure verified against its own filed figures, not reconciled or invalid, one record each, and the data-confidence page's "Verified figures" with the count; the coverage's "In informative layers: N of M (P%)" said once; d1 (the outside review of the live Release 41 decks): the "Other" count split into fit none and not checked yet, one count on every page; every company in a layer or "Other"; no half of a split layer ranked, no comparison on a gap under a point, the peer P/E gap only against named like-for-like peers; layers of two companies or fewer on the "Smaller layers" page, a layer page of at least 5 companies; the coverage on a page of its own when the checks need the room; a company in its layer's figures on its industry said so; LIVE7A (lane t1): the real minus in every range and median, one precision a column, text or chart, layer parts that add up to the change shown, a row's mark its kept reason and a mark's note only with a row that carries it, the tailwinds' contents line in the page's own counts, medians of whole-point margins printed whole; R41: a coloured table cell (the highest and lowest layer, drawn bold) measured bold, so its row holds it whole; a cut paragraph never ends on a joining word; R40: the peer set said as "this theme" (no "the the" on a wrap), a repeated word said once on the finished pages and counted, a layer named only by how its companies earn shown and never ranked, a market-value half with fewer than 3 companies in its figures undone, the coverage table's "In no layer" and "Another business" rows; R38: foreign legal endings left off a label before any of it is cut, no word of a table cell broken inside; LIVE6: calendar price periods, own words only, one market value per company, short charts and empty tables dropped; q1: the appendix counts "with figures" by the dive's rule, a layer's cohort that fell against the run before on the data-confidence page; n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 56                  # c1 (R44, the outside review of the live R43 decks): the coverage's "From other industries" row (each company the map names from another industry, why it is in the theme and, apart from that, whether it is in its layer's figures), a layer named by how its companies earn says on its page why it is never ranked, layers of one official industry made from "Other"; R44 (lane v1, the outside review of the live R43 decks): each unusual figure verified against its own filed figures, not reconciled or invalid, one record each, and the data-confidence page's "Verified figures" with the count; the coverage's "In informative layers: N of M (P%)" said once; d1 (the outside review of the live Release 41 decks): the "Other" count split into fit none and not checked yet, one count on every page; every company in a layer or "Other"; no half of a split layer ranked, no comparison on a gap under a point, the peer P/E gap only against named like-for-like peers; layers of two companies or fewer on the "Smaller layers" page, a layer page of at least 5 companies; the coverage on a page of its own when the checks need the room; a company in its layer's figures on its industry said so; LIVE7A (lane t1): the real minus in every range and median, one precision a column, text or chart, layer parts that add up to the change shown, a row's mark its kept reason and a mark's note only with a row that carries it, the tailwinds' contents line in the page's own counts, medians of whole-point margins printed whole; R41: a coloured table cell (the highest and lowest layer, drawn bold) measured bold, so its row holds it whole; a cut paragraph never ends on a joining word; R40: the peer set said as "this theme" (no "the the" on a wrap), a repeated word said once on the finished pages and counted, a layer named only by how its companies earn shown and never ranked, a market-value half with fewer than 3 companies in its figures undone, the coverage table's "In no layer" and "Another business" rows; R38: foreign legal endings left off a label before any of it is cut, no word of a table cell broken inside; LIVE6: calendar price periods, own words only, one market value per company, short charts and empty tables dropped; q1: the appendix counts "with figures" by the dive's rule, a layer's cohort that fell against the run before on the data-confidence page; n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")

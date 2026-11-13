@@ -100,11 +100,13 @@ def test_a_layer_name_states_each_way_of_earning_it_names():
 
 def test_only_online_sellers_join_the_online_layer_on_the_exact_replay():
     d = live("retail")
-    was = {c["ticker"] for v in d["value_chain"] if v["layer"] == "Online retailers and marketplaces" for c in v["companies"]}
-    now = {s_ for s_, x in now_layers("retail").items() if x == "Online retailers and marketplaces"}
+    # c1 (updated on purpose): in the inputs read from the live Release 43 the online sellers are in the layer of their official industry,
+    # "Catalog and mail-order houses" (d1, R43 industry_group); c1 (R44) adds Caro Holdings, with no words of its own, by that industry
+    was = {c["ticker"] for v in d["value_chain"] if v["layer"] == "Catalog and mail-order houses" for c in v["companies"]}
+    now = {s_ for s_, x in now_layers("retail").items() if x == "Catalog and mail-order houses"}
     # lane d1 (updated on purpose): R40's nine online sellers are live since (in the inputs read from Release 41), and stay
     joined = {"CHWY", "RVLV", "SFIX", "DDL", "NXH", "AKA", "HOUR", "LITB", "QVCG"}
-    assert was == now and joined <= now
+    assert was | {"CAHO"} == now and joined <= now
     for s_ in joined:                          # each says "online" or "e-commerce" in its own words
         assert re.search(r"\bonline\b|\be-?commerce\b", d["evidence"][s_], re.I), s_
     # the thrift chain shares its industry, not its words: it stays in "Other"; the pawnbrokers are another business (R43): out of the theme
@@ -124,21 +126,26 @@ def test_propane_and_heating_oil_distributors_filed_as_retail_are_another_busine
 def test_another_business_is_dropped_from_the_theme_and_named_once_with_its_industry():
     # lane d1 (updated on purpose): the inputs are read from the live Release 41, whose placement already dropped R40's propane distributors
     # and solar makers (so they are on the live coverage, not in the inputs); the replay under R43 drops the retail filers of another business
+    # c1 (updated on purpose): the inputs are read from the live Release 43, whose placement already dropped R40's propane distributors and
+    # R43's retail filers of another business (on the live coverage, not in the inputs); the replay under R44 drops c1's five
     d = live("retail")
     live_off = d["placements"]["off_industry"]
-    assert {x["ticker"] for x in live_off} == {"FGPR", "SPH"} and {x["industry"] for x in live_off} == {"Retail-Miscellaneous Retail"}
+    r43 = {"CDW", "EZPW", "FBCD", "FCFS", "IPSI", "NSIT", "TMS", "WBUY"}
+    assert {x["ticker"] for x in live_off} == r43 | {"FGPR", "SPH"}
     out, _ = replay("retail", carried=True)
     off = out["placements"]["off_industry"]
-    r43 = {"CDW", "EZPW", "FBCD", "FCFS", "IPSI", "NSIT", "TMS", "WBUY"}
-    assert {x["ticker"] for x in off} == r43 and not (r43 | {"FGPR", "SPH"}) & {c["ticker"] for v in out["value_chain"] for c in v["companies"]}
+    c1 = {"AMZE", "ESSI", "LIVE", "MDEX", "VIPZ"}
+    assert {x["ticker"] for x in off} == c1 and not (c1 | r43 | {"FGPR", "SPH"}) & {c["ticker"] for v in out["value_chain"] for c in v["companies"]}
     m = pre_map(d, RECOVERED["origin"].get("retail"), RECOVERED["description"].get("retail"))
     m["placements"] = {"total": 96, "placed": 96, "base": 96}
     counted, _ = B.place_rest(m, d["theme"], lambda s_: d["evidence"].get(s_), ask=None, kept=d["kept"], carried=True)
-    assert {k: counted["placements"][k] for k in ("total", "placed", "base")} == {"total": 88, "placed": 88, "base": 88}
+    assert {k: counted["placements"][k] for k in ("total", "placed", "base")} == {"total": 91, "placed": 91, "base": 91}
     assert {x["ticker"] for x in live("semis")["placements"]["off_industry"]} == {"DQ", "TE", "TYGO", "FTCI", "SUNE", "ASTI", "MAXNQ"}
-    v = {"placements": {"off_industry": live_off}}
+    v = {"placements": {"off_industry": [x for x in live_off if x["ticker"] in ("SPH", "FGPR")]}}
     assert deck.off_industry_line(v) == ("Filed under Retail-Miscellaneous Retail but in another business: Suburban Propane Partners LP, "
                                          "Ferrellgas Partners L P.")
+    # c1: a name ending in a full stop is not given a second one ("Madison Technologies Inc..")
+    assert deck.off_industry_line({"placements": counted["placements"]}).endswith("Amaze Holdings, Inc.")
 
 
 def test_a_company_the_map_named_is_never_dropped():
@@ -211,8 +218,9 @@ def test_the_coverage_says_how_many_companies_fit_none_of_the_map_s_layers_and_d
     # R44 (updated on purpose): the companies placed counted once, in the row's "In informative layers 7 of 11 (64%)"
     assert "in a layer the map names; the other 4 in “Other test companies”, listed, never compared: 4 fit none of the map's layers" in t
     assert "Filed under Retail-Miscellaneous Retail but in another business: Propane Co." in t
-    conf = next(s for s in slides if s.title == "Data confidence")
-    rows = [r for b in conf.blocks if b["kind"] == "table" and b["head"] == deck.COVERAGE_HEAD for r in b["rows"]]
+    # c1 (R44, updated on purpose): with the "From other industries" row the coverage table may have a page of its own after the checks
+    rows = [r for s in slides if s.title in ("Data confidence", deck.COVERAGE_TITLE) for b in s.blocks
+            if b["kind"] == "table" and b["head"] == deck.COVERAGE_HEAD for r in b["rows"]]
     assert ["In informative layers", "7 of 11 (64%)"] == rows[[r[0] for r in rows].index("In informative layers")][:2]       # R44 (updated on purpose)
     assert deck.coverage_table_flags(rows, v, deck.coverage(v)) == []
     low = DC.check_text("A\nB\n In no layer   40 of 100   companies fit none of the map's layers (in “Other”)\n\f")

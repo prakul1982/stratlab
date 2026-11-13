@@ -69,16 +69,18 @@ def test_the_theme_deck_has_the_cover_chain_layers_members_claims_and_notes():
     # R19 (owner, 7 Nov: "just keep the important ones not everything"): changed on purpose; no overview page (its words are in the notes), no
     # "Dated company updates" when no company meets the rules, no page for a part with nothing important (an empty sub-theme, margins over time, the
     # balance sheet when it shows nothing), the notes on one page and the appendix one table of every confirmed company's figures
-    assert titles == ["Test theme", "Contents", "Key findings", "Data confidence",
+    # c1 (R44, updated on purpose): the coverage's "From other industries" row (Cell A and Cell B, named by the map from another industry, each
+    # with why it is in the theme and whether it is in its layer's figures) gives the coverage table a page of its own after the checks
+    assert titles == ["Test theme", "Contents", "Key findings", "Data confidence", "Coverage",
                       "The value chain by layer", "Smaller layers", "Layers side by side", "What moved the aggregate margin",       # lane d1: two layers of 2 confirmed companies, one page (updated on purpose)
                       "Tailwinds and risks", "Size and shape", "Growth and profitability", "Valuation", "Price", "How to read this deck",
                       "How the figures are built", "Every company's figures"]       # R25: changed on purpose, the figures' notes before the appendix
     assert slides[0].kind == "cover" and slides[0].subtitle == "India (NSE and BSE) · Theme deep dive" and "Theme deep dive" in footer
     assert not [s for s in slides if s.kind == "section"]
     contents = table_of(slides, "Contents")["rows"]
-    assert [(r[0], r[2]) for r in contents[:2]] == [("Findings", "3"), ("The value chain", "5")]          # each part with its first page
-    assert contents[-1][0] == "Appendix" and contents[-1][2] == "16"            # R25: one page later (the figures' notes); lane d1: one layer page fewer (updated on purpose)
-    assert contents[-2][0] == "How the figures are built" and contents[-2][2] == "15"
+    assert [(r[0], r[2]) for r in contents[:2]] == [("Findings", "3"), ("The value chain", "6")]          # each part with its first page; c1 (R44, updated on purpose): the coverage on a page of its own before it
+    assert contents[-1][0] == "Appendix" and contents[-1][2] == "17"            # c1 (R44): one page later, the coverage on a page of its own (updated on purpose); R25: one page later (the figures' notes); lane d1: one layer page fewer (updated on purpose)
+    assert contents[-2][0] == "How the figures are built" and contents[-2][2] == "16"          # c1 (R44): one page later, the coverage on a page of its own (updated on purpose)
     cover = dict((t[0], t[1]) for t in next(b for b in slides[0].blocks if b["kind"] == "stats")["items"])
     # R28: changed on purpose, "with figures" is of the confirmed companies (CELLB, not confirmed, has figures but is never in them)
     assert cover["Companies"] == "6" and cover["Layers"] == "2" and cover["With figures"] == "4"          # R20: its share and the universe beneath

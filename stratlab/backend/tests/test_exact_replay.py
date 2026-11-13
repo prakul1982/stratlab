@@ -139,8 +139,57 @@ _NARROW = ("an Other-mover the largest layer of its family took by its industry 
 _GROUP = ("{}; with the chains of its official industry in \"Other\" (no model, own words that say they sell in stores) it makes a layer of "
           "that industry, {} or more of them (R43, by_model INDUSTRY_GROUP_MIN)")
 # d1's moves (RULES 43) are live since Release 43, so in the inputs read from it (c1, 13 Nov, updated on purpose): APPROVED restarts
-# against the exact replay of RULES 43 (the live layer); c1's own moves (RULES 44) are added below with their reasons
-APPROVED: dict = {}
+# against the exact replay of RULES 43 (the live layer); c1's own moves (RULES 44, theme_base.from_other: the outside review of the live
+# Release 43 decks, "improve coverage only with evidence; never force") are below with their reasons
+_C1_IND = ("no words of its own and no way of earning shown: placed by its official industry ({}) in the one layer whose name that "
+           "industry's name says, which holds most of the theme's companies of that industry with words (c1, R44, theme_base.from_other 1)")
+_C1_IN_GROUP = ("no words of its own and no way of earning shown: placed by its official industry ({}) in the layer made of that industry "
+                "and named by it (c1, R44, theme_base.from_other 1)")
+_C1_WORDS = ("in \"Other\" with its way of earning shown (retail): its own words ({}) say what the layer's name says, the one layer of its "
+             "way of earning that does (c1, R44, theme_base.from_other 2: \"apparel\" says \"clothing\", SAME_KIND)")
+_C1_GROUP = ("of the official industry {}, {}; with the others of that industry left in \"Other\" or moved by how they earn alone into a "
+             "layer whose name their words don't say, they make a layer of that industry: 5 or more, 3 or more with words of their own, "
+             "none of that industry with words of that way of earning elsewhere (c1, R44, theme_base.from_other 3)")
+_FROM_MAKERS = "moved by the split from \"Other\" into \"Makers of their own products\", a group named only by how its companies earn"
+_FROM_OTHER = "in \"Other\" with no words of its own"
+APPROVED: dict = {
+    **{f"it:{s_}": ("Software products and SaaS platforms", _C1_IND.format("Software Products")) for s_ in ("ACESOFT", "SOTEFIN")},
+    "defence:LAXMIPATI": ("Naval shipbuilding", _C1_IND.format("Ship Building & Allied Services")),
+    "metals:SIZEMASTER": ("Zinc, lead and silver mining and smelting", _C1_IND.format("Zinc")),
+    "retail:CAHO": ("Catalog and mail-order houses", _C1_IN_GROUP.format("Retail-Catalog & Mail-Order Houses")),
+    "retail:PLCE": ("Family clothing stores", _C1_IN_GROUP.format("Retail-Family Clothing Stores")),
+    "retail:ZUMZ": ("Family clothing stores", _C1_WORDS.format("\"a specialty clothing store\"")),
+    "retail:TLYS": ("Family clothing stores", _C1_WORDS.format("\"a specialty retailer of casual apparel\"")),
+    "retail:DLTH": ("Family clothing stores", _C1_WORDS.format("\"workwear, casual wear, outdoor apparel\"")),
+    # Utilities: the cable makers and the electrical equipment makers, apart from each other by their official industry
+    **{f"utilities:{s_}": ("Electrical cables", _C1_GROUP.format("Cables - Electricals", _FROM_MAKERS)) for s_ in (
+        "CMICABLES", "CORDSCABLE", "DYCL", "FINCABLES", "KEI", "KSHINTL", "LASERPOWER", "LUMINO", "PARACABLES", "POLYCAB", "QUADFUTURE",
+        "UNIVCABLES")},
+    **{f"utilities:{s_}": ("Electrical cables", _C1_GROUP.format("Cables - Electricals", _FROM_OTHER)) for s_ in (
+        "DEFRAIL", "JDCABLES", "JOHNSONCAB", "SUSAN", "SYSTEMATIC", "ULTRACAB")},
+    **{f"utilities:{s_}": ("Heavy electrical equipment", _C1_GROUP.format("Heavy Electrical Equipment", _FROM_MAKERS)) for s_ in (
+        "AARTECH", "ABB", "ATLANTAELE", "AZAD", "BBL", "BHEL", "CGPOWER", "ELECON", "EXICOM", "INDOTECH", "INOXWIND", "KANOHAR",
+        "KARAMTARA", "MARSONS", "NEUEON", "POWERINDIA", "SCHNEIDER", "SIEMENS", "SKIPPER", "SUZLON", "SWELECTES", "TARIL", "TDPOWERSYS",
+        "THERMAX", "TRITURBINE", "VOLTAMP", "WAAREEINDO")},
+    **{f"utilities:{s_}": ("Heavy electrical equipment", _C1_GROUP.format("Heavy Electrical Equipment", _FROM_OTHER)) for s_ in (
+        "ACCORDTS", "JYOTI", "KPGEL", "RAKSAN", "STARDELTA", "UVDRHOR", "VANS")},
+    # Metals: the ferro alloy makers (ferro chrome, manganese and silicon alloys), out of the mining layer, which they don't mine for
+    **{f"metals:{s_}": ("Ferro alloys", _C1_GROUP.format("Ferro & Silica Manganese", "moved by the split into \"Mining of coal and iron "
+                                                         "ore\" by how it earns (commodity making) alone: its words name ferro alloys, "
+                                                         "not coal or iron ore")) for s_ in (
+        "IMPEXFERRO", "MAITHANALL", "SHYAMCENT", "VISACHROME")},
+    "metals:IMFA": ("Ferro alloys", _C1_GROUP.format("Ferro & Silica Manganese", "in \"Other\", its words a ferro chrome maker's")),
+    **{f"metals:{s_}": ("Ferro alloys", _C1_GROUP.format("Ferro & Silica Manganese", _FROM_OTHER)) for s_ in (
+        "CHROME", "FACORALL", "INDSILHYD", "NAGPI", "NCML")},
+    # Metals: the makers of aluminium products (powder, profiles, foil, secondary aluminium), apart from the smelters, which keep their layer
+    **{f"metals:{s_}": ("Aluminium", _C1_GROUP.format("Aluminium", "moved by the split into \"Metal pipe, tube and product fabricators\" "
+                                                      "by how it earns (metal processing) alone: its words name aluminium products, not "
+                                                      "pipes or tubes")) for s_ in ("ARFIN", "MAANALU", "MANAKALUCO")},
+    **{f"metals:{s_}": ("Aluminium", _C1_GROUP.format("Aluminium", "in \"Other\", its words an aluminium product maker's")) for s_ in (
+        "HINDALUMI", "MMP")},
+    **{f"metals:{s_}": ("Aluminium", _C1_GROUP.format("Aluminium", _FROM_OTHER)) for s_ in (
+        "BMAL", "JIVIAL", "KANISHK", "MAITRI", "MSAFE", "PALCO", "PGFOILQ", "SACHEMT", "SUDAI")},
+}
 # R40: "theme:symbol" -> why it is no longer in the theme (theme_base.without_off_industry): a company the theme's official industry brought
 # in whose own words describe another business is dropped, never placed in "Other", and named on the theme's coverage (placements.off_industry)
 _SOLAR = "filed under semiconductors, its own words describe solar {} and no chips: another business"
@@ -152,11 +201,16 @@ DROPPED = {**{f"retail:{s_}": _PAWN.format(what) for s_, what in (
                ("IPSI", "digital payment solutions"), ("WBUY", "a travel platform"))},
            "semis:DQ": _SOLAR.format("polysilicon"), "semis:TE": _SOLAR.format("modules"), "semis:TYGO": _SOLAR.format("power electronics"),
            "semis:FTCI": _SOLAR.format("trackers"), "semis:SUNE": _SOLAR.format("installations"), "semis:ASTI": _SOLAR.format("panels"),
-           "semis:MAXNQ": _SOLAR.format("panels"), "retail:SPH": _FUEL, "retail:FGPR": _FUEL}
+           "semis:MAXNQ": _SOLAR.format("panels"), "retail:SPH": _FUEL, "retail:FGPR": _FUEL,
+           # c1 (R44, the outside review of the live Release 43 Consumer retail deck: 29 of 90 in "Other"; theme_check.OFF_INDUSTRY)
+           **{f"retail:{s_}": _PAWN.format(what).replace("R43", "c1, R44") for s_, what in (
+               ("VIPZ", "an online mobile sportsbook"), ("MDEX", "a live broadcast network"), ("ESSI", "enterprise software"),
+               ("AMZE", "a virtual reality concert production company"), ("LIVE", "a diversified holding company"))}}
 # the owner's review of Release 38: these companies' layers (or "Other") on the exact replay, whatever a later rule changes; R40 (the owner's
 # review of Release 39, updated on purpose): Chewy into the online layer; Ferrellgas, Suburban Propane and T1 Energy out of the theme (None)
 REGRESSION = {"auto:BOSCHLTD": "Component and systems suppliers", "auto:ASAHIINDIA": "Component and systems suppliers",
-              "retail:CHWY": "Catalog and mail-order houses",          # c1 (updated on purpose): its layer on the live Release 43 "retail:FGPR": None, "retail:SPH": None,
+              "retail:CHWY": "Catalog and mail-order houses",          # c1 (updated on purpose): its layer on the live Release 43
+              "retail:FGPR": None, "retail:SPH": None,
               "semis:MU": "Makers of their own products", "semis:INTC": "Makers of their own products",
               "semis:QRVO": "Makers of their own products", "semis:GFS": "Contract chip foundries", "semis:TE": None,
               # d1 (the outside review of the live Release 41 decks, updated on purpose): Arm, Fortinet, the apparel chains, the pawnbrokers
@@ -164,8 +218,10 @@ REGRESSION = {"auto:BOSCHLTD": "Component and systems suppliers", "auto:ASAHIIND
               "retail:GAP": "Family clothing stores", "retail:AEO": "Family clothing stores", "retail:BKE": "Family clothing stores",
               "retail:DDS": "Other", "retail:FCFS": None, "retail:CDW": None, "realty:PENINLAND": "Residential developers",
               # c1 (updated on purpose): on the live Release 43 the map's two makers' layers hold none of the map's own picks, so the cable
-              # and equipment makers are one layer the split named by how they earn (shown, never ranked)
-              "utilities:PARACABLES": "Makers of their own products"}
+              # and equipment makers were one layer the split named by how they earn; c1 (R44) puts the cable makers in a layer of their
+              # official industry, apart from the equipment makers (theme_base.from_other 3)
+              "utilities:PARACABLES": "Electrical cables", "utilities:BHEL": "Heavy electrical equipment",
+              "metals:MAITHANALL": "Ferro alloys", "retail:VIPZ": None, "retail:LIVE": None}
 
 
 def joined(name: str, v: dict | None = None) -> str:
@@ -174,7 +230,7 @@ def joined(name: str, v: dict | None = None) -> str:
 
 # live layer names a change approved here takes away, and those it adds (halves as one), by theme
 RENAMED: dict = {}          # c1 (updated on purpose): d1's renames are live since Release 43
-ADDED: dict = {}
+ADDED: dict = {"utilities": {"Electrical cables", "Heavy electrical equipment"}, "metals": {"Ferro alloys", "Aluminium"}}      # c1 (R44)
 
 
 def name_only(d: dict) -> dict:
@@ -269,7 +325,8 @@ def test_each_recovered_layer_is_the_only_one_the_kept_answer_fits():
         if not origin:
             continue
         odd = set(RECOVERED["unexplained"].get(key) or {})
-        want = {c["ticker"]: v["layer"] for v in d["value_chain"] for c in v["companies"]}
+        # c1 (updated on purpose): a company APPROVED moves is expected in its approved layer, as the first test expects it
+        want = {c["ticker"]: APPROVED.get(f"{key}:{c['ticker']}", (v["layer"],))[0] for v in d["value_chain"] for c in v["companies"]}
         names = [v["layer"] for v in pre_map(d, {**RECOVERED["origin"][key], **{s_: "?" for s_ in origin}})["value_chain"]
                  if not v.get("official") and v["layer"] != "?"]
         fits = []
@@ -278,7 +335,8 @@ def test_each_recovered_layer_is_the_only_one_the_kept_answer_fits():
             got = layers_of(out["value_chain"])
             if odd or d.get("kept_version") != B.RULES:        # names lost with an unexplained company: members only (halves as one)
                 got = {s_: joined(v["layer"], v) for v in out["value_chain"] for c in v["companies"] for s_ in [c["ticker"]]}
-                ref = {c["ticker"]: joined(v["layer"], v) for v in d["value_chain"] for c in v["companies"]}
+                ref = {c["ticker"]: APPROVED.get(f"{key}:{c['ticker']}", (joined(v["layer"], v),))[0] for v in d["value_chain"]
+                       for c in v["companies"]}
                 back = name_only(d)
                 ok = all(got.get(s_) in (x, back.get(x)) for s_, x in ref.items() if s_ not in odd)
             else:
