@@ -142,8 +142,13 @@ test("DI-014, DI-022: Help is in the account menu and lists the explanations; Se
 
 test("DI-005, DI-006: My space keeps the chosen order, and the layout is kept on the account", async ({ page, request }, info) => {
   const phone = info.project.name === "phone";
-  const u = who(118, phone);
+  // its own account for each project and repeat (the order is kept on the account: a repeat on the same one, or a second run
+  // against a server left running, started with Markets already moved and its "Move up" button off)
+  const n = (info.repeatEachIndex % 12) * 2 + (phone ? 1 : 0);
+  const u: Who = { token: `di1-${n}`, id: `u-di1-${n}`, email: `di1${n}@example.com` };
   await answer(request, u, "money");
+  // and from the default order, whatever an earlier run left on it
+  await request.put(`${API}/me/prefs`, { headers: auth(u), data: { mine: { order: ["networth", "pnl", "paper", "markets", "coming", "watch", "saved"], hidden: [] } } });
   const errors = await signIn(page, u, "/mine");
   await expect(page.getByTestId("mine-home")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Customise", exact: true }).click();
