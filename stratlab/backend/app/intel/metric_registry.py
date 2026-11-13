@@ -68,7 +68,7 @@ METRICS = (
     _m("ebitda", "EBITDA margin", "Operating profit before depreciation, interest and tax, over revenue", "pct", "year", _YEAR_SRC,
        "None for banks, lenders, insurers; some file whole points", "*"),
     _m("net", "Net margin", "Net profit over revenue; one above the EBITDA margin or unusual that its own filed figures don't give (†) is out of the median", "pct", "year", _YEAR_SRC,
-       "Includes items outside operations, and tax", "*"),
+       "Includes other income, exceptional items and tax", "*"),
     _m("roce", "ROCE", "Operating profit before interest and tax over equity plus debt", "pct", "year", _LAST_SRC, "None for banks, lenders, insurers", "*"),
     _m("roe", "ROE", "Net profit over shareholders' equity", "pct", "year", _LAST_SRC, "Debt raises it; lenders' and others' differ", "*"),
     _m("nii_assets", "NII / assets", "Interest earned less interest paid, over average total assets; filed results annualised where read, "

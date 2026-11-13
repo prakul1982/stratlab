@@ -37,7 +37,7 @@ FEW_BASE = 4                  # a highest or lowest median on this many companie
 COMPARE_MIN = MIN_BASE
 # R31 (the owner's review of the live R30 decks): a layer-vs-layer headline (the value chain's line, findings, questions) needs at least this
 # many companies with the figure in each layer it compares; tables still show every layer and mark (green, red) those of COMPARE_MIN or more
-DIVE_TEXT = 20         # gl50 (R50): a chain with no way of earning read shown, not ranked; a parent's listed subsidiary out of totals adding both; the latest quarter most companies report; a clinical-stage layer's commercial companies out of its figures; ex49 (R49): each company left out of a layer's figures with its precise reason (a different revenue model with both models, insufficient evidence with what is missing, the part of a partial one), the capital-intensity proxy labelled and its inputs checked, layers ranked only of one business model the map's words support, which net-above-EBITDA lines are still missing; vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R47): a company listed in its layer as another way of earning is said so in the layer's line, the coverage control (theme_changes.coverage_control); vf46 (R46): each checked figure's source record and statement lines, a net margin above EBITDA reconciled line by line; c1 (R44): each company's place in the theme with its reason ("theme": theme_record) apart from its comparison decision ("comparison"), a layer named by how its companies earn says why it is never ranked; R44.1: a loss in a verification reason printed with the real minus (deck 55, dive text 15, updated on purpose); R44 (lane v1): each unusual figure verified against its own filed figures, not reconciled or invalid (verify_net, figure_states), never dropped by a cutoff alone; the dive's coverage of informative layers; R43.1: the whole-point margins counted among the margins there are ("3 of the 1" on the live Insurance deck); d1: halves of a split layer never ranked, no ranking on a gap under a point, peers named and like for like, every company in a layer or "Other", the not-checked-yet mark; LIVE7A (lane t1): every company at the index's newest close and one price date, own words without encyclopedia leads or a cut word, whole-point margins and gaps printed whole, operating figures of old periods left out and listed once, click-bait headlines left out, "Dividend: Dividend" said once; R40: a layer the split named only by how its companies earn is never ranked ("a group by how they earn, of different businesses"), a market-value half with fewer than 3 companies in its figures undone; LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
+DIVE_TEXT = 21         # rv51 (R51): a layer's business model only from its own records (named_fit); a company of the theme's industries whose principal business fits it never screened out by its words (membership); gl50 (R50): a chain with no way of earning read shown, not ranked; a parent's listed subsidiary out of totals adding both; the latest quarter most companies report; a clinical-stage layer's commercial companies out of its figures; ex49 (R49): each company left out of a layer's figures with its precise reason (a different revenue model with both models, insufficient evidence with what is missing, the part of a partial one), the capital-intensity proxy labelled and its inputs checked, layers ranked only of one business model the map's words support, which net-above-EBITDA lines are still missing; vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R47): a company listed in its layer as another way of earning is said so in the layer's line, the coverage control (theme_changes.coverage_control); vf46 (R46): each checked figure's source record and statement lines, a net margin above EBITDA reconciled line by line; c1 (R44): each company's place in the theme with its reason ("theme": theme_record) apart from its comparison decision ("comparison"), a layer named by how its companies earn says why it is never ranked; R44.1: a loss in a verification reason printed with the real minus (deck 55, dive text 15, updated on purpose); R44 (lane v1): each unusual figure verified against its own filed figures, not reconciled or invalid (verify_net, figure_states), never dropped by a cutoff alone; the dive's coverage of informative layers; R43.1: the whole-point margins counted among the margins there are ("3 of the 1" on the live Insurance deck); d1: halves of a split layer never ranked, no ranking on a gap under a point, peers named and like for like, every company in a layer or "Other", the not-checked-yet mark; LIVE7A (lane t1): every company at the index's newest close and one price date, own words without encyclopedia leads or a cut word, whole-point margins and gaps printed whole, operating figures of old periods left out and listed once, click-bait headlines left out, "Dividend: Dividend" said once; R40: a layer the split named only by how its companies earn is never ranked ("a group by how they earn, of different businesses"), a market-value half with fewer than 3 companies in its figures undone; LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
 HEADLINE_MIN = 5
 # R27 (headline eligibility): a comparison is said as a headline only on a figure for at least this share of the companies of each group it
 # compares (a layer, a family); one with less is shown as data, never ranked (the live R26 Semis deck: "RPO growth -3.9%" of 21 of 53)
@@ -645,6 +645,25 @@ def page_reconcile(r: dict, f: dict, page: float) -> dict:
                                               "revenue gives it: not reconciled"}
 
 
+FINANCIAL_PROFILES = ("bank", "lender", "insurer")
+
+
+def other_income_words(r: dict) -> str:
+    """rv51 (R51): what a year's other income is called for this company: a bank's or lender's non-interest income (its fees, commissions
+    and treasury gains are part of its operations), an insurer's other income, else income outside operations."""
+    prof = r.get("profile") or ("lender" if r.get("bank") else "other")
+    if prof in ("bank", "lender"):
+        return "non-interest income (other income: fees, commissions and treasury gains)"
+    return "other income" if prof in FINANCIAL_PROFILES else "income outside operations"
+
+
+def checks_word(k: str, r: dict) -> str:
+    """CHECKS[k], with a financial company's other income in its own terms (rv51)."""
+    if k == "other_income" and other_income_words(r) != "income outside operations":
+        return CHECKS[k].replace("income outside operations", other_income_words(r).split(" (")[0])
+    return CHECKS[k]
+
+
 def verify_net(r: dict) -> None:
     """R44: a net margin a check finds unusual (beyond ±NET_UNUSUAL%, above the year's EBITDA margin, or with income outside operations
     above half the net profit) reconciled with the company's own filed figures for the same year (`filed`: revenue, net profit, EBITDA
@@ -712,7 +731,9 @@ def verify_net(r: dict) -> None:
         else:
             why.append(f"at or below its {gpts(e)} EBITDA margin" if net <= e else "")
     if ok and "other_income" in flags:          # the one-off that explains it, said
-        why.append(f"income outside operations of {amount(o, u)} is {o / p * 100:.0f}% of the net profit")
+        # rv51 (R51, the outside review of the live Release 49 Private banks deck: twelve verified cases said "income outside operations" of a
+        # bank's fee and treasury income): a financial company's other income in the accounting terms that fit it (other_income_words)
+        why.append(f"{other_income_words(r)} of {amount(o, u)} is {o / p * 100:.0f}% of the net profit")
     if sg:                                      # R48: what the year's lines show of a positive net profit beside a negative ROCE
         why.append(sg["why"])
         ok = ok and sg["kind"] != "not_stored"
@@ -720,7 +741,14 @@ def verify_net(r: dict) -> None:
         why.append(sp["why"])
         ok = ok and sp["ok"]
     why = [w for w in why if w]
-    r.setdefault("verify", {})["net"] = {"state": VERIFIED if ok else UNVERIFIED, "value": net, "checks": [CHECKS[k] for k in flags],
+    # rv51 (R51: "verified" must mean the calculation, accounting basis and supporting statement lines were checked): how far a kept figure
+    # was checked: "lines" when each check that flagged it was answered by the year's statement lines (the lines between EBITDA and net
+    # profit, the EBITDA margin it sits under, the lines a sign check reads), "arithmetic" when only net profit over revenue was worked out
+    # again (a large other income, said and not explained)
+    lined = [k for k in flags if k != "other_income"]
+    checked = "lines" if lined and (("net_unusual" not in flags or e is not None) and ("net_above_ebitda" not in flags or bool(bits))) else "arithmetic"
+    r.setdefault("verify", {})["net"] = {"state": VERIFIED if ok else UNVERIFIED, "value": net, "checks": [checks_word(k, r) for k in flags],
+                                         **({"checked": checked} if ok else {}),
                                          "why": "; ".join(([base] if ok and base else []) + why), **(bits if "net_above_ebitda" in flags else {}),
                                          **({"sign": sg} if sg else {}), **({"sign_page": sp} if sp else {})}
     r["one_off"] = not ok                       # shown with †, out of every median (in_median)
@@ -746,7 +774,7 @@ def verify_ebitda(r: dict) -> None:
                                                           else "; no operating profit is stored for the year to check it against") + "; not reconciled")
     net = r.get("net")
     if net is not None and net < 0:
-        r.setdefault("verify", {})["ebitda"] = {"state": VERIFIED, "value": e, "checks": [CHECKS["ebitda_under_max"]],
+        r.setdefault("verify", {})["ebitda"] = {"state": VERIFIED, "value": e, "checks": [CHECKS["ebitda_under_max"]], "checked": "lines",
                                                 "why": f"a loss at both levels, {gpts(e)} EBITDA and {pts(net)} net, {r.get('year') or 'the latest year'}"}
         return
     hold(r, "ebitda", "ebitda_under_max", state=UNVERIFIED, why=f"{CHECKS['ebitda_under_max']} with no net loss stored for the year to agree with it")
@@ -857,6 +885,7 @@ def figure_states(rows: list[dict]) -> list[dict]:
     lines with their values and unit, so a reader can work the figure out again. One list, so every page counts the same records."""
     return [{"symbol": r["symbol"], "name": r["name"], "key": k, "value": x["value"], "state": x["state"], "checks": list(x.get("checks") or []),
              "why": x.get("why") or "", **({"ebitda": r.get("ebitda"), "net": r.get("net")} if k == "net" else {}),
+             **({"checked": x["checked"]} if x.get("checked") else {}),
              # R46: its source record: the document, period and page the year's figures come from, and the statement lines used, as stored
              "source": r.get("source"), "lines": source_lines(r.get("filed")), **({"bridge": x["bridge"]} if x.get("bridge") else {}),
              # R48: what the year's lines show of a sign check (its EBIT and capital employed, or the page's own net margin's year)
@@ -1546,6 +1575,23 @@ def named_model(model) -> str:
     return (model.get("named") or "") if isinstance(model, dict) else ""
 
 
+def named_fit(model, v: dict) -> dict | None:
+    """rv51 (R51, the outside review of the live Release 49 Consumer retail deck: two retail layers shown, not ranked, as "platforms and
+    marketplaces" and "parts, component and ingredient makers", labels read from the map's earlier names for them): a layer's business model
+    apart from how its companies earn ("named", theme_base.by_model) kept only where the layer's own records support it
+    (theme_check.layer_business: its own name and description, and how its companies are read to earn), with where it is read ("named_from",
+    "named_was"); dropped otherwise, so the layer is compared on how its companies earn. A record kept before this release is read the same
+    way. Unchanged when the model names none."""
+    if not isinstance(model, dict) or not model.get("named"):
+        return model
+    from .theme_check import layer_business
+    got, where = layer_business(model["named"], v.get("layer") or "", v.get("was") or "", v.get("description") or "", model.get("family") or "")
+    base = {k: x for k, x in model.items() if k not in ("named", "named_from", "named_was")}
+    if not got:
+        return base
+    return {**base, "named": got, "named_from": where, **({"named_was": v.get("was")} if where == "map" else {})}
+
+
 def business_of(model) -> str:
     """ex49 (R48, the outside review of the live R48 Chemicals deck: custom synthesis ranked against commodity intermediates): a layer's
     business model as the map's words and its companies support it: the family of the model its name states (named_model), else the family
@@ -1573,7 +1619,12 @@ def business_words(model) -> str:
     from .theme_check import FAMILIES, MODELS
     n = named_model(model)
     if n in MODELS:
-        return f"{MODELS[n][1].lower()} (the map's name for the layer)"
+        # rv51 (R51): where the model is read, from the layer's own records (named_fit): its own name, or the map's earlier name for it that
+        # its description also states
+        was = model.get("named_was") or ""
+        if model.get("named_from") == "map" and was:
+            return f"{MODELS[n][1].lower()} (the map's name for the layer, “{was}”, and its description)"
+        return f"{MODELS[n][1].lower()} (stated by the layer's own name)"
     if not isinstance(model, dict) or not (model.get("id") or model.get("family")):
         return ""
     mid, f = model.get("id") or "", model.get("family") or ""
@@ -2323,11 +2374,65 @@ def other_work(what: str, words: set[str]) -> bool:
     return False
 
 
-def membership(c: dict, words: set[str]) -> str:
+# rv51 (R51, the outside review of the live Release 49 IT services deck: Black Box Ltd "own words describe other work", screened out on its
+# first sentence, "AGC Networks Ltd. (AGC), incorporated in 1986 by Tata Telecom Pvt. Ltd. to manufacture telecommunication equipment", though
+# its description goes on to an ICT solutions provider and integrator): another company's name is no word of the company's own work ("Tata
+# Telecom Pvt. Ltd.", the parent that incorporated it), and a sentence of its history (incorporated, established ... to manufacture), with no
+# verb of what it does now, is not its business
+_NAMED_COMPANY = re.compile(r"\b(?:[A-Z][\w&'-]*\.?\s+){1,5}(?:Pvt\.?|Private|Ltd\.?|Limited|Inc\.?|Corp\.?|Corporation|LLC|L\.L\.C\.|plc|PLC)"
+                            r"(?:\s+(?:Ltd\.?|Limited))?(?=\W|$)")
+_HISTORY = re.compile(r"\b(?:incorporated|established|founded|set up|formed|promoted|originally|formerly|began|started|was born)\b", re.I)
+_NOW_VERB = re.compile(r"(?<!\bto )\b(?:is|are|provides|offers|operates|delivers|serves|sells|makes|manufactures|produces|develops|designs|"
+                       r"specialises|specializes|focuses|runs|supplies|builds|integrates|implements|caters|engages|works)\b", re.I)
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z(“\"])")
+
+
+def business_sentence(text: str) -> str:
+    """rv51: the first sentence of a company's description that says what it does now: another company's name taken out (_NAMED_COMPANY),
+    a sentence that names no work (BUSINESS) or tells only its history (_HISTORY with no verb of what it does now) passed over. ""."""
+    t = str(text or "")
+    # a name that ends a sentence keeps its full stop ("held by Essar Telecom Ltd. Over the years ..."), else it is one word of the sentence
+    t = _NAMED_COMPANY.sub(lambda m_: "another company" + ("." if m_.group(0).endswith(".") and re.match(r"\s+[A-Z]", t[m_.end():]) else ""), t)
+    for s_ in _SENTENCE_END.split(t):
+        if BUSINESS.search(s_) and not (_HISTORY.search(s_) and not _NOW_VERB.search(s_)):
+            return " ".join(s_.split())
+    return ""
+
+
+def principal_business(c: dict, about: str | None = None, segments=None) -> tuple[str, str]:
+    """rv51: a company's principal disclosed business, (where, text): its largest reported segment ("segment"), else the first sentence of
+    its own description that says what it does now ("description", business_sentence over its whole stored description, else its line),
+    else its official industry ("industry"); ("", "") with none."""
+    segs = [x for x in segments or [] if isinstance(x, dict) and x.get("name")]
+    if segs:
+        top = max(segs, key=lambda x: x.get("share_pct") or 0)
+        return "segment", str(top["name"])
+    said = business_sentence(about or "") or business_sentence(c.get("what") or "")
+    if said:
+        return "description", said
+    ind = str(c.get("industry") or "")
+    return ("industry", ind) if ind else ("", "")
+
+
+PRINCIPAL_WORDS = {"segment": "its largest reported segment", "description": "the first sentence of its description that says what it does now",
+                   "industry": "its official industry"}
+
+
+def principal_fits(c: dict, words: set[str], about: str | None = None, segments=None) -> str:
+    """rv51: where a company's principal disclosed business (principal_business) is read when it fits the theme's definition (its words
+    show the theme's work and name no other kind of work); "" when it doesn't."""
+    where, text = principal_business(c, about, segments)
+    return where if text and does_the_work(text, words) and not other_work(text, words) else ""
+
+
+def membership(c: dict, words: set[str], about: str | None = None, segments=None, principal: bool = True) -> str:
     """How sure the theme is of a company (the owner, 7 Nov: a membership check for official-industry companies too, so an insurance software
     house filed under auto parts isn't in the auto figures): "core", a company of the theme's own industries or list whose own words (or a
     checked quote) show the work; "exposure", a company from another industry whose own words were checked to show the work; "unverified",
-    the rest: listed, but left out of every median and total."""
+    the rest: listed, but left out of every median and total. rv51 (R51): a company of the theme's own industries whose principal disclosed
+    business fits the theme (principal_fits: its largest segment, else the first sentence of its description that says what it does now,
+    else its official industry; `about` its whole stored description, `segments` its reported segments, a callable or a list) is never
+    screened out by its words: they place it in a layer or in "Other", in the theme (`principal` False: the check without it)."""
     if c.get("base") is None and c.get("verified") is None:
         return "core"                                 # a map from before the checks: as it was
     if c.get("base"):
@@ -2338,6 +2443,8 @@ def membership(c: dict, words: set[str]) -> str:
         # classification, so it stands (R17-012, R18)
         if not BUSINESS.search(c.get("what") or "") or not other_work(c.get("what") or "", words) or c.get("fit"):
             # (a company the placement found a layer for, from its own words, is the theme's: R22, a CRO in a pharma theme)
+            return "core"
+        if principal and principal_fits(c, words, about, segments() if callable(segments) else segments):
             return "core"
         return "unverified"
     return "exposure" if c.get("verified") else "unverified"
@@ -2476,14 +2583,27 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         for c in grp.get("companies") or []:
             placed.setdefault(c["ticker"], c)
     words = theme_words(checked, theme)
-    every_status = {s: membership(c, words) for s, c in placed.items()}
+
+    def seg_list(sym):
+        try:
+            return src.segments(sym)
+        except Exception as e:
+            print("theme data: segments not read:", sym, type(e).__name__, str(e)[:100])
+            return None
+    # rv51 (R51): a company of the theme's industries is screened out by its words only when its principal disclosed business doesn't fit
+    # (membership: its whole stored description and its segments read)
+    every_status = {s: membership(c, words, src.about(s), lambda s=s: seg_list(s)) for s, c in placed.items()}
     facts = {s: src.facts(s) for s in placed}
     rows = {s: r for s, r in ((s, company_row(region, s, f)) for s, f in facts.items()) if r}
     for s, c in placed.items():
         if s in rows:
             rows[s]["name"] = shown_name(c.get("name"), rows[s]["name"]) or rows[s]["name"]
-            rows[s]["status"] = membership(c, words)
+            rows[s]["status"] = every_status[s]
             rows[s]["theme"] = theme_record(c, rows[s]["status"])     # c1: in the theme, with its reason (apart from any comparison)
+            if c.get("base") and rows[s]["status"] == "core" and membership(c, words, principal=False) == "unverified":
+                where, said = principal_business(c, src.about(s), seg_list(s))
+                rows[s]["theme"]["why"] += (f"; its own words name other work, but its principal business ({PRINCIPAL_WORDS[where]}"
+                                            + (f", “{said}”" if where == "segment" else "") + ") fits the theme, so it stays in the theme")
             rows[s]["map_industry"] = c.get("industry") or ""          # the exchange's (or the SEC's) industry the map gives (R27: metric_registry)
             rows[s]["map_what"] = c.get("what") or ""                  # what the map says the company does (an insurer's type: metric_registry)
             if c.get("unread"):        # d1: in "Other" because nothing it says was read yet (theme_base.place_rest), not because it fits no layer
@@ -2539,7 +2659,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         b["by_industry"] = bool(v.get("by_industry"))
         if v.get("scale"):          # d1: a half of a layer split by market value (theme_base.by_model step 2), never ranked on its own
             b["scale"], b["sibling"] = v["scale"], v.get("sibling")
-        b["model"] = v.get("model") or None                 # what the layer's companies have in common: how they earn (theme_base.by_model, R25)
+        b["model"] = named_fit(v.get("model"), v) or None   # what the layer's companies have in common: how they earn (theme_base.by_model, R25)
         if b["model"]:                                       # R28: counted over the companies the page shows, not every company the map placed
             from .theme_base import shown_model
             b["model"] = shown_model(b["model"], [r for r in b["companies"] if r.get("status") != "unverified"])

@@ -190,7 +190,8 @@ def test_a_layer_the_map_names_for_custom_synthesis_is_shown_not_ranked_beside_m
     ch = v["chain"]
     assert ch["highest"] == "Chlor-alkali and soda ash producers" and ch["lowest"] == "Basic organic intermediates"
     left = {x["layer"]: x["why"] for x in ch["basis"]["left"]}
-    assert left["Custom synthesis manufacturers"] == "a different business model: contract manufacturing (the map's name for the layer)"
+    # rv51 (R51, updated on purpose): the model is read from the layer's own name, and said so (theme_data.named_fit)
+    assert left["Custom synthesis manufacturers"] == "a different business model: contract manufacturing (stated by the layer's own name)"
     rule = next(r for r in ch["basis"]["rules"] if r["rule"] == "business model")
     assert rule["passed"] and rule["text"] == "one business model: makers of their own products (how its companies earn)"
     assert "Custom synthesis manufacturers (22%), a different business model" in ch["line"]
@@ -290,8 +291,8 @@ def test_each_comparison_is_one_page_with_its_rules_in_larger_type_and_one_table
 
 
 def test_the_versions_moved():
-    assert B.RULES == 49 and TR.PLACE_CARRY[49] == 48 and TR.PLACE_CARRY[48] == 47 and B.PICK_RULES == 45          # gl50 (R50): RULES 49, PLACE_CARRY[49] = 48, deck 60, dive text 20 (updated on purpose)
-    assert deck.THEME_DECK_VERSION == 60 and D.DIVE_TEXT == 20          # gl50 (R50): RULES 49, PLACE_CARRY[49] = 48, deck 60, dive text 20 (updated on purpose)
+    assert B.RULES == 50 and TR.PLACE_CARRY[50] == 49 and TR.PLACE_CARRY[49] == 48 and TR.PLACE_CARRY[48] == 47 and B.PICK_RULES == 45          # rv51 (R51): RULES 50, PLACE_CARRY[50] = 49, deck 61, dive text 21 (updated on purpose); gl50 (R50): RULES 49, PLACE_CARRY[49] = 48, deck 60, dive text 20 (updated on purpose)
+    assert deck.THEME_DECK_VERSION == 61 and D.DIVE_TEXT == 21          # rv51 (R51): RULES 50, PLACE_CARRY[50] = 49, deck 61, dive text 21 (updated on purpose); gl50 (R50): RULES 49, PLACE_CARRY[49] = 48, deck 60, dive text 20 (updated on purpose)
 
 
 # ---------- G3 (the rotating review of the live R48 decks): the same exclusion beyond Consumer retail ----------

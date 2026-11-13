@@ -388,7 +388,10 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+
+
+EARLIER_MAX = 8                 # rv51: how many carried versions back an earlier answer of the same map is looked for
 
 
 def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
@@ -404,6 +407,16 @@ def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
             seen.add(r)
             r = PLACE_CARRY[r]
             kept = (computed.get("theme:place", key + [r]) or {}).get("value") or {}
+        # rv51 (R51, the live Release 49 IT services placement: the answer kept under rules 48, asked for two new companies, had dropped the
+        # two extra layers and the layer names of the one kept under 44): the nearest earlier answer of the same map, back through the
+        # carried versions (at most EARLIER_MAX), gives the names and extra layers the kept one lacks (theme_base.with_earlier)
+        e, steps = r, 0
+        while kept and e in PLACE_CARRY and steps < EARLIER_MAX:
+            e, steps = PLACE_CARRY[e], steps + 1
+            prev = (computed.get("theme:place", key + [e]) or {}).get("value") or {}
+            if prev:
+                kept = theme_base.with_earlier(kept, prev)
+                break
     except Exception:
         return {}, None
     return kept, (r if kept else None)
@@ -1241,6 +1254,8 @@ def deck_extras(r: str, theme: str, m: dict, profile: dict) -> dict:
         from .. import biz_updates
         if biz_updates._allowed(profile):
             out["business"] = business_of(r, m)
+    # rv51 (R51, P2): the theme's change log, its latest entry the deck's cohort row since the previous version (deck.cohort_row)
+    out["changes"] = theme_changes.view(r, m.get("_library") or theme, True)
     return out
 
 
