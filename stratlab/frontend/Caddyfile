@@ -54,6 +54,12 @@
 	@noindex path_regexp noindex ^/(mine|all|features|trade|invest|money|notebooks|new|n|import|options|paper|plans/.+|upgrade|help|tour|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|chart|scans|watchlist|dev|login|signup|verdict|calendar|v|c|r|embed)(/.*)?$
 	header @noindex X-Robots-Tag "noindex, follow"
 
+	# Vercel's default for a file without a cache header of its own
+	header {
+		defer
+		?Cache-Control "public, max-age=0, must-revalidate"
+	}
+
 	# Paths the API draws (vercel.json rewrites to the API host)
 	@api path /v/* /c/* /r/* /themes /themes/* /embed /embed/* /money/calendar/feed/* /stocks /stocks/* /blog /blog/* /status /sitemap.xml /sitemaps /sitemaps/* /unsubscribe /email/confirm /news-link/*
 	handle @api {
@@ -76,6 +82,15 @@
 	}
 
 	handle_errors 404 {
+		header {
+			X-Content-Type-Options "nosniff"
+			Referrer-Policy "strict-origin-when-cross-origin"
+			X-Frame-Options "DENY"
+			Content-Security-Policy "default-src 'self'; script-src 'self' https://checkout.razorpay.com https://*.razorpay.com https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://adservice.google.com https://*.adtrafficquality.google https://connect.facebook.net https://www.clarity.ms https://*.clarity.ms; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://stratlab-production-ca25.up.railway.app https://*.stratlab.studio https://*.supabase.co wss://*.supabase.co https://*.razorpay.com https://*.sentry.io https://us.i.posthog.com https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://adservice.google.com https://*.adtrafficquality.google https://connect.facebook.net https://www.facebook.com https://www.clarity.ms https://*.clarity.ms; frame-src https://*.razorpay.com https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://www.google.com https://*.adtrafficquality.google; worker-src 'self'; manifest-src 'self'; form-action 'self' https://*.razorpay.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; upgrade-insecure-requests"
+			Permissions-Policy "camera=(), microphone=(), geolocation=()"
+			Strict-Transport-Security "max-age=31536000; includeSubDomains"
+			Cache-Control "public, max-age=0, must-revalidate"
+		}
 		root * /srv
 		rewrite * /404.html
 		file_server {
