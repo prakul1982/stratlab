@@ -111,13 +111,12 @@ test("a page kept out of search results names no canonical address, in its HTML 
     assert.equal(/property="og:url"/.test(html), p.index, `${p.path} og:url`);
     if (!p.index) assert.equal(p.canonical, undefined, p.path);
   }
-  // /about: the app sends it to /features signed in and scrolls the landing page to its About place signed out, and the host
-  // and the page table both keep it out of search results, so it stays out of them (R10V-005 checked), with no canonical
-  assert.match(files["about/index.html"], /<meta name="robots" content="noindex, follow">/);
-  assert.match(read("vercel.json"), /\|about\|/);
-  assert.match(read("src/main.tsx"), /<Route path="\/about" element=\{<Redirect to="\/features" \/>\} \/>/);
-  assert.equal(seoFor("/about").canonical, null);
-  assert.equal(seoFor("/about").index, false);
+  // (updated on purpose, AS1) /about is its own page now (who runs StratLab, where the figures come from), drawn like the policies
+  // for everyone, signed in or not: indexed, with its own canonical address, and the host no longer marks it noindex
+  assert.match(files["about/index.html"], /<meta name="robots" content="index, follow">/);
+  assert.doesNotMatch(read("vercel.json").match(/"source": "[^"]*\|calendar\|v\|c\|r\|embed[^"]*"/)[0], /\|about\|/);
+  assert.equal(seoFor("/about").canonical, "https://stratlab.studio/about");
+  assert.equal(seoFor("/about").index, true);
   assert.equal(seoFor("/nope", "notfound").canonical, null);
   assert.equal(seoFor("/research/IN/X", "gate").canonical, null);
   assert.equal(seoFor("/verdict/abc", "verdict").canonical, null);

@@ -10,7 +10,7 @@ register("data:text/javascript," + encodeURIComponent(`export async function res
   try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
 const { openFy, askedFy, fyLink, yearHasTrades, movedYearNote } = await import("../src/lib/fy.ts");
 const { signedOutTitle, titleFor, PUBLIC_TITLES } = await import("../src/lib/title.ts");
-const { landingSection, isAppPath } = await import("../src/lib/deepLinks.ts");
+const { landingSection, isAppPath, visitorView } = await import("../src/lib/deepLinks.ts");
 const { welcomePending, askWelcome } = await import("../src/lib/onboarding.ts");
 const { featureTag } = await import("../src/lib/offer.ts");
 const { PAGE_GATES } = await import("../src/lib/gates.ts");
@@ -73,7 +73,8 @@ test("every public page has a tab title of its own, and a page nothing is at say
 test("/login, /signup and /about are real addresses, not dead routes (R4-017)", () => {
   assert.equal(landingSection("/login"), null);
   assert.equal(landingSection("/signup"), null);
-  assert.equal(landingSection("/about"), "about");
+  assert.equal(landingSection("/about"), undefined);      // (updated on purpose, AS1: /about is its own page now, drawn like the policies and indexed, for AdSense's publisher-identity check)
+  assert.equal(visitorView("/about").kind, "legal");
   for (const p of ["/login", "/signup", "/about"]) assert.ok(isAppPath(p), `${p} has no route`);
   assert.match(read("pages/Login.tsx"), /<div id="about" className="lp-wrap/, "the landing page has the place /about scrolls to (not a section[id]: the landing test lists those)");
   const main = read("main.tsx");

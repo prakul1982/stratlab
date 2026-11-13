@@ -23,7 +23,7 @@ def test_a_post_has_one_quiet_facts_line_and_one_width_for_its_text_and_its_tabl
     blog.save_brief(issue_for("IN"), datetime(2026, 10, 1, 11, 0, tzinfo=timezone.utc))
     page = w["client"].get("/blog/india-market-brief-2026-10-01").text
     css = blog_pages.STYLE
-    assert len(blog_pages.FACTS) < 130 and blog_pages.FACTS.count(". ") == 1 and 'class="facts">' + blog_pages.FACTS in page and "Facts, not advice." in page
+    assert len(blog_pages.FACTS) < 130 and blog_pages.FACTS.count(". ") == 1 and 'class="facts" data-shared>' + blog_pages.FACTS in page      # (updated on purpose, AS1: shared wording, not counted for ads) and "Facts, not advice." in page
     assert ".facts{font-size:13.5px;color:var(--muted);margin:0 0 22px}" in css and "border-left" not in re.search(r"\.facts\{[^}]*\}", css).group(0)
     assert "article p,article li{max-width:none}" in css and "68ch" not in css                 # the text runs as wide as the tables: one width
     assert ".btbl .l{text-align:left}" in css and "white-space:nowrap" in re.search(r"\.btbl th,\.btbl td\{[^}]*\}", css).group(0)

@@ -63,3 +63,29 @@ A deploy that changes the theme rules, a theme dive's sentences or the theme dec
 theme reads, figures and decks are keyed by those versions and are worked out again when next asked for, and the blog's
 theme posts whose figures came from older rules are worked out again from the theme library's read at the next newsletter
 check (or at the theme's next read).
+
+## Ads (Google AdSense)
+
+Ads are off until the switch is on: `ADS_ENABLED=true` with the publisher ID `ADSENSE_CLIENT` (ca-pub-…) and the ad unit's
+`ADSENSE_SLOT_PUBLIC` on the backend (the pages the server draws), and the same names in `config.js` (or `VITE_…` at build) for the
+app. `ads.txt` and the `google-adsense-account` tag already carry the publisher ID. A visitor is asked first; nothing from Google
+loads before "Allow ads". Never on money, tax, holdings, account, admin, sign-in or payment pages, and never in emails.
+
+**Which pages may carry an ad (AdSense: no ads on auto-generated pages or pages with little to no original content).** A page
+carries its one ad only when its main content holds at least **300 words of its own text**. Counted: the words inside `<main>`.
+Not counted: navigation, the header and footer, forms, tables, charts, buttons, link text, the ad itself, anything marked
+`data-shared`, and numbers and dates (a word has a letter in it). The server's pages use `ads.original_words` /
+`ads.enough_content` (`MIN_ORIGINAL_WORDS`, backend/app/ads.py); the app's slot uses the same rule and number
+(frontend/src/lib/adContent.ts). Pages that are one template filled in with figures carry `data-shared` on their `<main>`, so
+they never qualify: every company page, every market brief and every theme post. A research post written for its one subject,
+the landing page, the FAQ and the policies are counted as written.
+
+**Which company pages search engines are offered.** A company page is indexed and listed in the sitemap only when it shows both
+reported numbers and a recent share price (`stock_pages.indexable`). One with only one of them is `noindex` and left out of the
+sitemap; a visitor who opens it still reads what there is. The sitemap lists public pages only: the site's own pages (with
+`/about`), company pages that pass that rule, the A-Z and index lists, the blog's indexable posts and the theme pages offered to
+search. A link from a public page into the app (an address that asks for sign-in) says "(needs sign-in)" and is `nofollow`.
+
+Before pressing **Resubmit** in AdSense: open AdSense → **Policy center** and read the reason it names; wait until this release
+is live (the company pages' cache keeps a copy up to a day); then check `https://stratlab.studio/ads.txt`, `/about` and
+`/sitemap.xml` load.

@@ -162,12 +162,15 @@ test("an ad slot is drawn in exactly these places, and in none of the money, acc
   // the library loads the slot's code only when ads can draw there
   assert.match(read("src/pages/PublicLibrary.tsx"), /const PublicAd = \(\) => \(ADS_HERE \? <Suspense fallback=\{null\}><PublicAdLazy \/><\/Suspense> : null\);/);
   assert.match(read("src/pages/Login.tsx"), /<div className="lp-wrap"><PublicAd \/><\/div>/);
-  assert.equal(read("src/pages/Login.tsx").match(/<PublicAd/g).length, 1, "at most one slot on the landing page");
+  // (updated on purpose, AS1: the landing page loads the slot's code only when ads can draw, as the library does, so the slot's
+  // content check never adds to the landing page's download; still one slot)
+  assert.equal(read("src/pages/Login.tsx").match(/<PublicAd \/>/g).length, 1, "at most one slot on the landing page");
+  assert.match(read("src/pages/Login.tsx"), /const PublicAd = \(\) => \(ADS_HERE \? <Suspense fallback=\{null\}><PublicAdLazy \/><\/Suspense> : null\);/);
   assert.equal(read("src/pages/PublicLibrary.tsx").match(/<PublicAd \/>/g).length, 2, "one on the list and one on a strategy");
   assert.equal(read("src/pages/PublicVerdict.tsx").match(/<PublicAd/g).length, 1);
   // the hero is above every slot
   const login = read("src/pages/Login.tsx");
-  assert.ok(login.indexOf("<PublicAd") > login.indexOf('id="alerts"') && login.indexOf("<PublicAd") < login.indexOf("<Pricing"));
+  assert.ok(login.indexOf("<PublicAd />") > login.indexOf('id="alerts"') && login.indexOf("<PublicAd />") < login.indexOf("<Pricing"));      // (updated on purpose, AS1: the slot itself, not its lazy loader)
   // the one slot in the app is under a written AI read, and only when there is one
   const r = read("src/components/Research.tsx");
   assert.equal(r.match(/<AiAd /g).length, 1);
@@ -394,4 +397,23 @@ test("the morning Zerodha alert links straight to the broker login, which Admin 
   assert.match(page, /params\.get\("kite"\) === "login"/);
   assert.match(page, /if \(loggedInToday\) \{ notify\("Already logged in to the broker today: nothing to do\."\); return; \}/);
   assert.match(page, /window\.location\.assign\(url\);/);
+});
+
+
+test("AS1: Google's ad shows only on a page with enough original content; the count leaves out menus, links, tables and shared wording", async () => {
+  const c = await import("../src/lib/adContent.ts");
+  assert.equal(c.MIN_ORIGINAL_WORDS, 300);
+  assert.equal(c.wordsIn("Revenue grew 6.2% a year, 12 Nov 2026."), 5);          // a number or a date is not a word; "Nov" is
+  assert.equal(c.wordsIn(""), 0);
+  assert.equal(c.withContent("ad", "public", 299), "none");
+  assert.equal(c.withContent("ad", "ai", 10), "house");                             // under an AI answer, StratLab's own card holds the place
+  assert.equal(c.withContent("ad", "public", 300), "ad");
+  assert.equal(c.withContent("house", "ai", 1000), "house");
+  assert.equal(c.withContent("none", "public", 1000), "none");
+  for (const sel of ["nav", "header", "footer", "table", "a", "button", "[data-shared]", ".ad", "svg"]) assert.ok(c.NOT_COUNTED.split(",").includes(sel), sel);
+  // the slot counts the page's words only when an ad could show, and asks for the ad only with enough of them
+  const unit = read("src/components/AdUnit.tsx");
+  assert.match(unit, /const mode = withContent\(asked, slot, usePageWords\(asked === "ad"\)\);/);
+  // the server's pages follow the same rule with the same number
+  assert.match(read("../backend/app/ads.py"), /^MIN_ORIGINAL_WORDS = 300$/m);
 });

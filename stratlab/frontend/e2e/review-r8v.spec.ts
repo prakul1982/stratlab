@@ -31,7 +31,9 @@ test("each landing address draws the h1 its own HTML carries, with the tagline b
   await expect(page.locator("#pricing")).toBeInViewport();
   // /pricing is the prices page, as /plans is (RC2B-032): no hero, so no tagline beside its heading; /faq and /about keep theirs
   await expect(page.locator(".lp").getByText("it, research it, track it.")).toHaveCount(0);
-  for (const [path, file, heading] of [["/faq", "faq/index.html", "Questions"], ["/about", "about/index.html", "About StratLab"],
+  // (updated on purpose, AS1: /about is its own page, drawn like the policies and indexed): its heading is checked in e2e/as1-about.spec.ts
+  expect(rawH1("about/index.html")).toEqual(["About StratLab"]);
+  for (const [path, file, heading] of [["/faq", "faq/index.html", "Questions"],
     ["/", "index.html", "Test it, research it, track it."]] as const) {
     await page.goto(path);
     await expect(appH1(page)).toHaveText(heading, { timeout: 30_000 });

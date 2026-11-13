@@ -119,7 +119,8 @@ test("/tour as a class: every app address is sent to the app by the site, kept f
   const [fresh, noindex] = v.headers.filter((x) => x.source.includes("|help|")).map((h) => new RegExp(`^${h.source}$`));
   // public: the landing page and its sections, the library (served by its own page), and the plans/help a visitor reads
   // (R15: and the ad landing, /start, which names "/" as its canonical address)
-  const PUBLIC = new Set(["/", "/library", "/plans", "/pricing", "/faq", "/start"]);
+  // (updated on purpose, AS1: /about is its own page now, drawn like the policies and indexed, for AdSense's publisher-identity check)
+  const PUBLIC = new Set(["/", "/library", "/plans", "/pricing", "/faq", "/start", "/about"]);
   for (const r of APP_ROUTES) {
     const p = r.replace(/:[a-z]+/gi, "x").replace(/\/\*$/, "/x");
     if (r === "/" || r === "/library") continue;
