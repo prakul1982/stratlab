@@ -216,3 +216,20 @@ def test_deck_check_reads_the_count_when_its_cell_wraps_around_the_label():
     assert deck_check.check_pages([page(60)])["counts"]["other>40%"] == 0
     got = deck_check.check_pages([page(110)])
     assert got["counts"]["other>40%"] == 1 and "In informative layers 137 of 252 (54%); 110 fit none (44%)" in got["findings"][0]["text"]
+
+
+# ---------- R44.1: the reasons print a loss with the real minus, as every other figure in the deck (the live R44 decks: "-81.4%") ----------
+def test_a_verified_loss_is_said_with_the_real_minus_in_its_reason_and_in_the_deck():
+    loss = chip("LOSS", "Loss Chip Inc", -81.4, ebitda=-43.0)
+    deep = chip("DEEP", "Deep Loss Inc", -300.0, ebitda=-250.0)
+    r, d = D.company_row("US", "LOSS", loss), D.company_row("US", "DEEP", deep)
+    assert r["verify"]["net"]["state"] == D.VERIFIED and d["verify"]["ebitda"]["state"] == D.VERIFIED
+    assert r["verify"]["net"]["why"].endswith("Sep 2026: −81.4%; at or below its −43% EBITDA margin")
+    assert d["verify"]["ebitda"]["why"] == "a loss at both levels, −250% EBITDA and −300.0% net, Sep 2026"
+    extra = [{"name": "Loss Chip Inc", "ticker": "LOSS", "what": "makes memory chips"},
+             {"name": "Deep Loss Inc", "ticker": "DEEP", "what": "makes memory chips"}]
+    f = semis_facts() | {"LOSS": loss, "DEEP": deep}
+    v, slides = deck_of("US", semis_map(extra), f)
+    row = conf_rows(slides)["Verified figures"]
+    assert "−81.4%" in row[1] and not re.search(r"(?<![\w.])-\d", row[1])
+    assert deck_check.check_pages([texts(slides)])["counts"]["hyphen minus"] == 0

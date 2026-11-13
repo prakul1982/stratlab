@@ -313,7 +313,7 @@ def test_a_company_with_no_figures_carries_its_reason_on_its_row():
 
 
 def test_the_versions_moved_with_the_records():
-    assert D.DIVE_TEXT == 14 and deck.THEME_DECK_VERSION == 54          # R44 (lane v1): deck 54, dive text 14, verification states (updated on purpose); R43.1: dive text 13 (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane t1: deck 52, dive text 11 (LIVE7A, updated on purpose); R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)
+    assert D.DIVE_TEXT == 15 and deck.THEME_DECK_VERSION == 55          # R44.1: deck 55, dive text 15, a loss in a verification reason with the real minus (updated on purpose); R44 (lane v1): deck 54, dive text 14, verification states (updated on purpose); R43.1: dive text 13 (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane t1: deck 52, dive text 11 (LIVE7A, updated on purpose); R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)
 
 
 # ---------- 4. only layers of one way of earning are ranked together ----------
