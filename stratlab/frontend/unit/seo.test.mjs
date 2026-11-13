@@ -364,7 +364,10 @@ test("the sample pages don't carry what the review found: the reload message, on
 });
 
 test("R39: each policy page's whole text is in its own HTML, from the one source the app draws, and a load failure keeps it", async () => {
-  const { LEGAL_BLOCKS } = await import("../src/content/legal.ts");
+  // (updated on purpose, R44: /about's text is in content/about.ts so the policy pages don't download it; it is checked here too)
+  const { LEGAL_BLOCKS: POLICY } = await import("../src/content/legal.ts");
+  const { ABOUT_BLOCKS } = await import("../src/content/about.ts");
+  const LEGAL_BLOCKS = { "/about": ABOUT_BLOCKS, ...POLICY };
   const { pageFiles } = await import("../scripts/seoPages.mjs");
   const files = Object.fromEntries(pageFiles(read("index.html")));
   for (const [path, blocks] of Object.entries(LEGAL_BLOCKS)) {

@@ -36,7 +36,9 @@ test("the legal pages wait for the seller's details instead of showing the fallb
   const src = read("src/pages/LegalPage.tsx");
   // LIVE3-012 changed this on purpose: the policy is laid out from the first frame but hidden until the details are in, so the page
   // doesn't move when it appears; the fallback names are still never shown
-  assert.match(src, /<div className=\{loaded \? "legal-text" : "legal-text legal-wait"\} aria-hidden=\{loaded \? undefined : true\}><Policy path=\{page\.path\} \/><\/div>/);
+  // (updated on purpose, R44: /about's text loads in its own file, so the page waits for it as well: "ready" is the details AND the text)
+  assert.match(src, /const ready = loaded && blocks != null;/);
+  assert.match(src, /<div className=\{ready \? "legal-text" : "legal-text legal-wait"\} aria-hidden=\{ready \? undefined : true\}><Policy blocks=\{blocks \?\? \[\]\} \/><\/div>/);
   assert.match(src, /setLoaded\(true\)/);
   assert.match(src, /catch\(\(\) => \{ if \(live\) setLoaded\(true\)/);
 });
