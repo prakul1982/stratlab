@@ -183,8 +183,9 @@ def test_the_coverage_says_the_share_in_informative_layers_once_and_deck_check_r
     assert D.layer_coverage(checked) == {"informative": 3, "placed": 5, "share": 60, "other": 2, "unread": 1, "other_name": "Other x"}
     v, slides = deck_of("US", semis_map(), semis_facts())
     assert v["coverage"] == {"informative": 5, "placed": 5, "share": 100, "other": 0, "unread": 0, "other_name": ""}
-    cov = next(r for b in next(s for s in slides if s.title == "Data confidence").blocks if b["kind"] == "table" and b["head"] == deck.COVERAGE_HEAD
-               for r in b["rows"] if r[0] == "In informative layers")
+    # tx2 (R46, updated on purpose): with the screening row the coverage table can need a page of its own (d1): read wherever it is
+    cov = next(r for s in slides if s.title in ("Data confidence", "Coverage") for b in s.blocks if b["kind"] == "table"
+               and b["head"] == deck.COVERAGE_HEAD for r in b["rows"] if r[0] == "In informative layers")
     assert cov[1:] == ["5 of 5 (100%)", "every company in a layer the map names"]
     view = {"members": [{"symbol": s, "layer": "Makers"} for s in "ABC"] + [{"symbol": "D", "layer": "Other x", "rest": True},
                                                                           {"symbol": "E", "layer": "Other x", "rest": True, "unread": True}], "layers": []}
