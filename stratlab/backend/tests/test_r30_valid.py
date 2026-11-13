@@ -143,7 +143,8 @@ def test_every_synthetic_deck_has_the_coverage_table_and_it_reconciles():
         tab = next(b for s in slides if s.title in ("Data confidence", "Coverage") for b in s.blocks
                    if b["kind"] == "table" and b.get("head") == deck.COVERAGE_HEAD)
         kinds = [r[0] for r in tab["rows"]]
-        assert kinds[0] == "Companies, by count" and "Each figure" in kinds and "Each layer" in kinds, name
+        # tx2 (R46, updated on purpose): the screening populations first (considered = screened out + members), then the companies by count
+        assert kinds[:2] == ["Screening", "Companies, by count"] and "Each figure" in kinds and "Each layer" in kinds, name
         mv = next((r for r in tab["rows"] if r[0] == "Market value"), None)
         if mv:
             assert mv[1].endswith("%") and "market value" in mv[2] and "not of companies" in mv[2], name
@@ -200,7 +201,8 @@ def test_a_placement_kept_under_the_rules_before_carries_over(monkeypatch):
         return {"value": {"assign": {"X": {"layer": "L", "by": "ai"}}}} if key[-1] == T.PLACE_CARRY.get(B.RULES) else None
     monkeypatch.setattr(computed, "get", get)
     got = {}
-    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None, carried=False: (got.update(kept=kept), (out, kept))[1])
+    # tx2 (R45, updated on purpose): place_rest also takes the previous live layers (`previous`)
+    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None, carried=False, previous=None: (got.update(kept=kept), (out, kept))[1])
     T.placed("IN", "Telecom", {"generated_at": 1.0}, {"value_chain": []}, ask=None)
     assert seen == [B.RULES, T.PLACE_CARRY[B.RULES]] and got["kept"]["assign"]["X"]["layer"] == "L"
 
@@ -266,18 +268,20 @@ def test_a_placement_is_carried_back_past_versions_that_kept_none_of_their_own(m
         return {"value": {"assign": {"X": {"layer": "L", "by": "ai"}}}} if key[-1] == older else None
     monkeypatch.setattr(computed, "get", get)
     got = {}
-    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None, carried=False:
+    # tx2 (R45, updated on purpose): place_rest also takes the previous live layers (`previous`)
+    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None, carried=False, previous=None:
                         (got.update(kept=kept, carried=carried), (out, kept))[1])
     T.placed("IN", "Utilities", {"generated_at": 1.0}, {"value_chain": []}, ask=None)
     # lane s2-exact bumped RULES to 41, carrying 40; lane s3-r40 to 42, carrying 41: found at 40 (updated on purpose)
-    assert B.RULES == 44 and T.PLACE_CARRY[44] == 43 and T.PLACE_CARRY[43] == 42 and T.PLACE_CARRY[42] == 41 and T.PLACE_CARRY[41] == 40 and T.PLACE_CARRY[40] == 38 and 39 not in seen          # c1 (R44): RULES 44, PLACE_CARRY[44] = 43, deck 56, dive text 16 (55 and 15 are R44.1's), classification coverage from evidence (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)
-    assert seen == [44, 43, 42] and got["kept"]["assign"]["X"]["layer"] == "L" and got["carried"] is True          # c1 (R44): from 44 (updated on purpose); lane d1: from 43
+    assert B.RULES == 45 and T.PLACE_CARRY[45] == 44 and T.PLACE_CARRY[44] == 43 and T.PLACE_CARRY[43] == 42 and T.PLACE_CARRY[42] == 41 and T.PLACE_CARRY[41] == 40 and T.PLACE_CARRY[40] == 38 and 39 not in seen          # tx2 (R45/R46): RULES 45, PLACE_CARRY[45] = 44, deck 57 (dive text stays 16), the taxonomy regression guard and the screening populations (updated on purpose); c1 (R44): RULES 44, PLACE_CARRY[44] = 43, deck 56, dive text 16 (55 and 15 are R44.1's), classification coverage from evidence (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)
+    assert seen == [45, 44, 43] and got["kept"]["assign"]["X"]["layer"] == "L" and got["carried"] is True          # tx2 (R45): from 45 (updated on purpose); c1 (R44): from 44 (updated on purpose); lane d1: from 43
 
 
 def test_the_carry_back_stops_when_no_version_kept_a_placement(monkeypatch):
     from app import computed
     seen = []
     monkeypatch.setattr(computed, "get", lambda kind, key: seen.append(key[-1]) or None)
-    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None, carried=False: (out, kept))
+    # tx2 (R45, updated on purpose): place_rest also takes the previous live layers (`previous`)
+    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None, carried=False, previous=None: (out, kept))
     T.placed("IN", "Utilities", {"generated_at": 1.0}, {"value_chain": []}, ask=None)
     assert seen[0] == B.RULES and seen[-1] == min(T.PLACE_CARRY.values()) and len(seen) == len(set(seen))

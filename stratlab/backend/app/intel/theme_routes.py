@@ -366,7 +366,7 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
 def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
@@ -401,7 +401,7 @@ def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
     about = _about_reader(region, names, 0)                           # stored descriptions only: nothing is read from a page here
     # R41: an answer kept under earlier rules sticks (theme_base.place_rest `carried`: nothing it answered is asked again)
     new, got = theme_base.place_rest(out, theme, lambda s_: about(s_), ask=ask, kept=kept, facts_of=_facts_reader(region),
-                                     carried=version is not None and version != theme_base.RULES)
+                                     carried=version is not None and version != theme_base.RULES, previous=previous_layers(region, theme, m))
     if ask is not None and got and got != kept and (got.get("names_for") or any(x.get("by") == "ai" for x in (got.get("assign") or {}).values())):
         try:
             computed.put("theme:place", key, got, label=m.get("sector") or theme, region=region)
@@ -587,6 +587,22 @@ def quick(region: str, theme: str, m: dict) -> dict:
     out["tailwinds"], out["risks"] = claims["tailwinds"], claims["risks"]
     out["placements"]["industries_by"] = inds["how"]
     return out
+
+
+def previous_layers(region: str, theme: str, m: dict) -> dict:
+    """R45 (lane tx2, the taxonomy regression guard): {symbol: its layer in the previous live read of this same map} (theme_changes'
+    snapshot, kept when a checked read is stored), so a company leaves its previous layer only on evidence of the new one
+    (theme_base.place_rest `previous`). {} for a theme read for the first time, or a snapshot of another map."""
+    try:
+        snap = (theme_changes.stored(region, m.get("_library") or theme) or {}).get("snap") or {}
+        if not snap or int(float(snap.get("stamp") or 0)) != int(float(m.get("generated_at") or 0)):
+            return {}
+        layers = snap.get("layers") or []
+        return {s_: layers[c[1]] for s_, c in (snap.get("cos") or {}).items()
+                if isinstance(c, list) and len(c) > 1 and isinstance(c[1], int) and 0 <= c[1] < len(layers)}
+    except Exception as e:
+        print("theme: previous layers not read:", type(e).__name__, str(e)[:100])
+        return {}
 
 
 def checked(region: str, theme: str, m: dict, wait: bool = False) -> dict:
@@ -890,9 +906,14 @@ def placement_inputs(q: str, region: str = "IN", profile=Depends(current_profile
     names = {c["ticker"]: c.get("name") for v in hit.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}
     about = _about_reader(r, names, 0)                    # stored descriptions only, as placed() reads them
     kept, version = kept_placement(r, theme, m)
+    # R45 (lane tx2): also the previous live layers the placement reads (theme_base.place_rest `previous`) and each company's stored facts
+    # (its official industry path, segments, filings' titles and business read: the live Release 45 Utilities placement could not be
+    # replayed exactly without them), so a replay feeds exactly what the placement read
+    facts = _facts_reader(r)
     return R.ok({"region": r, "theme": theme, "rules": theme_base.RULES, "generated_at": m.get("generated_at"), "kept_version": version,
                  "kept": kept, "placements": hit.get("placements"), "value_chain": hit.get("value_chain") or [],
-                 "evidence": {s_: about(s_) for s_ in sorted(names)}})
+                 "evidence": {s_: about(s_) for s_ in sorted(names)}, "previous": previous_layers(r, theme, m),
+                 "facts": {s_: facts(s_) for s_ in sorted(names)}})
 
 
 def dive_key(r: str, theme: str, m: dict) -> list:
