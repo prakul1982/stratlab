@@ -64,7 +64,10 @@ def test_retail_other_share_falls_by_evidence_and_other_businesses_leave_the_the
     at = _layer_of(out)
     assert {at[s]["layer"] for s in ("ZUMZ", "TLYS", "DLTH", "PLCE")} == {"Family clothing stores"}
     assert at["DDS"].get("basis") == "rest" and at["SVV"].get("basis") == "rest"       # no layer says what they do
-    assert len(_other(out)) == 19 and len(at) == 85
+    # cl48 (R47, updated on purpose): lululemon and TheRealReal, in "Off-price" by default with no words of it, are in "Other"
+    # (test_exact_replay APPROVED: 21 of 85); Torrid, there by "branched off", joins "Family clothing stores" by its words
+    assert len(_other(out)) == 21 and len(at) == 85
+    assert {"LULU", "REAL"} <= _other(out) and at["CURV"]["layer"] == "Family clothing stores"
 
 
 def test_a_map_pick_from_another_industry_whose_words_say_its_layer_is_confirmed():

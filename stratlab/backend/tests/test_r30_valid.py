@@ -96,10 +96,14 @@ def _row(**kw):
 
 def test_a_net_profit_lifted_on_a_negative_return_and_negative_equity_is_held_with_its_checks():
     r = _row(book_value=-3.3)
-    assert r["net"] is None and not r["one_off"] and r["roe"] is None
-    assert r["held"]["net"]["value"] == 82.2
-    # (updated on purpose, R44): the sign check makes the net margin invalid; an invalid figure is not checked for being unusual as well
-    assert r["held"]["net"]["checks"] == [D.CHECKS["sign"]] and r["verify"]["net"]["state"] == D.INVALID
+    # (updated on purpose, R48: the outside review of the live R46 decks): a positive net profit beside a negative ROCE alone never makes the
+    # net margin invalid. The stored lines give negative capital employed (book equity −₹1,650 crore, debt ₹100 crore), so the ROCE is the
+    # figure with a calculation defect (invalid); the 82.2% net margin is checked as any unusual margin: above its EBITDA margin with no stored
+    # line to cover it, it is shown with † and left out of the medians (not reconciled), never "–"
+    assert r["net"] == 82.2 and r["one_off"] and r["roe"] is None and r["roce"] is None and "net" not in r["held"]
+    assert r["verify"]["net"]["state"] == D.UNVERIFIED and D.CHECKS["sign"] in r["verify"]["net"]["checks"]
+    assert r["verify"]["net"]["sign"]["kind"] == "negative_capital"
+    assert r["held"]["roce"]["checks"] == [D.CHECKS["neg_capital"]] and r["verify"]["roce"]["state"] == D.INVALID
     assert r["held"]["roe"]["checks"] == [D.CHECKS["neg_equity"]]
 
 
@@ -111,7 +115,10 @@ def test_other_income_sign_and_ebitda_checks():
     assert "income outside operations of ₹6,000 crore is 67% of the net profit" in r["verify"]["net"]["why"] and not r["one_off"]
     assert _row(profits=[1, 1, 1, 9000], roce=5.0, other_income=1000)["net"] == 20.0
     r = _row(profits=[1, 1, 1, 9000], roce=5.0, net_margin=-4.0)
-    assert r["held"]["net"]["checks"] == [D.CHECKS["sign_page"]]
+    # (updated on purpose, R48): a net margin of the other sign from the page's own is reconciled with the stored years, never invalid for
+    # the sign alone: no stored year gives the page's −4%, so it is not reconciled (shown with †, out of the medians)
+    assert r["net"] == 20.0 and "net" not in (r.get("held") or {}) and r["verify"]["net"]["state"] == D.UNVERIFIED
+    assert r["verify"]["net"]["checks"] == [D.CHECKS["sign_page"]] and "no stored year's net profit over revenue gives it" in r["verify"]["net"]["why"]
     a, b = {"symbol": "A", "ebitda": 95.0}, {"symbol": "B", "ebitda": 95.0}
     D.validate_model(a, "services")
     D.validate_model(b, "royalties")
@@ -126,12 +133,15 @@ def test_a_held_figure_leaves_medians_and_is_named_on_the_data_confidence_page()
     f[sym]["years"][-1]["profit"] = f[sym]["years"][-1]["sales"] * 0.77
     v, slides = deck_of(region, m, f, index_rows=lambda: market)
     held = v["checks"]["held"]
-    assert [x["key"] for x in held if x["symbol"] == sym] == ["net", "roe"]
+    # (updated on purpose, R48): the positive net profit beside the negative ROCE is reconciled with the stored lines first: they give negative
+    # capital employed, so the ROCE is held (invalid) and the 77% net margin, above its EBITDA margin with no line to cover it, is shown with
+    # † and left out of the net-margin median, never held as "–" for the signs alone
+    assert [x["key"] for x in held if x["symbol"] == sym] == ["roce", "roe"]
     lay = v["layers"][0]
-    assert all(c.get("net") != 77.0 for c in lay["companies"]) and lay["stats"]["net"]["n"] == len(lay["companies"]) - 1
+    assert lay["stats"]["net"]["n"] == len(lay["companies"]) - 1 and sym in lay["one_off"]
     conf = next(s for s in slides if s.title == "Data confidence")
     row = next(r for b in conf.blocks if b["kind"] == "table" for r in b["rows"] if r[0] == "Figure checks")
-    assert "net margin 77%" in row[1] and D.CHECKS["sign"] in row[1] and deck.ANOMALY_WHY in row[2]
+    assert "ROCE −1.7%" in row[1] and D.CHECKS["neg_capital"] in row[1] and deck.ANOMALY_WHY in row[2]
     assert not any(w in row[1] + row[2] for w in ("because", "due to", "one-off gain"))
 
 
@@ -273,8 +283,8 @@ def test_a_placement_is_carried_back_past_versions_that_kept_none_of_their_own(m
                         (got.update(kept=kept, carried=carried), (out, kept))[1])
     T.placed("IN", "Utilities", {"generated_at": 1.0}, {"value_chain": []}, ask=None)
     # lane s2-exact bumped RULES to 41, carrying 40; lane s3-r40 to 42, carrying 41: found at 40 (updated on purpose)
-    assert B.RULES == 46 and T.PLACE_CARRY[46] == 45 and T.PLACE_CARRY[45] == 44 and T.PLACE_CARRY[44] == 43 and T.PLACE_CARRY[43] == 42 and T.PLACE_CARRY[42] == 41 and T.PLACE_CARRY[41] == 40 and T.PLACE_CARRY[40] == 38 and 39 not in seen          # cv47 (R47): RULES 46, PLACE_CARRY[46] = 45, filing titles are no words of a company's own, the AI's industry pick kept across rules changes (PICK_RULES); deck and dive text unchanged (updated on purpose); tx2 (R45/R46): RULES 45, PLACE_CARRY[45] = 44, deck 57 (dive text stays 16), the taxonomy regression guard and the screening populations (updated on purpose); c1 (R44): RULES 44, PLACE_CARRY[44] = 43, deck 56, dive text 16 (55 and 15 are R44.1's), classification coverage from evidence (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)
-    assert seen == [46, 45, 44] and got["kept"]["assign"]["X"]["layer"] == "L" and got["carried"] is True          # cv47 (R46): from 46 (updated on purpose); tx2 (R45): from 45 (updated on purpose); c1 (R44): from 44 (updated on purpose); lane d1: from 43
+    assert B.RULES == 47 and T.PLACE_CARRY[47] == 46 and T.PLACE_CARRY[46] == 45 and T.PLACE_CARRY[45] == 44 and T.PLACE_CARRY[44] == 43 and T.PLACE_CARRY[43] == 42 and T.PLACE_CARRY[42] == 41 and T.PLACE_CARRY[41] == 40 and T.PLACE_CARRY[40] == 38 and 39 not in seen          # cl48 (R48): RULES 47, PLACE_CARRY[47] = 46, deck 58, dive text 18, primary-business validation and the coverage control (updated on purpose); cv47 (R47): RULES 46, PLACE_CARRY[46] = 45, filing titles are no words of a company's own, the AI's industry pick kept across rules changes (PICK_RULES); deck and dive text unchanged (updated on purpose); tx2 (R45/R46): RULES 45, PLACE_CARRY[45] = 44, deck 57 (dive text stays 16), the taxonomy regression guard and the screening populations (updated on purpose); c1 (R44): RULES 44, PLACE_CARRY[44] = 43, deck 56, dive text 16 (55 and 15 are R44.1's), classification coverage from evidence (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)
+    assert seen == [47, 46, 45] and got["kept"]["assign"]["X"]["layer"] == "L" and got["carried"] is True          # cl48 (R47): from 47 (updated on purpose); cv47 (R46): from 46 (updated on purpose); tx2 (R45): from 45 (updated on purpose); c1 (R44): from 44 (updated on purpose); lane d1: from 43
 
 
 def test_the_carry_back_stops_when_no_version_kept_a_placement(monkeypatch):

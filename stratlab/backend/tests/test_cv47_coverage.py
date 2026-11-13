@@ -89,10 +89,13 @@ def test_every_utilities_move_carries_evidence_against_the_previous_live_layer()
 
 
 def test_consumer_retail_replays_exactly_on_the_live_release_46_inputs():
-    """The placement rules change moves no retailer: the coverage gap is the universe, not the placement (58 of 98 on live and here)."""
+    """The placement rules change moves no retailer: the coverage gap is the universe, not the placement (58 of 98 on live and here).
+    cl48 (R47, updated on purpose): but for the two companies primary-business validation moves (test_cl48_class): lululemon back to the
+    brand owners its map placed it with, Torrid to "Other" (57 of 98)."""
     d = r46("retail")
     live, now = shown(d["value_chain"]), shown(replay46("retail")["value_chain"])
-    assert now == live and informative(now) == 58 and len(now) == 98
+    assert {s_: now[s_] for s_ in live if now[s_] != live[s_]} == {"LULU": "Apparel and consumer brand owners", "CURV": "Other"}
+    assert informative(live) == 58 and informative(now) == 57 and len(now) == 98
     p = d["placements"]
     assert "Retail-Retail Stores, Nec" in p["industries"] and "Retail-Family Clothing Stores" not in p["industries"]
     nec = [c["ticker"] for v in d["value_chain"] for c in v["companies"] if c.get("industry") == "Retail-Retail Stores, Nec"]

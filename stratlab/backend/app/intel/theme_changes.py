@@ -30,6 +30,13 @@ MARGIN_POINTS = 1.0          # a margin restated: moved by more than one percent
 SHARE = 0.25                 # a layer's companies counted as going somewhere: at least a quarter of them (and at least one)
 KINDS = ("removed", "added", "moved", "layers", "restated")      # an entry's lists, in the order a short view takes rows from
 CAUSES = ("rules", "map", "refresh", "figures")
+# cl48 (R47, the outside review's P1 "taxonomy coverage control": Consumer retail fell from 66 of 85 to 58 of 98 companies in informative
+# layers when its universe changed, and nothing said so): a theme is flagged on its coverage and to the admins when the share of its placed
+# companies in informative layers is under COVER_MIN per cent, or falls by COVER_FALL points or more against its previous live placement
+COVER_MIN = 60
+COVER_FALL = 8
+FLAGS_KEY = "theme:coverage:flags"        # {key_of: {"name", "region", "problem" (None once it passes), "at"}}: the admins' alert (autofix)
+FLAGS_KEEP = 200
 
 
 def key_of(region: str, name: str) -> str:
@@ -65,8 +72,10 @@ def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None) -> dict
                        e if e is not None else n, "e" if e is not None else "n" if n is not None else ""]
     off = {o["ticker"]: [str(o.get("name") or o["ticker"]), str(o.get("industry") or "")]
            for o in ((dive.get("placements") or {}).get("off_industry") or []) if isinstance(o, dict) and o.get("ticker")}
+    cv = dive.get("coverage") or {}
+    cover = [int(cv["informative"]), int(cv["placed"])] if isinstance(cv, dict) and cv.get("placed") and cv.get("informative") is not None else None
     return {"layers": layers, "cos": cos, "off": off, "map": sorted({s_ for s_ in members if s_}), "stamp": int(_num(stamp) or 0),
-            "rules": rules, "unit": dive.get("unit")}
+            "rules": rules, "unit": dive.get("unit"), **({"cover": cover} if cover else {})}
 
 
 def _layer_events(was: dict, now: dict) -> tuple[list[dict], set]:
@@ -189,6 +198,12 @@ def apply(cur: dict | None, now: dict, refresh: bool = False, at: datetime | Non
         d = diff(was, now)
         if changed(d):
             log = (log + [_entry(d, cause_of(was, now, refresh), at)])[-KEEP:]
+    if isinstance(was, dict) and now.get("cover"):
+        # cl48: the coverage before the last change of it, kept until it changes again (a read stored again unchanged keeps the fall said)
+        if was.get("cover") and list(was["cover"]) != list(now["cover"]):
+            now = {**now, "cover_was": list(was["cover"])}
+        elif was.get("cover_was"):
+            now = {**now, "cover_was": list(was["cover_was"])}
     return {"snap": now, "log": log, "since": since or at.date().isoformat()}
 
 
@@ -247,3 +262,76 @@ def served(region: str, name: str, dive: dict, profile: dict | None) -> dict:
     """The dive as one account gets it: with its theme's change log as that account's plan shows it ("changes"). The kept dive itself,
     the same for everyone, never holds it."""
     return {**dive, "changes": view(region, name, full_for(profile))}
+
+
+def _share(n: int, of: int) -> int:
+    return int(n * 100 / of + 0.5) if of else 0
+
+
+def coverage_control(cov: dict | None, snap: dict | None) -> dict | None:
+    """cl48 (R47): the coverage control of a theme's read: {"low": share under COVER_MIN, "fell": {"informative", "placed", "share"} of the
+    previous live placement when the share now is COVER_FALL points or more under it}; None when neither. `cov`: the read's coverage
+    (theme_data.layer_coverage); `snap`: the theme's stored snapshot (the previous live read), whose coverage is the one compared, or, when
+    the read is the same as it, the coverage before the last change (apply's "cover_was")."""
+    if not isinstance(cov, dict) or not cov.get("placed"):
+        return None
+    now = [int(cov.get("informative") or 0), int(cov["placed"])]
+    share = _share(*now)
+    snap = snap if isinstance(snap, dict) else {}
+    prev = snap.get("cover") if isinstance(snap.get("cover"), list) and len(snap["cover"]) == 2 else None
+    base = prev if prev and list(prev) != now else snap.get("cover_was")
+    out: dict = {}
+    if share < COVER_MIN:
+        out["low"] = True
+    if isinstance(base, list) and len(base) == 2 and base[1] and _share(*base) - share >= COVER_FALL:
+        out["fell"] = {"informative": int(base[0]), "placed": int(base[1]), "share": _share(*base)}
+    return out or None
+
+
+def control_line(cov: dict | None) -> str:
+    """The coverage control in words, facts with both numbers (cl48): "" when the theme isn't flagged."""
+    ctl = (cov or {}).get("control") if isinstance(cov, dict) else None
+    if not ctl:
+        return ""
+    n, of = int(cov.get("informative") or 0), int(cov.get("placed") or 0)
+    share = _share(n, of)
+    out = []
+    if ctl.get("fell"):
+        f = ctl["fell"]
+        out.append(f"{n:,} of {of:,} companies placed ({share}%) are in informative layers, against {f['informative']:,} of "
+                   f"{f['placed']:,} ({f['share']}%) in the previous live placement: {f['share'] - share} points fewer, a fall of "
+                   f"{COVER_FALL} or more.")
+    if ctl.get("low"):
+        out.append(f"{share}% of the companies placed are in informative layers ({n:,} of {of:,}), under {COVER_MIN}%.")
+    return " ".join(out)
+
+
+def flag(region: str, name: str, cov: dict | None) -> None:
+    """Keep the theme's coverage control for the admins' alert (cl48: theme_routes' autofix source, coverage_checks): its problem, or None once it passes.
+    Never raises."""
+    line = control_line(cov)
+    k = key_of(region, name)
+
+    def put(cur):
+        got = db.json_value(cur, {})
+        got = got if isinstance(got, dict) else {}
+        if not line and k not in got:
+            return None                   # nothing flagged, nothing to clear: left as it is
+        got[k] = {"name": name, "region": region, "problem": line or None, "at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+        if len(got) > FLAGS_KEEP:
+            for old in sorted(got, key=lambda x: str(got[x].get("at") or ""))[:len(got) - FLAGS_KEEP]:
+                del got[old]
+        return json.dumps(got, ensure_ascii=False, separators=(",", ":"))
+    try:
+        db.update_setting(FLAGS_KEY, put)
+    except Exception as e:
+        print("theme changes: coverage flag not kept:", type(e).__name__, str(e)[:100])
+
+
+def flags() -> dict:
+    try:
+        got = db.json_value(db.get_setting(FLAGS_KEY), {})
+    except Exception as e:
+        print("theme changes: coverage flags not read:", type(e).__name__, str(e)[:100])
+        got = {}
+    return got if isinstance(got, dict) else {}

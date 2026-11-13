@@ -37,7 +37,7 @@ FEW_BASE = 4                  # a highest or lowest median on this many companie
 COMPARE_MIN = MIN_BASE
 # R31 (the owner's review of the live R30 decks): a layer-vs-layer headline (the value chain's line, findings, questions) needs at least this
 # many companies with the figure in each layer it compares; tables still show every layer and mark (green, red) those of COMPARE_MIN or more
-DIVE_TEXT = 17         # vf46 (R46): each checked figure's source record and statement lines, a net margin above EBITDA reconciled line by line; c1 (R44): each company's place in the theme with its reason ("theme": theme_record) apart from its comparison decision ("comparison"), a layer named by how its companies earn says why it is never ranked; R44.1: a loss in a verification reason printed with the real minus (deck 55, dive text 15, updated on purpose); R44 (lane v1): each unusual figure verified against its own filed figures, not reconciled or invalid (verify_net, figure_states), never dropped by a cutoff alone; the dive's coverage of informative layers; R43.1: the whole-point margins counted among the margins there are ("3 of the 1" on the live Insurance deck); d1: halves of a split layer never ranked, no ranking on a gap under a point, peers named and like for like, every company in a layer or "Other", the not-checked-yet mark; LIVE7A (lane t1): every company at the index's newest close and one price date, own words without encyclopedia leads or a cut word, whole-point margins and gaps printed whole, operating figures of old periods left out and listed once, click-bait headlines left out, "Dividend: Dividend" said once; R40: a layer the split named only by how its companies earn is never ranked ("a group by how they earn, of different businesses"), a market-value half with fewer than 3 companies in its figures undone; LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
+DIVE_TEXT = 18         # vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R47): a company listed in its layer as another way of earning is said so in the layer's line, the coverage control (theme_changes.coverage_control); vf46 (R46): each checked figure's source record and statement lines, a net margin above EBITDA reconciled line by line; c1 (R44): each company's place in the theme with its reason ("theme": theme_record) apart from its comparison decision ("comparison"), a layer named by how its companies earn says why it is never ranked; R44.1: a loss in a verification reason printed with the real minus (deck 55, dive text 15, updated on purpose); R44 (lane v1): each unusual figure verified against its own filed figures, not reconciled or invalid (verify_net, figure_states), never dropped by a cutoff alone; the dive's coverage of informative layers; R43.1: the whole-point margins counted among the margins there are ("3 of the 1" on the live Insurance deck); d1: halves of a split layer never ranked, no ranking on a gap under a point, peers named and like for like, every company in a layer or "Other", the not-checked-yet mark; LIVE7A (lane t1): every company at the index's newest close and one price date, own words without encyclopedia leads or a cut word, whole-point margins and gaps printed whole, operating figures of old periods left out and listed once, click-bait headlines left out, "Dividend: Dividend" said once; R40: a layer the split named only by how its companies earn is never ranked ("a group by how they earn, of different businesses"), a market-value half with fewer than 3 companies in its figures undone; LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
 HEADLINE_MIN = 5
 # R27 (headline eligibility): a comparison is said as a headline only on a figure for at least this share of the companies of each group it
 # compares (a layer, a family); one with less is shown as data, never ranked (the live R26 Semis deck: "RPO growth -3.9%" of 21 of 53)
@@ -329,14 +329,21 @@ def capital_per_revenue(cap, pb, debt, de, sales) -> float | None:
 #   unverified_extreme  unusual, and its components are missing or don't give it: left out of every median with its reason; a net margin
 #                       stays in its table marked †; an EBITDA margin, which every layer comparison reads, shows "–" there and its value
 #                       on the data-confidence page
-#   invalid             impossible or contradictory (a margin on no positive revenue, a unit gap, opposite signs): "–", left out, reason said
+#   invalid             only on an established reporting or calculation defect (a margin on no positive revenue, a unit gap the year's own
+#                       lines show, a return on negative capital employed): "–", left out, reason said
+# R48 (the outside review of the live R46 decks: Chemicals p.4 marked a net margin invalid because the net profit was positive while the
+# ROCE was negative): a sign or scale check alone never makes a figure invalid. Each is reconciled with the year's stored lines first
+# (sign_reconcile, page_reconcile; a unit gap, a year's revenue jump and an EBITDA margin above 100% the same way), and its record says which
+# explanation the lines give, or that they don't reconcile.
 VERIFIED, UNVERIFIED, INVALID = "verified_extreme", "unverified_extreme", "invalid"
 NET_UNUSUAL = 60.0            # a net margin beyond ±60% of revenue is reconciled before it is used (R44: never left out for that alone)
 EBITDA_UNUSUAL = 90.0         # an EBITDA margin above 90%, outside the models that earn fees or royalties with few costs (EBITDA_FREE)
 EBITDA_FREE = {"royalties", "financial_fees", "lending", "underwriting", "life_insurance", "general_insurance", "reinsurance", "property"}
 OTHER_INCOME_SHARE = 0.5      # income outside operations above half the year's net profit, where the source carries it
 MARGIN_MAX = 100.0            # R44: an EBITDA margin above 100% is operating profit above revenue (invalid); one below −100% is checked
-UNIT_GAP = 10.0               # R44: a net profit ten times its revenue or more, either way: the two filed in different units (a 1000x slip)
+UNIT_GAP = 10.0               # R44: a net profit ten times its revenue or more, either way, is checked as a unit gap (the two in different units)...
+UNIT_SLIP = 100.0             # R48: ...and is one when the year's lines show it: the net profit ten times its profit before tax too, or with none
+#                               stored a hundredfold its revenue or more (only a unit slip, a hundred or a thousand times, gives that)
 YEAR_GAP = 500.0              # R44: a year's revenue 500 times the year before's, or a 500th of it: a unit slip between the years
 RECONCILE_TOL = 0.5           # R44: points within which a margin's own components give it
 CHECKS = {"sign": "net profit positive, return on capital negative", "sign_page": "net margin and net profit of opposite signs",
@@ -347,7 +354,8 @@ CHECKS = {"sign": "net profit positive, return on capital negative", "sign_page"
           "net_above_ebitda": "net margin above the EBITDA margin", "ebitda_over_max": f"EBITDA margin above {MARGIN_MAX:.0f}% (operating profit above revenue)",
           "ebitda_under_max": f"EBITDA margin below −{MARGIN_MAX:.0f}%", "no_revenue": "a margin on no positive revenue",
           "unit_gap": f"net profit {UNIT_GAP:.0f} times its revenue or more (the two out of scale: a unit gap)",
-          "year_gap": f"revenue {YEAR_GAP:.0f} times the year before's, or a {YEAR_GAP:.0f}th of it (a unit gap between years)"}
+          "year_gap": f"revenue {YEAR_GAP:.0f} times the year before's, or a {YEAR_GAP:.0f}th of it (a unit gap between years)",
+          "neg_capital": "return on capital with negative capital employed", "ebitda_lines": "EBITDA margin that the year's operating profit over revenue doesn't give"}
 STATE_WORDS = {VERIFIED: "verified against its own filed figures", UNVERIFIED: "not reconciled", INVALID: "invalid"}
 REVENUE_CAP_MAX = 200         # lane n2: a revenue above this many times the market value...
 REVENUE_PROFIT_MIN = 0.002    # ...whose years' profit or loss never reached this share of it is out of scale with the filing (a unit slip)
@@ -485,6 +493,113 @@ def year_gap(r: dict) -> bool:
     return any(a and b and a > 0 and b > 0 and max(a / b, b / a) >= YEAR_GAP for a, b in zip(s, s[1:]))
 
 
+def capital_employed(f: dict, fd: dict | None = None) -> dict | None:
+    """R48: the capital a ROCE is worked out on, as the stored page gives it: book equity (book value per share times the shares in issue, the
+    market value over the price; else the market value over the price to book) plus debt (the latest balance sheet's, else the year's).
+    {"equity", "debt", "value"}, each in the page's unit; None when no equity can be worked out (a page reporting in another currency than
+    its market value says nothing here)."""
+    if not isinstance(f, dict) or f.get("report_currency"):
+        return None
+    bv, cap, price, pb = num(f.get("book_value")), num(f.get("market_cap")), num(f.get("price")), num(f.get("pb"))
+    debt = num(f.get("debt"))
+    if debt is None:
+        debt = num((fd or {}).get("debt")) if fd else None
+    if debt is None:
+        ys = f.get("years") or []
+        debt = num(ys[-1].get("debt")) if ys and isinstance(ys[-1], dict) else None
+    eq = bv * cap / price if bv is not None and cap and price and price > 0 else (cap / pb if cap and pb and pb > 0 else None)
+    if eq is None:
+        return None
+    return {"equity": eq, "debt": debt or 0.0, "value": eq + (debt or 0.0)}
+
+
+def year_ebit(y: dict | None) -> dict | None:
+    """R48: a year's operating profit before interest and tax, from its stored lines, both ways a ROCE may take it: "value", with other
+    income in it (profit before tax plus interest), and "operating", before other income (operating profit, or revenue times the EBITDA
+    margin, less depreciation; the EBITDA alone when it is a loss, which depreciation only deepens: "loss_only"). Each None when the lines
+    don't give it; None when neither is given."""
+    if not isinstance(y, dict):
+        return None
+    s, e, op, dep, b, i = (num(y.get(k)) for k in ("sales", "opm", "op", "dep", "pbt", "interest"))
+    ebit = b + i if b is not None and i is not None else None
+    ebitda = op if op is not None else (s * e / 100 if s and s > 0 and e is not None else None)
+    oper, how, only = None, None, False
+    if ebitda is not None and dep is not None:
+        oper, how = ebitda - dep, ("operating profit" if op is not None else "EBITDA") + " less depreciation"
+    elif ebitda is not None and ebitda < 0:
+        oper, how, only = ebitda, "EBITDA, before depreciation", True
+    if ebit is None and oper is None:
+        return None
+    return {"value": ebit, "how": "profit before tax plus interest" if ebit is not None else None, "operating": oper, "operating_how": how,
+            "loss_only": only, "other_income": num(y.get("other_income"))}
+
+
+def sign_reconcile(r: dict, f: dict) -> dict:
+    """R48 (the outside review of the live R46 decks: "net profit positive while ROCE is negative alone does not prove a wrong figure"): a
+    positive net profit beside a negative ROCE reconciled with the year's stored lines (its EBIT, the capital employed and the other years).
+    A ROCE is negative only when the EBIT and the capital employed are of opposite signs, so the lines give one of:
+      negative_capital  the capital employed is negative (book equity below minus the debt): a return on it means nothing (the ROCE invalid)
+      operating_loss    the year's EBIT is a loss (with other income in it, or before it), lifted to a net profit by the lines below it
+                        (other income, items before or after tax, a tax credit): the ROCE agrees with the year's operating figures
+      other_year        the year's EBIT and capital employed are positive and another stored year's EBIT is a loss: the ROCE is not of the
+                        year (not reconciled)
+      lines_disagree    the year's EBIT and capital employed are positive and no stored year is a loss (the ROCE not reconciled)
+      not_stored        the lines that would tell are not stored (the net margin not reconciled)
+    {"kind", "why", "ebit", "ebit_how", "capital", "roce", "year"}: amounts in the filing's unit."""
+    fd = r.get("filed") or {}
+    u, yr, roce = fd.get("unit"), r.get("year") or "the latest year", r.get("roce")
+    ce = capital_employed(f, fd)
+    eb = year_ebit(fd)
+    cap_words = (f"capital employed of {amount(ce['value'], u)} (book equity {amount(ce['equity'], u)} and debt {amount(ce['debt'], u)})" if ce else "")
+    out = {"roce": roce, "year": yr, "capital": ce, "ebit": None, "ebit_how": None}
+    if ce and ce["value"] < 0:
+        return {**out, "kind": "negative_capital", "why": f"the ROCE of {pts(roce)} is on {cap_words}, below zero: a return on negative capital "
+                                                          "employed means nothing, and it does not question the net profit"}
+    if eb and eb["value"] is not None and eb["value"] < 0:
+        return {**out, "ebit": eb["value"], "ebit_how": eb["how"], "kind": "operating_loss",
+                "why": f"the ROCE of {pts(roce)} agrees with {yr}'s operating loss: EBIT {amount(eb['value'], u)} ({eb['how']}), lifted to a net "
+                       "profit by a tax credit or items after tax"}
+    if eb and eb["operating"] is not None and eb["operating"] < 0:
+        o = eb["other_income"]
+        return {**out, "ebit": eb["operating"], "ebit_how": eb["operating_how"], "kind": "operating_loss",
+                "why": f"the ROCE of {pts(roce)} agrees with {yr}'s operating loss before other income: {amount(eb['operating'], u)} ({eb['operating_how']})"
+                       + (f", lifted to a net profit by other income of {amount(o, u)} and the lines below it" if o and o > 0 else
+                          ", lifted to a net profit by the lines below it")}
+    ebit, how = (eb["value"], eb["how"]) if eb and eb["value"] is not None else ((eb["operating"], eb["operating_how"]) if eb else (None, None))
+    if ebit is not None and ce and ce["value"] > 0:
+        others = []
+        for y in (f.get("years") or [])[:-1]:
+            x = year_ebit(y) if isinstance(y, dict) else None
+            v = x and (x["value"] if x["value"] is not None else x["operating"])
+            if v is not None and v < 0:
+                others.append(f"{y.get('year')} EBIT {amount(v, u)}")
+        gives = f"{yr}'s lines give EBIT {amount(ebit, u)} ({how}) on {cap_words}, a return of {pts(ebit / ce['value'] * 100)}"
+        out = {**out, "ebit": ebit, "ebit_how": how}
+        if others:
+            return {**out, "kind": "other_year", "why": f"{gives}, not the ROCE of {pts(roce)}, and another stored year was a loss ({', '.join(others[-2:])}): "
+                                                        "the ROCE is not of the year's lines"}
+        return {**out, "kind": "lines_disagree", "why": f"{gives}, not the ROCE of {pts(roce)}: the ROCE does not reconcile with the year's lines"}
+    gone = ([] if ebit is not None else ["profit before tax and interest, or depreciation"]) + ([] if ce else ["book value"]) or ["capital employed above zero"]
+    return {**out, "ebit": ebit, "ebit_how": how, "kind": "not_stored",
+            "why": f"positive net profit beside a ROCE of {pts(roce)}: no {' or '.join(gone)} stored for {yr} to reconcile them"}
+
+
+def page_reconcile(r: dict, f: dict, page: float) -> dict:
+    """R48: a net margin of the other sign from the page's own net margin, reconciled with the stored years: the page's figure is the net
+    profit over revenue of one of its years (a different year from the row's), or of none. {"ok", "why", "year"}."""
+    fd = r.get("filed") or {}
+    u = fd.get("unit")
+    for y in reversed(f.get("years") or []):
+        if not isinstance(y, dict) or y.get("year") == r.get("year"):
+            continue
+        s, p = num(y.get("sales")), num(y.get("profit"))
+        if s and s > 0 and p is not None and abs(p / s * 100 - page) <= RECONCILE_TOL:
+            return {"ok": True, "year": y.get("year"), "why": f"the page's own net margin of {pts(page)} is {y.get('year')}'s (net profit {amount(p, u)} "
+                                                             f"over revenue {amount(s, u)}), another year"}
+    return {"ok": False, "year": None, "why": f"the page's own net margin of {pts(page)} is of the other sign and no stored year's net profit over "
+                                              "revenue gives it: not reconciled"}
+
+
 def verify_net(r: dict) -> None:
     """R44: a net margin a check finds unusual (beyond ±NET_UNUSUAL%, above the year's EBITDA margin, or with income outside operations
     above half the net profit) reconciled with the company's own filed figures for the same year (`filed`: revenue, net profit, EBITDA
@@ -493,7 +608,7 @@ def verify_net(r: dict) -> None:
     profit above EBITDA; not reconciled when a component is missing or doesn't give it; invalid on a unit gap. Worked out again when the
     EBITDA margin it is set against is taken out (validate_model)."""
     rec = (r.get("verify") or {}).get("net")
-    if rec and rec["state"] == INVALID:
+    if rec and (rec["state"] == INVALID or "net" in (r.get("held") or {})):      # R48: a held figure keeps its record (not reconciled too)
         return
     r.get("verify", {}).pop("net", None)
     r["one_off"] = False
@@ -502,14 +617,22 @@ def verify_net(r: dict) -> None:
         return
     e = r.get("ebitda")
     s, p, o = num(fd.get("sales")), num(fd.get("profit")), num(fd.get("other_income"))
+    sg, sp = r.get("sign"), r.get("sign_page")
     flags = (["net_unusual"] if abs(net) > NET_UNUSUAL else []) + (["net_above_ebitda"] if one_off(e, net) else []) \
-        + (["other_income"] if o is not None and p and p > 0 and o > p * OTHER_INCOME_SHARE else [])
+        + (["other_income"] if o is not None and p and p > 0 and o > p * OTHER_INCOME_SHARE else []) \
+        + (["sign"] if sg else []) + (["sign_page"] if sp else [])
     if not flags:
         return
     if s is not None and p is not None and s > 0 and abs(p) >= UNIT_GAP * s:
-        return hold(r, "net", "unit_gap", why=f"{CHECKS['unit_gap']}: net profit {amount(p, fd.get('unit'))} on revenue {amount(s, fd.get('unit'))}")
-    if year_gap(r):
-        return hold(r, "net", "year_gap")
+        # R48: a unit gap is established only when the filing's own lines show it: the net profit UNIT_GAP times its own profit before tax
+        # too, or, with no profit before tax stored, UNIT_SLIP times its revenue or more; a profit its profit before tax gives (a gain on a sale)
+        # is checked as any other
+        b = num(fd.get("pbt"))
+        if (abs(p) >= UNIT_GAP * abs(b)) if b else abs(p) >= UNIT_SLIP * s:
+            return hold(r, "net", "unit_gap", why=f"{CHECKS['unit_gap']}: net profit {amount(p, fd.get('unit'))} on revenue {amount(s, fd.get('unit'))}"
+                        + (f" and profit before tax {amount(b, fd.get('unit'))}: the year's stored lines don't give it" if b else "; no stored line gives it"))
+    # R48: a year's revenue YEAR_GAP times the year before's no longer makes the margin invalid: the margin is the year's own net profit over
+    # its own revenue, so a unit change between years doesn't touch it (the growth across the two years is left out: series_break)
     u, yr = fd.get("unit"), r.get("year") or "the latest year"
     base = (f"net profit {amount(p, u)} over revenue {amount(s, u)}, {yr}: {pts(net)}" if s and p is not None else "")
     why, ok, bits = [], True, {}
@@ -546,9 +669,16 @@ def verify_net(r: dict) -> None:
             why.append(f"at or below its {gpts(e)} EBITDA margin" if net <= e else "")
     if ok and "other_income" in flags:          # the one-off that explains it, said
         why.append(f"income outside operations of {amount(o, u)} is {o / p * 100:.0f}% of the net profit")
+    if sg:                                      # R48: what the year's lines show of a positive net profit beside a negative ROCE
+        why.append(sg["why"])
+        ok = ok and sg["kind"] != "not_stored"
+    if sp:                                      # R48: and of a net margin of the other sign from the page's own
+        why.append(sp["why"])
+        ok = ok and sp["ok"]
     why = [w for w in why if w]
     r.setdefault("verify", {})["net"] = {"state": VERIFIED if ok else UNVERIFIED, "value": net, "checks": [CHECKS[k] for k in flags],
-                                         "why": "; ".join(([base] if ok and base else []) + why), **(bits if "net_above_ebitda" in flags else {})}
+                                         "why": "; ".join(([base] if ok and base else []) + why), **(bits if "net_above_ebitda" in flags else {}),
+                                         **({"sign": sg} if sg else {}), **({"sign_page": sp} if sp else {})}
     r["one_off"] = not ok                       # shown with †, out of every median (in_median)
 
 
@@ -559,7 +689,17 @@ def verify_ebitda(r: dict) -> None:
     if e is None or abs(e) <= MARGIN_MAX:
         return
     if e > MARGIN_MAX:
-        return hold(r, "ebitda", "ebitda_over_max")
+        # R48: operating profit above revenue is invalid only when the year's own lines don't give the margin (a calculation defect); as filed,
+        # it is not reconciled: shown on the data-confidence page with its lines, out of every median
+        fd = r.get("filed") or {}
+        s_, op = num(fd.get("sales")), num(fd.get("op"))
+        u = fd.get("unit")
+        if s_ and s_ > 0 and op is not None and abs(op / s_ * 100 - e) > RECONCILE_TOL + ROUNDING:
+            return hold(r, "ebitda", "ebitda_lines", why=f"{CHECKS['ebitda_lines']}: operating profit {amount(op, u)} over revenue {amount(s_, u)} "
+                                                          f"gives {pts(op / s_ * 100)}, not {gpts(e)}")
+        return hold(r, "ebitda", "ebitda_over_max", state=UNVERIFIED,
+                    why=f"{CHECKS['ebitda_over_max']}" + (f", as filed: operating profit {amount(op, u)} on revenue {amount(s_, u)}" if s_ and op is not None
+                                                          else "; no operating profit is stored for the year to check it against") + "; not reconciled")
     net = r.get("net")
     if net is not None and net < 0:
         r.setdefault("verify", {})["ebitda"] = {"state": VERIFIED, "value": e, "checks": [CHECKS["ebitda_under_max"]],
@@ -570,16 +710,27 @@ def verify_ebitda(r: dict) -> None:
 
 def validate_row(r: dict, f: dict, last: dict | None) -> dict:
     """The checks a company's figures pass before they are used (R30), each figure given its state (R44): sign consistency (a positive net
-    profit beside a negative return on capital; the net margin's sign against the page's own), a margin on no positive revenue, a revenue
-    out of scale with the market value and the company's own profit, a return on equity or price to book on negative equity (each invalid),
-    an EBITDA margin beyond ±MARGIN_MAX% (verify_ebitda), and an unusual net margin reconciled with its own filed figures (verify_net). (An
-    EBITDA margin above EBITDA_UNUSUAL% is checked with the company's model: validate_model.)"""
+    profit beside a negative return on capital; the net margin's sign against the page's own), each reconciled with the year's stored lines
+    (R48: sign_reconcile, page_reconcile, never invalid for the signs alone), a margin on no positive revenue and a return on equity or price to
+    book on negative equity (invalid: a calculation defect), a revenue out of scale with the market value and the company's own profit (not
+    reconciled; invalid when the stored years show the slip), an EBITDA margin beyond ±MARGIN_MAX% (verify_ebitda), and an unusual net margin
+    reconciled with its own filed figures (verify_net). (An EBITDA margin above EBITDA_UNUSUAL% is checked with the company's model:
+    validate_model.)"""
     prof, net = r.get("profit"), r.get("net")
+    # R48: a positive net profit beside a negative ROCE, and a net margin of the other sign from the page's own, are reconciled with the year's
+    # stored lines (sign_reconcile, page_reconcile) and the net margin's record says what they show (verify_net); a ROCE is taken out only on
+    # negative capital employed (invalid) or when the year's lines give it the other sign (not reconciled)
+    r.pop("sign", None)
+    r.pop("sign_page", None)
     if net is not None and prof is not None and prof > 0 and (r.get("roce") or 0) < 0:
-        hold(r, "net", "sign")
+        sg = r["sign"] = sign_reconcile(r, f)
+        if sg["kind"] == "negative_capital":
+            hold(r, "roce", "neg_capital", why=sg["why"])
+        elif sg["kind"] in ("other_year", "lines_disagree"):
+            hold(r, "roce", "sign", state=UNVERIFIED, why=sg["why"])
     page = num(f.get("net_margin"))
     if net is not None and page is not None and page * net < 0:
-        hold(r, "net", "sign_page")
+        r["sign_page"] = page_reconcile(r, f, page)
     s_ = num((last or {}).get("sales"))
     if s_ is not None and s_ <= 0:              # R44: a margin on revenue of zero or below
         hold(r, "ebitda", "no_revenue")
@@ -588,10 +739,15 @@ def validate_row(r: dict, f: dict, last: dict | None) -> dict:
         # lane n2 (the outside review of the live R33 decks: Tigo Energy, $103.5 bn of revenue beside a $57 m market value, its filing's
         # revenue tagged a thousand times too large): the revenue is kept out of every sum, median and ranking until it is read again,
         # with the margins and the capital worked out on it; the data-confidence page names the company and the check
-        r["held_revenue"] = {"value": r["revenue"], "checks": [CHECKS["revenue_scale"]]}
+        # R48: invalid only when the stored years show the slip (the revenue jumped YEAR_GAP times on the year before); otherwise not reconciled
+        slip = year_gap(r)
+        state = INVALID if slip else UNVERIFIED
+        why = CHECKS["revenue_scale"] + ("; the stored years' revenue jumps 500 times or more between two years (a unit gap)" if slip else
+                                         "; not reconciled: no stored line shows whether the revenue or the market value is out of scale")
+        r["held_revenue"] = {"value": r["revenue"], "checks": [CHECKS["revenue_scale"]], "state": state}
         r["revenue"], r["capital_rev"] = None, None
-        hold(r, "ebitda", "revenue_scale")
-        hold(r, "net", "revenue_scale")
+        hold(r, "ebitda", "revenue_scale", state=state, why=why)
+        hold(r, "net", "revenue_scale", state=state, why=why)
     bv = num(f.get("book_value"))
     if bv is not None and bv < 0 or f.get("net_worth_negative"):
         hold(r, "roe", "neg_equity")
@@ -630,7 +786,10 @@ def figure_states(rows: list[dict]) -> list[dict]:
     return [{"symbol": r["symbol"], "name": r["name"], "key": k, "value": x["value"], "state": x["state"], "checks": list(x.get("checks") or []),
              "why": x.get("why") or "", **({"ebitda": r.get("ebitda"), "net": r.get("net")} if k == "net" else {}),
              # R46: its source record: the document, period and page the year's figures come from, and the statement lines used, as stored
-             "source": r.get("source"), "lines": source_lines(r.get("filed")), **({"bridge": x["bridge"]} if x.get("bridge") else {})}
+             "source": r.get("source"), "lines": source_lines(r.get("filed")), **({"bridge": x["bridge"]} if x.get("bridge") else {}),
+             # R48: what the year's lines show of a sign check (its EBIT and capital employed, or the page's own net margin's year)
+             **({"sign": x.get("sign") or r.get("sign")} if (x.get("sign") or (k == "roce" and r.get("sign"))) else {}),
+             **({"sign_page": x["sign_page"]} if x.get("sign_page") else {})}
             for r in rows if r.get("status") != "unverified" for k, x in (r.get("verify") or {}).items()]
 
 
@@ -769,7 +928,10 @@ def layer_block(name: str, rows: list[dict], wide: set[str]) -> dict:
             "model_out": sorted(r["symbol"] for r in rows if r.get("model_out") and r.get("status") != "unverified"),
             "stats_over": "all" if not own and sure else "own", "left_out": len(sure) - len(pool),
             # R30: the median company's capital for each unit of revenue (capital_per_revenue), for headline comparability
-            "intensity": (stat(r.get("capital_rev") for r in pool) or {}).get("median")}
+            "intensity": (stat(r.get("capital_rev") for r in pool) or {}).get("median"),
+            # R48: how many companies that median is of, and who is in each median a comparison reads, by name (comparison_basis)
+            "intensity_n": sum(1 for r in pool if r.get("capital_rev") is not None),
+            "in_stats": {k: [r["name"] for r in pool if in_median(r, k) is not None] for k in ("ebitda", "net", "roce", "roe")}}
 
 
 # R27: a figure whose filed value (sector_metrics.REPLACES) is on another basis than the stored pages' own (NII / assets: the filed half year
@@ -804,6 +966,28 @@ def margin_line(block: dict, chain_median: float | None, several: bool = True, w
 
 
 def chain_table(blocks: list[dict]) -> dict:
+    """The whole chain in one table (_chain_table), with (R48) the basis of the comparison its line makes or declines to make
+    (comparison_basis): the metric, each compared layer's companies by name and the eligibility rules with their figures."""
+    out = _chain_table(blocks)
+    names = out.get("compared") or out.get("not_ranked") or []
+    if len(names) >= 2:
+        key = out.get("measure") or "ebitda"
+        by = {b["layer"]: b for b in blocks}
+        groups = [{"layer": r["layer"], "value": r.get(key), "n": r.get(f"{key}_n") or 0, "of": r.get("n"), "model": r.get("model"),
+                   "basis": r.get("basis"), "intensity": r.get("intensity"), "intensity_n": (by.get(r["layer"]) or {}).get("intensity_n"),
+                   "names": list(((by.get(r["layer"]) or {}).get("in_stats") or {}).get(key) or []),
+                   "listed": listed_names(by.get(r["layer"]))}
+                  for r in out["rows"] if r["layer"] in names]
+        line = str(out.get("line") or "")
+        why = ("" if out.get("highest") else "their commodities differ" if "commodities differ" in line else
+               f"capital for each unit of revenue differs more than {INTENSITY_WORD}" if INTENSITY_WORD in line else
+               "their medians are within a point of each other" if "no layer stands apart" in line or "is the same" in line else "")
+        out["basis"] = comparison_basis("chain", "return on equity" if key == "roe" else "EBITDA margin", groups, made=bool(out.get("highest")),
+                                        why=why, left=out.get("unranked") or [], high=out.get("highest"), low=out.get("lowest"))
+    return out
+
+
+def _chain_table(blocks: list[dict]) -> dict:
     """The whole chain in one table: a row per layer, with the layer that has the highest median EBITDA margin and the one with the
     lowest named. The table's order is the chain's."""
     rows = []
@@ -1044,6 +1228,69 @@ def comparable_intensity(rows: list, intensity) -> bool:
     fewer than two have one."""
     xs = [x for x in (intensity(r) for r in rows) if x is not None and x > 0]
     return len(xs) < 2 or max(xs) <= min(xs) * INTENSITY_FACTOR
+
+
+def listed_names(block: dict | None) -> list[str]:
+    """R48: a layer's confirmed companies with figures by name, as the appendix's "Every company's figures" lists them under the layer."""
+    return [r["name"] for r in (block or {}).get("companies") or [] if r.get("status") != "unverified" and has_figures(r)]
+
+
+def intensity_test(groups: list) -> dict | None:
+    """R48: the capital-intensity test of a comparison, reproducible: each group's median company's capital for each unit of revenue (book
+    equity plus debt over the latest year's revenue, capital_per_revenue) and how many companies it is of, the highest over the lowest, and
+    the threshold (INTENSITY_FACTOR). None when fewer than two groups have the figure (the test then says nothing either way)."""
+    xs = [g for g in groups if g.get("intensity") is not None and g["intensity"] > 0]
+    if len(xs) < 2:
+        return None
+    hi, lo = max(xs, key=lambda g: g["intensity"]), min(xs, key=lambda g: g["intensity"])
+    ratio = hi["intensity"] / lo["intensity"]
+    return {"values": [{"layer": g["layer"], "value": g["intensity"], "n": g.get("intensity_n")} for g in xs], "high": hi["layer"], "low": lo["layer"],
+            "ratio": round(ratio, 2), "threshold": INTENSITY_FACTOR, "passed": ratio <= INTENSITY_FACTOR}
+
+
+def model_words(model) -> str:
+    """R48: a group's way of earning as the comparison basis says it: the model's words (theme_check.MODELS) and how many of its companies
+    it is shown for; "" when none is read."""
+    if not isinstance(model, dict) or not (model.get("id") or model.get("family")):
+        return ""
+    from .theme_check import MODELS
+    what = MODELS[model["id"]][2] if model.get("id") in MODELS else model.get("family") or ""
+    shown = f", shown for {model['known']} of {model['of']}" if model.get("known") is not None and model.get("of") and model["known"] < model["of"] else ""
+    return what + (f" ({model['sub']})" if model.get("sub") else "") + shown
+
+
+def comparison_basis(claim: str, metric: str, groups: list, made: bool = True, why: str = "", left: list | None = None,
+                     high: str | None = None, low: str | None = None, floor: int | None = None) -> dict:
+    """R48 (the outside review of the live R46 decks: "the 22% vs 9.5% EBITDA comparison spans different chemical business models; the
+    comparability rationale is thin"): what a highest/lowest claim between groups rests on, so it can be reproduced: the metric, each group
+    compared (its figure, how many companies it is of out of how many, those companies by name, its way of earning, its capital figure), the
+    eligibility rules with their figures (headline floor and coverage, one way of earning, one period basis, the capital-intensity test with
+    its threshold), whether the comparison is made, why not when it isn't, and each shown group left out with why.
+    `groups`: [{"layer", "value", "n", "of", "model", "basis", "intensity", "intensity_n", "names"}]."""
+    floor = HEADLINE_MIN if floor is None else floor
+    fams = sorted({model_family_of(g.get("model")) for g in groups} - {""})
+    subs = sorted({sub_of(g.get("model")) for g in groups} - {""})
+    ways = sorted({model_words(g.get("model")).split(", shown for")[0] for g in groups} - {""})
+    periods = sorted({g.get("basis") or "" for g in groups} - {""})
+    it = intensity_test(groups)
+    rules = [{"rule": "headline floor", "text": f"each layer with at least {floor} companies with the figure and at least "
+                                                f"{COVERAGE_MIN * 100:.0f}% of its companies", "passed": all((g.get("n") or 0) >= floor and (not g.get("of") or g["n"] >= g["of"] * COVERAGE_MIN) for g in groups)},
+             {"rule": "like-for-like model", "text": (f"one way of earning: {ways[0]}" if len(ways) == 1 else
+                                                      f"ways of earning: {'; '.join(ways)}" if ways else "no way of earning read for these companies")
+              + (f" (one kind of business: {fams[0]})" if len(fams) == 1 and len(ways) > 1 else ""), "passed": len(fams) <= 1 and len(subs) <= 1},
+             {"rule": "period basis", "text": "full years" if periods == ["full"] else ", ".join(periods) or "not stored", "passed": len(periods) <= 1 and "mixed" not in periods}]
+    if it:
+        each = "; ".join(f"{x['layer']} {x['value']:.2f}" + (f" ({x['n']} companies)" if x.get("n") else "") for x in it["values"])
+        rules.append({"rule": "capital intensity", "text": f"capital for each unit of revenue (book equity plus debt over the latest year's revenue, the "
+                                                           f"layer's median company): {each}; the highest is {it['ratio']:.1f} times the lowest, ranked only "
+                                                           f"at {INTENSITY_FACTOR:g} times or less", "passed": it["passed"], "test": it})
+    else:
+        rules.append({"rule": "capital intensity", "text": "fewer than two layers with a capital figure: the test says nothing either way", "passed": True})
+    return {"claim": claim, "metric": metric, "made": made, "why": why, "high": high, "low": low,
+            "groups": [{k: g.get(k) for k in ("layer", "value", "n", "of", "intensity", "intensity_n")} | {"names": list(g.get("names") or []),
+                                                                                                         "listed": list(g.get("listed") or []),
+                                                                                                         "model": model_words(g.get("model"))} for g in groups],
+            "rules": rules, "left": [{"layer": x["layer"], "why": x["why"]} for x in left or []]}
 
 
 def model_family_of(model) -> str:

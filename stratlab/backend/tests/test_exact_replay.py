@@ -152,6 +152,14 @@ _C1_GROUP = ("of the official industry {}, {}; with the others of that industry 
              "none of that industry with words of that way of earning elsewhere (c1, R44, theme_base.from_other 3)")
 _FROM_MAKERS = "moved by the split from \"Other\" into \"Makers of their own products\", a group named only by how its companies earn"
 _FROM_OTHER = "in \"Other\" with no words of its own"
+_CL48_MAP = ("the map (or its answer) placed it in {}; read as a retailer, the split moved it into \"Off-price and dollar stores\", the "
+             "largest layer of the retailers, which holds none of its industry and whose name (\"off-price\", \"dollar\") its words ({}) "
+             "don't say; they don't say its map layer's name either, nor two words of any retailers' layer: \"Other\" (cl48, R47, "
+             "by_model.home_of)")
+_CL48_OFF = ("in \"Other\" with its way of earning shown (retail): \"branched off\" no longer says \"off-price\" (a compound of a short "
+             "word is one word, as name_says reads it), so neither \"Off-price and dollar stores\" (its words say neither its name nor its "
+             "description) nor from_other 2 takes it there by chance; its words (\"plus-size clothing\", \"store\") say most of \"Family "
+             "clothing stores\", the one layer of its way of earning that they do (cl48, R47, theme_base.from_other 2)")
 APPROVED: dict = {
     **{f"it:{s_}": ("Software products and SaaS platforms", _C1_IND.format("Software Products")) for s_ in ("ACESOFT", "SOTEFIN")},
     "defence:LAXMIPATI": ("Naval shipbuilding", _C1_IND.format("Ship Building & Allied Services")),
@@ -192,6 +200,12 @@ APPROVED: dict = {
         "HINDALUMI", "MMP")},
     **{f"metals:{s_}": ("Aluminium", _C1_GROUP.format("Aluminium", _FROM_OTHER)) for s_ in (
         "BMAL", "JIVIAL", "KANISHK", "MAITRI", "MSAFE", "PALCO", "PGFOILQ", "SACHEMT", "SUDAI")},
+    # cl48 (R47, the outside review of the live Release 46 Consumer retail deck: a designer of branded athletic apparel in "Off-price, dollar
+    # and discount store chains"): a company's layer rests on its own words or official industry, never on the largest layer by default or
+    # on a word shared by chance (test_cl48_class holds the same rule on the live Release 46 inputs)
+    "retail:LULU": ("Other", _CL48_MAP.format("\"Brand owners selling direct and wholesale\"", "athletic apparel and footwear")),
+    "retail:REAL": ("Other", _CL48_MAP.format("\"Online marketplaces\"", "luxury consignment and resale")),
+    "retail:CURV": ("Family clothing stores", _CL48_OFF),
 }
 # R40: "theme:symbol" -> why it is no longer in the theme (theme_base.without_off_industry): a company the theme's official industry brought
 # in whose own words describe another business is dropped, never placed in "Other", and named on the theme's coverage (placements.off_industry)

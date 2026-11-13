@@ -91,10 +91,12 @@ def test_a_unit_mismatch_is_invalid():
     r = D.company_row("US", "UNIT", f)
     assert r["net"] is None and r["verify"]["net"]["state"] == D.INVALID and r["held"]["net"]["checks"] == [D.CHECKS["unit_gap"]]
     assert "net profit $84,969 million on revenue $133 million" in r["verify"]["net"]["why"]
-    # a year's revenue 1,000 times the year before's: a unit gap between the years
+    # a year's revenue 1,000 times the year before's: (updated on purpose, R48) no longer invalid, since the margin is the year's own net
+    # profit over its own revenue, which a unit change between years doesn't touch; above its EBITDA margin with no stored line to cover
+    # it, the 69.2% is not reconciled: shown with †, out of the medians
     g = us(facts("YEAR", "Year Slip Inc", [100.0, 110.0, 120.0, 130000.0], [30.0] * 4, [10.0, 11.0, 12.0, 90000.0], cap=500000))
     r = D.company_row("US", "YEAR", g)
-    assert r["net"] is None and r["verify"]["net"]["state"] == D.INVALID and r["held"]["net"]["checks"] == [D.CHECKS["year_gap"]]
+    assert r["net"] == 69.2 and r["one_off"] and r["verify"]["net"]["state"] == D.UNVERIFIED and "net" not in (r.get("held") or {})
     # a margin on revenue of zero or below is impossible
     z = facts("ZERO", "Zero Co", [100, 100, 100, -5], [10, 10, 10, 12], [5, 5, 5, 1])
     r = D.company_row("IN", "ZERO", z)
@@ -149,7 +151,9 @@ def test_a_margin_beyond_100_percent_is_judged_on_its_own_year_and_its_state_sai
     r = D.company_row("IN", "OLDX", f)
     assert r["ebitda"] == 18.0 and r["net"] == 9.0 and r["roe"] == 12.0 and "verify" not in r
     hi = D.company_row("IN", "HI", facts("HI", "High Co", [100, 100, 100, 100], [20, 20, 20, 130], [5, 5, 5, 6]))
-    assert hi["ebitda"] is None and hi["verify"]["ebitda"]["state"] == D.INVALID
+    # (updated on purpose, R48): above 100% with no operating profit stored to check it, not reconciled ("–" in tables, out of every median);
+    # invalid only when the year's stored operating profit over revenue doesn't give it (tests/test_r48_reconcile.py)
+    assert hi["ebitda"] is None and hi["verify"]["ebitda"]["state"] == D.UNVERIFIED
     lo = D.company_row("IN", "LO", facts("LO", "Low Co", [100, 100, 100, 100], [20, 20, 20, -250], [5, 5, 5, -300]))
     assert lo["ebitda"] == -250.0 and lo["verify"]["ebitda"]["state"] == D.VERIFIED
 

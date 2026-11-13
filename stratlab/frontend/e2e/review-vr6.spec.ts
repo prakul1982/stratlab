@@ -159,6 +159,12 @@ test("VR6-014: Account's usage list leaves no row alone beside an empty cell", a
   await open(page, "/account", ADMIN, 1440);
   const rows = page.locator("#plan .k-rows.two > div");
   await expect(rows.first()).toBeVisible({ timeout: 30_000 });
+  // the list fills in stages (the kept limits arrive after the plan's own rows): measure the finished list, the one a reader sees, once
+  // its row count has stopped changing (CI on 13 Nov measured 8 rows of the 15 the page settles on)
+  await page.waitForLoadState("networkidle");
+  let last = -1;
+  await expect.poll(async () => { const n = await rows.count(); const same = n === last; last = n; return same; },
+    { timeout: 20_000, intervals: [500, 500, 1000] }).toBe(true);
   const tops = await rows.evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.width)]; }));
   const byRow = new Map<number, number>();
   for (const [t] of tops) byRow.set(t, (byRow.get(t) ?? 0) + 1);
