@@ -37,7 +37,7 @@ FEW_BASE = 4                  # a highest or lowest median on this many companie
 COMPARE_MIN = MIN_BASE
 # R31 (the owner's review of the live R30 decks): a layer-vs-layer headline (the value chain's line, findings, questions) needs at least this
 # many companies with the figure in each layer it compares; tables still show every layer and mark (green, red) those of COMPARE_MIN or more
-DIVE_TEXT = 14         # R44 (lane v1): each unusual figure verified against its own filed figures, not reconciled or invalid (verify_net, figure_states), never dropped by a cutoff alone; the dive's coverage of informative layers; R43.1: the whole-point margins counted among the margins there are ("3 of the 1" on the live Insurance deck); d1: halves of a split layer never ranked, no ranking on a gap under a point, peers named and like for like, every company in a layer or "Other", the not-checked-yet mark; LIVE7A (lane t1): every company at the index's newest close and one price date, own words without encyclopedia leads or a cut word, whole-point margins and gaps printed whole, operating figures of old periods left out and listed once, click-bait headlines left out, "Dividend: Dividend" said once; R40: a layer the split named only by how its companies earn is never ranked ("a group by how they earn, of different businesses"), a market-value half with fewer than 3 companies in its figures undone; LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
+DIVE_TEXT = 15         # R44.1: a loss in a verification reason printed with the real minus (gpts, pts); R44 (lane v1): each unusual figure verified against its own filed figures, not reconciled or invalid (verify_net, figure_states), never dropped by a cutoff alone; the dive's coverage of informative layers; R43.1: the whole-point margins counted among the margins there are ("3 of the 1" on the live Insurance deck); d1: halves of a split layer never ranked, no ranking on a gap under a point, peers named and like for like, every company in a layer or "Other", the not-checked-yet mark; LIVE7A (lane t1): every company at the index's newest close and one price date, own words without encyclopedia leads or a cut word, whole-point margins and gaps printed whole, operating figures of old periods left out and listed once, click-bait headlines left out, "Dividend: Dividend" said once; R40: a layer the split named only by how its companies earn is never ranked ("a group by how they earn, of different businesses"), a market-value half with fewer than 3 companies in its figures undone; LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
 HEADLINE_MIN = 5
 # R27 (headline eligibility): a comparison is said as a headline only on a figure for at least this share of the companies of each group it
 # compares (a layer, a family); one with less is shown as data, never ranked (the live R26 Semis deck: "RPO growth -3.9%" of 21 of 53)
@@ -101,6 +101,11 @@ def pts(v: float, whole: bool = False) -> str:
     """12.3% (one decimal, a real minus); `whole`, for margins filed in whole points, prints 13% for 13.0 (a median's half stays: 16.5%)."""
     text = f"{f1(v)}%".replace("-", "−")
     return text.replace(".0%", "%") if whole else text
+
+
+def gpts(v: float) -> str:
+    """A margin as stored ({:g}: 43%, 1.1%) with a real minus, as every figure in the decks is printed (R44.1)."""
+    return f"{v:g}%".replace("-", "−")
 
 
 def whole_points(rows) -> bool:
@@ -421,26 +426,26 @@ def verify_net(r: dict) -> None:
     if year_gap(r):
         return hold(r, "net", "year_gap")
     u, yr = fd.get("unit"), r.get("year") or "the latest year"
-    base = (f"net profit {amount(p, u)} over revenue {amount(s, u)}, {yr}: {net:.1f}%" if s and p is not None else "")
+    base = (f"net profit {amount(p, u)} over revenue {amount(s, u)}, {yr}: {pts(net)}" if s and p is not None else "")
     why, ok = [], True
     if s is None or p is None or s <= 0:
         ok, why = False, ["the year's net profit or revenue is not stored"]
     elif abs(p / s * 100 - net) > RECONCILE_TOL:
-        ok, why = False, [f"net profit over revenue gives {p / s * 100:.1f}%, not {net:.1f}%"]
+        ok, why = False, [f"net profit over revenue gives {pts(p / s * 100)}, not {pts(net)}"]
     elif "net_above_ebitda" in flags:
         need = p - s * e / 100
         if gap_explained(s, p, e, o):
-            why.append(f"above its {e:g}% EBITDA margin by {amount(need, u)}, covered by income outside operations of {amount(o, u)}")
+            why.append(f"above its {gpts(e)} EBITDA margin by {amount(need, u)}, covered by income outside operations of {amount(o, u)}")
         else:
             ok = False
-            why.append(f"net profit {amount(need, u)} above EBITDA ({net:.1f}% net, {e:g}% EBITDA)" + (
+            why.append(f"net profit {amount(need, u)} above EBITDA ({pts(net)} net, {gpts(e)} EBITDA)" + (
                 f"; income outside operations of {amount(o, u)} covers part of it" if o is not None else
                 "; no income outside operations, exceptional gain, tax credit or share of associates is stored to explain it"))
     elif "net_unusual" in flags:
         if e is None:
             ok, why = False, ["no EBITDA margin is stored for the year to check it against"]
         else:
-            why.append(f"at or below its {e:g}% EBITDA margin" if net <= e else "")
+            why.append(f"at or below its {gpts(e)} EBITDA margin" if net <= e else "")
     if ok and "other_income" in flags:          # the one-off that explains it, said
         why.append(f"income outside operations of {amount(o, u)} is {o / p * 100:.0f}% of the net profit")
     why = [w for w in why if w]
@@ -460,7 +465,7 @@ def verify_ebitda(r: dict) -> None:
     net = r.get("net")
     if net is not None and net < 0:
         r.setdefault("verify", {})["ebitda"] = {"state": VERIFIED, "value": e, "checks": [CHECKS["ebitda_under_max"]],
-                                                "why": f"a loss at both levels, {e:g}% EBITDA and {net:.1f}% net, {r.get('year') or 'the latest year'}"}
+                                                "why": f"a loss at both levels, {gpts(e)} EBITDA and {pts(net)} net, {r.get('year') or 'the latest year'}"}
         return
     hold(r, "ebitda", "ebitda_under_max", state=UNVERIFIED, why=f"{CHECKS['ebitda_under_max']} with no net loss stored for the year to agree with it")
 

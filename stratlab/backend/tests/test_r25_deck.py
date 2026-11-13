@@ -242,7 +242,7 @@ def test_the_contents_lists_the_notes_page_and_references_point_at_it():
 
 # ---------- 5. the version ----------
 def test_the_deck_version_is_27_so_kept_deck_files_are_made_again_once():
-    assert deck.THEME_DECK_VERSION == 54                     # R44 (lane v1): deck 54, dive text 14, verification states (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane t1: deck 52, dive text 11 (LIVE7A, updated on purpose); R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); R35 bumped it (R25's test, updated: a new release makes kept files again)
+    assert deck.THEME_DECK_VERSION == 55                     # R44.1: deck 55, dive text 15, a loss in a verification reason with the real minus (updated on purpose); R44 (lane v1): deck 54, dive text 14, verification states (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane t1: deck 52, dive text 11 (LIVE7A, updated on purpose); R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); R35 bumped it (R25's test, updated: a new release makes kept files again)
 
 
 # ---------- 6. the live R24 decks: a layer's columns follow its family; notes name only the families shown ----------
