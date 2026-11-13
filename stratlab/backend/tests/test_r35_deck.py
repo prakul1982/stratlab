@@ -96,11 +96,13 @@ def test_a_layer_page_says_who_is_in_its_calculations_and_why_each_other_is_not(
     run, tag = "Runwell Managed Services", "Tagalong Software"
     note = paras(slides, page.title)
     roll_note = next(p for p in note if p.startswith("In the layer's calculations"))
-    # thirty long names take more than two lines, and six of each group still do: three of each, the count of the rest, and the appendix page
-    # that names every one
-    assert roll_note == ("In the layer's calculations (20 of 30): " + ", ".join(f"{run} {i}" for i in range(3)) + " and 17 more. "
-                         "Left out (10): other business: " + ", ".join(f"{tag} {i}" for i in range(3)) + " and 4 more; "       # lane m1: the reason first (updated on purpose)
-                         f"way of earning not shown: Vague 0, Vague 1; not confirmed: Stranger 0. Every one: appendix, p. {at}.")
+    # thirty long names take more than two lines, and six of each group still do: two of each (ex49: the reasons said precisely take
+    # more room), the count of the rest, and the appendix page that names every one
+    # (updated on purpose, ex49: each reason is its kind with what exactly, the company's way of earning for a different revenue model)
+    assert roll_note == ("In the layer's calculations (20 of 30): " + ", ".join(f"{run} {i}" for i in range(2)) + " and 18 more. "
+                         "Left out (10): different revenue model: " + ", ".join(f"{tag} {i}" for i in range(2))     # each kind alone here, in full in the appendix
+                         + " and 5 more; "       # lane m1: the reason first (updated on purpose)
+                         f"insufficient evidence: Vague 0, Vague 1; not confirmed in the theme: Stranger 0. Every one: appendix, p. {at}.")
     assert len(deck.wrap(roll_note, deck.BODY_MIN, deck.CW)) <= deck.ROLL_LINES
     assert not any(p.startswith("(not confirmed)") for p in note)             # no "(not confirmed)" row on the page: the roll's line says it
     text = next(b for b in page.blocks if b["kind"] == "text" and roll_note in b["paras"])
@@ -113,8 +115,8 @@ def test_a_layer_page_says_who_is_in_its_calculations_and_why_each_other_is_not(
     assert table["head"] == ["Layer", "In its calculations", "Left out, and why"] and [r[0] for r in table["rows"]] == ["Large outsourcing"]
     row = table["rows"][0]
     assert row[1] == "20 of 30: " + ", ".join(f"{run} {i}" for i in range(20))                  # every one named
-    assert row[2] == ("10: other business: " + ", ".join(f"{tag} {i}" for i in range(7)) + "; way of earning not shown: Vague 0, Vague 1; "
-                      "not confirmed: Stranger 0")
+    assert row[2] == ("10: different revenue model (software products and subscriptions): " + ", ".join(f"{tag} {i}" for i in range(7))
+                      + "; insufficient evidence: Vague 0, Vague 1; not confirmed in the theme: Stranger 0")         # (updated on purpose, ex49)
     lay = deck.table_layout(table, table["box"][2], table["box"][3])
     assert len(lay["rows"]) == 1                                                               # the row is on its page whole
     assert "who is in each layer's calculations" in texts([s for s in slides if s.title == "Contents"])
@@ -134,7 +136,8 @@ def test_a_short_roll_stays_on_the_layer_page_and_adds_no_appendix_page():
     # lane d1 (updated on purpose, R43): Quietfin 0 has no description of its own and the layer's industry: in its figures on its industry
     assert "(6 in the layer's calculations)" in page.subtitle
     roll = " ".join(paras(slides, page.title))
-    assert ("Left out (1): way of earning not shown: Vaguebank 0." in roll and "Quietfin 0" in roll) or "Quietfin 0 Ltd (on its industry)" in \
+    # (updated on purpose, ex49: the reason said precisely, what evidence is missing)
+    assert ("Left out (1): insufficient evidence (how it earns read only weakly): Vaguebank 0." in roll and "Quietfin 0" in roll) or "Quietfin 0 Ltd (on its industry)" in \
         [str(r[0]) for b in page.blocks if b["kind"] == "table" for r in b["rows"]]
     assert not any(s.title.startswith(deck.ROLL_TITLE) for s in slides)
     every_rule("banks, a short roll", v, slides)
@@ -152,9 +155,11 @@ def test_a_page_that_shows_every_company_says_it_on_their_rows_and_keeps_its_roo
     page = next(s for s in slides if s.title.startswith("Layer ") and "Lenders" in s.title)
     assert "(3 in the layer's calculations)" in page.subtitle
     cells = [str(r[0]) for b in page.blocks if b["kind"] == "table" for r in b["rows"]]
-    assert cells[:4] == ["Loanco 0 Ltd", "Loanco 1 Ltd", "Loanco 2 Ltd", "Vaguefin Ltd (left out)"]            # every company, the one left out marked
+    # (updated on purpose, ex49: the mark is the reason's kind, its note says what evidence is missing)
+    assert cells[:4] == ["Loanco 0 Ltd", "Loanco 1 Ltd", "Loanco 2 Ltd", "Vaguefin Ltd (insufficient evidence)"]            # every company, the one left out marked
     note = " ".join(paras(slides, page.title))
-    assert "(left out):" in note and "In the layer's calculations" not in note
+    assert "(insufficient evidence): Vaguefin Ltd: its evidence shows how it earns only weakly (read as lenders, low confidence)." in note
+    assert "In the layer's calculations" not in note
 
 
 def test_the_roll_counts_as_the_header_does_and_names_each_reason():
@@ -168,13 +173,16 @@ def test_the_roll_counts_as_the_header_does_and_names_each_reason():
            {"symbol": "X", "name": "Unsure Ltd", "revenue": 5, "status": "unverified", "model_out": "unknown"}]
     layer = {"layer": "L", "n": 5, "revenue": 129, "stats_over": "own"}
     ins, outs = deck.layer_roll(layer, cos)
-    assert ins == [("Alpha", ""), ("Beta", "figures in part"), ("Gamma", "figures in part"), ("Wide", "whole company: revenue only")]
-    assert outs == [("Nofig", "no revenue figure"), ("Other", "other business"), ("Unknown", "way of earning not shown"), ("Unsure", "not confirmed")]
+    # (updated on purpose, ex49: the part left out of a partial company named, each left-out reason its kind with what exactly)
+    assert ins == [("Alpha", ""), ("Beta", "partial: net margin not stored"), ("Gamma", "partial: net margin not reconciled"),
+                   ("Wide", "partial: whole company's figures, revenue only")]
+    assert outs == [("Nofig", "no figure stored"), ("Other", "different revenue model"), ("Unknown", "insufficient evidence"),
+                    ("Unsure", "not confirmed in the theme")]
     assert deck.layer_head(layer, cos, lambda x: f"₹{x} cr").startswith("8 companies (4 in the layer's calculations)")
     line, cut = deck.roll_line(ins, outs)
-    assert not cut and line == ("In the layer's calculations (4 of 8): Alpha; Beta (figures in part), Gamma (figures in part), Wide (whole company: "
-                                "revenue only). Left out (4): other business: Other; way of earning not shown: Unknown; not confirmed: Unsure; "
-                                "no revenue figure: Nofig.")
+    assert not cut and line == ("In the layer's calculations (4 of 8): Alpha; Beta (partial: net margin not stored), Gamma (partial: net margin not "
+                                "reconciled), Wide (partial: whole company's figures, revenue only). Left out (4): different revenue model: Other; "
+                                "insufficient evidence: Unknown; not confirmed in the theme: Unsure; no figure stored: Nofig.")
     # a layer whose every company is the whole company's keeps them in its medians: no "revenue only"
     assert deck.layer_roll({**layer, "stats_over": "all"}, cos)[0][3] == ("Wide", "")
 
@@ -249,7 +257,7 @@ def test_the_kept_peer_medians_are_one_a_run_that_differs_and_never_more_than_a_
     assert list(store) == ["theme:peers:IN:speciality-chemicals"] and len(json.loads(store["theme:peers:IN:speciality-chemicals"])) == D.PEER_RUNS
     assert len(store["theme:peers:IN:speciality-chemicals"]) < 600                          # bounded storage
     assert T.sources("US", "Speciality chemicals").peer_history("x", {"d": "2026-10-01", "peers": 30.0, "k": 9}) == [{"d": "2026-10-01", "peers": 30.0, "k": 9}]
-    assert D.DIVE_TEXT == 18          # vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R48): deck 58, dive text 18, the coverage flag row and who earns another way said in layer lines (updated on purpose); vf46 (R46): dive text 17, each checked figure's source record, net above EBITDA reconciled line by line (updated on purpose); tx2 (R45/R46): RULES 45, PLACE_CARRY[45] = 44, deck 57 (dive text 17 from vf46), the taxonomy regression guard and the screening populations (updated on purpose); c1 (R44): RULES 44, PLACE_CARRY[44] = 43, deck 56, dive text 16 (55 and 15 are R44.1's), classification coverage from evidence (updated on purpose); R44 (lane v1): deck 54, dive text 14, verification states (updated on purpose); R43.1: dive text 13, whole-point margins counted among the margins there are (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane t1: dive text 11 (LIVE7A, updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); lane m1 bumped it; LIVE6-007 too (updated on purpose)
+    assert D.DIVE_TEXT == 19          # ex49 (R49): RULES 48, PLACE_CARRY[48] = 47, deck 59, dive text 19, precise exclusion reasons, the business-model ranking rule (updated on purpose); vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R48): deck 58, dive text 18, the coverage flag row and who earns another way said in layer lines (updated on purpose); vf46 (R46): dive text 17, each checked figure's source record, net above EBITDA reconciled line by line (updated on purpose); tx2 (R45/R46): RULES 45, PLACE_CARRY[45] = 44, deck 57 (dive text 17 from vf46), the taxonomy regression guard and the screening populations (updated on purpose); c1 (R44): RULES 44, PLACE_CARRY[44] = 43, deck 56, dive text 16 (55 and 15 are R44.1's), classification coverage from evidence (updated on purpose); R44 (lane v1): deck 54, dive text 14, verification states (updated on purpose); R43.1: dive text 13, whole-point margins counted among the margins there are (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane t1: dive text 11 (LIVE7A, updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose); lane m1 bumped it; LIVE6-007 too (updated on purpose)
 
 
 # ---------- 4. a median row's figure with its count is never cut ----------
@@ -366,4 +374,4 @@ def test_layer_names_take_the_room_the_figure_columns_dont_use_and_one_still_cut
     assert key.startswith("Layer names in full: ") and key.endswith(" = Digital engineering and consulting projects for governments.")
     assert "Other IT service companies" not in key
     assert deck.short_names(head, rows[:1], widths, 1) == "" and deck.short_names(head, rows, widths, None) == ""
-    assert deck.THEME_DECK_VERSION == 58          # vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R48): deck 58, dive text 18, the coverage flag row and who earns another way said in layer lines (updated on purpose); vf46 (R46): dive text 17, each checked figure's source record, net above EBITDA reconciled line by line (updated on purpose); tx2 (R45/R46): RULES 45, PLACE_CARRY[45] = 44, deck 57 (dive text 17 from vf46), the taxonomy regression guard and the screening populations (updated on purpose); c1 (R44): RULES 44, PLACE_CARRY[44] = 43, deck 56, dive text 16 (55 and 15 are R44.1's), classification coverage from evidence (updated on purpose); R44 (lane v1): deck 54, dive text 14, verification states (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane t1: deck 52, dive text 11 (LIVE7A, updated on purpose); R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)
+    assert deck.THEME_DECK_VERSION == 59          # ex49 (R49): RULES 48, PLACE_CARRY[48] = 47, deck 59, dive text 19, precise exclusion reasons, the business-model ranking rule (updated on purpose); vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R48): deck 58, dive text 18, the coverage flag row and who earns another way said in layer lines (updated on purpose); vf46 (R46): dive text 17, each checked figure's source record, net above EBITDA reconciled line by line (updated on purpose); tx2 (R45/R46): RULES 45, PLACE_CARRY[45] = 44, deck 57 (dive text 17 from vf46), the taxonomy regression guard and the screening populations (updated on purpose); c1 (R44): RULES 44, PLACE_CARRY[44] = 43, deck 56, dive text 16 (55 and 15 are R44.1's), classification coverage from evidence (updated on purpose); R44 (lane v1): deck 54, dive text 14, verification states (updated on purpose); lane d1: RULES 43, PLACE_CARRY[43] = 42, deck 53, dive text 12 (the outside review of the live R41 decks, updated on purpose); lane t1: deck 52, dive text 11 (LIVE7A, updated on purpose); R41: deck 51, coloured cells measured bold (updated on purpose); lane s3-r40: RULES 42, deck 50, dive text 10 (updated on purpose)

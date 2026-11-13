@@ -17,7 +17,7 @@ import { filedOn } from "./BizUpdates";
 import { fmtDate, pct, ratio, safeHref } from "../lib/format";
 import type { Co, Region, SectorAI } from "../lib/research";
 import {
-  amount, calcOf, CALC_WORDS, layerLines, medCell, MIN_BASE, NO_WORDS, ownWords, pc, pcw, plainIndustry, points, span, times,
+  amount, calcOf, calcWords, layerLines, medCell, MIN_BASE, NO_WORDS, ownWords, pc, pcw, plainIndustry, points, span, times,
   themeApi,
   type BizRow, type Business, type Dive, type DiveRow, type Layer, type LayerLine, type Listing, type NewsRow, type Prices, type Stat,
 } from "../lib/theme";
@@ -218,7 +218,7 @@ function layerColumns(r: Region, wide: Set<string>, wideOut: boolean, whole = fa
   // LIVE6-001: a company left out of the layer's calculations says so on its row, with why, as the deck's rows do
   const mark = (row: DiveRow) => {
     const c = calcOf(row);
-    if (!c.in) return <span className="k-sub-line" data-testid="calc-out">Left out of the layer's calculations: {CALC_WORDS[c.why] ?? c.why}</span>;
+    if (!c.in) return <span className="k-sub-line" data-testid="calc-out">Left out of the layer's calculations: {calcWords(c)}</span>;
     if (wideOut && wide.has(row.symbol)) return <span className="k-sub-line" data-testid="calc-out">Left out of the medians: its figures are the whole company's</span>;
     return null;
   };

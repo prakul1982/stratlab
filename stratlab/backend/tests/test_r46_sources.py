@@ -75,12 +75,13 @@ def test_a_page_without_the_lines_says_which_line_is_not_stored_and_the_figure_s
     old = D.company_row("IN", "DEV4", dev("DEV4", "Estate Old Ltd", 250.0, {"other_income": 50.0}))
     rec = old["verify"]["net"]
     assert old["one_off"] and rec["state"] == D.UNVERIFIED and D.in_median(old, "net") is None
-    assert rec["why"].endswith("income outside operations of ₹50 crore covers part of it; no profit before tax or tax rate is stored for the year "
-                               "(the stored page was built before these lines were kept)")
+    # (updated on purpose, ex49: which line is still missing, and why, per company)
+    assert rec["why"].endswith("income outside operations of ₹50 crore covers part of it; still missing: profit before tax and tax rate (the "
+                               "stored page was built before profit before tax and tax rate were kept; read again once it is rebuilt)")
     # the source gives no profit before tax (the line kept, empty): not stored, said without the page's age
     none = D.company_row("IN", "DEV6", dev("DEV6", "Estate Blank Ltd", 250.0, {"op": 120.0, "other_income": 50.0, "interest": 30.0, "dep": 10.0,
                                                                               "pbt": None, "tax_pct": None}))
-    assert none["one_off"] and none["verify"]["net"]["why"].endswith("no profit before tax or tax rate is stored for the year")
+    assert none["one_off"] and none["verify"]["net"]["why"].endswith("still missing: profit before tax and tax rate (none stored for the year)")
     # the stored lines would add up, the net profit filed on another basis: never kept on a guess
     assert D.company_row("IN", "DEV7", dev("DEV7", "Estate Plain Ltd", 250.0))["verify"]["net"]["state"] == D.UNVERIFIED
 
@@ -161,7 +162,9 @@ def test_the_deck_keeps_the_reconciled_developers_and_shows_each_figures_source_
     assert re.search(r"Each one's document, stored page and lines: p\. \d+\.$", vf)
     nb = rows["Net above EBITDA margin"][1]
     assert nb.startswith("Net margin above the EBITDA margin at 1 company, that the year's stored lines don't cover: Estate Old Ltd (25% net, 12% EBITDA).")
-    assert "1 company whose stored page holds no profit before tax or tax rate (built before these lines were kept)." in nb
+    # (updated on purpose, ex49: each company named with the lines it still needs)
+    assert ("1 company whose stored page holds no profit before tax or tax rate (built before these lines were kept; read again once rebuilt), "
+            "each still missing: Estate Old Ltd: profit before tax, tax rate.") in nb
     assert "no stored figure that explains it" not in texts(slides)
     # the appendix's source page: one row per checked figure, verified first, each with its document, page, lines and what they show
     page = next(s for s in slides if s.title == deck.SOURCES_TITLE)
@@ -176,8 +179,8 @@ def test_the_deck_keeps_the_reconciled_developers_and_shows_each_figures_source_
     assert by["Estate Credit Ltd (DEV2)"][4] == "above EBITDA by 120: covered by other income 20, a tax credit 120"
     old = by["Estate Old Ltd (DEV4)"]
     assert old[1] == "Net margin 25%, not reconciled" and old[3].endswith("other income 50; profit before tax not stored; tax rate not stored")
-    assert old[4] == ("above EBITDA by 130; other income 50 covers part; no profit before tax or tax rate stored (page built before these lines "
-                      "were kept)")
+    assert old[4] == ("above EBITDA by 130; other income 50 covers part; still missing: profit before tax and tax rate (the stored page was "
+                      "built before profit before tax and tax rate were kept; read again once it is rebuilt)")          # (updated on purpose, ex49)
     note = next(b for b in page.blocks if b["kind"] == "text")["paras"][0]
     assert note.startswith("Each company's year as its stored page holds it (/stocks/in/SYMBOL), in the filing's unit.")
     contents = next(s for s in slides if s.title == "Contents")

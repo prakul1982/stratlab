@@ -14,7 +14,7 @@ export type AIRow = { /** the provider's id ("groq"); the server always sends it
   result?: "working" | "quota" | "paused" | "failed" | "untested" | null };
 /** Which invoice seller details are still empty (R7M-001): `missing` names them; `gst` is whether invoices will carry GST. */
 export type InvoiceSeller = { complete: boolean; missing: string[]; gst: boolean };
-export type ServerError = { ref: string; at: string; method: string; path: string; error: string; where: string };
+export type ServerError = { ref: string; at: string; method: string; path: string; error: string; where: string; build?: string | null };
 
 export interface Overview {
   server: {

@@ -30,7 +30,12 @@ export const CALC_WORDS: Record<string, string> = {
   "no revenue figure": "no revenue figure is stored for it",
 };
 /** A company row's place in its layer's calculations, as the server kept it (theme_data.calc_record); a row kept without one is in. */
-export const calcOf = (row: DiveRow): { in: boolean; why: string } => (row.calc && typeof row.calc.in === "boolean" ? row.calc : { in: true, why: "" });
+export const calcOf = (row: DiveRow): { in: boolean; why: string; kind?: string; detail?: string } =>
+  (row.calc && typeof row.calc.in === "boolean" ? row.calc : { in: true, why: "" });
+/** ex49 (R49): why a left-out company is out, precisely, as the server keeps it (theme_data.out_reason: "different revenue model, the way of
+ *  earning of …, not the layer's"; "insufficient evidence, no description of its own is stored"); a record kept before it, in CALC_WORDS. */
+export const calcWords = (c: { why: string; kind?: string; detail?: string }): string =>
+  c.kind && c.detail ? `${c.kind}: ${c.detail}` : CALC_WORDS[c.why] ?? c.why;
 
 /** A median cell as the deck writes it (deck._medn): "–" when no company has the figure; "–" with "(2 of 6)" when fewer than MIN_BASE
  *  do; the median, with "(5 of 6)" when it is of fewer companies than the `of` in the layer's calculations. */

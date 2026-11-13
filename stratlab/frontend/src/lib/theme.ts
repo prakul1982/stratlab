@@ -15,7 +15,7 @@ export interface DiveRow {
   /** 0 when its EBITDA margin is filed in whole points (LIVE7A-009: printed 12%, not 12.0%) */
   ebitda_dp?: number;
   /** its place in its layer's calculations, kept by the server (theme_data.calc_record; LIVE6-001: the page says what the deck says) */
-  calc?: { in: boolean; why: string } | null; one_off?: boolean;
+  calc?: { in: boolean; why: string; kind?: string; detail?: string } | null; one_off?: boolean;
 }
 export interface BizRow {
   symbol: string; name: string; metric: string; unit: string | null; span: "month" | "quarter"; period: string; value: number; prev: number | null; year_ago: number | null;
@@ -97,4 +97,4 @@ export const themeApi = {
 };
 
 
-export { amount, pc, pcw, times, points, span, layerLines, medCell, calcOf, CALC_WORDS, MIN_BASE, NO_WORDS, ownWords, libraryLabel, LIBRARY_HEAD, bizFor, plainIndustry, type LayerLine } from "./themeFormat";
+export { amount, pc, pcw, times, points, span, layerLines, medCell, calcOf, calcWords, CALC_WORDS, MIN_BASE, NO_WORDS, ownWords, libraryLabel, LIBRARY_HEAD, bizFor, plainIndustry, type LayerLine } from "./themeFormat";

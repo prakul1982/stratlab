@@ -68,7 +68,9 @@ def test_no_branded_apparel_company_is_in_an_off_price_layer_on_the_live_release
     live, now = shown(d["value_chain"]), shown(out["value_chain"])
     assert live["LULU"] == OFF and now["LULU"] == BRANDS
     lulu = next(c for v in out["value_chain"] for c in v["companies"] if c["ticker"] == "LULU")
-    assert lulu["model"] == "retail" and lulu["model_out"] == "other"
+    # (updated on purpose, ex49 / RULES 48: read as a retailer, its own words say it designs the goods it sells, so it is in the brand
+    # owners' figures; before, it was listed there out of them as a retailer, "another business": tests/test_ex49_deck.py)
+    assert lulu["model"] == "retail" and "model_out" not in lulu and lulu["own_goods"]
     off = next(v for v in out["value_chain"] if v["layer"] == OFF)
     for c in off["companies"]:
         words = B.own_text(d["evidence"].get(c["ticker"]))
@@ -111,8 +113,8 @@ def test_a_layer_s_line_says_who_earns_another_way():
     earns" (Arm in "Design software and IP licensing", the retailers among the brand owners)."""
     out = replay46("retail")
     line = next(v for v in out["value_chain"] if v["layer"] == BRANDS)["model"]["line"]
-    assert "2 of 8 are listed but left out of this layer's figures and rankings, 1 as it earns another way than the layer's companies, 1 as " \
-           "its evidence shows how it earns only weakly." in line
+    # (updated on purpose, ex49 / RULES 48: lululemon is in the layer's figures, its own words saying it designs the goods it sells)
+    assert "1 of 8 is listed but left out of this layer's figures and rankings, as its evidence shows how it earns only weakly." in line
     assert B.out_line([{"ticker": "A"}], "of 3", {"A"}) == ("1 of 3 is listed but left out of this layer's figures and rankings, as it earns "
                                                           "another way than the layer's companies.")
     assert B.out_line([{"ticker": "A"}, {"ticker": "B", "model_out": "other"}], "the other") == (

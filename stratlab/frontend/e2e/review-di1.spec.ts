@@ -142,8 +142,14 @@ test("DI-014, DI-022: Help is in the account menu and lists the explanations; Se
 
 test("DI-005, DI-006: My space keeps the chosen order, and the layout is kept on the account", async ({ page, request }, info) => {
   const phone = info.project.name === "phone";
-  const u = who(118, phone);
+  // its own account per project and repeat, starting from the default layout: the order this test saves is kept on the account, so a
+  // second run against a server kept running (a local run) or a repeat beside it started from Markets already moved up, and the
+  // second "Move Markets up" found the button disabled at the top (ops49: 2 of 3 local runs failed, CI passed on a fresh server)
+  const i = 2 * Math.min(info.repeatEachIndex, 19) + (phone ? 1 : 0);
+  const u = { token: `ops49-${i}`, id: `u-ops49-${i}`, email: `ops49${i}@example.com` };
   await answer(request, u, "money");
+  expect((await request.put(`${API}/me/prefs`, { headers: auth(u), data: { mine: { order: [], hidden: [] } } })).ok()).toBe(true);
+  expect((await prefs(request, u)).mine?.order ?? []).toEqual([]);
   const errors = await signIn(page, u, "/mine");
   await expect(page.getByTestId("mine-home")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Customise", exact: true }).click();

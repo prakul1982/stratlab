@@ -8,6 +8,9 @@ from types import SimpleNamespace
 
 USERS = {
     **{f"load-{i}": (f"u-load-{i}", f"load{i}@example.com", ("free", "basic", "pro")[i % 3]) for i in range(300)},
+    # lane ops49's e2e (e2e/review-di1.spec.ts, My space's order): its own accounts, one per project and repeat (Basic on a desktop and
+    # Pro on a phone, as the load accounts it used), so a repeat or a second run on a server kept running never starts from another's layout
+    **{f"ops49-{i}": (f"u-ops49-{i}", f"ops49{i}@example.com", ("basic", "pro")[i % 2]) for i in range(40)},
     # the MONEY lane's e2e (e2e/money-imports.spec.ts): its own Pro accounts, one per test and project, so nothing it saves meets another spec
     **{f"money-{i}": (f"u-money-{i}", f"money{i}@example.com", "pro") for i in range(24)},
     # the SECMEM lane's e2e (e2e/auth-pkce.spec.ts, e2e/consent.spec.ts): its own accounts, one per test and project

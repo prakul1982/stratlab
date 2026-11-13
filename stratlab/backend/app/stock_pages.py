@@ -1543,6 +1543,42 @@ def fresh(stored: dict | None, region: str, now: float | None = None) -> bool:
 
 
 BUILT_KEY = "stocks:built:"          # stocks:built:<region> = {"at", "pages": every stored page, "shown": those with something to show}
+# how far the stored pages are rebuilt to the facts a page shows now (owner, 13 Nov: "show how far the company-page rebuild has got"):
+# stocks:rebuild:<region> = {"at", "version", "current": pages with facts at FACTS_VERSION, "of": pages with facts, "pages": every stored
+# page}, counted while the screens' index gathers every stored page (no read of its own), and read by Admin, kept REBUILD_MEMORY
+REBUILD_KEY = "stocks:rebuild:"
+REBUILD_MEMORY = 300
+_rebuild_mem: dict = {"at": 0.0, "value": None}
+
+
+def rebuild_counts(facts_list) -> dict:
+    """Of the stored pages' facts, those with something to show (`of`) and among them those built at FACTS_VERSION (`current`)."""
+    current = of = 0
+    for f in facts_list:
+        if has_content(f):
+            of += 1
+            current += (f.get("v") or 1) >= FACTS_VERSION
+    return {"version": FACTS_VERSION, "current": current, "of": of}
+
+
+def rebuild_progress(now: float | None = None, regions=("IN", "US")) -> dict:
+    """Admin's line on the rebuild: per market, the stored pages at the current facts version N of M and when they were counted.
+    A count kept at an earlier version (a new version deployed, the index not gathered since) is not this version's: `counted` False."""
+    now = now if now is not None else time.time()
+    hit = _rebuild_mem.get("value")
+    if hit is not None and now - _rebuild_mem["at"] < REBUILD_MEMORY:
+        return hit
+    markets = []
+    for region in regions:
+        got = _setting(REBUILD_KEY + region) or {}
+        if got.get("version") == FACTS_VERSION and isinstance(got.get("of"), int):
+            markets.append({"region": region, "counted": True, "current": int(got.get("current") or 0), "of": got["of"],
+                            "pages": got.get("pages"), "at": got.get("at")})
+        else:
+            markets.append({"region": region, "counted": False, "at": got.get("at")})
+    value = {"version": FACTS_VERSION, "markets": markets}
+    _rebuild_mem.update(at=now, value=value)
+    return value
 FOREIGN_OTC = re.compile(r"^[A-Z]{4}[FY]$")      # a foreign company's US over-the-counter line: it rarely files results here
 
 
