@@ -2591,6 +2591,120 @@ def results_purpose(purpose) -> str:
 
 
 WATCH_MAX = 16
+VERIFIED_SHOWN = 3         # R46: verified figures named on the data-confidence page; every one is on the source page
+
+
+SOURCES_TITLE = "Figure sources"        # R46: the appendix page of every checked figure's source record
+
+
+def source_words(src: dict | None, page: bool = True) -> str:
+    """R46: a figure's source as its record holds it: the document, the period, (with `page`) the stored page it was read from and the day it was
+    built; "source not stored" when the record has none (never a document made up)."""
+    if not src:
+        return "source not stored"
+    bits = [src.get("document") or "document not stored", src.get("period") or "period not stored"]
+    if src.get("filed"):
+        bits[0] += f", filed {_day(src['filed'])}"
+    if page and src.get("page"):
+        bits.append(f"page {src['page']}" + (f", built {_day(src['built'])}" if src.get("built") else ""))
+    return "; ".join(bits)
+
+
+def bare(v) -> str:
+    """R46: an amount in the unit a source record states once ("1,000", "−16,280", "2.5"), with the real minus."""
+    x = f"{abs(v):,.1f}" if abs(v) < 10 else f"{abs(v):,.0f}"
+    return (MINUS if v < 0 and float(x.replace(",", "")) != 0 else "") + x
+
+
+def line_words(lines: list[dict] | None, unit) -> str:
+    """R46: a figure's statement lines as stored, the unit said once and each line with its value ("₹ crore: revenue 511; net profit 316; tax
+    rate not stored"), for a reader to work the figure out again."""
+    from .intel.theme_data import gpts
+    said = "; ".join(f"{x['line'].replace(' (EBITDA)', '')} " + ("not stored" if x.get("value") is None else gpts(x["value"]) if x.get("pct") else bare(x["value"]))
+                     for x in lines or [])
+    return f"{unit}: {said}" if said and unit else said
+
+
+def shown_words(x: dict) -> str:
+    """R46: what a checked figure's stored lines show, from its record, in the record's unit: net profit over revenue, and for a net margin above
+    the EBITDA margin the gap with each stored line that covers it, or the lines not stored; the checks that flagged it otherwise. No cause
+    beyond the lines."""
+    from .intel.theme_data import LINE_WORDS, pts
+    got = {ln["key"]: ln.get("value") for ln in x.get("lines") or []}
+    s_, p_ = got.get("sales"), got.get("profit")
+    out = []
+    br = x.get("bridge")
+    if x.get("key") == "net" and s_ and s_ > 0 and p_ is not None and not br:
+        out.append(f"net profit over revenue: {pts(p_ / s_ * 100)}")
+    if br:
+        lifts = [f"{LIFT_SHORT[i['key']]} {bare(i['value'])}" for i in br.get("items") or []]
+        if br.get("gap") is not None and br["gap"] <= 0:
+            out.append("at or below the year's operating profit")
+        else:
+            gap = f"above EBITDA by {bare(br['gap'])}" if br.get("gap") is not None else "above EBITDA"
+            if x.get("state") == "verified_extreme":
+                out.append(f"{gap}: covered by " + ", ".join(lifts))
+            else:
+                out.append(gap + (f"; {', '.join(lifts)} cover{'s' if len(lifts) == 1 else ''} part" if lifts else ""))
+                gone = [LINE_WORDS[k] for k in br.get("missing") or []]
+                out.append(f"no {' or '.join(gone)} stored" + (" (page built before these lines were kept)"
+                                                              if {"pbt", "tax_pct"} & set(br.get("unkept") or []) else "") if gone else
+                           "the stored lines don't cover it")
+    elif x.get("key") == "net" and x.get("state") == "verified_extreme":
+        out += [p for p in str(x.get("why") or "").split("; ")[1:] if p]           # e.g. "at or below its 81.7% EBITDA margin"
+    elif x.get("state") != "verified_extreme" or not out:
+        out.append(", ".join(x.get("checks") or []) or STATE_WORDS.get(x.get("state"), ""))
+    return "; ".join(o for o in out if o)
+
+
+LIFT_SHORT = {"other_income": "other income", "before_tax": "items before tax", "tax_credit": "a tax credit", "after_tax": "items after tax"}
+
+
+def verified_words(x: dict) -> str:
+    """R46: one verified figure as the data-confidence page names it, enough to work it out again: the company, the figure, the year's net profit
+    over its revenue (or the reason it is kept), the stored lines that cover a net margin above the EBITDA margin, and the source document."""
+    from .intel.theme_data import amount
+    parts = [p for p in str(x.get("why") or "").split("; ") if p]
+    br, unit = x.get("bridge"), (x.get("source") or {}).get("unit")
+    if br and br.get("gap") is not None and br["gap"] > 0 and br.get("items"):
+        extra = [f"above EBITDA by {amount(br['gap'], unit)}: " + " and ".join(f"{LIFT_SHORT[i['key']]} {amount(i['value'], unit)}" for i in br["items"])]
+    elif br and br.get("gap") is not None and br["gap"] <= 0:
+        extra = ["at or below the year's operating profit"]
+    else:
+        extra = parts[1:]
+    doc = (x.get("source") or {}).get("document") or "source not stored"
+    return f"{x['name']}, {HELD_WORDS.get(x['key'], x['key'])} {_pc(x['value'])} (" + "; ".join(parts[:1] + extra + [doc]) + ")"
+
+
+def verified_row(vf: list[dict], short: bool = False) -> list[str]:
+    """R46 (the outside review of the live R45 decks): the data-confidence page's "Verified figures": each named with what works it out again and
+    its source document, every one with its stored page and lines on the appendix's source page; `short`, names only, for a page whose checks
+    don't fit otherwise (no check is ever cut off the page)."""
+    said = "; ".join(x["name"] if short else verified_words(x) for x in vf[:VERIFIED_SHOWN]) + (f"; and {len(vf) - VERIFIED_SHOWN} more" if len(vf) > VERIFIED_SHOWN else "")
+    who = "Its" if len(vf) == 1 else "Each one's"
+    return ["Verified figures", f"{_n(len(vf), 'unusual figure')} verified against {'its' if len(vf) == 1 else 'their'} own filed figures: {said}. "
+            f"{who} document, stored page and lines: ⟦{SOURCES_TITLE}⟧.", "Kept in every median and ranking."]
+
+
+def gap_reasons(xs: list[dict]) -> str:
+    """R46: why the stored lines don't explain each net margin above the EBITDA margin, counted by reason: the page built before profit before
+    tax and tax were kept, a line the source gives none for, or lines that don't cover the gap."""
+    from .intel.theme_data import LINE_WORDS
+    old, gone, short = [], {}, []
+    for x in xs:
+        br = x.get("bridge") or {}
+        if not br:
+            continue
+        if {"pbt", "tax_pct"} & set(br.get("unkept") or []):
+            old.append(x)
+        elif br.get("missing"):
+            gone.setdefault(" or ".join(LINE_WORDS[k] for k in br["missing"]), []).append(x)
+        else:
+            short.append(x)
+    bits = ([f"{_n(len(old), 'company', 'companies')} whose stored page holds no profit before tax or tax rate (built before these lines were kept)"]
+            if old else []) + [f"{_n(len(g), 'company', 'companies')} with no {k} stored" for k, g in gone.items()] + (
+            [f"{_n(len(short), 'company', 'companies')} whose stored lines don't cover the gap"] if short else [])
+    return "; ".join(bits)
 
 
 def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> list[list[str]]:
@@ -2608,11 +2722,7 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> li
     else:
         rows.append(["Membership", "Every company with figures has words of its own, or a checked quote, that show the theme's work.", "Nothing held back."])
     if ch.get("verified"):         # R44: an unusual figure its own filed figures give: kept, and said so with the count
-        vf = ch["verified"]
-        said = "; ".join(f"{x['name']}, {HELD_WORDS.get(x['key'], x['key'])} {_pc(x['value'])} ({x['why']})" for x in vf[:3]) \
-            + (f"; and {len(vf) - 3} more" if len(vf) > 3 else "")
-        rows.append(["Verified figures", f"{_n(len(vf), 'unusual figure')} verified against {'its' if len(vf) == 1 else 'their'} own filed figures: {said}.",
-                     "Kept in every median and ranking."])
+        rows.append(verified_row(ch["verified"]))
     if ch.get("one_off"):
         above = all(x.get("net") is not None and x.get("ebitda") is not None and x["net"] > x["ebitda"] for x in ch["one_off"])
         oo = ", ".join(f"{x['name']} ({_pc(x['net'])} net, {_pc(x['ebitda']).replace('.0%', '%')} EBITDA)" if x.get("ebitda") is not None and x.get("net") is not None
@@ -2621,8 +2731,11 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> li
         with_, without = ch.get("net_with"), ch.get("net_without")
         moved = with_ is not None and without is not None and _pc(with_) != _pc(without)      # said only when leaving them out changes it (R18)
         rows.append(["Net above EBITDA margin" if above else "Net margin not reconciled",
-                     (f"Net margin above the EBITDA margin at {_n(len(ch['one_off']), 'company', 'companies')}, with no stored figure that explains it: {oo}." if above else
-                      f"{_n(len(ch['one_off']), 'net margin')} unusual and not reconciled with the company's own filed figures: {oo}."),
+                     # R46: why the stored lines don't explain it, counted by reason, never "no stored figure" where a line is stored
+                     (f"Net margin above the EBITDA margin at {_n(len(ch['one_off']), 'company', 'companies')}, that the year's stored lines don't cover: {oo}."
+                      if above else f"{_n(len(ch['one_off']), 'net margin')} unusual and not reconciled with the company's own filed figures: {oo}.")
+                     + (f" {gap_reasons(ch['one_off'])[:1].upper()}{gap_reasons(ch['one_off'])[1:]}." if gap_reasons(ch["one_off"]) else "")
+                     + f" Each one's lines: ⟦{SOURCES_TITLE}⟧.",
                      # m2: the flag has no day, so it is here and not among the dated updates; no cause is named (ANOMALY_WHY, R27)
                      "Marked † and left out of net-margin medians" + (f": the median net margin is {_pc(without)} without them, {_pc(with_)} with them" if moved else "")
                      + f"; {ANOMALY_WHY}."])
@@ -3095,6 +3208,12 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
                 break
             rows_ = [r for r in rows_ if r[0] != name]
         return rows_
+
+    def named_only(rows_, room_):
+        """R46: the verified figures said by name only (each one's record is on the source page) before any check is cut off the page."""
+        if len(table_pages(head, rows_, widths, CW, room_)) > 1 and (v.get("checks") or {}).get("verified"):
+            return [verified_row(v["checks"]["verified"], short=True) if r[0] == "Verified figures" else r for r in rows_]
+        return rows_
     rows = give_way(room)
     # d1 (the live Release 41 Semiconductors, Real estate, Telecom and Utilities decks: the checks' table printed its heading and no row, the
     # coverage table under it taking the page): when the checks don't fit beside the coverage, the coverage has a page of its own after them
@@ -3102,7 +3221,7 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
     if apart:
         room = BOT - TOP - nh - 0.15
         rows = give_way(room)
-    rows = table_pages(head, rows, widths, CW, room)[0] if rows else rows
+    rows = table_pages(head, named_only(rows, room), widths, CW, room)[0] if rows else rows
     s = Slide("Data confidence", "The checks every figure went through, what each found and what the deck does with it", eyebrow=eyebrow)
     th = min(room, table_height(head, rows, widths, CW))
     s.add("table", (M, TOP, CW, th), head=head, rows=rows, widths=widths, numeric=[False] * 3, tight=True)
@@ -3149,7 +3268,53 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
         slides.append(s)
 
 
+def source_records(ch: dict) -> list[dict]:
+    """R46: every checked figure's record (verified, not reconciled, invalid), one list read from theme_data.figure_states; a view kept before
+    R44 carries only its verified and † lists."""
+    if ch.get("states"):
+        return list(ch["states"])
+    return [{**x, "key": x.get("key", "net"), "state": x.get("state", "verified_extreme")} for x in ch.get("verified") or []] + \
+        [{**x, "key": "net", "value": x.get("net"), "state": "unverified_extreme", "checks": x.get("checks") or []} for x in ch.get("one_off") or []]
+
+
+SOURCES_HEAD, SOURCES_WIDTHS = ["Company", "Figure, state", "Source, period", "Statement lines, as stored", "What the lines show"], [2.0, 1.4, 2.0, 4.4, 2.4]
+
+
+def _figure_sources(slides: list, v: dict, eyebrow: str) -> None:
+    """R46 (the outside review of the live R45 decks: "verified extremes are kept, but the explanation does not always give a filing reference and
+    a traceable extraction record"): one row per checked figure, verified first: the document, period and stored page its year comes from, the
+    statement lines it is worked out from with their values in the filing's unit, its state and what the lines show. A part not stored is said
+    so, never filled in."""
+    recs = source_records(v.get("checks") or {})
+    if not recs:
+        return
+    order = {"verified_extreme": 0, "unverified_extreme": 1, "invalid": 2}
+    recs = sorted(recs, key=lambda x: order.get(x.get("state"), 3))
+    rows = [[f"{x['name']} ({x['symbol']})" if x.get("symbol") else x["name"], f"{HELD_WORDS.get(x['key'], x['key'])[:1].upper()}{HELD_WORDS.get(x['key'], x['key'])[1:]} "
+             + (f"{x['value']}x" if x["key"] == "pb" else _pc(x["value"])) + f", {STATE_WORDS.get(x.get('state'), '–')}",
+             source_words(x.get("source"), page=False) + (f"; page built {_day(x['source']['built'])}" if (x.get("source") or {}).get("built") else ""),
+             line_words(x.get("lines"), (x.get("source") or {}).get("unit")) or "lines not stored",
+             shown_words(x)] for x in recs]
+    mk = (v.get("region") or "in").lower()
+    note = (f"Each company's year as its stored page holds it (/stocks/{mk}/SYMBOL), in the filing's unit. EBITDA: the operating profit, else "
+            "revenue times the EBITDA margin. Items before tax: profit before tax beyond EBITDA, other income, interest and depreciation (exceptional "
+            "items); items after tax: net profit beyond profit before tax less its tax (a share of associates' or joint ventures' profit, or another "
+            "item after tax). Verified: in every median; not reconciled: shown, out of the medians; invalid: shown as –.")
+    nh = note_h(note)
+    th = BOT - TOP - nh - 0.1
+    pages = table_pages(SOURCES_HEAD, rows, SOURCES_WIDTHS, CW, th)
+    vn = sum(1 for x in recs if x.get("state") == "verified_extreme")
+    for k, chunk in enumerate(pages):
+        s = Slide(SOURCES_TITLE + (f" ({k + 1} of {len(pages)})" if len(pages) > 1 else ""),
+                  f"{_n(len(recs), 'checked figure')}, {vn} verified: where each comes from and the stored lines it is worked out from", eyebrow=eyebrow)
+        s.add("table", (M, TOP, CW, min(th, table_height(SOURCES_HEAD, chunk, SOURCES_WIDTHS, CW))), head=SOURCES_HEAD, rows=chunk,
+              widths=SOURCES_WIDTHS, numeric=[False] * len(SOURCES_HEAD), tight=True)
+        s.add("text", (M, BOT - nh, CW, nh), paras=[note], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
+        slides.append(s)
+
+
 COVERAGE_TITLE = "Coverage"
+CHART_MIN = 2.2            # R46: inches a chart keeps when the questions the figures raise share its page
 CONF_GIVE_WAY = ("Precision", "Old operating figures", "Bases and counts", "Broken series", "One quarter", "Operating figures")
 
 
@@ -3165,7 +3330,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 57                  # tx2 (R46, the outside review of the live R45 decks): the coverage's "Screening" row (considered = screened out as another business + members, confirmed, with figures, in informative layers, eligible for each metric), the screened-out companies said to be candidates, never members, "Considered" counting them apart from the members, a coverage table taller than a page continued on the next; c1 (R44, the outside review of the live R43 decks): the coverage's "From other industries" row (each company the map names from another industry, why it is in the theme and, apart from that, whether it is in its layer's figures), a layer named by how its companies earn says on its page why it is never ranked, layers of one official industry made from "Other"; R44 (lane v1, the outside review of the live R43 decks): each unusual figure verified against its own filed figures, not reconciled or invalid, one record each, and the data-confidence page's "Verified figures" with the count; the coverage's "In informative layers: N of M (P%)" said once; d1 (the outside review of the live Release 41 decks): the "Other" count split into fit none and not checked yet, one count on every page; every company in a layer or "Other"; no half of a split layer ranked, no comparison on a gap under a point, the peer P/E gap only against named like-for-like peers; layers of two companies or fewer on the "Smaller layers" page, a layer page of at least 5 companies; the coverage on a page of its own when the checks need the room; a company in its layer's figures on its industry said so; LIVE7A (lane t1): the real minus in every range and median, one precision a column, text or chart, layer parts that add up to the change shown, a row's mark its kept reason and a mark's note only with a row that carries it, the tailwinds' contents line in the page's own counts, medians of whole-point margins printed whole; R41: a coloured table cell (the highest and lowest layer, drawn bold) measured bold, so its row holds it whole; a cut paragraph never ends on a joining word; R40: the peer set said as "this theme" (no "the the" on a wrap), a repeated word said once on the finished pages and counted, a layer named only by how its companies earn shown and never ranked, a market-value half with fewer than 3 companies in its figures undone, the coverage table's "In no layer" and "Another business" rows; R38: foreign legal endings left off a label before any of it is cut, no word of a table cell broken inside; LIVE6: calendar price periods, own words only, one market value per company, short charts and empty tables dropped; q1: the appendix counts "with figures" by the dive's rule, a layer's cohort that fell against the run before on the data-confidence page; n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 57                  # vf46 (R46): dive text 17, each checked figure's source record, net above EBITDA reconciled line by line (updated on purpose); tx2 (R46, the outside review of the live R45 decks): the coverage's "Screening" row (considered = screened out as another business + members, confirmed, with figures, in informative layers, eligible for each metric), the screened-out companies said to be candidates, never members, "Considered" counting them apart from the members, a coverage table taller than a page continued on the next; c1 (R44, the outside review of the live R43 decks): the coverage's "From other industries" row (each company the map names from another industry, why it is in the theme and, apart from that, whether it is in its layer's figures), a layer named by how its companies earn says on its page why it is never ranked, layers of one official industry made from "Other"; R44 (lane v1, the outside review of the live R43 decks): each unusual figure verified against its own filed figures, not reconciled or invalid, one record each, and the data-confidence page's "Verified figures" with the count; the coverage's "In informative layers: N of M (P%)" said once; d1 (the outside review of the live Release 41 decks): the "Other" count split into fit none and not checked yet, one count on every page; every company in a layer or "Other"; no half of a split layer ranked, no comparison on a gap under a point, the peer P/E gap only against named like-for-like peers; layers of two companies or fewer on the "Smaller layers" page, a layer page of at least 5 companies; the coverage on a page of its own when the checks need the room; a company in its layer's figures on its industry said so; LIVE7A (lane t1): the real minus in every range and median, one precision a column, text or chart, layer parts that add up to the change shown, a row's mark its kept reason and a mark's note only with a row that carries it, the tailwinds' contents line in the page's own counts, medians of whole-point margins printed whole; R41: a coloured table cell (the highest and lowest layer, drawn bold) measured bold, so its row holds it whole; a cut paragraph never ends on a joining word; R40: the peer set said as "this theme" (no "the the" on a wrap), a repeated word said once on the finished pages and counted, a layer named only by how its companies earn shown and never ranked, a market-value half with fewer than 3 companies in its figures undone, the coverage table's "In no layer" and "Another business" rows; R38: foreign legal endings left off a label before any of it is cut, no word of a table cell broken inside; LIVE6: calendar price periods, own words only, one market value per company, short charts and empty tables dropped; q1: the appendix counts "with figures" by the dive's rule, a layer's cohort that fell against the run before on the data-confidence page; n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -5185,6 +5350,9 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             s.add("text", (M, BOT - rnh, CW, rnh), paras=[rnote], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
             later_slides.append(s)
 
+    roll_end = len(later_slides)
+    _figure_sources(later_slides, v, eb("Appendix"))       # R46: every checked figure's source record, after the figures it is of
+
     # 7. tailwinds and risks, on one page (R19); the headlines and new listings stay on the theme's page
     tw_, rk_ = v.get("tailwinds") or [], v.get("risks") or []
     claims = [("Tailwind", c) for c in tw_] + [("Risk", c) for c in rk_]
@@ -5297,10 +5465,10 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     if built:
         crow.append([NOTES_TITLE, "What each figure shown measures, how it is worked out, its period and source, and its limits.", str(slides.index(built[0]) + 1)])
     if later_slides:
-        crow.append(["Appendix", "; ".join(x for x in (
-            f"Every confirmed company's key figures, one row each ({_n(fig_pages, 'page')})" if fig_pages else "",
-            ("who is in each layer's calculations" if fig_pages else "Who is in each layer's calculations") if len(later_slides) > fig_pages else "")
-            if x) + ".", str(slides.index(later_slides[0]) + 1)])
+        apx = [x for x in (f"Every confirmed company's key figures, one row each ({_n(fig_pages, 'page')})" if fig_pages else "",
+                           "who is in each layer's calculations" if roll_end > fig_pages else "",
+                           "each checked figure's source and statement lines" if len(later_slides) > roll_end else "") if x]   # R46
+        crow.append(["Appendix", "; ".join(apx)[:1].upper() + "; ".join(apx)[1:] + ".", str(slides.index(later_slides[0]) + 1)])
     contents.add("table", (M, TOP, CW, min(BOT - TOP, table_height(["Part", "What it holds", "Page"], crow, [2.6, 8.4, 0.9], CW))),
                  head=["Part", "What it holds", "Page"], rows=crow, widths=[2.6, 8.4, 0.9], numeric=[False, False, True], tight=True)
     slides[0].tidied = tidy_tables(slides)          # LIVE6-008: no line through under 4 points, no row of dashes, no table mostly dashes
@@ -5468,6 +5636,7 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
     section("", "Industry economics", "Each layer's margins, returns, growth and valuation side by side, what moved the aggregate margin, and the questions "
                                       "the figures raise, each computed from the reported figures.")
     room = []              # (slide, x, y, w, h): the space a page leaves under its table, where the questions go when they fit
+    shrink = []            # R46: (slide, chart block): a chart page of this part whose chart can give the questions room under it
     if lay:
         # a lender's layers on lenders' measures (R18): net margin, ROE, net interest income over assets, gross NPA and P/B beside growth and P/E
         cellm = lambda x, k, f: _medn(None, x["n"], f, n=x[f"{k}_n"], value=x[k] if x[f"{k}_n"] >= MIN_BASE else (x[k] or 0) or 1)   # noqa: E731
@@ -5534,6 +5703,7 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
             s.add("columns", (M, TOP, CW, BOT - TOP - ch_ - 0.2), fmt="pct", cats=[x["layer"] for x in both], series=series)
             s.add("text", (M, BOT - ch_, CW, ch_), paras=[cnote], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
             slides.append(s)
+            shrink.append((s, s.blocks[0]))
     if md.get("companies"):
         lead = md["layers"][0] if md.get("layers") else None
         msg = (f"The aggregate EBITDA margin went from {_pc(md['start'])} in {md['from']} to {_pc(md['end'])} in {md['to']} ({_pts(md['change'])}, "
@@ -5561,9 +5731,19 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
         # under a table of this part where they fit (no half-empty page), else on a page of their own
         card = {"title": "Questions the figures raise", "lines": qs[:5]}
         spot = next((r for r in room if card_height(card, r[3], True, 12) + 0.1 <= r[4]), None)
+        # R46 (the outside review of the live R45 Insurance deck: one question alone on a page, a large blank under it): else under this part's
+        # chart, the chart made shorter, when the chart keeps at least CHART_MIN of height; a page of their own only when neither has room
+        fit = next(((sl, b) for sl, b in shrink if b["box"][3] - (card_height(card, b["box"][2], True, 12) + 0.1 + 0.25) >= CHART_MIN), None)
         if spot:
             sl, x, y, w, _ = spot
             sl.add("cards", (x, y, w, card_height(card, w, True, 12) + 0.1), cols=1, fill=True, bullets=True, size=12, items=[card])
+        elif fit:
+            sl, b = fit
+            x, y, w, h = b["box"]
+            ch = card_height(card, w, True, 12) + 0.1
+            b["box"] = (x, y, w, h - ch - 0.25)
+            sl.add("cards", (x, y + h - ch, w, ch), cols=1, fill=True, bullets=True, size=12, items=[card])
+            sl.subtitle += "; the questions the figures raise under it"
         else:
             s = Slide("Questions the figures raise", "Each question with the computed figures it rests on; the figures don't answer them", eyebrow=eyebrow)
             s.add("cards", (M, TOP, CW, min(BOT - TOP, card_height(card, CW, True, 13) + 0.1)), cols=1, fill=True, bullets=True, size=13, items=[card])
