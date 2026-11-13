@@ -104,8 +104,13 @@ test("R4-016: the menu fades where more is behind it, and its last row scrolls f
   await nav.evaluate((n) => { n.scrollTop = n.scrollHeight; });
   await expect(nav).toHaveAttribute("data-fade", "top");
   const last = nav.locator("a:visible").last();
-  const [n, l] = await Promise.all([nav.boundingBox(), last.boundingBox()]);
-  expect(l!.y + l!.height, "the last row is clipped by the footer").toBeLessThanOrEqual(n!.y + n!.height);
+  // scrolled to the end and measured until the menu has finished laying out after the resize (a group still opening could grow it
+  // after one scroll, so one measure taken at once could catch the last row below the fold; CI R43.1): the same check, made stable
+  await expect.poll(async () => {
+    await nav.evaluate((n) => { n.scrollTop = n.scrollHeight; });
+    const [n, l] = await Promise.all([nav.boundingBox(), last.boundingBox()]);
+    return Math.round(l!.y + l!.height - (n!.y + n!.height));
+  }, { message: "the last row is clipped by the footer", timeout: 5_000 }).toBeLessThanOrEqual(0);
   expect(errors).toEqual([]);
 });
 
