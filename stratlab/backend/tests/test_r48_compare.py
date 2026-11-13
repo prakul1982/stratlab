@@ -53,6 +53,13 @@ def table(slides, title):
             for r in b["rows"] if not isinstance(r, dict)]
 
 
+def basis_pages(slides):
+    """ex49: each comparison's page: (its claim, its rules' lines, its table's rows)."""
+    return [(s.subtitle, [p for b in s.blocks if b["kind"] == "text" and b.get("size") == deck.RULES_SIZE for p in b["paras"]],
+             [r for b in s.blocks if b["kind"] == "table" for r in b["rows"] if not isinstance(r, dict)])
+            for s in slides if s.title.startswith(deck.COMPARE_TITLE)]
+
+
 # ---------- P1: the comparison basis ----------
 def test_the_chemicals_ranking_states_its_metric_company_sets_and_rule():
     m, f = chem()
@@ -65,17 +72,21 @@ def test_the_chemicals_ranking_states_its_metric_company_sets_and_rule():
     assert g["Custom synthesis manufacturers"]["n"] == 6 and g["Custom synthesis manufacturers"]["names"] == [f"Custom Chem {i} Ltd" for i in range(6)]
     assert g["Basic organic intermediates"]["n"] == 8 and len(g["Basic organic intermediates"]["names"]) == 8
     rules = {r["rule"]: r for r in b["rules"]}
-    assert set(rules) == {"headline floor", "like-for-like model", "period basis", "capital intensity"} and all(r["passed"] for r in rules.values())
+    # (updated on purpose, ex49: the business model is a rule of its own, apart from the way of earning)
+    assert set(rules) == {"headline floor", "like-for-like model", "period basis", "business model", "capital intensity"} and all(r["passed"] for r in rules.values())
     it = rules["capital intensity"]["test"]
     assert it["threshold"] == D.INTENSITY_FACTOR and it["ratio"] == 1.0 and {x["layer"]: x["value"] for x in it["values"]}["Basic organic intermediates"] == 3.0
     # printed: the appendix page, a row per compared layer with its companies by name; the value chain and the findings point to it
-    rows = table(slides, deck.COMPARE_TITLE)
-    first = next(r for r in rows if r[2].startswith("Custom synthesis manufacturers:"))
-    assert first[0].startswith("EBITDA margin by layer: highest Custom synthesis manufacturers, lowest Basic organic intermediates. p. ")
-    assert "Headline floor: each layer with at least 5 companies with the figure" in first[1]
-    assert "Capital intensity: the highest layer's capital for each unit of revenue is 1.0 times the lowest's; ranked only at 3 times or less." in first[1]
-    assert first[2] == "Custom synthesis manufacturers: 22% (6); capital 3.00 (6)" and first[3].startswith("Custom Chem 0 Ltd, Custom Chem 1 Ltd")
-    assert any(r[2].startswith("Basic organic intermediates: 9.5% (8)") and "Basic Chem 7 Ltd" in r[3] for r in rows)
+    # (updated on purpose, ex49: one comparison a page, its claim the page's takeaway, its rules a line each, one table of its layers)
+    claim, rules_, rows = next(p for p in basis_pages(slides) if p[0].startswith("EBITDA margin by layer"))
+    assert claim.startswith("EBITDA margin by layer, among layers with at least 5 companies with the figure: highest Custom synthesis manufacturers, "
+                            "lowest Basic organic intermediates. p. ")
+    assert any(x.startswith("Headline floor (met): each layer with at least 5 companies with the figure") for x in rules_)
+    assert ("Capital intensity, a proxy for capital needs (met): the largest layer figure of capital for each unit of revenue is 1.0 times the "
+            "smallest; ranked only at 3 times or less; passing it alone never makes layers comparable.") in rules_
+    first = next(r for r in rows if r[0] == "Custom synthesis manufacturers")
+    assert first[1:3] == ["22% (6)", "3.00 (6)"] and first[-1].startswith("Custom Chem 0 Ltd, Custom Chem 1 Ltd")
+    assert any(r[0] == "Basic organic intermediates" and r[1] == "9.5% (8)" and "Basic Chem 7 Ltd" in r[-1] for r in rows)
     vc = next(s for s in slides if s.title == "The value chain by layer")
     page = next(i for i, s in enumerate(slides, 1) if s.title.startswith(deck.COMPARE_TITLE))
     assert f"Each compared layer's companies by name, the rules and the capital figures: p. {page}." in " ".join(p for bl in vc.blocks for p in bl.get("paras") or [])
@@ -92,9 +103,11 @@ def test_layers_whose_capital_needs_differ_are_not_ranked_and_the_test_figures_a
     assert v["chain"]["highest"] is None and not b["made"] and b["why"] == "capital for each unit of revenue differs more than threefold"
     it = next(r for r in b["rules"] if r["rule"] == "capital intensity")
     assert not it["passed"] and it["test"]["ratio"] == 8.0 and it["test"]["high"] == "Custom synthesis manufacturers"
-    first = next(r for r in table(slides, deck.COMPARE_TITLE) if r[0])
-    assert first[0].startswith("EBITDA margin by layer: not ranked, capital for each unit of revenue differs more than threefold.")
-    assert "is 8.0 times the lowest's; ranked only at 3 times or less (not met)." in first[1] and first[2] == "Custom synthesis manufacturers: 22% (6); capital 24.00 (6)"
+    claim, rules_, rows = basis_pages(slides)[0]          # (updated on purpose, ex49: the claim, the rules' lines and the table apart)
+    assert claim.startswith("EBITDA margin by layer: not ranked, capital for each unit of revenue differs more than threefold.")
+    assert any(x.startswith("Capital intensity, a proxy for capital needs (not met): ") and "is 8.0 times the smallest; ranked only at 3 times or less" in x
+               for x in rules_)
+    assert next(r for r in rows if r[0] == "Custom synthesis manufacturers")[1:3] == ["22% (6)", "24.00 (6)"]
     assert "Custom synthesis manufacturers 24.00 (6 companies)" in it_text(b)
 
 
@@ -111,10 +124,9 @@ def test_every_ranking_the_deck_makes_has_its_basis_and_the_findings_point_to_it
     v, slides = deck_of("IN", m, f)
     t = texts(slides)
     assert "revenue grew fastest in the latest year in Custom synthesis manufacturers" in t
-    rows = table(slides, deck.COMPARE_TITLE)
-    claims = [r[0] for r in rows if r[0]]
-    assert any(c.startswith("Revenue growth in the latest year (median) by layer: highest Custom synthesis manufacturers, lowest Basic organic "
-                            "intermediates. p. ") for c in claims)
+    claims = [p[0] for p in basis_pages(slides)]          # (updated on purpose, ex49: each comparison's claim is its page's takeaway)
+    assert any(c.startswith("Revenue growth in the latest year (median) by layer, among layers with at least 5 companies with the figure: highest "
+                            "Custom synthesis manufacturers, lowest Basic organic intermediates. p. ") for c in claims)
     assert any(c.startswith("Median ROCE by layer") or c.startswith("Revenue growth") for c in claims)
     cards = next(s for s in slides if s.title == "Key findings")
     page = next(i for i, s in enumerate(slides, 1) if s.title.startswith(deck.COMPARE_TITLE))

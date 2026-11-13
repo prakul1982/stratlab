@@ -229,11 +229,17 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
     applyThemeColor(t);
   }, []);
 
-  /** Save some of the preferences in one request (two at once could each overwrite the other's change). */
+  /** Save some of the preferences in one request (two at once could each overwrite the other's change). The requests go one at a
+   * time, in the order they were made: two quick changes (My space's card moved up twice) sent at once could land the other way
+   * round, and the account kept the older layout while this screen showed the newer one. */
+  const prefsQueue = useRef<Promise<unknown>>(Promise.resolve());
   const savePrefs = useCallback(async (p: Prefs, quiet = false) => {
     if (p.space) { setSpaceHere(p.space); saveView(p.space); }
     setMe((m) => (m ? { ...m, prefs: { level: m.prefs?.level ?? null, ...(m.prefs ?? {}), ...p, space: p.space ? viewToServer(p.space) : m.prefs?.space } } : m));
-    try { await api("/me/prefs", { method: "PUT", body: p.space ? { ...p, space: viewToServer(p.space) } : p }); } catch (e) { if (!quiet) fail(e); }
+    const body = p.space ? { ...p, space: viewToServer(p.space) } : p;
+    const sent = prefsQueue.current.then(() => api("/me/prefs", { method: "PUT", body }));
+    prefsQueue.current = sent.catch(() => undefined);
+    try { await sent; } catch (e) { if (!quiet) fail(e); }
   }, [fail]);
   const setLevel = useCallback((l: Level) => savePrefs({ level: l }), [savePrefs]);
   const setFocus = useCallback((f: Focus) => savePrefs({ focus: f }), [savePrefs]);

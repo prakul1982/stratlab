@@ -532,8 +532,14 @@ def rows() -> list[dict]:
             x = st.get(r)
             if not isinstance(x, dict):
                 continue
+            # a pass that read no page's price (it raised, or every read did) is a Problem only from the second such pass in a row: one is
+            # the source not answering for a moment, and the job's next pass, a few minutes later, reads them again by itself (owner,
+            # 13 Nov: the check opened and cleared by itself). A status kept from before passes were counted is taken as it reads.
+            passes = int(x.get("failed_passes", autofix.REPEAT_RUNS) or 0)
+            lasting = passes >= autofix.REPEAT_RUNS
+            over = f" in the last {passes} passes" if lasting and x.get("failed_passes") else " in the last pass"
             if x.get("error"):
-                errors.append(f"{name}: {x['error']}")
+                (errors if lasting else log).append(f"{name}: {x['error']}" + ("" if lasting else "; read again at the next pass"))
                 continue
             if x.get("source_down"):
                 # the source turned the pass away (India's broker before the morning login): the pages wait for it,
@@ -552,7 +558,10 @@ def rows() -> list[dict]:
             # a Problem only when reads fail and none worked: the long tail of companies that didn't trade at the last
             # close is normal, not a problem (R82: "India: no page's price could be read" over 299 such pages)
             if err and not x.get("refreshed"):
-                errors.append(f"{name}: no page's price could be read in the last pass ({err} tried)")
+                if lasting:
+                    errors.append(f"{name}: no page's price could be read{over} ({err} tried)")
+                else:
+                    log.append(f"{name}: no page's price could be read in the last pass ({err} tried); read again at the next pass")
 
         return _row("page-prices", "Company pages' prices", "After each market's close, every 15 minutes until every stored page has it",
                     st.get("last_run"), "; ".join(errors) or None, errors + log)
@@ -622,6 +631,14 @@ def admin_jobs(_=Depends(admin.admin_profile)):
     # which container runs the jobs (a deploy overlaps two for a minute) and until when its lease holds; each row with what the
     # self-healing is doing about it (being retried: a Check; tries used up: a Problem)
     return {"jobs": autofix.annotate(rows()), "leader": leader.current.status()}
+
+
+@router.get("/admin/stock-pages/rebuild")
+def admin_stock_pages_rebuild(_=Depends(admin.admin_profile)):
+    """How far the stored company pages are rebuilt to the facts a page shows now (stock_pages.FACTS_VERSION): per market, the pages at
+    that version N of M, as counted when the screens' index last gathered them (no read of its own; kept a few minutes)."""
+    from . import stock_pages
+    return stock_pages.rebuild_progress()
 
 
 # ---------- self-healing: a failed or stuck job is re-run through its own Run now (owner, 4 Nov) ----------

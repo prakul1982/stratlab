@@ -65,9 +65,10 @@ def test_every_roll_page_shows_its_rows_and_every_layer_and_company_is_named():
         assert all(f"{label} Diversified Group {i}" in every for i in range(9))
     assert " more" not in every                                                       # never "and 12 more" in the appendix
     first = next(r for r in rows if r[0] == "Online retailers")
-    assert first[1].startswith("40 of 71: ") and first[2].startswith("31: other business: ")
+    # (updated on purpose, ex49: each reason is its kind with what exactly, the company's way of earning for a different revenue model)
+    assert first[1].startswith("40 of 71: ") and first[2].startswith("31: different revenue model (software products and subscriptions): ")
     cont = [r for r in rows if r[0] == "Online retailers" + deck.ROLL_MORE]
-    assert all(r[2].startswith(("other business: ", "way of earning not shown: ")) or not r[2] for r in cont)   # the reason before its names
+    assert all(r[2].startswith(("different revenue model", "insufficient evidence")) or not r[2] for r in cont)   # the reason before its names
     assert not [d for d in slides[0].gate["dropped"] if "Who is in" in d["slide"]], slides[0].gate["dropped"]
 
 

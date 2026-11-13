@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from . import admin, alerts as alerts_mod, db, ipo_docs as D, job_status, leader, memguard, official_close
+from . import admin, alerts as alerts_mod, autofix, db, ipo_docs as D, job_status, leader, memguard, official_close
 from . import ai_providers as AI
 from .ai_providers import AIError
 from .auth import current_profile
@@ -805,10 +805,12 @@ def _backfill(r: dict, today: date, age: int) -> bool:
     return not r.get("detail_at") or r["detail_at"][:10] <= (today - timedelta(days=7)).isoformat()
 
 
-def refresh_us(calendar, edgar, today: date, now: datetime | None = None, lookups: int = 10, check: list | None = None) -> tuple[list[dict], list[str]]:
+def refresh_us(calendar, edgar, today: date, now: datetime | None = None, lookups: int = 10, check: list | None = None,
+               pages: dict | None = None) -> tuple[list[dict], list[str]]:
     """Read the US calendar (last two months, this and the next) and the SEC's filings for the offerings that have a date, then the
     final prospectuses the SEC took in over the last 30 days against the rows (see add_final_prospectuses). `check`, a list, is filled
-    with the IPOs that have a final prospectus and no row."""
+    with the IPOs that have a final prospectus and no row. `pages`, a dict, is filled with the company filing pages looked up ("read")
+    and those the SEC didn't answer ("failed"): a page that didn't answer is looked up again at the next run, not two days later."""
     now = now or _now()
     problems: list[str] = []
     old = load("US")["rows"]
@@ -831,7 +833,14 @@ def refresh_us(calendar, edgar, today: date, now: datetime | None = None, lookup
         if not (r.get("expected") or r.get("priced") or r.get("filed", "") >= (today - timedelta(days=45)).isoformat()):
             continue
         n += 1
+        before = len(problems)
         got = _try(problems, f"{MINOR_PREFIX}{r['name'][:30]}", lambda r=r: edgar.docs_for(r["name"], today))
+        if len(problems) > before:              # not answered: looked up again at the next run (the job's own retry), not marked read
+            if pages is not None:
+                pages.setdefault("failed", []).append(r["name"][:30])
+            continue
+        if pages is not None:
+            pages.setdefault("read", []).append(r["name"][:30])
         r["docs_checked"] = today.isoformat()
         if got and got.get("docs"):
             r["docs"] = [{"kind": d["form"], "form": d["form"], "label": d["form"], "url": d["url"], "link": d.get("link"), "date": d["date"], "source": "sec"}
@@ -1459,11 +1468,12 @@ class Job:
         """Read one market's sources and keep the rows; with `perf`, also how each recently listed issue has traded since."""
         today = now.astimezone(IST).date() if market == "IN" else now.astimezone(NY).date()
         missing: list[str] = []
+        pages: dict = {}
         if market == "IN":
             feed = _wire["feed"]()
             rows, problems = refresh_india(feed, _wire["sebi"](), today, now, sleep=self.sleep, check=missing)
         else:
-            rows, problems = refresh_us(_wire["calendar"](), _wire["edgar"](), today, now, check=missing)
+            rows, problems = refresh_us(_wire["calendar"](), _wire["edgar"](), today, now, check=missing, pages=pages)
         if perf:
             attach_perf(rows, now)
         if market == "IN":
@@ -1476,7 +1486,20 @@ class Job:
         if rows is not load_["rows"] or problems or missing:
             save(market, rows, checked, as_of=now.isoformat(timespec="seconds") if len(problems) < 4 else load_["as_of"])
         st = state()
-        st[market] = {**(st.get(market) or {}), "read": now.isoformat(timespec="seconds"), "problems": problems[:6], "missing": missing[:12], "rows": len(rows)}
+        prev = st.get(market) or {}
+        st[market] = {**prev, "read": now.isoformat(timespec="seconds"), "problems": problems[:6], "missing": missing[:12], "rows": len(rows)}
+        if market == "US":
+            # the company filing pages the SEC didn't answer: each runs in a row (autofix.streaks), and those worth a check (owner, 13 Nov:
+            # 2 pages that didn't answer once opened a check that cleared on the retry, every few hours): the same page failing two runs
+            # running, or a large share of the pages looked up failing in this run
+            failed, read_ = pages.get("failed") or [], pages.get("read") or []
+            counts = autofix.streaks(prev.get("pages_failing"), failed, read_)
+            keep = autofix.lasting(failed, counts, len(failed) + len(read_))
+            again = all(counts.get(k, 0) >= autofix.REPEAT_RUNS for k in keep)
+            st[market].update(pages_failing=counts, pages_note=(
+                (f"{len(keep)} company filing page{'s' if len(keep) != 1 else ''} the SEC didn't answer in {autofix.REPEAT_RUNS} runs in a row "
+                 if again else f"{len(failed)} of {len(failed) + len(read_)} company filing pages the SEC didn't answer in the last run ")
+                + f"({keep[0]}{' and more' if len(keep) > 1 else ''}); read again at the next run.") if keep else None)
         save_state(st)
         # Admin shows a gap the same day: what a list has that ours doesn't, from both markets' last reads, as the job's problems (IPO-002);
         # a line that waits on the issuer (AWAITS) is a Check, not a Problem
@@ -1485,12 +1508,12 @@ class Job:
         waits = [f"To check ({where}): {x}" for where, x in lines if awaits(x)]
         # one company's filing page the SEC answered with a 500 is a Check with its own words, not a red feed (LIVE1C-002): a Problem is
         # the feed itself failing, and the same feed reads India's issues and bids besides
-        minor = [p for p in problems if p.startswith(MINOR_PREFIX)]
+        # ...and only a page that keeps failing (or many at once) is one: one that didn't answer in a single run is in the log, and the job
+        # looks it up again at its next run by itself
         major = [p for p in problems if not p.startswith(MINOR_PREFIX)]
+        minor = (st.get("US") or {}).get("pages_note")
         notes = ([f"{len(waits)} filing{'s' if len(waits) != 1 else ''} with the regulators {'has' if len(waits) == 1 else 'have'} no exchange "
-                  "listing yet; looked for again each day."] if waits else []) \
-            + ([f"{len(minor)} company filing page{'s' if len(minor) != 1 else ''} the SEC didn't answer just now ({minor[0][len(MINOR_PREFIX):].split(':')[0]}"
-                f"{' and more' if len(minor) > 1 else ''}); read again at the next run."] if minor else [])
+                  "listing yet; looked for again each day."] if waits else []) + ([minor] if minor else [])
         self.status.update(last_run=now.isoformat(timespec="seconds"), read=market, problems=(gaps + waits + problems[:5])[:10],
                            last_error=(f"{len(gaps)} issue{'s' if len(gaps) != 1 else ''} on the exchanges' lists {'is' if len(gaps) == 1 else 'are'} missing from ours."
                                        if gaps else major[0][:200] if major else None),

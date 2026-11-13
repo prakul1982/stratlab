@@ -2086,9 +2086,55 @@ ROLL_TITLE = "Who is in each layer's calculations"
 ROLL_LINES = 2                    # a layer page names every company in and left out when that takes no more lines than this
 ROLL_NAMES = 6                    # else this many names of each group; the rest are counted there and named in the appendix
 ROLL_FULL = 40                    # a layer page names every company when the line stays short (roll_line); the appendix names every one (roll_rows)
-from .intel.theme_data import CALC_WHY as ROLL_WHY, in_calc, mostly_whole      # noqa: E402 (why a listed company is left out, in this order: one list, theme_data.calc_record)
-ROLL_TAG = {"other business": "other business", "way of earning not shown": "left out", "not confirmed": "not confirmed",
-            "no revenue figure": "no figures"}                # the mark on a left-out company's own row, each with its note under the table
+from .intel.theme_data import CALC_KINDS as ROLL_WHY, in_calc, mostly_whole      # noqa: E402 (why a listed company is left out, in this order: one list, theme_data.calc_record)
+# ex49 (R48): the mark on a left-out company's own row is its reason's kind (theme_data.out_reason), each with its note under the table
+ROLL_TAG = {"different revenue model": "different model", "another business": "another business", "insufficient evidence": "insufficient evidence",
+            "not confirmed in the theme": "not confirmed", "no figure stored": "no figures"}
+KIND_OF = {"other business": "different revenue model", "way of earning not shown": "insufficient evidence", "not confirmed": "not confirmed in the theme",
+           "no revenue figure": "no figure stored"}       # a record's kept key (theme_data.CALC_WHY) -> its kind, for a record with none
+
+
+def why_kind(rec: dict) -> str:
+    """ex49: a left-out record's reason kind (theme_data.CALC_KINDS)."""
+    return rec.get("kind") or KIND_OF.get(rec.get("why"), "")
+
+
+def why_label(rec: dict) -> str:
+    """ex49: a left-out record's reason as a roll groups companies by it: its kind with what exactly ("different revenue model: platforms
+    and marketplaces against the layer's retail", "insufficient evidence (no description of its own)")."""
+    return rec.get("label") or why_kind(rec)
+
+
+def label_kind(label: str) -> str:
+    """ex49: the kind a roll's reason label is of ("insufficient evidence (no description of its own)" -> "insufficient evidence")."""
+    return next((k for k in ROLL_WHY if label.startswith(k)), label)
+
+
+def label_rank(label: str) -> int:
+    return next((i for i, k in enumerate(ROLL_WHY) if label.startswith(k)), len(ROLL_WHY))
+
+
+FIGURE_WORDS = {"ebitda": "EBITDA margin", "net": "net margin", "roe": "ROE", "roce": "ROCE"}
+
+
+def part_note(c: dict, keys: tuple) -> str:
+    """ex49 (R48): which part of a company in its layer's calculations is left out, and why: a figure not stored, or one whose state keeps it
+    out of the median (not reconciled, invalid, or on another period basis: n.c.); "" when none is."""
+    from .intel.theme_data import STATE_WORDS, VERIFIED
+    held, ver, nc = c.get("held") or {}, c.get("verify") or {}, set(c.get("nc") or ())
+    gone, odd = [], []
+    for k in keys:
+        st = (held.get(k) or {}).get("state") or ((ver.get(k) or {}).get("state") if (ver.get(k) or {}).get("state") != VERIFIED else None)
+        if k == "net" and c.get("one_off") and not st:
+            st = "unverified_extreme"
+        if st:
+            odd.append(f"{FIGURE_WORDS.get(k, k)} {STATE_WORDS.get(st, 'held')}")
+        elif k in nc:
+            odd.append(f"{FIGURE_WORDS.get(k, k)} on another period basis")
+        elif c.get(k) is None:
+            gone.append(FIGURE_WORDS.get(k, k))
+    parts = ([" and ".join(gone) + " not stored"] if gone else []) + odd
+    return "partial: " + ", ".join(parts) if parts else ""
 _LEGAL = re.compile(r"[,.]?\s+(?:inc|incorporated|corp|corporation|co|company|ltd|limited|plc|llc|lp|n\.?v|s\.?a|ag)\.?$", re.I)
 
 
@@ -2107,15 +2153,15 @@ def layer_roll(layer: dict, cos: list, keys: tuple = ("ebitda", "net")) -> tuple
         nm = _LEGAL.sub("", clean_name(c.get("name") or c.get("symbol") or "")).strip(" ,.") or str(c.get("symbol") or "")
         rec = calc_of(c)                  # lane m1: the company's kept record (theme_data.calc_record), never worked out again here
         if not rec["in"]:
-            outs.append((nm, rec["why"]))
+            outs.append((nm, why_label(rec)))         # ex49: the reason's kind with what exactly
         elif c["symbol"] in wide and apart:
-            ins.append((nm, "whole company: revenue only"))
+            ins.append((nm, "partial: whole company's figures, revenue only"))
         else:
-            ins.append((nm, "figures in part" if c.get("one_off") or c.get("nc") or any(c.get(k) is None for k in keys) else ""))
+            ins.append((nm, part_note(c, keys) if c.get("one_off") or c.get("nc") or any(c.get(k) is None for k in keys) else ""))
     return ins, outs
 
 
-def roll_words(ins: list, outs: list, limit: int = ROLL_NAMES) -> tuple[str, str, bool]:
+def roll_words(ins: list, outs: list, limit: int = ROLL_NAMES, short: bool = False) -> tuple[str, str, bool]:
     """(who is in, who is left out with why, whether a name was left off): "A, B, C (figures in part)", "other business: D, E; not
     confirmed: F", each group at most `limit` names and then "and 5 more". Lane m1 (the outside review of the live R32 IT deck: nine names
     with their one reason after the last of them read as three with none): the reason comes before the names it is of."""
@@ -2128,8 +2174,12 @@ def roll_words(ins: list, outs: list, limit: int = ROLL_NAMES) -> tuple[str, str
     plain = [n for n, note in ins if not note]
     noted = [f"{n} ({note})" for n, note in ins if note]
     in_ = "; ".join(x for x in (some(plain), some(noted)) if x)
-    out_ = "; ".join(f"{why}: {some([n for n, w in outs if w == why])}" for why in ROLL_WHY if any(w == why for _, w in outs))
-    return in_, out_, cut
+    # ex49: each precise reason, in its kind's order; `short`: each kind alone (a layer page's line with no room for them, the appendix's
+    # roll saying each in full)
+    outs = [(n, label_kind(w)) for n, w in outs] if short else outs
+    labels = sorted(dict.fromkeys(w for _, w in outs), key=label_rank)
+    out_ = "; ".join(f"{why}: {some([n for n, w in outs if w == why])}" for why in labels)
+    return in_, out_, cut or (short and any(label_kind(w) != w for _, w in outs))
 
 
 ROLL_HEAD, ROLL_WIDTHS = ["Layer", "In its calculations", "Left out, and why"], [2.6, 4.7, 5.0]
@@ -2141,9 +2191,8 @@ def roll_rows(name: str, ins: list, outs: list, h: float, w: float = CW) -> list
     than a page was left off it, and Retail's and Real Estate's rolls printed an empty page): one row when it fits a w x h table under the
     head, else the names cut evenly into as few rows as fit, each later one "<layer> (continued)", each left-out reason before its names in
     every row it reaches."""
-    rank = {why: i for i, why in enumerate(ROLL_WHY)}
     ins_ = [x for x in ins if not x[1]] + [x for x in ins if x[1]]
-    outs_ = sorted(outs, key=lambda x: rank.get(x[1], len(rank)))
+    outs_ = sorted(outs, key=lambda x: (label_rank(x[1]), x[1]))
     total = len(ins) + len(outs)
 
     def fits(r):
@@ -2171,13 +2220,40 @@ def roll_line(ins: list, outs: list) -> tuple[str, bool]:
     when that takes no more than ROLL_LINES lines, else ROLL_NAMES of each group (half as many when that is still too long) and where the
     rest are."""
     total = len(ins) + len(outs)
-    for limit in (ROLL_FULL, ROLL_NAMES, ROLL_NAMES // 2):
-        in_, out_, cut = roll_words(ins, outs, limit)
-        line = (f"In the layer's calculations ({len(ins)} of {total}): {in_ or 'none'}. Left out ({len(outs)}): {out_}."
-                + (f" Every one: appendix, ⟦{ROLL_TITLE}⟧." if cut else ""))
+    for short, limit in [(False, n) for n in (ROLL_FULL, ROLL_NAMES, ROLL_NAMES // 2)] + [(True, ROLL_NAMES // 2)]:
+        in_, out_, cut = roll_words(ins, outs, limit, short)
+        line = roll_said(len(ins), total, len(outs), in_, out_, cut)
         if len(wrap(line.replace(f"⟦{ROLL_TITLE}⟧", "p. 00"), BODY_MIN, CW)) <= ROLL_LINES:
             break
     return line, cut
+
+
+def roll_said(n_in: int, total: int, n_out: int, in_: str, out_: str, cut: bool) -> str:
+    return (f"In the layer's calculations ({n_in} of {total}): {in_ or 'none'}. Left out ({n_out}): {out_}."
+            + (f" Every one: appendix, ⟦{ROLL_TITLE}⟧." if cut else ""))
+
+
+def kind_notes(cos: list, shown: set) -> list[str]:
+    '''ex49 (R48): the notes of a layer table's left-out marks (ROLL_TAG), each kind once, its companies grouped by their exact reason:
+    "(different model): eBay, Mercadolibre: the way of earning of “Platforms and marketplaces” (commissions ...), not the layer's, that of
+    “Retail” (the margin on goods ...). Left out of this layer's figures and rankings."'''
+    from .intel.theme_data import calc_of
+    groups: dict = {}
+    for c in cos:
+        rec = calc_of(c)
+        groups.setdefault(why_kind(rec), {}).setdefault(rec.get("detail") or "", []).append(clean_name(c.get("name") or c.get("symbol") or ""))
+    out = []
+    for kind in ROLL_WHY:
+        tag = ROLL_TAG.get(kind)
+        if kind not in groups or tag not in shown:
+            continue
+        said = []
+        for detail, names in groups[kind].items():
+            who = ", ".join(names) if len(names) <= 4 else f"{', '.join(names[:3])} and {len(names) - 3} more"
+            if detail:
+                said.append(f"{who}: {detail}")
+        out.append(f"({tag}): " + ("; ".join(said) + ". " if said else "") + "Left out of this layer's figures and rankings.")
+    return out
 
 
 def layer_head(layer: dict, cos: list, amt) -> str:
@@ -2645,7 +2721,7 @@ def shown_words(x: dict) -> str:
     """R46: what a checked figure's stored lines show, from its record, in the record's unit: net profit over revenue, and for a net margin above
     the EBITDA margin the gap with each stored line that covers it, or the lines not stored; the checks that flagged it otherwise. No cause
     beyond the lines."""
-    from .intel.theme_data import LINE_WORDS, pts
+    from .intel.theme_data import pts
     got = {ln["key"]: ln.get("value") for ln in x.get("lines") or []}
     s_, p_ = got.get("sales"), got.get("profit")
     out = []
@@ -2662,10 +2738,8 @@ def shown_words(x: dict) -> str:
                 out.append(f"{gap}: covered by " + ", ".join(lifts))
             else:
                 out.append(gap + (f"; {', '.join(lifts)} cover{'s' if len(lifts) == 1 else ''} part" if lifts else ""))
-                gone = [LINE_WORDS[k] for k in br.get("missing") or []]
-                out.append(f"no {' or '.join(gone)} stored" + (" (page built before these lines were kept)"
-                                                              if {"pbt", "tax_pct"} & set(br.get("unkept") or []) else "") if gone else
-                           "the stored lines don't cover it")
+                from .intel.theme_data import missing_said
+                out.append(missing_said(br) or "the stored lines don't cover it")       # ex49: which line is still missing, and why
     elif x.get("key") == "net" and x.get("state") == "verified_extreme":
         said = {(x.get("sign") or {}).get("why"), (x.get("sign_page") or {}).get("why")}
         out += [p for p in str(x.get("why") or "").split("; ")[1:] if p and p not in said]           # e.g. "at or below its 81.7% EBITDA margin"
@@ -2743,8 +2817,12 @@ def gap_reasons(xs: list[dict]) -> str:
             gone.setdefault(" or ".join(LINE_WORDS[k] for k in br["missing"]), []).append(x)
         else:
             short.append(x)
-    bits = ([f"{_n(len(old), 'company', 'companies')} whose stored page holds no profit before tax or tax rate (built before these lines were kept)"]
-            if old else []) + [f"{_n(len(g), 'company', 'companies')} with no {k} stored" for k, g in gone.items()] + (
+    # ex49 (R48): each company named with the lines it still needs (the stored page built before they were kept: read again once rebuilt)
+    each = lambda g: "; ".join(f"{clean_name(x.get('name') or x.get('symbol') or '')}: {', '.join(LINE_WORDS[k] for k in (x.get('bridge') or {}).get('missing') or [])}"
+                               for x in g[:6]) + (f"; and {len(g) - 6} more" if len(g) > 6 else "")      # noqa: E731
+    bits = ([f"{_n(len(old), 'company', 'companies')} whose stored page holds no profit before tax or tax rate (built before these lines were kept; "
+             f"read again once rebuilt), each still missing: {each(old)}"] if old else []) + \
+        [f"{_n(len(g), 'company', 'companies')} with no {k} stored for the year ({each(g)})" for k, g in gone.items()] + (
             [f"{_n(len(short), 'company', 'companies')} whose stored lines don't cover the gap"] if short else [])
     return "; ".join(bits)
 
@@ -3169,7 +3247,7 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
         # no finding on a base under 3 (R20), one floor (R25), coverage and model (R27); none whose growth is mostly unusual figures (R27)
         if g and e and headline_ok(e["n"], len(cos), x.get("model")) and not dominated(g) and not x.get("scale"):      # d1: a half never ranked alone
             gm.append((x["layer"], _median(g), e["median"], len(g), len(cos), x.get("model"), period_basis(cos), x.get("intensity")))
-            grew[x["layer"]] = ([c["name"] for c in cos if c.get("sales_1y") is not None], x.get("intensity_n"), listed_names(x))
+            grew[x["layer"]] = ([c["name"] for c in cos if c.get("sales_1y") is not None], x.get("intensity_n"), listed_names(x), x.get("intensity_missing") or [])
     f_ = _pc if lender else ebm
     pair = rank_pair(gm, lambda t: t[1], lambda t: t[3], of=lambda t: t[4], model=lambda t: t[5], basis=lambda t: t[6],
                      intensity=lambda t: t[7]) if chained else None
@@ -3177,7 +3255,7 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
         fast, slow = pair
         note_basis(v, "Key findings", "revenue growth in the latest year (median)", [
             {"layer": t[0], "value": t[1], "n": t[3], "of": t[4], "model": t[5], "basis": t[6], "intensity": t[7], "intensity_n": grew[t[0]][1],
-             "names": grew[t[0]][0], "listed": grew[t[0]][2]} for t in comparable_basis_rows(gm, lambda t: t[1], lambda t: t[3], lambda t: t[4], lambda t: t[5], lambda t: t[6], lambda t: t[7])],
+             "names": grew[t[0]][0], "listed": grew[t[0]][2], "intensity_missing": grew[t[0]][3]} for t in comparable_basis_rows(gm, lambda t: t[1], lambda t: t[3], lambda t: t[4], lambda t: t[5], lambda t: t[6], lambda t: t[7])],
             high=fast[0], low=slow[0])
         # m2: one sentence that says which layers it ranks (the headline floor), the fastest and the slowest in it
         kinds = {(t[5] or {}).get("family") for t in gm if isinstance(t[5], dict)} - {None, ""}       # a layer of another family is left out of it
@@ -3370,7 +3448,12 @@ def _figure_sources(slides: list, v: dict, eyebrow: str) -> None:
 
 
 COMPARE_TITLE = "Comparison basis"      # R48: the appendix page of what each highest/lowest claim between layers rests on
-COMPARE_HEAD, COMPARE_WIDTHS = ["Claim", "Metric and eligibility rule", "Layer, figure", "Companies in the figure"], [2.3, 3.4, 2.5, 4.0]
+# ex49 (R49, the outside review of the live R48 decks: "comparison-basis pages are text-heavy with small type: condense without losing
+# evidence (clear hierarchy, one table a page)"): each comparison on its own page, its claim the page's takeaway, its rules one short line
+# each in larger type, and one table: a row per compared layer (its figure with its count, its capital proxy, its business model and its
+# companies by name)
+COMPARE_HEAD, COMPARE_WIDTHS = ["Layer", "Figure (companies)", "Capital, a proxy", "Business model", "Companies in the figure"], [2.4, 1.4, 1.2, 2.5, 4.6]
+RULES_SIZE = 12                           # ex49: the rules' lines, a size above the notes'
 
 
 NAMES_SHOWN = 12           # R48: a compared layer's companies named one by one up to this many; beyond it, by the appendix's rows, all but those named
@@ -3403,78 +3486,117 @@ def note_basis(v: dict, where: str, metric: str, groups: list, high: str | None 
     v["comparisons"].append({**comparison_basis(where, metric, groups, high=high, low=low), "where": where, **({"said": said} if said else {})})
 
 
-def basis_rows(b: dict, h: float = 99.0, w: float = CW) -> list[list[str]]:
-    """R48: one comparison's rows on the "Comparison basis" page: the claim (made or not, with why, and where), the metric and each eligibility
-    rule with its figures, then a row per compared layer with its figure, count and capital figure, and its companies by name; a layer whose
-    names don't fit one row of a w x h table goes on in rows of its own, "<layer> (continued)", as the roll's (roll_rows)."""
-    from .intel.theme_data import gpts, pts
+def basis_claim(b: dict) -> str:
+    """ex49: a comparison's claim, as its page's takeaway: the metric, the layers named highest and lowest (or not ranked, and why), and where
+    the deck makes it."""
+    from .intel.theme_data import HEADLINE_MIN
     hi_lo = (f"highest {b['high']}" + (f", lowest {b['low']}" if b.get("low") else "")) if b.get("high") else ""
-    claim = (f"{b['metric'][:1].upper()}{b['metric'][1:]} by layer: " + (hi_lo if b.get("made") else f"not ranked, {b.get('why') or 'not comparable'}")
-             + (f". In {b['said']}, from ⟦{b['where']}⟧" if b.get("said") else f". ⟦{b['where']}⟧")
-             + "".join(f", ⟦{w}⟧" for w in b.get("also") or []))
-    def said(r):                  # each layer's capital figure is in its own row: the rule says the ratio and the threshold
-        t = r.get("test")
-        text = (f"the highest layer's capital for each unit of revenue is {t['ratio']:.1f} times the lowest's; ranked only at {t['threshold']:g} "
-                "times or less") if t else r["text"]
-        return f"{r['rule'][:1].upper()}{r['rule'][1:]}: {text}" + ("" if r.get("passed") else " (not met)") + "."
-    rule = f"{b['metric'][:1].upper()}{b['metric'][1:]}, the layer's median company. " + " ".join(said(r) for r in b.get("rules") or [])
-    if b.get("left"):
-        rule += " Shown, not ranked: " + "; ".join(f"{x['layer']}, {x['why']}" for x in b["left"]) + "."
-    fmt = _chg if "growth" in b["metric"] else gpts if b["metric"] == "EBITDA margin" else pts
-    ways = {str(g.get("model") or "").split(", shown for")[0] for g in b.get("groups") or []} - {""}
+    # m2: a sentence that names a highest or lowest says the headline floor in it
+    scope = f", among layers with at least {HEADLINE_MIN} companies with the figure" if hi_lo and b.get("made") else ""
+    return (f"{b['metric'][:1].upper()}{b['metric'][1:]} by layer{scope}: " + (hi_lo if b.get("made") else f"not ranked, {b.get('why') or 'not comparable'}")
+            + (f". In {b['said']}, from ⟦{b['where']}⟧" if b.get("said") else f". ⟦{b['where']}⟧")
+            + "".join(f", ⟦{w}⟧" for w in b.get("also") or []))
+
+
+def basis_rules(b: dict) -> list[str]:
+    """ex49: a comparison's eligibility rules, one short line each with whether it is met, then each shown layer left out of the ranking with
+    why: the metric, the headline floor and coverage, one way of earning, one business model, one period basis and the capital-intensity proxy
+    (each layer's figure is in its own row of the table; the line says the ratio, the threshold and the inputs missing)."""
     out = []
-    for k, g in enumerate(b.get("groups") or []):
+    for r in b.get("rules") or []:
+        t = r.get("test")
+        name = "Capital intensity, a proxy for capital needs" if r["rule"] == "capital intensity" else f"{r['rule'][:1].upper()}{r['rule'][1:]}"
+        if t:
+            text = (f"the largest layer figure of capital for each unit of revenue is {t['ratio']:.1f} times the smallest; ranked only at "
+                    f"{t['threshold']:g} times or less; passing it alone never makes layers comparable")
+            miss = r.get("missing") or []
+            if miss:
+                text += "; inputs missing: " + "; ".join(f"{nm} ({' and '.join(m_)})" for _, nm, m_ in miss[:6]) + (
+                    f" and {len(miss) - 6} more" if len(miss) > 6 else "")
+        else:
+            text = r["text"]
+        out.append(f"{name} ({'met' if r.get('passed') else 'not met'}): {text}.")
+    if b.get("left"):
+        out.append("Shown, not ranked: " + "; ".join(f"{x['layer']}, {x['why']}" for x in b["left"]) + ".")
+    return out
+
+
+def basis_rows(b: dict, h: float = 99.0, w: float = CW) -> list[list[str]]:
+    """R48: one comparison's table rows: a row per compared layer with its figure and count, its capital proxy, its business model and its
+    companies by name; a layer whose names don't fit one row of a w x h table goes on in rows of its own, "<layer> (continued)", as the
+    roll's (roll_rows). ex49: the claim and the rules are the page's own lines (basis_claim, basis_rules), no longer cells."""
+    from .intel.theme_data import gpts, pts
+    fmt = _chg if "growth" in b["metric"] else gpts if b["metric"] == "EBITDA margin" else pts
+    out = []
+    for g in b.get("groups") or []:
         fig = ("–" if g.get("value") is None else fmt(g["value"])) + f" ({_of_n(g.get('n') or 0, g.get('of'))})"
-        cap = f"; capital {g['intensity']:.2f}" + (f" ({g['intensity_n']})" if g.get("intensity_n") else "") if g.get("intensity") else ""
+        cap = (f"{g['intensity']:.2f}" + (f" ({g['intensity_n']})" if g.get("intensity_n") else "")) if g.get("intensity") else "not stored"
         m = str(g.get("model") or "")
-        way = f"; {m}" if m and len(ways) > 1 else (f"; way of earning{m.split(',', 1)[1]}" if ", shown for" in m else "")
-        head = [claim if k == 0 else "", rule if k == 0 else "", f"{g['layer']}: {fig}{cap}{way}"]
+        biz = str(g.get("business") or "") or m.split(", shown for")[0]
+        if ", shown for" in m:
+            biz += f"; way of earning{m.split(',', 1)[1]}"
+        head = [g["layer"], fig, cap, biz or "not read"]
         names = list(g.get("names") or [])
         listed = list(g.get("listed") or [])
         if len(names) > NAMES_SHOWN and listed and set(names) <= set(listed):
             # a long list said by the appendix's own rows: every company it lists under the layer, all but those named (exact either way)
             gone = [x for x in listed if x not in set(names)]
             names = ["Every company of the layer in the appendix's figures table, ⟦Every company's figures⟧" + (f", but {', '.join(gone)}" if gone else "")]
-        fits = lambda r: len(table_layout({"head": COMPARE_HEAD, "rows": [r], "widths": COMPARE_WIDTHS, "numeric": [False] * 4}, w, h)["rows"]) == 1  # noqa: E731
+        fits = lambda r: len(table_layout({"head": COMPARE_HEAD, "rows": [r], "widths": COMPARE_WIDTHS, "numeric": [False] * 5}, w, h)["rows"]) == 1  # noqa: E731
         for n in range(1, max(1, len(names)) + 1):
             per = -(-len(names) // n) if names else 1
             parts = [names[j * per:(j + 1) * per] for j in range(n) if names[j * per:(j + 1) * per]] or [[]]
-            got = [head + [", ".join(parts[0]) or "not stored"]] + [["", "", g["layer"] + ROLL_MORE, ", ".join(x)] for x in parts[1:]]
+            got = [head + [", ".join(parts[0]) or "not stored"]] + [[g["layer"] + ROLL_MORE, "", "", "", ", ".join(x)] for x in parts[1:]]
             if all(fits(r) for r in got):
                 break
         out += got
     return out
 
 
+def compare_cols(rows: list) -> tuple[list, list]:
+    """ex49: the comparison table's columns: the business model's left out when no layer of it has one read."""
+    if rows and all(r[3] in ("not read", "") for r in rows):
+        return [h for i, h in enumerate(COMPARE_HEAD) if i != 3], [w_ for i, w_ in enumerate(COMPARE_WIDTHS) if i != 3]
+    return COMPARE_HEAD, COMPARE_WIDTHS
+
+
 def _comparison_basis(slides: list, v: dict, eyebrow: str) -> None:
     """R48 (the outside review of the live R46 decks: "every highest/lowest claim has an auditable metric, company set and eligibility
-    rule"): one block of rows per comparison the deck makes or declines to make between layers (the value chain's, the findings', the
-    economics' and the questions'), each with its metric, the rules with their figures (headline floor and coverage, one way of earning, one
-    period basis, the capital-intensity test with each layer's figure and the threshold) and each compared layer's companies by name."""
+    rule"): every comparison the deck makes or declines to make between layers (the value chain's, the findings', the economics' and the
+    questions'), with its metric, the rules with their figures (headline floor and coverage, one way of earning, one business model, one
+    period basis, the capital-intensity proxy with each layer's figure and the threshold) and each compared layer's companies by name.
+    ex49 (R49): one comparison a page (continued on the next when its table runs over): its claim the takeaway, its rules a line each at
+    RULES_SIZE, one table."""
     recs = v.get("comparisons") or []
     if not recs:
         return
-    note = ("Capital: capital for each unit of revenue, book equity (market value over price to book, else debt over debt to equity) plus debt, "
-            "over the latest year's revenue, of the layer's median company, with how many companies it is of. Companies in the figure: those whose "
-            "figure is in the layer's median. (not met): the rule that kept the layers from being ranked.")
+    note = ("Each figure: the layer's median company, its count in brackets. Capital, a proxy for capital needs: book equity (market value over "
+            "price to book, else debt over debt to equity) plus debt, over the latest year's revenue, both parts stored for the year. Business "
+            "model: the one the map's own name for the layer states, else how its companies earn. Companies in the figure: those in its median.")
     nh = note_h(note)
-    th = BOT - TOP - nh - 0.1
-    rows, of = [], {}
-    for b in recs:
-        for r in basis_rows(b, th):
-            rows.append(r)
-            of[id(r)] = f"{b['metric'][:1].upper()}{b['metric'][1:]} by layer (continued)"
-    pages = table_pages(COMPARE_HEAD, rows, COMPARE_WIDTHS, CW, th)
-    # a page that opens inside a comparison says which one it goes on with, and where its rule is
-    pages = [[[of[id(c[0])], "Its rule: the page before."] + c[0][2:]] + c[1:] if c and not isinstance(c[0], dict) and not c[0][0] and id(c[0]) in of else c
-             for c in pages]
     made = sum(1 for b in recs if b.get("made", True))
-    for k, chunk in enumerate(pages):
-        s = Slide(COMPARE_TITLE + (f" ({k + 1} of {len(pages)})" if len(pages) > 1 else ""),
-                  f"{_n(len(recs), 'comparison')} between layers, {made} ranked: the metric, the rule and each layer's companies", eyebrow=eyebrow)
-        s.add("table", (M, TOP, CW, min(th, table_height(COMPARE_HEAD, chunk, COMPARE_WIDTHS, CW))), head=COMPARE_HEAD, rows=chunk,
-              widths=COMPARE_WIDTHS, numeric=[False] * len(COMPARE_HEAD), tight=True)
-        s.add("text", (M, BOT - nh, CW, nh), paras=[note], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
+    pages = []                      # (claim, rule lines or None on a page that goes on, table rows)
+    for b in recs:
+        rules = basis_rules(b)
+        rh = sum(len(wrap(x, RULES_SIZE, CW)) * _lh(RULES_SIZE) for x in rules) + 0.06 * (len(rules) - 1) + 0.15
+        full = BOT - TOP - nh - 0.1
+        first = max(1.0, full - rh)
+        rows = basis_rows(b, first)
+        head, widths = compare_cols(rows)
+        rows = [[c for i, c in enumerate(r) if i != 3] for r in rows] if len(head) < len(COMPARE_HEAD) else rows
+        chunks = table_pages(head, rows, widths, CW, full, first=(CW, first))
+        for k, chunk in enumerate(chunks):
+            pages.append((basis_claim(b) + (" (continued)" if k else ""), rules if k == 0 else None, chunk, rh, first if k == 0 else full, head, widths))
+    for k, (claim, rules, chunk, rh, th, head, widths) in enumerate(pages):
+        s = Slide(COMPARE_TITLE + (f" ({k + 1} of {len(pages)})" if len(pages) > 1 else ""), claim, eyebrow=eyebrow)
+        y = TOP
+        if rules:
+            s.add("text", (M, y, CW, rh), paras=rules, size=RULES_SIZE, floor=BODY_MIN)
+            y += rh
+        s.add("table", (M, y, CW, min(th, table_height(head, chunk, widths, CW))), head=head, rows=chunk,
+              widths=widths, numeric=[False] * len(head), tight=True)
+        s.add("text", (M, BOT - nh, CW, nh), paras=[note + f" {_n(len(recs), 'comparison')} between layers, {made} ranked."], size=BODY_MIN,
+              floor=BODY_MIN, color=MUTED)
         slides.append(s)
 
 
@@ -3495,7 +3617,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 58                  # vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R47): dive text 18, the coverage page's "Coverage flag" row (under 60% in informative layers, or 8 points or more fewer than the previous live placement), layers' lines say who earns another way (updated on purpose); vf46 (R46): dive text 17, each checked figure's source record, net above EBITDA reconciled line by line (updated on purpose); tx2 (R46, the outside review of the live R45 decks): the coverage's "Screening" row (considered = screened out as another business + members, confirmed, with figures, in informative layers, eligible for each metric), the screened-out companies said to be candidates, never members, "Considered" counting them apart from the members, a coverage table taller than a page continued on the next; c1 (R44, the outside review of the live R43 decks): the coverage's "From other industries" row (each company the map names from another industry, why it is in the theme and, apart from that, whether it is in its layer's figures), a layer named by how its companies earn says on its page why it is never ranked, layers of one official industry made from "Other"; R44 (lane v1, the outside review of the live R43 decks): each unusual figure verified against its own filed figures, not reconciled or invalid, one record each, and the data-confidence page's "Verified figures" with the count; the coverage's "In informative layers: N of M (P%)" said once; d1 (the outside review of the live Release 41 decks): the "Other" count split into fit none and not checked yet, one count on every page; every company in a layer or "Other"; no half of a split layer ranked, no comparison on a gap under a point, the peer P/E gap only against named like-for-like peers; layers of two companies or fewer on the "Smaller layers" page, a layer page of at least 5 companies; the coverage on a page of its own when the checks need the room; a company in its layer's figures on its industry said so; LIVE7A (lane t1): the real minus in every range and median, one precision a column, text or chart, layer parts that add up to the change shown, a row's mark its kept reason and a mark's note only with a row that carries it, the tailwinds' contents line in the page's own counts, medians of whole-point margins printed whole; R41: a coloured table cell (the highest and lowest layer, drawn bold) measured bold, so its row holds it whole; a cut paragraph never ends on a joining word; R40: the peer set said as "this theme" (no "the the" on a wrap), a repeated word said once on the finished pages and counted, a layer named only by how its companies earn shown and never ranked, a market-value half with fewer than 3 companies in its figures undone, the coverage table's "In no layer" and "Another business" rows; R38: foreign legal endings left off a label before any of it is cut, no word of a table cell broken inside; LIVE6: calendar price periods, own words only, one market value per company, short charts and empty tables dropped; q1: the appendix counts "with figures" by the dive's rule, a layer's cohort that fell against the run before on the data-confidence page; n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 59                  # ex49 (R49): dive text 19, every exclusion's precise reason on layer pages and rolls, the capital-intensity proxy labelled, the business-model rule in each comparison, one condensed comparison per page (updated on purpose); vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R47): dive text 18, the coverage page's "Coverage flag" row (under 60% in informative layers, or 8 points or more fewer than the previous live placement), layers' lines say who earns another way (updated on purpose); vf46 (R46): dive text 17, each checked figure's source record, net above EBITDA reconciled line by line (updated on purpose); tx2 (R46, the outside review of the live R45 decks): the coverage's "Screening" row (considered = screened out as another business + members, confirmed, with figures, in informative layers, eligible for each metric), the screened-out companies said to be candidates, never members, "Considered" counting them apart from the members, a coverage table taller than a page continued on the next; c1 (R44, the outside review of the live R43 decks): the coverage's "From other industries" row (each company the map names from another industry, why it is in the theme and, apart from that, whether it is in its layer's figures), a layer named by how its companies earn says on its page why it is never ranked, layers of one official industry made from "Other"; R44 (lane v1, the outside review of the live R43 decks): each unusual figure verified against its own filed figures, not reconciled or invalid, one record each, and the data-confidence page's "Verified figures" with the count; the coverage's "In informative layers: N of M (P%)" said once; d1 (the outside review of the live Release 41 decks): the "Other" count split into fit none and not checked yet, one count on every page; every company in a layer or "Other"; no half of a split layer ranked, no comparison on a gap under a point, the peer P/E gap only against named like-for-like peers; layers of two companies or fewer on the "Smaller layers" page, a layer page of at least 5 companies; the coverage on a page of its own when the checks need the room; a company in its layer's figures on its industry said so; LIVE7A (lane t1): the real minus in every range and median, one precision a column, text or chart, layer parts that add up to the change shown, a row's mark its kept reason and a mark's note only with a row that carries it, the tailwinds' contents line in the page's own counts, medians of whole-point margins printed whole; R41: a coloured table cell (the highest and lowest layer, drawn bold) measured bold, so its row holds it whole; a cut paragraph never ends on a joining word; R40: the peer set said as "this theme" (no "the the" on a wrap), a repeated word said once on the finished pages and counted, a layer named only by how its companies earn shown and never ranked, a market-value half with fewer than 3 companies in its figures undone, the coverage table's "In no layer" and "Another business" rows; R38: foreign legal endings left off a label before any of it is cut, no word of a table cell broken inside; LIVE6: calendar price periods, own words only, one market value per company, short charts and empty tables dropped; q1: the appendix counts "with figures" by the dive's rule, a layer's cohort that fell against the run before on the data-confidence page; n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -3789,7 +3911,7 @@ def intensity_note(chain: dict) -> str:
     """Why the value chain's layers are not ranked when their capital for each unit of revenue differs (n1, the outside review of the live
     R33 Chemicals deck: "more than threefold", the figures nowhere): each such layer's median company's capital (book equity plus debt)
     over its revenue, how many times the lowest the highest is, and the threshold (theme_data.INTENSITY_FACTOR); "" when that is not why."""
-    from .intel.theme_data import INTENSITY_FACTOR, INTENSITY_WORD
+    from .intel.theme_data import CAPITAL_PROXY, INTENSITY_FACTOR, INTENSITY_WORD
     if INTENSITY_WORD not in str(chain.get("line") or ""):
         return ""
     names = set(chain.get("not_ranked") or [])
@@ -3798,9 +3920,10 @@ def intensity_note(chain: dict) -> str:
         return ""
     lo, hi = min(rows, key=lambda r: r["intensity"]), max(rows, key=lambda r: r["intensity"])
     each = "; ".join(f"{r['layer']} {r['intensity']:.2f}" for r in rows)
-    return (f"Capital for each unit of revenue (book equity plus debt over the latest year's revenue, the layer's median company): {each}. "
+    # ex49 (R48): labelled as the proxy it is, never as proof that layers are comparable
+    return (f"Capital for each unit of revenue ({CAPITAL_PROXY}; over the latest year's revenue, the layer's median company): {each}. "
             f"{hi['layer']}'s is {hi['intensity'] / lo['intensity']:.1f} times {lo['layer']}'s; layers are ranked only where the highest is "
-            f"at most {INTENSITY_FACTOR:g} times the lowest.")
+            f"at most {INTENSITY_FACTOR:g} times the lowest, and only when they also share a way of earning and a business model.")
 
 
 def compare_note(chain: dict, key: str) -> str:
@@ -4507,7 +4630,7 @@ def provenance_flags(slides: list, v: dict) -> list[dict]:
     cmp_ = tabs(COMPARE_TITLE)
     for b in v.get("comparisons") or []:
         for g in b.get("groups") or []:
-            if not any(_cell_text(r[2]).startswith(g["layer"] + ":") and _cell_text(r[3]) not in ("", "not stored") for r in cmp_):
+            if not any(_cell_text(r[0]) == g["layer"] and _cell_text(r[-1]) not in ("", "not stored") for r in cmp_):      # ex49: one table a comparison
                 out.append({"slide": COMPARE_TITLE, "text": f"{b.get('metric')}: {g['layer']}", "why": "a compared layer with no row of its companies",
                             "rule": "sourced"})
     return out
@@ -5241,10 +5364,11 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             if c["symbol"] in unsure:
                 return "not confirmed"
             if c["symbol"] in unmodelled:
-                return "other business" if c.get("model_out") == "other" else "left out"
+                return ROLL_TAG.get(why_kind(calc_of(c)), "insufficient evidence")      # ex49: the reason's kind
             if c["symbol"] in nofig:
-                return ROLL_TAG["no revenue figure"]
-            return "whole company" if c["symbol"] in lwide else "on its industry" if c.get("on_industry") else ""
+                return ROLL_TAG["no figure stored"]
+            return "whole company" if c["symbol"] in lwide else "on its industry" if c.get("on_industry") else "own design" if c.get("own_goods") else \
+                "on its words" if c.get("by_words") else ""
         tags = {c["symbol"]: tag(c) for c in cos}
         body = [[f"{c['name']} ({tags[c['symbol']]})" if tags[c["symbol"]] else c["name"]]
                 + [co_cell(c, k, amt) for k, _, _ in cols] + [c.get("year") or "–"] for c in cos]
@@ -5301,16 +5425,18 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         if "on its industry" in shown_tags:          # d1
             fparts.append("(on its industry): its own words show how it earns only weakly; it is in the layer's figures by its official industry, "
                           "that of most of the layer's companies.")
+        if "own design" in shown_tags:      # ex49
+            fparts.append("(own design): read as a retailer, its own words say it designs the goods it sells, so it sells products of its own, "
+                          "as the layer's companies do, and is in the layer's figures.")
+        if "on its words" in shown_tags:    # ex49 (G3)
+            fparts.append("(on its words): the map placed it here and its own words say the layer's name and no other way of earning; only the "
+                          "AI's read gave it another, so it is in the layer's figures.")
         if unsure:
             fparts.append("(not confirmed): its own words don't show this work, so it is left out of the medians and the revenue total.")
-        lo_note = "(left out): its evidence doesn't show clearly how it earns, so it is left out of this layer's figures and rankings."
-        other = {c["symbol"] for c in cos if c["symbol"] in unmodelled and c.get("model_out") == "other"}
-        if "left out" in shown_tags:
-            fparts.append(lo_note)
-        if other:      # R34 (GPT review of R31.5, IT: 13 with records, 4 in the layer's calculations, no reason given for the other 9)
-            fparts.append("(other business): it earns another way than most of this layer's companies, so it is left out of this layer's "
-                          "figures and rankings.")
-        nf_note = f"({ROLL_TAG['no revenue figure']}): no revenue figure is stored for it, so it is in none of this layer's medians or totals."
+        # ex49 (R48): each left-out mark's note says exactly why, per company where it differs: both ways of earning for a different revenue
+        # model, what is missing for insufficient evidence (R34: every company left out carries its reason)
+        fparts += kind_notes([c for c in cos if c["symbol"] in unmodelled], shown_tags)
+        nf_note = f"({ROLL_TAG['no figure stored']}): no revenue or other figure is stored for it, so it is in none of this layer's medians or totals."
         if nofig:           # lane m1: every company left out of a layer's calculations carries its reason on its row or in the roll's line
             fparts.append(nf_note)
         if any(c.get("one_off") for c in cos):
@@ -5341,7 +5467,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         if r_out and k_fit < len(body):
             # R35 (GPT reviews of R31.5-R31.9, live IT: "13 companies (4 in the layer's calculations)", three rows shown, nobody named): the
             # page doesn't show every company, so a line of its own names who is in and why each other is not. A page that shows them all
-            # says it on their rows ("(left out)", "(other business)", "(not confirmed)") and keeps its room for them.
+            # says it on their rows ("(insufficient evidence)", "(different model)", "(not confirmed)") and keeps its room for them.
             rline, rcut = roll_line(r_in, r_out)
             rolls.append((layer["layer"], r_in, r_out, rcut))
             fnote, fh = foot(fparts)
@@ -5378,22 +5504,26 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             room = BOT - fh - below
             k_fit = fits(tw)
         if k_fit < want and rline:          # the roll's line names fewer of each group (every one is in the appendix)
-            in_, out_, _ = roll_words(r_in, r_out, max(1, ROLL_NAMES // 3))
-            rline = (f"In the layer's calculations ({len(r_in)} of {len(r_in) + len(r_out)}): {in_ or 'none'}. Left out ({len(r_out)}): {out_}."
-                     f" Every one: appendix, ⟦{ROLL_TITLE}⟧.")
+            for short in (False, True):        # ex49: each reason in full where it fits its lines, else its kind alone (in full in the appendix)
+                in_, out_, _ = roll_words(r_in, r_out, max(1, ROLL_NAMES // 3), short)
+                rline = roll_said(len(r_in), len(r_in) + len(r_out), len(r_out), in_, out_, True)
+                if len(wrap(rline.replace(f"⟦{ROLL_TITLE}⟧", "p. 00"), BODY_MIN, CW)) <= ROLL_LINES:
+                    break
             rolls[-1] = (layer["layer"], r_in, r_out, True)
             fnote, fh = foot(fparts)
             room = BOT - fh - below
             k_fit = fits(tw)
         on_page = {c["symbol"] for c in cos[:k_fit]}
         on_tags = {tags[x] for x in on_page}
-        drop = ([lo_note] if "left out" not in on_tags else []) + [p for p in fparts if p.startswith("(other business)") and not other & on_page]
+        # ex49: a left-out mark's note (each kind's, kind_notes) and the own-design note only with a row on the page that carries it
+        drop = [p for p in fparts for t_ in ("different model", "another business", "insufficient evidence", "own design", "on its words")
+                if p.startswith(f"({t_})") and t_ not in on_tags]
         drop += [p for p in fparts if p.startswith("(whole company)") and "whole company" not in on_tags]
         drop += [p for p in fparts if p.startswith("(on its industry)") and "on its industry" not in on_tags]
         drop += [nf_note] if not nofig & on_page else []
         if rline and not unsure & on_page:          # R35: the roll's line says who isn't confirmed, so the mark's own note goes with its rows
             drop += [p for p in fparts if p.startswith("(not confirmed)")]
-        if (unmodelled or rline or nofig or lwide or "on its industry" in shown_tags) and any(p in fparts for p in drop):       # no "(left out)" / "(other business)" row shown: its note isn't either
+        if (unmodelled or rline or nofig or lwide or {"on its industry", "own design", "on its words"} & shown_tags) and any(p in fparts for p in drop):       # no marked row shown: its note isn't either
             fparts = [p for p in fparts if p not in drop]
             fnote, fh2 = foot(fparts)
             if rline and fh2 < fh:          # R35: the roll's line took room from the table: the room the dropped notes leave goes back to its rows,
@@ -5537,10 +5667,11 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     if any(cut for _, _, _, cut in rolls):       # R35: a layer's page left names off: every layer's full roll, one row each, in the appendix
         rhead, rwidths = ROLL_HEAD, ROLL_WIDTHS
         rnote = ("In a layer's calculations: confirmed by its own description, how it earns shown and of the layer's kind, with a revenue figure. "
-                 "(whole company: revenue only): in the layer's revenue total, not its medians. (figures in part): a margin is missing or left out "
-                 "of its median. Left out, each reason before the companies it is of: other business, it earns another way than most of the "
-                 "layer; way of earning not shown, its evidence doesn't show clearly how it earns; not confirmed, its own words don't show "
-                 "this work; no revenue figure, none is stored.")
+                 "(partial: ...): in the calculations in part, the part named: the whole company's figures (revenue only, not its medians), a "
+                 "figure not stored, or one not reconciled, invalid or on another period basis (out of its median). Left out, each reason before "
+                 "the companies it is of: different revenue model, the company's way of earning and the layer's named; another business than its "
+                 "official industry, by its own words; insufficient evidence, what is missing named; not confirmed in the theme, its own words "
+                 "don't show this work; no figure stored.")
         rnh = note_h(rnote)
         rth = BOT - TOP - rnh - 0.1
         rrows = [r for name, r_in, r_out, _ in rolls for r in roll_rows(name, r_in, r_out, rth)]
@@ -5722,9 +5853,10 @@ def _smaller_layers(slides: list, small: list, amt, eyebrow: str) -> None:
         others = [o.get("name") or o.get("symbol") for o in x.get("companies") or [] if o.get("status") == "unverified"]
         for i, c in enumerate(sure):
             from .intel.theme_data import calc_of
-            why = calc_of(c)["why"]           # LIVE7A-005: a row's mark is its kept reason first, the whole company's figures after
+            why = why_kind(calc_of(c))        # LIVE7A-005: a row's mark is its kept reason first, the whole company's figures after (ex49: its kind)
             mark = ROLL_TAG.get(why) if why else ("whole company" if c.get("company_wide") or c["symbol"] in (x.get("company_wide") or []) else
-                                                  "on its industry" if c.get("on_industry") else "")
+                                                  "on its industry" if c.get("on_industry") else "own design" if c.get("own_goods") else
+                                                  "on its words" if c.get("by_words") else "")
             name = (f"{c['name']} ({mark})" if mark else c["name"]) \
                 + (f"; also listed, not confirmed: {', '.join(others)}" if others and i == len(sure) - 1 else "")
             rows_.append(({**x, "layer": x["layer"] if i == 0 else ""}, c, name))
@@ -5739,9 +5871,12 @@ def _smaller_layers(slides: list, small: list, amt, eyebrow: str) -> None:
     head, body, widths, numeric = drop_empty(head, body, widths, [False, False, False] + [True] * len(cols) + [False], keep=(0, 1, 2))
     ones = all(confirmed_n(x) == 1 for x in small)
     marks_ = {re.search(r"\(([^()]+)\)(?:;|$)", nm).group(1) for _, _, nm in rows_ if re.search(r"\(([^()]+)\)(?:;|$)", nm)}
-    said_ = {"left out": "(left out): its evidence doesn't show clearly how it earns, so it is left out of its layer's figures.",
-             "other business": "(other business): it earns another way than its layer's other companies, so it is left out of its figures.",
-             ROLL_TAG["no revenue figure"]: f"({ROLL_TAG['no revenue figure']}): no revenue figure is stored for it.",
+    said_ = {"insufficient evidence": "(insufficient evidence): its evidence doesn't show clearly how it earns, so it is left out of its layer's figures.",
+             "different model": "(different model): it earns another way than its layer's other companies, so it is left out of its figures.",
+             "another business": "(another business): its own words describe another business than its official industry, so it is left out of its figures.",
+             "own design": "(own design): read as a retailer, its own words say it designs the goods it sells; in its layer's figures.",
+             "on its words": "(on its words): the map placed it here and its own words say the layer's name and no other way of earning; in its figures.",
+             ROLL_TAG["no figure stored"]: f"({ROLL_TAG['no figure stored']}): no revenue figure is stored for it.",
              "whole company": "(whole company): it runs other businesses too, so its figures are the whole company's.",
              "on its industry": "(on its industry): no description of its own; in its layer by its official industry, that of most of the "
                                 "layer's companies."}
@@ -5809,12 +5944,13 @@ def economics_questions(v: dict, shown: list, sec: dict, ebm) -> list[str]:
         if g and x.get("basis") != "rest" and not x.get("scale"):      # the "Other" group is never compared (R22), nor a half alone (d1)
             from statistics import median as _m
             gm.append((x["layer"], _m(g), len(g), len(cos), x.get("model"), period_basis(cos), x.get("intensity"),
-                       [c["name"] for c in cos if c.get("sales_1y") is not None], x.get("intensity_n"), listed_names(x)))
+                       [c["name"] for c in cos if c.get("sales_1y") is not None], x.get("intensity_n"), listed_names(x), x.get("intensity_missing") or []))
     pair = rank_pair(gm, lambda t: t[1], lambda t: t[2], of=lambda t: t[3], model=lambda t: t[4], basis=lambda t: t[5], intensity=lambda t: t[6])
     if pair:
         f_, s_ = pair
         note_basis(v, "Layers side by side", "revenue growth in the latest year (median)", [
-            {"layer": t[0], "value": t[1], "n": t[2], "of": t[3], "model": t[4], "basis": t[5], "intensity": t[6], "intensity_n": t[8], "names": t[7], "listed": t[9]}
+            {"layer": t[0], "value": t[1], "n": t[2], "of": t[3], "model": t[4], "basis": t[5], "intensity": t[6], "intensity_n": t[8], "names": t[7], "listed": t[9],
+             "intensity_missing": t[10]}
             for t in comparable_basis_rows(gm, lambda t: t[1], lambda t: t[2], lambda t: t[3], lambda t: t[4], lambda t: t[5], lambda t: t[6])],
             high=f_[0], low=s_[0], said="the questions the figures raise")
         out.append(f"Median revenue growth in the latest year: {_chg(f_[1])} in {f_[0]} ({ow(f_[2], f_[3])}), {_chg(s_[1])} in {s_[0]} ({ow(s_[2], s_[3])}). "
@@ -5838,7 +5974,7 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
         med = lambda k: (st.get(k) or {}).get("median") if ((st.get(k) or {}).get("n") or 0) >= MIN_BASE else None      # noqa: E731
         from .intel.theme_data import period_basis
         lay.append({"layer": x["layer"], "n": len(every), "listed": len(x.get("companies") or []), "rest": x.get("basis") == "rest" or bool(x.get("scale")),
-                    "intensity_n": x.get("intensity_n"), "listed_names": listed_names(x),
+                    "intensity_n": x.get("intensity_n"), "listed_names": listed_names(x), "intensity_missing": x.get("intensity_missing") or [],
                     # R48: who is in each median by name (the comparison basis): the layer's own records, growth from its companies
                     "names": {**{k: list(n) for k, n in (x.get("in_stats") or {}).items()}, "growth": [c["name"] for c in cos if c.get("sales_1y") is not None]},
                     "model": x.get("model"), "basis": period_basis(cos), "intensity": x.get("intensity"), "ebitda": med("ebitda"), "roce": med("roce"),
@@ -5889,6 +6025,7 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
             if got:                       # R48: the layers each "highest" is among, their companies by name and the rule
                 note_basis(v, "Layers side by side", what, [{"layer": x["layer"], "value": x[key], "n": x[f"{key}_n"], "of": x["n"], "model": x["model"],
                                                             "basis": x["basis"], "intensity": x["intensity"], "intensity_n": x.get("intensity_n"),
+                                                            "intensity_missing": x.get("intensity_missing") or [],
                                                             "names": x["names"].get(key) or [], "listed": x["listed_names"]} for x in got[1]],
                            high=got[0]["layer"])
         sizes = {len(g[1]) for g in (got_r, got_g) if g}

@@ -86,6 +86,11 @@ test("admin: the breadcrumb says Mine > Admin, and only an admin gets in", async
   await expect(ipo.getByText(/^\d+ of 120$/)).toBeVisible();
   for (const row of ["Summaries today, asked for", "Waiting for a summary", "Still to read"]) await expect(ipo.getByText(row).first()).toBeVisible();
   await expect(ipo.getByText(/(About \d+ days? at 120 a day|None waiting)/).first()).toBeVisible();
+  // how far the company pages are rebuilt to the current facts version, per market (owner, 13 Nov): N of M, or not counted yet
+  const rebuild = page.getByLabel(/^Company pages at facts version \d+$/);
+  // (on a phone the note sits under the market's name in the same cell: read by how the cell starts)
+  for (const market of [/^India/, /^US/]) await expect(rebuild.getByText(market).first()).toBeVisible({ timeout: 30_000 });
+  await expect(rebuild.getByText(/^(\d[\d,]* of \d[\d,]*|Not counted yet)$/).first()).toBeVisible();
   await sane(page, errors);
 });
 
