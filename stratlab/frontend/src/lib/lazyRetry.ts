@@ -12,10 +12,25 @@ const within = <T,>(p: Promise<T>, ms: number): Promise<T> => new Promise<T>((ok
   p.then((v) => { clearTimeout(t); ok(v); }, (e) => { clearTimeout(t); no(e); });
 });
 
+/** The app's own code file a failed import names ("Failed to fetch dynamically imported module: https://…/assets/x-1a2b.js"), or null. */
+export function failedAsset(e: unknown): string | null {
+  const m = String((e as { message?: string })?.message ?? e ?? "").match(/(?:https?:\/\/[^\s"')]+)?\/assets\/[\w.-]+\.(?:js|css)/);
+  return m ? m[0] : null;
+}
+
+/** A code file that once answered 404 (a deploy switching over) can stay a 404 in the browser's cache: the host marks every
+ * /assets/ answer to be kept for a year, its 404 too, so every retry got the kept 404 and "Couldn't load StratLab. Reload"
+ * never went away (R43.1 smoke). Before the next try the file is asked for past the cache, which replaces the kept answer. */
+export async function refetchPastCache(url: string | null, tryMs: number = TRY_TIMEOUT_MS): Promise<void> {
+  if (!url || typeof fetch !== "function") return;
+  try { await within(fetch(url, { cache: "reload", credentials: "same-origin" }), tryMs); } catch { /* the next try says how it went */ }
+}
+
 export async function importWithRetry<T>(load: () => Promise<T>, waits: number[] = RETRY_WAITS, tryMs: number = TRY_TIMEOUT_MS): Promise<T> {
   let last: unknown;
   for (let i = 0; i <= waits.length; i++) {
     if (i) await new Promise((ok) => setTimeout(ok, waits[i - 1]));
+    if (i) await refetchPastCache(failedAsset(last), tryMs);
     try {
       const m = await within(Promise.resolve().then(load), tryMs);
       if (m == null) throw new Error("Failed to fetch dynamically imported module");

@@ -4,6 +4,7 @@ import { openFeedback } from "./FeedbackOpen";
 
 // kept apart from the policy texts, so the app shell and footers don't download them
 export const LEGAL_PAGES: { path: string; title: string }[] = [
+  { path: "/about", title: "About StratLab" },      // AS1: who runs StratLab and where its figures come from, from every footer
   { path: "/terms", title: "Terms of service" },
   { path: "/privacy", title: "Privacy policy" },
   { path: "/refunds", title: "Cancellation and refunds" },

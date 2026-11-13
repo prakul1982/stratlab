@@ -15,7 +15,7 @@ export const DEFAULT_BUSINESS: Business = { name: "StratLab", email: "support@st
   privacy: "privacy@stratlab.studio", address: "", gstin: "" };
 
 /** The day each page's words last changed (the sitemap's dates, backend/app/site_pages.py, say the same). */
-export const LEGAL_UPDATED: Record<string, string> = { "/terms": "16 October 2026", "/privacy": "28 October 2026", "/refunds": "25 October 2026", "/contact": "26 September 2026" };
+export const LEGAL_UPDATED: Record<string, string> = { "/about": "13 November 2026", "/terms": "16 October 2026", "/privacy": "28 October 2026", "/refunds": "25 October 2026", "/contact": "26 September 2026" };
 
 export type Tok = { t: "text" | "b" | "code"; s: string } | { t: "link"; s: string; to: string } | { t: "mail"; s: string; to: string };
 

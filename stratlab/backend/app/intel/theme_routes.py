@@ -970,6 +970,7 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
     src = sources(r, theme, fresh=True) if refresh else sources(r, theme)
     hit = theme_data.build(r, theme, fm, src)
     hit["placements"], hit["figures"] = m.get("placements"), figures
+    hit["coverage"] = map_coverage(m)          # R44: of every company the map places, not only those the figures were read for
     late = {x["symbol"]: x["filed_unread"] for x in ((hit.get("sections") or {}).get("quarter") or {}).get("earlier") or [] if x.get("filed_unread")}
     if late:                      # results filed since the stored page was built: the screens' sweep builds those pages first (R18)
         try:
@@ -1082,6 +1083,12 @@ def members_of(m: dict, dive: dict) -> list[dict]:
     return out
 
 
+def map_coverage(m: dict) -> dict | None:
+    """R44: "In informative layers: N of M (P%)" of the whole map, every company in a layer or in "Other" (theme_data.layer_coverage), as
+    the dive and the deck both say it."""
+    return theme_data.layer_coverage(theme_base.with_sub_only(m, m.get("sector") or ""))
+
+
 def deck_view(r: str, m: dict, dive: dict, extra: dict | None = None) -> dict:
     """What theme deck slides are made of (deck.theme_plan): every part of the theme's page (DECK, 5 Nov: "it doesn't contain everything
     there is on the page about the theme"): the map's words and checks, the dive's figures and sections, and the parts the page reads on its
@@ -1095,7 +1102,7 @@ def deck_view(r: str, m: dict, dive: dict, extra: dict | None = None) -> dict:
             "members": members_of(m, dive), "tailwinds": m.get("tailwinds") or [], "risks": m.get("risks") or [],
             "placements": m.get("placements") or {}, "figures": dive.get("figures") or {}, "median_ebitda": med.get("median"),
             "checks": dive.get("checks") or {}, "status": dive.get("status") or {}, "with_figures": dive.get("with_figures"),
-            "membership": dive.get("membership") or {},
+            "membership": dive.get("membership") or {}, "coverage": map_coverage(m),
             "news": None, "listings": None, "prices": None, "business": None, **(extra or {})}
 
 

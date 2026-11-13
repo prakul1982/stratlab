@@ -275,7 +275,8 @@ test("/plans: one heading and one line, the cards in view, the public header, in
   const top = (await free.boundingBox())!.y;
   if (info.project.name !== "phone") expect(top, "the cards start above the fold").toBeLessThan(420);
   // the same header as the other public pages
-  if (info.project.name !== "phone") await expect(page.locator('nav[aria-label="Sections"] a')).toHaveText(["Trade", "Invest", "Money", "Alerts", "Plans", "FAQ", "Library", "Companies", "Blog"]);
+  // (updated on purpose, R44/AS1: one menu on every public page, components/PublicFrame.tsx PUBLIC_MENU)
+  if (info.project.name !== "phone") await expect(page.locator('nav[aria-label="Sections"] a')).toHaveText(["Home", "Library", "Companies", "Themes", "Blog", "Plans", "About", "Contact"]);
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "index, follow");
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", "https://stratlab.studio/plans");
   // Free, Basic and Pro stand at the same x in each table (wide screens: a phone's tables scroll or wrap)

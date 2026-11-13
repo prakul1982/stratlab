@@ -104,7 +104,7 @@
       ]
     },
     {
-      "source": "/((?:mine|all|features|trade|invest|money|notebooks|new|n|import|options|paper|plans/.+|upgrade|help|tour|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|chart|scans|watchlist|dev|login|signup|about|verdict|calendar|v|c|r|embed)(?:/.*)?)",
+      "source": "/((?:mine|all|features|trade|invest|money|notebooks|new|n|import|options|paper|plans/.+|upgrade|help|tour|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|chart|scans|watchlist|dev|login|signup|verdict|calendar|v|c|r|embed)(?:/.*)?)",
       "headers": [
         {
           "key": "X-Robots-Tag",
@@ -197,6 +197,10 @@
     {
       "source": "/r/:token",
       "destination": "https://stratlab-production-ca25.up.railway.app/r/:token"
+    },
+    {
+      "source": "/themes",
+      "destination": "https://stratlab-production-ca25.up.railway.app/themes"
     },
     {
       "source": "/themes/:path*",

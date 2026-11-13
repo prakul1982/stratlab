@@ -119,17 +119,18 @@ test("a strategy's tab keeps the title its own HTML carries until its data names
 
 const readTitle = (file: string) => (built(file).match(/<title>([^<]*)<\/title>/) ?? [])[1];
 
-test("/about and the 404 are kept out of search results with no canonical address, drawn and as built (R10V-005)", async ({ page }) => {
-  for (const file of ["about/index.html", "404.html"]) {
-    const html = built(file);
-    expect(html, file).toMatch(/<meta name="robots" content="noindex, follow">/);
-    expect(html, file).not.toMatch(/rel="canonical"/);
-  }
+test("/help and the 404 are kept out of search results with no canonical address; /about is indexed with its own (R10V-005, AS1)", async ({ page }) => {
+  // (updated on purpose, AS1: /about is its own page, drawn like the policies and indexed)
+  const html = built("404.html");
+  expect(html).toMatch(/<meta name="robots" content="noindex, follow">/);
+  expect(html).not.toMatch(/rel="canonical"/);
+  expect(built("about/index.html")).toMatch(/<meta name="robots" content="index, follow">/);
+  expect(built("about/index.html")).toMatch(/<link rel="canonical" href="https:\/\/stratlab\.studio\/about">/);
   const errors = await quiet(page);
   await page.goto("/about/");
-  await expect(page.locator(".lp")).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, follow");
-  await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);
+  await expect(page.getByRole("heading", { level: 1, name: "About StratLab" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "index, follow");
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", "https://stratlab.studio/about");
   await page.goto("/help/");
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, follow");
   await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);

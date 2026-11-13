@@ -53,7 +53,11 @@ test("/faq draws the questions with its heading, not the whole landing page (RC2
   await expect(page.locator("#faq details").first()).toBeVisible();
   await expect(page.locator("#trade, #invest, #money, #pricing, .lp-demo")).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThan(4500);
-  for (const path of ["/help/", "/about/", "/login/"]) {
+  // (updated on purpose, AS1: /about is its own page, drawn like the policies and indexed)
+  await page.goto("/about/");
+  await expect(page.getByRole("heading", { level: 1, name: "About StratLab" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator("#trade, #invest, #money, #pricing, .lp-demo")).toHaveCount(0);
+  for (const path of ["/help/", "/login/"]) {
     await page.goto(path);
     await expect(page.locator(".lp")).toBeVisible({ timeout: 30_000 });
     await expect(page.locator("#trade, #invest, #money, #pricing, .lp-demo")).toHaveCount(0);

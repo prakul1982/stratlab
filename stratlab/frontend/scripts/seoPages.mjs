@@ -11,7 +11,10 @@ import { dirname, join } from "node:path";
 import { absolute, BROWSE_COMPANIES, HOME_DESCRIPTION, INSTAGRAM, LIBRARY_SEEDS, libraryMeta, NOT_FOUND_DESCRIPTION, PAGES, SITE } from "../src/content/seo.ts";
 import { FAQ, faqText } from "../src/content/faq.ts";
 import { AD_PAGE } from "../src/content/ad.ts";
-import { DEFAULT_BUSINESS, inline, LEGAL_BLOCKS, LEGAL_UPDATED } from "../src/content/legal.ts";
+import { DEFAULT_BUSINESS, inline, LEGAL_BLOCKS as POLICY_BLOCKS, LEGAL_UPDATED } from "../src/content/legal.ts";
+import { ABOUT_BLOCKS } from "../src/content/about.ts";
+/** Every page drawn from the policy text: the policies and /about (kept apart in the app so a policy page doesn't download it). */
+const LEGAL_BLOCKS = { "/about": ABOUT_BLOCKS, ...POLICY_BLOCKS };
 import { PLAN_IDS, PLAN_NAME, PRICE, WHO } from "../src/lib/plans.ts";
 
 const attr = (s) => String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");

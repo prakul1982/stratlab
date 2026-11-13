@@ -66,7 +66,7 @@ export function hasSavedSession(supabaseUrl: string | undefined, storage: Pick<S
 export const isAdVisit = (search: string) => /[?&](fbclid=|utm_source=(facebook|fb|ig|instagram|meta)\b)/i.test(search);
 
 /** The pages anyone sees the same way, signed in or not: the policies and a shared verdict or library entry. */
-export const PUBLIC_FOR_ALL = [/^\/(terms|privacy|refunds|contact)\/?$/, /^\/verdict\/[^/]+\/?$/, /^\/library\/[^/]+\/?$/];
+export const PUBLIC_FOR_ALL = [/^\/(about|terms|privacy|refunds|contact)\/?$/, /^\/verdict\/[^/]+\/?$/, /^\/library\/[^/]+\/?$/];
 export const isPublicForAll = (path: string) => PUBLIC_FOR_ALL.some((re) => re.test(path.split(/[?#]/)[0]));
 
 /** The server's public answers a visitor's first page will ask for, by its address: asked at once, alongside the page's
@@ -80,6 +80,6 @@ export function publicReads(path: string): string[] {
   return /^\/library\/?$/.test(p) ? ["/public/library"]
     : lib ? [`/public/library/${one(lib[1])}`]
     : verdict ? [`/public/v/${one(verdict[1])}`]
-    : /^\/(pricing|plans|upgrade|help|faq|features|login|signup|about)?\/?$/.test(p) ? ["/pricing", "/public/library?sort=new&limit=60"]
+    : /^\/(pricing|plans|upgrade|help|faq|features|login|signup)?\/?$/.test(p) ? ["/pricing", "/public/library?sort=new&limit=60"]
     : [];
 }

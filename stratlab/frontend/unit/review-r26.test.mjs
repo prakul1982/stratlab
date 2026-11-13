@@ -16,7 +16,8 @@ test("R26-005: the library's frame has a Menu (details/summary) with Trade, Inve
   const frame = read("src/components/PublicFrame.tsx");
   assert.match(frame, /<details className=\{`lp-menu pub-menu\$\{action \? " pub-menu-start" : ""\}`\} ref=\{menu\}>\s*<summary>Menu<\/summary>/);
   assert.match(frame, /useDetailsDismiss\(menu\)/);
-  for (const label of ["Trade", "Invest", "Money", "Plans", "Companies"]) assert.match(frame, new RegExp(`, "${label}"\\]`), label);
+  // (updated on purpose, AS1: the public menu is the site's public pages, the same on every page: Home, Library, Companies, Themes, Blog, Plans, About, Contact)
+  for (const label of ["Home", "Library", "Companies", "Themes", "Blog", "Plans", "About", "Contact"]) assert.match(frame, new RegExp(`, "${label}"\\]`), label);
   const css = read("src/styles.css");
   assert.match(css, /@media \(min-width: 641px\) \{ \.pub-nav \.pub-menu \{ display: none; \} \}/);
   assert.match(css, /\.pub-nav \.lp-menu nav \{[^}]*position: absolute/);

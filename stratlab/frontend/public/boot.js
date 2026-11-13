@@ -95,6 +95,14 @@
   window.addEventListener("beforeinstallprompt", function (e) { if (e.preventDefault) e.preventDefault(); window.__stratlabInstall = e; });
   window.addEventListener("appinstalled", function () { window.__stratlabInstall = null; });
 
+  // the host keeps every /assets/ answer for a year, a 404 too (a deploy switching over): the file that failed is asked for past the
+  // browser's cache before the reload, so the reload gets the file and not the kept 404 (R43.1 smoke: "Couldn't load StratLab" stayed)
+  function refetch(url) {
+    if (typeof fetch !== "function") return null;                 // no way to ask past the cache: reload as before
+    try { return fetch(url, { cache: "reload", credentials: "same-origin" }).then(function () {}, function () {}); }
+    catch (x) { return null; }
+  }
+  window.__stratlabRefetch = refetch;
   window.__stratlabRecover = recover;
   window.__stratlabShowLoadError = show;
 
@@ -121,7 +129,10 @@
     if (!t || t === window || !t.tagName) return;
     var url = String(t.src || t.href || "");
     // config.js too: without it the app can send no request (R68-004: its 502 showed "StratLab ran into a problem")
-    if ((/\/assets\//.test(url) || /\/config\.js(\?|$)/.test(url)) && (t.tagName === "SCRIPT" || t.tagName === "LINK")) recover();
+    if ((/\/assets\//.test(url) || /\/config\.js(\?|$)/.test(url)) && (t.tagName === "SCRIPT" || t.tagName === "LINK")) {
+      var asked = refetch(url);
+      if (asked) asked.then(recover); else recover();
+    }
   }, true);
 
   // the built stylesheet downloaded but did not apply (src/styles.css sets --css-ok on :root): the app would show as plain,

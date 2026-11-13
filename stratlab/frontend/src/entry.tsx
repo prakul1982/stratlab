@@ -23,10 +23,10 @@ import { holdStartup } from "./lib/held";
 /** The first public page's code, by address (the same files VisitorApp loads, asked for early). */
 const publicPage = (p: string) =>
   /^\/start\/?$/.test(p) || (p === "/" && isAdVisit(location.search)) ? import("./pages/AdLanding")
-    : /^\/(terms|privacy|refunds|contact)\/?$/.test(p) ? import("./pages/LegalPage")
+    : /^\/(about|terms|privacy|refunds|contact)\/?$/.test(p) ? import("./pages/LegalPage")
     : /^\/verdict\//.test(p) ? import("./pages/PublicVerdict")
     : /^\/library(\/|$)/.test(p) ? import("./pages/PublicLibrary")
-    : /^\/(pricing|plans|upgrade|help|faq|features|login|signup|about)?\/?$/.test(p) ? import("./pages/Login")
+    : /^\/(pricing|plans|upgrade|help|faq|features|login|signup)?\/?$/.test(p) ? import("./pages/Login")
     : import("./pages/Gate");
 
 /** Try /config.js once. A failed download (an error page where the file should be) leaves the config unset. */

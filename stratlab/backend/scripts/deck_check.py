@@ -17,8 +17,10 @@ Failures (the exit code is 1 when any deck has one):
 Reported, and a failure only with --strict:
   cut text     every other text ending in "…" (a label or a sentence cut to its box)
   mixed range  a range with one end whole and the other with a decimal ("19.6% to 20%"; LIVE7A-014)
-  other>40%    a theme whose "Other" group holds over 40% of the companies placed, as its coverage says ("50 of 100 companies fit none
-               of the map's layers"): a map that places too few of its companies
+  other>40%    a theme whose "Other" group holds over 40% of the companies placed, as its coverage says: R44, "In informative layers
+               137 of 252 (54%) ... 33 fit none of the map's layers; 82 not checked yet" (those that fit none, the companies not checked
+               yet apart, as d1; the companies outside informative layers when the row doesn't split them); before R44, "50 of 100
+               companies fit none of the map's layers": a map that places too few of its companies
 
 A PDF that can't be read is a failure of its own (UNREADABLE). A folder with no PDF is read from its .txt files (pdftotext -layout output, pages separated by form feeds), so a saved extract can be
 checked again. Standalone: nothing of the app is imported; pdftotext (poppler) must be on the PATH to read PDFs. Exit 2: nothing to read."""
@@ -49,11 +51,28 @@ _ENDINGS = ("", "s", "es", "'s", "’s", "al", "ally", "ity", "ian", "ians", "ic
 _COLUMNS = re.compile(r"\S {3,}\S")     # a table's row or two blocks side by side, in pdftotext's layout
 # d1: "33 of 252 fit none of the map's layers; 82 not checked yet": the share of those that fit none (the companies not checked yet apart)
 _OTHER = re.compile(r"(\d[\d,]*) of (\d[\d,]*)\s+(?:companies\s+)?fit\s+none\s+of\s+the\s+map's\s+layers")
+# R44: the coverage's one count of the companies placed, "In informative layers 137 of 252 (54%)", and how many of the rest fit none
+_INFORMATIVE = re.compile(r"In informative layers")
+_INF_COUNT = re.compile(r"(?<![\w.,])(\d[\d,]*) of (\d[\d,]*)(?![\d,])")    # its count, a cell that may wrap above or below the label's line
+_FIT_NONE = re.compile(r"(\d[\d,]*)\s+fit\s+none\s+of\s+the\s+map's")     # (the row's text wraps around its label's line)
 _APPENDIX = "Every company's figures"
 # R40: a word said twice in a row; repeated when the second is lower case or it is a joining word ("The the"), never a name ("Bora Bora")
 _TWICE = re.compile(r"\b([A-Za-z]+)(?: (?! )|\n)\1\b", re.I)
 _TWICE_JOIN = _JOINING | {"is", "are", "was", "were", "its", "their", "this", "these", "than", "as", "be", "it"}
 _TWICE_OK = {"had", "that", "very", "so", "no", "bye", "more", "many", "much", "far", "long"}
+
+
+def _informative_count(page: str, at) -> "re.Match | None":
+    """The count of the coverage's "In informative layers" row (R44): in its own column, on the label's line or the line above or below it
+    (pdftotext wraps a narrow cell: "137 of 252" above the label, "(54%)" under it), never another row's or the row's text."""
+    lines = page.split("\n")
+    k = page.count("\n", 0, at.start())
+    col = at.start() - (page.rfind("\n", 0, at.start()) + 1)
+    for ln in (lines[k], lines[k - 1] if k else "", lines[k + 1] if k + 1 < len(lines) else ""):
+        m = _INF_COUNT.search(ln[:col + 50])
+        if m:
+            return m
+    return None
 
 
 def _indent(line: str) -> int:
@@ -138,6 +157,15 @@ def check_pages(pages: list[str]) -> dict:
             if col and len(cells) == col and cells[1] == "–" and _indent(ln) <= 2:       # a name wrapped above starts at the layer's column
                 add("no layer", n, f"{cells[0]} in: {ln.strip()}")
     for n, page in enumerate(pages, 1):           # R40: the coverage's count of the "Other" group, once a deck
+        i = _INFORMATIVE.search(page)
+        c = _informative_count(page, i) if i else None
+        if c:                                     # R44: read from the coverage's "In informative layers" row
+            inf, b = int(c.group(1).replace(",", "")), int(c.group(2).replace(",", ""))
+            fn = _FIT_NONE.search(page[max(0, i.start() - 400):i.end() + 600])
+            a = int(fn.group(1).replace(",", "")) if fn else b - inf
+            if b and a > OTHER_MAX * b:
+                add("other>40%", n, f"In informative layers {inf:,} of {b:,} ({round(inf / b * 100)}%); {a:,} fit none ({round(a / b * 100)}%)")
+            break
         m = _OTHER.search(page)
         if m:
             a, b = int(m.group(1).replace(",", "")), int(m.group(2).replace(",", ""))

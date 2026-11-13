@@ -45,7 +45,8 @@ test("DK-004, DK-008: /plans is one heading and one line with the public header;
   assert.match(frame, /<SiteLinks \/><LegalLinks \/>/);
   assert.match(login, /<SiteLinks \/>/);
   void PUBLIC_MENU;
-  assert.match(read("../backend/app/stock_pages.py"), /\/library">Library<\/a><a href="\/stocks">Companies/);
+  // (updated on purpose, AS1: the server's menu is one list, PUBLIC_MENU, the same as the app's public frame)
+  assert.match(read("../backend/app/stock_pages.py"), /\("\/library", "Library"\), \("\/stocks", "Companies"\)/);
 });
 
 test("DK-006: /plans is indexed with its own address, listed in the sitemap, and not sent a noindex header", async () => {

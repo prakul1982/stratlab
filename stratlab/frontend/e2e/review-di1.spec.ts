@@ -204,7 +204,8 @@ test("DI-029, DI-033: signed out, /app gives the install steps, and /help, /faq 
   await expect(page.getByRole("heading", { level: 1, name: "Get the app" })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId("install-steps")).toContainText("Add to Home Screen");
   await expect(page).toHaveTitle("Get the app · StratLab");
-  for (const [path, h] of [["/help", "Help"], ["/faq", "Questions"], ["/about", "About StratLab"]]) {
+  // (updated on purpose, AS1: /about is its own page, drawn like the policies and indexed): its heading is the page's own (.legal), checked in e2e/as1-about.spec.ts
+  for (const [path, h] of [["/help", "Help"], ["/faq", "Questions"]]) {
     await page.goto(path);
     const h1 = page.locator(".lp").getByRole("heading", { level: 1 });
     await expect(h1).toHaveText(h, { timeout: 30_000 });

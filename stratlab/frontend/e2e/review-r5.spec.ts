@@ -219,8 +219,8 @@ test.describe("addresses and sign-in (R5V-011, R5V-013, R5V-015)", () => {
     await open(page, "/signup");
     await expect(page.getByRole("heading", { level: 1, name: "Sign up for StratLab" })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole("button", { name: "Continue with Google" })).toHaveCount(1);
-    await open(page, "/about");
-    await expect(page.locator("#about")).toBeInViewport({ timeout: 30_000 });
+    await open(page, "/about");      // (updated on purpose, AS1: /about is its own page, drawn like the policies and indexed)
+    await expect(h1(page)).toHaveText("About StratLab", { timeout: 30_000 });
     await open(page, "/help");
     await expect(page.locator("#faq")).toBeInViewport({ timeout: 30_000 });
   });
