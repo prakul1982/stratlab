@@ -281,7 +281,8 @@ def _label(k: str) -> str:
 def kind_of(label: str) -> str:
     """How a row's figures are written: a percentage, days, a per-share figure, a count or money."""
     t = label.lower()
-    if "%" in t or "margin" in t:
+    # a growth row is a percentage even where the source's label has no "%" (LIVE8B-017: "Sales growth 16 15 9 4" printed as money)
+    if "%" in t or "margin" in t or "growth" in t:
         return "pct"
     if "days" in t or "cycle" in t:
         return "days"

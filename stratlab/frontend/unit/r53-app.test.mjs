@@ -153,3 +153,7 @@ test("LIVE8B-021: positioning shares in one precision; the total row's net and s
   assert.match(page, /r\.id === "total" && k\.endsWith\("_net"\) \? null/);
   assert.match(page, /r\.id === "total" \? null : <span data-testid=\{`split-\$\{r\.id\}`\}>/);
 });
+
+test("LIVE8B-017: the peers' growth column says its span", () => {
+  assert.match(read("src/components/CompanyPeers.tsx"), /header: "Sales growth, 3 yrs"/);
+});

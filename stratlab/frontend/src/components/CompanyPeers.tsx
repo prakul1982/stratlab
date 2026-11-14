@@ -52,7 +52,8 @@ export function PeersCard({ region, symbol, id = "co-peers" }: { region: Region;
       ? <b>{r.name}<span className="sr-only"> (this company)</span></b>
       : <Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}`}>{r.name}</Link>) },
     { key: "market_cap", header: "Market value", numeric: true, sortable: true, cell: (r) => capText(r.market_cap, region) },
-    { key: "sales_growth", header: "Sales growth", info: "Compounded a year over the last 3 years.", numeric: true, sortable: true,
+    // the header says the span: the 3-year compounded rate, not the latest year's (LIVE8B-017)
+    { key: "sales_growth", header: "Sales growth, 3 yrs", info: "Compounded a year over the last 3 years.", numeric: true, sortable: true,
       cell: (r) => (r.sales_growth == null ? "–" : <Signed value={r.sales_growth}>{pct(r.sales_growth, 1)}</Signed>) },
     ...(v.lender ? [] : [{ key: "ebitda", header: "EBITDA margin", numeric: true, sortable: true, cell: (r: PeerRow) => pctCell(r.ebitda) } as Column<PeerRow>]),
     { key: "net", header: "Net margin", numeric: true, sortable: true, cell: (r) => pctCell(r.net) },

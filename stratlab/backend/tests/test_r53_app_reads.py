@@ -45,3 +45,9 @@ def test_a_banks_facts_name_its_top_line_revenue():
     f = A.company_facts(c)
     assert f["quarterly_results"]["revenue"] == [93000, 95132] and "sales" not in f["quarterly_results"]
     assert "never call it sales" in f["lender"]
+
+
+def test_a_growth_row_is_a_percentage_whatever_its_label():
+    from app import company_tables as T
+    assert T.kind_of("Sales Growth") == "pct" and T.kind_of("Profit growth") == "pct"
+    assert T.kind_of("Sales") == "money" and T.kind_of("OPM %") == "pct"
