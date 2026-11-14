@@ -153,6 +153,12 @@ class MemoryDocStore:
             out[tuple(k)] = " ".join(frag)
         return out
 
+    def covers(self, max_chars, limit, skip=None):
+        rows = [d for d in self.docs.values() if d["region"] == "US" and d["kind"] == "earnings_release" and d["link"] == d["url"]
+                and d["chars"] < max_chars and d["url"] not in (skip or [])]
+        rows.sort(key=lambda d: (d["filed_at"], d["url"]), reverse=True)
+        return [{k: d.get(k) for k in ("url", "region", "symbol", "kind", "filed_at", "title", "company", "sector")} for d in rows[:limit]]
+
     def passages(self, q, region, symbols, kinds, since, limit):
         groups, excluded = parse(q)
         out = []
