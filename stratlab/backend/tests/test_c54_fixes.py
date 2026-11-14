@@ -100,8 +100,10 @@ def test_battery_and_home_care_makers_leave_packaged_foods_on_the_live_r53_fmcg_
     assert live("fmcg")["NIPPOBATRY"] == FOODS
     out = replay("fmcg")
     got = layers(out["value_chain"])
-    assert got["NIPPOBATRY"] == "Other" and got["JYOTHYLAB"] == "Other" and got["AWL"] == FOODS
-    assert "(“foods”)" in row(out, "NIPPOBATRY")["refit"]["why"]
+    # v55 (R55 review, updated on purpose): out of packaged foods, Indo National is no member of the theme at all (its principal business,
+    # batteries and torches, is outside the theme's definition: screened out with that reason, never kept in "Other")
+    assert "NIPPOBATRY" not in got and got["JYOTHYLAB"] == "Other" and got["AWL"] == FOODS
+    assert next(x for x in out["placements"]["off_industry"] if x["ticker"] == "NIPPOBATRY")["scope"] == "batteries, torches and electrical goods"
     assert "sells what" in row(out, "AWL")["sold_by"]          # new to the layer, with what shows it
 
 
@@ -111,9 +113,11 @@ def test_ufp_technologies_is_not_a_surgical_robotics_maker_on_the_live_r53_medic
     want = live("meddev")
     out = replay("meddev")
     got = layers(out["value_chain"])
-    assert want["UFPT"] == ROBOTS and got["UFPT"] == "Other"
-    assert {s for s in want if got.get(s) != want[s]} == {"UFPT"}
-    assert "“robotics”" in row(out, "UFPT")["refit"]["why"]
+    # v55 (R55 review, updated on purpose): out of robotics, UFP Technologies, a custom manufacturer for medical devices, goes with Integer
+    # Holdings (a medical device contract manufacturer, in "Other" on the live deck) to a layer of their kind, never an unexplained "Other"
+    assert want["UFPT"] == ROBOTS and got["UFPT"] == "Medical device contract manufacturers"
+    assert {s for s in want if got.get(s) != want[s]} == {"UFPT", "ITGR"} and got["ITGR"] == "Medical device contract manufacturers"
+    assert row(out, "UFPT")["refit"]["from"] == ROBOTS
 
 
 def test_without_a_move_to_judge_the_live_placement_stands():
@@ -329,7 +333,7 @@ def test_deck_check_finds_moves_without_a_reason_scope_layers_counted_core_and_l
 def test_the_rules_version_and_the_new_inputs():
     from app import deck as K
     from app.intel import theme_routes as TR
-    assert B.RULES == 53 and TR.PLACE_CARRY[53] == 52 and K.THEME_DECK_VERSION == 64 and D.DIVE_TEXT == 24
+    assert B.RULES == 54 and TR.PLACE_CARRY[54] == 53 and TR.PLACE_CARRY[53] == 52 and K.THEME_DECK_VERSION == 65 and D.DIVE_TEXT == 25          # v55 (R55 review): RULES 54, PLACE_CARRY[54] = 53, deck 65, dive text 25 (updated on purpose)
     assert "moved_before" in B.place_rest.__code__.co_varnames
     assert re.search(r'"moved_before": moved_before\(r, theme, m\)', pathlib.Path(TR.__file__).read_text())
 

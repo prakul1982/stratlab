@@ -1011,6 +1011,90 @@ def off_industry(evidence) -> bool:
                for ind, other, keep in OFF_INDUSTRY)
 
 
+# v55 (R55, the owner's review of the live R54 FMCG deck: Indo National, a maker of dry-cell batteries, torches and electrical accessories
+# filed under Household Products, taken out of "Branded packaged foods manufacturing" and parked in "Other FMCG companies": "moving an
+# out-of-scope business into Other is not removing it"): kinds of product a company's principal business can be of, each with the words a
+# theme's definition (its name and its map's own layers, their names and descriptions) states when the kind is of its scope. A company the
+# theme's official industry brought in whose principal business (its description's sentence of what it does now) names one of these kinds
+# first, in a theme whose definition states none of it, is not a member: screened out with its reason, never in "Other". Each: (the kind as
+# the deck says it, its products, the words of a theme it is of)
+SCOPE_PRODUCTS = (
+    ("batteries, torches and electrical goods",
+     r"\bdry[- ]?cells?\b|\bdry batter(?:y|ies)\b|\bbatter(?:y|ies)\b|\btorch(?:es)?\b|\bflash ?lights?\b|\belectrical accessories\b",
+     r"\bbatter|\belectric|\benergy\b|\bpower (?:generation|equipment|plants?|utilit\w*|transmission|tools)\b|\bauto(?:mo\w*)?\b|\bvehicles?\b|"
+     r"\bmobility\b|\bmotors?\b|\bstorage\b|\blighting\b|\bsemiconductor|\belectronic|\bdurables?\b|\bappliances?\b|\bcapital goods\b|"
+     r"\bindustrials?\b|\bengineering\b|\butilit|\btelecom|\brenewab|\bsolar\b|\bdefen[cs]e|\bcomponents?\b|\bequipment\b"),
+    ("cables, wires and electrical equipment",
+     r"\b(?:power |electric(?:al)? )?cables?\b|\bwires? and cables?\b|\bswitchgears?\b|\b(?:power |distribution )?transformers\b|"
+     r"\belectrical equipment\b|\belectric motors?\b",
+     r"\belectric|\bpower\b|\benergy\b|\butilit|\bcapital goods\b|\bindustrials?\b|\bengineering\b|\binfrastructure\b|\btelecom|"
+     r"\bauto(?:mo\w*)?\b|\bconstruction\b|\bequipment\b|\bcomponents?\b|\bdefen[cs]e|\brenewab|\bsolar\b|\bcables?\b|\bmetals?\b"),
+    ("steel and metal products",
+     r"\b(?:stainless |alloy )?steel(?! utensils)\b|\bpig iron\b|\bsponge iron\b|\bferro ?alloys?\b|\baluminium\b|\baluminum\b|\bcopper\b|"
+     r"\bzinc\b|\bcastings?\b|\bforgings?\b|\bseamless pipes?\b",
+     r"\bmetal|\bsteel\b|\bmining\b|\bminerals?\b|\bauto(?:mo\w*)?\b|\bvehicles?\b|\bcapital goods\b|\bindustrials?\b|\bengineering\b|"
+     r"\binfrastructure\b|\bconstruction\b|\bdefen[cs]e|\bcomponents?\b|\bequipment\b|\bhousing\b|\breal ?estate|\brealty\b|\bcables?\b|"
+     r"\bchemical|\butilit|\bpower\b|\benergy\b|\bmaterials?\b|\bcommodit"),
+    ("cement and building materials",
+     r"\bcement\b|\bclinker\b|\bceramic tiles\b|\bvitrified tiles\b|\bsanitary ?ware\b|\bplywood\b|\blaminates\b",
+     r"\bcement\b|\bbuilding\b|\bconstruction\b|\binfrastructure\b|\breal ?estate|\brealty\b|\bhousing\b|\bmaterials?\b|\bhome improvement\b"),
+    ("tyres and vehicle parts",
+     r"\btyres?\b|\btires\b|\bauto(?:motive)? (?:components?|parts|ancillar\w*)\b|\bvehicle (?:components?|parts)\b",
+     r"\bauto(?:mo\w*)?\b|\bvehicles?\b|\bmobility\b|\btyres?\b|\btires?\b|\brubber\b|\bcomponents?\b|\bcapital goods\b|\bindustrials?\b|"
+     r"\bengineering\b|\bdefen[cs]e|\btransport"),
+    ("fertilisers and crop protection",
+     r"\bfertili[sz]ers?\b|\bpesticides?\b|\bagrochemicals?\b|\binsecticides?\b|\bherbicides?\b|\bfungicides?\b|\bcrop protection\b",
+     r"\bagri|\bfarm|\bcrop|\bfertili|\bchemical|\bcommodit|\bseeds?\b|\bplantation"),
+)
+_SCOPE_PLAIN = {"manufactur", "manufacturing", "manufacturer", "maker", "make", "produc", "product", "producer", "production", "supplier",
+                "suppl", "seller", "brand", "branded", "compan", "consumer", "good", "goods", "market", "marketing", "distribut", "trading",
+                "larger", "smaller", "mixed", "diversified", "various", "sold", "selling", "earning", "earn", "revenue", "these", "layer"}
+
+
+_OF_ANOTHER = re.compile(r"\banother company\b|\bsubsidiary of\b|\bpart of\b|\bgroup\b|\bpromoted by\b|\bparent\b|\bconglomerate\b", re.I)
+
+
+def off_scope(about, theme_text: str, name: str = "") -> dict | None:
+    """v55: {"kind", "said", "text"} when a company's principal business, the first sentence of its own description that says what it does
+    now (theme_data.business_sentence, its own name's words left out), names a kind of product (SCOPE_PRODUCTS) before any product of the
+    theme's own and the theme's definition (`theme_text`: its name and its map's own layers' names and descriptions) states none of that
+    kind; None else (no words of its own, or a kind of the theme's scope)."""
+    from .theme_data import _stems, business_sentence, does_the_work
+    shown = said = business_sentence(str(about or ""))
+    if not said:
+        return None
+    if name:
+        from .theme_base import without_name
+        said = " ".join((without_name(said, name) or said).split())
+    own = {w for w in _stems(theme_text) if w not in _SCOPE_PLAIN}
+    for kind, products, scope in SCOPE_PRODUCTS:
+        if re.search(scope, theme_text or "", re.I):
+            continue
+        m = re.search(products, said, re.I)
+        # (a kind said of its parent or group, "a subsidiary of another company, a conglomerate with interest in ... cement", is not its own)
+        if m and not does_the_work(said[:m.start()], own) and not _OF_ANOTHER.search(said[:m.start()]):
+            return {"kind": kind, "said": m.group(0), "text": shown[:200]}
+    return None
+
+
+def off_scope_listed(name: str, industry: str, theme_text: str) -> dict | None:
+    """v55 (R55, the owner's acceptance test: "a battery maker can't remain in FMCG solely through Other"): for a company with no
+    description of its own (nothing off_scope can read), {"kind", "said", "where", "text"} when its official industry, else its listed
+    name (its issuer's, theme_base.issuer_name), names a kind of product (SCOPE_PRODUCTS) the theme's definition doesn't include; None
+    else. "where": "industry" or "name"."""
+    from .theme_base import issuer_name
+    for where, text in (("industry", str(industry or "")), ("name", issuer_name(name or ""))):
+        if not text:
+            continue
+        for kind, products, scope in SCOPE_PRODUCTS:
+            if re.search(scope, theme_text or "", re.I):
+                continue
+            m = re.search(products, text, re.I)
+            if m:
+                return {"kind": kind, "said": m.group(0), "where": where, "text": text[:120]}
+    return None
+
+
 RETAIL_STOCK = (r"\bstores?\b|\bshops?\b|inventor(?:y|ies)|\bretailer|\bwe sell\b|\bsells\b|\bselling\b|merchandise|own[- ]brands?|private label|"
                 r"first[- ]party|\b1p\b|direct sales|supermarket|hypermarket")
 REFINE_HINTS = {"regulated_utility": r"transmission|distribution|electric utilit", "power_generation": r"power generation|electric services",

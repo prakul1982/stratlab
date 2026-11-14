@@ -62,6 +62,29 @@ Failures (the exit code is 1 when any deck has one):
   population mismatch  e54 (the live R53 Medical devices deck: "Companies, by count 76 of 222" while its "Each layer" row adds up to 100,
                adjacent participants among them): the layers' companies with figures adding up to another count than the deck's companies
                with figures, unless the row says how core members and adjacent participants add up to it
+  identity unresolved  v55 (R55, the owner's review of the live R54 Payments deck: "Adyen Nv-Unspon ADR" among the "companies with figures
+               whose own words describe other work", none of its words read): a company listed as one whose own words describe other work
+               (or don't show the work) whose name is a depositary-receipt line, or that the same deck says has its own words "not confirmed
+               to show the theme's work yet"
+  out of scope in Other  v55 (the live R54 FMCG deck: Indo National, a battery and torch maker, moved into "Other FMCG companies", and High
+               Energy Batteries there): a company of a theme's "Other" group whose name states a kind of product outside the theme's own
+               (batteries, torches, dry cells; cables, transformers; steel, castings, forgings; cement; tyres; fertilisers, pesticides), in a
+               theme whose title doesn't state it, unless the deck says it is not checked yet
+  stage mismatch  v55 (the live R54 Biotech deck: Merck & Co, $65 bn of revenue, in "Pipeline-stage and royalty-funded drug developers"):
+               a company of the appendix in a layer named by a development stage only (clinical-stage, pipeline-stage, pre-revenue,
+               development-stage, pre-clinical; no commercial, specialty, large or portfolio part) with an operating profit and revenue ten
+               times the layer's median developer's (those with no operating profit) and $5 bn (₹20,000 cr) or more
+  coverage blur  v55 (the owner: "keep increasing checked membership without implying financial coverage grew"): a "Membership checked"
+               row whose checked share rose over stored versions, with no count of the companies with figures said apart in it
+  evidence unsplit  l55 (R55, the owner's review of the live R54 decks: FMCG "confirmed 160 (of 160 checked)" was 97 confirmed by their own
+               description and 63 kept on their official industry, MedDev 110 + 50): a count said "confirmed" ("confirmed 160", "97 confirmed",
+               "12 confirmed companies", "confirmed, with figures") without its evidence states, description-verified and industry-supported,
+               named in the same sentence
+  evidence counts  l55: the deck's statements of its members by evidence state ("membership checked 160 of 211: 97 description-verified, 63
+               industry-supported, 51 not checked", on the findings, data-confidence and coverage pages) that differ from page to page, or
+               don't add up (the states to those checked, checked + not checked to the companies); a part of the members (the informative
+               layers, "by membership evidence: ...", a layer's "Membership of its 24 companies: ...") with more of a state than the deck's own count of it
+  empty page   l55 (the owner's publication preflight: no empty pages): a page that prints its heading and nothing under it
 Reported, and a failure only with --strict:
   cut text     every other text ending in "…" (a label or a sentence cut to its box)
   mixed range  a range with one end whole and the other with a decimal ("19.6% to 20%"; LIVE7A-014)
@@ -82,7 +105,8 @@ import sys
 FAIL = ("headline", "mid-word", "placeholder", "joining word", "count", "repeated", "hyphen minus", "no layer", "unread ranked", "unread kind",
         "left out>50%", "unchecked as 0", "biz label", "biz making", "stale layer", "same company", "words claim", "partial unsaid",
         "outlier range", "added unexplained", "verified count", "adjacent ranked", "move unexplained", "scope core", "layer lost unsaid",
-        "evidence state", "population mismatch")
+        "evidence state", "population mismatch", "identity unresolved", "out of scope in Other", "stage mismatch", "coverage blur",
+        "evidence unsplit", "evidence counts", "empty page")
 WARN = ("cut text", "other>40%", "mixed range")
 # LIVE7A-014: a minus sign as a hyphen before a figure with its unit (never a date's or a range's dash: it follows a space or a bracket)
 _HYPHEN_MINUS = re.compile(r"(?:(?<=\s)|(?<=[(\[])|^)-\d[\d,]*(?:\.\d+)?(?:%|x\b| ?pts\b| ?points\b)")
@@ -292,6 +316,8 @@ def check_pages(pages: list[str]) -> dict:
     d53_checks(pages, layers, add)
     c54_checks(pages, layers, add)
     e54_checks(pages, add)
+    v55_checks(pages, add)
+    l55_checks(pages, add)
     counts = {k: sum(1 for f in findings if f["kind"] == k) for k in FAIL + WARN}
     return {"pages": len(pages), "counts": counts, "findings": findings}
 
@@ -301,7 +327,8 @@ _SAME_WAY = re.compile(r"earn the same way as those of ((?:“[^”]+”(?:, )?)
 _QUOTED = re.compile(r"“([^”]+)”")
 _WORDS_CLAIM = "Every company with figures has words of its own"
 _NO_WORDS = re.compile(r"No description in its own words yet|no description in their own words yet")
-_CHECKED = re.compile(r"(\d[\d,]*) checked \(the map's own picks.*?(\d[\d,]*) not checked yet")
+# (l55: "membership checked 160 of 821 (the map's own picks, ...): ..., 661 not checked" as well as the form before it)
+_CHECKED = re.compile(r"(?:(\d[\d,]*) checked|membership checked (\d[\d,]*) of [\d,]+) \(the map's own picks.*?(\d[\d,]*) not checked\b")
 _CONSIDERED = re.compile(r"(\d[\d,]*) companies \(|(\d[\d,]*) in the exchange's industry list")
 _PARTIAL = "A partial map"
 _BIG = re.compile(r"(?<![\w.,])[−-](\d[\d,]*(?:\.\d+)?)%|(?<![\w.,−-])(\d[\d,]*(?:\.\d+)?)%")
@@ -348,7 +375,7 @@ def d53_checks(pages: list[str], layers: set, add) -> None:
         add("words claim", next(n for n, f in enumerate(flat_pages, 1) if _WORDS_CLAIM in f), _NO_WORDS.search(whole).group(0))
     m = _CHECKED.search(whole)
     if m and _PARTIAL not in whole:
-        a, gone = _num(m.group(1)), _num(m.group(2))
+        a, gone = _num(m.group(1) or m.group(2)), _num(m.group(3))
         if a * 2 < a + gone:
             add("partial unsaid", next(n for n, f in enumerate(flat_pages, 1) if m.group(0)[:30] in f), m.group(0)[:140])
     for n, page in enumerate(pages, 1):
@@ -426,9 +453,10 @@ def c54_checks(pages: list[str], layers: set, add) -> None:
 
 # (a table's two columns interleave in the text: the other column's words can fall inside a cell's sentence)
 _EV_CHECKED = re.compile(r"(\d[\d,]*) checked\b(?:(?!\d checked).){0,160}?\(the map's own picks[^)]*\):? (\d[\d,]*) confirmed by their own\b")
+_EV_L55 = re.compile(r"membership checked (\d[\d,]*) of [\d,]+(?: \((?:[^()]|\([^()]*\))*\))?: (\d[\d,]*) description-verified\b")
 _EV_FULL = re.compile(r"(\d[\d,]*) checked: (\d[\d,]*) confirmed by their own\b")
 _EV_ALL = re.compile(r"(\d[\d,]*) confirmed by their own\b.{0,80}?\bdescription, (\d[\d,]*) not(?: yet)?\b")
-_EV_INDUSTRY = re.compile(r"(\d[\d,]*) kept on their official industry only")
+_EV_INDUSTRY = re.compile(r"(\d[\d,]*) kept on their official industry only|(\d[\d,]*) of the [\d,]+ membership-checked are industry-supported")
 _EV_LIST = re.compile(r"(\d[\d,]*) kept on the theme's own list only")
 _WORDLESS = re.compile(r"(\d[\d,]*) compan(?:y|ies) with figures (?:have|has) no description in\b")
 _BY_COUNT = re.compile(r"Companies, by count (\d[\d,]*) of (\d[\d,]*)")
@@ -443,7 +471,7 @@ def e54_checks(pages: list[str], add) -> None:
     where = lambda t: next((n for n, f in enumerate(flat_pages, 1) if t in f), 1)      # noqa: E731
     w = _WORDLESS.search(whole)
     wordless = _num(w.group(1)) if w else 0
-    m = _EV_CHECKED.search(whole)
+    m = _EV_CHECKED.search(whole) or _EV_L55.search(whole)
     if m:
         checked, desc = _num(m.group(1)), _num(m.group(2))
     else:
@@ -457,7 +485,7 @@ def e54_checks(pages: list[str], add) -> None:
         add("evidence state", where(m.group(0)[:40]), f"{m.group(0)[:110]}; {w.group(0) if w else ''}")
     ind = _EV_INDUSTRY.search(whole)
     if ind and w:
-        kept = _num(ind.group(1)) + sum(_num(x.group(1)) for x in _EV_LIST.finditer(whole))
+        kept = _num(ind.group(1) or ind.group(2)) + sum(_num(x.group(1)) for x in _EV_LIST.finditer(whole))
         if wordless > kept:
             add("evidence state", where(w.group(0)[:40]), f"{w.group(0)}; {ind.group(0)}")
     for n, flat in enumerate(flat_pages, 1):
@@ -483,6 +511,140 @@ def e54_checks(pages: list[str], add) -> None:
         if ca and _num(ca.group(1)) == said and _num(ca.group(3)) == sum_ and _num(ca.group(1)) + _num(ca.group(2)) == sum_:
             continue
         add("population mismatch", n, f"companies by count {by.group(1)}, the layers' companies with figures add up to {sum_:g}")
+
+
+_OTHER_WORK_LIST = re.compile(r"whose own words (?:describe other work|don't show the work, left out of every median and total): (.{3,400}?)\.(?=\s+[A-Z(]|\s*$)")
+_DEPOSITARY = re.compile(r"\b(?:ADRs?|ADSs?|GDRs?|[Uu]n-?[Ss]pon\w*|[Dd]epositary)\b")
+_NOT_YET = "its own words are not confirmed to show the theme's work yet"
+# (a kind of product a company's name states, and the words of a theme's title it is of: the app's theme_check.SCOPE_PRODUCTS, by name)
+_SCOPE_KINDS = ((r"\b(?:batter(?:y|ies)|torch(?:es)?|flash ?lights?|dry[- ]?cells?)\b",
+                 r"batter|electric|energy|auto|vehicle|mobility|power|utilit|semiconductor|electronic|durable|appliance|capital goods|"
+                 r"industrial|engineering|renewab|solar|defen"),
+                (r"\b(?:cables?|switchgears?|transformers)\b", r"electric|power|energy|utilit|capital goods|industrial|engineering|infrastructure|telecom|"
+                 r"auto|construction|defen|renewab|solar|cable|metal"),
+                (r"\b(?:steel|ferro ?alloys?|castings|forgings)\b", r"metal|steel|mining|auto|vehicle|capital goods|industrial|engineering|"
+                 r"infrastructure|construction|defen|real ?estate|realty|chemical|utilit|power|energy|material"),
+                (r"\b(?:cements?)\b", r"cement|building|construction|infrastructure|real ?estate|realty|housing|material"),
+                (r"\b(?:tyres?)\b", r"auto|vehicle|mobility|tyre|rubber|capital goods|industrial|engineering|defen|transport"),
+                (r"\b(?:fertili[sz]ers?|pesticides?|agrochemicals?)\b", r"agri|farm|crop|fertili|chemical|commodit|seed|plantation"))
+_DEV_LAYER = re.compile(r"\bpre-?revenue\b|\bclinical[- ]stage\b|\bdevelopment[- ]stage\b|\bpre-?clinical\b|\bpipeline[- ]stage\b", re.I)
+_COM_LAYER = re.compile(r"\bcommercial\b|\blarge\b|\bbig\b|\bestablished\b|\bportfolios?\b|\bmarketed\b|\bspecialty\b|\bmajor\b|\bmature\b", re.I)
+_MONEY = re.compile(r"^([$₹])\s?([\d,]+(?:\.\d+)?)\s?(bn|m|cr|k)?$")
+_PCT = re.compile(r"^([−-]?\d[\d,]*(?:\.\d+)?)%$")
+STAGE_FACTOR, STAGE_FLOOR = 10.0, {"$": 5000.0, "₹": 20000.0}     # v55: $ million / ₹ crore
+_NOT_CHECKED_NAMES = re.compile(r"not (?:checked|placed) yet \(([^()]{3,400})\)")          # l55 renamed the Other group's "not checked yet" to "not placed yet"
+
+
+def _money(cell: str) -> tuple[str, float] | None:
+    """("$" or "₹", the amount in $ million or ₹ crore) of a money cell ("$65 bn", "$603 m", "₹4,251 cr"), or None."""
+    m = _MONEY.match(cell.strip())
+    if not m:
+        return None
+    x = _num(m.group(2))
+    unit = m.group(3) or ""
+    if m.group(1) == "$":
+        x = x * 1000 if unit == "bn" else x / 1000 if unit == "k" else x
+    else:
+        x = x * 100000 if unit == "bn" else x
+    return m.group(1), x
+
+
+def v55_checks(pages: list[str], add) -> None:
+    """v55 (R55): a company excluded on words never read, an out-of-scope business kept in "Other", a commercial company displayed in a
+    development-stage layer, and membership checks said as if they added figures (see the module's list)."""
+    flat_pages = [re.sub(r"\s+", " ", p) for p in pages]
+    whole = " ".join(flat_pages)
+    for n, flat in enumerate(flat_pages, 1):
+        for m in _OTHER_WORK_LIST.finditer(flat):
+            for name in re.split(r", (?:and \d+ more)?| and \d+ more", m.group(1)):
+                name = name.strip(" .")
+                if len(name) < 3:
+                    continue
+                said_not_yet = any(_NOT_YET in whole[i:i + 400] for i in [j.start() for j in re.finditer(re.escape(name), whole)])
+                if _DEPOSITARY.search(name) or said_not_yet:
+                    add("identity unresolved", n, f"{name}: listed as describing other work" + (" (a depositary-receipt line)" if _DEPOSITARY.search(name)
+                                                                                               else f"; elsewhere: “{_NOT_YET}”"))
+    t = _TITLE.search(pages[0] if pages else "")
+    title = (t.group(1) or t.group(2) or t.group(3) or "").strip() if t else ""
+    unchecked = {x.strip(" .") for m in _NOT_CHECKED_NAMES.finditer(whole) for x in re.split(r", | and \d+ more", m.group(1))}
+    rows: dict = {}
+    for n, page in enumerate(pages, 1):
+        for ln in page.split("\n"):
+            cells = [c for c in re.split(r"\s{2,}", ln.strip()) if c]
+            if len(cells) < 6:
+                continue
+            name, layer = cells[0], cells[1]
+            if title and layer.startswith("Other ") and any(re.search(k, name, re.I) and not re.search(t_, title, re.I) for k, t_ in _SCOPE_KINDS) \
+                    and not any(name.startswith(u) or u.startswith(re.sub(r" (?:Ltd|Limited|Inc\.?|Corp\.?)$", "", name)) for u in unchecked):
+                add("out of scope in Other", n, f"{name} in “{layer}” of the {title} deck")
+            if _DEV_LAYER.search(layer) and not _COM_LAYER.search(layer):
+                rev, ebitda = _money(cells[3]), _PCT.match(cells[5].strip())
+                if rev:
+                    rows.setdefault(layer, []).append((n, name, rev, _num(ebitda.group(1).replace("−", "-")) if ebitda else None))
+    for layer, rs in rows.items():
+        young = sorted(r[2][1] for r in rs if r[3] is not None and r[3] <= 0)
+        mid = young[len(young) // 2] if len(young) >= 2 else None      # (with fewer than two developers shown, the floor alone)
+        for n, name, (cur, rev), e in rs:
+            if e is not None and e > 0 and rev >= STAGE_FLOOR[cur] and (mid is None or rev >= STAGE_FACTOR * mid):
+                add("stage mismatch", n, f"{name} in “{layer}”: revenue {cur}{rev:,.0f}{' m' if cur == '$' else ' cr'}, EBITDA margin {e:g}%"
+                                         + (f", the layer's median developer's {cur}{mid:,.0f}" if mid else ""))
+    for n, flat in enumerate(flat_pages, 1):
+        i = flat.find("Membership checked")
+        if i < 0:
+            continue
+        row = flat[i:i + 1600]
+        if "Checked share after each stored version" in row and "→" in row and not re.search(r"with figures|figures are worked out", row):
+            add("coverage blur", n, row[:160])
+
+
+# l55 (R55): a count said "confirmed" (one undifferentiated total): "confirmed 160 (of 160 checked)", "97 confirmed by their own
+# description", "12 confirmed companies", "confirmed, with figures (...) 93", "eligible for each metric (confirmed, with the figure)"
+_UNSPLIT = re.compile(r"(?<![Nn]ot )(?<![Nn]ot yet )\bconfirmed (?:\(of )?\d|(?<![\d,.])\d[\d,]* (?:of the \d[\d,]* added are )?confirmed\b(?! in the theme)|"
+                      r"\bconfirmed,? with (?:figures|the figure)\b|\b\d[\d,]* confirmed compan", re.I)
+_STATES_NAMED = re.compile(r"description-verified.{0,120}?industry-supported")
+# the members by evidence state: the deck's own statement, or a part of it ("by membership evidence: ...", "Membership evidence of ...")
+_EV_TRIPLE = re.compile(r"(\d[\d,]*) description-verified, (\d[\d,]*) industry-supported(?:, (\d[\d,]*) list-supported)?"
+                        r"(?:, (\d[\d,]*) (?:whose )?own words describe other work)?, (\d[\d,]*) not checked\b")
+_EV_HEAD = re.compile(r"membership checked (\d[\d,]*) of (\d[\d,]*)(?: \((?:[^()]|\([^()]*\))*\))?: $")
+_PART_HEAD = re.compile(r"(?:by membership evidence|[Mm]embership (?:evidence )?of [^:]{0,90}): $")
+_FOOTER = re.compile(r"Not investment advice|Theme deep dive · \d")
+EMPTY_MAX = 3                   # l55: a page's eyebrow, title and headline, and nothing else
+
+
+def l55_checks(pages: list[str], add) -> None:
+    """l55 (R55): every count of the theme's members by evidence state, the same on every page, and no empty page (see the module's list)."""
+    flat_pages = [re.sub(r"\s+", " ", p) for p in pages]
+    whole: list = []                    # (page, (description-verified, industry-, list-supported, other work, not checked), checked, of)
+    parts: list = []
+    for n, flat in enumerate(flat_pages, 1):
+        for m in _UNSPLIT.finditer(flat):
+            near = flat[max(0, m.start() - 160):m.end() + 200]
+            if not _STATES_NAMED.search(near):
+                add("evidence unsplit", n, flat[max(0, m.start() - 40):m.end() + 60])
+        for m in _EV_TRIPLE.finditer(flat):
+            got = tuple(_num(m.group(k)) if m.group(k) else 0 for k in range(1, 6))
+            before = flat[max(0, m.start() - 200):m.start()]
+            if _PART_HEAD.search(before):
+                parts.append((n, got, m.group(0)))
+                continue
+            h = _EV_HEAD.search(before)
+            whole.append((n, got, _num(h.group(1)) if h else None, _num(h.group(2)) if h else None, m.group(0)))
+    seen = None
+    for n, got, chk, of, text in whole:
+        if chk is not None and (sum(got[:4]) != chk or chk + got[4] != of):
+            add("evidence counts", n, f"{text}: the states make {sum(got[:4]):g} of {chk:g} checked, with those not checked {chk + got[4]:g} of {of:g}")
+        if seen is None:
+            seen = (n, got)
+        elif got != seen[1]:
+            add("evidence counts", n, f"{text}; p.{seen[0]} says " + ", ".join(f"{x:g}" for x in seen[1]))
+    if seen:
+        for n, got, text in parts:
+            if any(a > b for a, b in zip(got, seen[1])):
+                add("evidence counts", n, f"{text}: more of a state than the deck's {', '.join(f'{x:g}' for x in seen[1])} (p.{seen[0]})")
+    for n, page in enumerate(pages, 1):
+        lines = [ln for ln in page.split("\n") if ln.strip() and not _FOOTER.search(ln)]
+        if page.strip() and _FOOTER.search(page) and len(lines) <= EMPTY_MAX:
+            add("empty page", n, " / ".join(ln.strip() for ln in lines)[:140] or "(nothing but the footer)")
 
 
 def check_text(text: str) -> dict:

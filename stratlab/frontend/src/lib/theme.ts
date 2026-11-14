@@ -50,6 +50,8 @@ export interface Dive {
   /** e54: what each checked company's place in the theme rests on (theme_data.EVIDENCE_STATES), the figures' window... */
   evidence?: Record<string, EvidenceState>;
   membership?: { placed: number; confirmed: number; not_confirmed: number };
+  /** the members in the theme with figures (every median and total is of these): a count apart from the membership check's */
+  with_figures?: number;
   membership_evidence?: Partial<Record<EvidenceState, number>>;
   /** ...and the companies the membership check reached beyond it, with its progress after each stored read ([day, checked, total]) */
   membership_check?: { outside: Record<string, EvidenceState>; checked: number; total: number; history: [string, number, number][]; step?: number };
@@ -73,13 +75,16 @@ export interface Dive {
 }
 /** e54: the evidence a company's place in a theme rests on, one state each (theme_data.EVIDENCE_STATES) */
 export type EvidenceState = "description_verified" | "industry_code_supported" | "list_supported" | "not_confirmed" | "membership_unverified";
+/** l55 (R55, the owner's review of the live R54 decks): the states by the deck's names, never one "confirmed" total */
 export const EVIDENCE_ONE: Record<EvidenceState, string> = {
-  description_verified: "Confirmed by its own description", industry_code_supported: "Kept on its official industry only",
-  list_supported: "Kept on the theme's own list only", not_confirmed: "Its own words describe other work", membership_unverified: "Not checked yet",
+  description_verified: "Description-verified", industry_code_supported: "Industry-supported (official industry only)",
+  list_supported: "List-supported (the theme's own list only)", not_confirmed: "Own words describe other work", membership_unverified: "Not checked",
 };
-const EVIDENCE_MANY: [EvidenceState, string][] = [["description_verified", "confirmed by their own description"],
-  ["industry_code_supported", "kept on their official industry only"], ["list_supported", "kept on the theme's own list only"],
-  ["not_confirmed", "whose own words describe other work"], ["membership_unverified", "not checked yet"]];
+const EVIDENCE_MANY: [EvidenceState, string][] = [["description_verified", "description-verified"],
+  ["industry_code_supported", "industry-supported"], ["list_supported", "list-supported"],
+  ["not_confirmed", "own words describe other work"], ["membership_unverified", "not checked"]];
+/** said even at 0: the three states every count names */
+const EVIDENCE_ALWAYS: EvidenceState[] = ["description_verified", "industry_code_supported", "membership_unverified"];
 
 /** e54: each company's evidence state from the dive (its figures' window, then those the membership check reached), "membership_unverified"
  * for a company neither has; undefined for a dive kept before the states were. */
@@ -89,14 +94,30 @@ export function evidenceOf(dive: Dive | null | undefined): ((sym: string) => Evi
   return (sym) => inner[sym] ?? outer[sym] ?? "membership_unverified";
 }
 
-/** e54: "82 confirmed by their own description · 78 kept on their official industry only · 62 not checked yet" over the companies listed
- * (the same states and counts as the deck's universe line); "" with no states kept. */
+/** e54/l55: "82 description-verified · 78 industry-supported · 62 not checked" over the companies listed (the same states and counts as
+ * the deck's universe line, the three always named); "" with no states kept. */
 export function evidenceLine(dive: Dive | null | undefined, symbols: string[]): string {
+  const n = evidenceCounts(dive, symbols);
+  if (!n) return "";
+  return EVIDENCE_MANY.filter(([k]) => n.get(k) || EVIDENCE_ALWAYS.includes(k)).map(([k, w]) => `${(n.get(k) ?? 0).toLocaleString("en-IN")} ${w}`).join(" · ");
+}
+
+/** l55: each state's count over the companies listed, each company once; undefined with no states kept. */
+export function evidenceCounts(dive: Dive | null | undefined, symbols: string[]): Map<EvidenceState, number> | undefined {
   const of = evidenceOf(dive);
-  if (!of) return "";
+  if (!of) return undefined;
   const n = new Map<EvidenceState, number>();
   for (const s of new Set(symbols)) n.set(of(s), (n.get(of(s)) ?? 0) + 1);
-  return EVIDENCE_MANY.filter(([k]) => n.get(k)).map(([k, w]) => `${(n.get(k) ?? 0).toLocaleString("en-IN")} ${w}`).join(" · ");
+  return n;
+}
+
+/** l55 (R55): "Membership checked 160 of 211: 97 description-verified · 63 industry-supported · 51 not checked", the membership check's
+ * count apart from the count with figures (the check reads no figure); "" with no states kept. */
+export function membershipLine(dive: Dive | null | undefined, symbols: string[]): string {
+  const n = evidenceCounts(dive, symbols);
+  if (!n) return "";
+  const all = new Set(symbols).size, checked = all - (n.get("membership_unverified") ?? 0);
+  return `Membership checked ${checked.toLocaleString("en-IN")} of ${all.toLocaleString("en-IN")}: ${evidenceLine(dive, symbols)}`;
 }
 
 export interface PriceRow { symbol: string; name: string; ret: Record<"1M" | "3M" | "1Y" | "3Y", number | null>; date: string; above200: boolean | null; near_high: boolean | null; near_low: boolean | null }
