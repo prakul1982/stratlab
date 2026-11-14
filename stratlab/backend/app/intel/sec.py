@@ -1334,6 +1334,14 @@ class SEC(Source):
         idx = self._json(d["folder"] + "index.json")
         names = [i.get("name", "") for i in ((idx.get("directory") or {}).get("item") or [])]
         ex = [n for n in names if re.search(r"ex-?99", n, re.I) and n.lower().endswith((".htm", ".html", ".txt"))]
+        if not ex:
+            # m53 (R53): many filers name the release by its subject ("pypl3q-26earningsrelease.htm", "deltaairlinesannouncessept.htm"), not
+            # "ex99", and the 8-K cover was read in its place (no figure of the release in the filings index): the one other document of the
+            # folder is the release; with none, or more than one, the cover as before
+            own = d["url"].rsplit("/", 1)[-1].lower()
+            ex = [n for n in names if n.lower().endswith((".htm", ".html")) and n.lower() != own and not re.match(r"r\d+\.htm", n, re.I)
+                  and "-index" not in n.lower()]
+            ex = ex if len(ex) == 1 else []
         url = d["folder"] + sorted(ex)[0] if ex else d["url"]
         return url, self.document(url)
 

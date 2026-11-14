@@ -20,7 +20,7 @@ from statistics import median
 
 from .. import stock_pages
 from .. import screens
-from . import sector_metrics
+from . import sector_metrics, sector_ops
 
 # a company that runs several businesses: its figures are the whole company's, not those of one layer's work
 DIVERSIFIED = {"RELIANCE", "ADANIENT", "M&M", "LT", "ITC", "GRASIM", "SIEMENS", "TATASONS", "BAJAJHLDNG", "JSWHL", "AEGISLOG", "GODREJIND",
@@ -2481,16 +2481,18 @@ class Sources:
     segments(symbol) -> the business segments the company's documents report ([{name, share_pct}]) or None (is_diversified);
     corp_history(symbol) -> the company's stored corporate actions (every kind, each with "kind" and "ex_date"), never read from a source;
     metrics(symbol, family) -> the company's filed sector figures (sector_metrics: a stored piece, read now or queued) or None (R23);
-    about(symbol) -> the company's whole stored description or None, never read from a source (R35: sub_members)."""
+    about(symbol) -> the company's whole stored description or None, never read from a source (R35: sub_members);
+    passages(symbols, query) -> the matching passages of the companies' own documents in the filings index (m53: sector_ops), never read
+    from a source."""
 
     def __init__(self, today: date, facts, index_rows=lambda: [], shareholding=lambda s: None, insider_buys=lambda: {},
                  results=lambda a, b, s: [], actions=lambda a, b, s: [], red_flags=lambda s, a, b: [], card=lambda s, r: None,
                  history=lambda k, p: [p], segments=lambda s: None, corp_history=lambda s: [], metrics=lambda s, fam: None, about=lambda s: None,
-                 peer_history=lambda k, p: [p], cohort_history=lambda k, p: [p]):
+                 peer_history=lambda k, p: [p], cohort_history=lambda k, p: [p], passages=lambda syms, q: []):
         self.today, self.facts, self.index_rows, self.shareholding, self.insider_buys = today, facts, index_rows, shareholding, insider_buys
         self.results, self.actions, self.red_flags, self.card, self.history, self.segments = results, actions, red_flags, card, history, segments
         self.corp_history, self.metrics, self.about, self.peer_history = corp_history, metrics, about, peer_history
-        self.cohort_history = cohort_history
+        self.cohort_history, self.passages = cohort_history, passages
 
 
 _STOP = {"company", "companies", "limited", "india", "indian", "sector", "theme", "other", "others", "product", "products", "service", "services",
@@ -3054,6 +3056,10 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     model_of = {c["symbol"]: b["model"]["family"] for b in blocks for c in b["companies"]
                 if (b.get("model") or {}).get("family") and not b["model"].get("sparse")}
     out["sections"]["sector"] = sector_metrics.section([r for r in own if r.get("status") != "unverified"], region, layer_of, pending, stat, model_of)
+    # m53 (R53): each sector's own operating measures (airlines, hospitals, cement, power, payments) where the companies' own stored documents
+    # state them, for the companies whose layer the sector's profile fits
+    out["sections"]["ops"] = sector_ops.section([r for r in own if r.get("status") != "unverified"], region, layer_of, model_of, src.passages,
+                                                {s: p["parent"] for s, p in parents.items()}, layer_of)
     out["metrics_pending"] = sorted(pending)
     out["metrics_families"] = pending_fam           # R29: each one's family, so a kept dive can queue a read the worker dropped again
     out["checks"] = data_checks(listed, blocks, out)

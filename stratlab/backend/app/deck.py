@@ -5298,6 +5298,7 @@ def publication_gate(slides: list, v: dict, reproduced: list | None = None) -> d
     # R29: the dive's sector figures are at sections.sector (the gate read sections.sector.sector, so it never saw them); a family with none
     # read yet (still being read) has no figure to check
     fams = {k: f for k, f in ((((v.get("sections") or {}).get("sector") or {}).get("families") or {})).items() if isinstance(f, dict) and f.get("keys")}
+    fams.update(ops_families(v))            # m53: each sector profile's operating measures, in the same four states
     if any(f.get("states") for f in fams.values()):
         notes["applicable"] = "Sector figures carry their applicability and four states"
     elif fams:
@@ -6387,6 +6388,10 @@ SECTOR_LEAD = {"bank": ("gnpa_f", "cet1", "advances_growth", "credit_cost"), "in
                "us": ("sbc_share", "fcf_margin", "capex_share", "rd_share", "inventory_days", "rpo_growth", "deferred_growth")}
 SECTOR_PAGE = {"bank": "banks", "insurer": "insurers", "us": "US companies", "orders": "order books"}
 SECTOR_WHO = {"bank": ("bank", "banks"), "insurer": ("insurer", "insurers"), "us": ("company", "companies"), "orders": ("company", "companies")}
+# m53 (R53): each sector profile's operating measures (sector_ops), a page each, named by its companies
+from .intel.sector_ops import PROFILES as _OPS_PROFILES  # noqa: E402
+for _p in _OPS_PROFILES:
+    SECTOR_PAGE[_p.id], SECTOR_WHO[_p.id] = _p.many, (_p.one, _p.many)
 _SHORT = {"npa": "NPA", "cet1": "CET1", "sbc": "SBC", "rpo": "RPO", "fcf": "FCF", "r&d": "R&D", "nii": "NII", "vnb": "VNB"}
 
 
@@ -6402,6 +6407,8 @@ def sector_fmt(key: str, amt=None):
         return lambda x: f"{x:,.0f} days"
     if kind == "amt":
         return amt or (lambda x: f"{x:,.0f}")
+    if kind == "num":               # m53: a count or a price in the unit its label names, as stated
+        return lambda x: f"{x:,.0f}" if abs(x) >= 1000 or float(x).is_integer() else f"{x:,.2f}"
     return _pc
 
 
@@ -6562,10 +6569,39 @@ def order_family(v: dict) -> dict | None:
             "not_filed": "a company whose update doesn't state its order book or inflow has none here; no figure is worked out from another"}
 
 
+def ops_families(v: dict) -> dict:
+    """m53 (R53): each sector profile's operating measures (sector_ops.family): from the companies' own stored documents the dive read, and
+    from their business updates where the deck has them (the plan's own gate), each with its period and source; a profile none of whose
+    companies states a measure has no page."""
+    from .intel import sector_ops
+    from .intel.theme_data import stat
+    out = {}
+    for pid, prof in (((v.get("sections") or {}).get("ops") or {}).get("profiles") or {}).items():
+        if pid not in sector_ops.BY_PROFILE:
+            continue
+        f = sector_ops.family(pid, prof, v.get("region") or "IN", stat, v.get("business"))
+        if f:
+            out[pid] = f
+    return out
+
+
 def sector_paged(v: dict) -> bool:
     """R48: whether the deck has a page of filed operating figures (_sector_slides draws one for each family with figures and rows)."""
     fams = dict(((v.get("sections") or {}).get("sector") or {}).get("families") or {})
-    return bool(order_family(v)) or any(isinstance(f, dict) and f.get("keys") and f.get("rows") for f in fams.values())
+    return bool(order_family(v)) or bool(ops_families(v)) or any(isinstance(f, dict) and f.get("keys") and f.get("rows") for f in fams.values())
+
+
+def _src_short(src: dict) -> str:
+    """m53: where a company's operating measures are from, in a table cell: "Presentation, p. 15", "Earnings release", "Business update"."""
+    out = []
+    for x in (src or {}).values():
+        s = str(x.get("source") or "")
+        word = ("Presentation" if s.startswith("Investor presentation") else "Earnings release" if s.startswith("Earnings release")
+                else "Business update" if s.startswith("Business update") else s.split(" filed")[0])
+        word += f", p. {x['page']}" if x.get("page") and word == "Presentation" else ""
+        if word and word not in out:
+            out.append(word)
+    return "; ".join(out[:2]) or "–"
 
 
 def _sector_slides(slides: list, v: dict, amt, eyebrow: str) -> None:
@@ -6580,6 +6616,7 @@ def _sector_slides(slides: list, v: dict, amt, eyebrow: str) -> None:
     orders = order_family(v)
     if orders:
         fams["orders"] = orders
+    fams.update(ops_families(v))            # m53: each sector profile's operating measures
     for fam, f in fams.items():
         keys = list(f.get("keys") or [])
         if not keys or not f.get("rows"):
@@ -6588,21 +6625,24 @@ def _sector_slides(slides: list, v: dict, amt, eyebrow: str) -> None:
         sts = f.get("states") or {}
         order = sorted(range(len(f["rows"])), key=lambda i: (f["rows"][i].get("type") or "", f["rows"][i].get("name") or ""))
         typed = fam == "insurer" and len(f.get("types") or {}) > 1
-        head = ["Company"] + (["Type"] if typed else []) + [BY_ID[k].label for k in keys] + ["Period"]
-        widths = [2.6 if len(keys) < 8 else 2.3] + ([1.1] if typed else []) + [1.05 if len(keys) < 8 else 0.95] * len(keys) + [1.15 if len(keys) < 8 else 1.35]
+        ops = bool(f.get("profile"))        # m53: a sector profile's operating measures say where each company's are from
+        head = ["Company"] + (["Type"] if typed else []) + [BY_ID[k].label for k in keys] + (["Source"] if ops else []) + ["Period"]
+        widths = ([2.6 if len(keys) < 8 else 2.3] + ([1.1] if typed else []) + [1.05 if len(keys) < 8 else 0.95] * len(keys) + ([1.7] if ops else [])
+                  + [1.15 if len(keys) < 8 else 1.35])
         body = [[f["rows"][i]["name"]] + ([f["rows"][i].get("type", "").capitalize()] if typed else [])
-                + [_state_cell(f["rows"][i], k, (sts.get(k) or [None] * len(f["rows"]))[i], fmts[k]) for k in keys] + [f["rows"][i].get("as_of") or "–"]
+                + [_state_cell(f["rows"][i], k, (sts.get(k) or [None] * len(f["rows"]))[i], fmts[k]) for k in keys]
+                + ([_src_short(f["rows"][i].get("src"))] if ops else []) + [f["rows"][i].get("as_of") or "–"]
                 for i in order]
 
         def med_row(label, g, gkeys):
             meds = g.get("medians") or {}
             # R29: "N of M" in every median cell, M the companies the figure applies to (those still being read included)
             cells = [_medn_of(meds.get(k), (meds.get(k) or {}).get("of") or g.get("n"), fmts[k]) if k in gkeys and meds.get(k) else "" for k in keys]
-            return [label] + ([""] if typed else []) + cells + [""]
+            return [label] + ([""] if typed else []) + cells + ([""] if ops else []) + [""]
         if typed:
             tail = [med_row(f"Median, {TYPE_NAMES[t][1]} (companies)", g, g.get("keys") or ()) for t, g in f["types"].items()]
-        elif fam == "orders":       # each company's own stated amount: no median across companies of different sizes
-            tail = []
+        elif fam == "orders" or (ops and not any((f.get("medians") or {}).get(k, {}).get("median") is not None for k in keys)):
+            tail = []               # each company's own stated amount: no median across companies of different sizes
         else:
             tail = [med_row("Median (companies)", f, keys)]
         head, every, widths, _ = drop_empty(head, body + tail, widths)
@@ -6611,6 +6651,9 @@ def _sector_slides(slides: list, v: dict, amt, eyebrow: str) -> None:
         lead = sector_lines({"sector": {"families": {fam: f}}}, waiting=False)
         if fam == "orders":
             msg = f"{_n(f['n'], one, many)} whose own business update states an order figure, each with its period"
+        elif ops:                   # m53: the companies whose own documents state a measure, of those the profile fits
+            msg = (lead[0].rstrip(".") if lead else f"{_n(f['n'], one, many)} whose own documents state these measures, each with its period and source") + (
+                f"; {f['of'] - f['n']} more without" if f.get("of", 0) > f["n"] else "")
         else:
             # R29: still being read is said with the count read so far; companies read with none filed are said apart
             late = f.get("pending") or 0
