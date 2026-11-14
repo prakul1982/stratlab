@@ -16,11 +16,8 @@ import { Earlier } from "../components/Earlier";
 import { Card, CardHead, CheckField, DataTable, ShowLess, EmptyState, ErrorState, Field, PageHeader, Seg, Select, Signed, Skeleton, StockPicker, Working, type Column } from "../components/kit";
 import { ReportScope } from "../components/kit/ReportFigure";
 
-/** Today and tomorrow in the market's calendar (ISO), the days the "Today" and "Tomorrow" chips stand for. */
-const nearDays = (region: Region): string[] => {
-  const now = Date.now();
-  return [dayIn(new Date(now), marketTz(region)), dayIn(new Date(now + 86_400_000), marketTz(region))].filter((d): d is string => !!d);
-};
+/** Today in the market's calendar (ISO), the day the "Today" chip stands for. */
+const todayIn = (region: Region): string | null => dayIn(new Date(), marketTz(region));
 
 /* /research/results: the dates companies have called their board meetings to consider results (or, in the US, set for
  * their quarterly results), week by week, for your stocks or every company, narrowed by company size, sector, index, F&O and the
@@ -277,8 +274,8 @@ export function ResultsPage() {
         <CalendarFilters region={region} facets={data?.facets ?? null} filters={filters} set={set} firstSort="cap" sorts={SORT_NAME} active={n}
           total={data?.total ?? null} matching={data?.matching ?? null} unknownSize={data?.unknown_size ?? 0} onClear={() => set(NO_FILTERS)} testId="results-count"
           days={[{ value: "", label: "Every day" }, { value: "today", label: "Today" }, { value: "tomorrow", label: "Tomorrow" },
-            // today and tomorrow are the two chips above, not again by date (LIVE8A-025: "Today" and "Sat 14 Nov" both)
-            ...(data?.weeks ?? []).flatMap((w) => (w.days ?? []).filter((d) => !nearDays(region).includes(d.date)).map((d) => ({ value: d.date, label: resultDay(d.date) })))]}
+            // today is the "Today" chip above, not again by its date (LIVE8A-025: "Today" and "Sat 14 Nov" both)
+            ...(data?.weeks ?? []).flatMap((w) => (w.days ?? []).filter((d) => d.date !== todayIn(region)).map((d) => ({ value: d.date, label: resultDay(d.date) })))]}
           search={<>
             {scope === "all" && (
               <Field key={region} label="Find a company">

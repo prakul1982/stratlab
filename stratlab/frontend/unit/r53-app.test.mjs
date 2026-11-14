@@ -162,10 +162,10 @@ test("LIVE8B-023: a US company's next results day says expected", () => {
   assert.match(read("src/pages/Research.tsx"), /\{region === "US" \? "Results expected" : "Results on"\} \{resultDay\(nextResults\)\}/);
 });
 
-test("LIVE8A-025: the results day chips don't repeat today and tomorrow by date", () => {
+test("LIVE8A-025: the results day chips don't repeat today by its date", () => {
   const page = read("src/pages/ResultsPage.tsx");
-  assert.match(page, /\.filter\(\(d\) => !nearDays\(region\)\.includes\(d\.date\)\)/);
-  assert.match(page, /const nearDays = \(region: Region\): string\[\] =>/);
+  assert.match(page, /\.filter\(\(d\) => d\.date !== todayIn\(region\)\)/);
+  assert.match(page, /const todayIn = \(region: Region\): string \| null => dayIn\(new Date\(\), marketTz\(region\)\);/);
 });
 
 test("LIVE8A-021: the Plans row for a theme's supplier links says what its CSV is", () => {
