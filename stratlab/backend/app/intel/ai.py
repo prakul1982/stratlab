@@ -164,7 +164,8 @@ def company_facts(c: dict) -> dict:
     if qt.get("cols"):
         # with each quarter's margin, other income and tax rate, so a change against a quarter moved by a one-off is read
         # as such, and a margin's fall in the latest quarters is seen (DD-015, DD-016)
-        facts["quarterly_results"] = {"quarters": qt["cols"], "sales": qt.get("sales"), "net_profit": qt.get("profit"),
+        # a bank's top line is its revenue (the interest it earns), never "sales" (LIVE8B-010)
+        facts["quarterly_results"] = {"quarters": qt["cols"], "revenue" if c.get("bank") else "sales": qt.get("sales"), "net_profit": qt.get("profit"),
                                       **({"financing_margin_pct" if c.get("bank") else "ebitda_margin_pct": qt["opm"]} if any(v is not None for v in qt.get("opm") or []) else {}),
                                       **({"other_income": qt["other_income"]} if any(v is not None for v in qt.get("other_income") or []) else {}),
                                       **({"tax_rate_pct": qt["tax_pct"]} if any(v is not None for v in qt.get("tax_pct") or []) else {})}
@@ -192,7 +193,7 @@ def company_facts(c: dict) -> dict:
                                   else f"results due now are for Q{fq} FY{fy}."))
     if c.get("bank"):
         facts["lender"] = ("A bank or lender: EBITDA, operating margin and debt-to-equity don't describe its business and "
-                           "aren't on its page; don't mention them.")
+                           "aren't on its page; don't mention them. Its top line is revenue (the interest it earns): never call it sales.")
     return grounding.rounded({k: v for k, v in facts.items() if v not in (None, [], {}, "")})
 
 
@@ -368,6 +369,29 @@ _FIGURE = re.compile(r"\d")
 def figures_only(lines: list) -> list:
     """The lines that state a figure (a number, a percentage, an amount); a line of words only is no "notable figure"."""
     return [x for x in lines or [] if _FIGURE.search(str(x))]
+
+
+READ_TEXT = ("summary", "valuation_note", "position", "bull", "bear", "watch")
+
+
+def regrounded(read: dict, c: dict | None, today=None) -> dict:
+    """A stored company read held to the page's figures as they are now (LIVE8B-009: a read written on 11 Nov said "P/E is 38.17" and
+    "beat the estimate in three of the last four quarters, $2.05 against $2.03" on 14 Nov, beside the page's P/E 39.7 and its "4 of 4
+    quarters beat" at $2.10): the same check a fresh read gets, against the page's facts of now and the read's own number rows, so a
+    sentence whose figure the page no longer shows is left out. `c` is the page's company profile (routes.page_figures); None keeps the
+    read as it is."""
+    if not c or not isinstance(read, dict):
+        return read
+    try:
+        facts = company_facts(c)
+        rows = [r for r in read.get("facts") or [] if isinstance(r, dict) and isinstance(r.get("items"), list)]
+        if rows:
+            facts["key_facts"] = {r.get("label"): {i.get("label"): i.get("text") for i in r["items"] if isinstance(i, dict)} for r in rows}
+        got = grounding.ground_company({k: read.get(k) for k in READ_TEXT}, facts, c.get("region") or "IN", today or ist_date())
+    except Exception as e:                     # the check can't run: the read as it was stored
+        print("company read: regrounding", str(e)[:120])
+        return read
+    return {**read, **{k: got.get(k) for k in READ_TEXT if k in got}}
 
 
 def clean_company(read: dict) -> dict:

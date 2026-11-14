@@ -50,3 +50,12 @@ test("LIVE8B-004 / LIVE8A-017: the analytics question comes after the page, once
   assert.match(css, /\.shell > \.consent \{ grid-column: -2 \/ -1; grid-row: 2;/);
   assert.match(read("src/components/PublicFrame.tsx"), /\{foot && <footer/);
 });
+
+test("LIVE8B-011: a headline seven calendar days back but under seven days old never prints null", async () => {
+  const { newsWhen } = await import("../src/lib/researchFormat.ts");
+  const now = new Date("2026-11-14T02:40:00Z");                       // Sat 14 Nov, 08:10 IST
+  const got = newsWhen("2026-11-07T10:00:00Z", now);                  // 7 Nov, 6 days 16 hours earlier
+  assert.doesNotMatch(got, /null/);
+  assert.match(got, /^7 Nov · 1 week old$/);
+  assert.match(newsWhen("2026-11-11T10:00:00Z", now), /^11 Nov · 3 days old$/);
+});

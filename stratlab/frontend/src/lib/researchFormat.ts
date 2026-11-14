@@ -224,7 +224,10 @@ export function newsWhen(iso: string | null | undefined, now: Date = new Date())
   if (s < 86400) { const h = Math.floor(s / 3600); return `${h} hour${h === 1 ? "" : "s"} ago`; }
   const days = Math.max(1, calendarDays(t, now));
   const date = t.toLocaleDateString("en-GB", { day: "numeric", month: "short", ...(t.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }) });
-  const age = days < 7 ? `${days} day${days === 1 ? "" : "s"} old` : newsAge(iso, now);
+  // the age from the same calendar days as the date: by elapsed hours a headline 7 calendar days back can be 6.9 days old, and
+  // newsAge's null was printed as "7 Nov · null" (LIVE8B-011)
+  const weeks = Math.floor(days / 7);
+  const age = days < 7 ? `${days} day${days === 1 ? "" : "s"} old` : days < 60 ? `${weeks} week${weeks === 1 ? "" : "s"} old` : (newsAge(iso, now) ?? monthsOld(Math.floor(days / 30.4)));
   return `${date} · ${age}`;
 }
 
