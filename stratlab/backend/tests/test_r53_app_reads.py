@@ -51,3 +51,17 @@ def test_a_growth_row_is_a_percentage_whatever_its_label():
     from app import company_tables as T
     assert T.kind_of("Sales Growth") == "pct" and T.kind_of("Profit growth") == "pct"
     assert T.kind_of("Sales") == "money" and T.kind_of("OPM %") == "pct"
+
+
+def test_a_one_stock_sector_has_its_stocks_weight():
+    # the reviewer's holdings: SBIN ₹64,800, ICICIBANK ₹39,590, WIPRO ₹8,757, GOLDBEES ₹11,191 (WIPRO 7.04% of ₹1,24,338)
+    from app import holdings
+    items = [{"symbol": "SBIN", "qty": 60, "avg": 900, "sector": "Banks"}, {"symbol": "ICICIBANK", "qty": 25, "avg": 900, "sector": "Banks"},
+             {"symbol": "WIPRO", "qty": 45, "avg": 150, "sector": "Information Technology"}, {"symbol": "GOLDBEES", "qty": 100, "avg": 80, "sector": "Gold"}]
+    q = {"SBIN": {"price": 1080.0}, "ICICIBANK": {"price": 1583.6}, "WIPRO": {"price": 194.6}, "GOLDBEES": {"price": 111.91}}
+    v = holdings.view(items, q)
+    w = {r["symbol"]: r["weight"] for r in v["rows"]}
+    by = {a["sector"]: a["pct"] for a in v["allocation"]}
+    assert by["Information Technology"] == w["WIPRO"] == 7.1 and by["Gold ETFs"] == w["GOLDBEES"]
+    assert round(by["Banks"], 1) == round(w["SBIN"] + w["ICICIBANK"], 1)
+    assert abs(sum(by.values()) - 100) < 0.05
