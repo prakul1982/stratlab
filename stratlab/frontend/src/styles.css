@@ -3051,7 +3051,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
  * a link in the public footers and on the Help page. */
 .linklike { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
 .linklike.link { color: var(--accent-ink, inherit); text-decoration: underline; text-underline-offset: 2px; }
-.legal-links .legal-feedback { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding-block: 12px; box-sizing: border-box; text-decoration: none; }   /* the same tap size as the links beside it (A11Y-2) */
+.legal-links .legal-feedback { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding-block: 12px; box-sizing: border-box; text-decoration: underline; }   /* the same tap size as the links beside it (A11Y-2), underlined like them (LIVE8B-029) */
 /* the phone top bar's logo link is a full tap target and never squeezed by the buttons beside it (R7O-010) */
 .topbar .brand { min-width: 44px; justify-content: center; flex: none; }
 .topbar .icon-btn { flex: none; }

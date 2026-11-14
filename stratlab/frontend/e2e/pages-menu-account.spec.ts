@@ -170,7 +170,8 @@ test("the menu (IA-1): a space's short list of entries, the one you are in lit, 
   await expect(main.getByRole("link", { name: "Scans", exact: true })).toHaveCount(0);       // no catch-all "Scans" entry any more
   // the footer is two slim lines: the markets now and the account button; the menu above is the only part that scrolls
   const foot = side.locator(".side-foot");
-  await expect(foot.getByRole("button", { name: /^India (open|closed) · \d+\/\d+ markets open$/ })).toBeVisible();
+  // (updated on purpose, LIVE8B-027: one market open is named, "Crypto open", not counted)
+  await expect(foot.getByRole("button", { name: /^India (open|closed) · (\d+\/\d+ markets|[A-Za-z][A-Za-z .&/]*) open$/ })).toBeVisible();
   await expect(foot.getByRole("button", { name: /Pro plan, account menu$/ })).toBeVisible();
   expect((await foot.boundingBox())!.height, "the footer stays slim").toBeLessThanOrEqual(100);
   const scrolls = await side.evaluate((aside) => [aside, ...aside.querySelectorAll("*")].filter((el) => /(auto|scroll)/.test(getComputedStyle(el).overflowY)).map((el) => el.className));
@@ -305,7 +306,8 @@ test("the markets now: one line in the footer that opens the list, by mouse or k
   const phone = info.project.name === "phone";
   const errors = await open(page, "/research", "Companies");
   const side = await menu(page, phone);
-  const btn = side.getByRole("button", { name: /^India (open|closed) · \d+\/\d+ markets open$/ });
+  // (updated on purpose, LIVE8B-027: one market open is named, not counted)
+  const btn = side.getByRole("button", { name: /^India (open|closed) · (\d+\/\d+ markets|[A-Za-z][A-Za-z .&/]*) open$/ });
   const [, , total] = (await btn.innerText()).match(/(\d+)\/(\d+) markets/)!.map(Number);
   await expect(btn).toHaveAttribute("aria-expanded", "false");
   const footBefore = (await side.locator(".side-foot").boundingBox())!.height;

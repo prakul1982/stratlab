@@ -136,3 +136,10 @@ test("LIVE8B-015: a Key numbers group has a Basis or Usual range column only whe
   assert.match(r, /\.\.\.\(g\.items\.some\(\(m\) => m\.note && !mark\(m\)\) \? \[\{ key: "b", header: "Basis"/);
   assert.match(r, /\.\.\.\(g\.items\.some\(\(m\) => bandPosition\(m\.label, m\.value, industry\)\) \? \[\{ key: "r", header: "Usual range"/);
 });
+
+test("LIVE8B-027 / 029: one market open is named, not counted; the footer's Feedback is underlined like its links", async () => {
+  const src = read("src/components/SideMenus.tsx");
+  assert.match(src, /export const marketsOpenText = \(open: string\[\], total: number\): string => \(open\.length === 1 \? `\$\{open\[0\]\} open` : `\$\{open\.length\}\/\$\{total\} markets open`\);/);
+  assert.match(src, /marketsOpenText\(rows\.filter\(\(r\) => r\.st\.open\)\.map/);
+  assert.match(read("src/styles.css"), /\.legal-links \.legal-feedback \{[^}]*text-decoration: underline;/);
+});
