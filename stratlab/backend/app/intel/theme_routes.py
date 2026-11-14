@@ -228,7 +228,7 @@ def evidence_reader(region: str, names: dict):
             if len(about.split()) < ABOUT_WORDS or (region == "US" and not (says_work(about) and theme_base.has_own_line(about, names.get(sym) or ""))):
                 filed, owed = filed_business(region, sym)
                 about = " ".join(x for x in (about, filed) if x)
-            hit = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "about": theme_check.clean_description(about), "industry": industry,
+            hit = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "about": theme_check.kept_description(about), "industry": industry,
                    "v": ABOUT_V, **({"owed": True} if owed else {}), **({"no_page": True} if no_page else {})}
             try:
                 db.set_setting(key, json.dumps(hit, ensure_ascii=False))
@@ -611,7 +611,7 @@ def read_chip_making(region: str, out: dict, kept: dict | None) -> list[str]:
         if owed:
             break
         key_ = f"theme:evidence:{region}:{s_}"
-        new = {**got, "about": theme_check.clean_description(" ".join(x for x in (filed, got["about"]) if x)), "filed": True}
+        new = {**got, "about": theme_check.kept_description(" ".join(x for x in (filed, got["about"]) if x)), "filed": True}
         try:
             db.set_setting(key_, json.dumps(new, ensure_ascii=False))
         except Exception as e:

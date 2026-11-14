@@ -339,3 +339,35 @@ def test_deck_check_flags_the_live_r52_failures_from_their_text():
                  " ICICI Life Insurance Ltd     Life insurance underwriting    ₹66,047 cr    ₹63,357 cr    −10.5%    –    2.5%\n"
                  " ICICI Prudential Life Insurance    Life insurance underwriting    ₹62,548 cr    ₹63,357 cr    −10.5%    –    2.5%\n")
     assert DC.check_text(insurance)["counts"]["same company"] == 1
+
+
+# ---------- 7. medians set by small companies; own words never cut inside a word ----------
+def test_a_ranked_layer_whose_median_is_set_by_its_smaller_companies_says_so():
+    """Fails before: LIVE8A-010, "lowest in Fabless chip design (1.4%)" from micro-caps beside NVIDIA's 61.7% on most of the layer's revenue."""
+    big = {"symbol": "BIG", "name": "Big", "revenue": 100000.0, "ebitda": 60.0, "status": "core"}
+    smalls = [{"symbol": f"S{i}", "name": f"S{i}", "revenue": 50.0, "ebitda": 1.0 + i * 0.1, "status": "core"} for i in range(6)]
+    b = D.layer_block("Fabless", [big] + smalls, set())
+    assert b["aggregate"] is not None and b["aggregate"] > 55 and b["stats"]["ebitda"]["median"] < 2
+    assert D.together([{"revenue": 100.0, "ebitda": 10.0}, {"revenue": 300.0, "ebitda": 30.0}]) == 25.0
+
+
+def test_a_description_is_kept_to_its_last_whole_sentence_or_word():
+    """Fails before: kept to its first 700 characters, its last word cut ("a broad portfolio of solutio")."""
+    from app.intel import theme_check as C
+    long_ = "We make analog chips. " * 20 + "We serve customers with a broad portfolio of solutions across markets"
+    kept = C.kept_description(long_, 450)
+    assert len(kept) <= 450 and kept.endswith("We make analog chips.")
+    assert C.kept_description("word " * 200, 703).endswith("word") and not C.kept_description("word " * 200, 703).endswith("wor")
+    assert C.clean_description("abc def", 5) == "abc d"            # the evidence the placement reads is as before
+
+
+def test_ichor_and_arm_words_are_read_for_what_they_say():
+    """Fails before: LIVE8A-005, Ichor "its own words don't state how it earns" beside "the design, engineering and manufacturing of critical
+    fluid delivery subsystems"; Arm's "provides software development tools" read as development work done for clients."""
+    from app.intel import theme_check as C
+    ichor = ("We are a leader in the design, engineering and manufacturing of critical fluid delivery subsystems and components primarily for "
+             "semiconductor capital equipment.")
+    assert C.stated_model(ichor) == "manufacturing"
+    import re
+    assert not re.search(C.OWN_SAYS["project_services"], "It provides software development tools under the DS-5 and Keil brands.", re.I)
+    assert re.search(C.OWN_SAYS["project_services"], "It offers software development services to banks.", re.I)

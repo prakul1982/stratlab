@@ -4088,8 +4088,10 @@ def cover_line(v: dict, sector: str, total: int, cap, us: bool) -> str:
     where = "listed in the US" if us else "listed in India"
     wv = size.get("with_value") or 0
     # one denominator for the theme's market value (R20: "worth ₹37.4 lakh cr" over 20 beside "18 with a market value")
+    adj = len(v.get("adjacent") or [])
+    core = f" core members (the {adj:,} adjacent participants apart)" if adj else ""         # d53: the theme's size is of its core members
     worth = ((f", worth {cap(size['total_cap'])} together" if wv >= total else
-              f"; the {wv:,} with figures and a market value are worth {cap(size['total_cap'])} together") if size.get("total_cap") else "")
+              f"; the {wv:,}{core} with figures and a market value are worth {cap(size['total_cap'])} together") if size.get("total_cap") else "")
     lead = (f"; the largest are {', '.join(big[:-1])} and {big[-1]}" if len(big) > 1 else f"; the largest is {big[0]}") if big else ""
     return f"{sector}: {_n(total, 'company', 'companies')} {where}{worth}{lead}."
 

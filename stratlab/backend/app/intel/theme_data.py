@@ -1196,7 +1196,20 @@ def layer_block(name: str, rows: list[dict], wide: set[str]) -> dict:
                                   if r.get("capital_rev") is None and r.get("capital_missing")],
             "in_stats": {k: [r["name"] for r in pool if in_median(r, k) is not None] for k in ("ebitda", "net", "roce", "roe")},
             # d53: the companies spending ahead of their revenue, apart from its margin medians (verify_ebitda)
-            "developers": [r["name"] for r in pool if r.get("developer")]}
+            "developers": [r["name"] for r in pool if r.get("developer")],
+            # d53 (LIVE8A-010: Fabless "1.4%" as its median, from its micro-caps, beside NVIDIA's 61.7% on most of its revenue): the EBITDA
+            # margin of its companies in the median together (EBITDA over revenue, so each counts by its size)
+            "aggregate": together(pool)}
+
+
+def together(pool: list[dict]) -> float | None:
+    """d53: the EBITDA margin of a pool's companies together: their EBITDA added over their revenue added, of those in the median."""
+    xs = [(r["revenue"], in_median(r, "ebitda")) for r in pool if r.get("revenue") and in_median(r, "ebitda") is not None]
+    tot = sum(x for x, _ in xs)
+    return round(sum(x * e for x, e in xs) / tot, 1) if xs and tot > 0 else None
+
+
+SKEW_GAP = 10.0               # d53: points between a ranked layer's median and its companies' margin together that the headline says
 
 
 # R27: a figure whose filed value (sector_metrics.REPLACES) is on another basis than the stored pages' own (NII / assets: the filed half year
@@ -1270,7 +1283,8 @@ def _chain_table(blocks: list[dict]) -> dict:
                      **{f"{k}_n": (b["stats"].get(k) or {}).get("n", 0) for k in STAT_KEYS if k not in ("ebitda", "roe")},
                      **{k: (b["stats"].get(k) or {}).get("median") for k in FAMILY_CHAIN}, **{f"{k}_n": (b["stats"].get(k) or {}).get("n", 0) for k in FAMILY_CHAIN},
                 "model": b.get("model"), "intensity": b.get("intensity"), "basis": period_basis([c for c in b.get("companies") or [] if c.get("status") != "unverified"]),
-                **({"scale": b["scale"]} if b.get("scale") else {}), **({"adjacent": True} if b.get("adjacent") else {})}
+                **({"scale": b["scale"]} if b.get("scale") else {}), **({"adjacent": True} if b.get("adjacent") else {}),
+                "aggregate": b.get("aggregate")}
     rows = [row_of(b) for b in blocks]
     # gl52 (R52, the rotating review of Release 51: Cement's "Regional cement makers" and Airlines' "Hotels and resorts", each split into
     # halves by market value, left those themes with no ranking at all): the two halves of a layer split by market value are one layer, ranked
@@ -1406,6 +1420,15 @@ def _chain_table(blocks: list[dict]) -> dict:
         line = line.rstrip(".") + "; among the map's layers, the \"Other\" group left out."
     if line and hi and beyond:
         line += " " + beyond
+    if line and hi and measure == "ebitda":
+        # d53 (LIVE8A-010): a ranked layer whose median sits SKEW_GAP points or more from its companies' margin together is said so: its
+        # median is set by its smaller companies
+        skew = [r for r in (hi, lo) if r.get("aggregate") is not None and abs(r["ebitda"] - r["aggregate"]) >= SKEW_GAP]
+        if skew:
+            line += " " + " ".join(
+                f"{r['layer']}'s companies together earn {pts(r['aggregate'])} of their revenue as EBITDA, against its median company's "
+                f"{pts(r['ebitda'])}, so its median is set by its {'smaller' if r['aggregate'] > r['ebitda'] else 'larger'} companies."
+                for i, r in enumerate(skew) if r not in skew[:i])
     return {"rows": rows, "line": line, "highest": hi["layer"] if hi else None, "lowest": lo["layer"] if lo else None, "measure": measure,
             "compared": [r["layer"] for r in have], "gap": round(hi[measure] - lo[measure], 1) if hi else None,
             "unranked": [{"layer": r["layer"], "why": r["why"]} for r in out] if hi else []}
