@@ -70,3 +70,34 @@ def test_it_reads_through_the_pulse_route_as_the_clock(monkeypatch):
     monkeypatch.setattr(routes, "pulse_ai", fake)
     assert mood_job._pulse_read("IN") == {"mood": "calm", "region": "IN"}
     assert seen["refresh"] is False and seen["profile"]["id"] == "system:mood"
+
+
+# ---------- LIVE8A-014: a weekend session found from the exchange's own file of index closes ----------
+def test_a_weekend_day_with_an_index_file_is_a_special_session(monkeypatch):
+    from app import official_close as oc
+    from app.data import calendar as tc
+    store, noted = {}, []
+    monkeypatch.setattr(oc, "db", type("D", (), {"get_setting": staticmethod(store.get), "set_setting": staticmethod(lambda k, v: store.__setitem__(k, v)),
+                                                 "json_value": staticmethod(lambda raw, d: d), "all_settings_with_prefix": staticmethod(lambda p: []),
+                                                 "delete_setting": staticmethod(lambda k: None)}))
+    monkeypatch.setattr(tc, "is_trading_day", lambda m, d: d.weekday() < 5 and d.isoformat() != "2026-11-10")
+    monkeypatch.setattr(tc, "special_days", lambda m: set())
+    monkeypatch.setattr(tc, "note_session", lambda m, d: noted.append(str(d)))
+    asked = []
+
+    class Files:
+        def text(self, url):
+            asked.append(url)
+            if "ind_close_all_08112026" in url:
+                return "Index Name,Index Date,Closing Index Value\nNifty 50,08-11-2026,24986.40\n"
+            return ""
+    monkeypatch.setitem(oc._src, "files", lambda: Files())
+    oc.forget()
+    now = datetime(2026, 11, 14, 8, 0, tzinfo=IST)
+    assert oc.find_sessions(now) == ["2026-11-08"] and noted == ["2026-11-08"]
+    # the shut days only (weekends and the 10 Nov holiday), never a trading day
+    assert not any("13112026" in u or "12112026" in u for u in asked)
+    assert any("10112026" in u for u in asked)
+    # once a day
+    n = len(asked)
+    assert oc.find_sessions(now) == [] and len(asked) == n

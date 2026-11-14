@@ -322,6 +322,9 @@ class LiveJob:
                     day = now.astimezone(IST).date().isoformat()
                     if load("nifty500", day)["points"]:
                         official_close.index_closes(day, fetch=True, now=now)
+                    # LIVE8A-014: a weekend or holiday session the calendar didn't name (Diwali's Muhurat trading), from the exchange's
+                    # file of that day's index closes: one look a day
+                    official_close.find_sessions(now)
                 continue
             with memguard.heavy("breadth-live", force_release=True):      # every stock's quote and the day's base: one heavy job at a time (MEM-001)
                 res = self.live.round(region, now)
