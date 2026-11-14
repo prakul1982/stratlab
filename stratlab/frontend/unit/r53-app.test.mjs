@@ -94,3 +94,17 @@ test("LIVE8B-012: on a phone the peers come five at a time, quarters four a line
   assert.match(read("src/styles-invest.css"), /\.inv-q \.k-tbl-wrap\.stack \.k-table tr \{ grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
   assert.match(read("src/components/Research.tsx"), /name: bank \? "Revenue" : "Sales"/);
 });
+
+test("LIVE8A-007: the Markets panel never paints a kept price from before its market's last session", async () => {
+  const { keptQuotes, keepQuotes } = await import("../src/lib/watchQuotes.ts");
+  const mem = new Map();
+  const store = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) };
+  const now = Date.parse("2026-11-14T03:00:00Z");
+  const q = (price, at) => ({ price, change: 0, change_pct: 0.32, prev_close: price, at, currency: "INR", stale: false });
+  keepQuotes("u", { "IN:RELIANCE": q(1339.7, "2026-11-12T15:30:00+05:30"), "IN:TCS": q(2407.5, "2026-11-13T15:30:00+05:30"), "US:AAPL": q(356.27, "2026-11-13T16:00:00-05:00") }, now - 60_000, store);
+  const since = (k) => (k.startsWith("IN:") ? "2026-11-13" : k.startsWith("US:") ? "2026-11-13" : null);
+  const got = keptQuotes("u", now, store, since);
+  assert.deepEqual(Object.keys(got).sort(), ["IN:TCS", "US:AAPL"]);
+  assert.equal(Object.keys(keptQuotes("u", now, store)).length, 3);          // without a day to hold to, as before
+  assert.match(read("src/components/watch/WatchPanel.tsx"), /keptQuotes\(me\?\.id \?\? "guest", Date\.now\(\), undefined, \(k\) => \{/);
+});
