@@ -427,7 +427,7 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51}  # rules versions whose change only adds to a kept placement (d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52}  # rules versions whose change only adds to a kept placement (c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
 EARLIER_MAX = 8                 # rv51: how many carried versions back an earlier answer of the same map is looked for
@@ -479,9 +479,10 @@ def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
     about = _about_reader(region, names, 0)                           # stored descriptions only: nothing is read from a page here
     # R41: an answer kept under earlier rules sticks (theme_base.place_rest `carried`: nothing it answered is asked again)
     ob = off_before(region, theme, m)                 # d53: the companies an earlier version dropped as another business
+    mb = moved_before(region, theme, m)               # c54: the moves the stored change log records, judged on what the layer sells
     new, got = theme_base.place_rest(out, theme, lambda s_: about(s_), ask=ask, kept=kept, facts_of=_facts_reader(region),
                                      carried=version is not None and version != theme_base.RULES, previous=previous_layers(region, theme, m),
-                                     **({"off_before": ob} if ob else {}))
+                                     **({"off_before": ob} if ob else {}), **({"moved_before": mb} if mb else {}))
     if ask is not None and got and got != kept and (got.get("names_for") or any(x.get("by") == "ai" for x in (got.get("assign") or {}).values())):
         try:
             computed.put("theme:place", key, got, label=m.get("sector") or theme, region=region)
@@ -695,6 +696,16 @@ def off_before(region: str, theme: str, m: dict) -> dict:
         return theme_changes.off_memory(theme_changes.stored(region, m.get("_library") or theme))
     except Exception as e:
         print("theme: earlier exclusions not read:", type(e).__name__, str(e)[:100])
+        return {}
+
+
+def moved_before(region: str, theme: str, m: dict) -> dict:
+    """c54 (R53 review): {symbol: [from, to]} of the moves between layers the stored change log records (theme_changes.move_memory), the
+    latest of each company's, so a company a re-check moved into a layer is judged on what that layer sells. {} when none is stored."""
+    try:
+        return theme_changes.move_memory(theme_changes.stored(region, m.get("_library") or theme))
+    except Exception as e:
+        print("theme: earlier moves not read:", type(e).__name__, str(e)[:100])
         return {}
 
 
@@ -1052,6 +1063,7 @@ def placement_inputs(q: str, region: str = "IN", profile=Depends(current_profile
                  "kept": kept, "placements": hit.get("placements"), "value_chain": hit.get("value_chain") or [],
                  "evidence": {s_: about(s_) for s_ in sorted(names)}, "previous": previous_layers(r, theme, m),
                  "off_before": off_before(r, theme, m),        # d53: the companies an earlier version dropped as another business
+                 "moved_before": moved_before(r, theme, m),    # c54: the moves the stored change log records
                  "facts": {s_: facts(s_) for s_ in sorted(names)}})
 
 

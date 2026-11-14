@@ -252,7 +252,7 @@ def test_kept_placement_joins_the_nearest_earlier_answer_of_the_same_map(monkeyp
 
 
 def test_versions():
-    assert B.RULES == 52 and TR.PLACE_CARRY[52] == 51 and TR.PLACE_CARRY[51] == 50 and TR.PLACE_CARRY[50] == 49 and deck.THEME_DECK_VERSION == 63 and D.DIVE_TEXT == 23          # d53 (R53): RULES 52, PLACE_CARRY[52] = 51, deck 63, dive text 23 (updated on purpose)
+    assert B.RULES == 53 and TR.PLACE_CARRY[53] == 52 and TR.PLACE_CARRY[52] == 51 and TR.PLACE_CARRY[51] == 50 and TR.PLACE_CARRY[50] == 49 and deck.THEME_DECK_VERSION == 64 and D.DIVE_TEXT == 24          # c54 (R53 review): RULES 53, PLACE_CARRY[53] = 52, deck 64, dive text 24 (updated on purpose); d53 (R53): RULES 52, PLACE_CARRY[52] = 51, deck 63, dive text 23 (updated on purpose)
 
 
 # ---------- P1: a financial company's other income; verified against arithmetic reproduced; † medians ----------

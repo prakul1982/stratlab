@@ -46,6 +46,15 @@ Failures (the exit code is 1 when any deck has one):
                verified count is all its figures while its rows say some only had their arithmetic reproduced
   adjacent ranked  d53 (the owner's review: hospital operators in a Medical devices theme): a layer said to be adjacent participants named
                highest or lowest in a ranking
+  move unexplained  c54 (the owner's review of the live R53 decks: Intel moved "from “Makers of their own products” to “Chip equipment and
+               subsystem suppliers”", Indo National into "Branded packaged foods manufacturing", UFP into "Surgical robotics systems", with
+               nothing showing they sell what those layers are): a change log's move between layers into a layer named by what it sells (not
+               "Other", not a group named by how its companies earn) with no reason beside it
+  scope core   c54 (the live R53 Automotive deck: "Vehicle financiers" of lenders among the core makers; FMCG's "Mining, oil, gas and farming"):
+               a layer named by a business outside the theme's own (lenders or financiers, contractors or EPC, laboratories, mining, oil
+               and gas, farming), the theme's own name stating none of it, in a deck that says no company is an adjacent participant
+  layer lost unsaid  c54 (the live R53 Metals deck: "“Aluminium” removed (14 companies)"): a change log's layer of five companies or more
+               removed with neither where its companies went nor why
 Reported, and a failure only with --strict:
   cut text     every other text ending in "…" (a label or a sentence cut to its box)
   mixed range  a range with one end whole and the other with a decimal ("19.6% to 20%"; LIVE7A-014)
@@ -65,7 +74,7 @@ import sys
 
 FAIL = ("headline", "mid-word", "placeholder", "joining word", "count", "repeated", "hyphen minus", "no layer", "unread ranked", "unread kind",
         "left out>50%", "unchecked as 0", "biz label", "biz making", "stale layer", "same company", "words claim", "partial unsaid",
-        "outlier range", "added unexplained", "verified count", "adjacent ranked")
+        "outlier range", "added unexplained", "verified count", "adjacent ranked", "move unexplained", "scope core", "layer lost unsaid")
 WARN = ("cut text", "other>40%", "mixed range")
 # LIVE7A-014: a minus sign as a hyphen before a figure with its unit (never a date's or a range's dash: it follows a space or a bracket)
 _HYPHEN_MINUS = re.compile(r"(?:(?<=\s)|(?<=[(\[])|^)-\d[\d,]*(?:\.\d+)?(?:%|x\b| ?pts\b| ?points\b)")
@@ -273,6 +282,7 @@ def check_pages(pages: list[str]) -> dict:
             elif not any(stems_of(model) & stems_of(x) for x in layers | {layer}):
                 add("biz label", n, said)
     d53_checks(pages, layers, add)
+    c54_checks(pages, layers, add)
     counts = {k: sum(1 for f in findings if f["kind"] == k) for k in FAIL + WARN}
     return {"pages": len(pages), "counts": counts, "findings": findings}
 
@@ -353,6 +363,56 @@ def d53_checks(pages: list[str], layers: set, add) -> None:
         for m in re.finditer(r"\b(?:highest|lowest) in (.+?) \(", flat):
             if any(m.group(1).strip().endswith(a) or a.endswith(m.group(1).strip()) for a in adj):
                 add("adjacent ranked", n, m.group(0))
+
+
+# c54: a change log's move between layers ("Intel Corp (from “A” to “B”)", or with its reason "(from “A” to “B”: its own words ...)")
+_MOVE = re.compile(r"(?:^|, |: )([A-Z0-9][^,;:()“”]{1,80}?) \(from “([^”]+)” to “([^”]+)”(:[^)]*)?\)")
+# the groups the split names by how their companies earn (theme_check.MODELS' and FAMILIES' names): a company is in them by its way of earning
+BY_HOW = {"Project and consulting services", "Managed and outsourced IT services", "Business process outsourcing", "Software products and subscriptions",
+          "Designs licensed for royalties", "Platforms and marketplaces", "Hardware resale and integration", "Distribution and trading", "Retail",
+          "Makers of their own products", "Product designers that outsource making", "Parts, component and ingredient makers", "Contract manufacturing",
+          "Data centres, hosting and networks", "Telecom and broadband operators", "Engineering and construction contracts", "Lenders", "Insurers",
+          "Life insurers", "General and health insurers", "Reinsurers", "Brokers and distributors of financial products", "Fund and asset managers",
+          "Exchanges, depositories and ratings", "Payment networks and processors", "Mining, oil, gas and farming", "Power, gas and water supply",
+          "Regulated transmission and distribution", "Power generation", "Power trading and renewable project developers",
+          "Miners and primary metal producers", "Metal processors and fabricators", "IT services for clients", "Resale and distribution",
+          "Financial fees and commissions"}
+# a layer named by a business outside most themes (theme_data.SCOPE_KINDS), and the theme names that make it the theme's own
+_SCOPE_LAYER = re.compile(r"\b(?:financ\w*|lenders?|lending|banks?|EPC|(?:construction|civil|engineering) contractors?|laborator\w*|labs?|mining|"
+                          r"miners?|crude oil|oil(?:,| and) gas|natural gas|oil exploration|farming|growers?)\b", re.I)
+_SCOPE_THEME = re.compile(r"bank|lend|loan|credit|financ|nbfc|construct|infrastructure|EPC|engineering|capital goods|laborator|diagnost|hospital|"
+                          r"health ?care services|mining|metal|oil|gas|energy|commodit|agri|farm|plantation|fertili|coal|steel|petro|chemical|resource|"
+                          r"utilit|power|renewable", re.I)
+_TITLE = re.compile(r"THEME DEEP DIVE\s+(.+?)\s{2,}|THEME DEEP DIVE\s*\n\s*(.+)|^\s*(.+)\n.*· Theme deep dive", re.I)
+_REMOVED = re.compile(r"“([^”]+)” removed \((\d[\d,]*) companies([^)]*)\)(, [a-z][^;.]*)?")
+LOST_MIN = 5
+
+
+def c54_checks(pages: list[str], layers: set, add) -> None:
+    """c54 (R53 review): moves without a reason into a layer named by what it sells, a layer outside the theme's own business counted as
+    core, and a lost layer with nothing said of it (see the module's list)."""
+    flat_pages = [re.sub(r"\s+", " ", p) for p in pages]
+    for n, flat in enumerate(flat_pages, 1):
+        if "Since the previous version" not in flat and "against the version stored before it" not in flat:
+            continue
+        for m in _MOVE.finditer(flat):
+            to = re.sub(r" \((?:larger|smaller)\)$", "", m.group(3))
+            if not m.group(4) and to not in BY_HOW and not to.startswith("Other ") and to != re.sub(r" \((?:larger|smaller)\)$", "", m.group(2)):
+                add("move unexplained", n, m.group(0).strip(" ,:")[:160])
+        for m in _REMOVED.finditer(flat):
+            if _num(m.group(2)) >= LOST_MIN and "to “" not in m.group(3) and not m.group(4):
+                add("layer lost unsaid", n, m.group(0)[:160])
+    whole = " ".join(flat_pages)
+    t = _TITLE.search(pages[0] if pages else "")
+    title = (t.group(1) or t.group(2) or t.group(3) or "").strip() if t else ""
+    if not title or _SCOPE_THEME.search(title) or re.search(r"Core and adjacent|adjacent participants?", whole, re.I):
+        return
+    names = set(layers)
+    for p in pages:
+        names |= {m.group(1).strip() for m in _LAYER_HEAD.finditer(p)}
+    for name in sorted(names):
+        if _SCOPE_LAYER.search(name):
+            add("scope core", 1, f"“{name}” in the {title} deck, which has no “Core and adjacent” row")
 
 
 def check_text(text: str) -> dict:
