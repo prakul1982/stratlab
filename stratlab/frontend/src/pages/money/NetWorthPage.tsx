@@ -6,7 +6,7 @@ import { useApp } from "../../lib/app";
 import { useMarketRefresh } from "../../lib/marketLive";
 import { LoanCheck } from "./LoanCheck";
 import { asOf, axisInr, dateOnly, inr, inrCompact, istToday, signedInrCompact } from "../../lib/format";
-import { mergeLiveNetWorth, netWorthDelta, pricedMarkets, restatedNote, sinceNote } from "../../lib/networth";
+import { loanRateText, mergeLiveNetWorth, netWorthDelta, pricedMarkets, restatedNote, sinceNote } from "../../lib/networth";
 import { Modal } from "../../components/ui";
 import { MoreMenu } from "../../components/MoreMenu";
 import { XYChart } from "../../components/Charts";
@@ -259,8 +259,8 @@ function Facts({ r, tax }: { r: Row; tax?: DepositTax | null }) {
 
 /** A loan's rate: the sanctioned one, and today's after a floating rate's resets when it differs (DG-011). */
 function loanRate(r: Row): string {
-  const sanctioned = Number(r.entry?.rate), now = r.facts?.rate_now;
-  return now != null && Number.isFinite(sanctioned) && Math.abs(now - sanctioned) > 1e-9 ? `${now}% a year now (${sanctioned}% at the start)` : `${r.entry?.rate}% a year`;
+  const stmt = r.entry?.current_rate;
+  return loanRateText(Number(r.entry?.rate), r.facts?.rate_now, stmt == null || stmt === "" ? null : Number(stmt));
 }
 
 function PrepayBox({ loan, onClose }: { loan: Row; onClose: () => void }) {

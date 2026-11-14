@@ -70,3 +70,12 @@ test("LIVE8B-013: a leg distance its box doesn't take is never echoed as a rule;
   assert.equal(offsetFits(101, "strikes"), false);
   assert.match(read("src/pages/trade/options.css"), /\.k-leg-pick \.k-bad \{ flex-basis: 100%; order: 9; \}/);
 });
+
+test("LIVE8B-005: a loan's rate in the table is its statement rate when entered, the resets' rate named as expected", async () => {
+  const { loanRateText } = await import("../src/lib/networth.ts");
+  assert.equal(loanRateText(8.5, 7.5, 7.25), "7.25% a year on your statement; 7.5% expected after its resets (8.5% at the start)");
+  assert.equal(loanRateText(8.5, 7.25, 7.25), "7.25% a year on your statement (8.5% at the start)");
+  assert.equal(loanRateText(8.5, 7.5, null), "7.5% a year now (8.5% at the start)");
+  assert.equal(loanRateText(8.5, null, null), "8.5% a year");
+  assert.equal(loanRateText(8.5, 8.5, 8.5), "8.5% a year on your statement");
+});

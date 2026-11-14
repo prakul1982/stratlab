@@ -66,3 +66,16 @@ export function pricedMarkets(rows: readonly { kind: string; basis?: string | nu
   const of: Record<string, string> = { stocks_in: "IN", stocks_us: "US", gold: "MCX", sgb: "MCX", crypto: "CRYPTO" };
   return [...new Set((rows ?? []).filter((r) => r.basis === "market price" && of[r.kind]).map((r) => of[r.kind]))];
 }
+
+/** A loan's rate in the Loans table (DG-011: the sanctioned one, and today's after a floating rate's resets when it differs). With a rate
+ *  entered from the latest statement, that is the rate named as the loan's own, and the rate the resets give is named as expected, so the
+ *  table and the benchmark check below it never give the same loan two rates both called "now" (LIVE8B-005: "7.5% a year now" in the
+ *  table, "On your statement 7.25%" in the check). */
+export function loanRateText(sanctioned: number, rateNow: number | null | undefined, statement: number | null | undefined): string {
+  const differs = (a: number | null | undefined, b: number) => a != null && Number.isFinite(b) && Math.abs(a - b) > 1e-9;
+  if (statement != null && Number.isFinite(statement)) {
+    const expected = differs(rateNow, statement) ? `; ${rateNow}% expected after its resets` : "";
+    return `${statement}% a year on your statement${expected}${differs(statement, sanctioned) || expected ? ` (${sanctioned}% at the start)` : ""}`;
+  }
+  return differs(rateNow, sanctioned) ? `${rateNow}% a year now (${sanctioned}% at the start)` : `${sanctioned}% a year`;
+}
