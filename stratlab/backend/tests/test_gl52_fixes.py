@@ -375,3 +375,40 @@ def test_the_walk_back_reaches_the_answer_that_still_has_the_extra_layers(monkey
 
 def test_versions():
     assert B.RULES == 51 and TR.PLACE_CARRY[51] == 50 and deck.THEME_DECK_VERSION == 62 and D.DIVE_TEXT == 22
+
+
+# ---------- integrator: "on its industry" for a company with no words only where its industry points to this layer ----------
+def _machinery(elsewhere: int) -> dict:
+    """A layer whose name names "Industrial Machinery", holding 3 read makers of heavy equipment, 3 read makers of industrial machinery and one
+    company of industrial machinery with no words; `elsewhere` read industrial machinery makers in a pumps layer."""
+    words, cos_a, cos_b = {}, [], []
+    for i in range(3):
+        words[f"H{i}"] = f"Hco {i} manufactures cranes and earthmovers."
+        cos_a.append({"ticker": f"H{i}", "name": f"Hco {i}", "industry": "Heavy Equipment", "placed": "words"})
+    for i in range(3):
+        words[f"M{i}"] = f"Mco {i} manufactures lathes and presses."
+        cos_a.append({"ticker": f"M{i}", "name": f"Mco {i}", "industry": "Industrial Machinery", "placed": "words"})
+    cos_a.append({"ticker": "NW", "name": "Nco", "industry": "Industrial Machinery", "placed": "words"})
+    for i in range(3):
+        words[f"P{i}"] = f"Pco {i} manufactures pumps and valves."
+        cos_b.append({"ticker": f"P{i}", "name": f"Pco {i}", "industry": "Pumps", "placed": "words"})
+    for i in range(elsewhere):
+        words[f"E{i}"] = f"Eco {i} manufactures machine tools and pumps."
+        cos_b.append({"ticker": f"E{i}", "name": f"Eco {i}", "industry": "Industrial Machinery", "placed": "words"})
+    vc = [{"layer": "Industrial machinery makers", "description": "", "companies": cos_a},
+          {"layer": "Pump makers", "description": "", "companies": cos_b}]
+    models = {s: "manufacturing" for s in words}
+    got = B.by_model(copy.deepcopy(vc), models, "Capital goods", confidence={s: "high" for s in models}, evidence_of=lambda s: words.get(s, ""))
+    return {c["ticker"]: c for v in got for c in v["companies"]}
+
+
+def test_a_company_with_no_words_counts_on_its_industry_only_where_that_industry_points_mostly_to_its_layer():
+    """Fails on e67d9d3: a layer whose name named the industry took every company of it with no words, however that industry's read companies
+    were spread (the live Capital goods replay: 128 "Industrial Products" companies with no words counted in "Engines and industrial
+    machinery makers", 25 of the 40 read ones there and 15 over six other layers)."""
+    broad = _machinery(elsewhere=3)               # 3 of the 6 read industrial machinery makers here: the industry points nowhere
+    assert not broad["NW"].get("on_industry") and broad["NW"]["model_out"] and broad["NW"]["out_why"] == "no_words"
+    narrow = _machinery(elsewhere=1)              # 3 of 4 here (75%): it points to this layer
+    assert narrow["NW"].get("on_industry") and not narrow["NW"].get("model_out")
+    assert B.ON_INDUSTRY_SHARE == 2 / 3 and B.ON_INDUSTRY_MIN == 3
+

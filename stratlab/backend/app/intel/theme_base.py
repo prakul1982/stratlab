@@ -1487,6 +1487,11 @@ def map_names_of(previous: dict | None, kept: dict | None) -> dict:
 
 # gl52: a second way of earning a layer's own name can state, in so many words, beside how most of its companies earn
 NAME_PART_MODEL = {"construction": r"\bepc\b|engineering,? procurement,? (?:and|&) construction"}
+# gl52 (the integrator): a company with no words of its own counts on its industry in a layer only when that layer holds at least this share,
+# and this many, of the theme's companies of that industry that were read or placed by the AI (by_model industry_points_here); two in three:
+# at 60% the live Capital goods "Industrial Products" (25 of its 40 read companies in "Engines and industrial machinery makers", 62.5%, the
+# other 15 over six layers) still counted
+ON_INDUSTRY_SHARE, ON_INDUSTRY_MIN = 2 / 3, 3
 MODEL_LINE_MIN = 3              # gl52: companies a sparse layer's way of earning must be shown for before its line names it
 
 
@@ -1961,6 +1966,24 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
         return "no_model"
 
     # 4. what each layer's companies have in common, and who is left out of its figures
+    # gl52 (R52, the integrator, on the Capital goods replay: 128 "Industrial Products" companies with no words of their own counted on their
+    # industry in "Engines and industrial machinery makers", though that industry is spread over several layers): where the theme's companies
+    # of an industry that were read (words of their own) or placed by the AI (its answer or the map's own pick) sit, by layer (a layer's two
+    # halves by market value are one layer); a company with no words counts on its industry only in a layer that holds most of them
+    # (industry_points_here)
+    base_of = lambda w: _HALF_RX.sub("", w.get("layer") or "")      # noqa: E731
+    read_where: dict = {}
+    for w in out:
+        if w.get("official"):
+            continue
+        for x in w["companies"]:
+            if x.get("industry") and (own_text(ev(x)).strip() or x.get("placed") != "words"):
+                read_where.setdefault(key(x["industry"]), Counter())[base_of(w)] += 1
+
+    def industry_points_here(c, v) -> bool:
+        where_ = read_where.get(key(c.get("industry"))) or Counter()
+        here_ = where_[base_of(v)]
+        return here_ >= ON_INDUSTRY_MIN and here_ >= ON_INDUSTRY_SHARE * sum(where_.values())
     for v in out:
         v["companies"] = [{**c, "model": every.get(c.get("ticker"), ""), "model_tags": list(tags.get(c.get("ticker")) or []),
                            "model_confidence": conf.get(c.get("ticker"), "") if c.get("ticker") in every else ""} for c in v["companies"]]
@@ -2029,8 +2052,13 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
                 return True
             return not (every.get(c.get("ticker")) and conf.get(c.get("ticker")) == "low") and said_(c) <= {f}
         said_ = lambda c: {model_family(x) for x in words_models(ev(c))} - {""}      # noqa: E731
+        # a company with no words: the gl50 rule as it was (its industry the majority of the layer's companies shown to earn its way and of
+        # no other layer, the layer's own other half counted), else only where that industry points mostly to this layer (industry_points_here)
+        r50_ind = lambda c: bool(top_ind) and key(c.get("industry")) == top_ind[0][0] and top_ind[0][1] * 2 > len(known) \
+            and top_ind[0][0] not in elsewhere      # noqa: E731
         on_ind = {c.get("ticker") for c in cos if fam(c) == "" and c.get("ticker") not in another and c.get("ticker") not in outside
                   and c.get("industry") and ind_decides(c) and no_way_said(c)
+                  and (own_text(ev(c)).strip() or r50_ind(c) or industry_points_here(c, v))
                   and model_family(every.get(c.get("ticker")) or "") in ("", f)}
         kin |= on_ind
         # ex49 (R48, the outside review of the live Release 48 Consumer retail deck: lululemon, in "Apparel and consumer brand owners" by
