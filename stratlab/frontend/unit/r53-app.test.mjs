@@ -79,3 +79,12 @@ test("LIVE8B-005: a loan's rate in the table is its statement rate when entered,
   assert.equal(loanRateText(8.5, null, null), "8.5% a year");
   assert.equal(loanRateText(8.5, 8.5, 8.5), "8.5% a year on your statement");
 });
+
+test("LIVE8B-014: an account with a Google sign-in is named Google; an email-link account is told how it gets back in", async () => {
+  const acct = await import("../src/lib/account.ts");
+  assert.equal(acct.accountMethod("email", ["email", "google"], null), "Google");
+  assert.equal(acct.accountMethod("email", ["email"], null), "Email link");
+  assert.equal(acct.accountMethod(undefined, undefined, "google"), "Google");
+  assert.match(acct.EMAIL_LINK_NOTE, /Continue with Google, using this same email address/);
+  assert.match(read("src/pages/AccountPage.tsx"), /method === "Email link" && <span className="k-sub-line" data-testid="email-link-note">\{EMAIL_LINK_NOTE\}<\/span>/);
+});

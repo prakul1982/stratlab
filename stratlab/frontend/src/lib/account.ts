@@ -13,6 +13,16 @@ export function signedInWith(session: string | null | undefined, server: string 
   return METHODS[m.toLowerCase()] ?? m.charAt(0).toUpperCase() + m.slice(1);
 }
 
+/** The sign-in method Account names: Google when the account has a Google sign-in among its methods (the session's first method is the
+ * one the account was made with, so an account made with an email link and since opened with Google said "Email link"). */
+export function accountMethod(provider: string | null | undefined, providers: unknown, server: string | null | undefined): string | null {
+  const all = Array.isArray(providers) ? providers.map((p) => String(p).toLowerCase()) : [];
+  return signedInWith(all.includes("google") ? "google" : provider, server);
+}
+
+/** LIVE8B-014: sign-in is with Google only now; an account made with an email link is told how it gets back in. */
+export const EMAIL_LINK_NOTE = "Sign-in is with Google now: Continue with Google, using this same email address, opens this account.";
+
 /** How the paid plan runs, as Account shows it:
  * - "given": the site owner gave it by hand; it has an end date or none, and there is nothing to renew or cancel;
  * - "cancelled": a subscription that ends at the period's end;
