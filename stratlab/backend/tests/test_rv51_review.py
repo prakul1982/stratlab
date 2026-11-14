@@ -241,7 +241,9 @@ def test_kept_placement_joins_the_nearest_earlier_answer_of_the_same_map(monkeyp
     assert version == TR.PLACE_CARRY[B.RULES]
     assert kept["extra"] == early["extra"] and kept["rename"] == {"M": {"name": "New name"}, "L": {"name": "Old name"}}
     assert set(kept["assign"]) == {"A", "B"}
-    assert seen[-1] == 44 and len(seen) == len(set(seen))
+    # gl52 (R52, updated on purpose): the walk reads every carried version within EARLIER_MAX (the live IT answer that had lost the extra
+    # layers was the nearest one), never one twice
+    assert 44 in seen and len(seen) == len(set(seen)) and len(seen) <= 2 + TR.EARLIER_MAX
     # with no earlier answer, the walk stops after EARLIER_MAX versions
     store.pop(44)
     seen.clear()
@@ -250,7 +252,7 @@ def test_kept_placement_joins_the_nearest_earlier_answer_of_the_same_map(monkeyp
 
 
 def test_versions():
-    assert B.RULES == 50 and TR.PLACE_CARRY[50] == 49 and deck.THEME_DECK_VERSION == 61 and D.DIVE_TEXT == 21
+    assert B.RULES == 51 and TR.PLACE_CARRY[51] == 50 and TR.PLACE_CARRY[50] == 49 and deck.THEME_DECK_VERSION == 62 and D.DIVE_TEXT == 22
 
 
 # ---------- P1: a financial company's other income; verified against arithmetic reproduced; † medians ----------
