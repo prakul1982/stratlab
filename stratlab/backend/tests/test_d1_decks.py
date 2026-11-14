@@ -67,7 +67,8 @@ def test_a_company_with_no_words_in_no_layer_is_not_checked_yet_and_the_coverage
     assert rc == (2, 3, "Other x", 1)
     words = deck.rest_words(rc, v)
     # R44 (updated on purpose): the count of the companies placed is said once, as "In informative layers 1 of 3 (33%)"
-    assert "1 fit none of the map's layers" in words and "1 not checked yet" in words and " of 3" not in words
+    # l55 (R55, updated on purpose): "not placed yet", apart from the membership state "not checked"
+    assert "1 fit none of the map's layers" in words and "1 not placed yet" in words and " of 3" not in words
     # gl50 (R50, updated on purpose: the live Biotech deck, 73% outside informative layers, passed on the 3% that fit none): deck_check
     # counts every company outside informative layers, the not checked yet too
     page = f"In informative layers   1 of 3 (33%)   {words}"
@@ -165,7 +166,7 @@ def test_a_layer_page_shows_at_least_five_companies_and_small_layers_share_one_p
     small = next(s for s in slides if s.title.startswith(deck.SMALL_TITLE))
     rows = [r for b in small.blocks if b["kind"] == "table" for r in b["rows"]]
     assert len(rows) == 3 and [r[0] for r in rows].count("") == 1          # the 2-company layer said on its first row
-    assert "2 layers of 2 confirmed companies or fewer, 3 companies" in small.subtitle
+    assert "2 layers of 2 member companies or fewer, 3 companies" in small.subtitle  # l55 (R55): the evidence states by name, never a "confirmed" total (updated on purpose)
 
 
 # ---------- D. placement rules (RULES 43) ----------

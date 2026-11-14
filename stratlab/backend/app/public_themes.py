@@ -37,13 +37,22 @@ SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 METHOD = ("How companies are chosen: a theme's companies come from its official industries (the exchange's own classification) and "
           "from a map of the theme's layers. A company the map adds from another industry is shown here only once its own filings or "
           "description confirm the work its layer names; a company of the theme's official industries is shown on that classification, "
-          "and each one says whether its own description was checked and confirms the work, it is kept on its official industry only, "
-          "or it is not checked yet. Market value is at the last close; revenue is the latest full year as the company "
-          "reported it, in its own reporting currency. StratLab works out no figure on this page.")
-EVIDENCE_PUBLIC = {"description_verified": "confirmed by its own description", "industry_code_supported": "official industry only",
-                   "list_supported": "the theme's own list only", "membership_unverified": "not checked yet"}
-EVIDENCE_PUBLIC_MANY = (("description_verified", "confirmed by their own description"), ("industry_code_supported", "on their official industry only"),
-                        ("list_supported", "on the theme's own list only"), ("membership_unverified", "not checked yet"))
+          "and each one says what its place rests on: description-verified (its own description was checked and shows the work), "
+          "industry-supported (kept on its official industry only) or not checked (its membership is not checked yet). Market value is at "
+          "the last close; revenue is the latest full year as the company reported it, in its own reporting currency. StratLab works out "
+          "no figure on this page.")
+# l55 (R55, the owner's review of the live R54 decks): the evidence states by the same names as the deck, never one "confirmed" total
+EVIDENCE_PUBLIC = {"description_verified": "description-verified", "industry_code_supported": "industry-supported (official industry only)",
+                   "list_supported": "list-supported (the theme's own list only)", "membership_unverified": "not checked"}
+EVIDENCE_PUBLIC_MANY = (("description_verified", "description-verified"), ("industry_code_supported", "industry-supported"),
+                        ("list_supported", "list-supported"), ("membership_unverified", "not checked"))
+EVIDENCE_PUBLIC_ALWAYS = ("description_verified", "industry_code_supported", "membership_unverified")
+
+
+def evidence_said(tally: dict) -> str:
+    """l55: "97 description-verified, 63 industry-supported, 51 not checked": the three states by name (the theme's own list where it has
+    any), each with its count."""
+    return ", ".join(f"{tally.get(k) or 0} {w}" for k, w in EVIDENCE_PUBLIC_MANY if tally.get(k) or k in EVIDENCE_PUBLIC_ALWAYS)
 
 
 def slug(name: str) -> str:
@@ -160,7 +169,10 @@ def view(entry: dict, p: dict) -> dict:
                          "page": stock_pages.path(region, sym) if sym in known else None,
                          "cap": money(region, caps.get(sym)), "revenue": money(region, rev[0], rev[2]) if rev else None,
                          "year": str(rev[1] or "")[:20] if rev else None, "evidence": state if state in EVIDENCE_PUBLIC else None})
-        layers.append({"name": v["name"], "companies": rows})
+        # l55 (R55): each layer's companies by what their place rests on, as the page's count does for the whole theme
+        mine = {r_["symbol"]: r_.get("evidence") for r_ in rows}
+        layers.append({"name": v["name"], "companies": rows,
+                       "evidence": {k: sum(1 for x in mine.values() if x == k) for k in EVIDENCE_PUBLIC} if ev else None})
     n = len({c["symbol"] for v in layers for c in v["companies"]})
     once = {c["symbol"]: c.get("evidence") for v in layers for c in v["companies"]}
     tally = {k: sum(1 for x in once.values() if x == k) for k in EVIDENCE_PUBLIC} if ev else None
@@ -228,8 +240,7 @@ def render(v: dict) -> str:
             f'<p class="muted">{v["members"]} {word}compan{"y" if v["members"] == 1 else "ies"} in {len(v["layers"])} layer{"" if len(v["layers"]) == 1 else "s"}'
             + (f" · map made {e(day_text(v['day']))}" if v.get("day") else "") + "</p>")
     if v.get("evidence"):          # e54: the companies by what their place rests on, adding up to those shown
-        body += ('<p class="muted small" data-evidence>Membership: ' + e(", ".join(f"{v['evidence'][k]} {w}" for k, w in EVIDENCE_PUBLIC_MANY
-                                                                                     if v["evidence"].get(k))) + ".</p>")
+        body += '<p class="muted small" data-evidence>Membership: ' + e(evidence_said(v["evidence"])) + ".</p>"
     if v["summary"]:
         body += f"<p>{e(v['summary'])}</p>"
     for x in v["layers"]:
@@ -242,7 +253,8 @@ def render(v: dict) -> str:
             if c.get("evidence") and c["evidence"] != "description_verified":
                 figs.append(EVIDENCE_PUBLIC[c["evidence"]])        # e54: never said confirmed by its own words when it isn't
             items += f'<li>{name} <span class="muted small">{e(c["symbol"])}' + (" · " + e(", ".join(figs)) if figs else "") + "</span></li>"
-        body += f'<section class="card" data-layer><h2>{e(x["name"])}</h2><ul class="plain">{items}</ul></section>'
+        lev = (f'<p class="muted small" data-layer-evidence>{e(evidence_said(x["evidence"]))}</p>' if x.get("evidence") else "")
+        body += f'<section class="card" data-layer><h2>{e(x["name"])}</h2>{lev}<ul class="plain">{items}</ul></section>'
     if not v["layers"]:
         body += '<p class="note">No company in this theme has been checked yet.</p>'
     body += (f'<section class="card" data-cta><h2>See the full theme on StratLab</h2><p>Sign in for the whole theme: the figures of each layer, '

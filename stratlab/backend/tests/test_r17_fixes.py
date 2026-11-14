@@ -127,7 +127,7 @@ def test_a_layer_whose_companies_are_all_not_confirmed_gets_no_slide_and_the_lay
     assert not any("Machinery" in t for t in titles if t.startswith("Layer"))
     assert any(t.startswith("Layer 1 · Film") for t in titles) and any(t.startswith("Layer 2 · Converters") for t in titles)
     assert not any(t.startswith("Layer 3") for t in titles)
-    assert "No slide for Machinery: none of its companies is confirmed by its own description." in texts(slides)
+    assert "No slide for Machinery: none of its companies is in the theme (each one's own words describe other work)." in texts(slides)  # l55 (R55): the evidence states by name, never a "confirmed" total (updated on purpose)
     _, b = deck_of(*theme_b())
     # changed on purpose (R18): one layer is nothing to set side by side, so no layer slide and no value chain
     assert not [t.title for t in b if t.title.startswith("Layer")] and "The value chain by layer" not in [t.title for t in b]
@@ -145,14 +145,14 @@ def test_membership_reads_the_layers_own_words_and_a_sentence_that_says_nothing_
     assert v["membership_evidence"] == {"description_verified": 3, "industry_code_supported": 15, "list_supported": 0, "not_confirmed": 2,
                                         "membership_unverified": 0}
     t = texts(slides)
-    assert ("20 in the exchange's industry list; 20 checked: 3 confirmed by their own description, 15 kept on their official industry only, "
-            "2 whose own words describe other work") in t       # p2 and data confidence
+    assert ("20 in the exchange's industry list; membership checked 20 of 20: 3 description-verified, 15 industry-supported, "
+            "2 own words describe other work, 0 not checked") in t       # p2 and data confidence; l55 (R55): by state names (updated on purpose)
     cover = dict((it[0], it[2] if len(it) > 2 else None) for b in slides[0].blocks if b["kind"] == "stats" for it in b["items"])
-    assert cover["Companies"] == "in the exchange's industries; 2 not confirmed"          # R20: the universe's one wording, with what isn't confirmed
+    assert cover["Companies"] == "in the exchange's industries; 2 own words: other work"          # l55 (R55): by the state (updated on purpose)          # R20: the universe's one wording, with what isn't confirmed
     # US, most companies with no stored figures: the counts are of every company checked, with figures or not
     vb, sb = deck_of(*theme_b())
-    assert vb["membership"]["placed"] == 10 and ("10 in the exchange's industry list; 10 checked: 10 confirmed by their own description, 0 kept on "
-                                                 "their official industry only, 0 whose own words describe other work") in texts(sb)
+    assert vb["membership"]["placed"] == 10 and ("10 in the exchange's industry list; membership checked 10 of 10: 10 description-verified, "
+                                                 "0 industry-supported, 0 not checked") in texts(sb)          # l55 (R55): by state names (updated on purpose)
 
 
 def test_whole_points_print_whole_and_a_layers_half_stays():

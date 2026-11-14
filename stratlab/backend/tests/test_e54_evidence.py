@@ -50,16 +50,18 @@ def test_the_universe_line_never_says_an_industry_code_is_confirmed_by_its_own_d
     figures and no words of their own (the live R53 Medical devices deck, p.4)."""
     v = {"placements": {"base": 217, "added": 5}, "membership": {"placed": 100, "confirmed": 100, "not_confirmed": 0}, "membership_evidence": {"description_verified": 82, "industry_code_supported": 18}}
     said = deck.membership_words(v, 222)
-    assert ("100 checked (the map's own picks, then the largest by market value): 82 confirmed by their own description, 18 kept on their "
-            "official industry only, 0 whose own words describe other work; 122 not checked yet") in said
+    # l55 (R55, the owner's review of the live R54 decks, updated on purpose): each state by its name, never "confirmed"
+    assert ("membership checked 100 of 222 (the map's own picks, then the largest by market value): 82 description-verified, 18 "
+            "industry-supported, 122 not checked") in said
     # the companies the membership check reached beyond the figures' window are among those checked
     v2 = {**v, "membership_check": {"outside": {f"X{i}": "industry_code_supported" for i in range(50)} | {"Y": "description_verified"}}}
     said2 = deck.membership_words(v2, 222)
-    assert "151 checked (the map's own picks, then the largest by market value, and 51 more reached by the membership check)" in said2
-    assert "83 confirmed by their own description, 68 kept on their official industry only" in said2 and "71 not checked yet" in said2
+    assert "membership checked 151 of 222 (the map's own picks, then the largest by market value, and 51 more reached by the membership check)" in said2
+    assert "83 description-verified, 68 industry-supported, 71 not checked" in said2          # l55 (updated on purpose)
     c = deck.reconciled_counts(v2, {"total": 222, "n": 76})
     assert (c["checked"], c["confirmed"], c["split"]) == (151, 151, (83, 68))
-    assert deck.counts_words(c).startswith("Considered 222 · confirmed 151 (of 151 checked) · with figures 76")
+    assert deck.counts_words(c).startswith("Considered 222 · membership checked 151 of 222: 83 description-verified, 68 industry-supported, "
+                                           "71 not checked · with figures 76")          # l55 (updated on purpose)
 
 
 def test_the_membership_row_counts_the_industry_only_companies_and_every_wordless_one_is_among_them():
@@ -67,9 +69,10 @@ def test_the_membership_row_counts_the_industry_only_companies_and_every_wordles
                                                  {"symbol": "B", "name": "Beta Inc", "status": "core", "revenue": 12.0, "what": None}]}],
          "membership": {"placed": 2, "confirmed": 2, "not_confirmed": 0}, "membership_evidence": {"description_verified": 1, "industry_code_supported": 1}, "checks": {}}
     rows = {r[0]: r for r in deck.confidence_rows(v, {"total": 2}, date(2026, 11, 14))}
-    assert rows["Membership"][1] == ("1 of the 2 checked are kept on their official industry only. "
+    # l55 (R55, updated on purpose): by the state's name
+    assert rows["Membership"][1] == ("1 of the 2 membership-checked are industry-supported (kept on their official industry only). "
                                      "1 company with figures have no description in their own words yet: Beta Inc.")
-    assert "confirmed by their own description" not in rows["Universe"][1].split("1 confirmed by their own description")[1]
+    assert "1 description-verified, 1 industry-supported, 0 not checked" in rows["Universe"][1] and "confirmed" not in rows["Universe"][1]
 
 
 def test_on_the_live_r52_medical_devices_inputs_no_company_without_words_is_counted_as_confirmed_by_them():
@@ -179,7 +182,7 @@ def test_each_stored_read_keeps_what_was_checked_and_the_checked_share_after_it(
     v = {"membership": {"placed": 100, "confirmed": 100, "not_confirmed": 0}, "membership_evidence": {"industry_code_supported": 100}, "membership_check": two}
     row = deck.progress_row(v, {"total": 250})
     assert row[0] == "Membership checked" and row[1] == "220 of 250 (88%)"
-    assert "30 not checked yet, the next 60 by market value checked each time the theme's figures are stored" in row[2]
+    assert "30 not checked; the next 60 by market value checked each time the theme's figures are stored" in row[2]          # l55 (updated on purpose)
     assert row[2].endswith("Checked share after each stored version: 64% (07 Nov 2026) → 88% (14 Nov 2026).")
     t = deck.evidence_tally(v, 250)
     assert t["checked"] + t["membership_unverified"] == 250 and t["industry_code_supported"] == 220
@@ -201,8 +204,9 @@ def test_the_public_page_says_each_companys_evidence_state_from_the_stored_dive(
     v = public_themes.view({"region": "IN", "name": "Ships", "label": "Ships", "slug": "ships", "at": None}, payload)
     assert v["evidence"] == {"description_verified": 1, "industry_code_supported": 1, "list_supported": 0, "membership_unverified": 1}
     page = public_themes.render(v)
-    assert "Membership: 1 confirmed by their own description, 1 on their official industry only, 1 not checked yet." in page
-    assert "B · official industry only" in page and "D · not checked yet" in page and "3 companies in 1 layer" in page
+    # l55 (R55, the owner's review of the live R54 decks, updated on purpose): the deck's state names, never "confirmed"
+    assert "Membership: 1 description-verified, 1 industry-supported, 1 not checked." in page
+    assert "B · industry-supported (official industry only)" in page and "D · not checked" in page and "3 companies in 1 layer" in page
 
 
 def test_a_coverage_table_continued_on_the_next_page_is_checked_as_one_table():

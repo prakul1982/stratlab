@@ -2364,8 +2364,9 @@ def share_of_what(valued: int, total: int) -> str:
 
 
 def reconciled_counts(v: dict, cov: dict) -> dict:
-    """The four counts every deck states, the same everywhere (R27, P0): companies considered (the eligible universe), confirmed members, those
-    with figures, and those in each calculation (each median's own count)."""
+    """The four counts every deck states, the same everywhere (R27, P0): companies considered (the eligible universe), the members in the
+    theme, those with figures, and those in each calculation (each median's own count). l55: "confirmed" (description-verified + industry- or
+    list-supported) is the gate's own sum, never said as one total: `tally` holds the states the deck says instead (evidence_tally)."""
     mem = v.get("membership") or {}
     sec = v.get("sections") or {}
     meds, val, gm, q = sec.get("medians") or {}, sec.get("valuation") or {}, sec.get("growth") or {}, sec.get("quarter") or {}
@@ -2383,24 +2384,32 @@ def reconciled_counts(v: dict, cov: dict) -> dict:
     split = None
     if t and confirmed is not None:
         # e54: the companies the membership check reached beyond the figures' window count among those checked and, unless their own words
-        # describe other work, among those confirmed; the confirmed ones said by what their place rests on
+        # describe other work, among the members in the theme; each said by what their place rests on
         beyond = (v.get("membership_check") or {}).get("outside") or {}
         checked = (checked or 0) + len(beyond)
         confirmed += sum(1 for x in beyond.values() if x in ("description_verified", "industry_code_supported", "list_supported"))
         split = (t["description_verified"], t["industry_code_supported"] + t["list_supported"])
     return {"considered": cov["total"] + rejected, "members": cov["total"], "rejected": rejected, "confirmed": confirmed,
             "checked": checked, "with_figures": cov["n"], "counted": v.get("members_with_figures") or 0, "each": each,
-            "split": split, "adjacent": population(v)["adjacent"]}
+            "split": split, "tally": t if split else None, "adjacent": population(v)["adjacent"]}
 
 
 def confirmed_words(c: dict, members: int, short: bool = False) -> str:
-    """e54: "confirmed 160 (of 160 checked)": the deck's one count of confirmed companies, those the membership check reached beyond the
-    figures' window among them; what each one's place rests on is said once, in the universe line (membership_words), never all of them
-    "confirmed by their own description"."""
-    paren = []
-    if c.get("checked") and c["checked"] < members:
-        paren.append(f"of {c['checked']:,} checked")
-    return f"confirmed {c['confirmed']:,}" + (f" ({'; '.join(paren)})" if paren else "")
+    """l55 (R55, the owner's review of the live R54 decks: FMCG "confirmed 160 (of 160 checked)" was 97 confirmed by their own description and
+    63 kept on their official industry, MedDev 110 + 50): the members' count said by evidence state, never one "confirmed" total:
+    "membership checked 160 of 211: 97 description-verified, 63 industry-supported, 51 not checked". A view made before the states were kept:
+    "membership checked 160 of 211: 158 in the theme, 2 whose own words describe other work, 51 not checked"."""
+    t = c.get("tally")
+    checked = c.get("checked") if c.get("checked") is not None else members
+    if t:
+        said = evidence_split(t)
+    else:                  # (no state kept: the members in the theme, and the rest by what is known of them, each said only when there are any)
+        other, rest = max(0, (checked or 0) - (c.get("confirmed") or 0)), max(0, members - (checked or 0))
+        if not other and not rest:
+            return f"in the theme {c.get('confirmed') or 0:,}"          # every company checked and in the theme: one count, as it is
+        said = f"{c.get('confirmed') or 0:,} in the theme" + (f", {other:,} {EVIDENCE_SAID_OTHER}" if other else "") \
+            + (f", {rest:,} {UNCHECKED_WORD}" if rest else "")
+    return f"membership checked {checked or 0:,} of {members:,}: {said}"          # (one form wherever it is said: `short` kept for its callers)
 
 
 def figures_words(c: dict, short: bool = False) -> str:
@@ -2415,9 +2424,11 @@ def screened_out(v: dict) -> int:
 
 
 def counts_words(c: dict, short: bool = False) -> str:
-    """The four counts in one line: "Considered 112 · confirmed 60 (of 60 checked) · with figures 58 · in each calculation: EBITDA margin 55, ..."."""
+    """The four counts in one line: "Considered 112 · membership checked 60 of 112: 40 description-verified, 20 industry-supported, 52 not
+    checked · with figures 58 · in each calculation: EBITDA margin 55, ..."; l55: the membership check's count and the count with figures are
+    two counts, each said by its own name (the check reads no figure)."""
     members = c.get("members", c["considered"])
-    conf = confirmed_words(c, members, short) if c.get("confirmed") is not None else f"confirmed, with figures {c['counted']:,}"
+    conf = confirmed_words(c, members, short) if c.get("confirmed") is not None else f"in the theme, with figures {c['counted']:,}"
     each = ", ".join(f"{label} {k:,}" for label, k in c["each"])
     # tx2 (R46): the companies screened out as another business are counted among those considered, said apart from the members
     out = f"{c.get('rejected') or 0:,} screened out as another business, {members:,} members" if c.get("rejected") else ""
@@ -2425,9 +2436,17 @@ def counts_words(c: dict, short: bool = False) -> str:
         + (f" · in each calculation: {each}" if each else "")
 
 
-# e54 (R54): the evidence states (theme_data.EVIDENCE_STATES) as the deck says them, a count each
-EVIDENCE_WORDS = (("description_verified", "confirmed by their own description"), ("industry_code_supported", "kept on their official industry only"),
-                  ("list_supported", "kept on the theme's own list only"), ("not_confirmed", "whose own words describe other work"))
+# e54 (R54): the evidence states (theme_data.EVIDENCE_STATES) as the deck says them, a count each; l55 (R55, the owner's review of the live R54
+# decks): by name, "description-verified", "industry-supported", "not checked" (and the theme's own list and other work where there are any),
+# never one undifferentiated "confirmed" total
+EVIDENCE_WORDS = (("description_verified", "description-verified"), ("industry_code_supported", "industry-supported"),
+                  ("list_supported", "list-supported"), ("not_confirmed", "own words describe other work"))
+EVIDENCE_SAID_OTHER = "own words describe other work"
+UNCHECKED_WORD = "not checked"
+EVIDENCE_ALWAYS = ("description_verified", "industry_code_supported")        # said even at 0, with "not checked"
+EVIDENCE_KEY = ("Description-verified: own description shows the theme's work; industry-supported: on official industry only; not "
+                "checked: membership not checked yet.")
+EVIDENCE_KEY_LIST = " List-supported: kept on the theme's own named list only."
 
 
 def evidence_tally(v: dict, total: int) -> dict | None:
@@ -2452,15 +2471,62 @@ def evidence_tally(v: dict, total: int) -> dict | None:
 
 
 def evidence_words(t: dict) -> str:
-    """e54: "82 confirmed by their own description, 18 kept on their official industry only, 0 whose own words describe other work": each
-    state of the checked companies with its count (the list's state said only when it has one), adding up to the companies checked."""
-    return ", ".join(f"{t[k]:,} {w}" for k, w in EVIDENCE_WORDS if t.get(k) or k != "list_supported")
+    """e54/l55: "82 description-verified, 18 industry-supported": each state of the checked companies with its count (the theme's own list and
+    other work said only when there are any), adding up to the companies checked."""
+    return ", ".join(f"{t.get(k) or 0:,} {w}" for k, w in EVIDENCE_WORDS if t.get(k) or k in EVIDENCE_ALWAYS)
 
 
-def membership_words(v: dict, total: int) -> str:
-    """How the theme's companies got in and what each one's place rests on (R17-012, e54): "222 companies (217 in the exchange's industry
-    list, 5 added by the AI); 160 checked: 82 confirmed by their own description, 78 kept on their official industry only, 0 whose own words
-    describe other work; 62 not checked yet". Every count is of one population and they add up: checked + not checked yet = the companies."""
+def evidence_split(t: dict) -> str:
+    """l55: "97 description-verified, 63 industry-supported, 51 not checked": the three states by name (with the theme's own list and other
+    work where there are any), adding up to the companies they are of."""
+    return f"{evidence_words(t)}, {t.get('membership_unverified') or 0:,} {UNCHECKED_WORD}"
+
+
+def evidence_of(v: dict):
+    """l55: symbol -> its evidence state (theme_data.EVIDENCE_STATES): the figures' window (`evidence`), then those the membership check
+    reached beyond it (`membership_check.outside`), "membership_unverified" for any other; None for a view made before the states were kept."""
+    inner = v.get("evidence")
+    ev = v.get("membership_evidence")
+    if not isinstance(inner, dict) or not inner or not isinstance(ev, dict) or not any(ev.get(k) for k, _ in EVIDENCE_WORDS):
+        return None            # (as evidence_tally: a map from before the membership checks has no state to say)
+    outer = (v.get("membership_check") or {}).get("outside") or {}
+    return lambda sym: inner.get(sym) or outer.get(sym) or "membership_unverified"
+
+
+def evidence_mix(states) -> dict:
+    """l55: {state: n} over EVIDENCE_WORDS' states and "membership_unverified", from each company's state (one each)."""
+    out = {k: 0 for k, _ in EVIDENCE_WORDS}
+    out["membership_unverified"] = 0
+    for x in states:
+        out[x if x in out else "membership_unverified"] += 1
+    return out
+
+
+def figures_split(v: dict, n: int) -> str:
+    """l55 (R55): the core members with figures by evidence state, "80 description-verified, 13 industry-supported" (every median and total
+    is of these), when they add up to the deck's count `n`; "" for a view without states, or a count they don't make."""
+    of = evidence_of(v)
+    if not of:
+        return ""
+    adj = {x.get("symbol") for x in v.get("adjacent") or [] if x.get("symbol")}
+    seen = set()
+    for b in v.get("layers") or []:
+        for c in b.get("companies") or []:
+            s_ = c.get("symbol")
+            if not s_ or s_ in seen or s_ in adj or c.get("adjacent") or c.get("status") == "unverified" \
+                    or (c.get("revenue") is None and c.get("profit") is None):
+                continue
+            seen.add(s_)
+    mix = evidence_mix(of(s_) for s_ in seen)
+    if sum(mix.values()) != n or mix["membership_unverified"] or mix["not_confirmed"]:
+        return ""
+    return evidence_words(mix)
+
+
+def membership_words(v: dict, total: int, key: bool = False) -> str:
+    """How the theme's companies got in and what each one's place rests on (R17-012, e54, l55): "222 companies (217 in the exchange's
+    industry list, 5 added by the AI); membership checked 160 of 222: 82 description-verified, 78 industry-supported, 62 not checked". Every
+    count is of one population and they add up: checked + not checked = the companies. `key`: with what each state means (EVIDENCE_KEY)."""
     p = v.get("placements") or {}
     mem = v.get("membership") or {}
     base_n = max(0, (p.get("base") or 0) - (p.get("named") or 0))
@@ -2474,18 +2540,22 @@ def membership_words(v: dict, total: int) -> str:
         head = f"{total:,} in the exchange's industry list"
     t = evidence_tally(v, total)
     if t and t["checked"]:
-        # e54: never "confirmed by their own description" for a company kept on its official industry alone
+        # e54: never "confirmed by their own description" for a company kept on its official industry alone; l55: each state by name
         how = "the map's own picks, then the largest by market value" + (f", and {t['beyond']:,} more reached by the membership check" if t["beyond"] else "")
-        head += f"; {t['checked']:,} checked" + (f" ({how})" if t["membership_unverified"] or t["beyond"] else "") + f": {evidence_words(t)}"
-        if t["membership_unverified"]:
-            head += f"; {t['membership_unverified']:,} not checked yet"
+        head += f"; membership checked {t['checked']:,} of {t['total']:,}" + (f" ({how})" if t["membership_unverified"] or t["beyond"] else "") \
+            + f": {evidence_split(t)}"
+        if key:
+            head += ". " + EVIDENCE_KEY + (EVIDENCE_KEY_LIST if t.get("list_supported") else "")
+            head = head.rstrip(".")
     elif mem.get("placed") and mem["placed"] < total:
         # gl50 (R50, the rotating review: "100 of the 100 checked confirmed by their own description, 0 not yet" of 821, 588 and 317
         # companies): the companies not checked are said as such, never folded into "0 not yet"
-        head += (f"; {mem['placed']:,} checked (the map's own picks, then the largest by market value): {mem.get('confirmed', 0):,} confirmed "
-                 f"in the theme, {mem.get('not_confirmed', 0):,} not; {total - mem['placed']:,} not checked yet")
+        head += (f"; membership checked {mem['placed']:,} of {total:,} (the map's own picks, then the largest by market value): "
+                 f"{mem.get('confirmed', 0):,} in the theme" + (f", {mem['not_confirmed']:,} {EVIDENCE_SAID_OTHER}" if mem.get("not_confirmed") else "")
+                 + f", {total - mem['placed']:,} {UNCHECKED_WORD}")
     elif mem.get("placed"):
-        head += f"; {mem.get('confirmed', 0):,} confirmed in the theme, {mem.get('not_confirmed', 0):,} not yet"
+        head += (f"; membership checked {mem['placed']:,} of {total:,}: {mem.get('confirmed', 0):,} in the theme"
+                 + (f", {mem['not_confirmed']:,} {EVIDENCE_SAID_OTHER}" if mem.get("not_confirmed") else ""))
     return head
 
 
@@ -2981,8 +3051,8 @@ def partial_map(v: dict, cov: dict) -> str:
     n = total - gone
     if not total or n * 100 >= PARTIAL_SHARE * total:
         return ""
-    return (f"A partial map: {n:,} of the theme's {total:,} companies were checked ({round(n * 100 / total)}%); {gone:,} are not checked yet, "
-            "so the layers, medians and rankings are of the checked companies only.")
+    return (f"A partial map: membership checked for {n:,} of the theme's {total:,} companies ({round(n * 100 / total)}%); {gone:,} are not checked "
+            "yet, so the layers, medians and rankings are of the checked companies only.")
 
 
 def population(v: dict) -> dict:
@@ -3095,7 +3165,10 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> li
     rows = []                      # coverage: the table of counts under the checks (coverage_rows)
     names = lambda xs, k=4: ", ".join(x["name"] for x in xs[:k]) + (f" and {len(xs) - k} more" if len(xs) > k else "")  # noqa: E731
     if (v.get("membership") or {}).get("placed"):
-        rows.append(["Universe", membership_words(v, cov["total"]) + ".", "Only confirmed companies count in a median or total."])
+        # l55 (R55): each state by name, with what each means; only the members in the theme count, never one "confirmed" total
+        rows.append(["Universe", membership_words(v, cov["total"]) + ".",
+                     "Only description-verified and industry-supported companies count in a median or total." if evidence_tally(v, cov["total"])
+                     else "Only companies in the theme count in a median or total."])
     par = parents_row(v)
     if par:
         rows.append(par)
@@ -3110,14 +3183,15 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> li
                      "Listed, not confirmed; left out of every median and total until its own words are read."])
     if ch.get("unverified"):
         rows.append(["Membership", f"{_n(len(ch['unverified']), 'company', 'companies')} with figures whose own words describe other work: {names(ch['unverified'])}."
-                     + (f" {wordless_said(wordless)}" if wordless else ""), "Listed as not confirmed; left out of every median and total."])
+                     + (f" {wordless_said(wordless)}" if wordless else ""), "Listed as own words describing other work; left out of every median and total."])
     elif wordless or (tally and tally["industry_code_supported"] + tally["list_supported"]):
         # d53 (R53, LIVE8A-004: "Every company with figures has words of its own ... Nothing held back" beside AMD, Intel, KLA and more with "No
         # description in its own words yet"): the real count of companies with figures and no words of their own, never a claim of every one;
         # e54: and the count of every checked company kept on its official industry alone, the same one the universe line says
         kept = (tally["industry_code_supported"] + tally["list_supported"]) if tally else 0
         where = "official industry or the theme's own list" if tally and tally["list_supported"] else "official industry"
-        head = f"{kept:,} of the {tally['checked']:,} checked are kept on their {where} only." if kept else ""
+        state = "industry- or list-supported" if tally and tally["list_supported"] else "industry-supported"
+        head = f"{kept:,} of the {tally['checked']:,} membership-checked are {state} (kept on their {where} only)." if kept else ""
         rows.append(["Membership", " ".join(x for x in (head, wordless_said(wordless) if wordless else "") if x),
                      "Kept in the figures by their official industry; nothing in their own words was checked."])
     else:
@@ -3303,8 +3377,10 @@ def coverage_table(v: dict, cov: dict) -> list[list[str]]:
     # e54 (R54, the owner's review of the live R53 Medical devices deck: "76 with figures" beside "Each layer" rows that add up to 100, the
     # adjacent participants among them): each count says which population it is of
     prog = progress_row(v, cov)
+    # l55 (R55): the companies with figures by evidence state, never "confirmed" as one total
+    fsplit = figures_split(v, n)
     rows = [screening_row(v, cov)] + [[COVERAGE_KINDS[0], f"{n:,} of {total:,}",
-                                    "companies: confirmed, with figures, of every company the deck lists"
+                                    "companies with figures, of every company the deck lists" + (f": {fsplit}" if fsplit else ", members in the theme")
                                     + (f"; the theme's core members only, the {pop['adjacent']:,} adjacent participants with figures apart" if pop["adjacent"] else "")]]
     if cov.get("share") is not None:
         rows.append([COVERAGE_KINDS[1], f"{cov['share']}%", f"of {cov['of_what']}, held by the companies with figures (a share of value, not of companies)"])
@@ -3336,7 +3412,9 @@ def coverage_table(v: dict, cov: dict) -> list[list[str]]:
         inf = rest[1] - rest[0]
         rows.append([COVERAGE_KINDS[6], f"{inf:,} of {rest[1]:,} ({informative_share(inf, rest[1])}%)", rest_words(rest, v)])
     elif c.get("placed"):          # R44: no "Other" group: every company placed is in a layer the map names
-        rows.append([COVERAGE_KINDS[6], f"{c['placed']:,} of {c['placed']:,} (100%)", "every company in a layer the map names"])
+        mix = informative_mix(v, c["placed"])
+        rows.append([COVERAGE_KINDS[6], f"{c['placed']:,} of {c['placed']:,} (100%)", "every company in a layer the map names"
+                     + (f" (by membership evidence: {mix})" if mix else "")])
     from .intel.theme_changes import control_line
     flagged = control_line(c)
     if flagged:                    # cl48 (R47): under 60% in informative layers, or 8 points or more fewer than the previous live placement
@@ -3369,14 +3447,18 @@ def progress_row(v: dict, cov: dict) -> list[str] | None:
     hist = [p for p in (v.get("membership_check") or {}).get("history") or [] if isinstance(p, (list, tuple)) and len(p) == 3 and p[2]]
     over = " → ".join(f"{pct(p[1], p[2])} ({_day(p[0])})" for p in hist[-6:]) if len(hist) >= 2 else ""
     from .intel.theme_data import MEMBERSHIP_STEP
+    # l55 (R55, the owner's review: membership checks must never read as financial coverage growing): the check reads no figure, said
+    # beside the count with figures, which it leaves as it is
+    n_fig = coverage(v)["n"] if v.get("members") is not None else None
     text = (f"{evidence_words(t)}"
-            + (f"; {t['membership_unverified']:,} not checked yet, the next {MEMBERSHIP_STEP} by market value checked each time the theme's figures are stored"
-               if t["membership_unverified"] else "; every company checked")
-            + (f". Checked share after each stored version: {over}" if over else "") + ".")
+            + (f", {t['membership_unverified']:,} not checked; the next {MEMBERSHIP_STEP} by market value checked each time the theme's figures are stored"
+               if t["membership_unverified"] else f", 0 {UNCHECKED_WORD}; every company checked")
+            + (f". Checked share after each stored version: {over}" if over else "")
+            + (f". The membership check reads no figures: companies with figures {n_fig:,}, a separate count" if n_fig is not None else "") + ".")
     # v55 (R55, the owner: "keep increasing checked membership without implying financial coverage grew"): what the check adds is
-    # membership only; the companies with figures are said apart, as their own count
+    # membership only; the companies with figures are said apart, as their own count (when the line above couldn't say it)
     figs = v.get("figures") or {}
-    if (t["beyond"] or over) and (figs.get("of") or cov.get("n") is not None):
+    if n_fig is None and (t["beyond"] or over) and (figs.get("of") or cov.get("n") is not None):
         if figs.get("of") and figs.get("shown"):
             text += (f" Membership checks only: figures are worked out for {figs['shown']:,} of the {figs['of']:,} companies "
                      f"({cov.get('n') or 0:,} with figures), a count of its own that the checks don't change.")
@@ -3481,7 +3563,8 @@ def screening_row(v: dict, cov: dict) -> list[str]:
     """tx2 (R46, the outside review of the live Release 45 decks: "explicit screening populations in every report"): the theme's screening
     in one row, each population with its count, reconciled (considered = screened out as another business + members): "100 considered = 15
     screened out as another business (candidates, never members) + 85 members · confirmed 85 · with figures 80 · in informative layers 66 ·
-    eligible for each metric (confirmed, with the figure): EBITDA margin 75, ...". The counts are the deck's one set (reconciled_counts)."""
+    eligible for each metric (in the theme, with the figure): EBITDA margin 75, ...". The counts are the deck's one set (reconciled_counts);
+    l55: the members by evidence state, "membership checked 85 of 85: 60 description-verified, 25 industry-supported, 0 not checked"."""
     c = reconciled_counts(v, cov)
     members, rejected = c["members"], c["rejected"]
     head = (f"{c['considered']:,} considered = {rejected:,} screened out as another business (candidates, never members) + {members:,} members"
@@ -3497,7 +3580,7 @@ def screening_row(v: dict, cov: dict) -> list[str]:
     elif cv.get("placed"):
         parts.append(f"in informative layers {cv['placed']:,}")
     if c["each"]:
-        parts.append("eligible for each metric (confirmed, with the figure): " + ", ".join(f"{label} {k:,}" for label, k in c["each"]))
+        parts.append("eligible for each metric (in the theme, with the figure): " + ", ".join(f"{label} {k:,}" for label, k in c["each"]))
     return [COVERAGE_KINDS[9], f"{c['considered']:,} considered", " · ".join(parts)]
 
 
@@ -3553,18 +3636,39 @@ def rest_count(v: dict) -> tuple[int, int, str, int] | None:
 def rest_words(rest: tuple, v: dict) -> str:
     """What the "Other" count is (d1): those that fit none of the map's layers apart from those not checked yet, and how many of the group the
     deck has figures for (the layer's page and tables count only those): "in “Other IT service companies”, listed, never compared: 33 of 252
-    fit none of the map's layers; 82 not checked yet (no description of their own is kept, so nothing placed them); 18 of the 115 among the
+    fit none of the map's layers; 82 not placed yet (no description of their own is kept, so nothing placed them); 18 of the 115 among the
     companies with figures"."""
     n, of, name, unread = rest[0], rest[1], rest[2], (rest[3] if len(rest) > 3 else 0)
     # R44: the count of the companies placed is said once, in the row's "In informative layers" figure; here, what the rest are
     parts = [f"{n - unread:,} fit none of the map's layers"]
     if unread:
-        parts.append(f"{unread:,} not checked yet (no description of their own is kept, so nothing placed them)")
+        # l55 (R55): "not placed yet", apart from the membership state "not checked" (these are on their official industry, never placed)
+        parts.append(f"{unread:,} not placed yet (no description of their own is kept, so nothing placed them)")
     shown = next((b for b in v.get("layers") or [] if b.get("basis") == "rest" or b.get("layer") == name), None)
     k = len([c for c in (shown or {}).get("companies") or [] if c.get("revenue") is not None or c.get("profit") is not None])
     if shown is not None and k < n:
         parts.append(f"its page lists the {k:,} of the {n:,} that have figures")
-    return f"in a layer the map names; the other {n:,} in “{name}”, listed, never compared: " + "; ".join(parts)
+    mix = informative_mix(v, of - n)
+    return (f"in a layer the map names" + (f" (by membership evidence: {mix})" if mix else "")
+            + f"; the other {n:,} in “{name}”, listed, never compared: " + "; ".join(parts))
+
+
+def informative_mix(v: dict, inf: int) -> str:
+    """l55 (R55, the owner's review of the live R54 Biotech deck: 242 placed in informative layers while 160 had their membership checked):
+    the companies in the map's named layers by evidence state, "131 description-verified, 29 industry-supported, 82 not checked", each
+    company once in its first layer as the coverage counts it (theme_data.layer_coverage); "" for a view without states, or one whose count
+    they don't make."""
+    of = evidence_of(v)
+    if not of or not inf:
+        return ""
+    first: dict = {}
+    for mb in v.get("members") or []:
+        if mb.get("symbol") and mb["symbol"] not in first:
+            first[mb["symbol"]] = bool(mb.get("rest"))
+    mix = evidence_mix(of(s_) for s_, rest in first.items() if not rest)
+    if sum(mix.values()) != inf:
+        return ""
+    return evidence_split(mix)
 
 
 def off_industry_line(v: dict) -> str:
@@ -3630,7 +3734,8 @@ def coverage_rows(v: dict, cov: dict) -> list[list[str]]:
     meds, mg, q, val = sec.get("medians") or {}, sec.get("margins") or {}, sec.get("quarter") or {}, sec.get("valuation") or {}
     rows = [["Companies in the theme's list", f"{cov['total']:,}", ""],
             ["With figures", f"{cov['n']:,}", f"{cov['share']}% of {cov['of_what']}" if cov.get("share") is not None else ""],
-            ["Confirmed, with figures (every median and total is of these)", f"{v.get('members_with_figures') or 0:,}", ""],
+            ["In the theme, with figures (every median and total is of these)", f"{v.get('members_with_figures') or 0:,}",
+             figures_split(v, v.get("members_with_figures") or 0)],
             ["With a market value (the theme's total market value)", f"{size.get('with_value', 0):,}", ""]]
     lend = bool((v.get("checks") or {}).get("lenders"))
     each = [f"{label} {n:,}" for label, n in (
@@ -4932,6 +5037,50 @@ def counts_flags(counts: dict) -> list[str]:
     return out
 
 
+# l55 (R55, the owner's review of the live R54 decks: "160 checked ... confirmed" for 97 confirmed by their own description and 63 kept on their
+# official industry): a count said "confirmed" (one undifferentiated total) instead of by evidence state
+_UNSPLIT = re.compile(r"(?<![Nn]ot )(?<![Nn]ot yet )\bconfirmed (?:\(of )?\d|(?<![\d,.])\d[\d,]* (?:of the \d[\d,]* added are )?confirmed\b(?! in the theme)|"
+                      r"\bconfirmed,? with (?:figures|the figure)\b|\b\d[\d,]* confirmed compan", re.I)
+# the deck's statement of the members by state: "membership checked 160 of 211 (...): 97 description-verified, 63 industry-supported, 51 not checked"
+_EV_SPLIT = re.compile(r"\bmembership(?: checked (\d[\d,]*) of (\d[\d,]*)(?: \((?:[^()]|\([^()]*\))*\))?)?: (\d[\d,]*) description-verified, (\d[\d,]*) "
+                       r"industry-supported(?:, (\d[\d,]*) list-supported)?(?:, (\d[\d,]*) (?:whose )?own words describe other work)?, (\d[\d,]*) not checked\b")
+# a part of the members said by state ("in a layer the map names (by membership evidence: 131 description-verified, ...)")
+_EV_PART = re.compile(r"by membership evidence: (\d[\d,]*) description-verified, (\d[\d,]*) industry-supported(?:, (\d[\d,]*) list-supported)?"
+                      r"(?:, (\d[\d,]*) (?:whose )?own words describe other work)?, (\d[\d,]*) not checked\b")
+
+
+def evidence_gate_flags(slides: list, counts: dict) -> list[dict]:
+    """l55 (R55): what breaks "every count of the theme's members by evidence state, the same on every page": a count said "confirmed"
+    without its states (_UNSPLIT), a statement of the members by state that doesn't add up (states = checked, checked + not checked = the
+    companies) or isn't the deck's one tally (reconciled_counts' `tally`), and a part (the informative layers) with more of a state than
+    the whole has. [{"slide", "text", "why", "rule"}], [] when they hold."""
+    num = lambda x: int(x.replace(",", "")) if x else 0          # noqa: E731
+    t = counts.get("tally") or {}
+    out = []
+    for sl in slides:
+        for txt in slide_texts(sl):
+            m = _UNSPLIT.search(txt)
+            if m:
+                out.append({"slide": sl.title, "text": txt[:200], "why": f"a count said confirmed without its evidence states: {m.group(0)!r}", "rule": "reconcile"})
+            for m in _EV_SPLIT.finditer(txt):
+                chk, of, d, i, li, o, nc = (num(m.group(k)) if m.group(k) else None for k in range(1, 8))
+                li, o = li or 0, o or 0
+                why = ""
+                if chk is not None and (d + i + li + o != chk or chk + nc != of):
+                    why = f"states {d + i + li + o} of {chk} checked, {chk} + {nc} not checked of {of}"
+                elif t and (d, i, li, nc) != (t["description_verified"], t["industry_code_supported"], t["list_supported"], t["membership_unverified"]):
+                    why = (f"{d}/{i}/{nc} against the deck's {t['description_verified']}/{t['industry_code_supported']}/{t['membership_unverified']} "
+                           "(description-verified/industry-supported/not checked)")
+                if why:
+                    out.append({"slide": sl.title, "text": m.group(0)[:200], "why": "evidence counts disagree: " + why, "rule": "reconcile"})
+            for m in _EV_PART.finditer(txt):
+                d, i, li, o, nc = (num(m.group(k)) for k in range(1, 6))
+                if t and (d > t["description_verified"] or i > t["industry_code_supported"] or li > t["list_supported"] or nc > t["membership_unverified"]):
+                    out.append({"slide": sl.title, "text": m.group(0)[:200], "why": "evidence counts disagree: a part with more of a state than the theme",
+                                "rule": "reconcile"})
+    return out
+
+
 def headline_flag(text: str) -> str | None:
     """Why a ranking sentence can't headline (R27): a highest, lowest, fastest or slowest on a figure of fewer than COMPARE_MIN companies or
     under COVERAGE_MIN of its group ("N of M companies")."""
@@ -5489,6 +5638,8 @@ def publication_gate(slides: list, v: dict, reproduced: list | None = None) -> d
     # doesn't fails the item, whatever the sentences say
     dropped["reconcile"] += [{"slide": "", "text": f"the four counts: {x}", "why": "a count above the one it is part of", "rule": "reconcile"}
                              for x in counts_flags(counts)]
+    # l55 (R55): every count of the members by evidence state, never one "confirmed" total, and the same states on every page
+    dropped["reconcile"] += evidence_gate_flags(slides, counts)
     # lane m1: a layer's counts are one set of records: two pages that state different totals for it, the scope not named, fail the item
     dropped["reconcile"] += [{"slide": x["slide"], "text": f"layer counts: {x['text']}", "why": "two counts of one layer with no scope named",
                               "rule": "reconcile"} for x in layer_count_flags(slides)]
@@ -5669,7 +5820,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         over.append(f"Everything converges on {v['core']}.")
     s.add("text", (M, 2.75, 9.6, 2.15), paras=over, size=17, floor=12, color=ON_DARK)
     s.add("stats", (M, 4.98, CW, 1.45), dark=True, items=[       # R35: tall enough for a three-line note under its figure
-        ("Companies", f"{total:,}", cov["universe"].split(" ", 1)[1] + (f"; {mem['not_confirmed']:,} not confirmed" if mem.get("not_confirmed") else "")), *([("Layers", str(len(shown)))] if chained else []),
+        ("Companies", f"{total:,}", cov["universe"].split(" ", 1)[1] + (f"; {mem['not_confirmed']:,} own words: other work" if mem.get("not_confirmed") else "")), *([("Layers", str(len(shown)))] if chained else []),
         ("With figures", f"{cov['n']:,}", f"{cov['share']}% of the value of the {cov['valued']:,} with one" if cov.get("share") is not None else ""),
         # R29: the total is of the confirmed companies with figures and a market value, said so (the live R27 Semiconductors cover had "58 of
         # 112 with one" beside "the 105 with one")
@@ -5695,15 +5846,17 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     # e54 (R54): what the checked companies' places rest on, one state each, the counts the universe line and the coverage say
     tiles = [("From the official industry list", f"{base_n:,}", "Kept unless their own words describe other work")]
     if tally and tally["checked"]:
-        tiles.append(("Confirmed by own description", f"{tally['description_verified']:,}", f"Of the {tally['checked']:,} checked: their own words show the work"))
-        tiles.append(("On official industry only", f"{tally['industry_code_supported'] + tally['list_supported']:,}",
-                      "Of those checked: no words of their own that show the work"))
+        # l55 (R55): each state by its name, the same names as every count of the deck
+        tiles.append(("Description-verified", f"{tally['description_verified']:,}", f"Of the {tally['checked']:,} membership-checked: their own words show the work"))
+        tiles.append(("Industry-supported", f"{tally['industry_code_supported'] + tally['list_supported']:,}",
+                      "Of those checked: on their official industry only" + (" or the theme's own list" if tally["list_supported"] else "")))
     if named:
         tiles.append(("Named in the theme's list", f"{named:,}", "The theme's own named companies"))
     if added or not named:
-        tiles.append(("Added by the AI", f"{added:,}", f"{confirmed:,} confirmed by their own description" if added else "From other industries"))
-    if mem.get("not_confirmed"):            # the one count of companies not confirmed, as the cover says it (R18: "Still being checked 16" beside "0 not yet")
-        tiles.append(("Not yet confirmed", f"{mem['not_confirmed']:,}", "Own words don't show the work yet"))
+        tiles.append(("Added by the AI", f"{added:,}", f"{confirmed:,} description-verified" + (f", {added - confirmed:,} not" if added > confirmed else "")
+                      if added else "From other industries"))
+    if mem.get("not_confirmed"):            # the one count of companies whose own words describe other work (R18; l55: by its state's name)
+        tiles.append(("Own words: other work", f"{mem['not_confirmed']:,}", "Their own words describe other work: listed, in no figure"))
     if tally and tally["membership_unverified"]:              # e54: the companies the membership check hasn't reached yet
         tiles.append(("Not checked yet", f"{tally['membership_unverified']:,}", f"Beyond the {tally['checked']:,} checked, the largest by market value first"))
     elif not tally and mem.get("placed") and mem["placed"] < total:          # gl50: the companies past the check, said as not checked yet
@@ -5801,7 +5954,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         if none_:
             foot.append(f"No listed company is shown for {', '.join(none_)}: none of the companies the map named has a description that shows it does the work.")
         if unsure_:
-            foot.append(f"No slide for {', '.join(unsure_)}: none of its companies is confirmed by its own description.")
+            foot.append(f"No slide for {', '.join(unsure_)}: none of its companies is in the theme (each one's own words describe other work).")
         if unplaced:
             foot.append(f"{_n(len(unplaced_cos), 'more company', 'more companies')} of the theme's industries the map doesn't place in a layer: {names5(unplaced_cos)}; "
                         "in every median and total, and in the appendix.")
@@ -5916,7 +6069,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
                                     + (f"; {', '.join(meds_)}" if meds_ else ""))
         rc_ = rest_count(v) if layer.get("basis") == "rest" else None
         if rc_ and rc_[0] > len(cos):       # d1: one count of "Other" on every page: the group's whole count, and why this page lists fewer
-            msg += (f"; {rc_[0]:,} in this group in all" + (f" ({rc_[3]:,} not checked yet)" if rc_[3] else "")
+            msg += (f"; {rc_[0]:,} in this group in all" + (f" ({rc_[3]:,} not placed yet)" if rc_[3] else "")
                     + f", the other {rc_[0] - len(cos):,} smaller companies whose figures the deck doesn't work out")
         desc = layer.get("description") or ""
         unread_n = sum(1 for c in cos if c.get("unread"))
@@ -5924,7 +6077,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         # that fit none of the layers
         unread_names = [clean_name(c.get("name") or c.get("symbol") or "").rstrip(".") for c in cos if c.get("unread")]
         official = (("Companies that fit none of the map's layers, by the AI's answer or their own words"
-                     + (f"; {unread_n} of them not checked yet ({', '.join(unread_names[:6])}{f' and {unread_n - 6} more' if unread_n > 6 else ''}): "
+                     + (f"; {unread_n} of them not placed yet ({', '.join(unread_names[:6])}{f' and {unread_n - 6} more' if unread_n > 6 else ''}): "
                         "no description of their own is kept, so nothing placed them." if unread_n else "."))
                     if layer.get("basis") == "rest" else
                     "Companies of the theme's list that the exchange files under this industry." if layer.get("by_industry") else
@@ -5949,6 +6102,10 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             chart = {"kind": "hbars", "title": f"{mname} by company", "cats": [c["name"] for c in top], "vals": [c[mkey] for c in top],
                      "fmt": "pctw" if whole and mkey == "ebitda" else "pct", "colors": [DOWN if c[mkey] < 0 else BLUE for c in top]}
         fparts = []
+        # l55 (R55): what its companies' places rest on, by state, the page's first note (a headline's figures are a table's: check_deck)
+        lev = layer_evidence(v, layer, cos)
+        if lev:
+            fparts.append(lev)
         r_in, r_out = layer_roll(layer, cos, ("roe", "net") if lend else ("ebitda", "net"))
         rline = ""             # R35: who the "(4 in the layer's calculations)" are and why each other is not, where the rows can't say it (below)
         shown_tags = set(tags.values())
@@ -6136,7 +6293,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     subs = [sub for sub in all_subs if sub.get("companies")]           # a sub-theme with no confirmed company is a count, not a row
     if subs:
         rows = [[sub["name"], whole_clause(sub.get("detail") or "", 160) or "–", str(len(sub.get("companies") or [])),
-                 names5(sorted(sub.get("companies") or [], key=lambda c: -(c.get("cap") or 0))) or "None confirmed by its own description"] for sub in subs]
+                 names5(sorted(sub.get("companies") or [], key=lambda c: -(c.get("cap") or 0))) or "None description-verified"] for sub in subs]
         head, widths = ["Sub-theme", "What it is", "Companies", "The largest, by market value"], [2.4, 4.6, 1.2, 4.0]
         note = "Each sub-theme's description is written by AI from general knowledge, with no figures; a company is shown only where its own description says it does that work."
         nh = note_h(note)
@@ -6167,6 +6324,10 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         seen_.add(key_)
         once_.append(x)
     lead = once_
+    # l55 (R55): the appendix's companies by evidence state, never "confirmed" as one total
+    of_ = evidence_of(v)
+    mix_ = evidence_mix(of_(x["symbol"]) for x in lead) if of_ else None
+    lead_mix = evidence_words(mix_) if mix_ and not mix_["membership_unverified"] and not mix_["not_confirmed"] else ""
     if lead:
         # short headings on one line, so 20 or more rows fit a page (R20: 8 rows a page)
         lcols = [("revenue", "Revenue", 1.15), ("sales_1y", "Growth", 0.95), ("ebitda", "EBITDA", 0.95), ("net", "Net", 0.9), ("roce", "ROCE", 0.85)]
@@ -6204,7 +6365,8 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             nh = tallest
         for k, chunk in enumerate(pages):
             s = Slide("Every company's figures" + (f" ({k + 1} of {len(pages)})" if len(pages) > 1 else ""),
-                      f"{_n(len(lead), 'confirmed company', 'confirmed companies')} with figures, one row each; {lead[0]['name']} is the largest at {cap(lead[0].get('cap'))}",
+                      f"{_n(len(lead), 'company', 'companies')} with figures" + (f" ({lead_mix})" if lead_mix else "")
+                      + f", one row each; {lead[0]['name']} is the largest at {cap(lead[0].get('cap'))}",
                       eyebrow=eb("Appendix"))
             s.add("table", (M, TOP, CW, th), head=head, rows=chunk, widths=widths, **cbase)
             s.add("text", (M, BOT - nh, CW, nh), paras=[with_key(chunk)], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
@@ -6214,7 +6376,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         rhead, rwidths = ROLL_HEAD, ROLL_WIDTHS
         kind_ = ("how it earns shown and of the layer's kind, " if any(layer_families(v).values())
                  else "with no way of earning read for this theme's companies (so no layer is ranked), ")      # gl50: never "of the layer's kind" then
-        rnote = (f"In a layer's calculations: confirmed by its own description, {kind_}with a revenue figure. "
+        rnote = (f"In a layer's calculations: description-verified or industry-supported, {kind_}with a revenue figure. "
                  "(partial: ...): in the calculations in part, the part named: the whole company's figures (revenue only, not its medians), a "
                  "figure not stored, or one not reconciled, invalid or on another period basis (out of its median). Left out, each reason before "
                  "the companies it is of: different revenue model, the company's way of earning and the layer's named; another business than its "
@@ -6296,7 +6458,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     who = [f"{_n(total, 'company', 'companies')} in all, each in one layer: {base_n:,} from the exchange's official industries"
            + (f", {named:,} named in the theme's own list" if named else "") + (f", {added:,} added by the AI from other industries." if added else ".")]
     if added:
-        who.append(f"{confirmed:,} of the {added:,} added are confirmed by their own description" + (f"; {added - confirmed:,} not yet." if added > confirmed else "."))
+        who.append(f"{confirmed:,} of the {added:,} added are description-verified" + (f"; {added - confirmed:,} not yet." if added > confirmed else "."))
     unv = checks.get("unverified") or []
     if unv:
         who.append(f"{_n(len(unv), 'company', 'companies')} whose own words don't show the work, left out of every median and total: {names5(unv)}.")
@@ -6305,6 +6467,8 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         who.append(f"{_n(len(unc), 'company', 'companies')} whose membership is not checked yet, left out of every median and total: {names5(unc)}.")
     if p.get("timed_out"):
         who.append(f"{p['timed_out']:,} couldn't be checked just now; the check runs again later.")
+    if evidence_tally(v, total):          # l55 (R55): what each evidence state the deck counts by means, once, after who is in it
+        who.append(EVIDENCE_KEY + (EVIDENCE_KEY_LIST if (evidence_tally(v, total) or {}).get("list_supported") else ""))
     figs = v.get("figures") or {}
     read = [f"What each figure measures, how it is worked out, its period, source and limits: ⟦{NOTES_TITLE}⟧.", MARKS_LINE]      # R27: the marks, once
     if figs.get("of") and figs.get("shown") and figs["of"] > figs["shown"]:
@@ -6353,7 +6517,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     if built:
         crow.append([NOTES_TITLE, "What each figure shown measures, how it is worked out, its period and source, and its limits.", str(slides.index(built[0]) + 1)])
     if later_slides:
-        apx = [x for x in (f"Every confirmed company's key figures, one row each ({_n(fig_pages, 'page')})" if fig_pages else "",
+        apx = [x for x in (f"Every member company's key figures, one row each ({_n(fig_pages, 'page')})" if fig_pages else "",
                            "who is in each layer's calculations" if roll_end > fig_pages else "",
                            "each checked figure's source and statement lines" if sources_end > roll_end else "",              # R46
                            "each comparison's companies and rule" if len(later_slides) > sources_end else "") if x]          # R48
@@ -6382,6 +6546,24 @@ def base_quarter(label: str | None) -> str | None:
     """The quarter a year before one named like "Sep 2026": "Sep 2025"."""
     m = re.match(r"\s*([A-Za-z]{3})\w*\s+(\d{4})", str(label or ""))
     return f"{m.group(1).title()} {int(m.group(2)) - 1}" if m else None
+
+
+def layer_evidence(v: dict, layer: dict, cos: list) -> str:
+    """l55 (R55, the owner's review of the live R54 Biotech deck: 242 companies in informative layers while 160 had their membership checked,
+    every layer's list reading as equally verified): a layer's companies by evidence state, the map's whole list of the layer (its page shows
+    those whose figures were read): "Membership of its 24 companies: 5 description-verified, 0 industry-supported, 19 not checked (figures
+    read for this page's 5)." "" for a view without states."""
+    of = evidence_of(v)
+    if not of:
+        return ""
+    syms = list(dict.fromkeys([c["symbol"] for c in cos if c.get("symbol")]
+                              + [mb["symbol"] for mb in v.get("members") or [] if mb.get("symbol") and mb.get("layer") == layer.get("layer")]))
+    if not syms:
+        return ""
+    mix = evidence_mix(of(s_) for s_ in syms)
+    more = len(syms) > len(cos)
+    return (f"Membership of its {_n(len(syms), 'company', 'companies')}: {evidence_split(mix)}"
+            + (f" (figures read for this page's {len(cos):,})." if more else "."))
 
 
 def confirmed_n(layer: dict) -> int:
@@ -6431,7 +6613,7 @@ def _smaller_layers(slides: list, small: list, amt, eyebrow: str) -> None:
              "whole company": "(whole company): it runs other businesses too, so its figures are the whole company's.",
              "on its industry": "(on its industry): no description of its own; in its layer by its official industry, that of most of the "
                                 "layer's companies."}
-    note = (("Each of these layers has one confirmed company" if ones else f"Each of these layers has {SMALL_MAX} confirmed companies or fewer")
+    note = (("Each of these layers has one member company" if ones else f"Each of these layers has {SMALL_MAX} member companies or fewer")
             + f", so it has no median (a median is of {MIN_BASE} or more) and no page of its own; it is in the value chain's table. "
             "Rows in the value chain's order; each company's latest full year; how each figure is built: ⟦" + NOTES_TITLE + "⟧."
             + "".join(f" {said_[k]}" for k in said_ if k in marks_))
@@ -6445,8 +6627,8 @@ def _smaller_layers(slides: list, small: list, amt, eyebrow: str) -> None:
     pages = table_pages(head, body, widths, CW, th)
     for k, chunk in enumerate(pages):
         s = Slide(SMALL_TITLE + (f" ({k + 1} of {len(pages)})" if len(pages) > 1 else ""),
-                  (f"{_n(len(small), 'layer')} with one confirmed company each" if ones else
-                   f"{_n(len(small), 'layer')} of {SMALL_MAX} confirmed companies or fewer, {len(rows_)} companies")
+                  (f"{_n(len(small), 'layer')} with one member company each" if ones else
+                   f"{_n(len(small), 'layer')} of {SMALL_MAX} member companies or fewer, {len(rows_)} companies")
                   + ": the company, what it does and its key figures, one row each",
                   eyebrow=eyebrow)
         s.add("table", (M, TOP, CW, th), head=head, rows=chunk, widths=widths, numeric=numeric)
@@ -6597,7 +6779,7 @@ def _economics(slides: list, v: dict, shown: list, sec: dict, ebm, eyebrow: str,
         # layers of different ways of earning are side by side but never ranked against each other
         cons_ = consolidated_layers(shown)
         prof_ = profiles_note([x for x in lay if not x["adjacent"]], {b["layer"]: b for b in shown})
-        note = ("Medians of each layer's confirmed companies (whole-company figures left out where the layer has its own); a median of fewer companies "
+        note = ("Medians of each layer's member companies (whole-company figures left out where the layer has its own); a median of fewer companies "
                 f"than the layer has shows its count, as N of M. Periods: ⟦{NOTES_TITLE}⟧."
                 + (f" {ADJACENT_NOTE}" if any(x["adjacent"] for x in lay) else "")
                 + (" " + CONSOLIDATED_HEAD + "; ".join(f"{k} ({n})" for k, n in cons_) + "." if cons_ else "")

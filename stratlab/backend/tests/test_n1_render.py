@@ -242,7 +242,8 @@ def test_with_no_dated_update_the_findings_say_so_in_a_line_that_stays(monkeypat
     # q1 (changed on purpose; the live R34 Private Banks card kept only the updates line, its coverage line given way): no dated update is
     # said in the title, the card's lines are the coverage summary
     assert len(cards) == 6 and card["title"] == "How far the figures go; no dated company update today"
-    assert card["lines"][0].startswith("Considered 8 · confirmed 8") and not any("rules today" in ln for ln in card["lines"])
+    # l55 (R55): the evidence states by name, never a "confirmed" total (updated on purpose)
+    assert card["lines"][0].startswith("Considered 8 · membership checked 8 of 8: 3 description-verified, 5 industry-supported, 0 not checked") and not any("rules today" in ln for ln in card["lines"])
 
 
 def test_one_company_listed_under_two_symbols_is_one_row_in_every_companys_figures():

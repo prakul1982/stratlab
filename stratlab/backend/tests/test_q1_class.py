@@ -184,8 +184,9 @@ def test_the_live_twin_listings_collapse_and_every_count_reads_the_same_list():
     f[bz] = {**f[bz], "report_currency": "CNY"}           # live Baozun: reports in yuan, no rate kept: its margins stand, its money figures out
     v, slides = deck_of(region, m, f)
     import re
-    said = [int(re.match(r"(\d+) confirmed compan", s.subtitle or "").group(1)) for s in slides
-            if s.title.startswith("Every company's figures") and re.match(r"(\d+) confirmed compan", s.subtitle or "")]
+    # l55 (R55, updated on purpose): "56 companies with figures (40 description-verified, 16 industry-supported)", never "56 confirmed companies"
+    said = [int(re.match(r"(\d+) compan(?:y|ies) with figures", s.subtitle or "").group(1)) for s in slides
+            if s.title.startswith("Every company's figures") and re.match(r"(\d+) compan(?:y|ies) with figures", s.subtitle or "")]
     rows_ = [r[0] for s in slides if s.title.startswith("Every company's figures") for b in s.blocks if b["kind"] == "table"
              for r in b["rows"] if not isinstance(r, dict)]
     assert said and set(said) == {v["with_figures"]} == {len(rows_)}, (said, v["with_figures"], len(rows_))

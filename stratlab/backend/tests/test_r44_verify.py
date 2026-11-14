@@ -197,7 +197,7 @@ def test_the_coverage_says_the_share_in_informative_layers_once_and_deck_check_r
     row = next(r for r in rows if r[0] == "In informative layers")
     assert row[1] == "3 of 5 (60%)" and len(re.findall(r"\d+ of \d+", " ".join(row[1:]))) == 1
     assert row[2].startswith("in a layer the map names; the other 2 in “Other x”, listed, never compared: 1 fit none of the map's layers; "
-                             "1 not checked yet")
+                             "1 not placed yet")          # l55 (R55): apart from the membership state "not checked" (updated on purpose)
     page = f"In informative layers   {row[1]}   {row[2]}"
     assert deck_check.check_pages([page])["counts"]["other>40%"] == 0            # 2 of 5 outside: 40%, not over it # gl50 (R50, updated on purpose): every company outside informative layers counts, the not checked yet too
     hi = "In informative layers   40 of 100 (40%)   in a layer the map names; the other 60 in “Other”, listed, never compared: 45 fit none of the map's layers; 15 not checked yet"

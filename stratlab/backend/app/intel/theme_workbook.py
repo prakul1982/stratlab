@@ -60,11 +60,29 @@ def _in_figures(c: dict) -> str:
     return "Yes" if rec["in"] else f"No: {rec['why']}" if rec.get("why") else "No"
 
 
+# l55 (R55, the owner's review of the live R54 decks): each company's evidence state by the deck's names, never "confirmed"
+EVIDENCE_CELL = {"description_verified": "Description-verified", "industry_code_supported": "Industry-supported (official industry only)",
+                 "list_supported": "List-supported (the theme's own list only)", "not_confirmed": "Own words describe other work",
+                 "membership_unverified": "Not checked"}
+EVIDENCE_COLS = (("description_verified", "Description-verified"), ("industry_code_supported", "Industry-supported"),
+                 ("list_supported", "List-supported"), ("not_confirmed", "Own words describe other work"), ("membership_unverified", "Not checked"))
+
+
+def _evidence(dive: dict):
+    """symbol -> its evidence state (the figures' window, then those the membership check reached), or None for a dive kept before the states."""
+    inner = dive.get("evidence")
+    if not isinstance(inner, dict) or not inner:
+        return None
+    outer = (dive.get("membership_check") or {}).get("outside") or {}
+    return lambda s: inner.get(s) or outer.get(s) or "membership_unverified"
+
+
 def companies(dive: dict, region: str) -> tuple:
     unit, cap_unit = dive.get("unit") or MONEY_UNIT.get(region, ""), MONEY_UNIT.get(region, "")
     head = ["Company", "Symbol", "Layer", "In the layer's figures", f"Market value ({cap_unit})", "Year of the figures", f"Revenue ({unit})",
             "EBITDA margin", "Net margin", "ROCE", "ROE", "P/E", "P/B", "EV/EBITDA", "Revenue growth, 1 year", "Revenue growth, 3 years a year",
-            "Debt to equity", "Price", "Price date"]
+            "Debt to equity", "Price", "Price date", "Membership evidence"]
+    of = _evidence(dive)
     rows, seen = [], set()
     for b in dive.get("layers") or []:
         for c in b.get("companies") or []:
@@ -74,7 +92,7 @@ def companies(dive: dict, region: str) -> tuple:
             rows.append([c.get("name"), c.get("symbol"), b.get("layer"), _in_figures(c), _n(c.get("cap")), c.get("year"), _n(c.get("revenue")),
                          _pct(c.get("ebitda")), _pct(c.get("net")), _pct(c.get("roce")), _pct(c.get("roe")), _n(c.get("pe")), _n(c.get("pb")),
                          _n(c.get("ev_ebitda")), _pct(c.get("sales_1y")), _pct(c.get("sales_3y")), _n(c.get("debt_equity")), _n(c.get("price")),
-                         _day(c.get("price_at"))])
+                         _day(c.get("price_at")), EVIDENCE_CELL.get(of(c.get("symbol"))) if of else None])
     m = _money_fmt(region)
     return _sheet("Companies", head, rows, {4: m, 6: m, 7: PCT, 8: PCT, 9: PCT, 10: PCT, 11: TIMES, 12: TIMES, 13: TIMES, 14: PCT, 15: PCT,
                                             16: PLAIN, 17: "#,##0.00", 18: DAY})
@@ -86,9 +104,11 @@ def _med(st):
 
 def layer_medians(dive: dict, region: str) -> tuple:
     unit = dive.get("unit") or MONEY_UNIT.get(region, "")
+    of = _evidence(dive)
     head = ["Layer", "Companies listed", "In its figures", f"Revenue, total ({unit})", "EBITDA margin, median", "EBITDA margin, lowest",
             "EBITDA margin, highest", "EBITDA margins counted", "Net margin, median", "ROCE, median", "ROE, median", "P/E, median", "P/B, median",
-            "EV/EBITDA, median"]
+            "EV/EBITDA, median"] + ([f"Companies listed: {w}" for _, w in EVIDENCE_COLS] if of else [])
+    mix = lambda cos: [sum(1 for c in cos if of(c.get("symbol")) == k) for k, _ in EVIDENCE_COLS] if of else []      # noqa: E731
     sec = dive.get("sections") or {}
     val = sec.get("valuation") or {}
     by_val = {x.get("layer"): x for x in val.get("by_layer") or []}
@@ -98,13 +118,15 @@ def layer_medians(dive: dict, region: str) -> tuple:
         e = st.get("ebitda") or {}
         rows.append([b.get("layer"), b.get("listed", len(b.get("companies") or [])), b.get("n"), _n(b.get("revenue")), _pct(e.get("median")),
                      _pct(e.get("min")), _pct(e.get("max")), e.get("n"), _pct(_med(st.get("net"))), _pct(_med(st.get("roce"))),
-                     _pct(_med(st.get("roe"))), _n(_med(v.get("pe"))), _n(_med(v.get("pb"))), _n(_med(v.get("ev_ebitda")))])
+                     _pct(_med(st.get("roe"))), _n(_med(v.get("pe"))), _n(_med(v.get("pb"))), _n(_med(v.get("ev_ebitda")))]
+                    + mix(b.get("companies") or []))
     med = sec.get("medians") or {}
     e = med.get("ebitda") or {}
     rows.append(["The whole theme", sum(len(b.get("companies") or []) for b in dive.get("layers") or []), dive.get("members"),
                  sum(_n(b.get("revenue")) or 0 for b in dive.get("layers") or []) or None, _pct(e.get("median")), _pct(e.get("min")),
                  _pct(e.get("max")), e.get("n"), _pct(_med(med.get("net"))), _pct(_med(med.get("roce"))), _pct(_med(med.get("roe"))),
-                 _n(_med(val.get("pe"))), _n(_med(val.get("pb"))), _n(_med(val.get("ev_ebitda")))])
+                 _n(_med(val.get("pe"))), _n(_med(val.get("pb"))), _n(_med(val.get("ev_ebitda")))]
+                + mix([c for b in dive.get("layers") or [] for c in b.get("companies") or []]))          # (as its "Companies listed")
     m = _money_fmt(region)
     return _sheet("Layer medians", head, rows, {3: m, 4: PCT, 5: PCT, 6: PCT, 8: PCT, 9: PCT, 10: PCT, 11: TIMES, 12: TIMES, 13: TIMES})
 
@@ -215,12 +237,16 @@ def method(dive: dict, region: str, theme: str, made: date, log: dict) -> tuple:
         ["Money", f"Revenue and totals in {unit}; market values in {MONEY_UNIT.get(region, '')}."
                   + (" Rupee amounts are grouped the Indian way (1,23,456)." if region == "IN" else "")],
         ["Percentages", "Margins, returns and growth are Excel percentages (0.125 shows as 12.5%)."],
-        ["How a layer's median is built", "Over the companies in the layer's figures: confirmed members whose way of earning is of the layer's "
+        ["How a layer's median is built", "Over the companies in the layer's figures: members in the theme (description-verified or "
+                                          "industry-supported) whose way of earning is of the layer's "
                                           "kind and that have the figure. A company that runs other businesses too (its figures are the whole "
                                           "company's) is left out of the median when the layer has companies that are their own; a net margin "
                                           "with a one-off gain in it is left out of the net margin's median. \"In the layer's figures\" on the "
                                           "Companies sheet says which companies are in, and why each other one is not."],
-        ["The whole theme's medians", "Over every confirmed company with figures, each company once, the companies whose figures are the "
+        ["Membership evidence", "What each company's place in the theme rests on: description-verified (its own description shows the "
+                                "theme's work), industry-supported (kept on its official industry only), list-supported (on the theme's own "
+                                "list only), own words describe other work (listed, in no figure) or not checked (its membership not checked yet)."],
+        ["The whole theme's medians", "Over every member company with figures, each company once, the companies whose figures are the "
                                       "whole company's left out when there are others."],
         ["Valuation", "P/E, P/B and EV/EBITDA medians over the companies that have one (a loss-maker has no P/E); the whole market's "
                       "median is over every listed company the site covers in that market."],

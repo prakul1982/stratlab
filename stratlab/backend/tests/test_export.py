@@ -94,7 +94,8 @@ def test_the_theme_deck_has_the_cover_chain_layers_members_claims_and_notes():
     assert claims[0]["sub"] == "Subsidy scheme extended · 01 Sep 2026 · A daily" and claims[0]["url"] == "https://example.com/news/subsidy"
     assert [t[0] for t in claims[1]["tags"]] == ["Risk", "General background (AI, no dated source)"] and claims[1]["sub"] is None
     t = texts(slides)
-    assert "2 of the 4 added are confirmed by their own description; 2 not yet." in t and "1 couldn't be checked just now" in t
+    # l55 (R55): by the state's name (updated on purpose)
+    assert "2 of the 4 added are description-verified; 2 not yet." in t and "1 couldn't be checked just now" in t
     assert "Not investment advice." in t
     for word in ("buy", "sell", "target price", "recommend"):
         assert word not in t.lower().replace("subsidy", "")
