@@ -2117,6 +2117,12 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-tap input { width: 18px; height: 18px; accent-color: var(--blue); cursor: pointer; }
 .k-table tfoot th, .k-table tfoot td { font-weight: 600; border-top: 1px solid var(--line-2); border-bottom: 0; padding: 11px 14px; font-size: 14px; text-align: left; background: var(--paper-2); }
 .k-table tfoot td.k-num { text-align: right; }
+/* LIVE8B-003: a period grid read across (statements, shareholding: data-grid) wider than its card opens on the latest periods with the
+   row names in view: its row-name column stays put at every width while the periods scroll under it */
+.k-tbl-wrap[data-grid]:not(.stack) .k-table tbody th[scope="row"]:first-child,
+.k-tbl-wrap[data-grid]:not(.stack):has(tbody th[scope="row"]:first-child) .k-table :is(thead, tfoot) th:first-child { position: sticky; left: 0; z-index: 1; background: var(--card); box-shadow: 1px 0 0 var(--line); }
+.k-tbl-wrap[data-grid]:not(.stack):has(tbody th[scope="row"]:first-child) .k-table thead th:first-child { background: var(--paper-2); z-index: 2; }
+.k-tbl-wrap[data-grid]:not(.stack) .k-table tbody tr:hover th[scope="row"]:first-child { background: var(--paper-2); }
 /* the totals line's long label wraps instead of widening the Symbol column; on a phone the first column stays put while the figures scroll (R18-003) */
 .k-table tfoot th { white-space: normal; min-width: 0; }
 @media (max-width: 640px) {

@@ -182,3 +182,23 @@ test("the deep dive has the same three cards", async ({ page }, info) => {
   }
   await sane(page, errors, "#dd-statements");
 });
+
+test("LIVE8B-003: a statements table wider than its card opens on the latest years with the row names in view", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  const errors = await open(page, "/research/IN/TATASTEEL", "Tata Steel", who(11, phone));
+  const st = page.locator("#co-statements");
+  await st.scrollIntoViewIfNeeded();
+  const pl = st.getByRole("table", { name: /Profit and loss/ });
+  await expect(pl).toBeVisible({ timeout: 20_000 });
+  const wrap = st.locator(".k-tbl-wrap").first();
+  // the card narrower than the years (a 12-year table in a 1,004 px card at 1440): squeeze the box, then scroll it to the latest year
+  await wrap.evaluate((b) => { (b as HTMLElement).style.maxWidth = "360px"; b.scrollLeft = b.scrollWidth; });
+  expect(await wrap.evaluate((b) => b.scrollLeft)).toBeGreaterThan(0);
+  const box = await wrap.boundingBox();
+  for (const cell of [pl.locator("tbody th[scope=row]").first(), pl.locator("thead th").first()]) {
+    const r = await cell.boundingBox();
+    expect(r && box && r.x >= box.x - 1, "the row names stay in view while the years scroll").toBeTruthy();
+  }
+  await expect(pl.locator("tbody th[scope=row]").first()).toHaveCSS("position", "sticky");
+  await sane(page, errors, "#co-statements");
+});
