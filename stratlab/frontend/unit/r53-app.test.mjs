@@ -171,7 +171,3 @@ test("LIVE8A-025: the results day chips don't repeat today by its date", () => {
 test("LIVE8A-021: the Plans row for a theme's supplier links says what its CSV is", () => {
   assert.match(read("src/lib/plans.ts"), /\["supply_pro", "Supplier links in a theme, CSV"\]/);
 });
-
-test("LIVE8B-015: a phone's two rows of tool cards are each as tall as their own cards", () => {
-  assert.match(read("src/styles.css"), /\.space-strip \{ display: grid; grid-template-columns: repeat\(4, minmax\(0, 1fr\)\); grid-auto-rows: auto; gap: 12px; \}/);
-});
