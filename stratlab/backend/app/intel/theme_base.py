@@ -2633,7 +2633,12 @@ def sold_what(out: list[dict], placed_in: dict, by_how, main, fam, ev, theme_wor
         return " or ".join(dict.fromkeys(said))
     moves, unfit, sold = [], {}, {}
     for v in named:
-        if by_how(v) or v.get("industry_group"):
+        if v.get("industry_group") and not by_how(v):          # a layer of one official industry: in it by that industry, said so
+            for c in v["companies"]:
+                if came_from(c, v) is not None and not isinstance(c.get("refit"), dict):
+                    sold[id(c)] = f"of its official industry, the one “{shown(v)}” is made of"
+            continue
+        if by_how(v):
             continue
         for c in v["companies"]:
             src = came_from(c, v)
@@ -2761,10 +2766,11 @@ def restore_vanished(vc: list[dict], previous: dict, evidence, theme: str, theme
                     v["companies"] = [c for c in v["companies"] if id(c) not in ids]
             taken |= {c.get("ticker") for _, c in fits}
             inds = {key(c.get("industry")) for _, c in fits}
-            drop = ("model_out", "out_why", "unfit", "refit", "on_industry", "single")
+            drop = ("model_out", "out_why", "unfit", "refit", "on_industry", "single", "sold_by")
             back.append({"layer": lay, "description": "", "restored": {"before": len(syms), "now": len(fits)},
                          **({"industry_group": True} if len(inds) == 1 and "" not in inds else {}),
-                         "companies": [{**{k: x for k, x in c.items() if k not in drop}, "moved": True, "fit": True, "restored": lay}
+                         "companies": [{**{k: x for k, x in c.items() if k not in drop}, "moved": True, "fit": True, "restored": lay,
+                                        "sold_by": f"back in “{lay}”, a layer of the version before: its own words or official industry still say what it sells"}
                                        for _, c in fits]})
             row.update(restored=len(fits), why=f"restored: {len(fits)} of its {len(syms)} companies' own words or official industry still say "
                                                  f"what it sells")
