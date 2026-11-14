@@ -122,8 +122,13 @@ def test_the_universe_says_how_many_are_not_checked_yet_never_0_not_yet():
     v = {"placements": {"base": 821, "named": 0}, "membership": {"placed": 100, "confirmed": 100, "not_confirmed": 0}}
     said = deck.membership_words(v, 821)
     assert "721 not checked yet" in said and "0 not yet" not in said and "100 checked (the map's own picks, then the largest by market value)" in said
+    # (updated on purpose, e54: a view with no evidence states kept says confirmed in the theme, never "by their own description", which an
+    # official-industry record can't be; with the states, each is counted)
     assert deck.membership_words({"placements": {"base": 60}, "membership": {"placed": 60, "confirmed": 58, "not_confirmed": 2}}, 60).endswith(
-        "58 confirmed by their own description, 2 not yet")
+        "58 confirmed in the theme, 2 not yet")
+    assert deck.membership_words({"placements": {"base": 60}, "membership": {"placed": 60, "confirmed": 58, "not_confirmed": 2, "evidence": {
+        "description_verified": 40, "industry_code_supported": 18, "not_confirmed": 2}}}, 60).endswith(
+        "60 checked: 40 confirmed by their own description, 18 kept on their official industry only, 2 whose own words describe other work")
     old = "Universe 821 companies; 100 of the 100 checked confirmed by their own description, 0 not yet."
     assert deck_check.check_pages([old])["counts"]["unchecked as 0"] == 1
     assert deck_check.check_pages([said])["counts"]["unchecked as 0"] == 0

@@ -18,7 +18,7 @@ import { fmtDate, pct, ratio, safeHref } from "../lib/format";
 import type { Co, Region, SectorAI } from "../lib/research";
 import {
   amount, calcOf, calcWords, layerLines, medCell, MIN_BASE, NO_WORDS, ownWords, pc, pcw, plainIndustry, points, span, times,
-  themeApi,
+  themeApi, EVIDENCE_ONE, evidenceLine, evidenceOf,
   type BizRow, type Business, type Dive, type DiveRow, type Layer, type LayerLine, type Listing, type NewsRow, type Prices, type Stat,
 } from "../lib/theme";
 
@@ -101,15 +101,19 @@ export function MembersCard({ r, region, dive }: { r: SectorAI; region: Region; 
     ...(subOnly.length ? [{ name: "Named in a sub-theme only", official: false, rows: subOnly }] : [])].filter((g) => g.rows.length > 0);
   if (groups.length === 0) return null;
   const total = p?.total ?? new Set(groups.flatMap((g) => g.rows.map((c) => c.ticker))).size;
+  const ev = evidenceOf(dive);
   const named = p?.named ?? 0, base = (p?.base ?? 0) - named, added = p?.added ?? 0, inds = p?.industries ?? [];
   const cols: Column<Co>[] = [
     { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (c) => <><Name r={region} sym={c.ticker} name={c.name} /><span className="k-sub-line k-muted">{c.ticker}</span></> },
     { key: "i", header: "Industry", wrap: true, cell: (c) => (region === "US" ? plainIndustry(c.industry) : c.industry) || dash },
     { key: "m", header: "Market value", numeric: true, cell: (c) => amount(caps.get(c.ticker) ?? c.cap ?? null, region) },
     { key: "w", header: "What it does, in its own words", wrap: true, cell: (c) => { const w = ownWords(c.what, c.name); return w ? <>“{w}”</> : <span className="k-muted">{NO_WORDS}</span>; } },
-    { key: "f", header: "In the theme by", cell: (c) => (c.base ? (c.basis === "list" ? "Named in the theme's list" : "Official industry")
+    { key: "f", header: "In the theme by", cell: (c) => (c.base ? <>{c.basis === "list" ? "Named in the theme's list" : "Official industry"}
+      {ev && <span className="k-sub-line k-muted" data-testid="member-evidence">{EVIDENCE_ONE[ev(c.ticker)]}</span>}</>
       : <><Badge tone="plain" dot={false}>Added</Badge><span className="k-sub-line">{c.verified ? "Confirmed by its own words" : "Not yet confirmed"}</span></>) },
   ];
+  // e54 (R54): what each company's place rests on, the same states and counts as the deck (own description, official industry only, not checked)
+  const evLine = evidenceLine(dive, groups.flatMap((g) => g.rows.map((c) => c.ticker)));
   return (
     <Card id="theme-members" label="Every company in this theme">
       <CardHead title="Every company in this theme" info="The base is every listed company the exchange's own industry classification puts in the theme's industries: it is in the theme whatever the AI says. The AI sorts companies into layers and adds companies from other industries; an added company stays only while its own description doesn't show otherwise, marked confirmed when its words show the work." />
@@ -117,6 +121,7 @@ export function MembersCard({ r, region, dive }: { r: SectorAI; region: Region; 
         <b>{total.toLocaleString("en-IN")} compan{total === 1 ? "y" : "ies"}</b>: {base.toLocaleString("en-IN")} from the official industry list, {named > 0 && `${named.toLocaleString("en-IN")} named in the theme's list, `}{added.toLocaleString("en-IN")} added
         {added > 0 && ` (${p?.confirmed ?? 0} confirmed from ${added === 1 ? "its" : "their"} own description)`}.
       </p>
+      {evLine && <p className="k-small k-muted" data-testid="theme-evidence">Membership: {evLine}.</p>}
       {inds.length > 0
         ? <p className="k-small k-muted">Official industries{p?.industries_by === "words" ? ", matched by the theme's own words" : p?.industries_by === "ai" ? ", picked by AI from the exchange's own list" : ""}: {inds.join(" · ")}.</p>
         : named > 0 ? <p className="k-small k-muted">No official industry is this theme's core on its own, so its companies are the theme's named list and the ones the map names.</p>

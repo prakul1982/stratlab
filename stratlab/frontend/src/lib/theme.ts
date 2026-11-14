@@ -47,6 +47,11 @@ export interface Dive {
   /** the figures are worked out on `shown` of the theme's `of` companies: every one the AI named, then the largest of the rest */
   figures?: { shown: number; of: number };
   notable: { kind: "gap" | "move" }[];
+  /** e54: what each checked company's place in the theme rests on (theme_data.EVIDENCE_STATES), the figures' window... */
+  evidence?: Record<string, EvidenceState>;
+  membership?: { placed: number; confirmed: number; not_confirmed: number; evidence?: Partial<Record<EvidenceState, number>> };
+  /** ...and the companies the membership check reached beyond it, with its progress after each stored read ([day, checked, total]) */
+  membership_check?: { outside: Record<string, EvidenceState>; checked: number; total: number; history: [string, number, number][]; step?: number };
   sections: {
     size: { companies: number; with_value: number; total_cap: number | null; biggest: { symbol: string; name: string; cap: number; share: number }[]; top3_share: number | null };
     medians: Record<"ebitda" | "net" | "roce", Stat | null>;
@@ -65,6 +70,34 @@ export interface Dive {
     leaders: DiveRow[];
   };
 }
+/** e54: the evidence a company's place in a theme rests on, one state each (theme_data.EVIDENCE_STATES) */
+export type EvidenceState = "description_verified" | "industry_code_supported" | "list_supported" | "not_confirmed" | "membership_unverified";
+export const EVIDENCE_ONE: Record<EvidenceState, string> = {
+  description_verified: "Confirmed by its own description", industry_code_supported: "Kept on its official industry only",
+  list_supported: "Kept on the theme's own list only", not_confirmed: "Its own words describe other work", membership_unverified: "Not checked yet",
+};
+const EVIDENCE_MANY: [EvidenceState, string][] = [["description_verified", "confirmed by their own description"],
+  ["industry_code_supported", "kept on their official industry only"], ["list_supported", "kept on the theme's own list only"],
+  ["not_confirmed", "whose own words describe other work"], ["membership_unverified", "not checked yet"]];
+
+/** e54: each company's evidence state from the dive (its figures' window, then those the membership check reached), "membership_unverified"
+ * for a company neither has; undefined for a dive kept before the states were. */
+export function evidenceOf(dive: Dive | null | undefined): ((sym: string) => EvidenceState) | undefined {
+  if (!dive?.evidence) return undefined;
+  const inner = dive.evidence, outer = dive.membership_check?.outside ?? {};
+  return (sym) => inner[sym] ?? outer[sym] ?? "membership_unverified";
+}
+
+/** e54: "82 confirmed by their own description · 78 kept on their official industry only · 62 not checked yet" over the companies listed
+ * (the same states and counts as the deck's universe line); "" with no states kept. */
+export function evidenceLine(dive: Dive | null | undefined, symbols: string[]): string {
+  const of = evidenceOf(dive);
+  if (!of) return "";
+  const n = new Map<EvidenceState, number>();
+  for (const s of new Set(symbols)) n.set(of(s), (n.get(of(s)) ?? 0) + 1);
+  return EVIDENCE_MANY.filter(([k]) => n.get(k)).map(([k, w]) => `${(n.get(k) ?? 0).toLocaleString("en-IN")} ${w}`).join(" · ");
+}
+
 export interface PriceRow { symbol: string; name: string; ret: Record<"1M" | "3M" | "1Y" | "3Y", number | null>; date: string; above200: boolean | null; near_high: boolean | null; near_low: boolean | null }
 export interface Prices {
   companies: PriceRow[]; median: Record<string, { median: number; n: number } | null>; pending: number;

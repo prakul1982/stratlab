@@ -46,6 +46,13 @@ Failures (the exit code is 1 when any deck has one):
                verified count is all its figures while its rows say some only had their arithmetic reproduced
   adjacent ranked  d53 (the owner's review: hospital operators in a Medical devices theme): a layer said to be adjacent participants named
                highest or lowest in a ranking
+  evidence state  e54 (R54, the owner's review of the live R53 Biotech, Medical devices and Hospitals decks: "100 confirmed by their own
+               description" of 100 checked beside "18 companies with figures have no description in their own words yet"): companies
+               counted as confirmed by their own description and companies with no words of their own that together are more than the
+               companies checked, or more companies without words than the deck keeps on their official industry only
+  population mismatch  e54 (the live R53 Medical devices deck: "Companies, by count 76 of 222" while its "Each layer" row adds up to 100,
+               adjacent participants among them): the layers' companies with figures adding up to another count than the deck's companies
+               with figures, unless the row says how core members and adjacent participants add up to it
 Reported, and a failure only with --strict:
   cut text     every other text ending in "…" (a label or a sentence cut to its box)
   mixed range  a range with one end whole and the other with a decimal ("19.6% to 20%"; LIVE7A-014)
@@ -65,7 +72,7 @@ import sys
 
 FAIL = ("headline", "mid-word", "placeholder", "joining word", "count", "repeated", "hyphen minus", "no layer", "unread ranked", "unread kind",
         "left out>50%", "unchecked as 0", "biz label", "biz making", "stale layer", "same company", "words claim", "partial unsaid",
-        "outlier range", "added unexplained", "verified count", "adjacent ranked")
+        "outlier range", "added unexplained", "verified count", "adjacent ranked", "evidence state", "population mismatch")
 WARN = ("cut text", "other>40%", "mixed range")
 # LIVE7A-014: a minus sign as a hyphen before a figure with its unit (never a date's or a range's dash: it follows a space or a bracket)
 _HYPHEN_MINUS = re.compile(r"(?:(?<=\s)|(?<=[(\[])|^)-\d[\d,]*(?:\.\d+)?(?:%|x\b| ?pts\b| ?points\b)")
@@ -273,6 +280,7 @@ def check_pages(pages: list[str]) -> dict:
             elif not any(stems_of(model) & stems_of(x) for x in layers | {layer}):
                 add("biz label", n, said)
     d53_checks(pages, layers, add)
+    e54_checks(pages, add)
     counts = {k: sum(1 for f in findings if f["kind"] == k) for k in FAIL + WARN}
     return {"pages": len(pages), "counts": counts, "findings": findings}
 
@@ -353,6 +361,59 @@ def d53_checks(pages: list[str], layers: set, add) -> None:
         for m in re.finditer(r"\b(?:highest|lowest) in (.+?) \(", flat):
             if any(m.group(1).strip().endswith(a) or a.endswith(m.group(1).strip()) for a in adj):
                 add("adjacent ranked", n, m.group(0))
+
+
+# (a table's two columns interleave in the text: the other column's words can fall inside a cell's sentence)
+_EV_CHECKED = re.compile(r"(\d[\d,]*) checked\b(?:(?!\d checked).){0,160}?\(the map's own picks[^)]*\):? (\d[\d,]*) confirmed by their own\b")
+_EV_FULL = re.compile(r"(\d[\d,]*) checked: (\d[\d,]*) confirmed by their own\b")
+_EV_ALL = re.compile(r"(\d[\d,]*) confirmed by their own\b.{0,80}?\bdescription, (\d[\d,]*) not(?: yet)?\b")
+_EV_INDUSTRY = re.compile(r"(\d[\d,]*) kept on their official industry only")
+_EV_LIST = re.compile(r"(\d[\d,]*) kept on the theme's own list only")
+_WORDLESS = re.compile(r"(\d[\d,]*) compan(?:y|ies) with figures (?:have|has) no description in\b")
+_BY_COUNT = re.compile(r"Companies, by count (\d[\d,]*) of (\d[\d,]*)")
+_CORE_ADJ = re.compile(r"(\d[\d,]*) core members \+ (\d[\d,]*) adjacent participants = (\d[\d,]*) with figures")
+_EACH_CELL = re.compile(r"^.+? (\d[\d,]*) of \d[\d,]*\b")      # its first count (the next row's or page's text can follow the last cell)
+
+
+def e54_checks(pages: list[str], add) -> None:
+    """e54 (R54): the evidence states and the populations a deck's counts are of, from the text (see the module's list)."""
+    flat_pages = [re.sub(r"\s+", " ", p) for p in pages]
+    whole = " ".join(flat_pages)
+    where = lambda t: next((n for n, f in enumerate(flat_pages, 1) if t in f), 1)      # noqa: E731
+    w = _WORDLESS.search(whole)
+    wordless = _num(w.group(1)) if w else 0
+    m = _EV_CHECKED.search(whole)
+    if m:
+        checked, desc = _num(m.group(1)), _num(m.group(2))
+    else:
+        m = _EV_FULL.search(whole)
+        if m:
+            checked, desc = _num(m.group(1)), _num(m.group(2))
+        else:
+            m = _EV_ALL.search(whole)
+            checked, desc = ((_num(m.group(1)) + _num(m.group(2))), _num(m.group(1))) if m else (None, None)
+    if checked is not None and desc + wordless > checked:
+        add("evidence state", where(m.group(0)[:40]), f"{m.group(0)[:110]}; {w.group(0) if w else ''}")
+    ind = _EV_INDUSTRY.search(whole)
+    if ind and w:
+        kept = _num(ind.group(1)) + sum(_num(x.group(1)) for x in _EV_LIST.finditer(whole))
+        if wordless > kept:
+            add("evidence state", where(w.group(0)[:40]), f"{w.group(0)}; {ind.group(0)}")
+    for n, flat in enumerate(flat_pages, 1):
+        by = _BY_COUNT.search(flat)
+        if not by:
+            continue
+        f2 = flat.replace(" Each layer ", " ")
+        got = [_num(c.group(1)) for e in _EACH.finditer(f2) for cell in e.group(1).split(" · ") for c in [_EACH_CELL.match(cell.strip())] if c]
+        if not got:
+            continue
+        said, sum_ = _num(by.group(1)), sum(got)
+        if sum_ == said:
+            continue
+        ca = _CORE_ADJ.search(f2)
+        if ca and _num(ca.group(1)) == said and _num(ca.group(3)) == sum_ and _num(ca.group(1)) + _num(ca.group(2)) == sum_:
+            continue
+        add("population mismatch", n, f"companies by count {by.group(1)}, the layers' companies with figures add up to {sum_:g}")
 
 
 def check_text(text: str) -> dict:
