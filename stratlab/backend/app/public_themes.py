@@ -32,10 +32,18 @@ MIN_MEMBERS = 8
 CACHE = "public, max-age=600, s-maxage=21600, stale-while-revalidate=86400"
 MISSING_CACHE = "public, max-age=60, s-maxage=300"
 SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*\Z")
+# e54 (R54, the owner's review of the live R53 decks: an official-industry record said to be confirmed by its own description): what each
+# company's place rests on is said as it is, a company kept on its official industry alone never said to be confirmed by its own words
 METHOD = ("How companies are chosen: a theme's companies come from its official industries (the exchange's own classification) and "
-          "from a map of the theme's layers; a company placed by the map is shown here only once its own filings or description "
-          "confirm the work its layer names. Market value is at the last close; revenue is the latest full year as the company "
+          "from a map of the theme's layers. A company the map adds from another industry is shown here only once its own filings or "
+          "description confirm the work its layer names; a company of the theme's official industries is shown on that classification, "
+          "and each one says whether its own description was checked and confirms the work, it is kept on its official industry only, "
+          "or it is not checked yet. Market value is at the last close; revenue is the latest full year as the company "
           "reported it, in its own reporting currency. StratLab works out no figure on this page.")
+EVIDENCE_PUBLIC = {"description_verified": "confirmed by its own description", "industry_code_supported": "official industry only",
+                   "list_supported": "the theme's own list only", "membership_unverified": "not checked yet"}
+EVIDENCE_PUBLIC_MANY = (("description_verified", "confirmed by their own description"), ("industry_code_supported", "on their official industry only"),
+                        ("list_supported", "on the theme's own list only"), ("membership_unverified", "not checked yet"))
 
 
 def slug(name: str) -> str:
@@ -94,15 +102,31 @@ def _index_caps(region: str) -> dict:
         return {}
 
 
-def _revenues(region: str, name: str, p: dict) -> dict:
-    """{symbol: (revenue, year, unit)} from the theme's stored dive, only where the figure is the company's own reported revenue in
-    the market's reporting unit (a figure turned from another currency is left out: that conversion is StratLab's)."""
+def _dive(region: str, name: str, p: dict) -> dict:
+    """The theme's stored dive (read only, never worked out here), {} when none is kept."""
     try:
         from .intel import theme_routes
         got = computed.get(theme_library.DIVE, theme_routes.dive_key(region, name, {**p, "_library": name}), count=False)
     except Exception:
         return {}
-    dive = ((got or {}).get("value") or {}).get("dive") or {}
+    dive = ((got or {}).get("value") or {}).get("dive")
+    return dive if isinstance(dive, dict) else {}
+
+
+def _evidence(dive: dict):
+    """e54: symbol -> its evidence state as the theme's stored dive keeps it (the figures' window, then the companies the membership check
+    reached beyond it), "membership_unverified" for one neither has; None for a dive kept before the states were (nothing is claimed)."""
+    inner = dive.get("evidence")
+    if not isinstance(inner, dict):
+        return None
+    outer = (dive.get("membership_check") or {}).get("outside") or {}
+    return lambda sym: inner.get(sym) or outer.get(sym) or "membership_unverified"
+
+
+def _revenues(region: str, name: str, p: dict, dive: dict | None = None) -> dict:
+    """{symbol: (revenue, year, unit)} from the theme's stored dive, only where the figure is the company's own reported revenue in
+    the market's reporting unit (a figure turned from another currency is left out: that conversion is StratLab's)."""
+    dive = _dive(region, name, p) if dive is None else dive
     out = {}
     for b in dive.get("layers") or []:
         for c in b.get("companies") or []:
@@ -121,7 +145,8 @@ def money(region: str, v, unit: str | None = None) -> str | None:
 def view(entry: dict, p: dict) -> dict:
     """What a theme page shows: checked companies only, reported figures only."""
     region = entry["region"]
-    caps, revs = _index_caps(region), _revenues(region, entry["name"], p)
+    dive = _dive(region, entry["name"], p)
+    caps, revs, ev = _index_caps(region), _revenues(region, entry["name"], p, dive), _evidence(dive)
     known = stock_pages.companies(region)
     layers = []
     for v in theme_layers(p):
@@ -129,13 +154,17 @@ def view(entry: dict, p: dict) -> dict:
         for c in v["companies"]:
             sym = c["ticker"]
             rev = revs.get(sym)
+            # e54: what its place rests on; a company the map added is shown only confirmed by its own words (share.checked)
+            state = "description_verified" if c.get("verified") is True else (ev(sym) if ev else None)
             rows.append({"symbol": sym, "name": public_words(c.get("name") or sym, 100) or sym,
                          "page": stock_pages.path(region, sym) if sym in known else None,
                          "cap": money(region, caps.get(sym)), "revenue": money(region, rev[0], rev[2]) if rev else None,
-                         "year": str(rev[1] or "")[:20] if rev else None})
+                         "year": str(rev[1] or "")[:20] if rev else None, "evidence": state if state in EVIDENCE_PUBLIC else None})
         layers.append({"name": v["name"], "companies": rows})
     n = len({c["symbol"] for v in layers for c in v["companies"]})
-    return {"region": region, "label": entry["label"], "slug": entry["slug"], "name": entry["name"],
+    once = {c["symbol"]: c.get("evidence") for v in layers for c in v["companies"]}
+    tally = {k: sum(1 for x in once.values() if x == k) for k in EVIDENCE_PUBLIC} if ev else None
+    return {"region": region, "label": entry["label"], "slug": entry["slug"], "name": entry["name"], "evidence": tally,
             "summary": public_words(p.get("summary"), 700), "layers": layers, "members": n,
             "day": datetime.fromtimestamp(float(entry["at"]), timezone.utc).date().isoformat() if entry.get("at") else None,
             "indexable": len(layers) >= MIN_LAYERS and n >= MIN_MEMBERS}
@@ -185,7 +214,8 @@ def render(v: dict) -> str:
     r = v["region"]
     canonical = site + path(r, v["slug"])
     title = f"{v['label']} {_where(v)}: the theme's layers · StratLab"
-    desc = (f"{v['label']} in {_market(r)}: {v['members']} checked companies in {len(v['layers'])} layers"
+    word = "" if v.get("evidence") else "checked "          # e54: with the states kept, each company says how it was checked
+    desc = (f"{v['label']} in {_market(r)}: {v['members']} {word}companies in {len(v['layers'])} layers"
             + (f", from {', '.join(x['name'] for x in v['layers'][:3])}" if v["layers"] else "") + ". Facts from filings, not advice.")
     crumbs_html, crumbs_ld = stock_pages._crumbs([("Themes", "/themes"), ("India" if r == "IN" else "US", f"/themes/{r.lower()}"),
                                                   (v["label"], path(r, v["slug"]))])
@@ -195,8 +225,11 @@ def render(v: dict) -> str:
     head = stock_pages._head(title, desc, canonical, extra=ld, robots="index,follow" if v["indexable"] else "noindex,follow")
     app = _app(r, v["name"])
     body = (crumbs_html + f"<h1>{e(v['label'])} <span class=\"muted\">{e(_where(v))}</span></h1>"
-            f'<p class="muted">{v["members"]} checked compan{"y" if v["members"] == 1 else "ies"} in {len(v["layers"])} layer{"" if len(v["layers"]) == 1 else "s"}'
+            f'<p class="muted">{v["members"]} {word}compan{"y" if v["members"] == 1 else "ies"} in {len(v["layers"])} layer{"" if len(v["layers"]) == 1 else "s"}'
             + (f" · map made {e(day_text(v['day']))}" if v.get("day") else "") + "</p>")
+    if v.get("evidence"):          # e54: the companies by what their place rests on, adding up to those shown
+        body += ('<p class="muted small" data-evidence>Membership: ' + e(", ".join(f"{v['evidence'][k]} {w}" for k, w in EVIDENCE_PUBLIC_MANY
+                                                                                     if v["evidence"].get(k))) + ".</p>")
     if v["summary"]:
         body += f"<p>{e(v['summary'])}</p>"
     for x in v["layers"]:
@@ -206,6 +239,8 @@ def render(v: dict) -> str:
             figs = [f"Market value {c['cap']}"] if c["cap"] else []
             if c["revenue"]:
                 figs.append(f"revenue {c['revenue']}" + (f" ({e(c['year'])})" if c.get("year") else ""))
+            if c.get("evidence") and c["evidence"] != "description_verified":
+                figs.append(EVIDENCE_PUBLIC[c["evidence"]])        # e54: never said confirmed by its own words when it isn't
             items += f'<li>{name} <span class="muted small">{e(c["symbol"])}' + (" · " + e(", ".join(figs)) if figs else "") + "</span></li>"
         body += f'<section class="card" data-layer><h2>{e(x["name"])}</h2><ul class="plain">{items}</ul></section>'
     if not v["layers"]:

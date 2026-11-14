@@ -122,8 +122,13 @@ def test_the_universe_says_how_many_are_not_checked_yet_never_0_not_yet():
     v = {"placements": {"base": 821, "named": 0}, "membership": {"placed": 100, "confirmed": 100, "not_confirmed": 0}}
     said = deck.membership_words(v, 821)
     assert "721 not checked yet" in said and "0 not yet" not in said and "100 checked (the map's own picks, then the largest by market value)" in said
+    # (updated on purpose, e54: a view with no evidence states kept says confirmed in the theme, never "by their own description", which an
+    # official-industry record can't be; with the states, each is counted)
     assert deck.membership_words({"placements": {"base": 60}, "membership": {"placed": 60, "confirmed": 58, "not_confirmed": 2}}, 60).endswith(
-        "58 confirmed by their own description, 2 not yet")
+        "58 confirmed in the theme, 2 not yet")
+    assert deck.membership_words({"placements": {"base": 60}, "membership": {"placed": 60, "confirmed": 58, "not_confirmed": 2}, "membership_evidence": {
+        "description_verified": 40, "industry_code_supported": 18, "not_confirmed": 2}}, 60).endswith(
+        "60 checked: 40 confirmed by their own description, 18 kept on their official industry only, 2 whose own words describe other work")
     old = "Universe 821 companies; 100 of the 100 checked confirmed by their own description, 0 not yet."
     assert deck_check.check_pages([old])["counts"]["unchecked as 0"] == 1
     assert deck_check.check_pages([said])["counts"]["unchecked as 0"] == 0
@@ -278,8 +283,8 @@ def test_deck_check_fails_a_ranking_and_a_kind_beside_no_way_of_earning_read_and
 
 
 def test_the_versions_moved():
-    assert B.RULES == 52 and TR.PLACE_CARRY[52] == 51 and TR.PLACE_CARRY[51] == 50 and TR.PLACE_CARRY[50] == 49 and TR.PLACE_CARRY[49] == 48 and TR.PLACE_CARRY[48] == 47          # d53 (R53): RULES 52, PLACE_CARRY[52] = 51, deck 63, dive text 23 (updated on purpose); gl52 (R52): RULES 51, PLACE_CARRY[51] = 50, deck 62, dive text 22 (updated on purpose); rv51 (R51): RULES 50, PLACE_CARRY[50] = 49, deck 61, dive text 21 (updated on purpose)
-    assert deck.THEME_DECK_VERSION == 63 and D.DIVE_TEXT == 23          # d53 (R53): RULES 52, PLACE_CARRY[52] = 51, deck 63, dive text 23 (updated on purpose); gl52 (R52): RULES 51, PLACE_CARRY[51] = 50, deck 62, dive text 22 (updated on purpose); rv51 (R51): RULES 50, PLACE_CARRY[50] = 49, deck 61, dive text 21 (updated on purpose)
+    assert B.RULES == 53 and TR.PLACE_CARRY[53] == 52 and TR.PLACE_CARRY[52] == 51 and TR.PLACE_CARRY[51] == 50 and TR.PLACE_CARRY[50] == 49 and TR.PLACE_CARRY[49] == 48 and TR.PLACE_CARRY[48] == 47          # c54 (R53 review): RULES 53, PLACE_CARRY[53] = 52, deck 64, dive text 24 (updated on purpose); d53 (R53): RULES 52, PLACE_CARRY[52] = 51, deck 63, dive text 23 (updated on purpose); gl52 (R52): RULES 51, PLACE_CARRY[51] = 50, deck 62, dive text 22 (updated on purpose); rv51 (R51): RULES 50, PLACE_CARRY[50] = 49, deck 61, dive text 21 (updated on purpose)
+    assert deck.THEME_DECK_VERSION == 64 and D.DIVE_TEXT == 24          # c54 (R53 review): RULES 53, PLACE_CARRY[53] = 52, deck 64, dive text 24 (updated on purpose); d53 (R53): RULES 52, PLACE_CARRY[52] = 51, deck 63, dive text 23 (updated on purpose); gl52 (R52): RULES 51, PLACE_CARRY[51] = 50, deck 62, dive text 22 (updated on purpose); rv51 (R51): RULES 50, PLACE_CARRY[50] = 49, deck 61, dive text 21 (updated on purpose)
 
 
 def test_deck_check_counts_the_not_checked_yet_in_other_and_reads_a_wrapped_label():

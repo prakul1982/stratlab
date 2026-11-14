@@ -185,10 +185,13 @@ def changes(log: dict, region: str) -> tuple:
         for c in e.get("added") or []:
             rows.append([d, why, "Company added", c.get("name"), c.get("symbol"), None, c.get("layer")])
         for c in e.get("moved") or []:
-            rows.append([d, why, "Company moved", c.get("name"), c.get("symbol"), c.get("from"), c.get("to")])
+            rows.append([d, why, "Company moved", c.get("name"), c.get("symbol"), c.get("from"), c.get("to")] + ([c["why"]] if c.get("why") else []))
         for x in e.get("layers") or []:
+            # c54: a removed layer with where its companies went and why it was not kept, when the log says so
+            went = "; ".join(f"{n} to {k}" if k else f"{n} out of the theme" for k, n in (x.get("went") or {}).items())
+            detail = (f"{x.get('n')} companies" if x.get("n") is not None else "") + (f": {went}" if went else "") + (f"; {x['why']}" if x.get("why") else "")
             rows.append([d, why, LAYER_WORDS.get(x.get("kind"), x.get("kind")), None, None, " + ".join(x.get("from") or []) or None,
-                         " + ".join(x.get("to") or []) or None, f"{x.get('n')} companies" if x.get("n") is not None else None])
+                         " + ".join(x.get("to") or []) or None, detail or None])
         for c in e.get("restated") or []:
             rev, mar = c.get("revenue") or [None, None], c.get("margin") or [None, None]
             rows.append([d, why, "Figures restated", c.get("name"), c.get("symbol"), None, None,

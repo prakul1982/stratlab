@@ -110,10 +110,14 @@ for (const width of [1440, 390]) {
     const shell = (await page.locator(".shell").boundingBox())!;
     expect(Math.round(shell.y), "the app starts at the top of the window").toBe(0);
     if (width > 900) expect(Math.round((await page.locator(".sidebar").boundingBox())!.y), "the side menu starts at the top of the window").toBe(0);
-    const box = (await ask.boundingBox())!;
-    // (updated on purpose, LIVE8B-004: above the page, its arrival after the first paint pushed the page down) the page ends above the question
-    const page0 = (await page.locator("#main").boundingBox())!;
-    expect(box.y, "the question comes after the page").toBeGreaterThanOrEqual(page0.y + page0.height - 1);
+    // (updated on purpose, LIVE8B-004: above the page, its arrival after the first paint pushed the page down) the page ends above the question,
+    // both read in one go: the page still grows as its data comes in, so two reads apart compared the question with a later, longer page
+    const [qTop, pageEnd] = await page.evaluate(() => {
+      const q = document.querySelector('[data-testid="consent"]')!.getBoundingClientRect();
+      const m = document.querySelector("#main")!.getBoundingClientRect();
+      return [q.top, m.bottom];
+    });
+    expect(qTop, "the question comes after the page").toBeGreaterThanOrEqual(pageEnd - 1);
     await shot(page, "consent", info);
     if (width < 500) { await sane(page, errors); return; }
     // the panel: docked at 1440 in its own column, the full window high; the page and the question make room

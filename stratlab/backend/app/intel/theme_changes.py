@@ -18,6 +18,7 @@ read is stored (theme_routes.dive_of).
 
 Who sees what (plans.py "theme_changes"): Basic and Pro the whole log; Free the latest entry's counts and its first FREE_ROWS rows."""
 import json
+from collections import Counter
 from datetime import datetime, timezone
 
 from .. import db
@@ -34,6 +35,10 @@ CAUSES = ("rules", "map", "refresh", "figures")
 # layers when its universe changed, and nothing said so): a theme is flagged on its coverage and to the admins when the share of its placed
 # companies in informative layers is under COVER_MIN per cent, or falls by COVER_FALL points or more against its previous live placement
 COVER_MIN = 60
+# e54 (R54): each company checked outside the figures' window kept with its evidence state (theme_data.EVIDENCE_STATES), one letter each, so
+# the membership check moves on from one stored read to the next (theme_routes.membership_check)
+EV_CODE = {"description_verified": "d", "industry_code_supported": "i", "list_supported": "l", "not_confirmed": "n", "membership_unverified": "u"}
+EV_STATE = {v: k for k, v in EV_CODE.items()}
 COVER_FALL = 8
 FLAGS_KEY = "theme:coverage:flags"        # {key_of: {"name", "region", "problem" (None once it passes), "at"}}: the admins' alert (autofix)
 FLAGS_KEEP = 200
@@ -83,9 +88,25 @@ def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None) -> dict
             t = (c.get("theme") or {}) if isinstance(c.get("theme"), dict) else {}
             if c.get("symbol") and t.get("why"):
                 why.setdefault(c["symbol"], str(t["why"])[:200])
+    # c54: the named layers of the version before that a re-check would have lost, restored or with why not (theme_base.restore_vanished),
+    # and the companies kept once as another symbol of the same company (theme_data.same_company), for the log
+    gone = [x for x in ((dive.get("placements") or {}).get("layers_gone") or []) if isinstance(x, dict) and x.get("layer")]
+    # c54: why a company is where it is when the placement said it (back by what a layer sells, or new to its layer on that evidence)
+    mwhy = {}
+    for b in dive.get("layers") or []:
+        for c in b.get("companies") or []:
+            r = c.get("refit") if isinstance(c.get("refit"), dict) else {}
+            w = r.get("why") or c.get("sold_by")
+            if c.get("symbol") and w:
+                mwhy.setdefault(c["symbol"], str(w)[:240])
+    dups = {str(x["symbol"]): str(x.get("kept_name") or x.get("kept") or "") for x in dive.get("duplicates") or [] if isinstance(x, dict) and x.get("symbol")}
+    mc = dive.get("membership_check") if isinstance(dive.get("membership_check"), dict) else {}
+    ev = {s_: EV_CODE[x] for s_, x in (mc.get("outside") or {}).items() if x in EV_CODE}
+    hist = [list(p) for p in mc.get("history") or [] if isinstance(p, (list, tuple)) and len(p) == 3]
     return {"layers": layers, "cos": cos, "off": off, "map": sorted({s_ for s_ in members if s_}), "stamp": int(_num(stamp) or 0),
             "rules": rules, "unit": dive.get("unit"), **({"cover": cover} if cover else {}), **({"back": back} if back else {}),
-            **({"why": why} if why else {})}
+            **({"why": why} if why else {}), **({"gone": gone} if gone else {}), **({"dups": dups} if dups else {}),
+            **({"mwhy": mwhy} if mwhy else {}), **({"ev": ev} if ev else {}), **({"ev_hist": hist} if hist else {})}
 
 
 def off_memory(got: dict | None) -> dict:
@@ -105,6 +126,20 @@ def off_memory(got: dict | None) -> dict:
             out[s_] = list(v) if isinstance(v, list) else [s_, ""]
     for s_ in snap.get("back") or []:              # judged again on its own words and kept in: no longer held by the earlier finding
         out.pop(s_, None)
+    return out
+
+
+def move_memory(got: dict | None) -> dict:
+    """c54 (R53 review, the live R53 Semiconductors deck: Intel and four more moved by a re-check from "Makers of their own products" into
+    "Chip equipment and subsystem suppliers"): {symbol: [from, to]} of every move between layers the stored log keeps (its last KEEP
+    entries), the latest of each company's, so the placement judges a company a re-check moved into a layer on what that layer sells
+    (theme_base.sold_what) even once the move is in the stored snapshot."""
+    got = got if isinstance(got, dict) else {}
+    out: dict = {}
+    for e in got.get("log") or []:
+        for r in (e.get("moved") or []) if isinstance(e, dict) else []:
+            if isinstance(r, dict) and r.get("symbol") and r.get("to"):
+                out[r["symbol"]] = [str(r.get("from") or ""), str(r["to"])]
     return out
 
 
@@ -146,7 +181,11 @@ def _layer_events(was: dict, now: dict) -> tuple[list[dict], set]:
             used_g.add(g)
             used_d.add(d)
             pairs.add((g, d))
-    out += [{"kind": "removed", "from": [g], "to": [], "n": len(src[g])} for g in gone if g not in used_g]
+    # c54 (R53 review): a removed layer says where its companies went ({layer: n}) and, when the placement listed it, why it was not kept
+    went = lambda g: dict(Counter(now["layers"][now["cos"][s_][1]] if s_ in now["cos"] else "" for s_ in src[g]).most_common())      # noqa: E731
+    why = {x.get("layer"): x.get("why") for x in now.get("gone") or [] if isinstance(x, dict)}
+    out += [{"kind": "removed", "from": [g], "to": [], "n": len(src[g]), "went": went(g), **({"why": why[g]} if why.get(g) else {})}
+            for g in gone if g not in used_g]
     out += [{"kind": "added", "from": [], "to": [d], "n": len(dst[d])} for d in fresh if d not in used_d]
     return out, pairs
 
@@ -155,6 +194,9 @@ def _why_removed(s_: str, now: dict) -> str:
     if s_ in now["off"]:
         ind = now["off"][s_][1]
         return f"another business (filed under {ind})" if ind else "another business"
+    if s_ in (now.get("dups") or {}):          # c54 (R53 review: ICICI Prudential Life "removed ... no figures stored for it")
+        return f"the same company as {now['dups'][s_]}, listed under two symbols: kept once" if now["dups"][s_] else \
+            "the same company as another listed under two symbols: kept once"
     if s_ in set(now["map"]):
         return "no figures stored for it"
     return "no longer in the theme's map"
@@ -184,7 +226,8 @@ def diff(was: dict, now: dict) -> dict:
             continue
         a, b = lay_w[old[1]], lay_n[c[1]]
         if a != b and (a, b) not in pairs:
-            moved.append({"symbol": s_, "name": c[0], "from": a, "to": b})
+            mw = (now.get("mwhy") or {}).get(s_)          # c54: the placement's reason for where it is, when it gave one
+            moved.append({"symbol": s_, "name": c[0], "from": a, "to": b, **({"why": mw} if mw else {})})
         if old[2] and old[2] == c[2]:
             rev = _moved_much(old[3], c[3], True)
             mar = old[5] == c[5] and _moved_much(old[4], c[4], False)
@@ -354,8 +397,14 @@ def coverage_control(cov: dict | None, snap: dict | None, dive: dict | None = No
     if isinstance(base, list) and len(base) == 2 and base[1] and _share(*base) - share >= COVER_FALL:
         out["fell"] = {"informative": int(base[0]), "placed": int(base[1]), "share": _share(*base)}
     lost = lost_layers(snap, dive)
+    # c54 (R53 review): each lost layer with why the re-check didn't keep it, and each one it restored (theme_base.restore_vanished)
+    gone = [x for x in (((dive or {}).get("placements") or {}).get("layers_gone") or []) if isinstance(x, dict) and x.get("layer")]
+    why = {x["layer"]: x.get("why") for x in gone}
     if lost:
-        out["lost"] = lost
+        out["lost"] = [{**x, **({"why": why[x["layer"]]} if why.get(x["layer"]) else {})} for x in lost]
+    back = [{"layer": x["layer"], "before": int(x.get("before") or 0), "now": int(x.get("restored") or 0)} for x in gone if x.get("restored")]
+    if back:
+        out["restored"] = back
     return out or None
 
 
@@ -376,7 +425,10 @@ def control_line(cov: dict | None) -> str:
         out.append(f"{share}% of the companies placed are in informative layers ({n:,} of {of:,}), under {COVER_MIN}%.")
     if ctl.get("lost"):
         out.append("Layers of the previous live placement gone, their companies taken by no new layer: "
-                   + ", ".join(f"“{x['layer']}” ({x['n']:,} companies)" for x in ctl["lost"]) + ".")
+                   + ", ".join(f"“{x['layer']}” ({x['n']:,} companies" + (f"; {x['why']}" if x.get("why") else "") + ")" for x in ctl["lost"]) + ".")
+    if ctl.get("restored"):
+        out.append("Layers of the previous live placement a re-check would have lost, kept with their companies whose own words or official "
+                   "industry still say what they sell: " + ", ".join(f"“{x['layer']}” ({x['now']:,} of its {x['before']:,})" for x in ctl["restored"]) + ".")
     return " ".join(out)
 
 

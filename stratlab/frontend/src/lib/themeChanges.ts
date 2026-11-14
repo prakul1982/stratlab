@@ -2,7 +2,8 @@
  * Pure, no React: the unit tests read it as it is. */
 
 export type ChangeCo = { symbol: string; name: string; layer?: string; why?: string; from?: string; to?: string };
-export type LayerChange = { kind: "renamed" | "split" | "merged" | "added" | "removed"; from: string[]; to: string[]; n: number };
+/** c54: a removed layer says where its companies went ({layer: n}, "" out of the theme) and, when the placement said it, why it was not kept. */
+export type LayerChange = { kind: "renamed" | "split" | "merged" | "added" | "removed"; from: string[]; to: string[]; n: number; went?: Record<string, number>; why?: string };
 export type Restated = { symbol: string; name: string; year: string; revenue: [number | null, number | null]; margin: [number | null, number | null]; measure: string; what: ("revenue" | "margin")[] };
 export type ChangeCounts = { removed: number; added: number; moved: number; layers: number; restated: number };
 export type ChangeEntry = { at: string; d: string; cause: "rules" | "map" | "refresh" | "figures"; counts: ChangeCounts;
@@ -39,15 +40,21 @@ export function changeRows(e: ChangeEntry, unit: string): ChangeRow[] {
   const rows: ChangeRow[] = [];
   for (const c of e.removed ?? []) rows.push({ key: `r-${c.symbol}`, change: "Removed", company: c.name, detail: `From ${c.layer}: ${c.why}` });
   for (const c of e.added ?? []) rows.push({ key: `a-${c.symbol}`, change: "Added", company: c.name, detail: `To ${c.layer}` });
-  for (const c of e.moved ?? []) rows.push({ key: `m-${c.symbol}`, change: "Moved", company: c.name, detail: `${c.from} → ${c.to}` });
+  for (const c of e.moved ?? []) rows.push({ key: `m-${c.symbol}`, change: "Moved", company: c.name, detail: `${c.from} → ${c.to}${c.why ? `: ${c.why}` : ""}` });
   (e.layers ?? []).forEach((x, i) => rows.push({ key: `l-${i}`, change: LAYER_WORDS[x.kind] ?? x.kind, company: "",
-    detail: x.kind === "added" ? `${x.to.join(", ")} (${n(x.n, "company", "companies")})` : x.kind === "removed" ? `${x.from.join(", ")} (${n(x.n, "company", "companies")})`
+    detail: x.kind === "added" ? `${x.to.join(", ")} (${n(x.n, "company", "companies")})` : x.kind === "removed" ? removedDetail(x)
       : `${x.from.join(" + ")} → ${x.to.join(" + ")} (${n(x.n, "company", "companies")})` }));
   for (const c of e.restated ?? []) {
     const bits = (c.what ?? []).map((w) => (w === "revenue" ? `revenue ${money(c.revenue[0])} → ${money(c.revenue[1])} ${unit}` : `${c.measure || "Margin"} ${pct(c.margin[0])} → ${pct(c.margin[1])}`));
     rows.push({ key: `s-${c.symbol}`, change: "Figures restated", company: c.name, detail: `${c.year}: ${bits.join("; ")}` });
   }
   return rows;
+}
+
+/** c54: "Aluminium (14 companies: 12 to Other, 2 to Steel pipes), none restored: ..." — a lost layer with where its companies went and why. */
+export function removedDetail(x: LayerChange): string {
+  const went = Object.entries(x.went ?? {}).slice(0, 4).map(([k, v]) => (k ? `${v.toLocaleString("en-IN")} to ${k}` : `${v.toLocaleString("en-IN")} out of the theme`));
+  return `${x.from.join(", ")} (${n(x.n, "company", "companies")}${went.length ? `: ${went.join(", ")}` : ""})${x.why ? `, ${x.why}` : ""}`;
 }
 
 /** The lock's words for a plan without the whole log: what is shown and what Basic adds. */

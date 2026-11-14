@@ -62,6 +62,13 @@ def test_every_deck_states_the_four_counts_the_same_everywhere_and_every_share_n
         else:
             assert int(m.group(4).replace(",", "")) == c["considered"] and int(m.group(3).replace(",", "")) <= c["considered"]
     for m in re.finditer(r"\b(\d[\d,]*) with figures\b", t):                         # one count of companies with figures, wherever it is said
+        # ...except the one line that adds the adjacent participants to it, naming both populations ("40 core members + 20 adjacent
+        # participants = 60 with figures": e54, R54), whose core part is that count (updated on purpose)
+        both = re.search(r"(\d[\d,]*) core members? \+ (\d[\d,]*) adjacent participants? = $", t[max(0, m.start() - 80):m.start()])
+        if both:
+            assert int(both.group(1).replace(",", "")) == c["with_figures"] and \
+                int(both.group(1).replace(",", "")) + int(both.group(2).replace(",", "")) == int(m.group(1).replace(",", "")), m.group(0)
+            continue
         assert int(m.group(1).replace(",", "")) == c["with_figures"], m.group(0)
 
 
