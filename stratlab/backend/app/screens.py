@@ -942,11 +942,28 @@ class Indexer:
     page into each market's index. `warm(region, symbol, company)` builds one page; it may raise when a source is
     busy, which only means trying again next time."""
 
-    def __init__(self, warm=None, every: float = 1800, warm_per_run: int = 20, gap: float = 12.0):
+    # India's night (00:00-06:30 IST = 18:30-01:00 UTC): few people open pages, so a run builds three times as many (the owner, 14 Nov:
+    # 13,700 pages rebuilt to new facts at 20 a market a run took about six days); one page at a time and the same gap, so memory and
+    # each source's load per minute stay as they are
+    NIGHT_UTC = (18.5, 1.0)
+
+    def __init__(self, warm=None, every: float = 1800, warm_per_run: int = 20, gap: float = 12.0, night_per_run: int | None = None):
         self.warm, self.every, self.warm_per_run, self.gap = warm, every, warm_per_run, gap
+        self.night_per_run = night_per_run
         self.status = {"last_run": None, "rows": {}, "warmed": 0, "last_error": None}
 
-    def _due(self, region: str, ages: dict, empty: set | None = None, old: dict | None = None) -> list[tuple[str, dict]]:
+    def per_run(self, now: datetime | None = None) -> int:
+        """Pages built a run: more in India's night, never more than fit in the half hour with the gap between them (both markets)."""
+        now = now or datetime.now(timezone.utc)
+        h = now.hour + now.minute / 60
+        start, end = self.NIGHT_UTC
+        night = (h >= start or h < end) if start > end else (start <= h < end)
+        if not night or not self.night_per_run:
+            return self.warm_per_run
+        fit = int(self.every * 0.8 / max(self.gap, 1.0) / max(len(REGIONS), 1))
+        return max(self.warm_per_run, min(self.night_per_run, fit))
+
+    def _due(self, region: str, ages: dict, empty: set | None = None, old: dict | None = None, n: int | None = None) -> list[tuple[str, dict]]:
         """Companies to build next: those with no stored page in the sector lists and the S&P 500, then the sector
         lists' and the S&P 500's own companies whose stored page had nothing (a source down when it was built: a large
         company missing from every list by size until someone opened it, R7V-001) or was built before the facts a page
@@ -969,7 +986,7 @@ class Indexer:
         first |= set(behind)
         rest = [s for s in missing if s not in seeds and s not in big]
         stale = sorted((s for s, t in ages.items() if s in cos and s not in first and now - t > stock_pages.FRESH), key=lambda s: ages[s])
-        return [(s, cos[s]) for s in (known + hollow + behind + rest + stale)[:self.warm_per_run]]
+        return [(s, cos[s]) for s in (known + hollow + behind + rest + stale)[:n if n is not None else self.per_run()]]
 
     def run_once(self, sleep=time.sleep) -> dict:
         warmed = 0
