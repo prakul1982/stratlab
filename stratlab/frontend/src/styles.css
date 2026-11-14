@@ -1198,7 +1198,10 @@ body:has(main .k-state.error button, main .k-state.error a.btn) .banner .account
 .space-recent-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 56px; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); text-decoration: none; }
 .space-recent-row:hover { border-color: var(--ink-2); color: var(--ink); }
 .space-recent-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.space-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 12px; }      /* two rows of two on a phone end level: a longer line in one card no longer makes its row taller */
+/* two rows of two on a phone: the cards of a row end level (they stretch to the row), and each row is as tall as its own cards, not the
+   tallest card of the strip (LIVE8B-015: on an iPhone the Options and Paper trading cards stood ~150px taller than their text, the
+   height of the journal's two-line status in the row below) */
+.space-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: auto; gap: 12px; }
 /* Trade home's market figures (DC-001): laid out as the tool strip, but its own class (the strip is the tools' row) */
 .trade-market { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .trade-market b.num { font-size: 1.15rem; line-height: 1.3; }
