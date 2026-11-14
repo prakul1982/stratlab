@@ -48,17 +48,24 @@ def path(region: str, s: str) -> str:
 
 def entries(region: str | None = None) -> list[dict]:
     """The library's stored themes under today's membership rules: {region, name, label, slug, aliases, at, hk}, by name."""
-    out = []
+    # ...and a theme not read again yet under rules newer than its stored entry keeps its newest stored one meanwhile (LIVE8A-001: a
+    # rules bump took 15 of 21 public theme pages to "No theme at this address" until each was read again), never one of an older map
+    # name: an entry under today's rules always wins
+    best: dict = {}
     for hk, e in (computed.index(theme_library.KIND).get("entries") or {}).items():
         m = e.get("meta") or {}
-        if m.get("rules") != theme_base.RULES or e.get("region") not in ("IN", "US") or (region and e.get("region") != region):
+        if not isinstance(m.get("rules"), int) or m["rules"] > theme_base.RULES or e.get("region") not in ("IN", "US") \
+                or (region and e.get("region") != region):
             continue
         name = str(m.get("q") or "")
         if not slug(name):
             continue
-        out.append({"region": e["region"], "name": name, "label": public_words(e.get("label") or name, 80) or name, "slug": slug(name),
-                    "aliases": [slug(a) for a in m.get("aliases") or [] if slug(a)], "at": e.get("at"), "hk": hk})
-    return sorted(out, key=lambda x: (x["region"], x["label"].lower()))
+        row = {"region": e["region"], "name": name, "label": public_words(e.get("label") or name, 80) or name, "slug": slug(name),
+               "aliases": [slug(a) for a in m.get("aliases") or [] if slug(a)], "at": e.get("at"), "hk": hk}
+        key, rank = (e["region"], slug(name)), (m["rules"], str(e.get("at") or ""))
+        if key not in best or rank > best[key][0]:
+            best[key] = (rank, row)
+    return sorted((row for _, row in best.values()), key=lambda x: (x["region"], x["label"].lower()))
 
 
 def find(region: str, s: str) -> tuple[dict | None, str | None]:
@@ -72,7 +79,8 @@ def find(region: str, s: str) -> tuple[dict | None, str | None]:
 
 
 def payload(entry: dict) -> dict | None:
-    got = computed.get(theme_library.KIND, theme_library.key_of(entry["region"], entry["name"]), count=False)
+    # the entry found, of whichever rules (an older one stands until the theme is read again under today's: entries)
+    got = computed.get_hk(theme_library.KIND, entry["hk"]) if entry.get("hk") else computed.get(theme_library.KIND, theme_library.key_of(entry["region"], entry["name"]), count=False)
     p = ((got or {}).get("value") or {}).get("payload")
     return p if isinstance(p, dict) else None
 

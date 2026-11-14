@@ -298,3 +298,18 @@ def test_embeds_carry_source_date_and_backlink_and_no_vendor(w):
     assert "<polyline" in p and "Source: exchange closing prices" in p and "As of " in p and "https://stratlab.studio/stocks/in/RELIANCE" in p
     assert not PROVIDERS.search(p)
     assert c.get("/embed/price/in/NOPE").status_code == 404 and c.get("/embed/theme/in/nope").status_code == 404
+
+
+def test_a_rules_bump_keeps_a_public_theme_page_until_the_theme_is_read_again(w, monkeypatch):
+    """LIVE8A-001: a rules bump took 15 of 21 public theme pages to 404 until each theme was read again; the newest stored entry stands meanwhile."""
+    from app.intel import theme_base
+    c = w["client"]
+    keep("IN", "defence")
+    monkeypatch.setattr(theme_base, "RULES", theme_base.RULES + 1)      # a release with new rules; the theme not read again yet
+    assert c.get("/themes/in/defence", follow_redirects=False).status_code == 200
+    assert "/themes/in/defence" in c.get("/themes/in").text
+    assert [e["slug"] for e in public_themes.entries("IN")] == ["defence"]                 # one page per theme, not one per rules
+    keep("IN", "defence")                                                                  # read again under the new rules
+    entries = public_themes.entries("IN")
+    meta = computed.index(theme_library.KIND)["entries"][entries[0]["hk"]]["meta"]
+    assert len(entries) == 1 and meta["rules"] == theme_base.RULES                         # the new entry wins
