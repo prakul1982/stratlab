@@ -161,3 +161,9 @@ test("LIVE8B-017: the peers' growth column says its span", () => {
 test("LIVE8B-023: a US company's next results day says expected", () => {
   assert.match(read("src/pages/Research.tsx"), /\{region === "US" \? "Results expected" : "Results on"\} \{resultDay\(nextResults\)\}/);
 });
+
+test("LIVE8A-025: the results day chips don't repeat today and tomorrow by date", () => {
+  const page = read("src/pages/ResultsPage.tsx");
+  assert.match(page, /\.filter\(\(d\) => !nearDays\(region\)\.includes\(d\.date\)\)/);
+  assert.match(page, /const nearDays = \(region: Region\): string\[\] =>/);
+});
