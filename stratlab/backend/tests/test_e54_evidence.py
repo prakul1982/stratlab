@@ -36,7 +36,9 @@ def test_each_company_has_one_evidence_state_and_an_industry_code_is_never_its_o
     assert D.evidence_state(ver, WORDS, about="Delta Ltd makes orthopaedic implants for hospitals.") == "description_verified"
     assert D.evidence_state(ver, WORDS, about=None) == "industry_code_supported"          # nothing of its own to show: its industry
     assert D.evidence_state({"ticker": "E", "name": "Eps", "base": False, "verified": True, "what": "makes implants"}, WORDS) == "description_verified"
-    assert D.evidence_state({"ticker": "F", "name": "Phi", "base": False, "verified": False, "what": ""}, WORDS) == "not_confirmed"
+    # v55 (R55 review, updated on purpose): a company the map named whose check gave no answer (no words of its own) is not checked yet, never
+    # one whose own words describe other work (the live R54 Payments deck's Adyen)
+    assert D.evidence_state({"ticker": "F", "name": "Phi", "base": False, "verified": False, "what": ""}, WORDS) == "membership_unverified"
     assert D.evidence_state({**base, "ticker": "G", "name": "Gee", "what": "We operate a chain of hotels and restaurants."}, WORDS) == "not_confirmed"
     assert D.evidence_state({"ticker": "H", "name": "Aitch", "what": ""}, WORDS) == "membership_unverified"     # a map from before the checks
     assert D.evidence_state({"ticker": "I", "base": True, "basis": "list", "name": "Eye", "what": ""}, WORDS) == "list_supported"

@@ -54,7 +54,8 @@ def test_each_thing_that_must_never_ship_is_found_with_its_page():
                            "unread ranked": 0, "unread kind": 0, "left out>50%": 0, "unchecked as 0": 0,
                            "biz label": 0, "biz making": 0, "stale layer": 0, "same company": 0, "words claim": 0, "partial unsaid": 0,
                            "outlier range": 0, "added unexplained": 0, "verified count": 0, "adjacent ranked": 0, "move unexplained": 0, "scope core": 0, "layer lost unsaid": 0,
-                           "evidence state": 0, "population mismatch": 0}          # c54 (R53 review): three more; e54 (R54): two more (updated on purpose)
+                           "evidence state": 0, "population mismatch": 0, "identity unresolved": 0, "out of scope in Other": 0, "stage mismatch": 0,
+                           "coverage blur": 0}          # v55 (R55 review): four more; c54 (R53 review): three more; e54 (R54): two more (updated on purpose)
 
 
 def test_counts_that_reconcile_and_figures_beside_of_are_not_flagged():
@@ -84,12 +85,13 @@ def test_the_script_reads_a_folder_reports_a_row_for_each_deck_and_exits_non_zer
                                            "biz", "label", "biz", "making", "stale", "layer", "same", "company", "words", "claim", "partial", "unsaid",
                                            "outlier", "range", "added", "unexplained", "verified", "count", "adjacent", "ranked",
                                            "move", "unexplained", "scope", "core", "layer", "lost", "unsaid", "evidence", "state", "population", "mismatch",
-                                           "cut", "text", "other>40%", "mixed", "range", "result"]          # c54 (R53 review): three more columns (updated on purpose)          # d53 (R53): eight more columns (updated on purpose)          # rv51 (R51): "biz label", "biz making" (updated on purpose); gl50 (R50): four more columns (updated on purpose)   # lane s3-r40: two columns; lane t1: two more; lane d1: "no layer" (updated on purpose)
-    assert out.splitlines()[1].split() == ["a.txt", "2"] + ["0"] * 30 + ["ok"]          # c54 + e54: 30 columns (updated on purpose)          # c54: 28 columns (updated on purpose)          # d53: 25 columns (updated on purpose)          # rv51: 17 columns; gl50: 15 columns (updated on purpose)
+                                           "identity", "unresolved", "out", "of", "scope", "in", "Other", "stage", "mismatch", "coverage", "blur",
+                                           "cut", "text", "other>40%", "mixed", "range", "result"]          # v55 (R55 review): four more columns (updated on purpose)          # c54 (R53 review): three more columns (updated on purpose)          # d53 (R53): eight more columns (updated on purpose)          # rv51 (R51): "biz label", "biz making" (updated on purpose); gl50 (R50): four more columns (updated on purpose)   # lane s3-r40: two columns; lane t1: two more; lane d1: "no layer" (updated on purpose)
+    assert out.splitlines()[1].split() == ["a.txt", "2"] + ["0"] * 34 + ["ok"]          # v55: 34 columns (updated on purpose)          # c54 + e54: 30 columns (updated on purpose)          # c54: 28 columns (updated on purpose)          # d53: 25 columns (updated on purpose)          # rv51: 17 columns; gl50: 15 columns (updated on purpose)
     assert DC.main([str(bad)]) == 1
     out = capsys.readouterr().out
     # lane t1: the "hyphen minus" and "mixed range" columns (updated on purpose)
-    assert re.search(r"b\.txt\s+2\s+1\s+1\s+5\s+1\s+1\s+0\s+0\s+0\s+0\s+0\s+0\s+0\s+0\s+0" + r"\s+0" * 13 + r"\s+1\s+0\s+0\s+FAIL", out) and "b.txt: headline (1)" in out and "p.2: '14 of 12'" in out  # c54: the three new columns (updated on purpose); d53: the eight new columns (updated on purpose); rv51: the two biz columns; gl50: the four new columns (updated on purpose)
+    assert re.search(r"b\.txt\s+2\s+1\s+1\s+5\s+1\s+1\s+0\s+0\s+0\s+0\s+0\s+0\s+0\s+0\s+0" + r"\s+0" * 17 + r"\s+1\s+0\s+0\s+FAIL", out) and "b.txt: headline (1)" in out and "p.2: '14 of 12'" in out  # v55: the four new columns (updated on purpose); c54: the three new columns (updated on purpose); d53: the eight new columns (updated on purpose); rv51: the two biz columns; gl50: the four new columns (updated on purpose)
     assert DC.main([str(tmp_path / "missing")]) == 2 and DC.main([]) == 2
     empty = tmp_path / "empty"
     empty.mkdir()

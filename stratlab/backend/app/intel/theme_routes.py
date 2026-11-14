@@ -110,13 +110,17 @@ def says_work(about) -> bool:
     return bool(_DOES.search(str(about or "")))
 
 
-def thin_about(got: dict, region: str = "") -> bool:
+def thin_about(got: dict, region: str = "", name: str = "") -> bool:
     """Whether a stored description is read once more: too thin to show the business and kept before the current format (GPT review of
     R31.5: Bharti Airtel's profile line names no mobile service; R35: a US company with no encyclopedia article had none at all, and its
     annual report says what it does), or the read of its annual report was put off (`owed`: FILING_READS_PER_MINUTE were taken), or (US,
     where the only line was an encyclopedia's) kept before R35 and not about a company at all (live: Ichor Holdings held the Greek myth)."""
     about = str(got.get("about") or "")
     if got.get("owed"):
+        return True
+    # v55 (R55): none found for a listing line (a depositary receipt) looked up under its listed name, kept before its issuer was looked up
+    # ("issuer"): read once more, under the issuer's name
+    if not about and name and theme_base.listing_line(name) and "issuer" not in got:
         return True
     # gl52 (R52): 5, a US company's stored words with no sentence of its own about its work (an encyclopedia's opening only: Visa,
     # Mastercard, Fortinet) are read once more, so its annual report's opening is added (evidence_reader)
@@ -150,10 +154,13 @@ def filed_business(region: str, sym: str, read=None) -> tuple[str, bool]:
 
 
 def plain_name(name: str) -> str:
-    """A company name without its legal form, for an encyclopedia lookup ("Qnity Electronics, Inc." -> "Qnity Electronics")."""
+    """A company name without its legal form, for an encyclopedia lookup ("Qnity Electronics, Inc." -> "Qnity Electronics"). v55 (R55, the
+    live R54 Payments deck: "Adyen Nv-Unspon ADR" looked up as it is listed, so no article was ever found for it): a listing line's own words
+    (a depositary receipt, sponsored or not, a share class) are taken off too, so the issuer is looked up (theme_base.issuer_name)."""
     out = re.sub(r"[,.]?\s+(?:inc|incorporated|corp|corporation|co|company|ltd|limited|plc|llc|lp|n\.?v|s\.?a|ag|holdings?)\.?$", "",
                  str(name or "").strip(), flags=re.I)
-    return out.strip(" ,.") or str(name or "")
+    out = out.strip(" ,.") or str(name or "")
+    return theme_base.issuer_name(out) if theme_base.listing_line(name) else out
 
 
 def _page_code(sym: str) -> str | None:
@@ -200,7 +207,7 @@ def evidence_reader(region: str, names: dict):
                 got = db.json_value(db.get_setting(key), {})
             except Exception:
                 got = {}
-            if got.get("at") and not thin_about(got, region):
+            if got.get("at") and not thin_about(got, region, names.get(sym) or ""):
                 age = (datetime.now(timezone.utc) - datetime.fromisoformat(got["at"])).days
                 if age < (EVIDENCE_DAYS if got.get("about") else NO_DESCRIPTION_DAYS):
                     hit = got
@@ -229,7 +236,9 @@ def evidence_reader(region: str, names: dict):
                 filed, owed = filed_business(region, sym)
                 about = " ".join(x for x in (about, filed) if x)
             hit = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "about": theme_check.kept_description(about), "industry": industry,
-                   "v": ABOUT_V, **({"owed": True} if owed else {}), **({"no_page": True} if no_page else {})}
+                   "v": ABOUT_V, **({"owed": True} if owed else {}), **({"no_page": True} if no_page else {}),
+                   # v55: the issuer a listing line was looked up under
+                   **({"issuer": plain_name(names.get(sym) or "")} if theme_base.listing_line(names.get(sym) or "") else {})}
             try:
                 db.set_setting(key, json.dumps(hit, ensure_ascii=False))
             except Exception as e:
@@ -427,10 +436,10 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52}  # rules versions whose change only adds to a kept placement (c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53}  # rules versions whose change only adds to a kept placement (v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
-EARLIER_MAX = 8                 # rv51: how many carried versions back an earlier answer of the same map is looked for
+EARLIER_MAX = 9                 # rv51: how many carried versions back an earlier answer of the same map is looked for (v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
 
 
 def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
@@ -480,7 +489,10 @@ def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
     # R41: an answer kept under earlier rules sticks (theme_base.place_rest `carried`: nothing it answered is asked again)
     ob = off_before(region, theme, m)                 # d53: the companies an earlier version dropped as another business
     mb = moved_before(region, theme, m)               # c54: the moves the stored change log records, judged on what the layer sells
+    # v55: each company's stored revenue read only where the map has a layer named by a stage (theme_base.stage_moves)
+    staged = any(theme_base.layer_stage(v) for v in out.get("value_chain") or [])
     new, got = theme_base.place_rest(out, theme, lambda s_: about(s_), ask=ask, kept=kept, facts_of=_facts_reader(region),
+                                     **({"figures_of": _figures_reader(region)} if staged else {}),
                                      carried=version is not None and version != theme_base.RULES, previous=previous_layers(region, theme, m),
                                      **({"off_before": ob} if ob else {}), **({"moved_before": mb} if mb else {}))
     if ask is not None and got and got != kept and (got.get("names_for") or any(x.get("by") == "ai" for x in (got.get("assign") or {}).values())):
@@ -654,6 +666,21 @@ def _facts_reader(region: str):
     return facts_of
 
 
+def _figures_reader(region: str):
+    """v55 (R55): symbol -> {"revenue", "ebitda"} of a company's latest stored year (the theme's kept page facts, theme_library.FACTS, as the
+    dive reads them; theme_data.company_row), {} when none is kept: what its stage is read from beside its words (theme_base.stage_moves).
+    Nothing is read from a source here."""
+    def figures_of(sym):
+        try:
+            hit = computed.get(theme_library.FACTS, [region, sym])
+            r = theme_data.company_row(region, sym, (hit or {}).get("value")) if hit else None
+        except Exception as e:
+            print("theme: stored figures not read:", sym, type(e).__name__, str(e)[:100])
+            r = None
+        return {"revenue": r.get("revenue"), "ebitda": r.get("ebitda")} if r and r.get("revenue") is not None else {}
+    return figures_of
+
+
 def _no_ai(system: str, text: str) -> dict:
     raise AIError("Not asked while a page waits.")
 
@@ -814,7 +841,7 @@ def _about_reader(region: str, names: dict, limit: int = DESCRIBE_READS):
                 got = db.json_value(db.get_setting(k), {})
             except Exception:
                 got = {}
-            if got.get("at") and not thin_about(got, region):
+            if got.get("at") and not thin_about(got, region, names.get(sym) or ""):
                 hit = got
                 EVIDENCE_CACHE.set(k, hit, 6 * 3600)
             elif got.get("at") and company_text(got.get("about")):
@@ -1061,13 +1088,15 @@ def placement_inputs(q: str, region: str = "IN", profile=Depends(current_profile
     # R45 (lane tx2): also the previous live layers the placement reads (theme_base.place_rest `previous`) and each company's stored facts
     # (its official industry path, segments, filings' titles and business read: the live Release 45 Utilities placement could not be
     # replayed exactly without them), so a replay feeds exactly what the placement read
-    facts = _facts_reader(r)
+    facts, figures = _facts_reader(r), _figures_reader(r)
     return R.ok({"region": r, "theme": theme, "rules": theme_base.RULES, "generated_at": m.get("generated_at"), "kept_version": version,
                  "kept": kept, "placements": hit.get("placements"), "value_chain": hit.get("value_chain") or [],
                  "evidence": {s_: about(s_) for s_ in sorted(names)}, "previous": previous_layers(r, theme, m),
                  "off_before": off_before(r, theme, m),        # d53: the companies an earlier version dropped as another business
                  "moved_before": moved_before(r, theme, m),    # c54: the moves the stored change log records
-                 "facts": {s_: facts(s_) for s_ in sorted(names)}})
+                 "facts": {s_: facts(s_) for s_ in sorted(names)},
+                 # v55: each company's latest stored revenue and EBITDA margin, as the placement reads its stage (theme_base.stage_moves)
+                 "figures": {s_: f for s_, f in ((s_, figures(s_)) for s_ in sorted(names)) if f}})
 
 
 def dive_key(r: str, theme: str, m: dict) -> list:
