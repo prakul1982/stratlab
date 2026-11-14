@@ -2120,14 +2120,16 @@ FIGURE_WORDS = {"ebitda": "EBITDA margin", "net": "net margin", "roe": "ROE", "r
 def part_note(c: dict, keys: tuple) -> str:
     """ex49 (R48): which part of a company in its layer's calculations is left out, and why: a figure not stored, or one whose state keeps it
     out of the median (not reconciled, invalid, or on another period basis: n.c.); "" when none is."""
-    from .intel.theme_data import STATE_WORDS, VERIFIED
+    from .intel.theme_data import DEVELOPER_KEYS, STATE_WORDS, VERIFIED
     held, ver, nc = c.get("held") or {}, c.get("verify") or {}, set(c.get("nc") or ())
     gone, odd = [], []
     for k in keys:
         st = (held.get(k) or {}).get("state") or ((ver.get(k) or {}).get("state") if (ver.get(k) or {}).get("state") != VERIFIED else None)
         if k == "net" and c.get("one_off") and not st:
             st = "unverified_extreme"
-        if st:
+        if k in DEVELOPER_KEYS and c.get("developer") and not st:     # d53: spending ahead of its revenue, its margins apart
+            odd.append(f"{FIGURE_WORDS.get(k, k)} apart (costs over twice revenue)")
+        elif st:
             odd.append(f"{FIGURE_WORDS.get(k, k)} {STATE_WORDS.get(st, 'held')}")
         elif k in nc:
             odd.append(f"{FIGURE_WORDS.get(k, k)} on another period basis")
@@ -2157,7 +2159,7 @@ def layer_roll(layer: dict, cos: list, keys: tuple = ("ebitda", "net")) -> tuple
         elif c["symbol"] in wide and apart:
             ins.append((nm, "partial: whole company's figures, revenue only"))
         else:
-            ins.append((nm, part_note(c, keys) if c.get("one_off") or c.get("nc") or any(c.get(k) is None for k in keys) else ""))
+            ins.append((nm, part_note(c, keys) if c.get("one_off") or c.get("nc") or c.get("developer") or any(c.get(k) is None for k in keys) else ""))
     return ins, outs
 
 
@@ -2880,6 +2882,51 @@ def parents_row(v: dict) -> list[str] | None:
                                       "shares are each company's own, so the parent's includes its stake."]
 
 
+def without_words(v: dict) -> list[str]:
+    """d53: the confirmed companies with figures whose own words are not shown (no description in their own words is kept), by name."""
+    out = []
+    for x in v.get("layers") or []:
+        for c in x.get("companies") or []:
+            if c.get("status") != "unverified" and (c.get("revenue") is not None or c.get("profit") is not None) and not c.get("what"):
+                out.append(clean_name(c.get("name") or c.get("symbol") or ""))
+    return list(dict.fromkeys(out))
+
+
+def wordless_said(names_: list) -> str:
+    shown = ", ".join(names_[:5]) + (f" and {len(names_) - 5} more" if len(names_) > 5 else "")
+    return f"{_n(len(names_), 'company', 'companies')} with figures have no description in their own words yet: {shown}."
+
+
+PARTIAL_SHARE = 50          # d53: a theme whose checked companies are under this share of its list has a partial map, said wherever the map is
+
+
+def partial_map(v: dict, cov: dict) -> str:
+    """d53 (R53, the owner's review of the live R52 Biotech deck: 821 companies, 100 checked, 583 unread, while the deck read as a whole map):
+    the sentence that says the map is partial when the companies checked are under PARTIAL_SHARE% of the theme's list, else ""."""
+    mem = v.get("membership") or {}
+    total = int(cov.get("total") or 0)
+    # not checked: those whose membership was never checked, or those placed in "Other" because no word of theirs was read (d1 "unread")
+    unread = len({mb["symbol"] for mb in v.get("members") or [] if mb.get("symbol") and mb.get("unread")})
+    gone = max(total - int(mem.get("placed") or total), unread)
+    n = total - gone
+    if not total or n * 100 >= PARTIAL_SHARE * total:
+        return ""
+    return (f"A partial map: {n:,} of the theme's {total:,} companies were checked ({round(n * 100 / total)}%); {gone:,} are not checked yet, "
+            "so the layers, medians and rankings are of the checked companies only.")
+
+
+def adjacent_row(v: dict) -> list[str]:
+    """d53 (R53, the owner's review: hospital operators in the Medical devices deck, device makers in the Hospitals deck): the adjacent
+    participants, those whose principal business is of another kind than the theme's core members', by kind and name."""
+    by: dict = {}
+    for x in v.get("adjacent") or []:
+        by.setdefault(x["kind"], []).append(clean_name(x["name"]))
+    said = "; ".join(f"{k} {len(ns)} ({', '.join(ns[:4])}{f' and {len(ns) - 4} more' if len(ns) > 4 else ''})" for k, ns in by.items())
+    return ["Core and adjacent", f"The theme's core members are {v.get('core_kind') or 'its own industry'}; {_n(sum(len(x) for x in by.values()), 'company', 'companies')} "
+            f"whose principal business is another kind are adjacent participants: {said}.",
+            "Shown, with their layer, as adjacent; in no total, median or ranking of the theme."]
+
+
 def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> list[list[str]]:
     """The data-confidence page (the owner, 7 Nov): each check the figures went through, what it found and what the deck does about it."""
     ch = v.get("checks") or {}
@@ -2892,11 +2939,29 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> li
     par = parents_row(v)
     if par:
         rows.append(par)
+    wordless = without_words(v)
     if ch.get("unverified"):
-        rows.append(["Membership", f"{_n(len(ch['unverified']), 'company', 'companies')} with figures whose own words describe other work: {names(ch['unverified'])}.",
-                     "Listed as not confirmed; left out of every median and total."])
+        rows.append(["Membership", f"{_n(len(ch['unverified']), 'company', 'companies')} with figures whose own words describe other work: {names(ch['unverified'])}."
+                     + (f" {wordless_said(wordless)}" if wordless else ""), "Listed as not confirmed; left out of every median and total."])
+    elif wordless:
+        # d53 (R53, LIVE8A-004: "Every company with figures has words of its own ... Nothing held back" beside AMD, Intel, KLA and more with "No
+        # description in its own words yet"): the real count of companies with figures and no words of their own, never a claim of every one
+        rows.append(["Membership", wordless_said(wordless), "Kept in the figures by their official industry; nothing in their own words was checked."])
     else:
         rows.append(["Membership", "Every company with figures has words of its own, or a checked quote, that show the theme's work.", "Nothing held back."])
+    part = partial_map(v, cov)
+    if part:
+        rows.append(["Partial map", part, "Every claim about the map is of its checked companies; the rest are listed, not placed."])
+    if v.get("duplicates"):        # d53: one company under two symbols, kept once
+        ds = v["duplicates"]
+        rows.append(["Same company twice", f"{_n(len(ds), 'company', 'companies')} listed under two symbols with the same latest year, revenue and net profit: "
+                     + "; ".join(f"{clean_name(x['name'])} is {clean_name(x['kept_name'])}" for x in ds[:4]) + (f"; and {len(ds) - 4} more" if len(ds) > 4 else "") + ".",
+                     "Kept once, under the symbol with a market value, before any median, total or list."])
+    if v.get("adjacent"):          # d53: adjacent participants apart from the theme's core members
+        rows.append(adjacent_row(v))
+    if v.get("developers"):        # d53: companies spending ahead of their revenue, apart from the margin medians
+        rows.append(["Spending ahead of revenue", f"{_n(v['developers'], 'company', 'companies')} whose costs are over twice their revenue (EBITDA margin below −100%), "
+                     "pre-revenue or early-stage.", "Their margins are shown on their rows, verified, and left out of every margin median and range."])
     if ch.get("verified"):         # R44: an unusual figure its own filed figures give: kept, and said so with the count
         rows.append(verified_row(ch["verified"]))
     if ch.get("one_off"):
@@ -3137,7 +3202,12 @@ def cohort_row(v: dict) -> list[str] | None:
     n_add, n_rem = counts.get("added", len(added)), counts.get("removed", len(removed))
     parts = []
     if n_add:
-        parts.append(f"added {n_add}: {names(added)}")
+        # d53 (R53, the owner's review of the live R52 Consumer retail deck: "added 6" with no reason, a propane distributor among them): each
+        # addition with why it is in the theme, as the log keeps it
+        bywhy_a: dict[str, list] = {}
+        for x in added:
+            bywhy_a.setdefault(x.get("why") or "", []).append(x)
+        parts.append(f"added {n_add}: " + "; ".join(f"{names(xs)}" + (f" ({w})" if w else "") for w, xs in bywhy_a.items()))
     if n_rem:
         bywhy: dict[str, list] = {}
         for x in removed:
@@ -3146,10 +3216,23 @@ def cohort_row(v: dict) -> list[str] | None:
     if into:
         parts.append(f"moved into “{other}” {len(into)}: " + ", ".join(f"{clean_name(x.get('name') or x.get('symbol') or '')} (from “{x.get('from')}”)"
                                                                         for x in into[:COHORT_SHOWN]) + (f" and {len(into) - COHORT_SHOWN} more" if len(into) > COHORT_SHOWN else ""))
+    # d53 (R53, our deck reviewer: moves between layers and new or lost layers were never logged, Retail's 11 companies out of "Other" and
+    # Utilities' 44 re-grouped): every move between two of the map's layers, and every layer renamed, split, merged, added or removed
+    between = [x for x in e.get("moved") or [] if not (other and x.get("to") == other)]
+    if between:
+        parts.append(f"moved between layers {len(between)}: " + ", ".join(f"{clean_name(x.get('name') or x.get('symbol') or '')} (from “{x.get('from')}” to “{x.get('to')}”)"
+                                                                          for x in between[:COHORT_SHOWN]) + (f" and {len(between) - COHORT_SHOWN} more" if len(between) > COHORT_SHOWN else ""))
+    lay = [x for x in e.get("layers") or [] if isinstance(x, dict) and x.get("kind")]
+    if lay:
+        said = {"renamed": lambda x: f"“{x['from'][0]}” renamed “{x['to'][0]}”", "split": lambda x: f"“{x['from'][0]}” split into " + ", ".join(f"“{t}”" for t in x["to"]),
+                "merged": lambda x: ", ".join(f"“{f}”" for f in x["from"]) + f" merged into “{x['to'][0]}”",
+                "removed": lambda x: f"“{x['from'][0]}” removed ({x.get('n', 0)} companies)", "added": lambda x: f"“{x['to'][0]}” added ({x.get('n', 0)} companies)"}
+        parts.append(f"layers changed {len(lay)}: " + "; ".join(said[x["kind"]](x) for x in lay[:COHORT_SHOWN] if x["kind"] in said)
+                     + (f"; and {len(lay) - COHORT_SHOWN} more" if len(lay) > COHORT_SHOWN else ""))
     day = _day(e.get("d")) if e.get("d") else "its last change"
     if not parts:
         return [COVERAGE_KINDS[12], "0", f"Against the version stored before {day}: no company with figures added, removed or moved into “Other”."]
-    return [COVERAGE_KINDS[12], str(n_add + n_rem + len(into)), f"On {day}, against the version stored before it, after {why}: " + "; ".join(parts) + "."]
+    return [COVERAGE_KINDS[12], str(n_add + n_rem + len(into) + len(between)), f"On {day}, against the version stored before it, after {why}: " + "; ".join(parts) + "."]
 
 
 def refit_line(v: dict) -> tuple[int, str]:
@@ -3265,11 +3348,19 @@ def off_industry_line(v: dict) -> str:
     an official industry of the theme files there whose own words describe another business, left out of the theme (theme_base.
     without_off_industry), by the industry they are filed under; "" when there are none."""
     by: dict = {}
+    held = []
     for x in (v.get("placements") or {}).get("off_industry") or []:
         if isinstance(x, dict) and x.get("ticker"):
+            if x.get("before"):          # d53: out by an earlier version's finding, no words of its own read since
+                held.append(clean_name(x.get("name") or x["ticker"]))
+                continue
             by.setdefault(x.get("industry") or "the theme's industries", []).append(clean_name(x.get("name") or x["ticker"]))
     # c1: a name ending in a full stop ("Amaze Holdings, Inc.") ends the sentence, never with a second one
-    return " ".join(f"Filed under {ind} but in another business: {', '.join(names).rstrip('.')}." for ind, names in by.items())
+    out = " ".join(f"Filed under {ind} but in another business: {', '.join(names).rstrip('.')}." for ind, names in by.items())
+    if held:
+        out = (out + " " if out else "") + (f"Found to be in another business by an earlier version of the theme, with no words of their own read "
+                                            f"since: {', '.join(held).rstrip('.')}.")
+    return out
 
 
 _COV_OF = re.compile(r"(\d[\d,]*) of (\d[\d,]*)")
@@ -3355,6 +3446,9 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
     measure, mword = ("roe", "return on equity") if lender else ("ebitda", "EBITDA margin")
     if chained and chain.get("line"):
         lines = [chain["line"]]
+        part = partial_map(v, cov)
+        if part:                   # d53: a partial map said in the headline it qualifies, before its first word
+            lines = [f"A partial map, of the {part.split(': ', 1)[1].split(' companies were checked')[0]} companies checked: {chain['line']}"]
         tot = sum(x["revenue"] for x in own)
         if own and tot and len(own) >= 2:
             big = max(own, key=lambda x: x["revenue"])
@@ -3562,10 +3656,14 @@ def _figure_sources(slides: list, v: dict, eyebrow: str) -> None:
     nh = note_h(note)
     th = BOT - TOP - nh - 0.1
     pages = table_pages(SOURCES_HEAD, rows, SOURCES_WIDTHS, CW, th)
-    vn = sum(1 for x in recs if x.get("state") == "verified_extreme")
+    # d53 (R53, our deck reviewer: "15 checked figures, 15 verified" over rows each "arithmetic reproduced"): the head counts the rows'
+    # own states, a figure whose arithmetic alone was worked out again never among the verified
+    vn = sum(1 for x in recs if x.get("state") == "verified_extreme" and not only_arithmetic(x))
+    an = sum(1 for x in recs if only_arithmetic(x))
+    head_ = f"{_n(len(recs), 'checked figure')}, {vn} verified" + (f", {an} arithmetic reproduced only" if an else "")
     for k, chunk in enumerate(pages):
         s = Slide(SOURCES_TITLE + (f" ({k + 1} of {len(pages)})" if len(pages) > 1 else ""),
-                  f"{_n(len(recs), 'checked figure')}, {vn} verified: where each comes from and the stored lines it is worked out from", eyebrow=eyebrow)
+                  f"{head_}: where each comes from and the stored lines it is worked out from", eyebrow=eyebrow)
         s.add("table", (M, TOP, CW, min(th, table_height(SOURCES_HEAD, chunk, SOURCES_WIDTHS, CW))), head=SOURCES_HEAD, rows=chunk,
               widths=SOURCES_WIDTHS, numeric=[False] * len(SOURCES_HEAD), tight=True)
         s.add("text", (M, BOT - nh, CW, nh), paras=[note], size=BODY_MIN, floor=BODY_MIN, color=MUTED)

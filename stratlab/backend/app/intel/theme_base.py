@@ -632,7 +632,7 @@ def fill_earlier(answer: dict, earlier: dict) -> dict:
 
 
 def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None, facts_of=None, carried: bool = False,
-               previous: dict | None = None) -> tuple[dict, dict]:
+               previous: dict | None = None, off_before: dict | None = None) -> tuple[dict, dict]:
     """(the map with every base company in one of the map's own layers, the answer as worked out: {"assign": {symbol: {"layer", "by"}},
     "rename": {layer: {"name", "description"}}, "extra": [{"name", "description", "symbols"}]}). Runs only when the map has layers of its own;
     companies in its official-industry or named-list layers (not a list grouped by industry) are placed: from `kept` (the answer kept with the map),
@@ -658,7 +658,9 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
     R45 (lane tx2, the outside review of the live Release 45 Automotive deck: Bosch and Asahi India Glass left the component suppliers'
     layer they were in on the live Release 43): `previous`, {symbol: its layer in the previous live placement as shown} (theme_changes'
     snapshot, theme_routes.placed): a company the split would move out of the layer it was in there moves only on evidence of the new
-    layer (by_model `previous`), and an unchecked map pick keeps it without evidence of the layer it is in (held_to_previous)."""
+    layer (by_model `previous`), and an unchecked map pick keeps it without evidence of the layer it is in (held_to_previous).
+    d53 (R53): `off_before`, the companies an earlier stored version dropped as another business (theme_changes.off_memory): each stays out
+    while no words of its own are read (without_off_industry); one its words now keep in is named in the placements' "back" with why."""
     from .theme_check import (MODEL_MEMBERS, earning_lines, model_confidence, model_evidence, model_supported, model_tags, refine_model,
                               names_for_models, recheck_models, stated_model)
     vc = list(m.get("value_chain") or [])
@@ -829,7 +831,8 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
             v = {**v, "companies": list(v.get("companies") or []) + by_layer.get(v.get("layer"), [])}
             r = rename.get(v["layer"])
             if r and r.get("name"):            # a name that fits the companies the layer now holds; the map's name kept as "was" (R22)
-                v = {**v, "layer": r["name"], "description": r.get("description") or v.get("description") or "", "was": v["layer"]}
+                v = {**v, "layer": r["name"], "description": r.get("description") or v.get("description") or "", "was": v["layer"],
+                     "aka": list(dict.fromkeys((v.get("aka") or []) + [v["layer"]]))}          # d53: every name it had (theme_data.same_names)
         out_vc.append(v)
     out_vc += extra_layers
     if other:
@@ -890,12 +893,19 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
     # theme_routes._facts_reader `searched`), never "not checked yet"
     out_vc = [{**v, "companies": [{**c, "out_why": "none_found"} if c.get("out_why") == "no_words" and facts_for(c.get("ticker")).get("searched") else c
                                   for c in v.get("companies") or []]} for v in out_vc]
-    out_vc, off = without_off_industry(out_vc, {c.get("ticker") for c in todo}, evidence)
+    out_vc, off = without_off_industry(out_vc, {c.get("ticker") for c in todo}, evidence, off_before,
+                                       lambda s_: about_of(s_) or (by_sym.get(s_) or {}).get("what"))
     placements = m.get("placements")
     out_vc, sure = confirmed_by_words(out_vc, about_of, theme)
     if sure and placements is not None:
         placements = {**placements, "confirmed": (placements.get("confirmed") or 0) + sure,
                       "unconfirmed": max(0, (placements.get("unconfirmed") or 0) - sure)}
+    back = [{"ticker": s_, "name": (by_sym.get(s_) or {}).get("name") or (off_before or {})[s_][0],
+             "why": "an earlier version found its own words describe another business; its own words read now show the theme's work"}
+            for s_ in sorted(off_before or {}) if s_ in {c.get("ticker") for v in out_vc for c in v.get("companies") or []}
+            and (about_of(s_) or (by_sym.get(s_) or {}).get("what"))]
+    if back:
+        placements = {**(placements or {}), "back": back}
     if off:
         placements = {**(placements or {}), "off_industry": off}
         for k_ in ("placed", "total", "base"):
@@ -1158,23 +1168,37 @@ def confirmed_by_words(vc: list[dict], about_of, theme: str) -> tuple[list[dict]
     return out, n
 
 
-def without_off_industry(vc: list[dict], todo: set, evidence) -> tuple[list[dict], list[dict]]:
+def without_off_industry(vc: list[dict], todo: set, evidence, before: dict | None = None, words=None) -> tuple[list[dict], list[dict]]:
     """(the layers without the companies of another business, those companies) (R40, the owner's review of the live Release 39 decks: solar
     makers in "Other semiconductor companies", propane distributors in "Other consumer retail companies"): a company the theme's official
     industry brought in (`todo`: placed after the map, never one the map named) whose own words describe another business than the one
     that industry files it under (theme_check.off_industry) is no member of the theme: dropped from every layer and from "Other", and named
     once, with the industry it is filed under ({"ticker", "name", "industry"}), so the theme's coverage says who was left out and why. A
-    group left with no company is dropped."""
+    group left with no company is dropped.
+    d53 (R53, the owner's review of the live R52 Consumer retail deck: Suburban Propane, a propane distributor dropped as another business
+    since R40, among the companies "added" when its stored words were no longer read): `before`, {symbol: [name, industry]} of the companies
+    an earlier stored version of the theme dropped as another business (theme_changes.off_memory), stays out while no words of its own are
+    read (`words(symbol)` falsy: nothing shows the earlier finding wrong), with that reason ("before": True); one whose words are read is
+    judged on them again, and one they now keep in is no longer held by the earlier finding."""
     from .theme_check import off_industry
     off, seen = [], set()
+    before = before or {}
     for v in vc:
         for c in v.get("companies") or []:
             s_ = c.get("ticker")
-            if s_ in todo and s_ not in seen and off_industry(evidence(s_)):
+            if s_ not in todo or s_ in seen:
+                continue
+            filed = industry_label(c.get('industry')) or 'the theme’s industry'
+            if off_industry(evidence(s_)):
                 seen.add(s_)
                 off.append({"ticker": s_, "name": c.get("name") or s_, "industry": c.get("industry") or "",
                             # c1 (R44, reviewer ask 3): the reason it is out of the theme, kept beside it
-                            "why": f"filed under {industry_label(c.get('industry')) or 'the theme’s industry'}, its own words describe another business"})
+                            "why": f"filed under {filed}, its own words describe another business"})
+            elif s_ in before and words is not None and not words(s_):
+                seen.add(s_)
+                off.append({"ticker": s_, "name": c.get("name") or s_, "industry": c.get("industry") or "", "before": True,
+                            "why": f"filed under {filed}; an earlier version of the theme found its own words describe another business, "
+                                   "and no words of its own are read since"})
     if not off:
         return vc, []
     out = [{**v, "companies": [c for c in v.get("companies") or [] if c.get("ticker") not in seen]} for v in vc]
@@ -1255,7 +1279,8 @@ def renamed_after_split(vc: list[dict], names: set[str], rename: dict) -> list[d
         r = rename.get(v["layer"]) if v["layer"] in names else None
         if r and r.get("name") and r["name"] not in taken:
             taken.add(r["name"])
-            v = {**v, "layer": r["name"], "description": r.get("description") or v.get("description") or "", "was": v.get("was") or v["layer"]}
+            v = {**v, "layer": r["name"], "description": r.get("description") or v.get("description") or "", "was": v.get("was") or v["layer"],
+                 "aka": list(dict.fromkeys((v.get("aka") or []) + [v["layer"]]))}          # d53: every name it had (theme_data.same_names)
         out.append(v)
     return out
 

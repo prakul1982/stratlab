@@ -478,8 +478,10 @@ def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
         read_chip_making(region, out, kept)
     about = _about_reader(region, names, 0)                           # stored descriptions only: nothing is read from a page here
     # R41: an answer kept under earlier rules sticks (theme_base.place_rest `carried`: nothing it answered is asked again)
+    ob = off_before(region, theme, m)                 # d53: the companies an earlier version dropped as another business
     new, got = theme_base.place_rest(out, theme, lambda s_: about(s_), ask=ask, kept=kept, facts_of=_facts_reader(region),
-                                     carried=version is not None and version != theme_base.RULES, previous=previous_layers(region, theme, m))
+                                     carried=version is not None and version != theme_base.RULES, previous=previous_layers(region, theme, m),
+                                     **({"off_before": ob} if ob else {}))
     if ask is not None and got and got != kept and (got.get("names_for") or any(x.get("by") == "ai" for x in (got.get("assign") or {}).values())):
         try:
             computed.put("theme:place", key, got, label=m.get("sector") or theme, region=region)
@@ -686,6 +688,16 @@ def previous_layers(region: str, theme: str, m: dict) -> dict:
         return {}
 
 
+def off_before(region: str, theme: str, m: dict) -> dict:
+    """d53 (R53): {symbol: [name, industry]} of the companies an earlier stored version of this theme dropped as another business
+    (theme_changes.off_memory), whatever map it was of: a company's business doesn't change with the map. {} when none is stored."""
+    try:
+        return theme_changes.off_memory(theme_changes.stored(region, m.get("_library") or theme))
+    except Exception as e:
+        print("theme: earlier exclusions not read:", type(e).__name__, str(e)[:100])
+        return {}
+
+
 def checked(region: str, theme: str, m: dict, wait: bool = False) -> dict:
     """The map as the page shows it, never waiting on the AI (LIVE3-001): the checked map when it is in; otherwise the checks are started
     in the background (`_check`) and the request gets the latest partly checked map, or the base with nothing checked yet (`quick`).
@@ -782,6 +794,7 @@ def _about_reader(region: str, names: dict, limit: int = DESCRIBE_READS):
     def about_of(sym):
         k = f"theme:evidence:{region}:{sym}"
         hit = EVIDENCE_CACHE.get(k)
+        stale = None
         if hit is None:
             try:
                 got = db.json_value(db.get_setting(k), {})
@@ -790,16 +803,23 @@ def _about_reader(region: str, names: dict, limit: int = DESCRIBE_READS):
             if got.get("at") and not thin_about(got, region):
                 hit = got
                 EVIDENCE_CACHE.set(k, hit, 6 * 3600)
+            elif got.get("at") and company_text(got.get("about")):
+                # d53 (R53, the owner's review of the live R52 Consumer retail deck: Suburban Propane, CDW, FirstCash and EZCORP, dropped as
+                # another business since R40, back in the theme, and Chewy moved to "Other"): gl52's ABOUT_V 5 marked every US description
+                # with no sentence of its own for a second read, and until that read was made (FILING_READS_PER_MINUTE across every theme)
+                # the placement read none at all, so a company's own words, by which it was out of the theme or in its layer, were gone.
+                # The stored words stand until the new read replaces them
+                stale = got["about"]
         if hit is None:
             with lock:
                 if reads["n"] >= limit:
                     reads["missed"] += 1
-                    return None
+                    return stale
                 reads["n"] += 1
             try:
-                return (evidence_reader(region, names)([sym])[0].get(sym) or {}).get("about")
+                return (evidence_reader(region, names)([sym])[0].get(sym) or {}).get("about") or stale
             except Exception:
-                return None
+                return stale
         return hit.get("about") or own_filings(region, sym) or None         # no description: the lines of its own filings
     about_of.reads = reads
     return about_of
@@ -1030,6 +1050,7 @@ def placement_inputs(q: str, region: str = "IN", profile=Depends(current_profile
     return R.ok({"region": r, "theme": theme, "rules": theme_base.RULES, "generated_at": m.get("generated_at"), "kept_version": version,
                  "kept": kept, "placements": hit.get("placements"), "value_chain": hit.get("value_chain") or [],
                  "evidence": {s_: about(s_) for s_ in sorted(names)}, "previous": previous_layers(r, theme, m),
+                 "off_before": off_before(r, theme, m),        # d53: the companies an earlier version dropped as another business
                  "facts": {s_: facts(s_) for s_ in sorted(names)}})
 
 
@@ -1111,7 +1132,7 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
     hit["placements"], hit["figures"] = m.get("placements"), figures
     hit["coverage"] = map_coverage(m)          # R44: of every company the map places, not only those the figures were read for
     # cl48 (R47): the coverage control, against the previous live read of the theme (theme_changes' snapshot, stored before this one)
-    ctl = theme_changes.coverage_control(hit["coverage"], theme_changes.stored(r, m.get("_library") or theme).get("snap"))
+    ctl = theme_changes.coverage_control(hit["coverage"], theme_changes.stored(r, m.get("_library") or theme).get("snap"), hit)   # d53: layers lost too
     if ctl:
         hit["coverage"] = {**hit["coverage"], "control": ctl}
     late = {x["symbol"]: x["filed_unread"] for x in ((hit.get("sections") or {}).get("quarter") or {}).get("earlier") or [] if x.get("filed_unread")}
@@ -1272,6 +1293,10 @@ def deck_view(r: str, m: dict, dive: dict, extra: dict | None = None) -> dict:
             "placements": m.get("placements") or {}, "figures": dive.get("figures") or {}, "median_ebitda": med.get("median"),
             "checks": dive.get("checks") or {}, "status": dive.get("status") or {}, "with_figures": dive.get("with_figures"),
             "membership": dive.get("membership") or {}, "coverage": coverage_of(m, dive), "parents": dive.get("parents") or [],
+            # d53 (R53): one company under two symbols merged, the adjacent participants and the core members' kind, the companies spending
+            # ahead of their revenue counted apart from the margin medians
+            "duplicates": dive.get("duplicates") or [], "adjacent": dive.get("adjacent") or [], "core_kind": dive.get("core_kind") or "",
+            "developers": dive.get("developers") or 0,
             "news": None, "listings": None, "prices": None, "business": None, **(extra or {})}
 
 
