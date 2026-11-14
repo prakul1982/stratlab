@@ -35,6 +35,10 @@ CAUSES = ("rules", "map", "refresh", "figures")
 # layers when its universe changed, and nothing said so): a theme is flagged on its coverage and to the admins when the share of its placed
 # companies in informative layers is under COVER_MIN per cent, or falls by COVER_FALL points or more against its previous live placement
 COVER_MIN = 60
+# e54 (R54): each company checked outside the figures' window kept with its evidence state (theme_data.EVIDENCE_STATES), one letter each, so
+# the membership check moves on from one stored read to the next (theme_routes.membership_check)
+EV_CODE = {"description_verified": "d", "industry_code_supported": "i", "list_supported": "l", "not_confirmed": "n", "membership_unverified": "u"}
+EV_STATE = {v: k for k, v in EV_CODE.items()}
 COVER_FALL = 8
 FLAGS_KEY = "theme:coverage:flags"        # {key_of: {"name", "region", "problem" (None once it passes), "at"}}: the admins' alert (autofix)
 FLAGS_KEEP = 200
@@ -96,10 +100,13 @@ def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None) -> dict
             if c.get("symbol") and w:
                 mwhy.setdefault(c["symbol"], str(w)[:240])
     dups = {str(x["symbol"]): str(x.get("kept_name") or x.get("kept") or "") for x in dive.get("duplicates") or [] if isinstance(x, dict) and x.get("symbol")}
+    mc = dive.get("membership_check") if isinstance(dive.get("membership_check"), dict) else {}
+    ev = {s_: EV_CODE[x] for s_, x in (mc.get("outside") or {}).items() if x in EV_CODE}
+    hist = [list(p) for p in mc.get("history") or [] if isinstance(p, (list, tuple)) and len(p) == 3]
     return {"layers": layers, "cos": cos, "off": off, "map": sorted({s_ for s_ in members if s_}), "stamp": int(_num(stamp) or 0),
             "rules": rules, "unit": dive.get("unit"), **({"cover": cover} if cover else {}), **({"back": back} if back else {}),
             **({"why": why} if why else {}), **({"gone": gone} if gone else {}), **({"dups": dups} if dups else {}),
-            **({"mwhy": mwhy} if mwhy else {})}
+            **({"mwhy": mwhy} if mwhy else {}), **({"ev": ev} if ev else {}), **({"ev_hist": hist} if hist else {})}
 
 
 def off_memory(got: dict | None) -> dict:

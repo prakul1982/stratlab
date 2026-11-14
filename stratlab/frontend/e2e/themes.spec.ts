@@ -42,6 +42,9 @@ test("the theme page is a deep dive made of tables, with each company only where
   const members = page.locator("#theme-members");
   await expect(members.getByTestId("theme-counts")).toHaveText(/^6 companies: 5 from the official industry list, 1 added \(1 confirmed from its own description\)\.$/);
   await expect(members).toContainText("Official industries: Iron & Steel");
+  // e54: what each company's place rests on, the deck's states and counts (never an official-industry record said confirmed by its words)
+  await expect(members.getByTestId("theme-evidence")).toHaveText(/^Membership: \d+ (confirmed by their own description|kept on their official industry only|not checked yet)/);
+  await expect(members.getByTestId("member-evidence").first()).toHaveText(/^(Confirmed by its own description|Kept on its official industry only|Not checked yet)$/);
   // R21: Vedanta, which the map doesn't name, is placed in the map's own layer that fits it (mining), never in an exchange-industry layer
   // beside the map's
   await expect(members.getByRole("heading", { name: /official industry/ })).toHaveCount(0);

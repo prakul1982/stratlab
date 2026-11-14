@@ -2675,6 +2675,87 @@ def membership(c: dict, words: set[str], about: str | None = None, segments=None
     return "exposure" if c.get("verified") else "unverified"
 
 
+# e54 (R54, the owner's review of the live R53 decks: "100 confirmed from their own descriptions" beside "18 with figures lack own-words
+# descriptions, kept on official-industry labels", Hospitals 98 vs 43): the evidence a company's place in the theme rests on, one state each,
+# the same on the deck, the app's theme page and the public page:
+#   "description_verified"    its own words (or a checked quote of them) were read and show the theme's work;
+#   "industry_code_supported" kept on its official industry alone: no words of its own read, or words that neither show nor contradict it;
+#   "list_supported"          kept on the theme's own named list alone (its own words don't show the work);
+#   "not_confirmed"           its own words were read and describe other work: listed, in no figure;
+#   "membership_unverified"   its membership was never checked (outside the companies checked so far, or a map from before the checks).
+EVIDENCE_STATES = ("description_verified", "industry_code_supported", "list_supported", "not_confirmed", "membership_unverified")
+EVIDENCE_SAID = {"description_verified": "confirmed by their own description", "industry_code_supported": "kept on their official industry only",
+                 "list_supported": "kept on the theme's own list only", "not_confirmed": "whose own words describe other work",
+                 "membership_unverified": "not checked yet"}
+EVIDENCE_ONE = {"description_verified": "Confirmed by its own description", "industry_code_supported": "Kept on its official industry only",
+                "list_supported": "Kept on the theme's own list only", "not_confirmed": "Its own words describe other work",
+                "membership_unverified": "Not checked yet"}
+
+
+def evidence_state(c: dict, words: set[str], about: str | None = None, segments=None, status: str | None = None) -> str:
+    """e54: what a company's place in the theme rests on (EVIDENCE_STATES), from its map record `c`. A company is "description_verified" only
+    when its own words are there to show (theme_base.own_words: the same line the page shows; never an industry label) and they, a checked
+    quote of them, the placement's read of them or its principal business as its own words state it show the theme's work; a company kept
+    with no such words is kept on its official industry (or the theme's list) only. `status`: its membership() when already worked out."""
+    status = status or membership(c, words, about, segments)
+    if status == "unverified":
+        return "not_confirmed"
+    if c.get("base") is None and c.get("verified") is None:
+        return "membership_unverified"
+    own = shown_words(c, about)
+    if c.get("verified") is True and (own or not c.get("base")):
+        return "description_verified"          # a checked quote, or its stored description read and found to say its layer's work
+    if own and (does_the_work(own, words) or c.get("fit")
+                or principal_fits(c, words, about, segments() if callable(segments) else segments) in ("segment", "description")):
+        return "description_verified"
+    if not c.get("base"):
+        return "not_confirmed"
+    return "list_supported" if c.get("basis") == "list" else "industry_code_supported"
+
+
+def shown_words(c: dict, about: str | None = None) -> str:
+    """e54: the company's own words a page can show: its map line when that is its own words, else its stored description's first sentence
+    of its own about its work (theme_base.own_line); "" when there are none (the page says "No description in its own words yet")."""
+    from .theme_base import own_line, own_words as _own
+    return _own(c.get("what") or "", c.get("name") or "") or (_own(own_line(about, c.get("name") or ""), c.get("name") or "") if about else "")
+
+
+def evidence_counts(states) -> dict:
+    """e54: {state: how many} over EVIDENCE_STATES, every state present (0 where none)."""
+    got = Counter(states.values() if isinstance(states, dict) else states)
+    return {k: int(got.get(k, 0)) for k in EVIDENCE_STATES}
+
+
+MEMBERSHIP_STEP = 60       # e54: companies beyond those checked so far whose membership is checked each time the theme's figures are stored
+
+
+def membership_round(m: dict, done, words: set[str], about, step: int = MEMBERSHIP_STEP) -> dict:
+    """e54 (R54, the owner's review: Biotech "564 still not checked" and Software 488 after several checks: the companies checked were always
+    the same window, every company the AI named and then the largest by market value, theme_base.for_figures, so the check never reached the
+    rest): the next `step` companies of the map (`m`, every company it lists) not checked yet (`done`: those already checked, this version's
+    figures window and every earlier round), largest by market value first, each with its evidence state (evidence_state) from its official
+    industry and its own stored description (`about(symbol)`, stored only, never read from a source). {symbol: state}; bounded by `step`."""
+    done = set(done or ())
+    seen, todo = set(), []
+    for v in m.get("value_chain") or []:
+        for c in v.get("companies") or []:
+            t = c.get("ticker")
+            if t and t not in done and t not in seen:
+                seen.add(t)
+                todo.append(c)
+    todo.sort(key=lambda c: (-(c.get("cap") or 0), c["ticker"]))
+    out = {}
+    for c in todo[:max(0, step)]:
+        try:
+            text = about(c["ticker"])
+        except Exception:
+            text = None
+        from .theme_base import one_line
+        rec = {**c, "what": c.get("what") or (one_line(text) if text else "")}
+        out[c["ticker"]] = evidence_state(rec, words, text, None)
+    return out
+
+
 # d53 (R53, the owner's review of the live R52 decks: hospital operators (HCA) counted in the Medical devices theme's figures, device makers
 # (Poly Medicure) in the Hospitals theme's): kinds of business whose companies take part in each other's themes as suppliers, customers or
 # other care settings. A theme whose own name states one of these kinds has as its core members the companies whose principal business is
@@ -2964,6 +3045,8 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     # rv51 (R51): a company of the theme's industries is screened out by its words only when its principal disclosed business doesn't fit
     # (membership: its whole stored description and its segments read)
     every_status = {s: membership(c, words, src.about(s), lambda s=s: seg_list(s)) for s, c in placed.items()}
+    # e54: what each one's place rests on (its own words read and showing the work, its official industry alone, ...), one state each
+    every_evidence = {s: evidence_state(c, words, src.about(s), lambda s=s: seg_list(s), every_status[s]) for s, c in placed.items()}
     facts = {s: src.facts(s) for s in placed}
     rows = {s: r for s, r in ((s, company_row(region, s, f)) for s, f in facts.items()) if r}
     # c54 (R53 review: "missing data must not remove a valid member"): a company of one of the map's layers with no stored page figures stays
@@ -2979,7 +3062,9 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         if s in rows:
             rows[s]["name"] = shown_name(c.get("name"), rows[s]["name"]) or rows[s]["name"]
             rows[s]["status"] = every_status[s]
+            rows[s]["evidence"] = every_evidence[s]
             rows[s]["theme"] = theme_record(c, rows[s]["status"])     # c1: in the theme, with its reason (apart from any comparison)
+            rows[s]["theme"]["evidence"] = every_evidence[s]
             if c.get("base") and rows[s]["status"] == "core" and membership(c, words, principal=False) == "unverified":
                 where, said = principal_business(c, src.about(s), seg_list(s))
                 rows[s]["theme"]["why"] += (f"; its own words name other work, but its principal business ({PRINCIPAL_WORDS[where]}"
@@ -3063,7 +3148,9 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
             for r in mine:
                 if r.get("adjacent") and not r.get("model_out"):
                     r["model_out"], r["out_why"] = "other", "adjacent"
-        b = layer_block(v.get("layer") or "", [{**r, "what": own_words(what.get(r["symbol"]), r.get("name") or "", r["symbol"]) or None, "company_wide": r["symbol"] in wide, "official_industry": ind.get(r["symbol"]) or "",
+        # e54: a company confirmed by its own description shows the words that confirmed it (its stored description's own sentence)
+        said = lambda r: what.get(r["symbol"]) or (shown_words({"name": r.get("name")}, src.about(r["symbol"])) if r.get("evidence") == "description_verified" else "")  # noqa: E731
+        b = layer_block(v.get("layer") or "", [{**r, "what": own_words(said(r), r.get("name") or "", r["symbol"]) or None, "company_wide": r["symbol"] in wide, "official_industry": ind.get(r["symbol"]) or "",
                                                 **model_fields(v, r["symbol"]), **refit_of(v, r["symbol"])} for r in mine], wide)
         b["description"] = v.get("description") or ""
         if adj_layer:
@@ -3159,6 +3246,8 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         # confirmed ones only (R28: an unconfirmed company is listed but never in the figures, so "with figures 15" beside "confirmed 14" was wrong)
         "membership": {"placed": len(every_status), "confirmed": sum(1 for x in every_status.values() if x != "unverified"),
                        "not_confirmed": sum(1 for x in every_status.values() if x == "unverified")},
+        # e54: the checked companies by what their place rests on (they add up to the membership's "placed"), and each one's state
+        "membership_evidence": evidence_counts(every_evidence), "evidence": dict(sorted(every_evidence.items())),
         "status": {r["symbol"]: r.get("status") or "core" for r in listed}, "with_figures": sum(1 for r in listed if has_figures(r) and r.get("status") != "unverified"),
         "without_figures": [{"symbol": r["symbol"], "name": r["name"]} for r in listed if not has_figures(r) and r.get("status") != "unverified"],
     }

@@ -523,7 +523,10 @@ def describe_unplaced(region: str, out: dict, names: dict, kept: dict | None) ->
     if not any(not v.get("official") and v.get("layer") for v in out.get("value_chain") or []):
         return []                               # no layers of the map's own to place them in (theme_base.place_rest)
     want = []
-    for c in sorted(rest, key=lambda c: (-(c.get("cap") or 0), c["ticker"]))[:theme_base.PLACE_MAX]:
+    # e54 (R54, the owner's review of the live R53 decks: Biotech's 564 and Software's 151 "not checked yet (no description of their own is
+    # kept)" after several checks): the candidates were cut to the largest PLACE_MAX before the ones already described were passed over, so
+    # once those had their words no company past them was ever read; the next PLACE_READS without a description, largest first, are read
+    for c in sorted(rest, key=lambda c: (-(c.get("cap") or 0), c["ticker"])):
         if len(want) >= PLACE_READS:
             break
         if not _has_description(region, c["ticker"]):
@@ -1127,6 +1130,33 @@ def _at_seconds(at) -> float:
             return 0.0
 
 
+def membership_check(theme: str, m: dict, fm: dict, dive: dict, before: dict | None, about, today) -> dict:
+    """e54 (R54, the owner's review of the live R53 decks: Biotech "564 still not checked", Software 488, after several checks: the companies
+    whose membership was checked were always the figures' window, every one the AI named and then the largest by market value, so the
+    check never moved on): the companies outside that window checked so far, earlier stored reads' (the snapshot's "ev") and this read's
+    next theme_data.MEMBERSHIP_STEP, each with its evidence state; with how many are checked of the theme's companies after each stored
+    read ("history", the snapshot's "ev_hist" and this read's point). {"outside": {symbol: state}, "checked", "total", "history"}."""
+    before = before if isinstance(before, dict) else {}
+    every = {c["ticker"] for v in m.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}
+    window = set(dive.get("evidence") or {})
+    kept = {s_: theme_changes.EV_STATE.get(x, x) for s_, x in (before.get("ev") or {}).items()
+            if s_ in every and s_ not in window and theme_changes.EV_STATE.get(x, x) in theme_data.EVIDENCE_STATES}
+    try:
+        words = theme_data.theme_words(fm, theme)
+        new = theme_data.membership_round(m, window | set(kept), words, about)
+    except Exception as e:
+        print("theme: membership check not moved on:", type(e).__name__, str(e)[:100])
+        new = {}
+    outside = {**kept, **new}
+    total = (dive.get("coverage") or {}).get("placed") or len(every)
+    checked = len(window | set(outside))
+    hist = [list(p) for p in before.get("ev_hist") or [] if isinstance(p, (list, tuple)) and len(p) == 3]
+    point = [today.isoformat(), checked, total]
+    if not hist or hist[-1][1:] != point[1:]:
+        hist = (hist + [point])[-theme_changes.KEEP:]
+    return {"outside": dict(sorted(outside.items())), "checked": checked, "total": total, "history": hist, "step": len(new)}
+
+
 def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None = None) -> dict:
     """The dive for a checked map with its descriptions (the page's tables and sections): kept once for everyone in the shared store
     (kind "theme:dive") and served from there, however old, until a Refresh (owner, 7 Nov); worked out again from the stored company
@@ -1144,8 +1174,12 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
     hit = theme_data.build(r, theme, fm, src)
     hit["placements"], hit["figures"] = m.get("placements"), figures
     hit["coverage"] = map_coverage(m)          # R44: of every company the map places, not only those the figures were read for
+    before = theme_changes.stored(r, m.get("_library") or theme).get("snap")
+    # e54 (R54): the membership check moves on through the companies not checked yet, MEMBERSHIP_STEP a stored read (membership_check)
+    hit["membership_check"] = membership_check(theme, m, fm, hit, before, getattr(src, "about", lambda s_: None),
+                                               getattr(src, "today", None) or datetime.now(timezone.utc).date())
     # cl48 (R47): the coverage control, against the previous live read of the theme (theme_changes' snapshot, stored before this one)
-    ctl = theme_changes.coverage_control(hit["coverage"], theme_changes.stored(r, m.get("_library") or theme).get("snap"), hit)   # d53: layers lost too
+    ctl = theme_changes.coverage_control(hit["coverage"], before, hit)   # d53: layers lost too
     if ctl:
         hit["coverage"] = {**hit["coverage"], "control": ctl}
     late = {x["symbol"]: x["filed_unread"] for x in ((hit.get("sections") or {}).get("quarter") or {}).get("earlier") or [] if x.get("filed_unread")}
@@ -1310,6 +1344,9 @@ def deck_view(r: str, m: dict, dive: dict, extra: dict | None = None) -> dict:
             # ahead of their revenue counted apart from the margin medians
             "duplicates": dive.get("duplicates") or [], "adjacent": dive.get("adjacent") or [], "core_kind": dive.get("core_kind") or "",
             "developers": dive.get("developers") or 0,
+            # e54 (R54): each checked company's evidence state and the membership check's progress outside the figures' window
+            "evidence": dive.get("evidence") or {}, "membership_evidence": dive.get("membership_evidence"),
+            "membership_check": dive.get("membership_check") or {},
             "news": None, "listings": None, "prices": None, "business": None, **(extra or {})}
 
 
