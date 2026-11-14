@@ -896,8 +896,8 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
     # c54 (R53 review, the live Metals deck: "Aluminium", 14 companies on the version before, gone on a re-check, its companies to "Other"
     # and the pipe makers): a named layer of the previous live version kept with those of its companies that still fit (restore_vanished)
     gone_layers: list = []
-    if previous:
-        out_vc, gone_layers = restore_vanished(out_vc, previous, evidence, theme, theme_words=kind_stems(theme))
+    if previous or moved_before:
+        out_vc, gone_layers = restore_vanished(out_vc, previous or {}, evidence, theme, theme_words=kind_stems(theme), moved_before=moved_before)
     # gl52 (R52): a company left out for want of words whose description was looked for in every source and none found says so ("none_found",
     # theme_routes._facts_reader `searched`), never "not checked yet"
     out_vc = [{**v, "companies": [{**c, "out_why": "none_found"} if c.get("out_why") == "no_words" and facts_for(c.get("ticker")).get("searched") else c
@@ -2698,7 +2698,8 @@ def sold_what(out: list[dict], placed_in: dict, by_how, main, fam, ev, theme_wor
 LOST_MIN = 5                    # c54: a named layer of the previous live version with this many companies or more is never lost unsaid
 
 
-def restore_vanished(vc: list[dict], previous: dict, evidence, theme: str, theme_words: set | None = None) -> tuple[list[dict], list[dict]]:
+def restore_vanished(vc: list[dict], previous: dict, evidence, theme: str, theme_words: set | None = None,
+                     moved_before: dict | None = None) -> tuple[list[dict], list[dict]]:
     """(the layers with each lost layer restored, what was lost) (c54, the owner's review of the live R53 Metals deck: "Aluminium", a layer
     of 14 companies on the version before, disappeared on a re-check, 11 of its companies to "Other" and 3 to the pipe makers, informative
     coverage 51 of 66 to 41 of 66, with nothing said but "removed"): a named layer of the previous live version (`previous`: {symbol: its
@@ -2706,8 +2707,15 @@ def restore_vanished(vc: list[dict], previous: dict, evidence, theme: str, theme
     back with those of its companies that still fit it: each now in "Other", or in a layer whose name its own words or industry don't say it
     sells (sells_layer, never one they do say: evidence for its new place keeps it there), whose own words or official industry say what the
     lost layer sells (a layer of one official industry: its industry). It comes back with SPLIT_PART companies or more, else stays lost.
-    Each lost layer is listed ({"layer", "before": N, "restored": n, "to": {layer: count}, "why"}) for the change log."""
+    Each lost layer is listed ({"layer", "before": N, "restored": n, "to": {layer: count}, "why"}) for the change log.
+    A layer the stored version already lost is read from the change log's moves (`moved_before`: {symbol: [from, to]}): a company the log
+    moved out of a layer and that is still where it moved it counts as of that layer (the live R53 Metals snapshot no longer had
+    "Aluminium"; its log moved its 14 companies out)."""
     tw = kind_stems(theme) if theme_words is None else theme_words
+    previous = dict(previous)
+    for s_, mv in (moved_before or {}).items():
+        if isinstance(mv, (list, tuple)) and len(mv) == 2 and mv[0] and _HALF_RX.sub("", str(previous.get(s_) or mv[1])) == _HALF_RX.sub("", str(mv[1])):
+            previous[s_] = mv[0]
     other = lambda v: bool(v.get("official")) and v.get("basis") == "rest"      # noqa: E731
     shown = lambda v: _HALF_RX.sub("", v.get("layer") or "")      # noqa: E731
     names = lambda v: ({shown(v), v.get("was") or ""} | set(v.get("aka") or [])) - {""}      # noqa: E731

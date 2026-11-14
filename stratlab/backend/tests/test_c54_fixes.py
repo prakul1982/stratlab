@@ -213,7 +213,7 @@ def test_the_aluminium_layer_comes_back_with_its_companies_that_still_fit_on_the
     informative to 41 of 66, the log saying only "removed". Now, against the previous version that had it, the layer comes back with those of
     its companies whose words or official industry ("Aluminium") still say what it sells and that no other layer's name says they sell, and
     the placement lists it ("layers_gone") with where its companies went."""
-    before = layers(replay("metals", previous={})["value_chain"])
+    before = layers(replay("metals", previous={}, moved=False)["value_chain"])
     assert "Aluminium" not in set(before.values())
     out = replay("metals", previous=r52_previous())
     got = layers(out["value_chain"])
@@ -224,6 +224,17 @@ def test_the_aluminium_layer_comes_back_with_its_companies_that_still_fit_on_the
     assert sum(gone[0]["to"].values()) == 14
     inf = lambda rows: sum(1 for x in rows.values() if x != "Other")      # noqa: E731
     assert inf(got) - inf(before) == sum(1 for s_ in back if before[s_] == "Other") >= 10          # the rest came back from the pipe makers
+
+
+def test_the_layer_the_live_r53_version_already_lost_comes_back_from_its_change_log():
+    """The live R53 Metals snapshot (the inputs' "previous") no longer has "Aluminium"; its change log moved its 14 companies out (11 into
+    "Other", 3 to the pipe makers). Read from the log's moves, the next re-check restores the layer, as against the R52 version itself."""
+    assert "Aluminium" not in set(inputs("metals")["previous"].values())
+    out = replay("metals")
+    got = layers(out["value_chain"])
+    want = layers(replay("metals", previous=r52_previous())["value_chain"])
+    assert [s_ for s_ in ALUMINIUM if got[s_] == "Aluminium"] == [s_ for s_ in ALUMINIUM if want[s_] == "Aluminium"]
+    assert out["placements"]["layers_gone"][0]["before"] == 14
 
 
 def test_a_layer_of_fewer_than_five_or_with_no_company_that_fits_stays_lost_and_says_why():
@@ -253,6 +264,10 @@ def test_the_change_log_says_where_a_lost_layer_s_companies_went_and_reads_back_
     assert not deck_check.check_text(f"Since the previous version: layers changed 1: {said}.")["counts"]["layer lost unsaid"]
     log = {"log": [{"moved": [{"symbol": "INTC", "from": MAKERS, "to": EQUIP}]}, {"moved": [{"symbol": "X", "from": "A", "to": "B"}]}]}
     assert C.move_memory(log) == {"INTC": [MAKERS, EQUIP], "X": ["A", "B"]}
+    from app.intel import theme_workbook as WB
+    _, rows, _, _ = WB.changes({"entries": [{"d": "2026-11-14", "cause": "rules", **d}]}, "IN")
+    assert [str(r[7])[:67] for r in rows if r[2] == "Layer removed"] == ["3 companies: 2 to Other metals companies; 1 to Pipes; none restored"]
+    assert any(len(r) == 8 and r[7].startswith("its own words say") for r in rows if r[2] == "Company moved")
 
 
 # ---------- 4 P1 missing figures, a merged symbol ----------

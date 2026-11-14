@@ -63,7 +63,14 @@ def test_a_company_still_in_the_map_but_without_figures_says_so():
     v1 = dive_of()
     v2 = dive_of(changed={"MINEB": None})
     d = TC.diff(snap(v1), snap(v2, members=["MINEA", "MINEB", "CELLA", "CELLB", "RELIANCE"]))
-    assert d["removed"] == [{"symbol": "MINEB", "name": "Mine B", "layer": "Mining", "why": "no figures stored for it"}]
+    # c54 (R53 review: "missing data must not remove a valid member", updated on purpose): a member whose figures are no longer stored stays
+    # in its layer, "figures not available", so it is no longer removed; the reason stays for a map member absent from the read
+    assert d["removed"] == []
+    mine_b = next(c for b in v2["layers"] for c in b["companies"] if c["symbol"] == "MINEB")
+    assert mine_b["figures"] == "not_available" and mine_b.get("revenue") is None
+    gone = snap(v2, members=["MINEA", "MINEB", "CELLA", "CELLB", "RELIANCE"])
+    gone["cos"].pop("MINEB")
+    assert TC.diff(snap(v1), gone)["removed"] == [{"symbol": "MINEB", "name": "Mine B", "layer": "Mining", "why": "no figures stored for it"}]
 
 
 def test_small_moves_and_a_new_year_are_not_restatements():
@@ -100,7 +107,8 @@ def test_a_layer_added_or_removed():
     v1 = dive_of()
     one = [{**LAYERS[0], "companies": LAYERS[0]["companies"] + LAYERS[1]["companies"]}]
     d = TC.diff(snap(v1), snap(dive_of(with_layers(one))))
-    assert d["layers"] == [{"kind": "removed", "from": ["Cells"], "to": [], "n": 3}] and len(d["moved"]) == 3
+    # c54 (R53 review, updated on purpose): a removed layer says where its companies went
+    assert d["layers"] == [{"kind": "removed", "from": ["Cells"], "to": [], "n": 3, "went": {"Mining": 3}}] and len(d["moved"]) == 3
 
 
 # ---------- the stored log ----------

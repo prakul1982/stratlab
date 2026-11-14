@@ -6887,7 +6887,7 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
     agg, gmed = gm.get("aggregate") or {}, gm.get("median") or {}
     mk = sec.get("market") or {}
     meds = sec.get("medians") or {}
-    if agg or gmed or meds:
+    if agg or gmed or any(meds.values()):          # c54: members listed with no figure give no median, and no page of none
         grow = [[label, _chg((agg.get(f"{k}_1y") or {}).get("value")), _chg((agg.get(f"{k}_3y") or {}).get("value")),
                  _chg((gmed.get(f"{k}_1y") or {}).get("median")), _chg((gmed.get(f"{k}_3y") or {}).get("median"))] for k, label in (("revenue", "Revenue"), ("profit", "Net profit"))]
         whole = mostly_whole((v.get("checks") or {}).get("whole_points"), (v.get("checks") or {}).get("with_ebitda"))

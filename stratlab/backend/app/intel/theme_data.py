@@ -2966,10 +2966,12 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     every_status = {s: membership(c, words, src.about(s), lambda s=s: seg_list(s)) for s, c in placed.items()}
     facts = {s: src.facts(s) for s in placed}
     rows = {s: r for s, r in ((s, company_row(region, s, f)) for s, f in facts.items()) if r}
-    # c54 (R53 review: "missing data must not remove a valid member"): a company of the theme with no stored page figures stays in its layer,
-    # listed as "figures not available", counted among the members, in no median or total (no_figures_row)
+    # c54 (R53 review: "missing data must not remove a valid member"): a company of one of the map's layers with no stored page figures stays
+    # in its layer, listed as "figures not available", counted among the members, in no median or total (no_figures_row)
+    # (a theme none of whose companies has figures yet is still being read: nothing to list beside)
+    in_layer = {c["ticker"] for v in checked.get("value_chain") or [] if not v.get("official") for c in v.get("companies") or []} if rows else set()
     for s, c in placed.items():
-        if s not in rows and not (isinstance(facts.get(s), dict) and facts[s].get("not_company")):
+        if s in in_layer and s not in rows and not (isinstance(facts.get(s), dict) and facts[s].get("not_company")):
             r = no_figures_row(region, s, c.get("name") or s)
             if r:
                 rows[s] = r
@@ -3041,7 +3043,8 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     # R32: a split by market value one of whose halves shows no company is undone (theme_base.unsplit_unshown)
     from .theme_base import own_words as _own, unsplit_unshown, whole_words
     own_words = lambda t, n, sym=None: _own(whole_words(t, src.about(sym)) if sym and t else t, n)     # noqa: E731  (LIVE7A-004: no word cut)
-    for v in unsplit_unshown(checked.get("value_chain") or [], {s for s, r in rows.items() if r.get("status") != "unverified"}):
+    for v in unsplit_unshown(checked.get("value_chain") or [], {s for s, r in rows.items() if r.get("status") != "unverified"
+                                                                and r.get("figures") != "not_available"}):          # c54: a listed row with no figure shows none
         mine = [rows[c["ticker"]] for c in v.get("companies") or [] if c["ticker"] in rows]
         if v.get("sub_only") and not mine:          # d1: the "Other" group made for sub-theme-only companies none of which has figures
             continue
