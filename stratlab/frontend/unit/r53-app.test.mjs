@@ -130,3 +130,9 @@ test("LIVE8A-015: the overseas markets' rows name their session's date, never to
   assert.equal(sessionWord("2026-11-13", "2026-11-13", dayText), "on 13 Nov");
   assert.equal(sessionWord(null, "2026-11-13", dayText), "–");
 });
+
+test("LIVE8B-015: a Key numbers group has a Basis or Usual range column only when one of its rows has one", () => {
+  const r = read("src/components/Research.tsx");
+  assert.match(r, /\.\.\.\(g\.items\.some\(\(m\) => m\.note && !mark\(m\)\) \? \[\{ key: "b", header: "Basis"/);
+  assert.match(r, /\.\.\.\(g\.items\.some\(\(m\) => bandPosition\(m\.label, m\.value, industry\)\) \? \[\{ key: "r", header: "Usual range"/);
+});

@@ -247,12 +247,14 @@ export function MetricsGrid({ groups, currency, industry }: { groups: MetricGrou
                 {/* LIVE7B-010: on a phone each group is a list (the measure and its value on one line, the basis and the range under them), not a
                     four-column table 322px wide with a basis wrapping to seven lines; its column header is out of sight there, so its name is here */}
                 <b className="inv-mt-title" aria-hidden="true">{g.title}</b>
+                {/* LIVE8B-015: a group whose rows have no basis (or no range bar) has no column for it: "Basis" stood empty in seven of
+                    twelve rows on the right */}
                 <DataTable label={`Key numbers: ${g.title}`} rows={g.items} rowKey={(m) => m.label} stack
                   columns={[
                     { key: "m", header: g.title, rowHeader: true, cell: (m) => <span className="k-small">{m.label}</span> },
                     { key: "v", header: "Value", numeric: true, cell: (m) => <b className={`inv-metric-v ${m.unit === "%±" ? signCls(m.value) : ""}`}>{metricText(m, currency)}{mark(m) && <sup className="cmp-foot-mark" aria-label={`see note ${mark(m)!.n}`}>{mark(m)!.n}</sup>}</b> },
-                    { key: "b", header: "Basis", cell: (m) => <span className="k-note">{m.note && !mark(m) ? m.note : ""}</span> },
-                    { key: "r", header: anyBar ? "Usual range" : "", cardLabel: "Usual range", cell: (m) => { const b = bandPosition(m.label, m.value, industry); return b ? <RangeBar b={b} m={m} currency={currency} industry={industry} /> : null; } },
+                    ...(g.items.some((m) => m.note && !mark(m)) ? [{ key: "b", header: "Basis", cell: (m: MetricGroup["items"][number]) => <span className="k-note">{m.note && !mark(m) ? m.note : ""}</span> }] : []),
+                    ...(g.items.some((m) => bandPosition(m.label, m.value, industry)) ? [{ key: "r", header: "Usual range", cardLabel: "Usual range", cell: (m: MetricGroup["items"][number]) => { const b = bandPosition(m.label, m.value, industry); return b ? <RangeBar b={b} m={m} currency={currency} industry={industry} /> : null; } }] : []),
                   ]} />
               </div>
         ))}
