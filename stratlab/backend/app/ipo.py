@@ -965,7 +965,43 @@ def _settle(row: dict, bars: list[dict], first: dict | None, now: datetime) -> t
     last = fix(bars[-1], True)
     if first is not None:
         first = last if first["t"] == bars[-1]["t"] else fix(first, False)
-    return bars[:-1] + [last], first
+    return bars[:-1] + [last] + later_closes(row, bars[-1]["t"][:10], now), first
+
+
+LATER_DAYS = 7                         # how far past the last candle the exchange's own closes are looked for
+
+
+def later_closes(row: dict, after: str, now: datetime) -> list[dict]:
+    """The exchange's official closes of an NSE issue for the trading days after its last daily candle, as candles (LIVE8A-016: an SME
+    issue's candles ran two sessions behind, "₹304.35 · Close 11 Nov" where the exchange's 13 Nov close was ₹274.70; the cash
+    bhavcopy has the SME series too). Days whose file isn't stored yet are left out; nothing past today's settled close."""
+    from .data.calendar import is_trading_day
+    sym = row.get("symbol") or ""
+    if row.get("market") != "IN" or not sym or not after:
+        return []
+    try:
+        d = date.fromisoformat(after)
+    except ValueError:
+        return []
+    today = now.astimezone(IST).date()
+    out = []
+    for _ in range(LATER_DAYS):
+        d += timedelta(days=1)
+        if d > today:
+            break
+        if not is_trading_day("IN", d):
+            continue
+        if d == today:
+            try:
+                if now < official_close.out_at(d.isoformat(), "cash"):
+                    break                      # today's session isn't settled: no close yet
+            except ValueError:
+                break
+        c = _official(sym, d.isoformat(), now, d == today)
+        if c is None:
+            continue
+        out.append({"t": d.isoformat(), "o": c, "h": c, "l": c, "c": c, "v": None, "official": True})
+    return out
 
 
 def performance(row: dict, yahoo, today: date | None = None, now: datetime | None = None) -> dict | None:

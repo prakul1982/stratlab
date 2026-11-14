@@ -116,3 +116,28 @@ def test_coming_up_after_the_close_starts_tomorrow(monkeypatch):
     # a Saturday keeps its own results (Indian companies report on Saturdays)
     sat = date(2026, 11, 14)
     assert mood.coming_from("IN", sat, datetime(2026, 11, 14, 8, 0, tzinfo=IST)) == sat
+
+
+# ---------- LIVE8A-016: an SME issue's latest close is the exchange's, past a candle series that runs behind ----------
+def test_an_issues_closes_past_its_last_candle_come_from_the_exchange(monkeypatch):
+    from datetime import date
+    from app import ipo, official_close
+    from app.data import calendar
+    monkeypatch.setattr(calendar, "is_trading_day", lambda region, d: d.weekday() < 5)
+    closes = {"2026-11-12": 290.10, "2026-11-13": 274.70}
+    monkeypatch.setattr(ipo, "_official", lambda sym, day, now, fetch: closes.get(day) if sym == "MAXENGS" else None)
+    monkeypatch.setattr(official_close, "same_basis", lambda a, b: True)
+    monkeypatch.setattr(official_close, "out_at", lambda day, kind: datetime.fromisoformat(f"{day}T18:00:00+05:30"))
+    row = {"market": "IN", "symbol": "MAXENGS", "segment": "sme", "listing": "2026-11-05", "price": 280.0}
+    bars = [{"t": "2026-11-10", "o": 300, "h": 310, "l": 295, "c": 301.0}, {"t": "2026-11-11", "o": 301, "h": 306, "l": 299, "c": 304.35}]
+    sat = datetime(2026, 11, 14, 8, 0, tzinfo=IST)
+    got, _ = ipo._settle(row, bars, bars[0], sat)
+    assert [b["t"] for b in got] == ["2026-11-10", "2026-11-11", "2026-11-12", "2026-11-13"]
+    assert got[-1]["c"] == 274.70 and got[-1]["official"]
+    # during Friday's session, Friday's close isn't there yet
+    fri = datetime(2026, 11, 13, 14, 0, tzinfo=IST)
+    got, _ = ipo._settle(row, bars, bars[0], fri)
+    assert got[-1]["t"] == "2026-11-12"
+    # a US issue is untouched
+    assert ipo.later_closes({"market": "US", "symbol": "X"}, "2026-11-11", sat) == []
+    assert date(2026, 11, 13).weekday() == 4
