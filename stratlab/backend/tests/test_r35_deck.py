@@ -158,7 +158,8 @@ def test_a_page_that_shows_every_company_says_it_on_their_rows_and_keeps_its_roo
     # (updated on purpose, ex49: the mark is the reason's kind, its note says what evidence is missing)
     assert cells[:4] == ["Loanco 0 Ltd", "Loanco 1 Ltd", "Loanco 2 Ltd", "Vaguefin Ltd (insufficient evidence)"]            # every company, the one left out marked
     note = " ".join(paras(slides, page.title))
-    assert "(insufficient evidence): Vaguefin Ltd: its evidence shows how it earns only weakly (read as lenders, low confidence)." in note
+    # gl52 (R52, updated on purpose): a low-confidence read is no fact, so it is never printed as what the company was read as
+    assert "(insufficient evidence): Vaguefin Ltd: its evidence shows how it earns only weakly (low confidence)." in note and "read as" not in note
     assert "In the layer's calculations" not in note
 
 

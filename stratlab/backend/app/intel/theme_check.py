@@ -19,6 +19,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timezone
 
 from ..ai_providers import AIError
+from .net import SourceError
 
 # words a group's name or text shares with every other group, which prove nothing about the work
 _WORK_GENERIC = {
@@ -149,6 +150,11 @@ def gather_evidence(symbols: list[str], read, budget: float = EVIDENCE_BUDGET, w
             return sym, "late"
         try:
             return sym, read(sym)
+        except SourceError as e:
+            # gl52 (R52): a source that says it has nothing for this company (not busy) has answered: nothing to read, never "try later"
+            # (the live Release 51 checks retried 43 such companies on every pass and placed none of them)
+            print("theme check: description not read:", sym, type(e).__name__, str(e)[:100])
+            return sym, (None if not e.busy else "late")
         except Exception as e:                     # a source that can't answer now: this company waits for the next request
             print("theme check: description not read:", sym, type(e).__name__, str(e)[:100])
             return sym, "late"
@@ -290,6 +296,10 @@ MODELS = {
     "broking": ("financial_fees", "Brokers and distributors of financial products", "commissions and fees for selling or arranging others' financial and insurance products"),
     "asset_management": ("financial_fees", "Fund and asset managers", "fees on the money they manage"),
     "market_infrastructure": ("financial_fees", "Exchanges, depositories and ratings", "fees for trading, settling, holding or rating securities"),
+    # gl52 (R52, the rotating review of Release 51: the Payments deck's "Merchant acquiring and processing" held 1 of its 5 companies in its
+    # figures, Fiserv read as managed IT services, Toast as software, Visa and Mastercard with no way of earning): processors, acquirers, card
+    # networks and wallets earn a fee or a share of each payment they process
+    "payments": ("payments", "Payment networks and processors", "fees on the value or number of payments they process"),
     "resources": ("resources", "Mining, oil, gas and farming", "selling what they mine, drill or grow"),
     "utility": ("utility", "Power, gas and water supply", "selling power, gas or water, much of it at regulated tariffs"),
     # R29 (the owner's review of the live R27 Utilities and Metals decks: regulated networks beside generators and traders, miners beside
@@ -340,7 +350,7 @@ OSAT_WORDS = r"\bosat\b|(?:assembly|packaging) and test(?:ing)? services|manufac
 MODEL_NEEDS = {
     "platform": r"marketplace|commission|advertis|take[- ]rate|listing fee|listings|classified|aggregator|gross merchandise|gmv|booking platform|"
                 r"connects (?:buyers|sellers|users|customers)|two-sided|(?:e-?)?commerce platforms?|online travel|food delivery|ride-hailing|"
-                r"third[- ]party sellers",
+                r"third[- ]party sellers|online (?:technology |travel |booking )?platforms?",
     "hardware_resale": r"resell|resale|reseller|distribut|system integrat|systems integrat|value[- ]added|channel partner|authori[sz]ed partner|"
                        r"install|trading|dealer|partner of (?:leading|global)|brands? such as",
     "distribution": r"distribut|wholesal|trading|trader|dealer|stockist|import|export|supply chain services",
@@ -358,6 +368,8 @@ MODEL_NEEDS = {
                               # R37 (lane r2, the live R35 Semiconductors deck: Amkor and ChipMOS, "packaging and test services", left out as "way
                               # of earning not shown"): packaging and testing others' chips (OSAT) is contract making in so many words
                               + OSAT_WORDS + r"|electronics system design and manufactur|\besdm\b|contract-led manufactur|custom synthesis",
+    "payments": r"payment|card transactions|merchant acquir|\\bacquir(?:er|ers|ing)\\b|interchange|card networks?|money (?:movement|transfer)|remittance|"
+                r"wallets?\\b|point[- ]of[- ]sale|checkout|electronic funds? transfers?|\\btpv\\b",
     "lending": r"\bloan|lend|credit|financ|bank|nbfc|microfinance|mortgage|deposit",
     "underwriting": r"insur|underwrit|premium|reinsur|assurance",
     "broking": r"brok|intermediar|distribut|commission|agent|advis|wealth|insurance web|aggregator",
@@ -415,10 +427,14 @@ MODEL_WORDS = {
     "utility": r"\bpower\b|electricity|generation|transmission|distribution of (?:power|electricity|gas)|tariff|water supply|city gas|utility|"
                r"megawatt|\bmw\b|\bgw\b",
     "property": r"\brent|lease|leasing|\breit|commercial (?:space|property|real estate)|office (?:space|parks?)|malls?\b|warehous|annuity assets",
-    "care": r"hospital|clinic|diagnostic|patients|healthcare services|pathology|\blabs?\b|beds\b",
+    "care": r"hospital|clinic|diagnostic|patients|healthcare services|pathology|\blabs?\b|laborator|beds\b",
     "media": r"media|broadcast|channels?\b|\bfilms?\b|content|publish|advertis|streaming|newspaper|music",
     "transport": r"logistic|transport|freight|shipping|courier|airline|cargo|\bports?\b|warehous|\brail|fleet",
     "holding": r"conglomerate|diversified|group companies|subsidiaries|holding company|several businesses",
+    "payments": r"payments? (?:processing|processors?|networks?|technology|platforms?|solutions|services|volume|acceptance)|"
+                r"process(?:es|ing)? (?:\w+ ){0,3}?(?:payments|card transactions|transactions)\b|merchant acquir|acquiring (?:services|business)|"
+                r"interchange|card networks?|payment cards?|(?:credit|debit) (?:and|&) (?:credit|debit) cards?|electronic funds? transfers?|"
+                r"money movement|money transfer|remittance|digital wallets?|point[- ]of[- ]sale|\btpv\b",
 }
 
 
@@ -496,13 +512,19 @@ MODEL_SAYS = {
     "contract_manufacturing": r"contract manufactur|\bcdmo\b|\bcrams\b|electronics manufacturing services|\bems provider|\bosat\b|pure-play foundry|"
                               r"(?:dedicated|independent) (?:semiconductor )?foundr",
     "fabless": r"fabless",
-    "platform": r"commission income|take rate|online marketplace|gross merchandise value|marketplace (?:revenue|commissions?|fees)",
+    "platform": r"commission income|take rate|online marketplace|gross merchandise value|marketplace (?:revenue|commissions?|fees)|"
+                # gl52 (R52: TBO Tek, "operating multiple online technology platforms ... to book global travel inventory")
+                r"operat\w* (?:\w+ ){0,2}online (?:technology |travel |booking )?platforms?|online travel agen(?:cy|cies|t)",
     "lending": r"interest income (?:on|from) loans|loan book|\bnbfc\b|non-banking financ",
     "life_insurance": r"life insurance company|life insurer",
     "general_insurance": r"general insurance company|general insurer|health insurer|non-life insurer",
     "reinsurance": r"reinsurer|reinsurance company",
     "hardware_resale": r"(?:authori[sz]ed|channel) (?:partner|reseller|distributor) (?:of|for)|value[- ]added reseller|system integrator for",
     "property_development": r"real estate develop|residential (?:real estate )?develop",
+    "payments": r"payments? processing|payment processors?|process(?:es)? (?:\w+ ){0,2}?(?:payments|(?:debit|credit) (?:and (?:debit|credit) )?card "
+                r"transactions)|merchant acquir|card networks?|payment networks?|payment transaction processing|total payment volume|\btpv\b|"
+                r"money movement platforms?|money transfer services|payments? (?:technology|solutions|services) (?:to|for) merchants|"
+                r"(?:facilitates|processes) electronic funds? transfers?",
     "telecom_services": r"telecom(?:munications?)? (?:service providers?|operators?)|providers? of telecommunications? services|mobile network operators?|"
                         r"(?:mobile|wireless|broadband|cellular) (?:and (?:home )?broadband )?operators?|wireless carriers?",
 }
@@ -1435,6 +1457,25 @@ def own_goods(evidence) -> bool:
     _, own = _split_evidence(evidence)
     own = _SOLD_TO.sub(" ", not_customers(own))
     return bool(re.search(DESIGNS_SELLS, own, re.I) or (re.search(MAKES_OWN_GOODS, own, re.I) and re.search(OWN_BRAND, own, re.I)))
+
+
+# gl52 (R52, the rotating review of Release 51: Labcorp, Quest and Natera, filed as medical laboratories, read as "managed and outsourced IT
+# services" at low confidence; Guardant as consumer services, "stays, trips, meals or courses"): an official industry that says the way of
+# earning outright, and the families an answer can give such a company only wrongly (a service firm's, a seller's or a software house's)
+INDUSTRY_MODEL = ((r"medical laborator|\bhospitals?\b|health ?care facilit|nursing (?:homes?|care)|diagnostic (?:centres?|centers?|labs?|services)|"
+                   r"patholog|clinical laborator|home health care", "care"),)
+NOT_FOR_INDUSTRY = {"services", "bpo", "consumer_services", "software", "platform", "resale", "capacity"}
+
+
+def industry_model(model, evidence, confidence: str = "") -> str:
+    """gl52: the model a company's official industry states outright (INDUSTRY_MODEL) in place of one of another family that the answer gave
+    at low confidence, or of a family such a company never earns by (NOT_FOR_INDUSTRY); else the model as given."""
+    industry, _ = _split_evidence(evidence)
+    for rx, md in INDUSTRY_MODEL:
+        if industry and re.search(rx, industry, re.I) and model_family(model) != model_family(md) and \
+                (confidence == "low" or model_family(model) in NOT_FOR_INDUSTRY):
+            return md
+    return model
 
 
 def words_models(evidence) -> set[str]:

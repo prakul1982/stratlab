@@ -948,7 +948,8 @@ def model_fields(layer: dict, sym: str) -> dict:
     lm = layer.get("model") if isinstance(layer.get("model"), dict) else {}
     # ex49 (R48): why it is left out, precisely (theme_base.by_model's "out_why"), with the layer's own way of earning to state both models;
     # one in the figures as a seller of goods of its own design says so ("own_goods")
-    out = {k: x for k, x in (("out_why", c.get("out_why")), ("layer_model", lm.get("id")), ("layer_family", lm.get("family"))) if x} \
+    out = {k: x for k, x in (("out_why", c.get("out_why")), ("layer_model", lm.get("id")), ("layer_family", lm.get("family")),
+                             ("unfit_why", (c.get("unfit") or {}).get("why") if c.get("out_why") == "unfit" else "")) if x} \
         if c.get("model_out") else {}
     return {"model": c.get("model") or "", "model_tags": list(c.get("model_tags") or []), "model_confidence": c.get("model_confidence") or "",
             **({"model_out": c.get("model_out")} if c.get("model_out") else {}), **({"on_industry": True} if c.get("on_industry") else {}),
@@ -979,12 +980,21 @@ KIND_SAID = {"different revenue model": "it earns another way than the layer's c
              "no figure stored": "no figure of it is stored"}
 EVIDENCE_GAP = {"no_words": ("not checked yet: no description of its own is stored", "not checked yet, no description of its own"),      # gl50
                 "no_model": ("its own words don't state how it earns", "its words don't state how it earns"),
-                "weak": ("its evidence shows how it earns only weakly (low confidence)", "how it earns read only weakly")}
+                "weak": ("its evidence shows how it earns only weakly (low confidence)", "how it earns read only weakly"),
+                # gl52 (R52): looked for in every source and none found (theme_base.place_rest "none_found"), never "not checked yet"
+                "none_found": ("no description of it was found in any source (its profile page, an encyclopedia, its own filings)",
+                               "no description found in any source")}
+
+
+def lower_kept(text: str) -> str:
+    """gl52 (R52, the rotating review of Release 51: "managed and outsourced it services"): a label in lower case inside a sentence, its
+    acronyms kept as written (IT, EPC, SaaS)."""
+    return " ".join(w if sum(ch.isupper() for ch in w) >= 2 else w.lower() for w in str(text or "").split())
 
 
 def _model_name(mid: str, family: str = "") -> str:
     from .theme_check import FAMILIES, MODELS
-    return (MODELS[mid][1] if mid in MODELS else FAMILIES.get(family, ("",))[0] or "").lower()
+    return lower_kept(MODELS[mid][1] if mid in MODELS else FAMILIES.get(family, ("",))[0] or "")
 
 
 def _model_title(mid: str, family: str = "") -> str:
@@ -1009,6 +1019,9 @@ def out_reason(r: dict) -> dict:
         if why == "off_industry":
             return {"kind": "another business", "label": "another business than its official industry",
                     "detail": "its own words describe another business than the one its official industry files it under"}
+        if why == "unfit":             # gl52 (R52): its own words and official industry are not of what the layer is
+            return {"kind": "another business", "label": "another business than the layer's",
+                    "detail": r.get("unfit_why") or "its own words and its official industry are not of what the layer is"}
         if why == "stage" and r.get("stage_out"):         # gl50 (R50): a commercial company in a clinical-stage or pre-revenue layer
             return {"kind": "another business", "label": "another business: a commercial company, not of the layer's stage", "detail": r["stage_out"]}
         if mid and (lid or lf):
@@ -1022,8 +1035,8 @@ def out_reason(r: dict) -> dict:
                 "detail": "it earns another way than the layer's companies"}
     if r.get("model_out"):
         full, short = EVIDENCE_GAP.get(why) or ("its evidence doesn't show clearly how it earns", "")
-        if why == "weak" and mid:
-            full = f"its evidence shows how it earns only weakly (read as {_model_name(mid)}, low confidence)"
+        # gl52 (R52, the rotating review of Release 51: Labcorp, Quest and Fiserv "read as managed and outsourced it services, low
+        # confidence"): a low-confidence model is no fact, so it is never printed as what the company was read as
         return {"kind": "insufficient evidence", "label": "insufficient evidence" + (f" ({short})" if short else ""), "detail": full}
     return {"kind": "no figure stored", "label": "no figure stored", "detail": "no revenue or other figure of it is stored"}
 
@@ -1623,13 +1636,13 @@ def business_words(model) -> str:
         # its description also states
         was = model.get("named_was") or ""
         if model.get("named_from") == "map" and was:
-            return f"{MODELS[n][1].lower()} (the map's name for the layer, “{was}”, and its description)"
-        return f"{MODELS[n][1].lower()} (stated by the layer's own name)"
+            return f"{lower_kept(MODELS[n][1])} (the map's name for the layer, “{was}”, and its description)"
+        return f"{lower_kept(MODELS[n][1])} (stated by the layer's own name)"
     if not isinstance(model, dict) or not (model.get("id") or model.get("family")):
         return ""
     mid, f = model.get("id") or "", model.get("family") or ""
     name = MODELS[mid][1] if mid in MODELS else FAMILIES.get(f, (f,))[0]
-    return f"{name.lower()} (how its companies earn)"
+    return f"{lower_kept(name)} (how its companies earn)"
 
 
 def rank_pair(rows: list, value, count, floor: int | None = None, of=None, model=None, basis=None, intensity=None):

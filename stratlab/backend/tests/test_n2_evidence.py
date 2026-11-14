@@ -95,7 +95,7 @@ def test_a_full_article_that_says_nothing_of_the_business_gets_the_annual_report
     got, _ = TR.evidence_reader("US", {"UMC": "United Microelectronics Corp"})(["UMC"])
     assert reads == ["UMC"] and got["UMC"]["about"].endswith(UMC_20F) and got["UMC"]["about"].startswith("United Microelectronics")
     # stored in the old format, it is read once more; in this format it keeps its time
-    assert TR.ABOUT_V == 4 and TR.thin_about({"at": "2026-11-01T00:00:00+00:00", "about": UMC_WIKI, "v": 3}, "US")
+    assert TR.ABOUT_V == 5 and TR.thin_about({"at": "2026-11-01T00:00:00+00:00", "about": UMC_WIKI, "v": 3}, "US")
     assert not TR.thin_about({"at": "2026-11-01T00:00:00+00:00", "about": UMC_WIKI, "v": TR.ABOUT_V}, "US")
     assert not TR.thin_about({"at": "2026-11-01T00:00:00+00:00", "about": UMC_WIKI, "v": 3}, "IN")
 

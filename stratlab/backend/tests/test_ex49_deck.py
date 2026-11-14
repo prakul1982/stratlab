@@ -69,14 +69,20 @@ def test_lululemon_is_in_the_brand_owners_figures_on_the_live_release_46_inputs(
         assert r["kind"] == "different revenue model" and r["label"] == "different revenue model (platforms and marketplaces, the layer's retail)"
         assert r["detail"].startswith("the way of earning of “Platforms and marketplaces” (commissions, listing fees or advertising on platforms they run), "
                                       "not the layer's, that of “Retail” (the margin on goods bought")
+    # gl52 (R52, updated on purpose): a low-confidence read is never printed as what the company was read as
     assert got["HNST"][1] == {"kind": "insufficient evidence", "label": "insufficient evidence (how it earns read only weakly)",
-                              "detail": "its evidence shows how it earns only weakly (read as makers of their own products, low confidence)"}
+                              "detail": "its evidence shows how it earns only weakly (low confidence)"}
     assert got["NEGG"][1]["label"] == "insufficient evidence (its words don't state how it earns)"
 
 
 def test_no_other_exclusion_changes_on_the_live_utilities_inputs_and_each_says_what_is_missing():
-    got = outs_of(replay46("utilities")["value_chain"])
-    assert len(got) == 8 and {r["kind"] for _, r in got.values()} == {"insufficient evidence"}
+    out = replay46("utilities")
+    got = outs_of(out["value_chain"])
+    # gl52 (R52, updated on purpose): the 7 heavy electrical makers with no description of their own are in "Heavy electrical equipment"'s
+    # figures on their industry, which the layer's own name names; only KPEL is still left out
+    assert set(got) == {"KPEL"} and {r["kind"] for _, r in got.values()} == {"insufficient evidence"}
+    heavy = next(v for v in out["value_chain"] if v["layer"] == "Heavy electrical equipment")
+    assert {"KPGEL", "VANS", "RAKSAN", "UVDRHOR", "ACCORDTS", "STARDELTA", "JYOTI"} <= {c["ticker"] for c in heavy["companies"] if c.get("on_industry")}
     # gl50 (R50, updated on purpose): a company with no description of its own read is "not checked yet"
     assert all(r["label"] in ("insufficient evidence (not checked yet, no description of its own)", "insufficient evidence (how it earns read only weakly)")
                for _, r in got.values())

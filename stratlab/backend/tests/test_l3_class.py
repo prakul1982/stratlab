@@ -175,7 +175,9 @@ def test_a_us_company_with_no_article_gets_its_annual_reports_opening_stored_onc
 
 
 def test_a_full_article_needs_no_annual_report_and_a_wrong_article_is_replaced_by_it(store, monkeypatch):
-    full = "Marvell Technology, Inc. is an American company which develops and produces semiconductors and related technology. " * 3
+    # gl52 (R52, updated on purpose): an article that has a sentence in the company's own words about its work (an encyclopedia's opening
+    # alone is read with the annual report too: test_gl52_fixes)
+    full = "Marvell Technology, Inc. is an American company. It develops and produces semiconductors and related technology for data centers. " * 3
     myth = "In Greek mythology, ichor is the ethereal fluid making up the blood of the gods and/or immortals. " * 3
     _hub(monkeypatch, wiki={"Marvell Technology": {"title": "Marvell Technology", "extract": full}, "Ichor": {"title": "Ichor", "extract": myth}})
     reads = []
@@ -233,7 +235,10 @@ def test_which_stored_descriptions_are_read_once_more():
     myth = "In Greek mythology, ichor is the ethereal fluid making up the blood of the gods and/or immortals. " * 3
     assert TR.thin_about({"at": now, "about": myth, "v": 2}, "US") and not TR.thin_about({"at": now, "about": myth, "v": TR.ABOUT_V}, "US")
     full = "Lam Research Corporation is an American supplier of wafer-fabrication equipment and related services to the semiconductor industry. " * 2
-    assert not TR.thin_about({"at": now, "about": full, "v": 2}, "US")
+    # gl52 (R52, updated on purpose): an encyclopedia's opening alone, kept before format 5, is read once more (its annual report added)
+    assert TR.thin_about({"at": now, "about": full, "v": 2}, "US") and not TR.thin_about({"at": now, "about": full, "v": TR.ABOUT_V}, "US")
+    own = full + "It sells etch and deposition systems to chip makers."
+    assert not TR.thin_about({"at": now, "about": own, "v": 2}, "US")
     assert TR.thin_about({"at": now, "about": "", "v": TR.ABOUT_V, "owed": True}, "US")
 
 

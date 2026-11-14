@@ -845,7 +845,7 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
 
     if previous:
         out_vc = held_to_previous(out_vc, map_names_of(previous, kept), about_of)
-    out_vc = definition_fit(out_vc, evidence, theme)            # gl50: what the layer is, in the company's words or industry
+    out_vc = definition_fit(out_vc, evidence, theme, about_of)  # gl50: what the layer is, in the company's words or industry
     if models:
         before = {v["layer"]: {c.get("ticker") for c in v["companies"]} for v in out_vc if not v.get("official")}
         out_vc = by_model(out_vc, models, theme, tags=tags, confidence=conf, evidence_of=evidence, settled=settled,
@@ -871,6 +871,10 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
         if model_names and model_names.get("rename"):
             out_vc = renamed_after_split(out_vc, {v["layer"] for v in reshaped}, model_names["rename"])
     out_vc = refits_kept(out_vc)
+    # gl52 (R52): a company left out for want of words whose description was looked for in every source and none found says so ("none_found",
+    # theme_routes._facts_reader `searched`), never "not checked yet"
+    out_vc = [{**v, "companies": [{**c, "out_why": "none_found"} if c.get("out_why") == "no_words" and facts_for(c.get("ticker")).get("searched") else c
+                                  for c in v.get("companies") or []]} for v in out_vc]
     out_vc, off = without_off_industry(out_vc, {c.get("ticker") for c in todo}, evidence)
     placements = m.get("placements")
     out_vc, sure = confirmed_by_words(out_vc, about_of, theme)
@@ -918,7 +922,8 @@ def distinct_stems(v: dict, layers: list[dict], theme_words: set) -> list[set]:
     (_fit_words), less the theme's words and those another layer's name says too. [] when no part says anything of its own."""
     name = lambda x: _HALF_RX.sub("", x.get("layer") or "")      # noqa: E731
     others = set().union(*[whole_stems(name(w)) for w in layers if w is not v and name(w) != name(v)] or [set()])
-    parts = [{w for w in _fit_words(p) if not (kind_stems(w) & theme_words) and not any(_near(_stem(w), b) for b in others)}
+    parts = [{w for w in _fit_words(p) if not (kind_stems(w) & theme_words) and not any(_near(_stem(w), b) for b in others)
+              and w not in GENERIC_FIT and f"{w}s" not in GENERIC_FIT}          # gl52: "healthcare" says nothing of which layer
              for p in _PARTS.split(name(v))]
     return [x for x in parts if x]
 
@@ -961,11 +966,28 @@ _FIT_STOP = {_stem(w) for w in ("under", "but", "when", "while", "where", "its",
                                 "set", "help", "helps", "keep", "keeps", "make", "made", "work", "works", "use", "used", "uses", "need", "needs")}
 
 
+# gl52 (R52, the rotating review of Release 51: Novo Nordisk moved into "Bioprocessing suppliers and diversified healthcare" because its words
+# say "healthcare"; AbbVie and Gilead kept in "Research tools and diagnostics suppliers" because its description says the tools are "sold to labs
+# and drug developers"): words any company of any layer may use, which say nothing of which layer it is of, and the customers a description
+# names, which are not what the layer's companies make or do
+GENERIC_FIT = {"healthcare", "health", "industrial", "industrials", "technology", "technologies", "platform", "platforms", "develop", "developer",
+               "developers", "development", "developing", "innovative", "advanced", "leading", "diversified", "solution", "solutions", "global"}
+_FIT_STOP |= {_stem(w) for w in GENERIC_FIT}
+_CUSTOMERS = re.compile(r"\b(?:sold|sells?|selling|supplied|supplies|supplying|serv(?:es|ing|ed)?|cater(?:s|ing)?|used by|bought by)\s+(?:to\s+)?"
+                        r"(?:[\w-]+\s+){0,1}(?:labs?|hospitals?|customers?|clients?|businesses|companies|makers?|developers?|manufacturers?|"
+                        r"governments?|retailers?|consumers?|oems?|[\w-]+\s+(?:makers?|developers?|companies|manufacturers?))\b[^.;]{0,80}", re.I)
+
+
+# what a description says the layer's companies are not ("set apart by tool and assay sales rather than drug sales")
+_CONTRAST = re.compile(r"\b(?:rather than|instead of|unlike|as opposed to|apart from|other than|not)\b[^.;]{0,80}", re.I)
+
+
 def says_of_layer(v: dict, text: str, theme_words: set) -> bool:
     """Whether a company's words share a word of what it makes or does (kind_stems) with its layer's description, beyond its name's words:
-    the loosest sign its words are of the layer's kind (a coffee maker's "coffee" shares nothing with "biscuits, noodles, snacks and dairy")."""
+    the loosest sign its words are of the layer's kind (a coffee maker's "coffee" shares nothing with "biscuits, noodles, snacks and dairy").
+    gl52: never a word any company may use (GENERIC_FIT), nor one of the customers the description names (_CUSTOMERS)."""
     names = whole_stems(" ".join(str(x) for x in (_HALF_RX.sub("", v.get("layer") or ""), v.get("was")) if x))
-    lay = whole_stems(str(v.get("description") or "")) - theme_words - names - _FIT_STOP       # the name is words_fit's: more than half of it
+    lay = whole_stems(_CONTRAST.sub(" ", _CUSTOMERS.sub(" ", str(v.get("description") or "")))) - theme_words - names - _FIT_STOP       # the name is words_fit's: more than half of it
     mine = whole_stems(text) - theme_words - _FIT_STOP
     return any(_near(a, b) for a in mine for b in lay)
 
@@ -994,7 +1016,7 @@ def without_name(text: str, name: str) -> str:
     return "".join(w for w in re.split(r"(\s+)", str(text or "")) if re.sub(r"[^a-z0-9]", "", w.lower()) not in drop).strip() if drop else text
 
 
-def definition_fit(vc: list[dict], evidence, theme: str) -> list[dict]:
+def definition_fit(vc: list[dict], evidence, theme: str, about_of=None) -> list[dict]:
     """The map's layers with each company that fits neither what its layer is nor its industry moved (gl50, R50). A company fits its layer
     when its own words (own_text, else its line on the page) say more than half of the layer name's distinct stems (words_fit) or share a word
     of its kind with the layer's name or description (says_of_layer), or when its official industry is the layer's (industry_fits). One that
@@ -1009,22 +1031,49 @@ def definition_fit(vc: list[dict], evidence, theme: str) -> list[dict]:
     if len(own) < 2:
         return vc
     stems = {id(v): distinct_stems(v, own, tw) for v in own}
+    # gl52: the map's earlier name for a layer says what it is too (the description's own words are left to words_fit of that name)
+    was_stems = lambda v: distinct_stems({"layer": v["was"]}, own, tw) if v.get("was") else []      # noqa: E731
     moves: list[tuple] = []
+    unfit: dict = {}
     for v in own:
         if not stems[id(v)] or v.get("by_model"):
             continue
         for c in v.get("companies") or []:
-            if c.get("verified") or c.get("placed") != "words":
-                continue                # only a placement by words alone: the map's own picks and the AI's placements read more
+            # gl52 (R52, the rotating review of Release 51: Shopify and Twilio in "Cloud and AI compute providers", Medtronic and 3M in
+            # "Surgical robotics systems", placed by the AI's answer, never checked against what the layer is): the AI's placements and
+            # the map's own picks not confirmed by their words are checked too, but move only on words of their own (never on none)
+            ai_ = c.get("placed") == "ai" or (not c.get("placed") and not c.get("moved") and not c.get("by_map"))
+            if c.get("verified") or (c.get("placed") != "words" and not ai_):
+                continue                # a placement confirmed by the company's own words is never moved
             words = own_text(evidence(c.get("ticker"))) if evidence else ""
+            if ai_ and about_of is not None:            # gl52: its whole stored description, never the model evidence's 420 characters
+                try:
+                    words = own_text(about_of(c.get("ticker")) or "") or words
+                except Exception:
+                    pass
             if no_words(words) and c.get("what") and not str(c.get("what")).startswith(FILING_TITLES):
                 words = str(c.get("what"))
             words = "" if no_words(words) else without_name(words, c.get("name") or "")
+            if ai_ and not words:
+                continue
             ind = c.get("industry") or ""
-            if (words and (words_fit(stems[id(v)], words) or says_of_layer(v, words, tw))) or industry_fits(v, ind, tw):
+            if (words and (words_fit(stems[id(v)], words) or says_of_layer(v, words, tw) or (ai_ and words_fit(was_stems(v), words)))) \
+                    or industry_fits(v, ind, tw):
                 continue
             names = lambda xs: list(dict.fromkeys(_HALF_RX.sub("", x["layer"]) for x in xs))      # noqa: E731
             lead = one_line(words) or words         # a move rests on what its first sentence says it does, never a list of uses or customers
+            if ai_:
+                # gl52: an AI placement or a map pick whose own words and official industry both contradict what its layer is stays where the
+                # answer put it, listed but left out of the layer's figures as another business ("unfit"), never moved to "Other" on a loose read
+                # the contradiction is shown only by another layer the company is of by both: its official industry and its words saying that
+                # layer's name; with none, nothing contradicts the answer (a long description that misses the layer's words proves nothing)
+                # (bounded: the answer's layer is kept, so no layer's membership moves; only its figures leave such a company out)
+                here_ = _HALF_RX.sub("", v["layer"])
+                both_ = [w for w in own if w is not v and industry_fits(w, ind, tw) and (words_fit(stems[id(w)], words) or words_fit(was_stems(w), words))]
+                if both_:
+                    unfit[id(c)] = (here_, f"its own words don't say what “{here_}” is, nor does its official industry"
+                                           + (f" ({plain_industry(ind)})" if ind else "") + f"; both are of “{names(both_)[0]}”")
+                continue
             by_words = [w for w in own if w is not v and words and words_fit(stems[id(w)], lead)]
             by_ind = [w for w in own if w is not v and industry_named_by(w, ind, tw)]
             here = _HALF_RX.sub("", v["layer"])
@@ -1041,8 +1090,13 @@ def definition_fit(vc: list[dict], evidence, theme: str) -> list[dict]:
             else:
                 continue
             moves.append((v, c, to, why))
+    def with_unfit(layers):
+        if not unfit:
+            return layers
+        return [{**v, "companies": [{**c, "unfit": {"layer": unfit[id(c)][0], "why": unfit[id(c)][1]}} if id(c) in unfit else c
+                                    for c in v.get("companies") or []]} if not v.get("official") else v for v in layers]
     if not moves:
-        return vc
+        return with_unfit(vc)
     gone = {id(c) for _, c, _, _ in moves}
     pos = {id(v): i for i, v in enumerate(vc)}
     out = [{**v, "companies": [c for c in v.get("companies") or [] if id(c) not in gone]} for v in vc]       # never the caller's layers
@@ -1057,7 +1111,7 @@ def definition_fit(vc: list[dict], evidence, theme: str) -> list[dict]:
             out.append(other)
         moved.pop("fit", None)
         other["companies"] = list(other["companies"]) + [moved]
-    return out
+    return with_unfit(out)
 
 
 def confirmed_by_words(vc: list[dict], about_of, theme: str) -> tuple[list[dict], int]:
@@ -1416,6 +1470,9 @@ def map_names_of(previous: dict | None, kept: dict | None) -> dict:
     return {s_: back.get(_HALF_RX.sub("", str(n)), _HALF_RX.sub("", str(n))) for s_, n in previous.items() if s_ and n}
 
 
+MODEL_LINE_MIN = 3              # gl52: companies a sparse layer's way of earning must be shown for before its line names it
+
+
 def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = None, confidence: dict | None = None,
              evidence_of=None, settled=(), previous: dict | None = None) -> list[dict]:
     """The placed map's layers with one revenue model family each, from `models` ({symbol: model id}, theme_check.MODELS):
@@ -1457,6 +1514,18 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
                               stated_model, sub_basis)
     tags, conf = tags or {}, dict(confidence or {})          # d1: a copy (the industry group sets models its members state)
     every = {s: m_ for s, m_ in (models or {}).items() if m_ in MODELS}
+    # gl52 (R52): a model its official industry contradicts outright (a medical laboratory read as managed IT services at low confidence, or as
+    # consumer services) gives way to the one the industry states, at "medium" (stated by its industry, not its own words)
+    if evidence_of is not None:
+        from .theme_check import industry_model
+        for s_ in list(every):
+            try:
+                ev_s = evidence_of(s_) or ""
+            except Exception:
+                ev_s = ""
+            md_ = industry_model(every[s_], ev_s, conf.get(s_, ""))
+            if md_ != every[s_]:
+                every[s_], conf[s_] = md_, "medium"
     models = {s: m_ for s, m_ in every.items() if conf.get(s) != "low"}
     out = [dict(v, companies=list(v.get("companies") or [])) for v in vc]
     ev_memo: dict = {}
@@ -1856,15 +1925,23 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
     # "off_industry" (its own words describe another business than its official industry files it under), "model" (its way of earning, read
     # from the answer or its own words, is another than the layer's), "weak" (its way of earning is read only with low confidence), "no_words"
     # (no description of its own is stored), "no_model" (its own words don't state how it earns)
+    unfit_all: set = set()
+
     def out_why(c) -> str:
         s_ = c.get("ticker")
+        if s_ in unfit_all:
+            return "unfit"
         if s_ in another:
             return "off_industry"
         if fam(c) or s_ in outside:
             return "model"
+        # gl52 (R52, the rotating review of Release 51: Trade-Wings and Yaan "read only weakly", though no word of theirs was ever read): a
+        # company with no words of its own has no description to read, whatever an answer on its name gave
+        if not own_text(ev(c)).strip():
+            return "no_words"
         if conf.get(s_) == "low" and every.get(s_):
             return "weak"
-        return "no_model" if own_text(ev(c)).strip() else "no_words"
+        return "no_model"
 
     # 4. what each layer's companies have in common, and who is left out of its figures
     for v in out:
@@ -1873,6 +1950,14 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
         if v.get("official"):
             continue
         cos = v["companies"]
+        # gl52 (R52): an AI placement or map pick whose own words and official industry both contradict what this layer is (definition_fit
+        # "unfit") is listed here but left out of its figures, as another business than the layer's
+        uf = {c.get("ticker") for c in cos if isinstance(c.get("unfit"), dict)
+              and c["unfit"].get("layer") in (_HALF_RX.sub("", v.get("layer") or ""), v.get("was"))}
+        for s_ in uf:
+            models.pop(s_, None)
+            outside.add(s_)
+        unfit_all.update(uf)
         f = main(cos)
         known = [c for c in cos if fam(c) == f] if f else []
         if not known:
@@ -1904,9 +1989,31 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
         elsewhere = {t[0][0] for w in out if w is not v and not w.get("official") and w["companies"]
                      for t in [Counter(key(x.get("industry")) for x in w["companies"] if x.get("industry")).most_common(1)]
                      if t and t[0][1] * 2 > len(w["companies"])}
-        on_ind = {c.get("ticker") for c in cos if fam(c) == "" and c.get("ticker") not in another and c.get("ticker") not in outside and top_ind
-                  and c.get("industry") and key(c.get("industry")) == top_ind[0][0] and top_ind[0][1] * 2 > len(known)
-                  and top_ind[0][0] not in elsewhere and not own_text(ev(c)).strip()
+        # gl52 (R52, the rotating review of Release 51: Nestle India out of "Branded packaged foods manufacturing (larger)", its words "operates
+        # in the Food segment" stating no way of earning, and its industry held to be ambiguous because the layer's own other half has it too;
+        # Global Payments, Block and TBO Tek out of their layers the same way): per company, its industry decides when it is the one most of
+        # the layer's companies share (the layer's other half by market value is the same layer, never "elsewhere"), or the layer's own name or
+        # description names it, whatever other layers hold; and a company whose words exist but state no way of earning other than the layer's
+        # is judged the same as one with none. One whose words state another way of earning, or read only weakly, stays out (R27)
+        half_of = lambda w: bool(v.get("scale")) and _HALF_RX.sub("", w.get("layer") or "") == _HALF_RX.sub("", v.get("layer") or "")      # noqa: E731
+        elsewhere_ = {t[0][0] for w in out if w is not v and not w.get("official") and w["companies"] and not half_of(w)
+                      for t in [Counter(key(x.get("industry")) for x in w["companies"] if x.get("industry")).most_common(1)]
+                      if t and t[0][1] * 2 > len(w["companies"])}
+        def ind_decides(c) -> bool:
+            k_ = key(c.get("industry"))         # most of the companies shown to earn the layer's way are of its industry
+            if top_ind and k_ == top_ind[0][0] and top_ind[0][1] * 2 > len(known) and k_ not in elsewhere_:
+                return True
+            # the layer's own name (shown or the map's) names it; never its description alone ("product design, embedded software" names
+            # no "Software Products" layer)
+            return industry_named_by({"layer": v.get("layer"), "was": v.get("was")}, c.get("industry"), theme_words)
+
+        def no_way_said(c) -> bool:
+            if not own_text(ev(c)).strip():
+                return True
+            return not (every.get(c.get("ticker")) and conf.get(c.get("ticker")) == "low") and said_(c) <= {f}
+        said_ = lambda c: {model_family(x) for x in words_models(ev(c))} - {""}      # noqa: E731
+        on_ind = {c.get("ticker") for c in cos if fam(c) == "" and c.get("ticker") not in another and c.get("ticker") not in outside
+                  and c.get("industry") and ind_decides(c) and no_way_said(c)
                   and model_family(every.get(c.get("ticker")) or "") in ("", f)}
         kin |= on_ind
         # ex49 (R48, the outside review of the live Release 48 Consumer retail deck: lululemon, in "Apparel and consumer brand owners" by
@@ -1932,12 +2039,27 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
                   and conf.get(c.get("ticker")) in ("medium",) and said_(c) <= {f} and (not c.get("placed") or said_(c) == {f})
                   and layer_says(v, own_text(ev(c)), theme_words)[1]}
         kin |= words_
+        # gl52 (R52, the rotating review of Release 51: Syngene, "India's first Contract Research Organization", out of "Contract research and
+        # life-science services" as read only weakly, though the answer's read was the layer's own way of earning; Fiserv, "processes debit
+        # and credit card transactions", out of "Merchant acquiring and processing", read as managed IT services at low confidence): a company
+        # read only at low confidence whose own words say the layer's name, and whose read or own words are of the layer's way of earning and
+        # name no other, is in the figures on its words ("by_words"); one whose words name another way of earning stays out
+        weak_ = {c.get("ticker") for c in cos if fam(c) == "" and c.get("ticker") not in kin and c.get("ticker") not in another
+                 and c.get("ticker") not in outside and conf.get(c.get("ticker")) == "low"
+                 and (model_family(every.get(c.get("ticker")) or "") == f or said_(c) == {f})
+                 and said_(c) <= {f} and layer_says(v, own_text(ev(c)), theme_words)[1]}
+        kin |= weak_
+        words_ |= weak_
+        # its model is the one its own words state (never the low read of another family: Fiserv is no managed IT services firm)
+        word_model = {c.get("ticker"): next(iter(sorted(m_ for m_ in words_models(ev(c)) if model_family(m_) == f)), "")
+                      for c in cos if c.get("ticker") in weak_ and model_family(every.get(c.get("ticker")) or "") != f}
         rest = [c for c in cos if fam(c) != f and c.get("ticker") not in kin]
         known_ids = {c.get("ticker") for c in known} | kin
         v["companies"] = [({**c, "on_industry": True, "model": c.get("model") or Counter(models[x["ticker"]] for x in known).most_common(1)[0][0],
                             "model_confidence": c.get("model_confidence") or "low"} if c.get("ticker") in on_ind else
                            {**c, "own_goods": True} if c.get("ticker") in brand else
-                           {**c, "by_words": True} if c.get("ticker") in words_ else c) if c.get("ticker") in known_ids else
+                           {**c, "by_words": True, **({"model": word_model[c["ticker"]], "model_confidence": "medium"} if word_model.get(c.get("ticker")) else {})}
+                           if c.get("ticker") in words_ else c) if c.get("ticker") in known_ids else
                           {**c, "model_out": "other" if fam(c) or c.get("ticker") in outside else "unknown",
                            "out_why": out_why(c)} for c in cos]      # R34: why, named; ex49: precisely (out_why)
         known = known + [c for c in cos if c.get("ticker") in kin]
@@ -1946,7 +2068,11 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
         if sparse:
             # R26: a line resting on a few of a layer's companies isn't what they have in common: said plainly instead (the live R25 IT services
             # deck, "8 of 50; the others' descriptions don't show how they earn"); R27: the others are left out of its figures
-            line = f"How they earn is shown for only {len(known)} of these {len(cos)} companies, mainly {what}; {out_line(rest, 'the other', away_)}"
+            # gl52 (R52, the rotating review of Release 51: "shown for only 2 of these 15 companies, mainly fees paid by consumers for stays,
+            # trips, meals or courses" on a layer of diagnostics labs): a way of earning shown for fewer than MODEL_LINE_MIN companies is
+            # not said to be what the layer's companies mainly earn by
+            line = (f"How they earn is shown for only {len(known)} of these {len(cos)} companies, mainly {what}; " if len(known) >= MODEL_LINE_MIN else
+                    f"How they earn is shown for only {len(known)} of these {len(cos)} companies; ") + out_line(rest, 'the other', away_)
         else:
             line = f"They earn mainly from {what}."
             if rest:
@@ -2389,6 +2515,26 @@ def own_words(text, name: str = "") -> str:
     return t if _WORK.search(t) else ""
 
 
+def own_line(about, name: str = "") -> str:
+    """gl52 (R52, the rotating review of Release 51: Visa, Mastercard, Fortinet and Trade Desk shown with "No description in its own words
+    yet", their stored words an encyclopedia's opening line): the first sentence of a description that is the company's own words about its
+    work (own_words), else one_line's sentence as before."""
+    first = one_line(about)
+    if not first or own_words(first, name) or str(about or "").startswith("From its own filings:"):
+        return first
+    for x in _sentences(" ".join(str(about or "").split())):
+        x = _HISTORY.sub("", x).strip(" ,;:-–—")
+        if len(x) >= 15 and not _PRESS.search(x) and own_words(x, name):
+            m = _FIRST.match(x + " ")
+            return (m.group(1) if m else x[:240]).rstrip(" .;")
+    return first
+
+
+def has_own_line(about, name: str = "") -> bool:
+    """Whether a stored description has a sentence in the company's own words about its work (own_line), not only an encyclopedia's."""
+    return bool(own_words(own_line(about, name), name))
+
+
 def whole_words(what, about) -> str:
     """A company's line with a word cut by the end of its stored description taken off and an ellipsis in its place (LIVE7A-004: ADI's "a
     broad portfolio of solutio", eBay's "via retail sal": a description is kept to its first EVIDENCE_CHARS characters, so its last word can
@@ -2416,7 +2562,7 @@ def described(m: dict, about_of) -> dict:
             for c in v.get("companies") or []:
                 if v.get("official") or c.get("placed"):          # a company placed after the map shows its own words too (R21)
                     about = about_of(c["ticker"])
-                    c = {**c, "what": one_line(about) if about else ""}
+                    c = {**c, "what": own_line(about, c.get("name") or "") if about else ""}       # gl52: its own words first
                 cos.append(c)
             v = {**v, "companies": cos}
         vc.append(v)

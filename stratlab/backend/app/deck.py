@@ -5579,8 +5579,10 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         if "whole company" in shown_tags:
             fparts.append("(whole company): it runs other businesses too, so its figures are the whole company's and left out of the medians.")
         if "on its industry" in shown_tags:          # d1
-            fparts.append("(on its industry): its own words show how it earns only weakly; it is in the layer's figures by its official industry, "
-                          "that of most of the layer's companies.")
+            # gl52 (R52): said as it is: its own words don't state how it earns (or there are none), and its official industry is the one most
+            # of the layer's companies share, or the one the layer's name names
+            fparts.append("(on its industry): its own words don't state how it earns; it is in the layer's figures by its official industry, "
+                          "that of most of the layer's companies or the one the layer's name names.")
         if "own design" in shown_tags:      # ex49
             fparts.append("(own design): read as a retailer, its own words say it designs the goods it sells, so it sells products of its own, "
                           "as the layer's companies do, and is in the layer's figures.")
@@ -6295,7 +6297,8 @@ def sector_fmt(key: str, amt=None):
 
 
 def _low(label: str) -> str:
-    return " ".join(_SHORT.get(w.lower(), w.lower()) for w in label.split())
+    # gl52 (R52): an acronym keeps its case ("IT services", never "it services")
+    return " ".join(_SHORT.get(w.lower(), w if sum(ch.isupper() for ch in w) >= 2 else w.lower()) for w in label.split())
 
 
 def _med_of(st: dict, fmt) -> str:
