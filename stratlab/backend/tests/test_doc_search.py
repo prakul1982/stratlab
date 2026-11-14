@@ -609,3 +609,19 @@ def test_postgres_the_route_returns_extracts_only(pg, monkeypatch):
     finally:
         doc_store.use(None)
         world["close"]()
+
+
+@needs_pg
+def test_postgres_passages_give_the_matching_passages_text_of_the_companies_recent_documents_in_page_order(pg):
+    """m53 (sector_ops): one bounded statement gives a profile's companies' matching passages, newest document first, in page order."""
+    put(pg, 1, symbol="CARE", kind="presentation", filed="2026-11-04", pages=[(1, "Cover."), (15, "Operating beds 8,522 Occupancy 73%"),
+                                                                              (18, "Bed Occupancy Rate (%) 73% 69%")])
+    put(pg, 2, symbol="CARE", kind="presentation", filed="2025-01-04", pages=[(3, "Operating beds 7,000")])
+    put(pg, 3, symbol="CARE", kind="transcript", filed="2026-11-10", pages=[(2, "occupancy at 73%")])
+    put(pg, 4, symbol="OTHER", kind="presentation", filed="2026-11-01", pages=[(2, "beds 100")])
+    got = pg.passages("beds or occupancy", "IN", ["CARE"], ["presentation"], "2026-05-01", 10)
+    assert [(r["symbol"], r["page"], r["kind"], r["filed_at"]) for r in got] == [("CARE", 15, "presentation", "2026-11-04"),
+                                                                                ("CARE", 18, "presentation", "2026-11-04")]
+    assert got[0]["body"] == "Operating beds 8,522 Occupancy 73%" and got[0]["link"].endswith("CARE1.pdf")
+    assert len(pg.passages("beds or occupancy", "IN", ["CARE"], ["presentation"], "2020-01-01", 1)) == 1      # at most `limit`
+    assert pg.passages("beds", "IN", [], ["presentation"], "2020-01-01", 10) == []

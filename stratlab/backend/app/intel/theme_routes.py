@@ -27,7 +27,7 @@ from ..guard import Window
 from ..responses import err
 from . import ai as A
 from . import grounding, theme_base, theme_changes, theme_check, theme_data, theme_library, theme_prices
-from . import sector_metrics
+from . import sector_metrics, sector_ops
 from .net import SourceError, TTLCache
 from .news import aggregator_url, company_headline, company_text, fits_company, plain_headline, publisher_url
 
@@ -984,7 +984,8 @@ def sources(region: str, theme: str, fresh: bool = False):
         red_flags=red, card=card, history=history, segments=segments, peer_history=peer_history, cohort_history=cohort_history,
         corp_history=lambda s: corp_actions.history(region, s, None, fetch=False),
         metrics=sector_metrics.reader(region, fresh),           # R23: filed sector figures, read once and kept for everyone
-        about=kept_about(region))                               # R35: the stored descriptions only (nothing is read from a page)
+        about=kept_about(region),                               # R35: the stored descriptions only (nothing is read from a page)
+        passages=sector_ops.passages_reader(region, today=today))   # m53: sector operating measures from the stored filings index only
     src.pieces = pieces
     return src
 
@@ -1495,14 +1496,21 @@ def business_reader():
         reads = biz_updates.stored(sym)
         if not reads:
             return None
-        h = biz_updates.headline(biz_updates.series(reads))
+        ms = biz_updates.series(reads)
+        h = biz_updates.headline(ms)
         if not h:
             return None
         src = h["latest"]["source"]
         return {"metric": h["metric"], "unit": h["unit"], "span": h["span"], "step": h["step"], "period": h["latest"]["period"], "value": h["latest"]["value"],
                 "prev": h["prev"]["value"] if h.get("prev") else None, "year_ago": h["year_ago"]["value"] if h.get("year_ago") else None,
                 "change_prev": h["change_prev"], "change_year": h["change_year"], "filed": src["at"][:10], "url": src["url"], "page": src.get("page"),
-                "exchange": src.get("exchange"), "points": [{"period": p["period"], "value": p["value"]} for p in h["points"]]}
+                "exchange": src.get("exchange"), "points": [{"period": p["period"], "value": p["value"]} for p in h["points"]],
+                # m53: every measure's latest figure as read (the deck's sector operating measures: sector_ops.from_business)
+                "measures": [{"metric": x["metric"], "segment": x.get("segment"), "unit": x["unit"], "span": x.get("span"), "own": x.get("own"),
+                              "period": x["latest"]["period"], "value": x["latest"]["value"], "filed": (x["latest"].get("source") or {}).get("at", "")[:10],
+                              "quote": (x["latest"].get("source") or {}).get("quote"), "page": (x["latest"].get("source") or {}).get("page"),
+                              "url": (x["latest"].get("source") or {}).get("url")}
+                             for x in ms[:biz_updates.MAX_FIGURES]]}
     return read
 
 

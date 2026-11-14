@@ -38,7 +38,8 @@ def sector_note(slides, page):
 def test_every_figure_a_deck_shows_is_in_the_registry_with_its_definition_period_source_limit_and_whom_it_applies_to():
     assert set(S.KEYS) <= set(R.BY_ID) and set(deck.METRIC_NOTES) <= set(R.BY_ID)
     for m in R.METRICS:
-        assert m.label and m.definition and m.source and m.limit and m.applies and m.unit in ("pct", "chg", "x", "amt", "days"), m.id
+        # updated on purpose (m53, R53): a sector profile's count or per-unit price ("num", in the unit its label names: beds, MTPA, MW)
+        assert m.label and m.definition and m.source and m.limit and m.applies and m.unit in ("pct", "chg", "x", "amt", "days", "num"), m.id
         assert m.period in R.STALE_MONTHS and set(m.regions) <= {"IN", "US"}
     assert len({R.MARK[s] for s in (R.UNAVAILABLE, R.NOT_APPLICABLE, R.NOT_COMPARABLE)}) == 3 and "0" not in R.MARK.values()
     assert R.LEGEND.count("–") == 1 and "n/a" in R.LEGEND and "n.c." in R.LEGEND

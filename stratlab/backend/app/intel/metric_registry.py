@@ -147,6 +147,62 @@ METRICS = (
     _m("order_inflow", "Order inflow", "New orders in the period, as the company's own update states them", "amt", "quarter",
        "Latest business update filed with the exchange", "As the company states it; not revenue", ORDERS, ("IN",), headline=False, group="orders"),
 )
+# m53 (R53, the owner's review of the live R52 decks: "new sectors need operating metrics where source data supports them, never fabricated"):
+# each sector's own operating measures, read only where a company's own stored document states them (sector_ops: its investor presentation or
+# earnings release in the filings index, or its business update), each with its period and source; whom each applies to is a sector profile
+# (sector_ops.PROFILES), tagged "ops:<profile>"; "num" is a count or a per-unit price in the unit its label names
+_DOC = "Latest quarter stated; the company's investor presentation, earnings release or business update"
+_AS_AT = "Latest date stated; the company's investor presentation, earnings release or business update"
+_AIR, _HOSP, _CEM, _PWR, _PAY = ("ops:airline",), ("ops:hospital",), ("ops:cement",), ("ops:power",), ("ops:payments",)
+METRICS += (
+    _m("plf", "Passenger load factor", "Revenue passenger distance flown over available seat distance, as the airline states it for the quarter", "pct",
+       "quarter", _DOC, "As the airline states it; the consolidated figure where it gives several", _AIR, group="airline"),
+    _m("ask", "ASKs (billion)", "Available seat kilometres: seats flown times kilometres flown, as the airline states them for the quarter", "num",
+       "quarter", _DOC, "As stated; a size, never a median across airlines", _AIR, ("IN",), headline=False, group="airline"),
+    _m("rpk", "RPKs (billion)", "Revenue passenger kilometres: paying passengers times kilometres flown, as the airline states them for the quarter",
+       "num", "quarter", _DOC, "As stated; a size, never a median across airlines", _AIR, ("IN",), headline=False, group="airline"),
+    _m("asm", "ASMs (million)", "Available seat miles: seats flown times miles flown, as the airline states them for the quarter", "num", "quarter",
+       _DOC, "As stated; a size, never a median across airlines", _AIR, ("US",), headline=False, group="airline"),
+    _m("rpm", "RPMs (million)", "Revenue passenger miles: paying passengers times miles flown, as the airline states them for the quarter", "num",
+       "quarter", _DOC, "As stated; a size, never a median across airlines", _AIR, ("US",), headline=False, group="airline"),
+    _m("yield_km", "Yield (₹ per RPK)", "Passenger revenue per revenue passenger kilometre, as the airline states it for the quarter", "num", "quarter",
+       _DOC, "As stated; airlines count ancillary revenue differently", _AIR, ("IN",), group="airline"),
+    _m("yield_mile", "Passenger yield (cents per RPM)", "Passenger revenue per revenue passenger mile, as the airline states it for the quarter",
+       "num", "quarter", _DOC, "As stated; airlines count ancillary revenue differently", _AIR, ("US",), group="airline"),
+    _m("beds_op", "Operational beds", "Beds in operation (operating, operational or in-service beds) as the company states them; its consolidated "
+       "total where it gives regions or segments too", "num", "quarter", _AS_AT, "As stated; some count census beds only", _HOSP, headline=False,
+       group="hospital"),
+    _m("beds_cap", "Bed capacity", "Installed, licensed or capacity beds as the company states them", "num", "quarter", _AS_AT,
+       "As stated; includes beds not yet in operation", _HOSP, headline=False, group="hospital"),
+    _m("occupancy", "Bed occupancy", "Occupied beds over beds in operation, as the company states it for the quarter (its consolidated figure, the "
+       "one beside its total beds)", "pct", "quarter", _DOC, "As stated; bases differ (census or all operational beds)", _HOSP, group="hospital"),
+    _m("arpob", "ARPOB (₹ a day)", "Average revenue per occupied bed per day, as the company states it for the quarter", "num", "quarter", _DOC,
+       "Only where the company states ARPOB; revenue per inpatient is a different measure", _HOSP, ("IN",), group="hospital"),
+    _m("cem_capacity", "Cement capacity (MTPA)", "Installed cement capacity in million tonnes a year, as the company states it at the latest date "
+       "(capacity planned or under construction not counted)", "num", "quarter", _AS_AT, "As stated; a group's capacity where the company "
+       "consolidates its subsidiaries", _CEM, headline=False, group="cement"),
+    _m("cem_util", "Capacity utilisation", "Cement produced or sold over installed capacity, as the company states it for the quarter", "pct", "quarter",
+       _DOC, "As stated; bases differ (production or sales, cement or clinker)", _CEM, group="cement"),
+    _m("cem_volume", "Sales volume (million tonnes)", "Cement (and clinker) sold in the quarter, in million tonnes, as the company states it; "
+       "consolidated where it states both", "num", "quarter", _DOC, "As stated; some include clinker or traded volumes", _CEM, headline=False,
+       group="cement"),
+    _m("cem_realisation", "Realisation (₹ a tonne)", "Net sales realisation per tonne of cement sold, as the company states it for the quarter",
+       "num", "quarter", _DOC, "Only where stated per tonne; a price per bag is not converted", _CEM, ("IN",), group="cement"),
+    _m("mw_installed", "Installed capacity (MW)", "Generation capacity in operation, in megawatts, as the company states it at the latest date "
+       "(capacity under construction, contracted or planned not counted)", "num", "quarter", _AS_AT, "As stated; some state their share of "
+       "joint ventures, some the whole", _PWR, headline=False, group="power"),
+    _m("generation", "Generation (GWh)", "Electricity generated or sold in the quarter, in gigawatt hours (million units), as the company states it",
+       "num", "quarter", _DOC, "As stated; generated or sold as the company gives it", _PWR, headline=False, group="power"),
+    _m("cuf", "CUF / PLF", "Capacity utilisation factor (plant load factor for thermal plants): energy generated over the most the capacity could "
+       "generate in the period, as the company states it for its whole portfolio", "pct", "quarter", _DOC,
+       "As stated; solar, wind and thermal differ by nature", _PWR, group="power"),
+    _m("tpv", "Payment volume", "Total payment volume (TPV, gross dollar volume or payments GMV) processed in the quarter, as the company states it",
+       "amt", "quarter", _DOC, "As stated; definitions differ by company (gross or net, card or all)", _PAY, headline=False, group="payments"),
+    _m("txn", "Transactions (billion)", "Payment transactions processed in the quarter, in billions, as the company states them", "num", "quarter",
+       _DOC, "As stated; what counts as a transaction differs", _PAY, headline=False, group="payments"),
+    _m("take_rate", "Take rate", "Transaction revenue over payment volume, as the company states it for the quarter", "pct", "quarter", _DOC,
+       "Only where the company states it", _PAY, group="payments"),
+)
 BY_ID = {m.id: m for m in METRICS}
 # figures no source the app reads carries for these structures: listed so the report and the notes can say so, never filled by a proxy
 NOT_READ = {"pharma": ("R&D / revenue and the export and domestic mix aren't in any filing the app reads for Indian companies",),

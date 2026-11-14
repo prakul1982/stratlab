@@ -203,6 +203,23 @@ class DocStore:
                 (q, HEADLINE, ids, ns)).fetchall()
         return {(int(d), int(n)): h for d, n, h in rows}
 
+    def passages(self, q: str, region: str, symbols: list[str], kinds: list[str], since: str, limit: int) -> list[dict]:
+        """m53 (sector_ops): the matching passages' own text, for a theme's operating measures read from the companies' documents: the
+        companies' passages filed since `since`, newest document first and in page order, at most `limit`, one statement of at most
+        TIMEOUT_MS. Never served to a page (sector_ops keeps only each figure with its short quote and link)."""
+        if not symbols:
+            return []
+        with self._conn() as c, c.transaction():
+            c.execute(f"set local statement_timeout = {int(TIMEOUT_MS)}")
+            rows = c.execute(
+                "select c.symbol, c.doc_id, c.n, c.page, c.kind, c.filed_at, c.body, d.link, d.title "
+                "from doc_chunks c join doc_documents d on d.id = c.doc_id, (select websearch_to_tsquery('english', %(q)s) tq) q "
+                "where c.tsv @@ q.tq and c.region = %(region)s and c.symbol = any(%(symbols)s) and c.kind = any(%(kinds)s) "
+                "and c.filed_at >= %(since)s order by c.symbol, c.filed_at desc, c.doc_id desc, c.n limit %(limit)s",
+                {"q": q, "region": region, "symbols": list(symbols), "kinds": list(kinds), "since": since, "limit": int(limit)}).fetchall()
+        return [{"symbol": s, "doc_id": int(d), "n": int(n), "page": p, "kind": k, "filed_at": _iso(f), "body": b, "link": ln, "title": ti}
+                for s, d, n, p, k, f, b, ln, ti in rows]
+
     def documents(self, ids: list[int]) -> dict[int, dict]:
         """The documents' details (never their text)."""
         if not ids:
