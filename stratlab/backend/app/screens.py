@@ -937,17 +937,32 @@ def _recent(t: str, now: datetime) -> bool:
 
 
 # ---------- the background job ----------
+NIGHT_UTC = (18.5, 1.0)        # India's night, 00:00-06:30 IST
+FAST_RATION = 2                # company pages built a minute in India's night and at the weekend: twice the configured ration (6: config)
+
+
+def fast_window(now: datetime | None = None) -> str | None:
+    """"weekend" (Saturday and Sunday in India: both markets closed), "night" (India's night) or None: the hours when few people
+    open pages, so more of them are built a minute (the pages' ration, main) and the screens' indexer builds more a run."""
+    now = now or datetime.now(timezone.utc)
+    if (now + timedelta(hours=5, minutes=30)).weekday() >= 5:
+        return "weekend"
+    h = now.hour + now.minute / 60
+    start, end = NIGHT_UTC
+    return "night" if ((h >= start or h < end) if start > end else (start <= h < end)) else None
+
+
 class Indexer:
     """Every half hour: top up a few stored company pages (through the pages' own ration), then gather every stored
     page into each market's index. `warm(region, symbol, company)` builds one page; it may raise when a source is
     busy, which only means trying again next time."""
 
-    # India's night (00:00-06:30 IST = 18:30-01:00 UTC): few people open pages, so a run builds three times as many (the owner, 14 Nov:
-    # 13,700 pages rebuilt to new facts at 20 a market a run took about six days); one page at a time and the same gap, so memory stays as
-    # it is. Saturday and Sunday in India (both markets closed, no price or bid jobs): all day, with half the gap between pages (owner,
-    # 14 Nov: "markets are closed, do it faster")
-    NIGHT_UTC = (18.5, 1.0)
-    WEEKEND_GAP = 6.0
+    # India's night (00:00-06:30 IST): few people open pages, so a run builds three times as many (the owner, 14 Nov: 13,700 pages
+    # rebuilt to new facts at 20 a market a run took about six days); Saturday and Sunday in India (both markets closed): all day, six
+    # times as many with a shorter gap. Past the pages' per-minute ration a page is served as stored, not rebuilt, so the gap keeps the
+    # indexer under the ration of these hours (FAST_RATION times the configured one) with room left for people opening pages
+    NIGHT_UTC = NIGHT_UTC
+    WEEKEND_GAP = 7.0
 
     def __init__(self, warm=None, every: float = 1800, warm_per_run: int = 20, gap: float = 12.0, night_per_run: int | None = None):
         self.warm, self.every, self.warm_per_run, self.gap = warm, every, warm_per_run, gap
@@ -959,11 +974,8 @@ class Indexer:
         with the gap between them (both markets)."""
         if not self.night_per_run:
             return self.warm_per_run, self.gap
-        now = now or datetime.now(timezone.utc)
-        weekend = (now + timedelta(hours=5, minutes=30)).weekday() >= 5
-        h = now.hour + now.minute / 60
-        start, end = self.NIGHT_UTC
-        night = (h >= start or h < end) if start > end else (start <= h < end)
+        window = fast_window(now)
+        night, weekend = window == "night", window == "weekend"
         if not (night or weekend):
             return self.warm_per_run, self.gap
         gap = min(self.gap, self.WEEKEND_GAP) if weekend else self.gap

@@ -1643,6 +1643,7 @@ class Pages:
         # `older(region, symbol, facts)`: a stored page from before FACTS_VERSION, served while it can't be rebuilt,
         # brought in line where that's cheap (see main.stock_page_older_facts)
         self.gather, self.per_minute, self.older = gather, per_minute, older
+        self.limit = None              # () -> builds a minute now, when it moves with the hour (main: more in India's night and at the weekend)
         self.on_built = None           # (region, symbol, facts) after a page is built and stored: screens.note_page
         self.on_priced = None          # (region, symbol, facts) after a stored page is moved to a newer close: screens.note_price (LIVE3-003)
         self.mem = TTLCache(max_items=3000)
@@ -1660,7 +1661,7 @@ class Pages:
             now = time.time()
             while self.recent and now - self.recent[0] > 60:
                 self.recent.popleft()
-            if len(self.recent) >= self.per_minute:
+            if len(self.recent) >= (self.limit() if self.limit else self.per_minute):
                 return False
             self.recent.append(now)
             return True
