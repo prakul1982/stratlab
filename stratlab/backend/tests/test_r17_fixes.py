@@ -141,8 +141,9 @@ def test_membership_reads_the_layers_own_words_and_a_sentence_that_says_nothing_
     words = D.theme_words({"value_chain": [{"layer": "Heavy vehicles", "description": "Trucks and buses for haulage."}]}, "Any theme")
     assert D.membership({**LIST, "what": "The company manufactures trucks and buses"}, words) == "core"      # the layer's description, not its name
     # (updated on purpose, e54: the checked companies by what their place rests on, never all "confirmed by their own description")
-    assert v["membership"] == {"placed": 20, "confirmed": 18, "not_confirmed": 2, "evidence": {
-        "description_verified": 3, "industry_code_supported": 15, "list_supported": 0, "not_confirmed": 2, "membership_unverified": 0}}
+    assert v["membership"] == {"placed": 20, "confirmed": 18, "not_confirmed": 2}
+    assert v["membership_evidence"] == {"description_verified": 3, "industry_code_supported": 15, "list_supported": 0, "not_confirmed": 2,
+                                        "membership_unverified": 0}
     t = texts(slides)
     assert ("20 in the exchange's industry list; 20 checked: 3 confirmed by their own description, 15 kept on their official industry only, "
             "2 whose own words describe other work") in t       # p2 and data confidence

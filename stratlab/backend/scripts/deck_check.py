@@ -404,7 +404,15 @@ def e54_checks(pages: list[str], add) -> None:
         if not by:
             continue
         f2 = flat.replace(" Each layer ", " ")
-        got = [_num(c.group(1)) for e in _EACH.finditer(f2) for cell in e.group(1).split(" · ") for c in [_EACH_CELL.match(cell.strip())] if c]
+        got = []
+        for e in _EACH.finditer(f2):
+            for cell in e.group(1).split(" · "):
+                c = _EACH_CELL.match(cell.strip())
+                if not c:
+                    break
+                got.append(_num(c.group(1)))
+                if cell.strip()[c.end():].strip():          # the row's last cell: the text after it is another row's or page's
+                    break
         if not got:
             continue
         said, sum_ = _num(by.group(1)), sum(got)

@@ -3120,10 +3120,9 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         # the theme's companies by how sure the theme is of each (R17-012), every placed company, with figures or not; "with_figures" is of the
         # confirmed ones only (R28: an unconfirmed company is listed but never in the figures, so "with figures 15" beside "confirmed 14" was wrong)
         "membership": {"placed": len(every_status), "confirmed": sum(1 for x in every_status.values() if x != "unverified"),
-                       "not_confirmed": sum(1 for x in every_status.values() if x == "unverified"),
-                       # e54: the checked companies by what their place rests on; they add up to "placed"
-                       "evidence": evidence_counts(every_evidence)},
-        "evidence": dict(sorted(every_evidence.items())),
+                       "not_confirmed": sum(1 for x in every_status.values() if x == "unverified")},
+        # e54: the checked companies by what their place rests on (they add up to the membership's "placed"), and each one's state
+        "membership_evidence": evidence_counts(every_evidence), "evidence": dict(sorted(every_evidence.items())),
         "status": {r["symbol"]: r.get("status") or "core" for r in listed}, "with_figures": sum(1 for r in listed if has_figures(r) and r.get("status") != "unverified"),
         "without_figures": [{"symbol": r["symbol"], "name": r["name"]} for r in listed if not has_figures(r) and r.get("status") != "unverified"],
     }

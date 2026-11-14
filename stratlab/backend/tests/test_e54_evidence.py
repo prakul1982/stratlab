@@ -46,8 +46,7 @@ def test_each_company_has_one_evidence_state_and_an_industry_code_is_never_its_o
 def test_the_universe_line_never_says_an_industry_code_is_confirmed_by_its_own_description_and_its_counts_add_up():
     """Fails before: "100 checked (...): 100 confirmed by their own description, 0 not; 122 not checked yet" beside 18 companies with
     figures and no words of their own (the live R53 Medical devices deck, p.4)."""
-    v = {"placements": {"base": 217, "added": 5}, "membership": {"placed": 100, "confirmed": 100, "not_confirmed": 0,
-                                                                 "evidence": {"description_verified": 82, "industry_code_supported": 18}}}
+    v = {"placements": {"base": 217, "added": 5}, "membership": {"placed": 100, "confirmed": 100, "not_confirmed": 0}, "membership_evidence": {"description_verified": 82, "industry_code_supported": 18}}
     said = deck.membership_words(v, 222)
     assert ("100 checked (the map's own picks, then the largest by market value): 82 confirmed by their own description, 18 kept on their "
             "official industry only, 0 whose own words describe other work; 122 not checked yet") in said
@@ -58,15 +57,15 @@ def test_the_universe_line_never_says_an_industry_code_is_confirmed_by_its_own_d
     assert "83 confirmed by their own description, 68 kept on their official industry only" in said2 and "71 not checked yet" in said2
     c = deck.reconciled_counts(v2, {"total": 222, "n": 76})
     assert (c["checked"], c["confirmed"], c["split"]) == (151, 151, (83, 68))
-    assert deck.counts_words(c).startswith("Considered 222 · confirmed 151 (83 by their own description, 68 on their official industry only; of 151 checked)")
+    assert deck.counts_words(c).startswith("Considered 222 · confirmed 151 (of 151 checked) · with figures 76")
 
 
 def test_the_membership_row_counts_the_industry_only_companies_and_every_wordless_one_is_among_them():
     v = {"layers": [{"layer": "L", "companies": [{"symbol": "A", "name": "Alpha Inc", "status": "core", "revenue": 10.0, "what": "We make implants."},
                                                  {"symbol": "B", "name": "Beta Inc", "status": "core", "revenue": 12.0, "what": None}]}],
-         "membership": {"placed": 2, "confirmed": 2, "not_confirmed": 0, "evidence": {"description_verified": 1, "industry_code_supported": 1}}, "checks": {}}
+         "membership": {"placed": 2, "confirmed": 2, "not_confirmed": 0}, "membership_evidence": {"description_verified": 1, "industry_code_supported": 1}, "checks": {}}
     rows = {r[0]: r for r in deck.confidence_rows(v, {"total": 2}, date(2026, 11, 14))}
-    assert rows["Membership"][1] == ("1 of the 2 checked are kept on their official industry only: no words of their own that show the theme's work. "
+    assert rows["Membership"][1] == ("1 of the 2 checked are kept on their official industry only. "
                                      "1 company with figures have no description in their own words yet: Beta Inc.")
     assert "confirmed by their own description" not in rows["Universe"][1].split("1 confirmed by their own description")[1]
 
@@ -75,7 +74,7 @@ def test_on_the_live_r52_medical_devices_inputs_no_company_without_words_is_coun
     """Fails before: every confirmed company was "confirmed by their own description", 214 of them with no words of their own shown."""
     d = inputs("inputs_r52/meddev.json")
     v, slides = synthetic_deck(d, replay(inputs("inputs_r52/meddev.json")))
-    ev = v["membership"]["evidence"]
+    ev = v["membership_evidence"]
     assert sum(ev.values()) == v["membership"]["placed"]
     wordless = deck.without_words(v)
     assert len(wordless) <= ev["industry_code_supported"] + ev["list_supported"]
@@ -101,7 +100,7 @@ def test_every_count_says_its_population_and_the_layers_add_up_to_core_plus_adja
     assert rows["Companies, by count"][2].endswith("the theme's core members only, the 39 adjacent participants with figures apart")
     assert rows["Each layer"][2].startswith(f"{pop['core']} core members + 39 adjacent participants = {pop['core'] + 39} with figures (adjacent layers: "
                                             "Diagnostic and genetic testing labs, Hospital and care facility operators); companies with figures:")
-    assert "with figures 183 (core members; 39 adjacent participants with figures apart)" in deck.counts_words(deck.reconciled_counts(v, cov))
+    assert "with figures 183 core members" in deck.counts_words(deck.reconciled_counts(v, cov))
     # the share of market value is the core members'
     adj = {x["symbol"] for x in v["adjacent"]}
     vs = deck.value_share(v)
@@ -138,8 +137,9 @@ def test_whole_company_figures_of_another_way_of_earning_are_said_on_the_row_and
     soft = _layer("Enterprise software", "software", "software", [_c("MSFT")])
     pay = _layer("Merchant acquiring and processing", "payments", "payments", [_c("FI")])
     note2 = deck.profiles_note([{"layer": x["layer"]} for x in (lend, soft, pay)], {x["layer"]: x for x in (lend, soft, pay)})
-    assert note2.startswith("These layers earn in 3 different ways: interest on loans they make (Card issuers and consumer lenders); ")
-    assert "never ranked against each other: a highest or lowest is said only among layers of one way of earning" in note2
+    assert note2.startswith("These layers earn in 3 different ways: interest on loans they make; licences and subscriptions for software they own; "
+                            "fees on the value or number of payments they process.")
+    assert "never ranked against each other: a ranking is made only among layers of one way of earning" in note2
     assert deck.profiles_note([{"layer": "Enterprise software"}], {"Enterprise software": soft}) == ""
 
 
@@ -174,7 +174,7 @@ def test_each_stored_read_keeps_what_was_checked_and_the_checked_share_after_it(
     two = TR.membership_check("Drug makers", m, m, dive, stored, lambda s: None, date(2026, 11, 14))
     assert (two["checked"], two["step"]) == (220, 60) and two["history"] == [["2026-11-07", 160, 250], ["2026-11-14", 220, 250]]
     # the deck says the progress, and the tally adds up to the theme's companies
-    v = {"membership": {"placed": 100, "confirmed": 100, "not_confirmed": 0, "evidence": {"industry_code_supported": 100}}, "membership_check": two}
+    v = {"membership": {"placed": 100, "confirmed": 100, "not_confirmed": 0}, "membership_evidence": {"industry_code_supported": 100}, "membership_check": two}
     row = deck.progress_row(v, {"total": 250})
     assert row[0] == "Membership checked" and row[1] == "220 of 250 (88%)"
     assert "30 not checked yet, the next 60 by market value checked each time the theme's figures are stored" in row[2]
@@ -244,3 +244,17 @@ def test_deck_check_finds_evidence_state_contradictions_and_population_mismatche
     # more companies without words than the deck keeps on their official industry
     worse = fixed.replace("18 kept on", "10 kept on").replace("82 confirmed", "90 confirmed")
     assert DC.check_text(worse)["counts"]["evidence state"] == 2          # 90 + 18 above the 100 checked, and 18 without words above the 10 kept
+
+
+def test_the_description_reads_move_on_past_the_largest_companies_once_those_are_described(monkeypatch):
+    """Fails before: the candidates were cut to the largest PLACE_MAX (120) before the described ones were passed over, so once those had
+    their words no company past them was read again (Biotech's 564 "not checked yet (no description of their own is kept)")."""
+    out = {"value_chain": [{"layer": "Drug developers", "companies": [{"ticker": "AI1"}]},
+                           {"layer": "Drug makers", "official": True, "basis": "industry",
+                            "companies": [{"ticker": f"C{i:03d}", "cap": 1000.0 - i} for i in range(300)]}]}
+    described = {f"C{i:03d}" for i in range(150)}
+    monkeypatch.setattr(TR, "_has_description", lambda region, s: s in described)
+    asked = []
+    monkeypatch.setattr(TR, "evidence_reader", lambda region, names: (lambda syms: asked.extend(syms) or [{}]))
+    got = TR.describe_unplaced("US", out, {}, None)
+    assert got == [f"C{i:03d}" for i in range(150, 150 + TR.PLACE_READS)] and asked == got

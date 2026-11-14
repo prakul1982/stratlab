@@ -522,7 +522,10 @@ def describe_unplaced(region: str, out: dict, names: dict, kept: dict | None) ->
     if not any(not v.get("official") and v.get("layer") for v in out.get("value_chain") or []):
         return []                               # no layers of the map's own to place them in (theme_base.place_rest)
     want = []
-    for c in sorted(rest, key=lambda c: (-(c.get("cap") or 0), c["ticker"]))[:theme_base.PLACE_MAX]:
+    # e54 (R54, the owner's review of the live R53 decks: Biotech's 564 and Software's 151 "not checked yet (no description of their own is
+    # kept)" after several checks): the candidates were cut to the largest PLACE_MAX before the ones already described were passed over, so
+    # once those had their words no company past them was ever read; the next PLACE_READS without a description, largest first, are read
+    for c in sorted(rest, key=lambda c: (-(c.get("cap") or 0), c["ticker"])):
         if len(want) >= PLACE_READS:
             break
         if not _has_description(region, c["ticker"]):
@@ -1161,7 +1164,8 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
     hit["coverage"] = map_coverage(m)          # R44: of every company the map places, not only those the figures were read for
     before = theme_changes.stored(r, m.get("_library") or theme).get("snap")
     # e54 (R54): the membership check moves on through the companies not checked yet, MEMBERSHIP_STEP a stored read (membership_check)
-    hit["membership_check"] = membership_check(theme, m, fm, hit, before, src.about, src.today)
+    hit["membership_check"] = membership_check(theme, m, fm, hit, before, getattr(src, "about", lambda s_: None),
+                                               getattr(src, "today", None) or datetime.now(timezone.utc).date())
     # cl48 (R47): the coverage control, against the previous live read of the theme (theme_changes' snapshot, stored before this one)
     ctl = theme_changes.coverage_control(hit["coverage"], before, hit)   # d53: layers lost too
     if ctl:
@@ -1329,7 +1333,8 @@ def deck_view(r: str, m: dict, dive: dict, extra: dict | None = None) -> dict:
             "duplicates": dive.get("duplicates") or [], "adjacent": dive.get("adjacent") or [], "core_kind": dive.get("core_kind") or "",
             "developers": dive.get("developers") or 0,
             # e54 (R54): each checked company's evidence state and the membership check's progress outside the figures' window
-            "evidence": dive.get("evidence") or {}, "membership_check": dive.get("membership_check") or {},
+            "evidence": dive.get("evidence") or {}, "membership_evidence": dive.get("membership_evidence"),
+            "membership_check": dive.get("membership_check") or {},
             "news": None, "listings": None, "prices": None, "business": None, **(extra or {})}
 
 

@@ -126,8 +126,8 @@ def test_the_universe_says_how_many_are_not_checked_yet_never_0_not_yet():
     # official-industry record can't be; with the states, each is counted)
     assert deck.membership_words({"placements": {"base": 60}, "membership": {"placed": 60, "confirmed": 58, "not_confirmed": 2}}, 60).endswith(
         "58 confirmed in the theme, 2 not yet")
-    assert deck.membership_words({"placements": {"base": 60}, "membership": {"placed": 60, "confirmed": 58, "not_confirmed": 2, "evidence": {
-        "description_verified": 40, "industry_code_supported": 18, "not_confirmed": 2}}}, 60).endswith(
+    assert deck.membership_words({"placements": {"base": 60}, "membership": {"placed": 60, "confirmed": 58, "not_confirmed": 2}, "membership_evidence": {
+        "description_verified": 40, "industry_code_supported": 18, "not_confirmed": 2}}, 60).endswith(
         "60 checked: 40 confirmed by their own description, 18 kept on their official industry only, 2 whose own words describe other work")
     old = "Universe 821 companies; 100 of the 100 checked confirmed by their own description, 0 not yet."
     assert deck_check.check_pages([old])["counts"]["unchecked as 0"] == 1

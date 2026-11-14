@@ -49,7 +49,8 @@ export interface Dive {
   notable: { kind: "gap" | "move" }[];
   /** e54: what each checked company's place in the theme rests on (theme_data.EVIDENCE_STATES), the figures' window... */
   evidence?: Record<string, EvidenceState>;
-  membership?: { placed: number; confirmed: number; not_confirmed: number; evidence?: Partial<Record<EvidenceState, number>> };
+  membership?: { placed: number; confirmed: number; not_confirmed: number };
+  membership_evidence?: Partial<Record<EvidenceState, number>>;
   /** ...and the companies the membership check reached beyond it, with its progress after each stored read ([day, checked, total]) */
   membership_check?: { outside: Record<string, EvidenceState>; checked: number; total: number; history: [string, number, number][]; step?: number };
   sections: {

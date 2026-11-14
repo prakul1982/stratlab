@@ -2394,22 +2394,19 @@ def reconciled_counts(v: dict, cov: dict) -> dict:
 
 
 def confirmed_words(c: dict, members: int, short: bool = False) -> str:
-    """e54: "confirmed 100 (82 by their own description, 18 on their official industry only; of 160 checked)": the deck's one count of
-    confirmed companies with what their place rests on, never all of them said to be confirmed by their own description."""
+    """e54: "confirmed 160 (of 160 checked)": the deck's one count of confirmed companies, those the membership check reached beyond the
+    figures' window among them; what each one's place rests on is said once, in the universe line (membership_words), never all of them
+    "confirmed by their own description"."""
     paren = []
-    if c.get("split") and not short:
-        paren.append(f"{c['split'][0]:,} by their own description, {c['split'][1]:,} on their official industry only")
     if c.get("checked") and c["checked"] < members:
         paren.append(f"of {c['checked']:,} checked")
     return f"confirmed {c['confirmed']:,}" + (f" ({'; '.join(paren)})" if paren else "")
 
 
 def figures_words(c: dict, short: bool = False) -> str:
-    """e54: "with figures 76 (core members; 24 adjacent participants with figures apart)": the population the count is of, said where the
-    theme has adjacent participants ("with figures 76 core members" where the line is short)."""
-    if not c.get("adjacent"):
-        return f"with figures {c['with_figures']:,}"
-    return f"with figures {c['with_figures']:,} " + ("core members" if short else f"(core members; {c['adjacent']:,} adjacent participants with figures apart)")
+    """e54: "with figures 76 core members": the population the count is of, said where the theme has adjacent participants (their count is
+    on the coverage's "Companies, by count" and "Each layer" rows), one form everywhere the four counts are said."""
+    return f"with figures {c['with_figures']:,}" + (" core members" if c.get("adjacent") else "")
 
 
 def screened_out(v: dict) -> int:
@@ -2436,13 +2433,12 @@ EVIDENCE_WORDS = (("description_verified", "confirmed by their own description")
 def evidence_tally(v: dict, total: int) -> dict | None:
     """e54 (R54, the owner's review of the live R53 decks: "100 confirmed from their own descriptions" beside "18 with figures lack own-words
     descriptions, kept on official-industry labels"): the theme's companies by what their place rests on, every count of one population that
-    adds up: {state: n} over theme_data.EVIDENCE_STATES for the companies checked (the figures' window, `membership.evidence`, and those the
+    adds up: {state: n} over theme_data.EVIDENCE_STATES for the companies checked (the figures' window, `membership_evidence`, and those the
     membership check reached beyond it, `membership_check.outside`), "checked", "total" and "membership_unverified" (total - checked: never
     checked). None for a view made before the states were kept."""
-    mem = v.get("membership") or {}
-    ev = mem.get("evidence")
-    if not isinstance(ev, dict):
-        return None
+    ev = v.get("membership_evidence")
+    if not isinstance(ev, dict) or not any(ev.get(k) for k, _ in EVIDENCE_WORDS):
+        return None            # (a map from before the membership checks, every company as it was: no state to say)
     out = {k: int(ev.get(k) or 0) for k, _ in EVIDENCE_WORDS}
     old = int(ev.get("membership_unverified") or 0)          # placed by a map from before the checks: never checked
     for x in ((v.get("membership_check") or {}).get("outside") or {}).values():
@@ -3070,9 +3066,9 @@ def profiles_note(rows: list, by_layer: dict) -> str:
         ways.setdefault(fam, (way, []))[1].append(r["layer"])
     if len(ways) < 2:
         return ""
-    said = "; ".join(f"{w} ({', '.join(ls)})" for w, ls in ways.values())
+    said = "; ".join(w for w, _ in ways.values())          # (each layer's page says its own way: no layer named beside another's here)
     return (f"These layers earn in {len(ways)} different ways: {said}. Their figures are of different kinds of business, so they are set side "
-            "by side and never ranked against each other: a highest or lowest is said only among layers of one way of earning.")
+            "by side and never ranked against each other: a ranking is made only among layers of one way of earning.")
 
 
 ADJACENT_NOTE = ("A layer marked (adjacent): most of its companies' principal business is another kind than the theme's core members'; shown, "
@@ -3114,9 +3110,9 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> li
         # e54: and the count of every checked company kept on its official industry alone, the same one the universe line says
         kept = (tally["industry_code_supported"] + tally["list_supported"]) if tally else 0
         where = "official industry or the theme's own list" if tally and tally["list_supported"] else "official industry"
-        head = f"{kept:,} of the {tally['checked']:,} checked are kept on their {where} only: no words of their own that show the theme's work." if kept else ""
+        head = f"{kept:,} of the {tally['checked']:,} checked are kept on their {where} only." if kept else ""
         rows.append(["Membership", " ".join(x for x in (head, wordless_said(wordless) if wordless else "") if x),
-                     "Kept in the figures by their official industry; counted apart from the companies confirmed by their own description."])
+                     "Kept in the figures by their official industry; nothing in their own words was checked."])
     else:
         rows.append(["Membership", "Every company with figures has words of its own, or a checked quote, that show the theme's work.", "Nothing held back."])
     part = partial_map(v, cov)
@@ -3297,11 +3293,13 @@ def coverage_table(v: dict, cov: dict) -> list[list[str]]:
     # e54 (R54, the owner's review of the live R53 Medical devices deck: "76 with figures" beside "Each layer" rows that add up to 100, the
     # adjacent participants among them): each count says which population it is of
     prog = progress_row(v, cov)
-    rows = [screening_row(v, cov)] + ([prog] if prog else []) + [[COVERAGE_KINDS[0], f"{n:,} of {total:,}",
+    rows = [screening_row(v, cov)] + [[COVERAGE_KINDS[0], f"{n:,} of {total:,}",
                                     "companies: confirmed, with figures, of every company the deck lists"
                                     + (f"; the theme's core members only, the {pop['adjacent']:,} adjacent participants with figures apart" if pop["adjacent"] else "")]]
     if cov.get("share") is not None:
         rows.append([COVERAGE_KINDS[1], f"{cov['share']}%", f"of {cov['of_what']}, held by the companies with figures (a share of value, not of companies)"])
+    if prog:                       # e54: how many of the theme's companies have had their membership checked, and after each version
+        rows.append(prog)
     each = next((r[2] for r in coverage_rows(v, cov) if r[0] == "In each median and total"), "")
     if each:
         rows.append([COVERAGE_KINDS[2], "", each])
