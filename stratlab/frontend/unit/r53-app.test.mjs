@@ -143,3 +143,13 @@ test("LIVE8B-027 / 029: one market open is named, not counted; the footer's Feed
   assert.match(src, /marketsOpenText\(rows\.filter\(\(r\) => r\.st\.open\)\.map/);
   assert.match(read("src/styles.css"), /\.legal-links \.legal-feedback \{[^}]*text-decoration: underline;/);
 });
+
+test("LIVE8B-021: positioning shares in one precision; the total row's net and split left blank", async () => {
+  const { pct } = await import("../src/lib/positioning.ts");
+  assert.equal(pct(61), "61.0%");
+  assert.equal(pct(65.94), "65.9%");
+  assert.equal(pct(null), "–");
+  const page = read("src/pages/PositioningPage.tsx");
+  assert.match(page, /r\.id === "total" && k\.endsWith\("_net"\) \? null/);
+  assert.match(page, /r\.id === "total" \? null : <span data-testid=\{`split-\$\{r\.id\}`\}>/);
+});
