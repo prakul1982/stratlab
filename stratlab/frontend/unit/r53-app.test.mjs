@@ -59,3 +59,14 @@ test("LIVE8B-011: a headline seven calendar days back but under seven days old n
   assert.match(got, /^7 Nov · 1 week old$/);
   assert.match(newsWhen("2026-11-11T10:00:00Z", now), /^11 Nov · 3 days old$/);
 });
+
+test("LIVE8B-013: a leg distance its box doesn't take is never echoed as a rule; the error sits under the row", async () => {
+  const { legRule, offsetFits } = await import("../src/lib/options.ts");
+  assert.equal(legRule({ side: "buy", opt: "CE", offset: 5000, lots: 1 }, "strikes"), "distance to fix");
+  assert.equal(legRule({ side: "buy", opt: "CE", offset: 2.5, lots: 1 }, "strikes"), "distance to fix");
+  assert.equal(legRule({ side: "buy", opt: "CE", offset: 5000, lots: 1 }, "points"), "5000 pts OTM");
+  assert.equal(legRule({ side: "buy", opt: "CE", offset: 2, lots: 1 }, "strikes"), "2 strikes OTM");
+  assert.equal(offsetFits(100, "strikes"), true);
+  assert.equal(offsetFits(101, "strikes"), false);
+  assert.match(read("src/pages/trade/options.css"), /\.k-leg-pick \.k-bad \{ flex-basis: 100%; order: 9; \}/);
+});
