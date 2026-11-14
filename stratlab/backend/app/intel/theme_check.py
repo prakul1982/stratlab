@@ -1024,10 +1024,34 @@ SCOPE_PRODUCTS = (
      r"\bbatter|\belectric|\benergy\b|\bpower (?:generation|equipment|plants?|utilit\w*|transmission|tools)\b|\bauto(?:mo\w*)?\b|\bvehicles?\b|"
      r"\bmobility\b|\bmotors?\b|\bstorage\b|\blighting\b|\bsemiconductor|\belectronic|\bdurables?\b|\bappliances?\b|\bcapital goods\b|"
      r"\bindustrials?\b|\bengineering\b|\butilit|\btelecom|\brenewab|\bsolar\b|\bdefen[cs]e|\bcomponents?\b|\bequipment\b"),
+    ("cables, wires and electrical equipment",
+     r"\b(?:power |electric(?:al)? )?cables?\b|\bwires? and cables?\b|\bswitchgears?\b|\b(?:power |distribution )?transformers\b|"
+     r"\belectrical equipment\b|\belectric motors?\b",
+     r"\belectric|\bpower\b|\benergy\b|\butilit|\bcapital goods\b|\bindustrials?\b|\bengineering\b|\binfrastructure\b|\btelecom|"
+     r"\bauto(?:mo\w*)?\b|\bconstruction\b|\bequipment\b|\bcomponents?\b|\bdefen[cs]e|\brenewab|\bsolar\b|\bcables?\b|\bmetals?\b"),
+    ("steel and metal products",
+     r"\b(?:stainless |alloy )?steel(?! utensils)\b|\bpig iron\b|\bsponge iron\b|\bferro ?alloys?\b|\baluminium\b|\baluminum\b|\bcopper\b|"
+     r"\bzinc\b|\bcastings?\b|\bforgings?\b|\bseamless pipes?\b",
+     r"\bmetal|\bsteel\b|\bmining\b|\bminerals?\b|\bauto(?:mo\w*)?\b|\bvehicles?\b|\bcapital goods\b|\bindustrials?\b|\bengineering\b|"
+     r"\binfrastructure\b|\bconstruction\b|\bdefen[cs]e|\bcomponents?\b|\bequipment\b|\bhousing\b|\breal ?estate|\brealty\b|\bcables?\b|"
+     r"\bchemical|\butilit|\bpower\b|\benergy\b|\bmaterials?\b|\bcommodit"),
+    ("cement and building materials",
+     r"\bcement\b|\bclinker\b|\bceramic tiles\b|\bvitrified tiles\b|\bsanitary ?ware\b|\bplywood\b|\blaminates\b",
+     r"\bcement\b|\bbuilding\b|\bconstruction\b|\binfrastructure\b|\breal ?estate|\brealty\b|\bhousing\b|\bmaterials?\b|\bhome improvement\b"),
+    ("tyres and vehicle parts",
+     r"\btyres?\b|\btires\b|\bauto(?:motive)? (?:components?|parts|ancillar\w*)\b|\bvehicle (?:components?|parts)\b",
+     r"\bauto(?:mo\w*)?\b|\bvehicles?\b|\bmobility\b|\btyres?\b|\btires?\b|\brubber\b|\bcomponents?\b|\bcapital goods\b|\bindustrials?\b|"
+     r"\bengineering\b|\bdefen[cs]e|\btransport"),
+    ("fertilisers and crop protection",
+     r"\bfertili[sz]ers?\b|\bpesticides?\b|\bagrochemicals?\b|\binsecticides?\b|\bherbicides?\b|\bfungicides?\b|\bcrop protection\b",
+     r"\bagri|\bfarm|\bcrop|\bfertili|\bchemical|\bcommodit|\bseeds?\b|\bplantation"),
 )
 _SCOPE_PLAIN = {"manufactur", "manufacturing", "manufacturer", "maker", "make", "produc", "product", "producer", "production", "supplier",
                 "suppl", "seller", "brand", "branded", "compan", "consumer", "good", "goods", "market", "marketing", "distribut", "trading",
                 "larger", "smaller", "mixed", "diversified", "various", "sold", "selling", "earning", "earn", "revenue", "these", "layer"}
+
+
+_OF_ANOTHER = re.compile(r"\banother company\b|\bsubsidiary of\b|\bpart of\b|\bgroup\b|\bpromoted by\b|\bparent\b|\bconglomerate\b", re.I)
 
 
 def off_scope(about, theme_text: str, name: str = "") -> dict | None:
@@ -1047,8 +1071,27 @@ def off_scope(about, theme_text: str, name: str = "") -> dict | None:
         if re.search(scope, theme_text or "", re.I):
             continue
         m = re.search(products, said, re.I)
-        if m and not does_the_work(said[:m.start()], own):
+        # (a kind said of its parent or group, "a subsidiary of another company, a conglomerate with interest in ... cement", is not its own)
+        if m and not does_the_work(said[:m.start()], own) and not _OF_ANOTHER.search(said[:m.start()]):
             return {"kind": kind, "said": m.group(0), "text": shown[:200]}
+    return None
+
+
+def off_scope_listed(name: str, industry: str, theme_text: str) -> dict | None:
+    """v55 (R55, the owner's acceptance test: "a battery maker can't remain in FMCG solely through Other"): for a company with no
+    description of its own (nothing off_scope can read), {"kind", "said", "where", "text"} when its official industry, else its listed
+    name (its issuer's, theme_base.issuer_name), names a kind of product (SCOPE_PRODUCTS) the theme's definition doesn't include; None
+    else. "where": "industry" or "name"."""
+    from .theme_base import issuer_name
+    for where, text in (("industry", str(industry or "")), ("name", issuer_name(name or ""))):
+        if not text:
+            continue
+        for kind, products, scope in SCOPE_PRODUCTS:
+            if re.search(scope, theme_text or "", re.I):
+                continue
+            m = re.search(products, text, re.I)
+            if m:
+                return {"kind": kind, "said": m.group(0), "where": where, "text": text[:120]}
     return None
 
 

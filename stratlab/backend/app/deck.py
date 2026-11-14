@@ -3579,14 +3579,16 @@ def off_industry_line(v: dict) -> str:
                 held.append(clean_name(x.get("name") or x["ticker"]))
                 continue
             if x.get("scope"):           # v55: a principal business of a kind of product the theme's definition doesn't include
+                how = {"industry": "no description of its own; its official industry is of",
+                       "name": "no description of its own; its name names"}.get(x.get("scope_where"), "its principal business is of")
                 scoped.append(f"{clean_name(x.get('name') or x['ticker']).rstrip('.')} (filed under {x.get('industry') or 'the theme’s industries'}; "
-                              f"its principal business is of {x['scope']})")
+                              f"{how} {x['scope']})")
                 continue
             by.setdefault(x.get("industry") or "the theme's industries", []).append(clean_name(x.get("name") or x["ticker"]))
     # c1: a name ending in a full stop ("Amaze Holdings, Inc.") ends the sentence, never with a second one
     out = " ".join(f"Filed under {ind} but in another business: {', '.join(names).rstrip('.')}." for ind, names in by.items())
     if scoped:              # v55 (R55): out of the theme, never parked in "Other"
-        out = (out + " " if out else "") + f"Outside the theme's definition, by their principal business: {'; '.join(scoped)}."
+        out = (out + " " if out else "") + f"Outside the theme's definition: {'; '.join(scoped)}."
     if held:
         out = (out + " " if out else "") + (f"Found to be in another business by an earlier version of the theme, with no words of their own read "
                                             f"since: {', '.join(held).rstrip('.')}.")

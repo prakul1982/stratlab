@@ -68,8 +68,8 @@ Failures (the exit code is 1 when any deck has one):
                to show the theme's work yet"
   out of scope in Other  v55 (the live R54 FMCG deck: Indo National, a battery and torch maker, moved into "Other FMCG companies", and High
                Energy Batteries there): a company of a theme's "Other" group whose name states a kind of product outside the theme's own
-               (batteries, torches, flashlights, dry cells), in a theme whose title doesn't state it, unless the deck says it is not checked
-               yet
+               (batteries, torches, dry cells; cables, transformers; steel, castings, forgings; cement; tyres; fertilisers, pesticides), in a
+               theme whose title doesn't state it, unless the deck says it is not checked yet
   stage mismatch  v55 (the live R54 Biotech deck: Merck & Co, $65 bn of revenue, in "Pipeline-stage and royalty-funded drug developers"):
                a company of the appendix in a layer named by a development stage only (clinical-stage, pipeline-stage, pre-revenue,
                development-stage, pre-clinical; no commercial, specialty, large or portfolio part) with an operating profit and revenue ten
@@ -503,9 +503,17 @@ def e54_checks(pages: list[str], add) -> None:
 _OTHER_WORK_LIST = re.compile(r"whose own words (?:describe other work|don't show the work, left out of every median and total): (.{3,400}?)\.(?=\s+[A-Z(]|\s*$)")
 _DEPOSITARY = re.compile(r"\b(?:ADRs?|ADSs?|GDRs?|[Uu]n-?[Ss]pon\w*|[Dd]epositary)\b")
 _NOT_YET = "its own words are not confirmed to show the theme's work yet"
-_SCOPE_NAME = re.compile(r"\b(?:batter(?:y|ies)|torch(?:es)?|flash ?lights?|dry[- ]?cells?)\b", re.I)
-_SCOPE_TITLE = re.compile(r"batter|electric|energy|auto|vehicle|mobility|power|utilit|semiconductor|electronic|durable|appliance|capital goods|"
-                          r"industrial|engineering|renewab|solar|defen", re.I)
+# (a kind of product a company's name states, and the words of a theme's title it is of: the app's theme_check.SCOPE_PRODUCTS, by name)
+_SCOPE_KINDS = ((r"\b(?:batter(?:y|ies)|torch(?:es)?|flash ?lights?|dry[- ]?cells?)\b",
+                 r"batter|electric|energy|auto|vehicle|mobility|power|utilit|semiconductor|electronic|durable|appliance|capital goods|"
+                 r"industrial|engineering|renewab|solar|defen"),
+                (r"\b(?:cables?|switchgears?|transformers)\b", r"electric|power|energy|utilit|capital goods|industrial|engineering|infrastructure|telecom|"
+                 r"auto|construction|defen|renewab|solar|cable|metal"),
+                (r"\b(?:steel|ferro ?alloys?|castings|forgings)\b", r"metal|steel|mining|auto|vehicle|capital goods|industrial|engineering|"
+                 r"infrastructure|construction|defen|real ?estate|realty|chemical|utilit|power|energy|material"),
+                (r"\b(?:cements?)\b", r"cement|building|construction|infrastructure|real ?estate|realty|housing|material"),
+                (r"\b(?:tyres?)\b", r"auto|vehicle|mobility|tyre|rubber|capital goods|industrial|engineering|defen|transport"),
+                (r"\b(?:fertili[sz]ers?|pesticides?|agrochemicals?)\b", r"agri|farm|crop|fertili|chemical|commodit|seed|plantation"))
 _DEV_LAYER = re.compile(r"\bpre-?revenue\b|\bclinical[- ]stage\b|\bdevelopment[- ]stage\b|\bpre-?clinical\b|\bpipeline[- ]stage\b", re.I)
 _COM_LAYER = re.compile(r"\bcommercial\b|\blarge\b|\bbig\b|\bestablished\b|\bportfolios?\b|\bmarketed\b|\bspecialty\b|\bmajor\b|\bmature\b", re.I)
 _MONEY = re.compile(r"^([$₹])\s?([\d,]+(?:\.\d+)?)\s?(bn|m|cr|k)?$")
@@ -553,7 +561,7 @@ def v55_checks(pages: list[str], add) -> None:
             if len(cells) < 6:
                 continue
             name, layer = cells[0], cells[1]
-            if title and layer.startswith("Other ") and _SCOPE_NAME.search(name) and not _SCOPE_TITLE.search(title) \
+            if title and layer.startswith("Other ") and any(re.search(k, name, re.I) and not re.search(t_, title, re.I) for k, t_ in _SCOPE_KINDS) \
                     and not any(name.startswith(u) or u.startswith(re.sub(r" (?:Ltd|Limited|Inc\.?|Corp\.?)$", "", name)) for u in unchecked):
                 add("out of scope in Other", n, f"{name} in “{layer}” of the {title} deck")
             if _DEV_LAYER.search(layer) and not _COM_LAYER.search(layer):

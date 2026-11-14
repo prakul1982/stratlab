@@ -170,16 +170,57 @@ def test_indo_national_is_screened_out_of_fmcg_never_parked_in_other_on_the_live
     assert "NIPPOBATRY" not in layers(out["value_chain"])
     off = next(x for x in out["placements"]["off_industry"] if x["ticker"] == "NIPPOBATRY")
     assert off["scope"] == "batteries, torches and electrical goods" and "which the theme's definition doesn't include" in off["why"]
-    assert DK.off_industry_line({"placements": out["placements"]}).startswith(
-        "Outside the theme's definition, by their principal business: Indo National Ltd (filed under Household Products; its principal "
-        "business is of batteries, torches and electrical goods).")
+    assert DK.off_industry_line({"placements": out["placements"]}) == (
+        "Outside the theme's definition: High Energy Batteries (India) Ltd (filed under Household Products; no description of its own; its "
+        "name names batteries, torches and electrical goods); Indo National Ltd (filed under Household Products; its principal business is of "
+        "batteries, torches and electrical goods).")
     # every other company keeps its live layer (the one other difference is the replay's own, before this change too)
     live = layers(inputs("fmcg")["value_chain"])
     assert {s for s, x in layers(out["value_chain"]).items() if live.get(s) != x} == {"GPAPL"}
+    assert set(live) - set(layers(out["value_chain"])) == {"NIPPOBATRY", "HIGHENE"}
+
+
+def test_a_battery_maker_with_no_description_cant_stay_in_fmcg_through_other_on_the_live_r54_inputs():
+    """The owner's acceptance test, "a battery maker can't remain in FMCG solely through Other". Fails before: High Energy Batteries (India),
+    no description of its own stored, stayed in "Other FMCG companies" as not checked yet. With no words of its own, its official industry,
+    else its listed name, is read against the theme's definition. (Panasonic Energy India, also with none, stays: neither its industry,
+    Household Products, nor its name names a kind of product outside the theme.)"""
+    out = replay("fmcg")
+    got = layers(out["value_chain"])
+    assert "HIGHENE" not in got and got["PANAENERG"] == "Other"
+    off = next(x for x in out["placements"]["off_industry"] if x["ticker"] == "HIGHENE")
+    assert off["scope_where"] == "name" and off["why"] == ("filed under Household products; no description of its own is stored, and its name "
+                                                           "(“High Energy Batteries (India)”) names batteries, torches and electrical goods "
+                                                           "(“Batteries”); outside the theme's definition")
+    fmcg = B.scope_text("FMCG", "", [v for v in inputs("fmcg")["value_chain"] if not v.get("official")])
+    by_ind = C.off_scope_listed("Acme Ltd", "Electrical Equipment > Batteries", fmcg)
+    assert by_ind["where"] == "industry" and by_ind["kind"] == "batteries, torches and electrical goods"
+    assert C.off_scope_listed("Acme Ltd", "Household Products", fmcg) is None
+    assert C.off_scope_listed("Hindustan Foods Ltd", "Diversified FMCG", fmcg) is None
+    # in a theme whose definition names the kind, a battery maker is the theme's
+    assert C.off_scope_listed("High Energy Batteries (India) Ltd", "", "Automotive Auto components and batteries") is None
+
+
+def test_the_out_of_scope_catalogue_reads_each_kind_of_product_only_outside_themes_of_its_scope():
+    fmcg = "FMCG Branded packaged foods manufacturing Branded home, personal care and FMCG Beverages, coffee and mixed consumer foods"
+    said = {k: C.off_scope(t, fmcg, "Acme Ltd") for k, t in (
+        ("cables", "Acme manufactures power cables and wires for utilities."),
+        ("steel", "Acme manufactures stainless steel pipes and alloy steel bars."),
+        ("cement", "Acme manufactures cement and clinker in two plants."),
+        ("tyres", "Acme manufactures tyres for trucks and buses."),
+        ("fertilisers", "Acme manufactures fertilisers and pesticides for farmers."))}
+    assert {k: (x or {}).get("kind") for k, x in said.items()} == {"cables": "cables, wires and electrical equipment", "steel": "steel and metal products",
+                                                                   "cement": "cement and building materials", "tyres": "tyres and vehicle parts",
+                                                                   "fertilisers": "fertilisers and crop protection"}
+    assert C.off_scope("Acme manufactures cement and clinker.", "Cement Cement makers Building materials", "Acme Ltd") is None
+    assert C.off_scope("Acme manufactures tyres for trucks.", "Automotive Tyre makers", "Acme Ltd") is None
+    # a kind said of its parent or group is not its own (a subsidiary of a conglomerate "with interest in ... cement")
+    assert C.off_scope("Acme Life Sciences, a subsidiary of Big Group Ltd, a conglomerate with interest in consumer products, cement and "
+                       "drugs, makes active ingredients.", fmcg, "Acme Life Sciences Ltd") is None
 
 
 def test_no_other_company_of_any_stored_theme_input_is_outside_its_themes_definition():
-    """The scope check moves no company of the 14 benchmark themes or any other stored live input: only Indo National is outside its theme."""
+    """The scope check moves no company of the 14 benchmark themes or any other stored live input: only the two battery makers in FMCG."""
     found = set()
     for p in sorted((LIVE.parent).glob("inputs_r*/*.json")):
         if p.name in ("recovered.json", "moved.json"):
@@ -191,7 +232,12 @@ def test_no_other_company_of_any_stored_theme_input_is_outside_its_themes_defini
             for c in v["companies"]:
                 if (c.get("base") or c.get("placed")) and C.off_scope(d["evidence"].get(c["ticker"]) or c.get("what"), text, c.get("name") or ""):
                     found.add((d["theme"], c["ticker"]))
-    assert found == {("FMCG", "NIPPOBATRY")}
+                elif (c.get("base") or c.get("placed")) and not d["evidence"].get(c["ticker"]) and not c.get("what") and C.off_scope_listed(
+                        c.get("name") or "", c.get("industry") or ((d.get("facts") or {}).get(c["ticker"]) or {}).get("industry") or "", text):
+                    found.add((d["theme"], c["ticker"]))
+    # v55 follow-up: with the catalogue widened (cables, steel and metal products, cement, tyres, fertilisers) and companies with no words of
+    # their own read on their industry or name, still only the two battery makers in FMCG
+    assert found == {("FMCG", "NIPPOBATRY"), ("FMCG", "HIGHENE")}
 
 
 def test_a_kind_of_product_of_the_themes_scope_or_named_after_the_themes_own_product_stays():
@@ -289,6 +335,9 @@ def test_deck_check_finds_exclusions_on_unread_words_out_of_scope_others_stage_m
     assert DC.check_text(head + other)["counts"]["out of scope in Other"] == 1
     said = head + "Companies that fit none of the map's layers; 1 of them not checked yet (Indo Batteries): no description.\f" + other
     assert DC.check_text(said)["counts"]["out of scope in Other"] == 0
+    cables = "Every company's figures\n Acme Cables Ltd     Other {} companies     ₹236 cr     ₹452 cr     −3.2%     −3.9%     −6.0%\n"
+    assert DC.check_text(head + cables.format("FMCG"))["counts"]["out of scope in Other"] == 1
+    assert DC.check_text("US · THEME DEEP DIVE\n\n\n\nCapital goods\n\f" + cables.format("capital goods"))["counts"]["out of scope in Other"] == 0
     bio = ("US · THEME DEEP DIVE\n\n\n\nBiotech\n\fEvery company's figures\n"
            " Merck & Co., Inc.     Pipeline-stage and royalty-funded drug developers     $364.3 bn     $65 bn     +1.3%     39.2%     28.1%\n"
            " Eli Lilly & Co        Specialty and clinical-stage biotechs                 $1,358 bn     $65.2 bn   +44.7%    43.9%     31.7%\n"

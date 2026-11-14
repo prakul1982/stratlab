@@ -922,12 +922,19 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
                                   for c in v.get("companies") or []]} for v in out_vc]
     # v55 (R55): theme membership decided apart from, and before, any layer: a company whose principal business is a kind of product the
     # theme's definition (its name and its map's own layers) doesn't include is screened out, never kept in "Other" (theme_check.off_scope)
-    from .theme_check import off_scope
+    from .theme_check import off_scope, off_scope_listed
     stext = scope_text(theme, m.get("sector") or "", own)
+
+    def scope_of(s_, text):
+        """its principal business in its own words; with none stored, its official industry, else its listed name (off_scope_listed)."""
+        c_ = by_sym.get(s_) or {}
+        words = about_of(s_) or c_.get("what")
+        if words and not str(words).startswith(FILING_TITLES):
+            return off_scope(words, text, c_.get("name") or "")
+        return off_scope_listed(c_.get("name") or "", c_.get("industry") or facts_for(s_).get("industry") or "", text)
     out_vc, off = without_off_industry(out_vc, {c.get("ticker") for c in todo}, evidence, off_before,
                                        lambda s_: about_of(s_) or (by_sym.get(s_) or {}).get("what"),
-                                       scope=lambda s_: off_scope(about_of(s_) or (by_sym.get(s_) or {}).get("what"), stext,
-                                                                  (by_sym.get(s_) or {}).get("name") or ""))
+                                       scope=lambda s_: scope_of(s_, stext))
     placements = m.get("placements")
     out_vc, sure = confirmed_by_words(out_vc, about_of, theme)
     if sure and placements is not None:
@@ -1371,9 +1378,15 @@ def without_off_industry(vc: list[dict], todo: set, evidence, before: dict | Non
                             "why": f"filed under {filed}, its own words describe another business"})
             elif scope is not None and (sc := scope(s_)):
                 seen.add(s_)
+                where = sc.get("where") or "words"
                 off.append({"ticker": s_, "name": c.get("name") or s_, "industry": c.get("industry") or "", "scope": sc["kind"],
-                            "why": f"filed under {filed}; its principal business, in its own words (“{sc['text']}”), is of {sc['kind']} "
-                                   f"(“{sc['said']}”), which the theme's definition doesn't include"})
+                            **({"scope_where": where} if where != "words" else {}),
+                            "why": (f"filed under {filed}; its principal business, in its own words (“{sc['text']}”), is of {sc['kind']} "
+                                    f"(“{sc['said']}”), which the theme's definition doesn't include") if where == "words" else
+                                   (f"no description of its own is stored; official industry: {sc['text']}, of {sc['kind']} (“{sc['said']}”); "
+                                    "outside the theme's definition") if where == "industry" else
+                                   (f"filed under {filed}; no description of its own is stored, and its name (“{sc['text']}”) names {sc['kind']} "
+                                    f"(“{sc['said']}”); outside the theme's definition")})
             elif s_ in before and words is not None and not words(s_):
                 seen.add(s_)
                 off.append({"ticker": s_, "name": c.get("name") or s_, "industry": c.get("industry") or "", "before": True,
