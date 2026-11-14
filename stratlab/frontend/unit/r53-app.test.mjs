@@ -167,3 +167,7 @@ test("LIVE8A-025: the results day chips don't repeat today and tomorrow by date"
   assert.match(page, /\.filter\(\(d\) => !nearDays\(region\)\.includes\(d\.date\)\)/);
   assert.match(page, /const nearDays = \(region: Region\): string\[\] =>/);
 });
+
+test("LIVE8A-021: the Plans row for a theme's supplier links says what its CSV is", () => {
+  assert.match(read("src/lib/plans.ts"), /\["supply_pro", "Supplier links in a theme, CSV"\]/);
+});
