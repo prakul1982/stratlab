@@ -29,6 +29,23 @@ Failures (the exit code is 1 when any deck has one):
   biz making   rv51 (the same deck: "Store retailers of home, auto and beauty goods ..., a different business model: parts, component and
                ingredient makers"): a making model (parts, components, ingredients, makers, manufacturing) given as the business model of a
                layer whose own name is a seller's or a service firm's (retailers, stores, chains, platforms, distributors, services, banks...)
+  stale layer  d53 (R53, our deck reviewer and the live R52 Biotech and Cement decks: "earn the same way as those of “Pipeline-stage and
+               royalty-funded drug developers”", a name the deck's layers no longer have): a layer named in a sentence ("earn the same way as
+               those of “X”") that is none of the deck's layers
+  same company d53 (the live R51-R52 Insurance decks: "ICICI Life Insurance Ltd" and "ICICI Prudential Life Insurance Company Ltd" on two
+               rows of one revenue, margins and growth): two rows of the appendix with the same revenue and the same three figures after it
+  words claim  d53 (LIVE8A-004: "Every company with figures has words of its own ... Nothing held back" beside "No description in its own
+               words yet"): the claim in a deck that prints a company with no words of its own
+  partial unsaid  d53 (the owner's review of the live R52 Biotech deck: 100 of 821 checked, the map read as whole): a deck whose companies
+               checked are under half its list ("N checked ...; M not checked yet") that never says "A partial map"
+  outlier range  d53 (LIVE8A-010: "−27994.5% to 62.2%", a median of −258.6%): a range or median of margins printed with an end beyond
+               ±1,000%
+  added unexplained  d53 (the owner's review of the live R52 Consumer retail deck: "added 6: CDW Corp, ..., Suburban Propane Partners LP"):
+               a change log that adds companies with no reason
+  verified count  d53 (our deck reviewer: "15 checked figures, 15 verified" over rows "arithmetic reproduced"): a figure-sources head whose
+               verified count is all its figures while its rows say some only had their arithmetic reproduced
+  adjacent ranked  d53 (the owner's review: hospital operators in a Medical devices theme): a layer said to be adjacent participants named
+               highest or lowest in a ranking
 Reported, and a failure only with --strict:
   cut text     every other text ending in "…" (a label or a sentence cut to its box)
   mixed range  a range with one end whole and the other with a decimal ("19.6% to 20%"; LIVE7A-014)
@@ -47,7 +64,8 @@ import subprocess
 import sys
 
 FAIL = ("headline", "mid-word", "placeholder", "joining word", "count", "repeated", "hyphen minus", "no layer", "unread ranked", "unread kind",
-        "left out>50%", "unchecked as 0", "biz label", "biz making")
+        "left out>50%", "unchecked as 0", "biz label", "biz making", "stale layer", "same company", "words claim", "partial unsaid",
+        "outlier range", "added unexplained", "verified count", "adjacent ranked")
 WARN = ("cut text", "other>40%", "mixed range")
 # LIVE7A-014: a minus sign as a hyphen before a figure with its unit (never a date's or a range's dash: it follows a space or a bracket)
 _HYPHEN_MINUS = re.compile(r"(?:(?<=\s)|(?<=[(\[])|^)-\d[\d,]*(?:\.\d+)?(?:%|x\b| ?pts\b| ?points\b)")
@@ -254,8 +272,87 @@ def check_pages(pages: list[str]) -> dict:
                     add("biz label", n, said)
             elif not any(stems_of(model) & stems_of(x) for x in layers | {layer}):
                 add("biz label", n, said)
+    d53_checks(pages, layers, add)
     counts = {k: sum(1 for f in findings if f["kind"] == k) for k in FAIL + WARN}
     return {"pages": len(pages), "counts": counts, "findings": findings}
+
+
+_LAYER_HEAD = re.compile(r"(?m)^\s*Layer \d+ · (.+?)\s*$")
+_SAME_WAY = re.compile(r"earn the same way as those of ((?:“[^”]+”(?:, )?)+)")
+_QUOTED = re.compile(r"“([^”]+)”")
+_WORDS_CLAIM = "Every company with figures has words of its own"
+_NO_WORDS = re.compile(r"No description in its own words yet|no description in their own words yet")
+_CHECKED = re.compile(r"(\d[\d,]*) checked \(the map's own picks.*?(\d[\d,]*) not checked yet")
+_CONSIDERED = re.compile(r"(\d[\d,]*) companies \(|(\d[\d,]*) in the exchange's industry list")
+_PARTIAL = "A partial map"
+_BIG = re.compile(r"(?<![\w.,])[−-](\d[\d,]*(?:\.\d+)?)%|(?<![\w.,−-])(\d[\d,]*(?:\.\d+)?)%")
+_RANGE_LINE = re.compile(r"(?:^|\s)(?:Range|range|median|Median)\b|[−-]?\d[\d,]*(?:\.\d+)?% to [−-]?\d")
+_ADDED = re.compile(r"added (\d[\d,]*): ([^;.]*(?:\.[^;.\s][^;.]*)*)(?=;|\.(?:\s|$))")
+_SOURCES_HEAD = re.compile(r"(\d[\d,]*) checked figures?, (\d[\d,]*) verified(?!, \d)")
+_ADJ = re.compile(r"([A-Z][^.;:]{3,90}?) \(\d[^)]*\), adjacent participants")
+OUTLIER = 1000.0                # d53: a margin's range or median end beyond this many per cent either way
+
+
+def _num(t: str) -> float:
+    return float(t.replace(",", ""))
+
+
+def d53_checks(pages: list[str], layers: set, add) -> None:
+    """d53 (R53): the checks of the theme's membership, roles and integrity, from the text (see the module's list)."""
+    flat_pages = [re.sub(r"\s+", " ", p) for p in pages]
+    names = set(layers)
+    for p in pages:
+        names |= {m.group(1).strip() for m in _LAYER_HEAD.finditer(p)}
+    names |= {re.sub(r" \((?:larger|smaller)\)$", "", x) for x in names}
+    for n, flat in enumerate(flat_pages, 1):
+        for m in _SAME_WAY.finditer(flat):
+            for q in _QUOTED.findall(m.group(1)):
+                if names and q not in names:
+                    add("stale layer", n, f"“{q}” in: {flat[m.start():m.start() + 140]}")
+    # the appendix: two rows of one revenue and the three figures after it
+    seen: dict = {}
+    for n, page in enumerate(pages, 1):
+        if _APPENDIX not in page:
+            continue
+        for ln in page.split("\n"):
+            cells = re.split(r"\s{2,}", ln.strip())
+            if len(cells) < 7 or cells[0] == "Company":
+                continue
+            fig = tuple(cells[3:7])
+            if not re.search(r"\d", fig[0]) or sum(1 for x in fig if re.search(r"\d", x)) < 3:
+                continue
+            if fig in seen and seen[fig] != cells[0]:
+                add("same company", n, f"{seen[fig]} and {cells[0]}: {' · '.join(fig)}")
+            seen.setdefault(fig, cells[0])
+    whole = " ".join(flat_pages)
+    if _WORDS_CLAIM in whole and _NO_WORDS.search(whole):
+        add("words claim", next(n for n, f in enumerate(flat_pages, 1) if _WORDS_CLAIM in f), _NO_WORDS.search(whole).group(0))
+    m = _CHECKED.search(whole)
+    if m and _PARTIAL not in whole:
+        a, gone = _num(m.group(1)), _num(m.group(2))
+        if a * 2 < a + gone:
+            add("partial unsaid", next(n for n, f in enumerate(flat_pages, 1) if m.group(0)[:30] in f), m.group(0)[:140])
+    for n, page in enumerate(pages, 1):
+        for ln in page.split("\n"):
+            if not _RANGE_LINE.search(ln):
+                continue
+            for x in _BIG.finditer(ln):
+                v = _num(x.group(1) or x.group(2))
+                if v >= OUTLIER:
+                    add("outlier range", n, ln.strip()[:140])
+                    break
+    for n, flat in enumerate(flat_pages, 1):
+        for m in _ADDED.finditer(flat):
+            if "(" not in m.group(2) and "Since the previous version" in flat:
+                add("added unexplained", n, m.group(0)[:140])
+        h = _SOURCES_HEAD.search(flat)
+        if h and h.group(1) == h.group(2) and "arithmetic reproduced" in flat:
+            add("verified count", n, h.group(0))
+    adj = {m.group(1).strip() for f in flat_pages for m in _ADJ.finditer(f)}
+    for n, flat in enumerate(flat_pages, 1):
+        for m in re.finditer(r"\b(?:highest|lowest) in (.+?) \(", flat):
+            if any(m.group(1).strip().endswith(a) or a.endswith(m.group(1).strip()) for a in adj):
+                add("adjacent ranked", n, m.group(0))
 
 
 def check_text(text: str) -> dict:
