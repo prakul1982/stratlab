@@ -157,3 +157,7 @@ test("LIVE8B-021: positioning shares in one precision; the total row's net and s
 test("LIVE8B-017: the peers' growth column says its span", () => {
   assert.match(read("src/components/CompanyPeers.tsx"), /header: "Sales growth, 3 yrs"/);
 });
+
+test("LIVE8B-023: a US company's next results day says expected", () => {
+  assert.match(read("src/pages/Research.tsx"), /\{region === "US" \? "Results expected" : "Results on"\} \{resultDay\(nextResults\)\}/);
+});
