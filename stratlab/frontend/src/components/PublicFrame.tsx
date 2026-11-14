@@ -35,7 +35,9 @@ export const OpenApp = ({ className = "btn outline sm" }: { className?: string }
 
 /** The frame around every public page that isn't the landing page itself (a shared verdict, StratLab's library, "Sign in
  * to see …", "Page not found"): the logo home, a way in, the page in a `main`, and the policies at the bottom. */
-export function PublicFrame({ children, className = "", action }: { children: ReactNode; className?: string; action?: ReactNode }) {
+/** `foot` false: the footer waits (a page whose words are still on their way: drawn under a short page, it moved down when they came,
+ * LIVE8A-017's layout shift on /about at 390). */
+export function PublicFrame({ children, className = "", action, foot = true }: { children: ReactNode; className?: string; action?: ReactNode; foot?: boolean }) {
   const menu = useRef<HTMLDetailsElement>(null);
   useDetailsDismiss(menu);
   return (
@@ -60,7 +62,7 @@ export function PublicFrame({ children, className = "", action }: { children: Re
         {action ?? (signedInHere() ? <OpenApp /> : <a className="btn outline sm" href="/" onPointerEnter={warmSignIn} onFocus={warmSignIn} onTouchStart={warmSignIn} onClick={(e) => { e.preventDefault(); void signIn(); }}>Sign in</a>)}
       </header>
       <main id="main" tabIndex={-1} className={`pub-main k-page ${className}`.trim()}>{children}</main>
-      <footer className={`pub-main ${className}`.trim()}><SiteLinks /><LegalLinks /></footer>
+      {foot && <footer className={`pub-main ${className}`.trim()}><SiteLinks /><LegalLinks /></footer>}
     </div>
   );
 }

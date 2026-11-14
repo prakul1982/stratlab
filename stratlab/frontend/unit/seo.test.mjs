@@ -328,7 +328,8 @@ test("the Privacy page lists every AI provider the code can use, says what the b
   assert.match(privacy, /random ID made in your browser, not to any account/);
   assert.doesNotMatch(privacy, /linked to your account's internal ID, never your email or name, and without/);
   // (PUB-1: the policies sit in the public frame, which is the page's one main landmark, with the header and footer every public page has)
-  assert.match(page, /<PublicFrame className="legal">/, "the policies sit in the public frame");
+  // (updated on purpose, LIVE8A-017: the frame's footer waits for the page's words)
+  assert.match(page, /<PublicFrame className="legal" foot=\{ready\}>/, "the policies sit in the public frame");
   assert.match(read("src/components/PublicFrame.tsx"), /<main id="main"/, "...whose main landmark holds them");
 });
 

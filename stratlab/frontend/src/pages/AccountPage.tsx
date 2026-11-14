@@ -16,7 +16,7 @@ import { FreeChangeNotice } from "../components/FreeChangeNotice";
 import { LIMITS } from "../lib/plans";
 import { AccountWait } from "../components/AccountWait";
 import { Modal } from "../components/ui";
-import { aiBuildsUse, confirmMatches, keptRow, monthlyUse, noneOnPlan, planLabel, planRow, planRun, sessionsRunning, signedInWith, trialUse, usageSpans, type KeptLimit } from "../lib/account";
+import { aiBuildsUse, confirmMatches, keptRow, monthlyUse, noneOnPlan, plannedKept, planLabel, planRow, planRun, sessionsRunning, signedInWith, trialUse, usageSpans, type KeptLimit } from "../lib/account";
 import { aiReadsUse } from "../lib/aiReason";
 import { TileGrid } from "../components/TileGrid";
 
@@ -95,7 +95,7 @@ export function AccountPage() {
     ...(u.ai_reads_today != null ? [["Fresh AI reads today", aiReadsUse(u.ai_reads_today, u.ai_reads_limit ?? null, u.ai_reads_cap_for ?? null, u.ai_reads_plan_limit)] as [string, string]] : []),
     // Free's sessions run in the trial: its days left, or that it ended (DP2-031)
     ["Paper sessions running", me.trial ? trialUse(me) : sessionsRunning(me)],
-    ...((kept ?? []).map(keptRow).filter((r): r is [string, string] => !!r)),
+    ...((kept ?? plannedKept(me.plan_info as unknown as Record<string, unknown>)).map(keptRow).filter((r): r is [string, string] => !!r)),
   ];
 
   return (

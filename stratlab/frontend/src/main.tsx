@@ -251,11 +251,11 @@ function Routed() {
   useLayoutEffect(() => { if (!everyone && (!ready || session)) document.title = titleFor(loc.pathname); }, [everyone, ready, session, loc.pathname]);
   // the analytics question comes first in the page's order, so the keyboard and a screen reader meet it before a hundred controls
   // (A11Y-2: it was the 127th Tab stop); signed in, the Shell draws it in the first row of its page column (LIVE7B-006)
-  if (everyone) return <><Tracking /><VisitorApp userId={session?.user.id} /></>;
-  if (!ready) return <><Tracking /><main><h1 className="sr-only">Opening StratLab</h1><Opening label="Opening StratLab" /></main></>;
+  if (everyone) return <><VisitorApp userId={session?.user.id} /><Tracking /></>;
+  if (!ready) return <><main><h1 className="sr-only">Opening StratLab</h1><Opening label="Opening StratLab" /></main><Tracking /></>;
   // a saved sign-in the sign-in service didn't answer for is not "signed out": say it couldn't load, offer Reload (R20-002)
-  if (!session && sessionUnconfirmed(ready, session)) return <><Tracking /><main><LoadFailed what="your account" /></main></>;
-  if (!session) return <><Tracking /><VisitorApp /></>;
+  if (!session && sessionUnconfirmed(ready, session)) return <><main><LoadFailed what="your account" /></main><Tracking /></>;
+  if (!session) return <><VisitorApp /><Tracking /></>;
   return (
     <Shell ask={<Tracking />}>
       <ViewAsBanner />{/* the owner is viewing the app as another plan: on every page until it is turned off */}

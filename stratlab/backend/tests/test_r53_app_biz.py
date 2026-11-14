@@ -48,3 +48,15 @@ def test_the_job_starts_at_a_different_company_each_day():
         reached |= set(B.rotated(syms, date(2026, 11, 1) + timedelta(days=d))[:100])
     assert reached == set(syms)
     assert B.rotated([], date(2026, 11, 1)) == []
+
+
+# ---------- LIVE8B-008: the Free plan's change says what happens to what is over a new count ----------
+def test_the_free_change_notice_says_what_happens_to_alerts_over_the_new_count(monkeypatch):
+    from datetime import datetime, timezone
+    from app import plans
+    from app.config import settings
+    monkeypatch.setattr(settings, "FREE_TIER_CHANGE_AT", "2026-11-13T00:00:00+05:30")
+    p = {"id": "u", "plan": "free", "created_at": "2026-10-01T00:00:00+00:00"}
+    n = plans.free_change_notice(p, datetime(2026, 11, 14, tzinfo=timezone.utc))
+    assert n and n["over"] == [f"Stock alerts on beyond {plans.PLANS['free']['stock_alerts']} stay saved and on; from then the "
+                               f"{plans.PLANS['free']['stock_alerts']} made first are the ones checked"]

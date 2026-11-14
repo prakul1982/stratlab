@@ -368,7 +368,11 @@ def free_change_notice(profile: dict | None, now: datetime | None = None) -> dic
         return None
     return {"on": end.isoformat(),
             "rows": [{"key": k, "label": label, "before": FREE_BEFORE[k], "after": PLANS["free"][k]} for k, label in FREE_CHANGE_WORDS],
-            "moves": [REFRESH_MOVES, "The tax report's CSV and PDF downloads move to Basic (the report on screen stays free)"]}
+            "moves": [REFRESH_MOVES, "The tax report's CSV and PDF downloads move to Basic (the report on screen stays free)"],
+            # what happens to what is over a new count on the day (LIVE8B-008: nothing said what became of alerts 4 and 5): the alert check
+            # and the event alerts take the oldest active alerts up to the plan's count (stock_alerts.Job, fire_events_counted)
+            "over": [f"Stock alerts on beyond {PLANS['free']['stock_alerts']} stay saved and on; from then the "
+                     f"{PLANS['free']['stock_alerts']} made first are the ones checked"]}
 
 
 # A Refresh of a stored read is one fresh AI read (LIVE7B-002), held to the plan's daily count; Free has none (refreshes_allowed)

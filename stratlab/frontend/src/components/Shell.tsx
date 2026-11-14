@@ -45,7 +45,8 @@ const MINE_PAGES = ["/account", "/settings", "/assistant", "/app", "/invite"];
 /** The page the menu's highlighted shortcut opens, under the search box in every space (R16). */
 export const THEMES = "/research/themes";
 
-/** `ask`: the analytics question (Tracking), drawn first in the page's order and in the first row of the page column (LIVE7B-006). */
+/** `ask`: the analytics question (Tracking), in the page column after the page (LIVE8B-004: above it, its arrival after the first paint
+ * pushed the page down, CLS 0.19 a time). */
 export function Shell({ children, ask }: { children: ReactNode; ask?: ReactNode }) {
   useScrollMemory();
   const { notebooks, markets, me, focus, space: saved, setSpace } = useApp();
@@ -332,7 +333,6 @@ export function Shell({ children, ask }: { children: ReactNode; ask?: ReactNode 
         to?.focus();
       }}>Skip to the page's sections</a>
       <a className="skip-link sr-only" href="#side-menu" onClick={(e) => { e.preventDefault(); sideScroll.current?.querySelector<HTMLElement>("a, button")?.focus(); }}>Skip to the menu</a>
-      {ask}{/* after the skip links, before the menu: the keyboard meets it among the first stops (A11Y-2) */}
       {slim && <button className="side-show" aria-label="Show the menu" title="Show the menu" onClick={() => setSlim(false)}><Menu /></button>}
       <header className="topbar">
         <button className="icon-btn" aria-label="Open menu" aria-expanded={open} aria-controls="side-menu" onClick={() => setOpen(true)}><Menu /></button>
@@ -346,6 +346,7 @@ export function Shell({ children, ask }: { children: ReactNode; ask?: ReactNode 
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
       {sidebar}
       <main className="main" id="main" tabIndex={-1}><div className="page"><div className="crumb-row"><PageBreadcrumb mine={space === "mine"} space={space} />{at && <HubTabs at={at} path={path} />}</div>{children}</div></main>
+      {ask}{/* after the page (LIVE8B-004): its coming and going never moves the page, and "Skip to content" lands on the page, not on it */}
       <Suspense fallback={null}>
         {search && <SearchPalette onClose={() => setSearch(false)} />}
       </Suspense>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { changeDay } from "../lib/freeChange";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -349,6 +350,8 @@ export function TaxReportPage() {
                 <button type="button" className="btn quiet sm" disabled={!!getting} onClick={() => download("pdf")}><Download size={16} />{getting === "pdf" ? "Making the PDF…" : "Download PDF summary"}</button>
               </span>}
             </>} />
+            {/* LIVE8B-008: an account in the Free plan's grace keeps the downloads until the change: said where they are */}
+            {canExport && me?.free_change?.moves.some((m) => /tax report/i.test(m)) && <p className="k-small k-muted" data-testid="tax-export-moves">The CSV and PDF downloads move to Basic on {changeDay(me.free_change.on)}; the report on screen stays free.</p>}
             {movedFrom != null && movedFrom !== y.fy && <p className="k-small k-muted" data-testid="tax-moved-year">{movedYearNote(movedFrom, y.fy, rep.current_fy, "trades")}</p>}
           </Card>
 

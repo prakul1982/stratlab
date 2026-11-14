@@ -115,7 +115,15 @@ export function sessionsRunning(me: Pick<Me, "plan" | "view_as" | "trial" | "liv
 /** One kept-count limit as /me/limits gives it (DP2-031: Account showed the monthly counts only). */
 export type KeptLimit = { key: string; used: number | null; limit: number | null; next: string | null };
 const KEPT_LABEL: Record<string, string> = { stock_alerts: "Stock alerts on", screens: "Saved screens", holdings: "Holdings kept",
-  mf_schemes: "Mutual fund schemes kept", networth_items: "Net worth entries", journal_trades: "Trades the journal counts" };
+  mf_schemes: "Mutual fund schemes kept", networth_items: "Net worth entries", journal_trades: "Trades the journal keeps" };   // the Plans page's words (LIVE8B-025)
+
+/** The kept-count rows from the plan's own limits (me.plan_info), counts not read yet: Account's grid is complete from its first frame and
+ * stays so if /me/limits can't be read (LIVE8B-007: a Free account's grid had no alerts, screens, holdings, net worth or journal rows,
+ * though Free's limits on those are the tight ones). /me/limits' answer replaces them with the counts. */
+export function plannedKept(info: Partial<Record<string, unknown>> | null | undefined): KeptLimit[] {
+  const n = (v: unknown) => (typeof v === "number" ? v : null);
+  return Object.keys(KEPT_LABEL).filter((k) => info && k in info).map((k) => ({ key: k, used: null, limit: n(info![k]), next: null }));
+}
 
 /** Account's row for a kept-count limit: "3 of 5", "12 (no limit)", and the journal's "The last 50" / "Every trade". */
 export function keptRow(r: KeptLimit): [string, string] | null {
