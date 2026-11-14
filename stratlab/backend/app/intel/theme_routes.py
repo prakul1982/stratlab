@@ -96,7 +96,7 @@ def own_filings(region: str, sym: str) -> str:
     return ("From its own filings: " + ". ".join(keep[:FILING_LINES]) + ".")[:FILING_CHARS] if keep else ""
 
 
-ABOUT_WORDS, ABOUT_V = 30, 4          # R34: a stored description under 30 words, kept before this format, is read again once (in the same bounded batches); lane n2: 4, one that doesn't say what the company does (says_work)
+ABOUT_WORDS, ABOUT_V = 30, 5          # R34: a stored description under 30 words, kept before this format, is read again once (in the same bounded batches); lane n2: 4, one that doesn't say what the company does (says_work)
 # lane n2 (the outside review of the live R33 decks: UMC's article, "a Taiwanese company based in Hsinchu ... founded as Taiwan's first
 # semiconductor company", has 40 words and none of what it does, so its foundry business, said in its 20-F, never reached its model)
 _DOES = re.compile(r"\b(?:provid\w*|produc(?:es|ers?|ing|ts?)|manufactur\w*|makes?|makers?|sells?|selling|suppl(?:y|ies|iers?)|designs?|develops?|"
@@ -118,7 +118,10 @@ def thin_about(got: dict, region: str = "") -> bool:
     about = str(got.get("about") or "")
     if got.get("owed"):
         return True
-    return got.get("v") != ABOUT_V and (len(about.split()) < ABOUT_WORDS or (region == "US" and not (company_text(about) and says_work(about))))
+    # gl52 (R52): 5, a US company's stored words with no sentence of its own about its work (an encyclopedia's opening only: Visa,
+    # Mastercard, Fortinet) are read once more, so its annual report's opening is added (evidence_reader)
+    return got.get("v") != ABOUT_V and (len(about.split()) < ABOUT_WORDS or (region == "US" and not (company_text(about) and says_work(about)
+                                                                                                    and theme_base.has_own_line(about))))
 
 
 def _business_read(sym: str) -> str:
@@ -153,6 +156,37 @@ def plain_name(name: str) -> str:
     return out.strip(" ,.") or str(name or "")
 
 
+def _page_code(sym: str) -> str | None:
+    """The code a company listed only on BSE has its profile page under (main.bse_code: its six-digit scrip code), or None."""
+    try:
+        from .. import main
+        code = main.bse_code(sym)
+    except Exception:
+        return None
+    return str(code) if code and str(code) != str(sym) else None
+
+
+def india_profile(screener, sym: str, code_of=None) -> dict | None:
+    """gl52 (R52, the rotating review of Release 51: "Screener.in has nothing for that" for CIAN Agro, Fortis Malar, Trade-Wings and 40 more
+    small and BSE-only companies, retried on every check pass for good and never read from any other source): an Indian company's profile
+    page, by its symbol, else by the BSE code it may be listed under (the company page reads its figures the same way); None when the source
+    says it has no page for either: a final answer, so the encyclopedia and its own filings are read next and the "none" is kept
+    (NO_DESCRIPTION_DAYS), never asked again each pass. A busy source still raises: that company is read in a later batch."""
+    try:
+        return screener.company(sym)
+    except SourceError as e:
+        if e.busy:
+            raise
+    code = (code_of or _page_code)(sym)
+    if code:
+        try:
+            return screener.company(code)
+        except SourceError as e:
+            if e.busy:
+                raise
+    return None
+
+
 def evidence_reader(region: str, names: dict):
     """A function symbol-list -> ({symbol: {about, industry}}, pending) that reads each company's own description once (the company
     page's profile), keeps it for EVIDENCE_DAYS, and reads no more than the request's budget allows."""
@@ -171,9 +205,11 @@ def evidence_reader(region: str, names: dict):
                 if age < (EVIDENCE_DAYS if got.get("about") else NO_DESCRIPTION_DAYS):
                     hit = got
         if hit is None:
-            about, industry = "", ""
+            about, industry, no_page = "", "", False
             if region == "IN":
-                p = R.hub.screener.company(sym)
+                p = india_profile(R.hub.screener, sym)
+                no_page = p is None
+                p = p or {}
                 about, industry = p.get("about") or "", " > ".join(p.get("industry_path") or [])
             if len(about.split()) < ABOUT_WORDS:          # R34: none, or a line too thin to show the business: its encyclopedia summary too
                 try:
@@ -186,11 +222,14 @@ def evidence_reader(region: str, names: dict):
             owed = False
             # R35: still thin: what its latest annual report says it does (US), a few a minute; lane n2: also when the words it has don't
             # say what it does (UMC's article: where it is and when it was founded), a 20-F's Item 4 as a 10-K's Item 1
-            if len(about.split()) < ABOUT_WORDS or (region == "US" and not says_work(about)):
+            # gl52 (R52, the rotating review of Release 51: Visa, Mastercard, Fortinet, Trade Desk, NetEase and CoreWeave with "No description
+            # in its own words yet"): a US company whose words have no sentence of its own about its work (an encyclopedia's opening only)
+            # has its annual report's opening added too
+            if len(about.split()) < ABOUT_WORDS or (region == "US" and not (says_work(about) and theme_base.has_own_line(about, names.get(sym) or ""))):
                 filed, owed = filed_business(region, sym)
                 about = " ".join(x for x in (about, filed) if x)
             hit = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "about": theme_check.clean_description(about), "industry": industry,
-                   "v": ABOUT_V, **({"owed": True} if owed else {})}
+                   "v": ABOUT_V, **({"owed": True} if owed else {}), **({"no_page": True} if no_page else {})}
             try:
                 db.set_setting(key, json.dumps(hit, ensure_ascii=False))
             except Exception as e:
@@ -388,7 +427,7 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
 EARLIER_MAX = 8                 # rv51: how many carried versions back an earlier answer of the same map is looked for
@@ -410,13 +449,17 @@ def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
         # rv51 (R51, the live Release 49 IT services placement: the answer kept under rules 48, asked for two new companies, had dropped the
         # two extra layers and the layer names of the one kept under 44): the nearest earlier answer of the same map, back through the
         # carried versions (at most EARLIER_MAX), gives the names and extra layers the kept one lacks (theme_base.with_earlier)
-        e, steps = r, 0
+        # gl52 (R52, the rotating review of Release 51: the live IT services page still without its two extra layers, as the walk stopped
+        # at the nearest earlier answer, rules 48's, the one that had lost them, and never reached rules 44's): every earlier answer of the
+        # same map within EARLIER_MAX carried versions is read, the nearest as before (with_earlier), each older one only for the layer names
+        # and extra layers still missing (fill_earlier)
+        e, steps, joined = r, 0, False
         while kept and e in PLACE_CARRY and steps < EARLIER_MAX:
             e, steps = PLACE_CARRY[e], steps + 1
             prev = (computed.get("theme:place", key + [e]) or {}).get("value") or {}
             if prev:
-                kept = theme_base.with_earlier(kept, prev)
-                break
+                kept = theme_base.fill_earlier(kept, prev) if joined else theme_base.with_earlier(kept, prev)
+                joined = True
     except Exception:
         return {}, None
     return kept, (r if kept else None)
@@ -598,7 +641,10 @@ def _facts_reader(region: str):
             business = theme_check.business_text(b)          # R27: the business read's own lines (what it sells, to whom, how it earns)
         except Exception as e:
             print("theme: segments not read:", sym, type(e).__name__, str(e)[:100])
-        return {"industry": (hit or {}).get("industry") or "", "segments": segs, "filings": own_filings(region, sym), "business": business}
+        # gl52 (R52): looked for in every source (its page, by symbol and BSE code, an encyclopedia, its annual report) and none found
+        searched = bool((hit or {}).get("at") and not (hit or {}).get("about") and not (hit or {}).get("owed"))
+        return {"industry": (hit or {}).get("industry") or "", "segments": segs, "filings": own_filings(region, sym), "business": business,
+                **({"searched": True} if searched else {})}
     return facts_of
 
 

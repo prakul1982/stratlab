@@ -278,8 +278,8 @@ def test_deck_check_fails_a_ranking_and_a_kind_beside_no_way_of_earning_read_and
 
 
 def test_the_versions_moved():
-    assert B.RULES == 50 and TR.PLACE_CARRY[50] == 49 and TR.PLACE_CARRY[49] == 48 and TR.PLACE_CARRY[48] == 47          # rv51 (R51): RULES 50, PLACE_CARRY[50] = 49, deck 61, dive text 21 (updated on purpose)
-    assert deck.THEME_DECK_VERSION == 61 and D.DIVE_TEXT == 21          # rv51 (R51): RULES 50, PLACE_CARRY[50] = 49, deck 61, dive text 21 (updated on purpose)
+    assert B.RULES == 51 and TR.PLACE_CARRY[51] == 50 and TR.PLACE_CARRY[50] == 49 and TR.PLACE_CARRY[49] == 48 and TR.PLACE_CARRY[48] == 47          # gl52 (R52): RULES 51, PLACE_CARRY[51] = 50, deck 62, dive text 22 (updated on purpose); rv51 (R51): RULES 50, PLACE_CARRY[50] = 49, deck 61, dive text 21 (updated on purpose)
+    assert deck.THEME_DECK_VERSION == 62 and D.DIVE_TEXT == 22          # gl52 (R52): RULES 51, PLACE_CARRY[51] = 50, deck 62, dive text 22 (updated on purpose); rv51 (R51): RULES 50, PLACE_CARRY[50] = 49, deck 61, dive text 21 (updated on purpose)
 
 
 def test_deck_check_counts_the_not_checked_yet_in_other_and_reads_a_wrapped_label():
