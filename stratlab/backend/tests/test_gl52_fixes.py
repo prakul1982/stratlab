@@ -374,7 +374,7 @@ def test_the_walk_back_reaches_the_answer_that_still_has_the_extra_layers(monkey
 
 
 def test_versions():
-    assert B.RULES == 51 and TR.PLACE_CARRY[51] == 50 and deck.THEME_DECK_VERSION == 62 and D.DIVE_TEXT == 22
+    assert B.RULES == 52 and TR.PLACE_CARRY[52] == 51 and TR.PLACE_CARRY[51] == 50 and deck.THEME_DECK_VERSION == 63 and D.DIVE_TEXT == 23          # d53 (R53): RULES 52, PLACE_CARRY[52] = 51, deck 63, dive text 23 (updated on purpose)
 
 
 # ---------- integrator: "on its industry" for a company with no words only where its industry points to this layer ----------

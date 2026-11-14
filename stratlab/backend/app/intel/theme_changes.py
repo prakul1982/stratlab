@@ -314,15 +314,26 @@ LOST_MIN = 3                 # d53: a layer of the previous live read with this 
 
 def lost_layers(snap: dict | None, dive: dict | None) -> list[dict]:
     """d53 (R53, our deck reviewer: a re-check took Utilities' "Electrical cables" and "Heavy electrical equipment" layers away, 12 companies
-    to "Other", and only the coverage share was watched): the layers of the previous live read (the stored snapshot) that the new read lost,
-    neither renamed, split nor merged into a new layer, with LOST_MIN companies or more: [{"layer", "n"}]."""
+    to "Other" and the rest to two halves of a split by market value, and only the coverage share was watched): the named layers of the
+    previous live read (the stored snapshot) with LOST_MIN companies or more that the new read no longer has, at least half of whose
+    companies now sit in its "Other" group or in a half of a layer split by market value (no business layer took them): [{"layer", "n"}]."""
     if not isinstance(snap, dict) or not isinstance(snap.get("cos"), dict) or not isinstance(snap.get("layers"), list) or not isinstance(dive, dict):
         return []
     try:
-        events, _ = _layer_events(snap, snapshot(dive))
+        now = snapshot(dive)
     except Exception:
         return []
-    return [{"layer": e["from"][0], "n": e["n"]} for e in events if e["kind"] == "removed" and e["n"] >= LOST_MIN]
+    import re as _re
+    no_business = lambda name: bool(_re.match(r"Other\b", name) or _re.search(r" \((?:larger|smaller)\)$", name))      # noqa: E731
+    out = []
+    for i, g in enumerate(snap["layers"]):
+        if g in now["layers"] or no_business(g):
+            continue
+        cos = [s_ for s_, c in snap["cos"].items() if isinstance(c, list) and len(c) > 1 and c[1] == i]
+        went = [now["layers"][now["cos"][s_][1]] for s_ in cos if s_ in now["cos"]]
+        if len(cos) >= LOST_MIN and went and sum(1 for x in went if no_business(x)) * 2 >= len(went):
+            out.append({"layer": g, "n": len(cos)})
+    return out
 
 
 def coverage_control(cov: dict | None, snap: dict | None, dive: dict | None = None) -> dict | None:
