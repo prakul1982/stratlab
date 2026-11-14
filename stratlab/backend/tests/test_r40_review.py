@@ -216,7 +216,9 @@ def test_the_coverage_says_how_many_companies_fit_none_of_the_map_s_layers_and_d
     slides = deck.theme_plan(v)[0]
     t = texts(slides)
     # R44 (updated on purpose): the companies placed counted once, in the row's "In informative layers 7 of 11 (64%)"
-    assert "in a layer the map names; the other 4 in “Other test companies”, listed, never compared: 4 fit none of the map's layers" in t
+    # l55 (R55, updated on purpose): with the evidence states kept, the informative layers' companies are said by state before the "Other" group
+    assert re.search(r"in a layer the map names(?: \(by membership evidence: [^()]*\))?; the other 4 in “Other test companies”, listed, never "
+                     r"compared: 4 fit none of the map's layers", t)
     assert "Filed under Retail-Miscellaneous Retail but in another business: Propane Co." in t
     # c1 (R44, updated on purpose): with the "From other industries" row the coverage table may have a page of its own after the checks
     rows = [r for s in slides if s.title in ("Data confidence", deck.COVERAGE_TITLE) for b in s.blocks

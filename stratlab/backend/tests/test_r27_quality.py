@@ -49,7 +49,11 @@ def test_every_deck_states_the_four_counts_the_same_everywhere_and_every_share_n
     c = deck.reconciled_counts(v, cov)
     words = deck.counts_words(c)
     assert words.startswith(f"Considered {c['considered']:,} · ") and f"with figures {c['with_figures']:,}" in words
-    assert "confirmed" in words and (not c["each"] or "in each calculation: " in words)
+    # l55 (R55, the owner's review of the live R54 decks): the members by evidence state, never one "confirmed" total (updated on purpose)
+    # (a view made before the states were kept, every company checked and in the theme: "in the theme N")
+    assert "confirmed" not in words and (" description-verified, " in words and " not checked" in words if c.get("tally")
+                                         else "membership checked " in words or " · in the theme " in words)
+    assert not c["each"] or "in each calculation: " in words
     conf = next(p for s in slides if s.title == "Data confidence" for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))
     find = next(ln for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards" for it in b["items"] for ln in it["lines"]
                 if ln.startswith("Considered"))

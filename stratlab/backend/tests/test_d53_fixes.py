@@ -247,7 +247,8 @@ def test_the_membership_row_says_the_real_count_without_words_and_a_partial_map_
     rows = {r[0]: r for r in deck.confidence_rows(v, {"total": 821}, D.date(2026, 11, 14))}
     assert rows["Membership"][1] == "1 company with figures have no description in their own words yet: Beta." or rows["Membership"][1].startswith("1 company with figures")
     assert rows["Membership"][2] != "Nothing held back."
-    assert rows["Partial map"][1].startswith("A partial map: 100 of the theme's 821 companies were checked (12%); 721 are not checked yet")
+    # l55 (R55, updated on purpose): the membership check's count, said as such, apart from the count with figures
+    assert rows["Partial map"][1].startswith("A partial map: membership checked for 100 of the theme's 821 companies (12%); 721 are not checked yet")
     assert deck.partial_map({**v, "membership": {"placed": 700}}, {"total": 821}) == ""
 
 

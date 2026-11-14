@@ -18,7 +18,7 @@ import { fmtDate, pct, ratio, safeHref } from "../lib/format";
 import type { Co, Region, SectorAI } from "../lib/research";
 import {
   amount, calcOf, calcWords, layerLines, medCell, MIN_BASE, NO_WORDS, ownWords, pc, pcw, plainIndustry, points, span, times,
-  themeApi, EVIDENCE_ONE, evidenceLine, evidenceOf,
+  themeApi, EVIDENCE_ONE, evidenceLine, evidenceOf, membershipLine,
   type BizRow, type Business, type Dive, type DiveRow, type Layer, type LayerLine, type Listing, type NewsRow, type Prices, type Stat,
 } from "../lib/theme";
 
@@ -110,34 +110,37 @@ export function MembersCard({ r, region, dive }: { r: SectorAI; region: Region; 
     { key: "w", header: "What it does, in its own words", wrap: true, cell: (c) => { const w = ownWords(c.what, c.name); return w ? <>“{w}”</> : <span className="k-muted">{NO_WORDS}</span>; } },
     { key: "f", header: "In the theme by", cell: (c) => (c.base ? <>{c.basis === "list" ? "Named in the theme's list" : "Official industry"}
       {ev && <span className="k-sub-line k-muted" data-testid="member-evidence">{EVIDENCE_ONE[ev(c.ticker)]}</span>}</>
-      : <><Badge tone="plain" dot={false}>Added</Badge><span className="k-sub-line">{c.verified ? "Confirmed by its own words" : "Not yet confirmed"}</span></>) },
+      : <><Badge tone="plain" dot={false}>Added</Badge><span className="k-sub-line">{c.verified ? "Description-verified" : "Not yet description-verified"}</span></>) },
   ];
-  // e54 (R54): what each company's place rests on, the same states and counts as the deck (own description, official industry only, not checked)
-  const evLine = evidenceLine(dive, groups.flatMap((g) => g.rows.map((c) => c.ticker)));
+  // e54 (R54): what each company's place rests on, the same states and counts as the deck; l55 (R55): by the deck's names, the membership
+  // check's count apart from the count with figures, and each layer's companies by state
+  const evLine = membershipLine(dive, groups.flatMap((g) => g.rows.map((c) => c.ticker)));
+  const withFigures = dive?.with_figures ?? dive?.members;
   return (
     <Card id="theme-members" label="Every company in this theme">
       <CardHead title="Every company in this theme" info="The base is every listed company the exchange's own industry classification puts in the theme's industries: it is in the theme whatever the AI says. The AI sorts companies into layers and adds companies from other industries; an added company stays only while its own description doesn't show otherwise, marked confirmed when its words show the work." />
       <p className="k-small" data-testid="theme-counts">
         <b>{total.toLocaleString("en-IN")} compan{total === 1 ? "y" : "ies"}</b>: {base.toLocaleString("en-IN")} from the official industry list, {named > 0 && `${named.toLocaleString("en-IN")} named in the theme's list, `}{added.toLocaleString("en-IN")} added
-        {added > 0 && ` (${p?.confirmed ?? 0} confirmed from ${added === 1 ? "its" : "their"} own description)`}.
+        {added > 0 && ` (${p?.confirmed ?? 0} description-verified)`}.
       </p>
-      {evLine && <p className="k-small k-muted" data-testid="theme-evidence">Membership: {evLine}.</p>}
+      {evLine && <p className="k-small k-muted" data-testid="theme-evidence">{evLine}.{withFigures != null && <> With figures: {withFigures.toLocaleString("en-IN")} (the membership check reads no figures).</>}</p>}
       {inds.length > 0
         ? <p className="k-small k-muted">Official industries{p?.industries_by === "words" ? ", matched by the theme's own words" : p?.industries_by === "ai" ? ", picked by AI from the exchange's own list" : ""}: {inds.join(" · ")}.</p>
         : named > 0 ? <p className="k-small k-muted">No official industry is this theme's core on its own, so its companies are the theme's named list and the ones the map names.</p>
         : <p className="k-small k-muted">{p?.industries_by === "pending" ? "Until the theme's official industries are picked, its companies are the ones the map names." : "No official industry is this theme's core, so every company here is one the map names, checked against its own description."}</p>}
       {(p?.unclassified ?? 0) > 0 && <p className="k-note">{p!.unclassified!.toLocaleString("en-IN")} US-listed companies have no industry on file yet, so they can't join a theme by industry until their SEC record is read; a few are read each time a theme is checked.</p>}
-      {groups.map((g) => <MemberGroup key={g.name} name={g.name} official={g.official} rows={g.rows} cols={cols} />)}
+      {groups.map((g) => <MemberGroup key={g.name} name={g.name} official={g.official} rows={g.rows} cols={cols} evidence={evidenceLine(dive, g.rows.map((c) => c.ticker))} />)}
     </Card>
   );
 }
 
-function MemberGroup({ name, official, rows, cols }: { name: string; official: boolean; rows: Co[]; cols: Column<Co>[] }) {
+function MemberGroup({ name, official, rows, cols, evidence }: { name: string; official: boolean; rows: Co[]; cols: Column<Co>[]; evidence: string }) {
   const [all, setAll] = useState(false);
   const shown = all ? rows : rows.slice(0, MEMBERS_SHOWN);
   return (
     <section className="k-stack">
       <h3 className="k-sub">{name}{official && <span className="k-muted"> · official industry</span>}</h3>
+      {evidence && <p className="k-small k-muted" data-testid="layer-evidence">{evidence}</p>}
       <DataTable label={`${name}: companies in the theme`} columns={cols} rows={shown} rowKey={(c) => c.ticker} />
       {rows.length > MEMBERS_SHOWN && (all ? <ShowLess onLess={() => setAll(false)} /> : <button type="button" className="btn quiet sm" onClick={() => setAll(true)}>{`Show all ${rows.length} companies`}</button>)}
     </section>
