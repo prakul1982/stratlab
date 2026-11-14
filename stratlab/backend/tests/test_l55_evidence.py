@@ -212,3 +212,24 @@ def test_the_public_page_and_the_workbook_say_each_state_by_name_and_each_layer_
     assert rows[1][at:at + 5] == [1, 1, 0, 0, 0] and rows[-1][at:at + 5] == [1, 1, 0, 0, 0]
     method = dict(W.method(wdive, "IN", "Ships", date(2026, 11, 14), {})[1][1:])
     assert "confirmed" not in method["How a layer's median is built"] and "description-verified" in method["Membership evidence"]
+
+
+def test_a_pick_whose_check_gave_no_answer_is_not_checked_on_every_page_from_one_tally():
+    """l55b (R55, with v55: a map pick whose check gave no answer is "not checked yet", never "own words describe other work"): fails
+    before: the membership's "placed" (every company, the unanswered ones too) was said as the companies checked beside the tally's states,
+    "membership checked 20 of 20: 3 description-verified, 15 industry-supported, 2 not checked", and the gate failed the deck; the cover
+    said the 2 were "own words: other work"."""
+    region, m, f = theme_a()
+    v, _ = deck_of(region, m, f)
+    v = copy.deepcopy(v)
+    two = [s_ for s_, x in v["evidence"].items() if x == "not_confirmed"]
+    assert len(two) == 2 and v["membership"]["placed"] == 20          # status "unverified" for both: listed, in no figure
+    v["evidence"] = {**v["evidence"], **{s_: "membership_unverified" for s_ in two}}
+    v["membership_evidence"] = {**v["membership_evidence"], "not_confirmed": 0, "membership_unverified": 2}
+    c = deck.reconciled_counts(v, deck.coverage(v))
+    assert c["checked"] == 18 and deck.confirmed_words(c, 20) == "membership checked 18 of 20: 3 description-verified, 15 industry-supported, 2 not checked"
+    slides = deck.theme_plan(v)[0]
+    assert not [d for d in slides[0].gate["dropped"] if "evidence" in d["why"]], slides[0].gate["dropped"]
+    cover = {it[0]: it[2] for b in slides[0].blocks if b["kind"] == "stats" for it in b["items"] if len(it) > 2}
+    assert "other work" not in cover["Companies"] and deck.other_work(v, 20) == 0
+    assert DC.check_text("\f".join(texts([s]) for s in slides))["counts"]["evidence counts"] == 0

@@ -2386,9 +2386,11 @@ def reconciled_counts(v: dict, cov: dict) -> dict:
         # e54: the companies the membership check reached beyond the figures' window count among those checked and, unless their own words
         # describe other work, among the members in the theme; each said by what their place rests on
         beyond = (v.get("membership_check") or {}).get("outside") or {}
-        checked = (checked or 0) + len(beyond)
         confirmed += sum(1 for x in beyond.values() if x in ("description_verified", "industry_code_supported", "list_supported"))
         split = (t["description_verified"], t["industry_code_supported"] + t["list_supported"])
+        # l55b (R55, with v55's "not checked yet" for a pick whose check gave no answer): the companies checked are the tally's, the one
+        # source every page's states are said from; the membership's "placed" counts those not checked too (status "unverified")
+        checked = t["checked"]
     return {"considered": cov["total"] + rejected, "members": cov["total"], "rejected": rejected, "confirmed": confirmed,
             "checked": checked, "with_figures": cov["n"], "counted": v.get("members_with_figures") or 0, "each": each,
             "split": split, "tally": t if split else None, "adjacent": population(v)["adjacent"]}
@@ -2500,6 +2502,13 @@ def evidence_mix(states) -> dict:
     for x in states:
         out[x if x in out else "membership_unverified"] += 1
     return out
+
+
+def other_work(v: dict, total: int) -> int:
+    """l55b: how many companies' own words describe other work: the evidence tally's count where the states are kept (a pick whose check
+    gave no answer is not checked, never other work: v55), else the membership's companies not confirmed."""
+    t = evidence_tally(v, total)
+    return t["not_confirmed"] if t else int((v.get("membership") or {}).get("not_confirmed") or 0)
 
 
 def figures_split(v: dict, n: int) -> str:
@@ -5820,7 +5829,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         over.append(f"Everything converges on {v['core']}.")
     s.add("text", (M, 2.75, 9.6, 2.15), paras=over, size=17, floor=12, color=ON_DARK)
     s.add("stats", (M, 4.98, CW, 1.45), dark=True, items=[       # R35: tall enough for a three-line note under its figure
-        ("Companies", f"{total:,}", cov["universe"].split(" ", 1)[1] + (f"; {mem['not_confirmed']:,} own words: other work" if mem.get("not_confirmed") else "")), *([("Layers", str(len(shown)))] if chained else []),
+        ("Companies", f"{total:,}", cov["universe"].split(" ", 1)[1] + (f"; {other_work(v, total):,} own words: other work" if other_work(v, total) else "")), *([("Layers", str(len(shown)))] if chained else []),
         ("With figures", f"{cov['n']:,}", f"{cov['share']}% of the value of the {cov['valued']:,} with one" if cov.get("share") is not None else ""),
         # R29: the total is of the confirmed companies with figures and a market value, said so (the live R27 Semiconductors cover had "58 of
         # 112 with one" beside "the 105 with one")
@@ -5855,8 +5864,8 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     if added or not named:
         tiles.append(("Added by the AI", f"{added:,}", f"{confirmed:,} description-verified" + (f", {added - confirmed:,} not" if added > confirmed else "")
                       if added else "From other industries"))
-    if mem.get("not_confirmed"):            # the one count of companies whose own words describe other work (R18; l55: by its state's name)
-        tiles.append(("Own words: other work", f"{mem['not_confirmed']:,}", "Their own words describe other work: listed, in no figure"))
+    if other_work(v, total):            # the one count of companies whose own words describe other work (R18; l55: by its state's name, l55b: the tally's)
+        tiles.append(("Own words: other work", f"{other_work(v, total):,}", "Their own words describe other work: listed, in no figure"))
     if tally and tally["membership_unverified"]:              # e54: the companies the membership check hasn't reached yet
         tiles.append(("Not checked yet", f"{tally['membership_unverified']:,}", f"Beyond the {tally['checked']:,} checked, the largest by market value first"))
     elif not tally and mem.get("placed") and mem["placed"] < total:          # gl50: the companies past the check, said as not checked yet
