@@ -90,6 +90,11 @@ test("Basic: every peer and sorting, every statement and the quarters, twelve qu
   const peers = page.locator("#co-peers");
   await peers.scrollIntoViewIfNeeded();
   const table = peers.getByRole("table", { name: "TATASTEEL and its peers" });
+  // (updated on purpose, LIVE8B-012: on a phone the company and its five nearest come first, then "Show more")
+  if (phone) {
+    await expect(table.locator("tbody tr")).toHaveCount(6, { timeout: 20_000 });
+    await peers.getByRole("button", { name: "Show 1 more" }).click();
+  }
   await expect(table.locator("tbody tr")).toHaveCount(7, { timeout: 20_000 });
   await expect(peers.getByText(/on the Basic plan/)).toHaveCount(0);
   await expect(peers.getByText("Downloading the peers as CSV is on the Pro plan.")).toBeVisible();
@@ -146,7 +151,8 @@ test("Pro: the peers download as CSV and the statements as Excel", async ({ page
   const errors = await open(page, "/research/IN/TATASTEEL", "Tata Steel", who(16, phone));
   const peers = page.locator("#co-peers");
   await peers.scrollIntoViewIfNeeded();
-  await expect(peers.getByRole("table", { name: "TATASTEEL and its peers" }).locator("tbody tr")).toHaveCount(7, { timeout: 20_000 });
+  // (updated on purpose, LIVE8B-012: a phone shows the company and its five nearest first)
+  await expect(peers.getByRole("table", { name: "TATASTEEL and its peers" }).locator("tbody tr")).toHaveCount(phone ? 6 : 7, { timeout: 20_000 });
   const csv = page.waitForEvent("download");
   await peers.getByRole("button", { name: "Download CSV" }).click();
   expect((await csv).suggestedFilename()).toBe("stratlab-TATASTEEL-peers.csv");
@@ -181,4 +187,24 @@ test("the deep dive has the same three cards", async ({ page }, info) => {
     await expect(card.getByRole("table").first()).toBeVisible({ timeout: 30_000 });
   }
   await sane(page, errors, "#dd-statements");
+});
+
+test("LIVE8B-003: a statements table wider than its card opens on the latest years with the row names in view", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  const errors = await open(page, "/research/IN/TATASTEEL", "Tata Steel", who(11, phone));
+  const st = page.locator("#co-statements");
+  await st.scrollIntoViewIfNeeded();
+  const pl = st.getByRole("table", { name: /Profit and loss/ });
+  await expect(pl).toBeVisible({ timeout: 20_000 });
+  const wrap = st.locator(".k-tbl-wrap").first();
+  // the card narrower than the years (a 12-year table in a 1,004 px card at 1440): squeeze the box, then scroll it to the latest year
+  await wrap.evaluate((b) => { (b as HTMLElement).style.maxWidth = "360px"; b.scrollLeft = b.scrollWidth; });
+  expect(await wrap.evaluate((b) => b.scrollLeft)).toBeGreaterThan(0);
+  const box = await wrap.boundingBox();
+  for (const cell of [pl.locator("tbody th[scope=row]").first(), pl.locator("thead th").first()]) {
+    const r = await cell.boundingBox();
+    expect(r && box && r.x >= box.x - 1, "the row names stay in view while the years scroll").toBeTruthy();
+  }
+  await expect(pl.locator("tbody th[scope=row]").first()).toHaveCSS("position", "sticky");
+  await sane(page, errors, "#co-statements");
 });

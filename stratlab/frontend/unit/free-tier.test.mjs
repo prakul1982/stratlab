@@ -120,7 +120,8 @@ test("the one-time notice says exactly what changes and when", () => {
   assert.equal(fc.changeSeenKey(NOTICE), "stratlab:free-change-seen:2026-11-30");
   // on Account and on My space, once (a "Got it" kept on the device), and never emailed
   assert.match(read("src/pages/AccountPage.tsx"), /<FreeChangeNotice \/>/);
-  assert.match(read("src/pages/MineHome.tsx"), /<FreeChangeNotice \/>/);
+  // (updated on purpose, LIVE8B-006: My space has one line linking to Account's table, so its cards stay on the first screen)
+  assert.match(read("src/pages/MineHome.tsx"), /<FreeChangeNotice line \/>/);
   const comp = read("src/components/FreeChangeNotice.tsx");
   assert.match(comp, /localStorage\.setItem\(key, "1"\)/);
   assert.match(comp, />Got it</);

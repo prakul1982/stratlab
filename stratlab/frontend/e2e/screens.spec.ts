@@ -156,7 +156,8 @@ test("the sidebar fits a short laptop, a tablet drawer and a phone drawer: slim 
     const side = page.locator("aside.sidebar");
     if (vp.width <= 900) await page.getByRole("button", { name: "Open menu" }).click();      // a shut drawer is hidden from the accessibility tree
     await expect(side.getByRole("navigation", { name: "Main" })).toBeAttached({ timeout: 30_000 });
-    await expect(side.getByRole("button", { name: /markets open$/ })).toBeVisible({ timeout: 30_000 });
+    // (updated on purpose, LIVE8B-027: one market open is named, "Crypto open")
+    await expect(side.getByRole("button", { name: / open$/ })).toBeVisible({ timeout: 30_000 });
     const at = `${vp.width}x${vp.height}`;
     const m = await side.evaluate((aside) => {
       const h = (sel: string) => aside.querySelector(sel)!.getBoundingClientRect();

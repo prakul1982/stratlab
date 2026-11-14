@@ -138,12 +138,14 @@ export interface PlanInfo {
   themes_per_month?: number | null; ai_reads_per_day?: number | null; search_ai_per_day?: number | null;
   /** Market Watch (MW-1): lists, symbols in a list, charts that keep drawings, indicators on a chart. null: no limit. */
   watchlists?: number | null; watchlist_symbols?: number | null; chart_saves?: number | null; chart_indicators?: number | null;
+  /** kept counts (None: no limit) */
+  mf_schemes?: number | null; networth_items?: number | null; journal_trades?: number | null;
 }
 /** Experience: only changes defaults (what starts open, which tools are suggested), never what's allowed. */
 export type Level = "new" | "some" | "pro";
 export type Focus = "invest" | "trade" | "money" | "both";
 
-export type FreeChange = { on: string; rows: { key: string; label: string; before: number | null; after: number | null }[]; moves: string[] };
+export type FreeChange = { on: string; rows: { key: string; label: string; before: number | null; after: number | null }[]; moves: string[]; over?: string[] };
 
 export interface Me {
   id: string; email: string | null; plan: "free" | "basic" | "pro"; plan_info: PlanInfo;

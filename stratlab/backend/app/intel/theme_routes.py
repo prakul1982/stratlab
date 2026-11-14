@@ -27,7 +27,7 @@ from ..guard import Window
 from ..responses import err
 from . import ai as A
 from . import grounding, theme_base, theme_changes, theme_check, theme_data, theme_library, theme_prices
-from . import sector_metrics
+from . import sector_metrics, sector_ops
 from .net import SourceError, TTLCache
 from .news import aggregator_url, company_headline, company_text, fits_company, plain_headline, publisher_url
 
@@ -228,7 +228,7 @@ def evidence_reader(region: str, names: dict):
             if len(about.split()) < ABOUT_WORDS or (region == "US" and not (says_work(about) and theme_base.has_own_line(about, names.get(sym) or ""))):
                 filed, owed = filed_business(region, sym)
                 about = " ".join(x for x in (about, filed) if x)
-            hit = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "about": theme_check.clean_description(about), "industry": industry,
+            hit = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "about": theme_check.kept_description(about), "industry": industry,
                    "v": ABOUT_V, **({"owed": True} if owed else {}), **({"no_page": True} if no_page else {})}
             try:
                 db.set_setting(key, json.dumps(hit, ensure_ascii=False))
@@ -427,7 +427,7 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50}  # rules versions whose change only adds to a kept placement (R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51}  # rules versions whose change only adds to a kept placement (d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
 EARLIER_MAX = 8                 # rv51: how many carried versions back an earlier answer of the same map is looked for
@@ -478,8 +478,10 @@ def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
         read_chip_making(region, out, kept)
     about = _about_reader(region, names, 0)                           # stored descriptions only: nothing is read from a page here
     # R41: an answer kept under earlier rules sticks (theme_base.place_rest `carried`: nothing it answered is asked again)
+    ob = off_before(region, theme, m)                 # d53: the companies an earlier version dropped as another business
     new, got = theme_base.place_rest(out, theme, lambda s_: about(s_), ask=ask, kept=kept, facts_of=_facts_reader(region),
-                                     carried=version is not None and version != theme_base.RULES, previous=previous_layers(region, theme, m))
+                                     carried=version is not None and version != theme_base.RULES, previous=previous_layers(region, theme, m),
+                                     **({"off_before": ob} if ob else {}))
     if ask is not None and got and got != kept and (got.get("names_for") or any(x.get("by") == "ai" for x in (got.get("assign") or {}).values())):
         try:
             computed.put("theme:place", key, got, label=m.get("sector") or theme, region=region)
@@ -609,7 +611,7 @@ def read_chip_making(region: str, out: dict, kept: dict | None) -> list[str]:
         if owed:
             break
         key_ = f"theme:evidence:{region}:{s_}"
-        new = {**got, "about": theme_check.clean_description(" ".join(x for x in (filed, got["about"]) if x)), "filed": True}
+        new = {**got, "about": theme_check.kept_description(" ".join(x for x in (filed, got["about"]) if x)), "filed": True}
         try:
             db.set_setting(key_, json.dumps(new, ensure_ascii=False))
         except Exception as e:
@@ -683,6 +685,16 @@ def previous_layers(region: str, theme: str, m: dict) -> dict:
                 if isinstance(c, list) and len(c) > 1 and isinstance(c[1], int) and 0 <= c[1] < len(layers)}
     except Exception as e:
         print("theme: previous layers not read:", type(e).__name__, str(e)[:100])
+        return {}
+
+
+def off_before(region: str, theme: str, m: dict) -> dict:
+    """d53 (R53): {symbol: [name, industry]} of the companies an earlier stored version of this theme dropped as another business
+    (theme_changes.off_memory), whatever map it was of: a company's business doesn't change with the map. {} when none is stored."""
+    try:
+        return theme_changes.off_memory(theme_changes.stored(region, m.get("_library") or theme))
+    except Exception as e:
+        print("theme: earlier exclusions not read:", type(e).__name__, str(e)[:100])
         return {}
 
 
@@ -782,6 +794,7 @@ def _about_reader(region: str, names: dict, limit: int = DESCRIBE_READS):
     def about_of(sym):
         k = f"theme:evidence:{region}:{sym}"
         hit = EVIDENCE_CACHE.get(k)
+        stale = None
         if hit is None:
             try:
                 got = db.json_value(db.get_setting(k), {})
@@ -790,16 +803,23 @@ def _about_reader(region: str, names: dict, limit: int = DESCRIBE_READS):
             if got.get("at") and not thin_about(got, region):
                 hit = got
                 EVIDENCE_CACHE.set(k, hit, 6 * 3600)
+            elif got.get("at") and company_text(got.get("about")):
+                # d53 (R53, the owner's review of the live R52 Consumer retail deck: Suburban Propane, CDW, FirstCash and EZCORP, dropped as
+                # another business since R40, back in the theme, and Chewy moved to "Other"): gl52's ABOUT_V 5 marked every US description
+                # with no sentence of its own for a second read, and until that read was made (FILING_READS_PER_MINUTE across every theme)
+                # the placement read none at all, so a company's own words, by which it was out of the theme or in its layer, were gone.
+                # The stored words stand until the new read replaces them
+                stale = got["about"]
         if hit is None:
             with lock:
                 if reads["n"] >= limit:
                     reads["missed"] += 1
-                    return None
+                    return stale
                 reads["n"] += 1
             try:
-                return (evidence_reader(region, names)([sym])[0].get(sym) or {}).get("about")
+                return (evidence_reader(region, names)([sym])[0].get(sym) or {}).get("about") or stale
             except Exception:
-                return None
+                return stale
         return hit.get("about") or own_filings(region, sym) or None         # no description: the lines of its own filings
     about_of.reads = reads
     return about_of
@@ -984,7 +1004,8 @@ def sources(region: str, theme: str, fresh: bool = False):
         red_flags=red, card=card, history=history, segments=segments, peer_history=peer_history, cohort_history=cohort_history,
         corp_history=lambda s: corp_actions.history(region, s, None, fetch=False),
         metrics=sector_metrics.reader(region, fresh),           # R23: filed sector figures, read once and kept for everyone
-        about=kept_about(region))                               # R35: the stored descriptions only (nothing is read from a page)
+        about=kept_about(region),                               # R35: the stored descriptions only (nothing is read from a page)
+        passages=sector_ops.passages_reader(region, today=today))   # m53: sector operating measures from the stored filings index only
     src.pieces = pieces
     return src
 
@@ -1030,6 +1051,7 @@ def placement_inputs(q: str, region: str = "IN", profile=Depends(current_profile
     return R.ok({"region": r, "theme": theme, "rules": theme_base.RULES, "generated_at": m.get("generated_at"), "kept_version": version,
                  "kept": kept, "placements": hit.get("placements"), "value_chain": hit.get("value_chain") or [],
                  "evidence": {s_: about(s_) for s_ in sorted(names)}, "previous": previous_layers(r, theme, m),
+                 "off_before": off_before(r, theme, m),        # d53: the companies an earlier version dropped as another business
                  "facts": {s_: facts(s_) for s_ in sorted(names)}})
 
 
@@ -1111,7 +1133,7 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
     hit["placements"], hit["figures"] = m.get("placements"), figures
     hit["coverage"] = map_coverage(m)          # R44: of every company the map places, not only those the figures were read for
     # cl48 (R47): the coverage control, against the previous live read of the theme (theme_changes' snapshot, stored before this one)
-    ctl = theme_changes.coverage_control(hit["coverage"], theme_changes.stored(r, m.get("_library") or theme).get("snap"))
+    ctl = theme_changes.coverage_control(hit["coverage"], theme_changes.stored(r, m.get("_library") or theme).get("snap"), hit)   # d53: layers lost too
     if ctl:
         hit["coverage"] = {**hit["coverage"], "control": ctl}
     late = {x["symbol"]: x["filed_unread"] for x in ((hit.get("sections") or {}).get("quarter") or {}).get("earlier") or [] if x.get("filed_unread")}
@@ -1272,6 +1294,10 @@ def deck_view(r: str, m: dict, dive: dict, extra: dict | None = None) -> dict:
             "placements": m.get("placements") or {}, "figures": dive.get("figures") or {}, "median_ebitda": med.get("median"),
             "checks": dive.get("checks") or {}, "status": dive.get("status") or {}, "with_figures": dive.get("with_figures"),
             "membership": dive.get("membership") or {}, "coverage": coverage_of(m, dive), "parents": dive.get("parents") or [],
+            # d53 (R53): one company under two symbols merged, the adjacent participants and the core members' kind, the companies spending
+            # ahead of their revenue counted apart from the margin medians
+            "duplicates": dive.get("duplicates") or [], "adjacent": dive.get("adjacent") or [], "core_kind": dive.get("core_kind") or "",
+            "developers": dive.get("developers") or 0,
             "news": None, "listings": None, "prices": None, "business": None, **(extra or {})}
 
 
@@ -1495,14 +1521,21 @@ def business_reader():
         reads = biz_updates.stored(sym)
         if not reads:
             return None
-        h = biz_updates.headline(biz_updates.series(reads))
+        ms = biz_updates.series(reads)
+        h = biz_updates.headline(ms)
         if not h:
             return None
         src = h["latest"]["source"]
         return {"metric": h["metric"], "unit": h["unit"], "span": h["span"], "step": h["step"], "period": h["latest"]["period"], "value": h["latest"]["value"],
                 "prev": h["prev"]["value"] if h.get("prev") else None, "year_ago": h["year_ago"]["value"] if h.get("year_ago") else None,
                 "change_prev": h["change_prev"], "change_year": h["change_year"], "filed": src["at"][:10], "url": src["url"], "page": src.get("page"),
-                "exchange": src.get("exchange"), "points": [{"period": p["period"], "value": p["value"]} for p in h["points"]]}
+                "exchange": src.get("exchange"), "points": [{"period": p["period"], "value": p["value"]} for p in h["points"]],
+                # m53: every measure's latest figure as read (the deck's sector operating measures: sector_ops.from_business)
+                "measures": [{"metric": x["metric"], "segment": x.get("segment"), "unit": x["unit"], "span": x.get("span"), "own": x.get("own"),
+                              "period": x["latest"]["period"], "value": x["latest"]["value"], "filed": (x["latest"].get("source") or {}).get("at", "")[:10],
+                              "quote": (x["latest"].get("source") or {}).get("quote"), "page": (x["latest"].get("source") or {}).get("page"),
+                              "url": (x["latest"].get("source") or {}).get("url")}
+                             for x in ms[:biz_updates.MAX_FIGURES]]}
     return read
 
 

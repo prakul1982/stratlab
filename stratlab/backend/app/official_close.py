@@ -679,3 +679,37 @@ def parse_index_closes(text: str) -> dict[str, float]:
 
 def index_close(name: str, day, fetch: bool = False, now: datetime | None = None) -> float | None:
     return (index_closes(day, fetch, now) or {}).get(str(name or "").upper())
+
+
+# ---------- special sessions, from the exchange's own file (LIVE8A-014) ----------
+# Diwali's Muhurat trading on Sunday 8 Nov 2026 was on no calendar this server read, though the exchange published its daily file of
+# index closes for that day (NIFTY 50 24,986.40, -0.18%): the 9 Nov brief measured 9 Nov against 6 Nov (+0.06% where the exchange said
+# +0.23%), and the week was told as 4 sessions. A day the calendar has as shut on which that file exists held a session.
+SESSION_LOOKBACK = 10               # days back a shut day is looked at
+SWEPT_KEY = "closes:sessions-swept"  # the India day the last look was made: one look a day
+
+
+def find_sessions(now: datetime | None = None) -> list[str]:
+    """The shut days of the last SESSION_LOOKBACK days (weekends, holidays) for which the exchange published its daily file of index
+    closes: each is noted as a special session (data/calendar.note_session), so a day's change, the session before a day and a week's
+    count of sessions take it in. One look a day (a job's, never a page's); a day already known as a session is not asked again.
+    Returns the days found."""
+    from .data import calendar as tc
+    local = (now or datetime.now(timezone.utc)).astimezone(IST)
+    today = local.date().isoformat()
+    try:
+        if db.get_setting(SWEPT_KEY) == today:
+            return []
+        db.set_setting(SWEPT_KEY, today)
+    except Exception:
+        return []
+    known = tc.special_days("IN")
+    out = []
+    for k in range(1, SESSION_LOOKBACK + 1):
+        d = local.date() - timedelta(days=k)
+        if tc.is_trading_day("IN", d) or d.isoformat() in known:
+            continue
+        if index_closes(d.isoformat(), fetch=True, now=now):
+            tc.note_session("IN", d)
+            out.append(d.isoformat())
+    return out

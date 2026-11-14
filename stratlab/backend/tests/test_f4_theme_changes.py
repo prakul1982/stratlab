@@ -50,7 +50,8 @@ def test_companies_added_removed_with_the_stated_reason_moved_and_restated():
     v2["placements"] = placements                  # as theme_routes.dive_of puts the checked map's placements on the dive
     d = TC.diff(snap(v1), snap(v2))
     assert d["counts"] == {"removed": 2, "added": 1, "moved": 1, "layers": 0, "restated": 1}
-    assert d["added"] == [{"symbol": "NEWMIN", "name": "New Mine", "layer": "Mining"}]
+    # d53 (R53, updated on purpose: the owner's review, every addition logged with why it is in the theme): the added row carries its reason
+    assert d["added"] == [{"symbol": "NEWMIN", "name": "New Mine", "layer": "Mining", "why": "placed in the theme's map"}]
     assert d["removed"] == [{"symbol": "CELLB", "name": "Cell B", "layer": "Cells", "why": "another business (filed under Solar Panels)"},
                             {"symbol": "RELIANCE", "name": "Reliance Industries", "layer": "Cells", "why": "no longer in the theme's map"}]
     assert d["moved"] == [{"symbol": "MINEB", "name": "Mine B", "from": "Mining", "to": "Cells"}]

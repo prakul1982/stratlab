@@ -357,7 +357,9 @@ function CompanyView() {
           <div className="k-stack inv-head-price">
             <Rail52 q={c.quote} low={c.range52.low} high={c.range52.high} since={c.range52.since} tradedFrom={c.range52.traded_from} currency={ccy} compact />
             {/* the next results day is a fact about the company: a line with a link, not another button */}
-            {nextResults && <Link className="link k-small" to={`/research/results?region=${region}`}>Results on {resultDay(nextResults)}</Link>}
+            {/* a US results day comes from a calendar that carries projected days too, so it says "expected"; an Indian one is the board
+                meeting the company told the exchange of (LIVE8B-023: "Results on Wed 27 Jan" before Apple had announced a date) */}
+            {nextResults && <Link className="link k-small" to={`/research/results?region=${region}`}>{region === "US" ? "Results expected" : "Results on"} {resultDay(nextResults)}</Link>}
             {filedNow && (results?.next?.out?.url
               ? <a className="link k-small" href={safeHref(results.next.out.url)} target="_blank" rel="noopener noreferrer">Results filed {resultDay(results.next.out.at)} ↗</a>
               : <Link className="link k-small" to={`/research/results?region=${region}`}>Results filed {resultDay(nextDay!)}{latestQuarter ? ` · quarter to ${latestQuarter}` : ""}</Link>)}

@@ -153,6 +153,25 @@ class MemoryDocStore:
             out[tuple(k)] = " ".join(frag)
         return out
 
+    def covers(self, max_chars, limit, skip=None):
+        rows = [d for d in self.docs.values() if d["region"] == "US" and d["kind"] == "earnings_release" and d["link"] == d["url"]
+                and d["chars"] < max_chars and d["url"] not in (skip or [])]
+        rows.sort(key=lambda d: (d["filed_at"], d["url"]), reverse=True)
+        return [{k: d.get(k) for k in ("url", "region", "symbol", "kind", "filed_at", "title", "company", "sector")} for d in rows[:limit]]
+
+    def passages(self, q, region, symbols, kinds, since, limit):
+        groups, excluded = parse(q)
+        out = []
+        for (i, n), c in self.chunks.items():
+            d = self.docs[i]
+            if d["region"] != region or d["symbol"] not in symbols or d["kind"] not in kinds or d["filed_at"] < since:
+                continue
+            if self._match(c["body"], groups, excluded):
+                out.append({"symbol": d["symbol"], "doc_id": i, "n": n, "page": c["page"], "kind": d["kind"], "filed_at": d["filed_at"],
+                            "body": c["body"], "link": d["link"], "title": d.get("title")})
+        out.sort(key=lambda r: (r["symbol"], [-ord(ch) for ch in r["filed_at"]], -r["doc_id"], r["n"]))
+        return out[:limit]
+
     def documents(self, ids):
         return {i: dict(self.docs[i]) for i in ids if i in self.docs}
 

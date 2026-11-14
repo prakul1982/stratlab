@@ -609,3 +609,83 @@ def test_postgres_the_route_returns_extracts_only(pg, monkeypatch):
     finally:
         doc_store.use(None)
         world["close"]()
+
+
+@needs_pg
+def test_postgres_passages_give_the_matching_passages_text_of_the_companies_recent_documents_in_page_order(pg):
+    """m53 (sector_ops): one bounded statement gives a profile's companies' matching passages, newest document first, in page order."""
+    put(pg, 1, symbol="CARE", kind="presentation", filed="2026-11-04", pages=[(1, "Cover."), (15, "Operating beds 8,522 Occupancy 73%"),
+                                                                              (18, "Bed Occupancy Rate (%) 73% 69%")])
+    put(pg, 2, symbol="CARE", kind="presentation", filed="2025-01-04", pages=[(3, "Operating beds 7,000")])
+    put(pg, 3, symbol="CARE", kind="transcript", filed="2026-11-10", pages=[(2, "occupancy at 73%")])
+    put(pg, 4, symbol="OTHER", kind="presentation", filed="2026-11-01", pages=[(2, "beds 100")])
+    got = pg.passages("beds or occupancy", "IN", ["CARE"], ["presentation"], "2026-05-01", 10)
+    assert [(r["symbol"], r["page"], r["kind"], r["filed_at"]) for r in got] == [("CARE", 15, "presentation", "2026-11-04"),
+                                                                                ("CARE", 18, "presentation", "2026-11-04")]
+    assert got[0]["body"] == "Operating beds 8,522 Occupancy 73%" and got[0]["link"].endswith("CARE1.pdf")
+    assert len(pg.passages("beds or occupancy", "IN", ["CARE"], ["presentation"], "2020-01-01", 1)) == 1      # at most `limit`
+    assert pg.passages("beds", "IN", [], ["presentation"], "2020-01-01", 10) == []
+
+
+def test_a_stored_8k_cover_page_is_read_again_once_and_replaced_by_the_release_and_a_real_release_is_never_touched(monkeypatch, mem, kv):
+    """m53: earnings releases stored while the exhibit was looked for only as "ex99" kept the 8-K's cover page (PayPal's "pypl3q-26earnings
+    release.htm", Delta's "deltaairlinesannouncessept.htm"): the nightly run reads such a row again, once, with the release found by the
+    folder's one other document (sec.release_doc), within its own cap; a stored release, and a cover whose folder has no single other
+    document, stay as they are and are not asked again."""
+    from app.intel import sec as S
+    monkeypatch.setattr(doc_index, "universe", lambda region: [])
+    base = "https://www.sec.gov/Archives/edgar/data/1/"
+    folders = {f"{base}0001/": ["pypl-20261027.htm", "pypl3q-26earningsrelease.htm", "R1.htm"],
+               f"{base}0002/": ["nvx-20261020.htm", "ex99.htm"],
+               f"{base}0003/": ["aal-20261022.htm", "a.htm", "b.htm"]}
+    cover = "UNITED STATES SECURITIES AND EXCHANGE COMMISSION FORM 8-K CURRENT REPORT Item 2.02 Results of Operations. " * 25
+    release = "Total payment volume increased 6% to $487.1 billion. Payment transactions increased 7% to 6.8 billion. " * 300
+    asked = []
+
+    class SEC(S.SEC):
+        def __init__(self):
+            self.cache = {}
+
+        def _json(self, url):
+            asked.append(url)
+            return {"directory": {"item": [{"name": n} for n in folders[url.replace("index.json", "")]]}}
+
+        def document(self, url):
+            asked.append(url)
+            return release if url.endswith("earningsrelease.htm") else cover
+    doc_index.setup(lambda: None, lambda: SEC(), lambda: None)
+
+    def put_(sym, acc, doc, text, link=None):
+        url = f"{base}{acc}/{doc}"
+        return mem.save({"url": url, "region": "US", "symbol": sym, "kind": "earnings_release", "filed_at": "2026-10-27", "title": "8-K",
+                         "host": "www.sec.gov", "link": link or url}, doc_index.chunk_text(text))
+    put_("PYPL", "0001", "pypl-20261027.htm", cover)                                         # its cover page, stored before the fix
+    put_("NVX", "0002", "nvx-20261020.htm", release * 1, link=f"{base}0002/ex99.htm")         # a release read as before
+    put_("AAL", "0003", "aal-20261022.htm", cover)                                           # a cover whose release can't be told apart
+    j = doc_index.Job()
+    j.sleep = lambda s: None
+    out = j.run(cap=10, discover=0)
+    docs = {d["symbol"]: d for d in mem.docs.values()}
+    assert out["reread"] == 1 and docs["PYPL"]["link"] == f"{base}0001/pypl3q-26earningsrelease.htm"
+    pypl = [c["body"] for (i, _), c in mem.chunks.items() if i == docs["PYPL"]["id"]]
+    assert any("$487.1 billion" in b for b in pypl) and not any("FORM 8-K" in b for b in pypl)        # the stored text is the release now
+    assert docs["NVX"]["link"].endswith("/ex99.htm") and not any("0002" in u for u in asked)        # a real release isn't touched
+    assert docs["AAL"]["link"] == docs["AAL"]["url"]                                                 # left as it was
+    before = list(asked)
+    again = j.run(cap=10, discover=0)
+    assert again["reread"] == 0 and asked == before                                                  # never again for the same filing
+
+
+@needs_pg
+def test_postgres_covers_are_the_short_us_earnings_releases_stored_as_the_8k_itself(pg):
+    def us(sym, link_self, text, kind="earnings_release"):
+        url = f"https://www.sec.gov/Archives/edgar/data/1/{sym}/{sym.lower()}-8k.htm"
+        return pg.save({"url": url, "region": "US", "symbol": sym, "kind": kind, "filed_at": "2026-10-27", "host": "www.sec.gov",
+                        "link": url if link_self else url.replace("-8k.htm", "-release.htm")}, [(None, text)])
+    us("COV", True, "Form 8-K cover. " * 20)
+    us("REL", False, "Form 8-K cover. " * 20)                   # its release was found: link is the exhibit
+    us("LONG", True, "Revenue rose. " * 1000)                   # long: a release read from the filing itself
+    us("ANN", True, "Form 10-K. " * 20, kind="annual_report")
+    got = pg.covers(8000, 20)
+    assert [r["symbol"] for r in got] == ["COV"] and got[0]["kind"] == "earnings_release"
+    assert pg.covers(8000, 20, [got[0]["url"]]) == []

@@ -111,6 +111,7 @@ from . import etf_nav
 from . import heatmap
 from . import data_status, movers
 from . import vix
+from . import mood_job
 from . import biz_updates, library_seed, shareholders
 from . import positioning
 from . import fo_changes_routes
@@ -449,6 +450,7 @@ def start_jobs():
     _start("etf_job", etf_job.start)
     _start("closing_auction_job", closing_auction_job.start)       # the closing auction, every 30 s from 15:14 to 15:40 on trading days
     _start("vix_job", vix_job.start)
+    _start("mood_job", mood_job.job.start)              # the market mood read after each close, once the closes settle (LIVE8A-006)
     _start("biz_job", biz_job.start)
     _start("holders_job", holders_job.start)
     _start("doc_index.job", doc_index.job.start)          # the filings search index, once a night when switched on

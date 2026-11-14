@@ -106,7 +106,7 @@ export function MineHome() {
         requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('[aria-controls="mine-customise"]')?.focus());
       }} />}
       {/* one line with the next step, so the first screen holds the person's own numbers (LIVE1B-086: a 375px checklist came first); the whole list is on each space's home */}
-      <FreeChangeNotice /><PromoCountdown /><FirstSteps compact />
+      <FreeChangeNotice line /><PromoCountdown /><FirstSteps compact />
       {shown.length === 0 ? (
         <EmptyState title="Every card is hidden" action={{ label: "Show the cards", onClick: () => { change(DEFAULT_LAYOUT); } }}>Use Customise to choose what My space shows.</EmptyState>
       ) : (

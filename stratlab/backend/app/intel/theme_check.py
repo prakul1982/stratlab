@@ -74,6 +74,20 @@ def clean_description(text, limit: int = EVIDENCE_CHARS) -> str:
     return " ".join(str(text or "").split())[:limit]
 
 
+def kept_description(text, limit: int = EVIDENCE_CHARS) -> str:
+    """A company's description as stored (theme_routes.evidence_reader): its words on one line, at most `limit` characters; d53 (LIVE8A-004:
+    "a broad portfolio of solutio" quoted on the page from a description kept to its first 700 characters): one longer than that is kept to
+    its last whole sentence within them, else to its last whole word, never cut inside a word."""
+    t = " ".join(str(text or "").split())
+    if len(t) <= limit:
+        return t
+    cut = t[:limit]
+    end = max(cut.rfind(". "), cut.rfind("! "), cut.rfind("? "))
+    if end >= limit // 2:
+        return cut[:end + 1]
+    return cut[:cut.rfind(" ")].rstrip(" ,;:-–—") if " " in cut else cut
+
+
 _SENTENCE = re.compile(r"[^.;!?]+")
 
 
@@ -552,7 +566,9 @@ OWN_SAYS = {
                               r"electronics manufacturing services|electronics system design and manufactur|\besdm\b|on behalf of (?:its |their )?(?:customers|clients)",
     "components": r"\b(?:auto(?:motive)?|automobile|vehicle|tractor|engine) (?:[\w-]+ ){0,2}(?:components?|parts|ancillar\w*)\b|\bcomponents? manufacturers?\b|"
                   r"\bmanufactur\w* (?:and \w+ )?(?:of )?(?:[\w&/,-]+ ){0,4}?components\b|\btier[- ]?(?:1|i|one) supplier",
-    "project_services": r"software (?:development|consultancy|consulting|outsourcing) services|\bsoftware development\b|\bit (?:consult\w*|services)\b|"
+    # d53 (LIVE8A-005: Arm "left out ... the way of earning of “Project and consulting services”" for "provides software development
+    # tools"): software development tools, kits or platforms are products sold, not development done for clients
+    "project_services": r"software (?:development|consultancy|consulting|outsourcing) services|\bsoftware development\b(?! (?:tools?|kits?|platforms?|environments?)\b)|\bit (?:consult\w*|services)\b|"
                         r"information technology services|(?:technical|technology|it) consult(?:ing|ancy)(?: services)?|\bsoftware services\b|"
                         r"customi[sz]ed software (?:solutions|development)",
     "software": r"\b(?:develops?|sells?|licen[cs]es?)(?: and \w+)? (?:its |our )?own (?:software )?products|\bsoftware products? (?:company|developer)",
@@ -560,7 +576,9 @@ OWN_SAYS = {
 }
 # making or trading in so many words: a maker of its own products ("manufactures", "is engaged in the manufacturing of", "a manufacturer of",
 # "produces"), or a trader of others' goods; a parts maker when its official industry is one of parts or components
-MAKER_SAYS = (r"\bmanufactures\b|\bmanufacturers? (?:and \w+ )?of\b|\b(?:engaged in|in the business of|business of|does|involved in) (?:the )?"
+# d53 (LIVE8A-005: Ichor "insufficient evidence: its own words don't state how it earns" beside "the design, engineering and manufacturing of
+# critical fluid delivery subsystems"): "manufacturing of" what it names is a maker's own words too
+MAKER_SAYS = (r"\bmanufactures\b|\bmanufacturers? (?:and \w+ )?of\b|\bdesign, engineering and manufacturing of\b|\b(?:engaged in|in the business of|business of|does|involved in) (?:the )?"
               r"(?:business of )?(?:the )?(?:manufactur\w*|production)\b|\bmanufacturing (?:and|&) (?:sell|sale|market|suppl|export)\w*|\bproduces\b|"
               r"\bproducers? (?:and \w+ )?of\b|\bmakes\b|\bmanufacturing company\b")
 TRADER_SAYS = (r"\btrad(?:ing|es|er|ers)\b(?! (?:name|mark)s?\b)|\bdistribut(?:es|or|ors|ion)\b|\bwholesal\w*|\bdeals? in\b(?! (?:the )?manufactur)|"

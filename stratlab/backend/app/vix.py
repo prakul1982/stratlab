@@ -281,15 +281,56 @@ def intraday(feed=None) -> list[dict]:
     return pts
 
 
+def official_close(day: date | str, fetch: bool = False) -> float | None:
+    """The day's closing value from the exchange's end-of-day file of every index's close (official_close.index_closes):
+    the final close. The index list's last value can be a reading from before it (LIVE8B-001: the list said 15.78 at
+    15:30 on 13 Nov, the end-of-day file 15.50). `fetch` only from the job, never a page."""
+    try:
+        from . import official_close as oc
+        return _num(oc.index_close(NAME, day.isoformat() if isinstance(day, date) else str(day), fetch=fetch))
+    except Exception as e:
+        print("india vix: official close", str(e)[:120])
+        return None
+
+
 def last_quote_row(day: date, feed=None) -> dict[str, list] | None:
     """The day's row from the last quote of the index list when it is stamped after the 15:30 close: the stand-in until
-    the exchange's history carries the day (R28-011). The open is left empty when the list gave no real one."""
+    the exchange's history carries the day (R28-011). The open is left empty when the list gave no real one. The close
+    is the end-of-day file's when it is out (LIVE8B-001)."""
     _cache.set("quote", None, 0)
     q = quote_now(feed)
     if not q or q.get("source") != "exchange" or not str(q.get("as_of") or "").startswith(day.isoformat()) \
             or str(q["as_of"])[11:16] < "15:30":
         return None
-    return {day.isoformat(): [q.get("open"), q.get("high"), q.get("low"), q["value"]]}
+    return {day.isoformat(): [q.get("open"), q.get("high"), q.get("low"), official_close(day, fetch=True) or q["value"]]}
+
+
+def settled(q: dict | None, now: datetime, hist: list[tuple[str, list]]) -> dict | None:
+    """The quote with the day's final close once the session is over: the end-of-day file's close, else the stored
+    history's row for that day, with the change from the stored close before it (LIVE8B-001: "15.78 -0.84 (-5.05%)" on a
+    Saturday where the exchange's close was 15.50, -1.12 (-6.75%)). During the session the list's value stands."""
+    if not q or q.get("value") is None:
+        return q
+    day, at = str(q.get("as_of") or "")[:10], str(q.get("as_of") or "")[11:16]
+    if not day or at < "15:30":          # a reading from inside a session is shown as of its own time
+        return q
+    local = now.astimezone(IST)
+    if local.date().isoformat() < day or (local.date().isoformat() == day and local.strftime("%H:%M") < "15:30"):
+        return q
+    rows = dict(hist)
+    final = official_close(day)
+    if final is None and isinstance(rows.get(day), list):
+        final = _num(rows[day][3])
+    if final is None or final == q["value"]:
+        return q
+    prev = next((v[3] for d, v in reversed(hist) if d < day and isinstance(v, list) and v[3]), None) or q.get("prev_close")
+    out = {**q, "value": final, "prev_close": prev, "final": True,
+           "change": round(final - prev, 2) if prev else None, "change_pct": round((final / prev - 1) * 100, 2) if prev else None}
+    if out.get("low") is not None and final < out["low"]:
+        out["low"] = final
+    if out.get("high") is not None and final > out["high"]:
+        out["high"] = final
+    return out
 
 
 def feed_quote(options_data, today: date) -> dict | None:
@@ -354,14 +395,15 @@ def panel(options_data=None, now: datetime | None = None, feed=None) -> dict:
     """Everything the India VIX panel shows."""
     now = (now or datetime.now(timezone.utc)).astimezone(IST)
     today = now.date()
-    q = quote_now(feed) or feed_quote(options_data, today)
     since = (today - timedelta(days=YEAR_DAYS)).isoformat()
     chart = daily((today - timedelta(days=CHART_DAYS)).isoformat(), today)
+    q = settled(quote_now(feed) or feed_quote(options_data, today), now, chart)
     hist = [x for x in chart if x[0] >= since]          # the percentile and the value are of the last year, whatever the chart draws
     # with no quote, the value is the newest stored close, sent with its day; that day is then the value, not its past
     value_day = None if q else (hist[-1][0] if hist else None)
     value = q["value"] if q else (hist[-1][1][3] if hist else None)
-    past = [v[3] for d, v in hist if d < (value_day or today.isoformat())]
+    # the past is the days before the value's own: a Saturday's value is Friday's close, not one of its past days
+    past = [v[3] for d, v in hist if d < (value_day or str((q or {}).get("as_of") or "")[:10] or today.isoformat())]
     every = daily(today=today)
     line = intraday(feed)
     return {"quote": within_line(q, line), "value": value, "value_day": value_day, "intraday": line, "history": [{"day": d, "close": v[3]} for d, v in chart],

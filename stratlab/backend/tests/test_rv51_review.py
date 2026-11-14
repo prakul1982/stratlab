@@ -252,7 +252,7 @@ def test_kept_placement_joins_the_nearest_earlier_answer_of_the_same_map(monkeyp
 
 
 def test_versions():
-    assert B.RULES == 51 and TR.PLACE_CARRY[51] == 50 and TR.PLACE_CARRY[50] == 49 and deck.THEME_DECK_VERSION == 62 and D.DIVE_TEXT == 22
+    assert B.RULES == 52 and TR.PLACE_CARRY[52] == 51 and TR.PLACE_CARRY[51] == 50 and TR.PLACE_CARRY[50] == 49 and deck.THEME_DECK_VERSION == 63 and D.DIVE_TEXT == 23          # d53 (R53): RULES 52, PLACE_CARRY[52] = 51, deck 63, dive text 23 (updated on purpose)
 
 
 # ---------- P1: a financial company's other income; verified against arithmetic reproduced; † medians ----------
@@ -317,9 +317,10 @@ def test_every_deck_lists_the_companies_added_removed_or_moved_into_other_since_
                    {"symbol": "C", "name": "Cee Ltd", "from": "A", "to": "B"}]}
     v = {"changes": {"entries": [e]}, "coverage": {"other_name": "Other IT service companies"}}
     row = deck.cohort_row(v)
-    assert row[0] == "Since the previous version" and row[1] == "3"
+    # d53 (R53, updated on purpose: our deck reviewer, moves between layers were never logged): the move between two layers is listed and counted
+    assert row[0] == "Since the previous version" and row[1] == "4"
     assert row[2] == ("On 12 Nov 2026, against the version stored before it, after a re-check under new placement rules: added 1: GVP Infotech Ltd; "
                       "removed 1: Zed Ltd (another business (filed under IT Enabled Services)); moved into “Other IT service companies” 1: Black Box Ltd "
-                      "(from “IT infrastructure, cloud and systems integration”).")
+                      "(from “IT infrastructure, cloud and systems integration”); moved between layers 1: Cee Ltd (from “A” to “B”).")
     assert deck.cohort_row({"changes": {"entries": []}})[2] == "No earlier stored version of this theme's figures to compare with."
     assert deck.cohort_row({}) is None

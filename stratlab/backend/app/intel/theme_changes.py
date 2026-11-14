@@ -74,8 +74,38 @@ def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None) -> dict
            for o in ((dive.get("placements") or {}).get("off_industry") or []) if isinstance(o, dict) and o.get("ticker")}
     cv = dive.get("coverage") or {}
     cover = [int(cv["informative"]), int(cv["placed"])] if isinstance(cv, dict) and cv.get("placed") and cv.get("informative") is not None else None
+    # d53: the companies an earlier version dropped as another business whose own words now keep them in (theme_base.place_rest "back")
+    back = sorted(o["ticker"] for o in ((dive.get("placements") or {}).get("back") or []) if isinstance(o, dict) and o.get("ticker"))
+    # d53: why each company is in the theme ("by": its official industry, the theme's list, the map from another industry), for the log
+    why = {}
+    for b in dive.get("layers") or []:
+        for c in b.get("companies") or []:
+            t = (c.get("theme") or {}) if isinstance(c.get("theme"), dict) else {}
+            if c.get("symbol") and t.get("why"):
+                why.setdefault(c["symbol"], str(t["why"])[:200])
     return {"layers": layers, "cos": cos, "off": off, "map": sorted({s_ for s_ in members if s_}), "stamp": int(_num(stamp) or 0),
-            "rules": rules, "unit": dive.get("unit"), **({"cover": cover} if cover else {})}
+            "rules": rules, "unit": dive.get("unit"), **({"cover": cover} if cover else {}), **({"back": back} if back else {}),
+            **({"why": why} if why else {})}
+
+
+def off_memory(got: dict | None) -> dict:
+    """d53 (R53, the owner's review of the live R52 Consumer retail deck: "an unrelated energy distributor can't re-enter Consumer Retail"):
+    {symbol: [name, industry]} of every company an earlier stored version of the theme dropped as another business: the stored snapshot's
+    "off", those kept from every snapshot before it ("off_ever", apply), and each logged removal for that reason (the last KEEP entries)."""
+    got = got if isinstance(got, dict) else {}
+    snap = got.get("snap") if isinstance(got.get("snap"), dict) else {}
+    out: dict = {}
+    for e in got.get("log") or []:
+        for r in (e.get("removed") or []) if isinstance(e, dict) else []:
+            if isinstance(r, dict) and r.get("symbol") and str(r.get("why") or "").startswith("another business"):
+                ind = str(r["why"])[len("another business (filed under "):-1] if "(filed under " in str(r["why"]) else ""
+                out[r["symbol"]] = [str(r.get("name") or r["symbol"]), ind]
+    for k in ("off_ever", "off"):
+        for s_, v in (snap.get(k) or {}).items() if isinstance(snap.get(k), dict) else []:
+            out[s_] = list(v) if isinstance(v, list) else [s_, ""]
+    for s_ in snap.get("back") or []:              # judged again on its own words and kept in: no longer held by the earlier finding
+        out.pop(s_, None)
+    return out
 
 
 def _layer_events(was: dict, now: dict) -> tuple[list[dict], set]:
@@ -146,7 +176,11 @@ def diff(was: dict, now: dict) -> dict:
     for s_, c in now["cos"].items():
         old = was["cos"].get(s_)
         if old is None:
-            added.append({"symbol": s_, "name": c[0], "layer": lay_n[c[1]]})
+            # d53 (R53): every addition with why it is in the theme, and one an earlier version dropped as another business said so
+            why = (now.get("why") or {}).get(s_) or ""
+            if s_ in (was.get("off") or {}) or s_ in (was.get("off_ever") or {}):
+                why = (why + "; " if why else "") + "an earlier version found its own words describe another business; its own words read now show the theme's work"
+            added.append({"symbol": s_, "name": c[0], "layer": lay_n[c[1]], **({"why": why} if why else {})})
             continue
         a, b = lay_w[old[1]], lay_n[c[1]]
         if a != b and (a, b) not in pairs:
@@ -198,6 +232,13 @@ def apply(cur: dict | None, now: dict, refresh: bool = False, at: datetime | Non
         d = diff(was, now)
         if changed(d):
             log = (log + [_entry(d, cause_of(was, now, refresh), at)])[-KEEP:]
+    if isinstance(was, dict):
+        # d53: every company an earlier snapshot dropped as another business, kept from one snapshot to the next (off_memory), unless its
+        # own words were read again and keep it in ("back")
+        ever = {**(was.get("off_ever") if isinstance(was.get("off_ever"), dict) else {}), **(was.get("off") if isinstance(was.get("off"), dict) else {})}
+        ever = {s_: v for s_, v in ever.items() if s_ not in set(now.get("back") or []) and s_ not in (now.get("off") or {})}
+        if ever:
+            now = {**now, "off_ever": ever}
     if isinstance(was, dict) and now.get("cover"):
         # cl48: the coverage before the last change of it, kept until it changes again (a read stored again unchanged keeps the fall said)
         if was.get("cover") and list(was["cover"]) != list(now["cover"]):
@@ -268,7 +309,34 @@ def _share(n: int, of: int) -> int:
     return int(n * 100 / of + 0.5) if of else 0
 
 
-def coverage_control(cov: dict | None, snap: dict | None) -> dict | None:
+LOST_MIN = 3                 # d53: a layer of the previous live read with this many companies or more gone, its companies taken by no new layer
+
+
+def lost_layers(snap: dict | None, dive: dict | None) -> list[dict]:
+    """d53 (R53, our deck reviewer: a re-check took Utilities' "Electrical cables" and "Heavy electrical equipment" layers away, 12 companies
+    to "Other" and the rest to two halves of a split by market value, and only the coverage share was watched): the named layers of the
+    previous live read (the stored snapshot) with LOST_MIN companies or more that the new read no longer has, at least half of whose
+    companies now sit in its "Other" group or in a half of a layer split by market value (no business layer took them): [{"layer", "n"}]."""
+    if not isinstance(snap, dict) or not isinstance(snap.get("cos"), dict) or not isinstance(snap.get("layers"), list) or not isinstance(dive, dict):
+        return []
+    try:
+        now = snapshot(dive)
+    except Exception:
+        return []
+    import re as _re
+    no_business = lambda name: bool(_re.match(r"Other\b", name) or _re.search(r" \((?:larger|smaller)\)$", name))      # noqa: E731
+    out = []
+    for i, g in enumerate(snap["layers"]):
+        if g in now["layers"] or no_business(g):
+            continue
+        cos = [s_ for s_, c in snap["cos"].items() if isinstance(c, list) and len(c) > 1 and c[1] == i]
+        went = [now["layers"][now["cos"][s_][1]] for s_ in cos if s_ in now["cos"]]
+        if len(cos) >= LOST_MIN and went and sum(1 for x in went if no_business(x)) * 2 >= len(went):
+            out.append({"layer": g, "n": len(cos)})
+    return out
+
+
+def coverage_control(cov: dict | None, snap: dict | None, dive: dict | None = None) -> dict | None:
     """cl48 (R47): the coverage control of a theme's read: {"low": share under COVER_MIN, "fell": {"informative", "placed", "share"} of the
     previous live placement when the share now is COVER_FALL points or more under it}; None when neither. `cov`: the read's coverage
     (theme_data.layer_coverage); `snap`: the theme's stored snapshot (the previous live read), whose coverage is the one compared, or, when
@@ -285,6 +353,9 @@ def coverage_control(cov: dict | None, snap: dict | None) -> dict | None:
         out["low"] = True
     if isinstance(base, list) and len(base) == 2 and base[1] and _share(*base) - share >= COVER_FALL:
         out["fell"] = {"informative": int(base[0]), "placed": int(base[1]), "share": _share(*base)}
+    lost = lost_layers(snap, dive)
+    if lost:
+        out["lost"] = lost
     return out or None
 
 
@@ -303,6 +374,9 @@ def control_line(cov: dict | None) -> str:
                    f"{COVER_FALL} or more.")
     if ctl.get("low"):
         out.append(f"{share}% of the companies placed are in informative layers ({n:,} of {of:,}), under {COVER_MIN}%.")
+    if ctl.get("lost"):
+        out.append("Layers of the previous live placement gone, their companies taken by no new layer: "
+                   + ", ".join(f"“{x['layer']}” ({x['n']:,} companies)" for x in ctl["lost"]) + ".")
     return " ".join(out)
 
 
