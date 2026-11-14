@@ -76,7 +76,8 @@ export function PeersCard({ region, symbol, id = "co-peers" }: { region: Region;
       {head(phoneSort || download ? <>{phoneSort}{download}</> : undefined)}
       <p className="k-small k-muted">{v.basis_words[0].toUpperCase() + v.basis_words.slice(1)}{v.return_label === "ROE" ? "; compared on return on equity, as a lender" : ""}. Market value in {region === "IN" ? "rupees" : "dollars"}.</p>
       <div className="ct-peers">
-        <DataTable label={`${symbol} and its peers`} rows={rows} rowKey={(r) => r.symbol} columns={cols} foot={foot}
+        {/* on a phone the company and its five nearest, then "Show more" (LIVE8B-012: eleven stacked cards ran 2,400 px) */}
+        <DataTable label={`${symbol} and its peers`} rows={rows} rowKey={(r) => r.symbol} columns={cols} foot={foot} phonePage={6}
           rowAttrs={(r): Record<string, string> => (r.own ? { className: "ct-own", "data-own": "" } : { "data-peer": r.symbol })}
           sort={v.can_sort ? { key: sort?.key ?? "", desc: sort?.desc ?? true, onSort } : undefined} />
       </div>

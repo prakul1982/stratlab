@@ -88,3 +88,9 @@ test("LIVE8B-014: an account with a Google sign-in is named Google; an email-lin
   assert.match(acct.EMAIL_LINK_NOTE, /Continue with Google, using this same email address/);
   assert.match(read("src/pages/AccountPage.tsx"), /method === "Email link" && <span className="k-sub-line" data-testid="email-link-note">\{EMAIL_LINK_NOTE\}<\/span>/);
 });
+
+test("LIVE8B-012: on a phone the peers come five at a time, quarters four a line; a bank's quarters say revenue", () => {
+  assert.match(read("src/components/CompanyPeers.tsx"), /columns=\{cols\} foot=\{foot\} phonePage=\{6\}/);
+  assert.match(read("src/styles-invest.css"), /\.inv-q \.k-tbl-wrap\.stack \.k-table tr \{ grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
+  assert.match(read("src/components/Research.tsx"), /name: bank \? "Revenue" : "Sales"/);
+});

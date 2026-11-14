@@ -90,6 +90,11 @@ test("Basic: every peer and sorting, every statement and the quarters, twelve qu
   const peers = page.locator("#co-peers");
   await peers.scrollIntoViewIfNeeded();
   const table = peers.getByRole("table", { name: "TATASTEEL and its peers" });
+  // (updated on purpose, LIVE8B-012: on a phone the company and its five nearest come first, then "Show more")
+  if (phone) {
+    await expect(table.locator("tbody tr")).toHaveCount(6, { timeout: 20_000 });
+    await peers.getByRole("button", { name: "Show 1 more" }).click();
+  }
   await expect(table.locator("tbody tr")).toHaveCount(7, { timeout: 20_000 });
   await expect(peers.getByText(/on the Basic plan/)).toHaveCount(0);
   await expect(peers.getByText("Downloading the peers as CSV is on the Pro plan.")).toBeVisible();
@@ -146,7 +151,8 @@ test("Pro: the peers download as CSV and the statements as Excel", async ({ page
   const errors = await open(page, "/research/IN/TATASTEEL", "Tata Steel", who(16, phone));
   const peers = page.locator("#co-peers");
   await peers.scrollIntoViewIfNeeded();
-  await expect(peers.getByRole("table", { name: "TATASTEEL and its peers" }).locator("tbody tr")).toHaveCount(7, { timeout: 20_000 });
+  // (updated on purpose, LIVE8B-012: a phone shows the company and its five nearest first)
+  await expect(peers.getByRole("table", { name: "TATASTEEL and its peers" }).locator("tbody tr")).toHaveCount(phone ? 6 : 7, { timeout: 20_000 });
   const csv = page.waitForEvent("download");
   await peers.getByRole("button", { name: "Download CSV" }).click();
   expect((await csv).suggestedFilename()).toBe("stratlab-TATASTEEL-peers.csv");

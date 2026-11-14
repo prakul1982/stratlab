@@ -76,7 +76,9 @@
   .inv-mt .k-tbl-wrap.stack .k-table td:nth-child(2) { grid-column: 2; grid-row: 1; text-align: right; white-space: nowrap; overflow-wrap: normal; }
   .inv-mt .k-tbl-wrap.stack .k-table td[data-label]::before { display: none; }
   .inv-q-unit { display: inline; color: var(--muted); font-weight: 400; }
-  .inv-q .k-tbl-wrap.stack .k-table tr { grid-template-columns: repeat(3, minmax(0, 1fr)); padding: var(--s3) 0; margin: 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; }
+  /* four quarters a line: eight quarters are two years, the same quarter of each year in one column (LIVE8B-012: three a line put Sep 2025
+     and Sep 2026 in different columns) */
+  .inv-q .k-tbl-wrap.stack .k-table tr { grid-template-columns: repeat(4, minmax(0, 1fr)); padding: var(--s3) 0; margin: 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; }
   .inv-q .k-tbl-wrap.stack .k-table tbody tr:last-child { border-bottom: 0; }
   .inv-mt .k-tbl-wrap.stack .k-table td:empty, .inv-mt .k-tbl-wrap.stack .k-table td:has(> .k-note:empty) { display: none; }
 }

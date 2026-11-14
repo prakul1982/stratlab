@@ -488,7 +488,8 @@ export function Shareholding({ s }: { s: NonNullable<Company["shareholding"]> })
 export function QuarterTable({ q, bank = false }: { q: NonNullable<Company["quarters"]>; bank?: boolean }) {
   const f = (v: number | null) => (v == null ? "–" : num(Math.round(v), 0));
   const rows = [
-    { name: "Sales", cells: q.sales.map(f) }, { name: "Net profit", cells: q.profit.map(f) },
+    // a bank's top line is its revenue, the interest it earns, as its Key numbers say (LIVE8B-010)
+    { name: bank ? "Revenue" : "Sales", cells: q.sales.map(f) }, { name: "Net profit", cells: q.profit.map(f) },
     // a bank reports a financing margin there, not an EBITDA margin (R7O-001)
     { name: bank ? "Financing margin" : "EBITDA margin", cells: q.opm.map((v) => (v == null ? "–" : `${v}%`)) },
   ].filter((r) => !(r.name === "Financing margin" && r.cells.every((c) => c === "–")));   // a bank's margin the source gets wrong is left out, not shown as dashes (R10O-011)
