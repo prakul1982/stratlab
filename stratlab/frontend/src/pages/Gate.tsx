@@ -122,9 +122,9 @@ export function NotFound({ signedIn }: { signedIn: boolean }) {
         </>
       ) : (
         <>
+          {/* no sign-in button on a page that isn't there: the way home, then the places to go (LIVE8A-013) */}
           <div className="gate-actions">
             <Link className="btn" to="/">Go to the StratLab home page</Link>
-            <button type="button" className="btn quiet" onClick={() => void signIn(null)}>Continue with Google</button>
           </div>
           <nav className="gate-links" aria-label="Places to go">
             <LinkCard to="/pricing" title="Plans">What Free, Basic and Pro include and cost.</LinkCard>

@@ -20,8 +20,10 @@ export const SiteLinks = () => (
     <nav className="k-row k-small legal-links" aria-label="Explore">
       <Link className="muted" to="/library">Strategy library</Link>
       <a className="muted" href="/stocks">Companies</a>
+      <a className="muted" href="/themes">Themes</a>
       <a className="muted" href="/blog">Blog</a>
       <Link className="muted" to="/plans">Plans</Link>
+      <a className="muted" href="/status">Data status</a>
     </nav>
     <nav className="k-row k-small legal-links" aria-label="Browse companies" data-browse-companies>
       <span className="muted">Browse companies:</span>

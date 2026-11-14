@@ -108,3 +108,18 @@ test("LIVE8A-007: the Markets panel never paints a kept price from before its ma
   assert.equal(Object.keys(keptQuotes("u", now, store)).length, 3);          // without a day to hold to, as before
   assert.match(read("src/components/watch/WatchPanel.tsx"), /keptQuotes\(me\?\.id \?\? "guest", Date\.now\(\), undefined, \(k\) => \{/);
 });
+
+test("LIVE8A-013: /sitemap and /index.html redirect; the public footer names the server pages' links; no sign-in on a not-found page", () => {
+  const caddy = read("Caddyfile");
+  assert.match(caddy, /^\tredir \/sitemap \/sitemap\.xml 301$/m);
+  assert.match(caddy, /^\tredir \/index\.html \/ 301$/m);
+  // before the app's own handling, beside the other redirects
+  assert.ok(caddy.indexOf("redir /sitemap") < caddy.indexOf("handle @api"));
+  const frame = read("src/components/PublicFrame.tsx");
+  for (const l of ['href="/themes">Themes', 'href="/status">Data status']) assert.ok(frame.includes(l), l);
+  const server = readFileSync(new URL("../../backend/app/stock_pages.py", import.meta.url), "utf8");
+  assert.match(server, /\("\/themes", "Themes"\), \("\/blog", "Blog"\), \("\/pricing", "Plans"\),\s+\("\/status", "Data status"\)/);
+  const gate = read("src/pages/Gate.tsx");
+  const nf = gate.slice(gate.indexOf("export function NotFound"));
+  assert.doesNotMatch(nf.slice(0, nf.indexOf("return signedIn")), /Continue with Google/);
+});
