@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { safeHref, fmtDate } from "../lib/format";
-import { bizChange, bizValue, periodName, tidyTitle } from "../lib/biz";
+import { bizChange, bizValue, periodName, monthIndex, monthOf, tidyTitle } from "../lib/biz";
 import { LineChart } from "./Charts";
 import { AlertButton } from "./AlertForm";
 import { DataTable, EmptyState, Notice, ShowLess, Skeleton } from "./kit";
@@ -61,9 +61,12 @@ export function BizChart({ m, label }: { m: BizMetric; label?: string }) {
   const pts = m.points;
   if (pts.length < 2) return null;
   const name = `${label ? `${label}: ` : ""}${m.metric}${m.segment ? ` (${m.segment})` : ""}`;
+  const xs = pts.map((p) => monthIndex(p.period));
+  const timed = xs.every((x) => Number.isFinite(x));    // each point at its month: months not read are a stretch of the axis (LIVE8B-002)
   return (
     <LineChart lines={[{ values: pts.map((p) => p.value), color: "var(--blue)", width: 2, label: m.metric }]}
       labels={pts.map((p) => `${periodName(p.period, m.span)}${p.filed_later ? " (as stated a year later)" : ""}`)}
+      {...(timed ? { x: xs, xFormat: (x: number) => (Number.isInteger(x) ? periodName(monthOf(x), m.span) : "") } : {})}
       axisLabels={pts.map((p) => periodName(p.period, m.span))} height={200}   // VR5-012: the axis says the period; "(as stated a year later)" is for the hover, where it fits (the axis names ran into each other)
       format={(v) => bizValue(v, m.unit)} axisFormat={(v) => v.toLocaleString("en-US", { notation: "compact", maximumFractionDigits: 1 })}
       ariaLabel={`${name} by ${m.span === "quarter" ? "quarter" : "month"}, ${periodName(pts[0].period, m.span)} to ${periodName(pts[pts.length - 1].period, m.span)}`} />
