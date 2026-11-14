@@ -773,6 +773,7 @@ def company_ai(region: str, symbol: str, refresh: bool = False, background: bool
             read = A.filed_watch(read, results_calendar.lookup(r, s), ist_date())       # a read kept from before the filing (LIVE7B-003)
         except Exception:
             pass
+        read = A.regrounded(read, page_now(r, s))          # held to the page's figures of now (LIVE8B-009)
     except HTTPException as e:
         # the read is a nice-to-have on a page that has loaded: no AI answer today is an answer ("unavailable", and why),
         # not a failed request on every company page opened
@@ -781,6 +782,15 @@ def company_ai(region: str, symbol: str, refresh: bool = False, background: bool
             return ok({"unavailable": True, "code": d["code"], "message": d.get("message") or "No AI read right now."})
         raise
     return ok(A.clean_company(read))
+
+
+def page_now(r: str, s: str) -> dict | None:
+    """The company page's own figures now, for holding a stored read to them (LIVE8B-009); None when they can't be read (the read is
+    then served as stored)."""
+    try:
+        return page_figures(r, source_call(lambda: hub.company(r, s)))
+    except Exception:
+        return None
 
 
 def company_read_key(r: str, s: str, pro: bool) -> tuple:

@@ -396,10 +396,14 @@ test("account: the one-time notice of the Free plan's change, on Account and My 
   const box = page.getByTestId("free-change");
   await expect(box).toBeVisible({ timeout: 30_000 });
   await expect(box).toContainText("Your Free plan changes on 30 Nov 2026.");
-  await expect(box.locator("li")).toHaveText(["Fresh AI reads a day: 60 now, 5 from 30 Nov 2026", "Slide decks a month: 1 now, 0 from 30 Nov 2026",
-    "The tax report's CSV and PDF downloads move to Basic (the report on screen stays free), from 30 Nov 2026"]);
+  // (updated on purpose, LIVE8B-006: a Limit / Now / From table on Account, not a sentence a limit; one line on My space)
+  await expect(box.locator("thead th")).toHaveText(["Limit", "Now", "From 30 Nov 2026"]);
+  await expect(box.locator("tbody tr")).toHaveText(["Fresh AI reads a day605", "Slide decks a month10"]);
+  await expect(box.locator("li")).toHaveText(["The tax report's CSV and PDF downloads move to Basic (the report on screen stays free), from 30 Nov 2026"]);
   await page.goto("/mine");
   await expect(page.getByTestId("free-change")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("free-change").locator("table, li")).toHaveCount(0);
+  await expect(page.getByTestId("free-change").getByRole("link", { name: "See what changes" })).toHaveAttribute("href", "/account#free-change");
   await page.getByTestId("free-change").getByRole("button", { name: "Got it" }).click();
   await expect(page.getByTestId("free-change")).toHaveCount(0);
   await page.goto("/account");

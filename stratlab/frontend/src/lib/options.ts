@@ -63,6 +63,11 @@ export function staleQuoteLine(fromLast: number, legs: number): string {
 export const PICKS: [StrikePick, string][] = [["offset", "Distance from ATM"], ["delta", "Closest delta"], ["delta_range", "Delta range"],
   ["premium", "Premium"], ["straddle_pct", "% of ATM straddle"]];
 
+/** Whether a leg's distance from the money is one its box takes: a whole number of strikes up to 100 either side, or points up to 5,000. */
+export function offsetFits(offset: number, unit: "strikes" | "points"): boolean {
+  return Number.isFinite(offset) && (unit === "points" ? Math.abs(offset) <= 5000 : Number.isInteger(offset) && Math.abs(offset) <= 100);
+}
+
 /** A leg's strike rule in a few words: "ATM", "2 OTM", "Δ 0.20", "Δ 0.15–0.25", "₹50", "≥ ₹40", "20% of straddle". */
 export function legRule(l: OptLeg, unit: "strikes" | "points"): string {
   switch (l.pick ?? "offset") {
@@ -70,8 +75,10 @@ export function legRule(l: OptLeg, unit: "strikes" | "points"): string {
     case "delta_range": return `Δ ${(l.delta ?? 0.2).toFixed(2)}–${(l.deltaTo ?? 0.3).toFixed(2)}`;
     case "premium": return `${{ near: "≈", gte: "≥", lte: "≤" }[l.premiumOp ?? "near"]} ₹${l.premium ?? 50}`;
     case "straddle_pct": return `${l.pct ?? 20}% of straddle`;
-    // the unit named either way (DB-006: "4 OTM" read the same in strikes and in points)
-    default: return l.offset === 0 ? "ATM" : `${Math.abs(l.offset)}${unit === "points" ? " pts" : Math.abs(l.offset) === 1 ? " strike" : " strikes"} ${l.offset > 0 ? "OTM" : "ITM"}`;
+    // the unit named either way (DB-006: "4 OTM" read the same in strikes and in points); a distance its box doesn't take (5,000 left
+    // from points, then the unit set to strikes) is never echoed as a rule (LIVE8B-013: "Buy 5000 strikes OTM CE")
+    default: if (!offsetFits(l.offset, unit)) return "distance to fix";
+      return l.offset === 0 ? "ATM" : `${Math.abs(l.offset)}${unit === "points" ? " pts" : Math.abs(l.offset) === 1 ? " strike" : " strikes"} ${l.offset > 0 ? "OTM" : "ITM"}`;
   }
 }
 

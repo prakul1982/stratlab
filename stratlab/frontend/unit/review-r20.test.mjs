@@ -27,7 +27,8 @@ test("R20-002: the app, the API calls and the gate never read a failed check as 
   assert.match(app, /export const sessionUnconfirmed = \(ready: boolean, session: Session \| null\): boolean =>/);
   assert.match(app, /SESSION_RETRY_MS/);
   // (updated on purpose, LIVE7B-006: the analytics question is drawn before each of these, not above the whole app)
-  assert.match(main, /if \(!session && sessionUnconfirmed\(ready, session\)\) return <><Tracking \/><main><LoadFailed what="your account" \/><\/main><\/>;\s+if \(!session\) return <><Tracking \/><VisitorApp \/><\/>;/);
+  // (updated on purpose, LIVE8B-004: after each of these, so its arrival never pushes the page down)
+  assert.match(main, /if \(!session && sessionUnconfirmed\(ready, session\)\) return <><main><LoadFailed what="your account" \/><\/main><Tracking \/><\/>;\s+if \(!session\) return <><VisitorApp \/><Tracking \/><\/>;/);
   // a request is never sent without a token while a sign-in is saved (its 401 would sign the person out)
   assert.match(api, /if \(!token && hasSavedSession\(CFG\.SUPABASE_URL/);
   // the gate itself says "couldn't load" when the settings never loaded or a sign-in is saved

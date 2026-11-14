@@ -15,13 +15,17 @@ const isQuote = (q: unknown): q is WatchQuote & { seen: number } => {
   return !!x && typeof x === "object" && (x.price === null || (typeof x.price === "number" && Number.isFinite(x.price))) && typeof x.seen === "number";
 };
 
-/** The prices kept, as the panel's quotes ({key: quote}); empty when nothing is kept or storage can't be read. */
-export function keptQuotes(who: string, now = Date.now(), store: Pick<Storage, "getItem"> | null = safeStore()): Record<string, WatchQuote> {
+/** The prices kept, as the panel's quotes ({key: quote}); empty when nothing is kept or storage can't be read. `since`: the day (ISO) a
+ * key's market last traded; a price kept from before it is left out, so a row never paints an older session's price under the newer
+ * session's date (LIVE8A-007: 12 Nov's prices under "Closed · last close Fri 13 Nov" until the reads came). */
+export function keptQuotes(who: string, now = Date.now(), store: Pick<Storage, "getItem"> | null = safeStore(), since?: (key: string) => string | null): Record<string, WatchQuote> {
   try {
     const raw = JSON.parse(store?.getItem(`${QUOTES_KEY}.${who}`) ?? "{}") as Kept;
     const out: Record<string, WatchQuote> = {};
     for (const [k, q] of Object.entries(raw && typeof raw === "object" ? raw : {})) {
       if (!isQuote(q) || q.price == null || now - q.seen > MAX_AGE_MS) continue;
+      const day = since?.(k);
+      if (day && (!q.at || String(q.at).slice(0, 10) < day)) continue;
       const { seen: _seen, ...quote } = q;
       out[k] = quote;
     }

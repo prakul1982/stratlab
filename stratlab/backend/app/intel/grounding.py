@@ -1047,13 +1047,23 @@ def base_noted(text: str, facts: dict, seen: set | None = None) -> str:
     return text
 
 
+# a bank's or lender's top line is its revenue (the interest it earns), never "sales" (LIVE8B-010: HDFCBANK's read said "Sales in the Sep
+# 2026 quarter were ₹95,132 Cr"); the page's own groups say "Revenue growth" for a lender (DD-013)
+_SALES_WORD = re.compile(r"\b(S|s)ales\b(?!\s+(?:tax|force|team|staff|channel|network)\b)")
+
+
+def lender_top_line(text: str) -> str:
+    return _SALES_WORD.sub(lambda m: "Revenue" if m.group(1) == "S" else "revenue", str(text or ""))
+
+
 _TAIL_NOTE = re.compile(r"\s\(([^()]*(?:one-off|base effect|moved by|other income|tax rate|exceptional|unusual)[^()]*)\)\.?$", re.I)
 
 
-def notes_once(lines: list) -> list:
+def notes_once(lines: list, seen: set | None = None) -> list:
     """A read's lines with each one-off note in brackets kept on its first line only (a read kept from before LIVE7B-004 had the same
-    tax-rate note on two lines)."""
-    seen, out = set(), []
+    tax-rate note on two lines). `seen`: the notes already said in the read's earlier parts."""
+    seen = set() if seen is None else seen
+    out = []
     for x in lines or []:
         s = str(x)
         m = _TAIL_NOTE.search(s)
@@ -1974,6 +1984,8 @@ def polish_company(read: dict, region: str = "IN", lender: bool = False, today=N
 
     for k in ("summary", "valuation_note", "position"):
         out[k] = prose(read.get(k))
+        if lender:
+            out[k] = lender_top_line(out[k])
     # a strength or a risk about a move between years older than the newest the read reports isn't current (R8B-003)
     newest = newest_move_year([read.get(k) for k in ("summary", "position")] + list(read.get("bull") or []) + list(read.get("bear") or []))
     for k in ("bull", "bear", "watch"):
@@ -1986,10 +1998,14 @@ def polish_company(read: dict, region: str = "IN", lender: bool = False, today=N
             x = " ".join(s for s in _SENT.split(x) if s and not (classes and mentions_class_move(s, classes))
                          and not (k != "watch" and stale_move(s, newest)))
             if x:
-                items.append(app_dates(x, today))
+                items.append(app_dates(lender_top_line(x) if lender else x, today))
         out[k] = items
-    # the page lists strengths and risks as one list: a one-off's note once in it (LIVE7B-004)
-    both = notes_once(list(out.get("bull") or []) + list(out.get("bear") or []))
+    # a one-off's note once in the whole read, the prose and the lists together (LIVE7B-004; LIVE8B-010: HDFCBANK's read said "(Mar 2024 had
+    # a tax rate of -1% against a median of 24%)" twice)
+    seen_notes: set = set()
+    for k in ("summary", "valuation_note", "position"):
+        out[k] = " ".join(notes_once([x for x in _SENT.split(out.get(k) or "") if x], seen_notes))
+    both = notes_once(list(out.get("bull") or []) + list(out.get("bear") or []), seen_notes)
     out["bull"], out["bear"] = both[:len(out.get("bull") or [])], both[len(out.get("bull") or []):]
     ideas = []
     for i in read.get("ideas") or []:

@@ -585,6 +585,7 @@ def vix_history(mp):
     from app import vix
     vix.fetch(date.today() - timedelta(days=400), date.today(), main.filings_feed, sleep=lambda s: None, pace=0)
     mp.setattr(main.vix_job, "start", lambda: None)
+    mp.setattr(main.mood_job.job, "start", lambda: None)      # no mood read on a clock under the browser tests (LIVE8A-006)
 
 
 def positioning_history():

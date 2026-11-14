@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { graceLine } from "../lib/freeChange";
 import { AccountWait } from "../components/AccountWait";
 import { Card, ConfirmDialog, FieldGroup, FormGrid, Notice, PageHeader, Seg } from "../components/kit";
 import { Link } from "react-router-dom";
@@ -152,6 +153,7 @@ export function PlansPage() {
                   .k-plans), and every limit and feature is in the comparison table under them, so nothing is folded inside a card */}
               <div className="k-plan-body">
                 <ul className="k-plan-list">{KEY[p].map((f) => <li key={f}><span aria-hidden="true">✓</span>{f}</li>)}</ul>
+                {p === "free" && cur && me?.free_change && <p className="k-note" data-testid="plan-grace">{graceLine(me.free_change)} <Link className="link" to="/account#free-change">See what changes</Link></p>}
                 {action(p, cur)}
               </div>
             </Card>

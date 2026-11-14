@@ -27,3 +27,15 @@ export const CHANGE_KEEPS = "Everything you've saved stays, and reads and themes
 
 /** Where "Got it" is kept, so the notice shows once for the change (and again only for a different change date). */
 export const changeSeenKey = (fc: FreeChange) => `stratlab:free-change-seen:${fc.on.slice(0, 10)}`;
+
+/** The notice's table (LIVE8B-006: twelve sentences in a box): one row a limit that changes, [limit, now, from the day]. */
+export function changeRows(fc: FreeChange): [string, string, string][] {
+  return fc.rows.filter((r) => r.before !== r.after).map((r) => [r.label, changeCount(r.before), changeCount(r.after)]);
+}
+
+/** The Plans page's line on the Free card for an account in its grace (LIVE8B-008: "Current plan" listed limits this account doesn't
+ * have until the change): what it has now, and from when the card's limits apply. */
+export function graceLine(fc: FreeChange): string {
+  const rows = fc.rows.filter((r) => r.before !== r.after);
+  return `Yours until ${changeDay(fc.on)}: ${rows.map((r) => `${r.label.charAt(0).toLowerCase()}${r.label.slice(1)} ${changeCount(r.before)}`).join(", ")}. The limits above apply from then.`;
+}

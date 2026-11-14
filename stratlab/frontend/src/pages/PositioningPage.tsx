@@ -73,12 +73,13 @@ function ParticipantTable({ rows, kind, seg, split }: { rows: PRow[]; kind: "oi"
   const what = `${SEG_WORD[seg]} futures and options ${kind === "oi" ? "open interest" : "traded"}`;
   const cell = ([k, l]: [string, string]): Column<PRow> => ({
     key: k, header: l, numeric: true,
-    cell: (r) => <>{k.endsWith("_net") ? <Sgn v={n(r, k)} /> : contracts(n(r, k))}<Chg v={n(r, `${k}_chg`)} /></>,
+    // the total row's net is always nil (every contract has a buyer and a seller): left blank, not "0" (LIVE8B-021)
+    cell: (r) => (r.id === "total" && k.endsWith("_net") ? null : <>{k.endsWith("_net") ? <Sgn v={n(r, k)} /> : contracts(n(r, k))}<Chg v={n(r, `${k}_chg`)} /></>),
   });
   const columns: Column<PRow>[] = [
     { key: "who", header: `${seg === "idx" ? "Index" : "Stock"} F&O`, rowHeader: true, cell: (r) => <b>{r.label}</b> },
     ...cols.slice(0, 3).map(cell),
-    ...(split ? [{ key: "split", header: `Futures ${lo} / ${sh}`, numeric: true, cell: (r: PRow) => <span data-testid={`split-${r.id}`}><Split long={n(r, `fut_${seg}_long_pct`)} short={n(r, `fut_${seg}_short_pct`)} words={[lo, sh]} /></span> }] : []),
+    ...(split ? [{ key: "split", header: `Futures ${lo} / ${sh}`, numeric: true, cell: (r: PRow) => (r.id === "total" ? null : <span data-testid={`split-${r.id}`}><Split long={n(r, `fut_${seg}_long_pct`)} short={n(r, `fut_${seg}_short_pct`)} words={[lo, sh]} /></span>) }] : []),
     ...cols.slice(3).map(cell),
   ];
   return (

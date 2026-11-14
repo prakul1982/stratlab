@@ -285,7 +285,8 @@ test("DOC-2: the landing page names the newer tools, its lists keep full grid ro
 // ---------- PUB-1: the public pages look like one product ----------
 test("PUB-1: the policies use the public frame (header with the site's links, footer with the explore links), not a header of their own", () => {
   const page = read("src/pages/LegalPage.tsx"), css = read("src/styles.css");
-  assert.match(page, /<PublicFrame className="legal">/);
+  // (updated on purpose, LIVE8A-017: the footer waits for the page's words, so it never moves down when they come)
+  assert.match(page, /<PublicFrame className="legal" foot=\{ready\}>/);
   assert.doesNotMatch(page, /legal-head|<Logo|SkipLink/);                                           // the frame brings the logo, the skip link and the header
   assert.match(page, /<nav className="legal-tabs" aria-label="Policy pages">/);                        // the other policies stay one tap away
   assert.match(css, /\.pub-main\.legal \{ max-width: 800px; \}/);

@@ -38,12 +38,32 @@ export function Tracking() {
   // the welcome question and the tour come first: on a phone the two cards stood over each other and this one hid the
   // welcome choices (CI, 28 Oct), so the question waits until the guide is answered or closed
   const guiding = useGuideOpen();
+  const settled = useSettled();
   if (!askNow({ cfg: CONFIG, choice, path: pathname, adsOnly, declined, dnt: doNotTrack() })) return null;
-  if (guiding) return null;
+  if (guiding || !settled) return null;
   return <ConsentCard adsOnly={adsOnly} />;
 }
 
-/** The question itself: a band in the page's own flow, above the page, so nothing is ever under it (LIVE7B-006). */
+/** Ms after the window's load before the question is drawn: by then the page has drawn its own content, so the question, after it,
+ * is never pushed down by a page still filling in (LIVE8B-004). */
+export const ASK_AFTER_LOAD_MS = 1200;
+
+/** True once the page has loaded and had a moment to draw (or at once when it already had: a page opened later in the visit). */
+function useSettled(): boolean {
+  const [on, setOn] = useState(() => settledOnce);
+  useEffect(() => {
+    if (on) return;
+    let t = 0;
+    const go = () => { t = window.setTimeout(() => { settledOnce = true; setOn(true); }, ASK_AFTER_LOAD_MS); };
+    if (document.readyState === "complete") go(); else window.addEventListener("load", go, { once: true });
+    return () => { window.removeEventListener("load", go); window.clearTimeout(t); };
+  }, [on]);
+  return on;
+}
+let settledOnce = false;
+
+/** The question itself: a band in the page's own flow, after the page, so nothing is ever under it (LIVE7B-006) and its arrival never
+ * moves the page (LIVE8B-004: above the page it pushed everything down after the first paint, CLS 0.19 each time). */
 function ConsentCard({ adsOnly }: { adsOnly: boolean }) {
   const text = useId();
   const { title, text: words, short } = consentWords(CONFIG, adsOnly);

@@ -20,6 +20,10 @@
 	@slash path_regexp slash ^(.+)/$
 	redir @slash {re.slash.1} 308
 
+	# LIVE8A-013: /sitemap answered 404 (the sitemap is /sitemap.xml), and /index.html was a second copy of the home page
+	redir /sitemap /sitemap.xml 301
+	redir /index.html / 301
+
 	header -Server
 	# like Vercel: a header the API sets on its own pages (their own, stricter policy) is kept; these fill what it leaves out
 

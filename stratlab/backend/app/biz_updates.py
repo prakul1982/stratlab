@@ -719,6 +719,7 @@ def fy_period(f: dict, period: str) -> str:
     return end if shift(period, -36) <= end <= period else period
 
 
+OTHER_COLUMN = 3.0                  # a stated year-ago figure this many times every own reading of the measure is another column's
 YOY_UP, YOY_DOWN = 75.0, -50.0      # a year-on-year change beyond these is shown only once the filing itself confirms the year-ago figure
 
 
@@ -757,6 +758,15 @@ def series(reads: dict) -> list[dict]:
     out = []
     for k, m in metrics.items():
         pts = sorted(m["points"].values(), key=lambda x: x["period"])
+        # a year-ago figure a filing states that is several times every reading of the measure's own is another column's (a
+        # year-to-date or cumulative figure copied as the year-ago month, LIVE8B-002: VST's "3519 33103 4664 32069" read 33,103
+        # as Oct 2025's and said "down 89.4%"; reads made before the reader knew the column wait for the job to read them again):
+        # it is neither drawn nor used for a change
+        own_values = [x["value"] for x in pts if not x["filed_later"] and isinstance(x["value"], (int, float)) and x["value"] > 0]
+        if own_values and "%" not in m["unit"]:
+            top = max(own_values)
+            pts = [x for x in pts if not (x["filed_later"] and isinstance(x["value"], (int, float)) and x["value"] > OTHER_COLUMN * top)]
+            m["points"] = {x["period"]: x for x in pts}
         last = [x for x in pts if not x["filed_later"]] or pts
         latest = last[-1]
         before = [x for x in pts if x["period"] < latest["period"]]
@@ -1228,6 +1238,16 @@ def user_symbols() -> list[str]:
     return [s for s, _ in sorted(count.items(), key=lambda kv: (-kv[1], kv[0]))[:USER_STOCKS]]
 
 
+def rotated(symbols: list[str], day: date) -> list[str]:
+    """The day's order of the companies: the alphabetical list started at a different place each day, so when the day's AI
+    budget runs out part-way (a new reader re-reading every stored filing), the same end of the alphabet doesn't wait every
+    day (LIVE8B-002: VSTTILLERS' filings kept the old reader's year-ago figures while the budget went on A to T)."""
+    if not symbols:
+        return symbols
+    k = int(day.toordinal() * 0.618034 * len(symbols)) % len(symbols)     # a golden-ratio step: the starts spread over the list
+    return symbols[k:] + symbols[:k]
+
+
 class Job:
     """Once a day in the evening: for every company on the sector lists and every stock with a business-update alert,
     read the updates filed in the last few weeks that aren't read yet, then fire the alerts on the new ones."""
@@ -1265,6 +1285,7 @@ class Job:
         since = (now.astimezone(IST) - timedelta(days=JOB_DAYS)).date().isoformat()
         symbols = sorted({s for v in SECTORS.values() for s, _ in v["symbols"]} | set(self.alert_symbols())
                          | set(user_symbols()) | set(index_symbols()))      # and the NIFTY 100, so none of it stays "not looked at" (LO1-3)
+        symbols = rotated(symbols, now.astimezone(IST).date())
         rows, read, problems = [], 0, []
         for sym in symbols:
             try:

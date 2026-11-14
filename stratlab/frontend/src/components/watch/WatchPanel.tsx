@@ -65,7 +65,11 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
   // ---------- prices: the rows in view, and the chart open ----------
   const [visible, setVisible] = useState<string[]>([]);
   // the prices last seen on this device at once, each with its own time, until the reads replace them (LIVE6-013)
-  const [quotes, setQuotes] = useState<Record<string, WatchQuote | null>>(() => keptQuotes(me?.id ?? "guest"));
+  // (each from its market's last session or later: never an older session's price under the newer one's date, LIVE8A-007)
+  const [quotes, setQuotes] = useState<Record<string, WatchQuote | null>>(() => keptQuotes(me?.id ?? "guest", Date.now(), undefined, (k) => {
+    const m = markets.find((x) => x.id === k.split(":")[0]);
+    return m ? lastTradingDay(m) : null;
+  }));
   useEffect(() => {
     const t = window.setTimeout(() => keepQuotes(me?.id ?? "guest", quotes), 1000);
     return () => window.clearTimeout(t);

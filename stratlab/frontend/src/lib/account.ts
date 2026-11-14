@@ -13,6 +13,16 @@ export function signedInWith(session: string | null | undefined, server: string 
   return METHODS[m.toLowerCase()] ?? m.charAt(0).toUpperCase() + m.slice(1);
 }
 
+/** The sign-in method Account names: Google when the account has a Google sign-in among its methods (the session's first method is the
+ * one the account was made with, so an account made with an email link and since opened with Google said "Email link"). */
+export function accountMethod(provider: string | null | undefined, providers: unknown, server: string | null | undefined): string | null {
+  const all = Array.isArray(providers) ? providers.map((p) => String(p).toLowerCase()) : [];
+  return signedInWith(all.includes("google") ? "google" : provider, server);
+}
+
+/** LIVE8B-014: sign-in is with Google only now; an account made with an email link is told how it gets back in. */
+export const EMAIL_LINK_NOTE = "Sign-in is with Google now: Continue with Google, using this same email address, opens this account.";
+
 /** How the paid plan runs, as Account shows it:
  * - "given": the site owner gave it by hand; it has an end date or none, and there is nothing to renew or cancel;
  * - "cancelled": a subscription that ends at the period's end;
@@ -115,7 +125,15 @@ export function sessionsRunning(me: Pick<Me, "plan" | "view_as" | "trial" | "liv
 /** One kept-count limit as /me/limits gives it (DP2-031: Account showed the monthly counts only). */
 export type KeptLimit = { key: string; used: number | null; limit: number | null; next: string | null };
 const KEPT_LABEL: Record<string, string> = { stock_alerts: "Stock alerts on", screens: "Saved screens", holdings: "Holdings kept",
-  mf_schemes: "Mutual fund schemes kept", networth_items: "Net worth entries", journal_trades: "Trades the journal counts" };
+  mf_schemes: "Mutual fund schemes kept", networth_items: "Net worth entries", journal_trades: "Trades the journal keeps" };   // the Plans page's words (LIVE8B-025)
+
+/** The kept-count rows from the plan's own limits (me.plan_info), counts not read yet: Account's grid is complete from its first frame and
+ * stays so if /me/limits can't be read (LIVE8B-007: a Free account's grid had no alerts, screens, holdings, net worth or journal rows,
+ * though Free's limits on those are the tight ones). /me/limits' answer replaces them with the counts. */
+export function plannedKept(info: Partial<Record<string, unknown>> | null | undefined): KeptLimit[] {
+  const n = (v: unknown) => (typeof v === "number" ? v : null);
+  return Object.keys(KEPT_LABEL).filter((k) => info && k in info).map((k) => ({ key: k, used: null, limit: n(info![k]), next: null }));
+}
 
 /** Account's row for a kept-count limit: "3 of 5", "12 (no limit)", and the journal's "The last 50" / "Every trade". */
 export function keptRow(r: KeptLimit): [string, string] | null {

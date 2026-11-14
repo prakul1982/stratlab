@@ -57,3 +57,15 @@ export function tidyTitle(title: string): string {
   }
   return t;
 }
+
+/** A period's place on a time axis, in months ("2026-10" → 2026 × 12 + 9), and back as "YYYY-MM": the chart puts each point at its
+ *  month, so months not read are a stretch of the axis, never drawn one step apart (LIVE8B-002: the chart went Oct 2025 → Jun 2026 at
+ *  the spacing of one month). */
+export function monthIndex(period: string): number {
+  const [y, m] = period.split("-").map(Number);
+  return y && m ? y * 12 + (m - 1) : NaN;
+}
+export function monthOf(i: number): string {
+  const k = Math.round(i);
+  return `${Math.floor(k / 12)}-${String((k % 12) + 1).padStart(2, "0")}`;
+}

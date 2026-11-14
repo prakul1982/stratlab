@@ -71,7 +71,7 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in 
   ["doc_search", "Search filings: all results"], ["doc_search_all", "Search filings: all years, CSV"],
   ["tables", "All company tables"],
   ["watchlist_import", "Watchlist import from a CSV or Excel file"],
-  ["supply", "Customer and supplier links"], ["supply_pro", "Theme links, CSV"]];
+  ["supply", "Customer and supplier links"], ["supply_pro", "Supplier links in a theme, CSV"]];   // the links among its companies, not its company list (LIVE8A-021)
 // EVERYONE (what every plan has, the comparison table's last fold) is in planFeatures.ts: only the lazy table reads it, so the landing
 // page's JavaScript doesn't carry it (FREE-TIER kept that page's budget)
 

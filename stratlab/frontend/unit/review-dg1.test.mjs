@@ -75,7 +75,8 @@ test("DG-011 .. DG-013: the loan's rate now, points not percent, and what the ne
   assert.equal(NW.nextResetNote({ benchmark: "repo", repo_now: 5.5, repo_at_reset: 5.5, next_expected: 7.75 }), "");
   const card = read("src/pages/money/LoanCheck.tsx");
   assert.match(card, /\{Math\.abs\(c\.gap\.pts\) === 1 \? "point" : "points"\}/);
-  assert.match(read("src/pages/money/NetWorthPage.tsx"), /% a year now \(\$\{sanctioned\}% at the start\)/);
+  // (updated on purpose, LIVE8B-005: the words moved to lib/networth.ts loanRateText, which names a statement rate as the loan's own)
+  assert.match(read("src/lib/networth.ts"), /% a year now \(\$\{sanctioned\}% at the start\)/);
 });
 
 test("DP2-017, DG-026: the import says the stamp duty lines and the schemes kept apart", () => {

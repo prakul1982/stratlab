@@ -445,6 +445,8 @@ export function HoldingsPage() {
           <Card id="h-positions" label="Positions">
             <CardHead title="Positions" actions={<>
               {!facts && <span className="k-note">Checking each stock's trend and filings…</span>}
+              {/* LIVE8B-008: the count against the plan's limit where it bites (at 80% of it or more) */}
+              {view && view.limit > 0 && rows.length >= Math.ceil(view.limit * 0.8) && <span className="k-note" data-testid="holdings-count">{rows.length} of {view.limit} kept</span>}
               {more.toggle}
               {/* LIVE7B-013: the CSV with the table's other controls in its header, not alone on a line under them */}
               <CsvButton name="holdings positions" label="Positions" columns={cols} rows={rows} />

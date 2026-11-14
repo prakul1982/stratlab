@@ -52,7 +52,8 @@ export function PeersCard({ region, symbol, id = "co-peers" }: { region: Region;
       ? <b>{r.name}<span className="sr-only"> (this company)</span></b>
       : <Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}`}>{r.name}</Link>) },
     { key: "market_cap", header: "Market value", numeric: true, sortable: true, cell: (r) => capText(r.market_cap, region) },
-    { key: "sales_growth", header: "Sales growth", info: "Compounded a year over the last 3 years.", numeric: true, sortable: true,
+    // the header says the span: the 3-year compounded rate, not the latest year's (LIVE8B-017)
+    { key: "sales_growth", header: "Sales growth, 3 yrs", info: "Compounded a year over the last 3 years.", numeric: true, sortable: true,
       cell: (r) => (r.sales_growth == null ? "–" : <Signed value={r.sales_growth}>{pct(r.sales_growth, 1)}</Signed>) },
     ...(v.lender ? [] : [{ key: "ebitda", header: "EBITDA margin", numeric: true, sortable: true, cell: (r: PeerRow) => pctCell(r.ebitda) } as Column<PeerRow>]),
     { key: "net", header: "Net margin", numeric: true, sortable: true, cell: (r) => pctCell(r.net) },
@@ -76,7 +77,8 @@ export function PeersCard({ region, symbol, id = "co-peers" }: { region: Region;
       {head(phoneSort || download ? <>{phoneSort}{download}</> : undefined)}
       <p className="k-small k-muted">{v.basis_words[0].toUpperCase() + v.basis_words.slice(1)}{v.return_label === "ROE" ? "; compared on return on equity, as a lender" : ""}. Market value in {region === "IN" ? "rupees" : "dollars"}.</p>
       <div className="ct-peers">
-        <DataTable label={`${symbol} and its peers`} rows={rows} rowKey={(r) => r.symbol} columns={cols} foot={foot}
+        {/* on a phone the company and its five nearest, then "Show more" (LIVE8B-012: eleven stacked cards ran 2,400 px) */}
+        <DataTable label={`${symbol} and its peers`} rows={rows} rowKey={(r) => r.symbol} columns={cols} foot={foot} phonePage={6}
           rowAttrs={(r): Record<string, string> => (r.own ? { className: "ct-own", "data-own": "" } : { "data-peer": r.symbol })}
           sort={v.can_sort ? { key: sort?.key ?? "", desc: sort?.desc ?? true, onSort } : undefined} />
       </div>

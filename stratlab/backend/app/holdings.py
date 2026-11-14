@@ -571,7 +571,13 @@ def view(items: list[dict], quotes: dict[str, dict], us_quotes: dict[str, dict] 
         if rate(r) is not None:
             sectors[r["sector"]] = sectors.get(r["sector"], 0) + (r["value"] if r["value"] is not None else r["invested"] or 0) * rate(r)
     ordered = sorted(sectors.items(), key=lambda kv: (kv[0] == UNCLASSIFIED, -kv[1]))      # "Not classified" last, whatever its size
-    pcts = pct_split([v for _, v in ordered]) if value and ordered else [None] * len(ordered)
+    # a sector's share is the sum of its positions' weights (in tenths), so a one-stock sector shows its stock's weight and the two
+    # tables never round one holding two ways (LIVE8B-020: WIPRO 7.1% in Positions, IT 7.0% in By sector, 7.04% of the total)
+    tenths: dict[str, int] = {}
+    for r in shown:
+        if r.get("weight") is not None:
+            tenths[r["sector"]] = tenths.get(r["sector"], 0) + round(r["weight"] * 10)
+    pcts = [tenths.get(s, 0) / 10 for s, _ in ordered] if value and ordered else [None] * len(ordered)
     allocation = [{"sector": s, "value": _r(v), "pct": p, "count": sum(1 for r in rows if r["sector"] == s and rate(r) is not None)}
                   for (s, v), p in zip(ordered, pcts)]
     us = [r for r in rows if r["market"] == "US"]
