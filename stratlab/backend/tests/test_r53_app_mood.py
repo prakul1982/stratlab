@@ -101,3 +101,18 @@ def test_a_weekend_day_with_an_index_file_is_a_special_session(monkeypatch):
     # once a day
     n = len(asked)
     assert oc.find_sessions(now) == [] and len(asked) == n
+
+
+# ---------- LIVE8A-015: "Coming up" after the close starts tomorrow ----------
+def test_coming_up_after_the_close_starts_tomorrow(monkeypatch):
+    from datetime import date
+    from app.data import calendar
+    from app.intel import mood
+    monkeypatch.setattr(calendar, "is_trading_day", lambda region, d: d.weekday() < 5)
+    fri = date(2026, 11, 13)
+    assert mood.coming_from("US", fri, datetime(2026, 11, 13, 21, 45, tzinfo=ET)) == date(2026, 11, 14)
+    assert mood.coming_from("US", fri, datetime(2026, 11, 13, 11, 0, tzinfo=ET)) == fri
+    assert mood.coming_from("IN", fri, datetime(2026, 11, 13, 16, 0, tzinfo=IST)) == date(2026, 11, 14)
+    # a Saturday keeps its own results (Indian companies report on Saturdays)
+    sat = date(2026, 11, 14)
+    assert mood.coming_from("IN", sat, datetime(2026, 11, 14, 8, 0, tzinfo=IST)) == sat

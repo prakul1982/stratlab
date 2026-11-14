@@ -172,7 +172,7 @@ export function GlobalTable({ g, region, today }: { g: NonNullable<PulseMood["gl
     { key: "n", header: "Market", rowHeader: true, cell: (x) => x.label },
     { key: "a", header: "Area", cell: (x) => x.tag },
     { key: "c", header: "Move", numeric: true, brief: true, cell: (x) => chg(x.change_pct) },
-    { key: "s", header: "Session", cell: (x) => (today ? sessionWord(x.day, today, day) : x.same_day === false && x.day ? `on ${day(x.day)}` : "today") },
+    { key: "s", header: "Session", cell: (x) => sessionWord(x.day, today ?? "", day) },
   ];
   return (
     <Card testId="pulse-global">

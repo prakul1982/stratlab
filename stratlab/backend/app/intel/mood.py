@@ -455,6 +455,25 @@ def _closes_of(candles: list[dict], today: str) -> list[float]:
     return out
 
 
+def coming_from(region: str, today: date, now: datetime | None = None) -> date:
+    """The first day "Coming up" lists: today, or tomorrow once today's session is over (LIVE8A-015: at 21:45 ET on
+    Friday 13 Nov the US page listed "13 Nov Results MUFG / SMFG", results already out)."""
+    from zoneinfo import ZoneInfo
+    from ..data.calendar import is_trading_day
+    from ..data.markets import BY_ID
+    from ..stock_pages import close_of
+    tz = (BY_ID.get(region) or {}).get("tz") or "UTC"
+    local = (now or datetime.now(timezone.utc)).astimezone(ZoneInfo(tz))
+    if local.date() != today:
+        return today
+    try:
+        # a day with no session keeps its own results (Indian companies report on a Saturday too)
+        over = is_trading_day(region, today) and local.strftime("%H:%M") >= close_of(region, today)
+    except Exception:
+        over = False
+    return today + timedelta(days=1) if over else today
+
+
 class Mood:
     """The finished payloads and the daily closes behind them, read behind the page and kept in memory."""
 
@@ -668,8 +687,9 @@ class Mood:
             print("flows unavailable:", str(e)[:100])
             return None
 
-    def _calendar(self, region: str, today: date, caps: dict[str, float]) -> dict:
+    def _calendar(self, region: str, today: date, caps: dict[str, float], now: datetime | None = None) -> dict:
         out = {"results": [], "ipos": [], "events": []}
+        today = coming_from(region, today, now)       # after the day's close, "Coming up" starts tomorrow (LIVE8A-015)
         end = today + timedelta(days=6)
         try:
             from .. import results

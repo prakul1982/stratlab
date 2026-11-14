@@ -91,5 +91,7 @@ export const quoteMove = (r: Pick<MoodQuoteRow, "change_pct" | "change_bp">): { 
   r.change_bp != null ? { value: r.change_bp, text: `${r.change_bp > 0 ? "+" : r.change_bp < 0 ? "−" : ""}${Math.abs(r.change_bp)} bp` }
     : { value: r.change_pct, text: r.change_pct == null ? "–" : `${r.change_pct > 0 ? "+" : r.change_pct < 0 ? "−" : ""}${Math.abs(r.change_pct).toFixed(2)}%` };
 
-/** "today", or the session's day when a market's latest session isn't today's (worked out now, not when the read was made). */
-export const sessionWord = (day: string | null | undefined, today: string, dayText: (iso: string) => string): string => (day && day !== today ? `on ${dayText(day)}` : "today");
+/** A row's session: its date (worked out now, not when the read was made). */
+/* LIVE8A-015: every row names its session's date ("on 13 Nov"), never "today": an overseas market's day is not the reader's (at 21:45 ET
+ * on Friday the Nikkei's "today" was a session that ended in Tokyo on what was by then Saturday morning there) */
+export const sessionWord = (day: string | null | undefined, _today: string, dayText: (iso: string) => string): string => (day ? `on ${dayText(day)}` : "–");

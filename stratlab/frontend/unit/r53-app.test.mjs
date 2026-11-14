@@ -123,3 +123,10 @@ test("LIVE8A-013: /sitemap and /index.html redirect; the public footer names the
   const nf = gate.slice(gate.indexOf("export function NotFound"));
   assert.doesNotMatch(nf.slice(0, nf.indexOf("return signedIn")), /Continue with Google/);
 });
+
+test("LIVE8A-015: the overseas markets' rows name their session's date, never today", async () => {
+  const { sessionWord } = await import("../src/lib/pulseMood.ts");
+  const dayText = (iso) => `${Number(iso.slice(8))} Nov`;
+  assert.equal(sessionWord("2026-11-13", "2026-11-13", dayText), "on 13 Nov");
+  assert.equal(sessionWord(null, "2026-11-13", dayText), "–");
+});
