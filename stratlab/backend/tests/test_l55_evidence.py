@@ -59,8 +59,8 @@ def test_every_count_of_the_members_says_its_evidence_states_and_none_says_confi
     assert rows["Universe"][1].startswith("30 companies (20 in the exchange's industry list); description-verified 4 of 30 (13%); "
                                           "membership checked 22 of 30 (the map's own picks")
     assert rows["Universe"][1].endswith(": " + split.split(": ", 1)[1] + ".") and split in rows["Screening"][2]
-    assert rows["Membership checked"][1] == "22 of 30 (73%)" and rows["Membership checked"][2].startswith(
-        "4 description-verified, 16 industry-supported, 2 own words describe other work, 8 not checked; ")
+    assert rows["Membership checked"][1] == "22 of 30 (73%)" and (      # h56 (R56): led by the description-verified share (updated on purpose)
+        ". By state: 4 description-verified, 16 industry-supported, 2 own words describe other work, 8 not checked; ") in rows["Membership checked"][2]
     # the companies with figures by state, adding up to the deck's count (every median and total is of these)
     n = v["members_with_figures"]
     by = re.search(r"companies with figures, of every company the deck lists: (\d+) description-verified, (\d+) industry-supported", rows["Companies, by count"][2])

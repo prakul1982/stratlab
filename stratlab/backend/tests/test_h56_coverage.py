@@ -56,9 +56,8 @@ def test_a_history_point_kept_without_the_tallys_counts_is_left_out_and_the_last
     new = {"membership_evidence": ev, "membership_check": {"outside": {}, "history": [["2026-11-07", 10, 20, 10], ["2026-11-14", 20, 20, 20]]}}
     row = deck.progress_row(new, {"total": 20})
     assert "Checked share after each stored version: 50% (07 Nov 2026) → 95% (14 Nov 2026)." in row[2]
-    ver = deck.dv_share_row(new, {"total": 20})
-    assert ver[0] == "Description-verified" and ver[1] == "19 of 20 (95%)"
-    assert "Description-verified share after each stored version: 50% (07 Nov 2026) → 95% (14 Nov 2026)." in ver[2]
+    assert row[2].startswith("Description-verified 19 of 20 (95%); description-verified share after each stored version: 50% (07 Nov 2026) → "
+                             "95% (14 Nov 2026). By state: 19 description-verified, 0 industry-supported, 1 not checked")
     # the snapshot keeps only such points, and the next read carries them on
     snap = TC.snapshot({"membership_check": {"outside": {}, "history": [["2026-11-07", 10, 20], ["2026-11-14", 19, 20, 19]]}, "layers": []}, [])
     assert snap["ev_hist"] == [["2026-11-14", 19, 20, 19]]
@@ -137,12 +136,10 @@ def test_the_coverage_and_the_universe_lead_with_the_description_verified_share(
     v = _partial()
     slides = deck.theme_plan(v)[0]
     rows = [r for s in slides for b in s.blocks if b["kind"] == "table" for r in b.get("rows") or [] if not isinstance(r, dict)]
-    labels = [r[0] for r in rows]
-    assert labels.index("Description-verified") + 1 == labels.index("Membership checked")
-    dv = next(r for r in rows if r[0] == "Description-verified")
-    assert dv[1] == "4 of 30 (13%)" and "Description-verified share after each stored version: 10% (07 Nov 2026) → 13% (14 Nov 2026)" in dv[2]
-    assert ("of the 22 membership-checked, 16 are industry-supported (a label, not their own words) and 2 own words describe other work; "
-            "8 not checked") in dv[2]
+    mc = next(r for r in rows if r[0] == "Membership checked")          # (no row added: the coverage table keeps its length)
+    assert mc[1] == "22 of 30 (73%)" and mc[2].startswith(
+        "Description-verified 4 of 30 (13%); description-verified share after each stored version: 10% (07 Nov 2026) → 13% (14 Nov 2026). "
+        "By state: 4 description-verified, 16 industry-supported, 2 own words describe other work, 8 not checked")
     uni = next(r for r in rows if r[0] == "Universe")
     assert "; description-verified 4 of 30 (13%); membership checked 22 of 30" in uni[1]
     assert "description-verified 4 of 30 (13%)" in texts(slides)
@@ -182,8 +179,8 @@ def test_deck_check_fails_a_history_that_does_not_end_on_the_rows_share():
     assert DC.check_text(FMCG_R55)["counts"]["history end"] == 0          # its columns interleaved: 209 of 209 is 100%, the last point 100%
     fixed = PAYMENTS_R55.replace("100% (14 Nov 2026) → 100% (14 Nov 2026)", "90% (07 Nov 2026) → 95% (14 Nov 2026)")
     assert DC.check_text(fixed)["counts"]["history end"] == 0
-    dv = ("Coverage\n Description-verified         4 of 30 (13%)          companies whose own description shows the theme's work. Description-verified share\n"
-          "                                                     after each stored version: 10% (07 Nov 2026) → 20% (14 Nov 2026).\n")
+    dv = ("Coverage\n                              Description-verified 4 of 30 (13%); description-verified share after each stored version: 10%\n"
+          " Membership checked           22 of 30 (73%)  (07 Nov 2026) → 20% (14 Nov 2026). By state: 4 description-verified.\n")
     assert DC.check_text(dv)["counts"]["history end"] == 1
 
 

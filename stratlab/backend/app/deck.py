@@ -3330,7 +3330,7 @@ STATE_WORDS = {"verified_extreme": "verified", "unverified_extreme": "not reconc
 COVERAGE_HEAD = ["Coverage", "Covered", "Of what"]
 COVERAGE_KINDS = ("Companies, by count", "Market value", "Each figure", "Each layer", "Partly read", "Not in the sources", "In informative layers",
                   "Screened out: another business", "From other industries", "Screening", "Coverage flag", "Moved by what its layer is",
-                  "Since the previous version", "Membership checked", "Description-verified")
+                  "Since the previous version", "Membership checked")
 # R31 (the owner's review of the live R30 Insurance and Real estate decks): the model-specific figures the app's sources don't hold, and why,
 # by business-model family (theme_check.MODELS); said once, on the coverage table (an insurer's, when the sector table doesn't say it)
 NOT_IN_SOURCES = {
@@ -3404,9 +3404,6 @@ def coverage_table(v: dict, cov: dict) -> list[list[str]]:
                                     + (f"; the theme's core members only, the {pop['adjacent']:,} adjacent participants with figures apart" if pop["adjacent"] else "")]]
     if cov.get("share") is not None:
         rows.append([COVERAGE_KINDS[1], f"{cov['share']}%", f"of {cov['of_what']}, held by the companies with figures (a share of value, not of companies)"])
-    ver = dv_share_row(v, cov)
-    if ver:                        # h56 (R56): the description-verified share first, before the membership check's count
-        rows.append(ver)
     if prog:                       # e54: how many of the theme's companies have had their membership checked, and after each version
         rows.append(prog)
     each = next((r[2] for r in coverage_rows(v, cov) if r[0] == "In each median and total"), "")
@@ -3476,24 +3473,6 @@ def history_words(hist: list[list], k: int) -> str:
     return " → ".join(f"{_pct_of(p[k], p[2])} ({_day(p[0])})" for p in hist[-6:]) if len(hist) >= 2 else ""
 
 
-def dv_share_row(v: dict, cov: dict) -> list[str] | None:
-    """h56 (R56, the owner's review of the live R55 decks: Biotech checked 219 of 820, Software 220 of 588, FMCG all 209 but 98 description-
-    verified and 111 on industry labels: "keep the three levels separate; a larger checked count is not stronger direct verification"): the
-    coverage's description-verified share, the row before the membership check's, with the share after each stored version. None for a view
-    made before the states were kept."""
-    t = evidence_tally(v, cov.get("total") or 0)
-    if not t or not t["total"]:
-        return None
-    lab = t["industry_code_supported"] + t["list_supported"]
-    over = history_words(tally_history(v, t), 3)
-    text = (f"companies whose own description shows the theme's work, of the theme's {t['total']:,}; of the {t['checked']:,} membership-checked, "
-            f"{lab:,} {'are' if lab != 1 else 'is'} industry-supported" + (" or list-supported" if t["list_supported"] else "")
-            + " (a label, not their own words)" + (f" and {t['not_confirmed']:,} {EVIDENCE_SAID_OTHER}" if t["not_confirmed"] else "")
-            + f"; {t['membership_unverified']:,} {UNCHECKED_WORD}"
-            + (f". Description-verified share after each stored version: {over}" if over else "") + ".")
-    return [COVERAGE_KINDS[14], f"{t['description_verified']:,} of {t['total']:,} ({_pct_of(t['description_verified'], t['total'])})", text]
-
-
 def progress_row(v: dict, cov: dict) -> list[str] | None:
     """e54 (R54, the owner's review of the live R53 decks: Biotech "564 still not checked", Software 488, after several checks): how many of
     the theme's companies have had their membership checked, now and after each earlier stored read of the theme (the membership check
@@ -3502,7 +3481,8 @@ def progress_row(v: dict, cov: dict) -> list[str] | None:
     t = evidence_tally(v, cov.get("total") or 0)
     if not t or not t["total"]:
         return None
-    over = history_words(tally_history(v, t), 1)
+    hist = tally_history(v, t)
+    over, over_dv = history_words(hist, 1), history_words(hist, 3)
     from .intel.theme_data import membership_step
     # l55 (R55, the owner's review: membership checks must never read as financial coverage growing): the check reads no figure, said
     # beside the count with figures, which it leaves as it is
@@ -3513,7 +3493,11 @@ def progress_row(v: dict, cov: dict) -> list[str] | None:
     ahead = min(t["membership_unverified"], max(0, t["total"] - reached))
     nxt = (f"the next {min(ahead, membership_step(t['total'])):,} by market value checked each time the theme's figures are stored" if ahead
            else "each checked again once its own words are read")
-    text = (f"{evidence_words(t)}"
+    # h56 (R56, the owner's review of the live R55 decks: Biotech checked 219 of 820, FMCG all 209 but 98 description-verified and 111 on
+    # industry labels: "a larger checked count is not stronger direct verification"): the row leads with the description-verified share
+    lead = verified_lead(t)
+    text = (f"{lead[:1].upper()}{lead[1:]}" + (f"; description-verified share after each stored version: {over_dv}" if over_dv else "")
+            + f". By state: {evidence_words(t)}"
             + (f", {t['membership_unverified']:,} not checked; {nxt}" if t["membership_unverified"] else f", 0 {UNCHECKED_WORD}; every company checked")
             + (f". Checked share after each stored version: {over}" if over else "")
             + (f". The membership check reads no figures: companies with figures {n_fig:,}, a separate count" if n_fig is not None else "") + ".")
