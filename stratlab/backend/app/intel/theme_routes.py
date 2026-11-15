@@ -556,7 +556,8 @@ def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
     mb = moved_before(region, theme, m)               # c54: the moves the stored change log records, judged on what the layer sells
     mo = moved_out(region, theme, m)                  # t56: the moves of the re-check that removed each layer the snapshot no longer has
     # v55: each company's stored revenue read only where the map has a layer named by a stage (theme_base.stage_moves)
-    staged = any(theme_base.layer_stage(v) for v in out.get("value_chain") or [])
+    staged = any(theme_base.layer_stage(v) or (not v.get("official") and re.search(theme_base.SCALE_LAYER, v.get("layer") or "", re.I))
+                 for v in out.get("value_chain") or [])          # r571: also where a layer is named by scale (theme_base.scale_moves)
     new, got = theme_base.place_rest(out, theme, lambda s_: about(s_), ask=ask, kept=kept, facts_of=_facts_reader(region),
                                      **({"figures_of": _figures_reader(region)} if staged else {}),
                                      carried=version is not None and version != theme_base.RULES, previous=previous_layers(region, theme, m),

@@ -1026,7 +1026,7 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
     # published member held in its published layer unless printed evidence moved it
     # the contract's steps run where the placement reads the published memory (`published`, {} for a theme read for the first time: every
     # live placement, theme_routes.placed); a replay of a stored version without it places as that version's rules did
-    truth, fit_rows, held_rows, fit_answer, audit_rows, audit_answer = [], [], [], None, [], None
+    truth, fit_rows, held_rows, fit_answer, audit_rows, audit_answer, scale_rows = [], [], [], None, [], None, []
     if published is not None:
         out_vc, truth = truthful_layers(out_vc, published, evidence, theme)
         out_vc, whole_out = whole_company_out(out_vc, words_of, theme)
@@ -1036,6 +1036,7 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
                                                     kept.get("fit") if isinstance(kept.get("fit"), dict) else None)
         out_vc, audit_rows, audit_answer = audit_moves(out_vc, evidence, theme, words_of, ask,
                                                        kept.get("audit") if isinstance(kept.get("audit"), dict) else None)
+        out_vc, scale_rows = scale_moves(out_vc, words_of, theme, figures_for if figures_of is not None else None)
         out_vc, held_rows = hold_published(out_vc, published, evidence, theme)
     back = [{"ticker": s_, "name": (by_sym.get(s_) or {}).get("name") or (off_before or {})[s_][0],
              "why": "an earlier version found its own words describe another business; its own words read now show the theme's work"}
@@ -1059,8 +1060,9 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
                 placements["dropped"] = gone
             else:
                 placements = {k: x for k, x in placements.items() if k != "dropped"}
-    if truth or held_rows or fit_rows or audit_rows:   # p57: the contract's steps: layers named by their companies, misfits moved
+    if truth or held_rows or fit_rows or audit_rows or scale_rows:   # p57: the contract's steps (r571: the scale rule)
         placements = {**(placements or {}), "contract": {**({"layers": truth} if truth else {}), **({"fit": fit_rows} if fit_rows else {}),
+                                                        **({"scale": scale_rows} if scale_rows else {}),
                                                         **({"audit": audit_rows} if audit_rows else {}),
                                                         **({"held": held_rows} if held_rows else {})}}
     if staged_n:             # v55: companies displayed in the layer of their own stage
@@ -3851,6 +3853,62 @@ def audit_moves(vc: list[dict], evidence, theme: str, words_of=None, ask=None, k
 
 
 _FIELDS = re.compile(r"\b(?:in the fields of|operat\w* (?:in|across)|active in|businesses (?:in|span\w*|include)|segments? (?:are|include|of))\b", re.I)
+SCALE_LAYER = r"\b(?:large|largest|major|big|global|leading)\b"          # r571: a layer named by scale ("Large pharma and biotech portfolios")
+NICHE_LAYER = r"clinical|\bstage\b|specialty|specialised|specialized|emerging|\bsmall|niche|early|pipeline|developers?\b"
+
+
+def scale_moves(vc: list[dict], words_of, theme: str, figures_of) -> tuple[list[dict], list[dict]]:
+    """r571 (the R56 audit BIO-2, still on the live R57 Biotech deck: Novo Nordisk, AbbVie, Amgen and Bristol Myers in "Specialty and
+    clinical-stage biotechs" beside "Large pharma and biotech portfolios"; the model's audit named none of them): where a theme has a layer
+    named by scale, a company of a sibling layer named by a stage or a niche joins it when (a) its stored revenue is at or above the median
+    revenue of the scale layer's companies, (b) it is commercial: not a development-stage company by its own words (company_stage), and its
+    own words name products on sale or it has an operating profit, and (c) its own words or official industry say a word of the scale layer's
+    name (a word inside a longer one counts: "pharma" of "biopharmaceutical"). (the layers, the moves). Its reason printed ("refit")."""
+    import statistics
+    shown = lambda v: _HALF_RX.sub("", v.get("layer") or "")      # noqa: E731
+    named = [v for v in vc if not v.get("official") and v.get("companies")]
+    scale = {}
+    for v in named:
+        if re.search(SCALE_LAYER, f"{shown(v)} {v.get('was') or ''}", re.I) and not re.search(NICHE_LAYER, shown(v), re.I):
+            scale.setdefault(shown(v), []).append(v)
+    if not scale or figures_of is None:
+        return vc, []
+    rows = []
+    for nm, svs in scale.items():
+        revs = [r for x in svs for c in x["companies"] for r in [(figures_of(c.get("ticker")) or {}).get("revenue")] if r]
+        if len(revs) < 3:
+            continue
+        median = statistics.median(revs)
+        words = {w for w in re.findall(r"[a-z]+", f"{nm} {svs[0].get('was') or ''}".lower()) if len(w) >= 5}
+        words -= {"large", "largest", "major", "global", "leading", "portfolio", "portfolios", "companies", "makers", "producers"}
+        target = svs[0]
+        for v in named:
+            if shown(v) == nm or not re.search(NICHE_LAYER, f"{shown(v)} {v.get('was') or ''}", re.I) or len(v["companies"]) <= 2:
+                continue
+            for c in list(v["companies"]):
+                f = figures_of(c.get("ticker")) or {}
+                rev, ebitda = f.get("revenue"), f.get("ebitda")
+                text = own_text(words_of(c.get("ticker")) or c.get("what") or "")
+                if not rev or rev < median or len(text.strip()) < 40:
+                    continue
+                stage, said = company_stage(text, rev, ebitda)
+                if stage == "development" or not (stage == "commercial" or (ebitda or 0) > 0):
+                    continue
+                mine = set(re.findall(r"[a-z]+", f"{text} {plain_industry(c.get('industry') or '')}".lower()))
+                hit = sorted(w for w in words if any(w in a for a in mine))
+                if not hit or len(v["companies"]) <= 2:
+                    continue
+                how = said if stage == "commercial" and said.startswith("its own words") else f"an operating profit (EBITDA margin {ebitda:.1f}%)"
+                why = (f"revenue of ${rev / 1000:.1f} bn, at or above the median of “{nm}” (${median / 1000:.1f} bn); a commercial company: {how}; "
+                       f"its own words or industry say “{'”, “'.join(hit)}” (the placement contract)")
+                v["companies"] = [x for x in v["companies"] if x is not c]
+                target["companies"] = list(target["companies"]) + [{**{k: x for k, x in c.items() if k not in ("sold_by", "unfit", "unfit_why")},
+                                                                    "moved": True, "fit": True, "refit": {"from": shown(v), "to": nm, "why": why, "scale": True}}]
+                rows.append({"ticker": c.get("ticker"), "name": c.get("name") or c.get("ticker"), "from": shown(v), "to": nm, "revenue": rev,
+                             "median": median})
+    return vc, rows
+
+
 _WHOLE_PLAIN = {"care", "consumer", "health", "safety", "industrial", "services", "service", "solution", "solutions", "goods", "material"}
 
 

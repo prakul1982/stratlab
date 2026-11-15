@@ -161,3 +161,25 @@ def test_8b_deck_diff_counts_a_layer_from_its_page_and_never_its_notes_page():
     pages = ["RETAIL · THE VALUE CHAIN\nLayer 3 · Catalog and mail-order houses\n6 companies, revenue $9 bn together\n",
              "Layer 3 · Catalog and mail-order houses (notes)\n6 companies are said here too\n"]
     assert DD.layer_counts(pages) == {"Catalog and mail-order houses": 6}
+
+
+def test_10_a_large_commercial_company_joins_the_theme_s_scale_layer_by_its_revenue(monkeypatch):
+    """Fails before (R56 audit BIO-2, still on the live R57 Biotech deck; the model's audit named none of them): Novo Nordisk, AbbVie,
+    Amgen and Bristol Myers (revenue $37-61 bn, at or above the $17.3 bn median of "Large pharma and biotech portfolios") join it from
+    "Specialty and clinical-stage biotechs"; Sarepta ($2.2 bn) and the clinical-stage developers stay."""
+    d = json.loads((pathlib.Path(__file__).parent / "fixtures" / "themes_live" / "r571" / "biotech.json").read_text())
+    d = d.get("data", d)
+    out = copy.deepcopy(d["value_chain"])
+    vc, rows = B.scale_moves(out, lambda s: d["evidence"].get(s), d["theme"], lambda s: d["figures"].get(s) or {})
+    got = {c["ticker"]: (X._HALF.sub("", v["layer"]), c) for v in vc for c in v["companies"]}
+    for s_ in ("NVO", "ABBV", "AMGN", "BMY"):
+        assert got[s_][0] == "Large pharma and biotech portfolios", s_
+        assert "at or above the median" in got[s_][1]["refit"]["why"]
+    assert got["SRPT"][0] == "Specialty and clinical-stage biotechs"
+    assert all(r["revenue"] >= r["median"] for r in rows)
+    full = where(place("biotech", monkeypatch))          # the whole placement, with the published memory: the same four, reasons printed
+    for s_ in ("NVO", "ABBV", "AMGN", "BMY"):
+        assert full[s_][0] == "Large pharma and biotech portfolios" and full[s_][1]["refit"]["why"].startswith("revenue of $"), s_
+    assert full["SRPT"][0] == "Specialty and clinical-stage biotechs"
+    assert not any(got[c["ticker"]][0] != "Clinical-stage gene editing and drug developers"
+                   for v in d["value_chain"] if v["layer"] == "Clinical-stage gene editing and drug developers" for c in v["companies"])
