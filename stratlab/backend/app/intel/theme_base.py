@@ -927,7 +927,7 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
     if models:
         before = {v["layer"]: {c.get("ticker") for c in v["companies"]} for v in out_vc if not v.get("official")}
         out_vc = by_model(out_vc, models, theme, tags=tags, confidence=conf, evidence_of=evidence, settled=settled,
-                          previous=map_names_of(previous, kept), moved_before=moved_before)
+                          previous=map_names_of(previous, kept), moved_before=moved_before, about_of=about_of)
         # R26: a layer of the map the split reshaped (companies moved in or out) whose name no longer fits how its companies earn is renamed by
         # the same check as the placement's; asked once a map and its split, kept with the rest
         reshaped = [v for v in out_vc if v["layer"] in before and not v.get("official") and not v.get("scale") and (v.get("model") or {}).get("line")
@@ -1765,7 +1765,11 @@ def map_names_of(previous: dict | None, kept: dict | None) -> dict:
 
 
 # gl52: a second way of earning a layer's own name can state, in so many words, beside how most of its companies earn
-NAME_PART_MODEL = {"construction": r"\bepc\b|engineering,? procurement,? (?:and|&) construction"}
+OF_LAYER_WORDS = 3          # x57: words of what it makes or does (kind_stems) a description needs for its official industry to place it in a layer's figures beside a low read
+NAME_PART_MODEL = {"construction": r"\bepc\b|engineering,? procurement,? (?:and|&) construction",
+                   # x57 (RC4: Inox Green, "wind power operation and maintenance ("O&M") service providers", left out of "Wind turbine
+                   # manufacturing and servicing" as read only weakly): a layer whose name states servicing takes a servicer whose words say so
+                   "managed_services": r"\bservicing\b|\boperations? (?:and|&) maintenance\b|\bo ?& ?m\b"}
 # gl52 (the integrator): a company with no words of its own counts on its industry in a layer only when that layer holds at least this share,
 # and this many, of the theme's companies of that industry that were read or placed by the AI (by_model industry_points_here); two in three:
 # at 60% the live Capital goods "Industrial Products" (25 of its 40 read companies in "Engines and industrial machinery makers", 62.5%, the
@@ -1775,7 +1779,7 @@ MODEL_LINE_MIN = 3              # gl52: companies a sparse layer's way of earnin
 
 
 def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = None, confidence: dict | None = None,
-             evidence_of=None, settled=(), previous: dict | None = None, moved_before: dict | None = None) -> list[dict]:
+             evidence_of=None, settled=(), previous: dict | None = None, moved_before: dict | None = None, about_of=None) -> list[dict]:
     """The placed map's layers with one revenue model family each, from `models` ({symbol: model id}, theme_check.MODELS):
     1. a layer of the map whose companies earn in different ways keeps its main family (the most of its companies; a tie, the family of the first
        of them, the map's own pick); each other company moves to the layer whose main family is its own (the largest), else to a new layer named
@@ -1811,7 +1815,7 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
     from collections import Counter
 
     from .theme_check import (FAMILIES, MODELS, SUB_BASIS, SUB_JOIN, SUB_OF, model_evidence, model_family, name_models, off_industry, own_goods,
-                              words_models,
+                              principal_words, secondary_models, words_models,
                               stated_model, sub_basis)
     tags, conf = tags or {}, dict(confidence or {})          # d1: a copy (the industry group sets models its members state)
     every = {s: m_ for s, m_ in (models or {}).items() if m_ in MODELS}
@@ -2229,6 +2233,7 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
     # from the answer or its own words, is another than the layer's), "weak" (its way of earning is read only with low confidence), "no_words"
     # (no description of its own is stored), "no_model" (its own words don't state how it earns)
     unfit_all: set = set()
+    word_other: dict = {}          # x57: no model read, its principal words state another way of earning than its layer's: {symbol: model}
 
     def out_why(c) -> str:
         s_ = c.get("ticker")
@@ -2236,7 +2241,7 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
             return "unfit"
         if s_ in another:
             return "off_industry"
-        if fam(c) or s_ in outside:
+        if fam(c) or s_ in outside or s_ in word_other:
             return "model"
         # gl52 (R52, the rotating review of Release 51: Trade-Wings and Yaan "read only weakly", though no word of theirs was ever read): a
         # company with no words of its own has no description to read, whatever an answer on its name gave
@@ -2245,6 +2250,28 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
         if conf.get(s_) == "low" and every.get(s_):
             return "weak"
         return "no_model"
+
+    # x57 (second wave, the release gate's "model contradicted"): a read of low or medium confidence that the company's own words contradict
+    # (they state another way of earning in so many words, of another family, and show nothing of the read: theme_check.contradicted_read)
+    # gives way to the way its words state, at "medium", for what is printed and for its layer's figures; set after every move, so it moves
+    # no company to another layer
+    from .theme_check import contradicted_read
+
+    def whole_ev(c) -> str:
+        # its whole stored description (`about_of`), never only the first characters the model evidence keeps, its industry line first
+        try:
+            whole = str(about_of(c.get("ticker")) or "") if about_of is not None else ""
+        except Exception:
+            whole = ""
+        return f"Industry: {c.get('industry')}. {whole}" if whole and c.get("industry") else (whole or ev(c))
+    for v in out:
+        for c in v["companies"]:
+            s_ = c.get("ticker")
+            if s_ in every and s_ not in another:
+                st_ = contradicted_read(every[s_], whole_ev(c), conf.get(s_, ""))
+                if st_:
+                    every[s_], conf[s_], models[s_] = st_, "medium", st_
+                    outside.discard(s_)
 
     # 4. what each layer's companies have in common, and who is left out of its figures
     # gl52 (R52, the integrator, on the Capital goods replay: 128 "Industrial Products" companies with no words of their own counted on their
@@ -2370,12 +2397,62 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
         # and credit card transactions", out of "Merchant acquiring and processing", read as managed IT services at low confidence): a company
         # read only at low confidence whose own words say the layer's name, and whose read or own words are of the layer's way of earning and
         # name no other, is in the figures on its words ("by_words"); one whose words name another way of earning stays out
+        # x57 (R57, the audit of the 24 live R56 decks, RC4: Syngene, "India's first Contract Research Organization (CRO) ... (CRAMS)", in
+        # its layer's figures in the Pharma deck and "insufficient evidence" in the Hospitals deck's "Contract research and life-science
+        # services", the same stored words): a company read at low confidence as the layer's way of earning whose own words say the layer's
+        # name has two signs of the layer's way; another way its words also name is what it also earns from (said on its row), never a
+        # reason to call its evidence insufficient
+        main_said = lambda c: {model_family(x) for x in words_models(principal_words(ev(c)))} - {""}      # noqa: E731
+
+        def of_layer(c) -> bool:
+            # x57: a sign the company is of what the layer is, beside the read: its own words say the layer's name or share a word of its kind
+            # with the layer's description, or its official industry is the layer's (never the read of how it earns alone)
+            # (its industry counts only beside words that name what it makes or does, OF_LAYER_WORDS of them: "a financial group" names none)
+            t_ = own_text(ev(c))
+            return bool(layer_says(v, t_, theme_words)[1] or says_of_layer(v, t_, theme_words)
+                        or (industry_fits(v, c.get("industry"), theme_words) and len(kind_stems(t_) - theme_words) >= OF_LAYER_WORDS))
+
+        def way_named(fam_: str) -> bool:
+            # x57: the layer's own name or description says the way of earning of its companies (a word of that way's name or of what it
+            # earns from, MODELS), so saying the layer's name says how it earns
+            lay_ = whole_stems(" ".join(str(x) for x in (_HALF_RX.sub("", v.get("layer") or ""), v.get("was"), v.get("description")) if x))
+            way_ = set().union(*[whole_stems(f"{MODELS[m_][1]} {MODELS[m_][2]}") for m_ in MODELS if model_family(m_) == fam_] or [set()]) - _FIT_STOP
+            return bool(lay_ & way_)
         weak_ = {c.get("ticker") for c in cos if fam(c) == "" and c.get("ticker") not in kin and c.get("ticker") not in another
                  and c.get("ticker") not in outside and conf.get(c.get("ticker")) == "low"
-                 and (model_family(every.get(c.get("ticker")) or "") == f or said_(c) == {f})
-                 and said_(c) <= {f} and layer_says(v, own_text(ev(c)), theme_words)[1]}
+                 and (f in said_(c) or (model_family(every.get(c.get("ticker")) or "") == f and not said_(c)))
+                 and layer_says(v, own_text(ev(c)), theme_words)[1]}
         kin |= weak_
         words_ |= weak_
+        # x57 (RC4: Mahindra & Mahindra, PI Industries, BASF India, Zoom, AtriCure and Inspire, each read at low confidence as its layer's way
+        # of earning, each with a description that names its products and no other way of earning in the sentences that say its principal
+        # business, left out as "insufficient evidence"): the layer it was placed in and the read of how it earns agree, and its own words
+        # don't contradict them (the sentences on its subsidiaries' or other businesses are what it also earns from: principal_words): it is in
+        # the layer's figures, marked as read at low confidence ("read_low"), never as shown in its own words
+        low_ = {c.get("ticker") for c in cos if fam(c) == "" and c.get("ticker") not in kin and c.get("ticker") not in another
+                and c.get("ticker") not in outside and c.get("ticker") not in uf and conf.get(c.get("ticker")) == "low"
+                and own_text(ev(c)).strip() and ((model_family(every.get(c.get("ticker")) or "") == f and main_said(c) <= {f}) or f in main_said(c))
+                and of_layer(c)}
+        kin |= low_
+        # x57 (RC4: Payoneer, "remove the complexity and barriers of doing business across borders", in "Cross-border and B2B payments" with no
+        # way of earning read): a company no answer gave a model, placed in the layer by the map or the AI's placement (never by its words
+        # alone), whose own words say the layer's name and name no way of earning, in a layer whose own name and description state no way of
+        # earning but its companies' own, is in its figures on its words ("by_words", the layer's way at low confidence); one whose principal
+        # words state another way of earning is left out as that different way (word_other), never as insufficient evidence
+        nm_kinds = {model_family(x) for x in name_models(_HALF_RX.sub("", v.get("layer") or "")) | name_models(v.get("was") or "")
+                    | words_models(v.get("description") or "")} - {""}
+        bare_ = {c.get("ticker") for c in cos if fam(c) == "" and c.get("ticker") not in kin and c.get("ticker") not in another
+                 and c.get("ticker") not in outside and c.get("ticker") not in uf and not every.get(c.get("ticker"))
+                 and c.get("placed") != "words" and not c.get("moved") and own_text(ev(c)).strip() and not said_(c)
+                 and nm_kinds <= {f} and way_named(f) and len(known) * 2 >= len(cos) and layer_says(v, own_text(ev(c)), theme_words)[1]}
+        kin |= bare_
+        words_ |= bare_
+        for c in cos:
+            s_ = c.get("ticker")
+            if fam(c) == "" and s_ not in kin and s_ not in another and s_ not in outside and s_ not in uf \
+                    and (not every.get(s_) or (conf.get(s_) == "low" and model_family(every[s_]) != f)) and own_text(ev(c)).strip() \
+                    and main_said(c) - {f} and f not in said_(c) and model_family(stated_model(principal_words(ev(c)))) not in ("", f):
+                word_other[s_] = stated_model(principal_words(ev(c)))          # one way stated in so many words, never a guess
         # its model is the one its own words state (never the low read of another family: Fiserv is no managed IT services firm)
         word_model = {c.get("ticker"): next(iter(sorted(m_ for m_ in words_models(ev(c)) if model_family(m_) == f)), "")
                       for c in cos if c.get("ticker") in weak_ and model_family(every.get(c.get("ticker")) or "") != f}
@@ -2386,18 +2463,33 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
         nm_ = " ".join(x for x in (_HALF_RX.sub("", v.get("layer") or ""), v.get("was") or "") if x)
         part_ = {c.get("ticker") for c in cos if c.get("ticker") not in kin and c.get("ticker") not in another and c.get("ticker") not in uf
                  and every.get(c.get("ticker")) in NAME_PART_MODEL and model_family(every[c.get("ticker")]) != f
-                 and conf.get(c.get("ticker")) != "low" and re.search(NAME_PART_MODEL[every[c.get("ticker")]], nm_, re.I)
-                 and re.search(NAME_PART_MODEL[every[c.get("ticker")]], own_text(ev(c)), re.I)}
+                 and re.search(NAME_PART_MODEL[every[c.get("ticker")]], nm_, re.I)
+                 and (re.search(NAME_PART_MODEL[every[c.get("ticker")]], own_text(ev(c)), re.I) or of_layer(c))}
         kin |= part_
         words_ |= part_
         rest = [c for c in cos if fam(c) != f and c.get("ticker") not in kin]
         known_ids = {c.get("ticker") for c in known} | kin
-        v["companies"] = [({**c, "on_industry": True, "model": c.get("model") or Counter(models[x["ticker"]] for x in known).most_common(1)[0][0],
+        top_model = Counter(models[x["ticker"]] for x in known).most_common(1)[0][0]
+
+        def read_of(c) -> dict:
+            # x57: whether an answer read it as another way than the layer's (said: "only the AI's read gave it another"), or gave it none
+            md_ = every.get(c.get("ticker"))
+            return {} if md_ and model_family(md_) != f else {"read_agrees": True} if md_ else {"no_read": True}
+
+        def also_of(c) -> dict:
+            # x57 (RC4 c): the other ways of earning its own words name (its subsidiaries' and other businesses' among them), said on its row
+            got = sorted({m_ for m_ in words_models(ev(c)) | secondary_models(ev(c)) if model_family(m_) and model_family(m_) != f})
+            return {"also_earns": got} if got else {}
+        v["companies"] = [({**c, "on_industry": True, "model": c.get("model") or top_model,
                             "model_confidence": c.get("model_confidence") or "low"} if c.get("ticker") in on_ind else
                            {**c, "own_goods": True} if c.get("ticker") in brand else
-                           {**c, "by_words": True, **({"model": word_model[c["ticker"]], "model_confidence": "medium"} if word_model.get(c.get("ticker")) else {})}
-                           if c.get("ticker") in words_ else c) if c.get("ticker") in known_ids else
-                          {**c, "model_out": "other" if fam(c) or c.get("ticker") in outside else "unknown",
+                           {**c, "by_words": True, **also_of(c), **read_of(c),
+                            **({"model": word_model[c["ticker"]], "model_confidence": "medium"} if word_model.get(c.get("ticker")) else
+                                                                    {"model": top_model, "model_confidence": "low"} if c.get("ticker") in bare_ else {})}
+                           if c.get("ticker") in words_ else
+                           {**c, "read_low": True, **also_of(c)} if c.get("ticker") in low_ else c) if c.get("ticker") in known_ids else
+                          {**c, "model_out": "other" if fam(c) or c.get("ticker") in outside or c.get("ticker") in word_other else "unknown",
+                           **({"model": word_other[c["ticker"]], "model_confidence": "medium"} if word_other.get(c.get("ticker")) else {}),
                            "out_why": out_why(c)} for c in cos]      # R34: why, named; ex49: precisely (out_why)
         known = known + [c for c in cos if c.get("ticker") in kin]
         away_ = {c.get("ticker") for c in rest if fam(c) or c.get("ticker") in outside}      # cl48: listed as another way of earning

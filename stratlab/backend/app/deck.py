@@ -2235,6 +2235,27 @@ def roll_said(n_in: int, total: int, n_out: int, in_: str, out_: str, cut: bool)
             + (f" Every one: appendix, ⟦{ROLL_TITLE}⟧." if cut else ""))
 
 
+# x57 (R57, the audit of the 24 live R56 decks, RC4: "Fiserv Inc (on its words): ... its own words say the layer's name and no other way of
+# earning", Fiserv's financial solutions being about half its revenue; J&J, Merck, L&T and Fortinet the same): a company in its layer's figures
+# by its words is never said to have no other way of earning from words that name none; what its words name beside the layer's business is
+# said as what it also earns from, and "no other way of earning" only where one reportable segment is stored (theme_data.also_said)
+ON_WORDS_NOTE = "(on its words): the map placed it here and its own words say the layer's name, so it is in the layer's figures."
+LOW_TAG = "read at low confidence"
+LOW_NOTE = (f"({LOW_TAG}): how it earns is read at low confidence as the layer's way, its own words or official industry are of the layer's "
+            "kind, and the sentences of its own words on its principal business name no other way of earning, so it is in the layer's figures.")
+
+
+def also_notes(cos: list) -> str:
+    """x57: each marked company's other ways of earning, as its own words name them (theme_data.also_said), one sentence each; ""."""
+    from .intel.theme_data import also_said
+    out = []
+    for c in cos:
+        said = also_said(c)
+        if said:
+            out.append(f" {clean_name(c.get('name') or c.get('symbol') or '')}: {said[2:]}.")
+    return "".join(out)
+
+
 def kind_notes(cos: list, shown: set) -> list[str]:
     '''ex49 (R48): the notes of a layer table's left-out marks (ROLL_TAG), each kind once, its companies grouped by their exact reason:
     "(different model): eBay, Mercadolibre: the way of earning of “Platforms and marketplaces” (commissions ...), not the layer's, that of
@@ -2269,6 +2290,9 @@ def layer_head(layer: dict, cos: list, amt) -> str:
     # gl50: a listed subsidiary whose parent is in the layer too is left out of the revenue added together, and said so
     sub = ("; " + "; ".join(f"{clean_name(d['name'])} left out of it, as {clean_name(d['parent'])} holds {d['pct']:g}% and its figures include it"
                             for d in dbl)) if dbl else ""
+    # x57 (RC10 a): a subsidiary counted in another layer is taken out of its parent's figures added here, so no revenue is added twice
+    sub += "".join(f"; {clean_name(d['name'])}'s revenue taken out of {clean_name(d['parent'])}'s, as it holds {d['pct']:g}% and {d['name']} "
+                   f"is counted in “{d['layer']}”" for d in layer.get("double_elsewhere") or [])
     if listed > figs:
         return f"{_n(listed, 'company', 'companies')} ({figs} in the layer's calculations), revenue of those {amt(layer.get('revenue'))}{sub}"
     return f"{_n(n, 'company', 'companies')}, revenue {amt(layer.get('revenue'))} together{sub}"
@@ -3036,8 +3060,12 @@ def parents_row(v: dict) -> list[str] | None:
     each = "; ".join(f"{clean_name(p['name'])} is {p['pct']:g}% held by {clean_name(p['parent_name'])} (promoter, {p['quarter']} filing)"
                      + (", whose figures are its consolidated ones" if p.get("basis") == "consolidated" else ", whose figures are the whole company's"
                         if p.get("parent_wide") else "") for p in ps)
-    return [PARENTS_LABEL, f"{each}.", "The subsidiary's revenue is left out of every total that adds the parent's; market values and their "
-                                      "shares are each company's own, so the parent's includes its stake."]
+    # x57 (RC10): across layers too: the parent's layer's revenue has the subsidiary's taken out, and a parent whose figures are the whole
+    # company's is a holding company of a member, in no core figure
+    return [PARENTS_LABEL, f"{each}.", "The subsidiary's revenue is left out of every total that adds the parent's, and taken out of the parent's "
+                                      "layer's revenue when the two are in different layers; a parent whose figures are the whole company's is "
+                                      "shown as a holding company of a member, in no core figure; market values and their shares are each "
+                                      "company's own, so the parent's includes its stake."]
 
 
 def without_words(v: dict) -> list[str]:
@@ -6086,7 +6114,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             if c["symbol"] in nofig:
                 return ROLL_TAG["no figure stored"]
             return "whole company" if c["symbol"] in lwide else "on its industry" if c.get("on_industry") else "own design" if c.get("own_goods") else \
-                "on its words" if c.get("by_words") else ""
+                "on its words" if c.get("by_words") else LOW_TAG if c.get("read_low") else ""
         tags = {c["symbol"]: tag(c) for c in cos}
         # e54 (R54): a company whose whole-company figures, of another way of earning too, stand in the layer's figures says so on its row
         cons = consolidated_of(layer, cos)
@@ -6178,9 +6206,10 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         if "own design" in shown_tags:      # ex49
             fparts.append("(own design): read as a retailer, its own words say it designs the goods it sells, so it sells products of its own, "
                           "as the layer's companies do, and is in the layer's figures.")
-        if "on its words" in shown_tags:    # ex49 (G3)
-            fparts.append("(on its words): the map placed it here and its own words say the layer's name and no other way of earning; only the "
-                          "AI's read gave it another, so it is in the layer's figures.")
+        if "on its words" in shown_tags:    # ex49 (G3); x57 (RC4 c): never "no other way of earning" from an absence of words
+            fparts.append(ON_WORDS_NOTE + also_notes([c_ for c_ in cos if tags.get(c_["symbol"]) == "on its words"]))
+        if LOW_TAG in shown_tags:           # x57 (RC4): the read at low confidence agrees with the layer it was placed in
+            fparts.append(LOW_NOTE + also_notes([c_ for c_ in cos if tags.get(c_["symbol"]) == LOW_TAG]))
         if "not confirmed" in shown_tags:
             fparts.append("(not confirmed): its own words don't show this work, so it is left out of the medians and the revenue total.")
         for c_ in cos:          # v55: an adjacent kind of business too few for a layer of its own, said where it is
@@ -6273,7 +6302,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         on_page = {c["symbol"] for c in cos[:k_fit]}
         on_tags = {tags[x] for x in on_page}
         # ex49: a left-out mark's note (each kind's, kind_notes) and the own-design note only with a row on the page that carries it
-        drop = [p for p in fparts for t_ in ("different model", "another business", "insufficient evidence", "own design", "on its words")
+        drop = [p for p in fparts for t_ in ("different model", "another business", "insufficient evidence", "own design", "on its words", LOW_TAG)
                 if p.startswith(f"({t_})") and t_ not in on_tags]
         drop += [p for p in fparts if p.startswith("(whole company)") and "whole company" not in on_tags]
         drop += [p for p in fparts if p.startswith("(on its industry)") and "on its industry" not in on_tags]
@@ -6283,7 +6312,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         drop += [nf_note] if not nofig & on_page else []
         if rline and not unsure & on_page:          # R35: the roll's line says who isn't confirmed, so the mark's own note goes with its rows
             drop += [p for p in fparts if p.startswith("(not confirmed)")]
-        if (unmodelled or rline or nofig or lwide or {"on its industry", "own design", "on its words", "consolidated"} & shown_tags) and any(p in fparts for p in drop):       # no marked row shown: its note isn't either
+        if (unmodelled or rline or nofig or lwide or {"on its industry", "own design", "on its words", LOW_TAG, "consolidated"} & shown_tags) and any(p in fparts for p in drop):       # no marked row shown: its note isn't either
             fparts = [p for p in fparts if p not in drop]
             fnote, fh2 = foot(fparts)
             if rline and fh2 < fh:          # R35: the roll's line took room from the table: the room the dropped notes leave goes back to its rows,
@@ -6646,7 +6675,7 @@ def _smaller_layers(slides: list, small: list, amt, eyebrow: str) -> None:
             why = why_kind(calc_of(c))        # LIVE7A-005: a row's mark is its kept reason first, the whole company's figures after (ex49: its kind)
             mark = ROLL_TAG.get(why) if why else ("whole company" if c.get("company_wide") or c["symbol"] in (x.get("company_wide") or []) else
                                                   "on its industry" if c.get("on_industry") else "own design" if c.get("own_goods") else
-                                                  "on its words" if c.get("by_words") else "")
+                                                  "on its words" if c.get("by_words") else LOW_TAG if c.get("read_low") else "")
             name = (f"{c['name']} ({mark})" if mark else c["name"]) \
                 + (f"; also listed, not confirmed: {', '.join(others)}" if others and i == len(sure) - 1 else "")
             rows_.append(({**x, "layer": x["layer"] if i == 0 else ""}, c, name))
@@ -6665,7 +6694,9 @@ def _smaller_layers(slides: list, small: list, amt, eyebrow: str) -> None:
              "different model": "(different model): it earns another way than its layer's other companies, so it is left out of its figures.",
              "another business": "(another business): its own words describe another business than its official industry, so it is left out of its figures.",
              "own design": "(own design): read as a retailer, its own words say it designs the goods it sells; in its layer's figures.",
-             "on its words": "(on its words): the map placed it here and its own words say the layer's name and no other way of earning; in its figures.",
+             "on its words": "(on its words): the map placed it here and its own words say the layer's name; in its figures.",
+             LOW_TAG: f"({LOW_TAG}): how it earns is read at low confidence as its layer's way, and its own words on its principal business name no "
+                      "other; in its figures.",
              ROLL_TAG["no figure stored"]: f"({ROLL_TAG['no figure stored']}): no revenue figure is stored for it.",
              "whole company": "(whole company): it runs other businesses too, so its figures are the whole company's.",
              "on its industry": "(on its industry): no description of its own; in its layer by its official industry, that of most of the "

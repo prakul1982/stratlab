@@ -505,7 +505,8 @@ def own_words_show(model, evidence) -> bool:
         return False
     _, own = _split_evidence(evidence)
     words = _words_of(model)
-    return bool(words and re.search(words, own, re.I)) or family_shown(model, own)
+    # x57 (second wave): the words that name a way beside a company's other words (WORDS_SAY: "Contract Research Organization (CRO)") show it
+    return bool(words and re.search(words, own, re.I)) or family_shown(model, own) or bool(WORDS_SAY.get(model) and re.search(WORDS_SAY[model], own, re.I))
 
 
 def family_shown(model, own) -> bool:
@@ -596,7 +597,7 @@ OWN_SAYS = {
 # critical fluid delivery subsystems"): "manufacturing of" what it names is a maker's own words too
 MAKER_SAYS = (r"\bmanufactures\b|\bmanufacturers? (?:and \w+ )?of\b|\bdesign, engineering and manufacturing of\b|\b(?:engaged in|in the business of|business of|does|involved in) (?:the )?"
               r"(?:business of )?(?:the )?(?:manufactur\w*|production)\b|\bmanufacturing (?:and|&) (?:sell|sale|market|suppl|export)\w*|\bproduces\b|"
-              r"\bproducers? (?:and \w+ )?of\b|\bmakes\b|\bmanufacturing company\b")
+              r"\bproducers? (?:and \w+ )?of\b|\bmakes\b(?! (?:it|them|us|sure|up)\b)(?![^.;]{0,40}\bpossible\b)|\bmanufacturing company\b")
 TRADER_SAYS = (r"\btrad(?:ing|es|er|ers)\b(?! (?:name|mark)s?\b)|\bdistribut(?:es|or|ors|ion)\b|\bwholesal\w*|\bdeals? in\b(?! (?:the )?manufactur)|"
                r"\bdealers?\b|\bstockists?\b|\bimports?\b")
 # trading as the business itself ("engaged in trading of chemicals", "a distributor of"), not shares or securities traded beside another business
@@ -700,7 +701,7 @@ def layer_business(named: str, name: str, was: str = "", description: str = "", 
 # ---------- q1: a network operator's subscriptions are for a service it runs, not software (the GPT review of the live R34 Telecom deck) ----------
 # Its customers named are never what it is: a tower company leases "to wireless telecom operators", a messaging platform caters "to mobile network
 # operators (MNOs)"
-_CUSTOMERS = re.compile(r"\b(?:to|for|serving|serves|catering to|customers(?: such as| include| including)?|clients(?: such as| include)?)\s+"
+_CUSTOMERS = re.compile(r"\b(?:to|for|serving|serves|catering to|shared by|used by|with|(?:requirements|needs) of|customers(?: such as| include| including)?|clients(?: such as| include)?)\s+"
                         r"(?:[\w&,()-]+\s+){0,5}?(?:telecom\w*|mobile|wireless|broadband|cellular)\s+(?:network\s+|service\s+)?"
                         r"(?:operators?|service providers?|providers?|carriers?|companies|businesses|industry)\b(?:\s*\([^)]{0,12}\))?", re.I)
 # its own words that it runs a network service for subscribers
@@ -1596,6 +1597,89 @@ def industry_model(model, evidence, confidence: str = "") -> str:
     return model
 
 
+# x57 (R57, the audit of the 24 live R56 decks, RC4: Mahindra & Mahindra, "one of the most diversified automobile company in India with presence
+# across 2-wheelers, 3-wheelers, PVs, CVs, tractors", left out of the passenger vehicle makers' figures because a later sentence lists the
+# group's "auto components, ... retail ... through its subsidiaries and group companies"): a sentence of a company's own words that speaks of
+# the businesses of its subsidiaries, group companies or associates, or of the other businesses it also runs, says what else it earns from,
+# never what its principal business is
+SECONDARY = re.compile(r"\b(?:through|via|by) (?:its |their |the group'?s? )?(?:various |\w+ )?(?:subsidiar\w*|group compan\w*|associates?|associate compan\w*|"
+                       r"joint ventures?|affiliates?)\b|\b(?:its|the company'?s|the group'?s) other businesses\b|\bother businesses includ\w*|"
+                       r"\b(?:it|the company|the group) also (?:has|runs|operates|owns)\b|\balso has (?:a )?presence\b|"
+                       r"\balso has certain other businesses\b|\bcertain other businesses\b", re.I)
+_SENTENCES = re.compile(r"(?<=[.;])\s+(?=[A-Z(•])")
+
+
+# x57 (second wave, the release gate's "model contradicted" rows: EverestIMS and Kratikal, "Software-as-a-Service (SaaS)", printed as
+# managed or project IT services; Pharmaids, "Custom Research and Manufacturing Services (CRAMS)", as project services; BILL, "total payment
+# volume", as software): the families of making are one kin (a maker, a parts maker, a contract maker, a miner, a metal processor)
+KIN_OF_MAKING = {"making", "components", "contract_making", "mining", "metal_processing", "resources"}
+
+
+def words_state(evidence) -> str:
+    """x57 (second wave): the one model a company's own words state in so many words (stated_model), never one only inferred (a chip
+    designer's design words read as fabless); "" else."""
+    st = stated_model(evidence)
+    if not st:
+        return ""
+    _, own = _split_evidence(evidence)
+    rx = MODEL_SAYS.get(st) or OWN_SAYS.get(st)
+    if st == "fabless" and not (rx and re.search(rx, own, re.I)):
+        return ""
+    return st
+
+
+_WORK_WITH = re.compile(r"\b(?:collaborate|partner|work)s? with (?:us|it|the company|[A-Z][A-Za-z]{1,})\b")     # its customers named as who works with it
+_ALSO = re.compile(r"^\s*(?:it|the company|additionally,?)\s+(?:also\s+)?(?:provides|offers|has|runs|operates|undertakes)\b|^\s*(?:it|the company) also\b", re.I)
+
+
+def contradicted_read(model, evidence, confidence: str = "") -> str:
+    """x57 (second wave): the model a company's own words state in so many words (words_state) when the read it was given (low or medium
+    confidence) is of another family, not of the kin of making with it, and its own words show nothing of the read (own_words_show, the ways
+    its words name); "" when the read stands."""
+    if model not in MODELS or confidence not in ("low", "medium"):
+        return ""
+    # read on the words of its principal business: never a sentence on what it also does ("It also provides software development") nor
+    # the operators it names as its customers ("Telecom operators ... collaborate with" it: telecom_operator)
+    industry, own = _split_evidence(principal_words(evidence))
+    own = " ".join(x for x in _SENTENCES.split(own) if not _ALSO.search(x) and not _WORK_WITH.search(x))
+    st = words_state((f"Industry: {industry}. " if industry else "") + own)
+    if not st or st == model or (st == "telecom_services" and not telecom_operator(evidence)):
+        return ""
+    fa, fb = model_family(st), model_family(model)
+    if fa == fb or (fa in KIN_OF_MAKING and fb in KIN_OF_MAKING):
+        return ""
+    if own_words_show(model, evidence) or model in words_models(evidence):
+        return ""
+    return st
+
+
+def principal_words(evidence) -> str:
+    """x57: a company's evidence with the sentences of its own words that speak of what its subsidiaries, group companies or associates do,
+    or of the other businesses it also runs (SECONDARY), left out: the words that say its principal business. Its official industry line is
+    kept as it is. The whole evidence when every sentence is of that kind (nothing would be left to read)."""
+    industry, own = _split_evidence(evidence)
+    parts = _SENTENCES.split(str(own or ""))
+    kept = [x for x in parts if not SECONDARY.search(x)]
+    if not kept or len(kept) == len(parts):
+        return str(evidence or "")
+    return (f"Industry: {industry}. " if industry else "") + " ".join(kept)
+
+
+def secondary_models(evidence) -> set[str]:
+    """x57: the ways of earning only the sentences on its subsidiaries', group companies' or other businesses name (words_models of its whole
+    words less those of principal_words): what a company also earns from, beside its principal business."""
+    return words_models(evidence) - words_models(principal_words(evidence))
+
+
+# x57 (RC4: Syngene, "India's first Contract Research Organization (CRO)", read only as a contract manufacturer from "(CRAMS)"; Sagility, a
+# share of "the U.S. healthcare outsourcing market", read as stating no way of earning): words that name a way of earning beside a company's
+# other words, read only to say which ways its words name (words_models), never to give a company a model on their own (stated_model)
+WORDS_SAY = {"project_services": r"contract research (?:organi[sz]ations?|services)|\bcros?\b(?! ?-)|clinical (?:trial |research )?services|"
+                                 r"r ?& ?d services|research (?:and|&) development services",
+             "bpo": r"\b(?:healthcare|business process|back[- ]office|customer (?:care|experience)) outsourcing\b|\boutsourcing market\b|"
+                    r"revenue cycle management|technology[- ]enabled healthcare solutions"}
+
+
 def words_models(evidence) -> set[str]:
     """ex49 (R48): every way of earning a company's own words name (MODEL_SAYS, OWN_SAYS, a chip designer's own words, making words without
     trading words), its official industry and the customers it names left out: what stated_model reads, before it settles on one."""
@@ -1603,7 +1687,7 @@ def words_models(evidence) -> set[str]:
     own = _SOLD_TO.sub(" ", not_customers(own))
     if not own.strip():
         return set()
-    hits = {m_ for m_, rx in list(MODEL_SAYS.items()) + list(OWN_SAYS.items()) if re.search(rx, own, re.I)}
+    hits = {m_ for m_, rx in list(MODEL_SAYS.items()) + list(OWN_SAYS.items()) + list(WORDS_SAY.items()) if re.search(rx, own, re.I)}
     one = stated_model(evidence)
     shop = {"retail"} if re.search(NAME_STATES["retail"], own, re.I) else set()        # stores, shops, retailing: a retailer's own words
     return hits | ({one} if one else set()) | shop

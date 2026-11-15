@@ -182,9 +182,14 @@ def test_the_vehicle_financiers_are_adjacent_in_the_automotive_theme_on_the_live
 
 def test_card_lenders_and_digital_banks_are_adjacent_in_payments_and_the_tea_growers_in_fmcg():
     v, _ = deck("payments")
-    assert {x["symbol"] for x in v["adjacent"]} == {"AXP", "COF", "SYF", "AFRM", "DAVE"}         # Coinbase, an exchange, is not a lender
+    # (updated on purpose, x57 R57 RC5 a, PAY-2: American Express's own words name its "card-issuing, merchant-acquiring and card network
+    # businesses", the payments way of earning the theme's own name says, so its principal business is the theme's, not a lender's)
+    assert {x["symbol"] for x in v["adjacent"]} == {"COF", "SYF", "AFRM", "DAVE"}         # Coinbase, an exchange, is not a lender
     v, _ = deck("fmcg")
-    assert {x["layer"] for x in v["adjacent"]} == {"Mining, oil, gas and farming"}
+    # (updated on purpose, x57 second wave, FMCG-5: tea estate companies in "Other" whose principal words say the same as the farming
+    # layer's ("cultivation, manufacture and sale of tea") are adjacent growers too, whatever the read's confidence; never a branded maker)
+    assert {x["layer"] for x in v["adjacent"]} <= {"Mining, oil, gas and farming", "Other FMCG companies"}
+    assert all(x["kind"] == "miners, drillers and growers" for x in v["adjacent"] if x["layer"] == "Other FMCG companies")
     assert next(b for b in v["layers"] if b["layer"] == "Mining, oil, gas and farming")["adjacent"]["kind"] == "miners, drillers and growers"
 
 

@@ -403,8 +403,12 @@ def test_utilities_rank_only_the_layers_of_makers_against_each_other_and_say_so(
     assert makers == {"Power and grid equipment makers", "Cables and wires makers"} and len(set(fams.values())) == 3
     side = next(s for s in slides if s.title.startswith("Layers side by side"))
     named = deck.layers_named(side.subtitle, fams)
-    assert named and set(named) <= makers, side.subtitle                           # never a generator or a network beside a maker
-    assert "among the 2 layers of one kind of business" in side.subtitle
+    # (updated on purpose, x57 R57 RC5 d: a Utilities theme's equipment and cable makers are adjacent participants, so their layers are
+    # adjacent layers, shown and never ranked: the side-by-side headline ranks no maker beside anything, and never a generator or a network
+    # beside a maker)
+    assert set(named) <= makers, side.subtitle                                     # never a generator or a network beside a maker
+    assert {b["layer"] for b in v["layers"] if b.get("adjacent")} == makers
+    assert all(b["adjacent"]["kind"] == "electrical equipment and cable makers" for b in v["layers"] if b.get("adjacent"))
     _one_kind_only("utilities", v, slides)
 
 
