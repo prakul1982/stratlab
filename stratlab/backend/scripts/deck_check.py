@@ -89,6 +89,12 @@ Failures (the exit code is 1 when any deck has one):
                each stored version: 100% (14 Nov 2026) → 100% (14 Nov 2026)"): the "Membership checked" row's checked share after each
                stored version whose last point is not the share of the row's count ("N of M"), or its description-verified share after each
                stored version whose last point is not the share of the "Description-verified N of M" it says just before
+  profile unsaid  m57 (R57, the owner's review of the live R56 decks: "Airlines and travel: limited airline/hotel operating measures";
+               Renewable energy's EPC contractors and Payments' processors with no measures of their own): a layer whose name and way of
+               earning ("In common: they earn mainly from ...") give it a sector operating profile (airlines, hotels, hospitals, cement,
+               power producers, payments processors, contractors paid on orders, property developers) that the deck covers neither on "Each layer on its own
+               measures" (its "Operating profiles:" line) nor on a "Sector operating figures" page of that profile; or an "Operating
+               profiles:" line saying a layer's measures are none stated on a page that prints no "Not available" line
 Reported, and a failure only with --strict:
   cut text     every other text ending in "…" (a label or a sentence cut to its box)
   mixed range  a range with one end whole and the other with a decimal ("19.6% to 20%"; LIVE7A-014)
@@ -110,7 +116,8 @@ FAIL = ("headline", "mid-word", "placeholder", "joining word", "count", "repeate
         "left out>50%", "unchecked as 0", "biz label", "biz making", "stale layer", "same company", "words claim", "partial unsaid",
         "outlier range", "added unexplained", "verified count", "adjacent ranked", "move unexplained", "scope core", "layer lost unsaid",
         "evidence state", "population mismatch", "identity unresolved", "out of scope in Other", "stage mismatch", "coverage blur",
-        "evidence unsplit", "evidence counts", "empty page", "layer vanished", "share fall unsaid", "removal unnamed", "history end")
+        "evidence unsplit", "evidence counts", "empty page", "layer vanished", "share fall unsaid", "removal unnamed", "history end",
+        "profile unsaid")
 WARN = ("cut text", "other>40%", "mixed range")
 # LIVE7A-014: a minus sign as a hyphen before a figure with its unit (never a date's or a range's dash: it follows a space or a bracket)
 _HYPHEN_MINUS = re.compile(r"(?:(?<=\s)|(?<=[(\[])|^)-\d[\d,]*(?:\.\d+)?(?:%|x\b| ?pts\b| ?points\b)")
@@ -324,6 +331,7 @@ def check_pages(pages: list[str]) -> dict:
     l55_checks(pages, add)
     t56_checks(pages, add)
     h56_checks(pages, add)
+    m57_checks(pages, add)
     counts = {k: sum(1 for f in findings if f["kind"] == k) for k in FAIL + WARN}
     return {"pages": len(pages), "counts": counts, "findings": findings}
 
@@ -778,6 +786,58 @@ def _end_check(add, n: int, label: str, count, points) -> None:
     share = 99 if share == 100 and a < b else share          # (the deck never says 100% while one is short of the whole)
     if int(points[-1][0]) != share:
         add("history end", n, f"{label} {count.group(0)}".strip() + f": its share after each stored version ends on {points[-1][0]}% ({points[-1][1]})")
+
+
+# m57 (R57): the sector operating profiles a layer's name and way of earning give it (app/intel/sector_ops.PROFILES, as decks print them): its
+# name's words, the words of how it earns ("In common: they earn mainly from ..."), and the "Sector operating figures: <x>" page of the profile
+PROFILE_HINTS = (
+    ("airlines", r"\bairlines?\b|air charter|air carriers?", ("moving and storing goods or people",)),
+    ("hotel operators", r"\bhotels?\b|\bresorts?\b", ("stays, trips, meals or courses", "rent and leases on property")),
+    ("hospital operators", r"\bhospitals?\b|multi-?specialty|super-?specialty", ("fees for care, treatment and tests",)),
+    ("cement makers", r"\bcement\b", ("finished products of their own", "selling products of their own", "parts, components or ingredients")),
+    ("power producers", r"\bpower\b|generation|generators?|renewable (?:power|energy) (?:producers|developers)|\bhydro|thermal",
+     ("selling the power their own plants generate", "developing, selling or running renewable projects")),
+    ("payments companies", r".", ("fees on the value or number of payments they process",)),
+    ("contractors and equipment makers", r"\bEPC\b|contractors?\b|\bconstruction\b|engineering",
+     ("contracts to design and build projects for clients",)),
+    ("property developers", r"develop|residential|homes|housing", ("selling homes, offices and plots they build",)),
+)
+_LAYER_PAGE = re.compile(r"^\s*Layer \d+ · (.+?)\s*$", re.M)
+_EARNS = re.compile(r"In common: they earn mainly from (.+?)\.")
+_PROFILES_LINE = re.compile(r"Operating profiles: (.+?)\.(?: Its last column| Not in this|$)")
+LAYER_PROFILE_PAGE = "Each layer on its own measures"
+
+
+def m57_checks(pages: list[str], add) -> None:
+    """m57 (R57): every layer with a sector operating profile prints its measures or says they aren't available (see the module's list)."""
+    flats = [re.sub(r"\s+", " ", p) for p in pages]
+    said, paged, nots = {}, set(), 0
+    for n, (page, flat) in enumerate(zip(pages, flats), 1):
+        head = "\n".join(page.split("\n")[:6])
+        if LAYER_PROFILE_PAGE in head:
+            nots += flat.count("Not available:")
+            for m in _PROFILES_LINE.finditer(flat):
+                for item in m.group(1).split("; "):
+                    name, _, rest = item.partition(": ")
+                    said[name.rsplit(", ", 1)[0].strip().lower()] = rest          # (the note repeats on each page of the table)
+        for many, _, _ in PROFILE_HINTS:
+            if re.search(r"Sector operating figures: " + re.escape(many) + r"\b", head):
+                paged.add(many)
+    for n, (page, flat) in enumerate(zip(pages, flats), 1):
+        lm = _LAYER_PAGE.search("\n".join(page.split("\n")[:6]))
+        em = _EARNS.search(flat)
+        if not lm or not em:
+            continue
+        name, earns = lm.group(1).strip(), em.group(1)
+        for many, name_rx, ways in PROFILE_HINTS:
+            if not any(w in earns for w in ways) or not re.search(name_rx, name, re.I):
+                continue
+            if name.lower() not in said and many not in paged:
+                add("profile unsaid", n, f"{name}: a layer of {many} with none of its operating measures and no line saying they aren't available")
+            break
+    none_said = sum(1 for rest in said.values() if rest.startswith("none of its"))
+    if none_said > nots:
+        add("profile unsaid", 0, f"{none_said} layers said to state none of their operating measures, {nots} \"Not available\" lines printed")
 
 
 def check_text(text: str) -> dict:
