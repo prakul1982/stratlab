@@ -106,7 +106,7 @@ FAIL = ("headline", "mid-word", "placeholder", "joining word", "count", "repeate
         "left out>50%", "unchecked as 0", "biz label", "biz making", "stale layer", "same company", "words claim", "partial unsaid",
         "outlier range", "added unexplained", "verified count", "adjacent ranked", "move unexplained", "scope core", "layer lost unsaid",
         "evidence state", "population mismatch", "identity unresolved", "out of scope in Other", "stage mismatch", "coverage blur",
-        "evidence unsplit", "evidence counts", "empty page")
+        "evidence unsplit", "evidence counts", "empty page", "layer vanished", "share fall unsaid", "removal unnamed")
 WARN = ("cut text", "other>40%", "mixed range")
 # LIVE7A-014: a minus sign as a hyphen before a figure with its unit (never a date's or a range's dash: it follows a space or a bracket)
 _HYPHEN_MINUS = re.compile(r"(?:(?<=\s)|(?<=[(\[])|^)-\d[\d,]*(?:\.\d+)?(?:%|x\b| ?pts\b| ?points\b)")
@@ -318,6 +318,7 @@ def check_pages(pages: list[str]) -> dict:
     e54_checks(pages, add)
     v55_checks(pages, add)
     l55_checks(pages, add)
+    t56_checks(pages, add)
     counts = {k: sum(1 for f in findings if f["kind"] == k) for k in FAIL + WARN}
     return {"pages": len(pages), "counts": counts, "findings": findings}
 
@@ -645,6 +646,77 @@ def l55_checks(pages: list[str], add) -> None:
         lines = [ln for ln in page.split("\n") if ln.strip() and not _FOOTER.search(ln)]
         if page.strip() and _FOOTER.search(page) and len(lines) <= EMPTY_MAX:
             add("empty page", n, " / ".join(ln.strip() for ln in lines)[:140] or "(nothing but the footer)")
+
+
+# t56 (R55): an established layer gone with no restore or reason; a fall in the informative share said with no reason; a removal from the
+# theme with no named reason
+_GONE_LINE = re.compile(r"gone, their companies taken by no new layer: (.+?)\.(?: [A-Z]|$)")
+_GONE_ITEM = re.compile(r"“([^”]+)” \((\d[\d,]*) companies([^;)]*)(;[^)]*)?\)")
+_REASON_OF = re.compile(r"of its (\d[\d,]*) companies")
+_FALL = re.compile(r"in the previous live placement: (\d+) points\b")
+_REMOVED_LIST = re.compile(r"\bremoved (?:for a listing reason )?(\d[\d,]*): (.+?)(?=; (?:moved|added|removed|layers changed)\b|\.\s*$|\. [A-Z]|$)")
+_NAMED_REASON = re.compile(r"business membership: |listing: |another business|the same company as|outside the theme's definition|"
+                           r"no figures stored for it|filed under", re.I)
+FALL_MIN = 5
+
+
+def _top_items(text: str) -> list[str]:
+    """A list's items split at "; " outside brackets."""
+    out, depth, cur = [], 0, ""
+    for i, ch in enumerate(text):
+        depth += (ch == "(") - (ch == ")")
+        if ch == ";" and depth <= 0:
+            out.append(cur.strip())
+            cur = ""
+            continue
+        cur += ch
+    return [x for x in out + [cur.strip()] if x]
+
+
+def _last_paren(item: str) -> str:
+    """The bracket an item ends with (its reason), "" when it ends with none."""
+    s = item.rstrip(" .,")
+    if not s.endswith(")"):
+        return ""
+    depth = 0
+    for i in range(len(s) - 1, -1, -1):
+        depth += (s[i] == ")") - (s[i] == "(")
+        if depth == 0:
+            return s[i + 1:-1]
+    return ""
+
+
+def t56_checks(pages: list[str], add) -> None:
+    """t56 (R55, the owner's review of the live R55 decks: Metals lost its 13-company "Aluminium" layer and Consumer retail its "Catalog and
+    mail-order houses" with nothing restored, informative 52 of 66 to 39 of 66; Adyen's ADR "removed ... (no longer in the theme's map)"):
+      layer vanished     a removed layer of five companies or more (the change log's "“X” removed (N companies ...)", or the coverage flag's
+                         "Layers ... gone ...: “X” (N companies ...)") with no restore and no reason, or with a reason counting another
+                         number of its companies than were removed ("none restored: 0 of its 5" for 6 removed)
+      share fall unsaid  "N points fewer" in the informative share, N of five or more, with no "Why:" said beside it
+      removal unnamed    a company removed from the theme (the change log's "removed N: ...") whose reason names neither a listing nor a
+                         business-membership decision ("no longer in the theme's map", or none)"""
+    flat_pages = [re.sub(r"\s+", " ", p) for p in pages]
+    for n, flat in enumerate(flat_pages, 1):
+        for m in _REMOVED.finditer(flat):
+            k = _num(m.group(2))
+            why = m.group(4) or ""
+            r = _REASON_OF.search(why)
+            if k >= LOST_MIN and (not why or (r and _num(r.group(1)) != k and "restored:" in why and not why.startswith(", restored"))):
+                add("layer vanished", n, m.group(0)[:200])
+        for g in _GONE_LINE.finditer(flat):
+            for m in _GONE_ITEM.finditer(g.group(1)):
+                if _num(m.group(2)) >= LOST_MIN and not m.group(4):
+                    add("layer vanished", n, m.group(0)[:200])
+        for m in _FALL.finditer(flat):
+            if int(m.group(1)) >= FALL_MIN and "Why:" not in flat[m.end():m.end() + 400]:
+                add("share fall unsaid", n, flat[max(0, m.start() - 120):m.end()][:220])
+        if "Since the previous version" not in flat and "against the version stored before it" not in flat:
+            continue
+        for m in _REMOVED_LIST.finditer(flat):
+            listing = m.group(0).startswith("removed for a listing reason")          # its heading names the kind: each item its reason
+            for it in _top_items(m.group(2)):
+                if not (_NAMED_REASON.search(_last_paren(it)) or (listing and _last_paren(it).strip())):
+                    add("removal unnamed", n, it[:200])
 
 
 def check_text(text: str) -> dict:

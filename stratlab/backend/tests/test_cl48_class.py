@@ -191,7 +191,9 @@ def test_the_coverage_control_flags_a_low_share_and_a_fall():
     snap = {"cover": [66, 85]}
     ctl = C.coverage_control(cov, snap)
     assert ctl == {"low": True, "fell": {"informative": 66, "placed": 85, "share": 78}}
-    assert C.coverage_control({"informative": 80, "placed": 100, "share": 80}, {"cover": [87, 100]}) is None      # 7 points: not flagged
+    # t56 (R55 review, updated on purpose: a fall of 5 points or more is flagged, 8 before): 4 points, not flagged; 7 points, flagged
+    assert C.coverage_control({"informative": 80, "placed": 100, "share": 80}, {"cover": [84, 100]}) is None
+    assert C.coverage_control({"informative": 80, "placed": 100, "share": 80}, {"cover": [87, 100]}) == {"fell": {"informative": 87, "placed": 100, "share": 87}}
     # stored again: the snapshot now holds this read, and the coverage before the change is kept until it changes again
     was = C.apply({"snap": {"layers": ["L"], "cos": {"A": ["A", 0, None, None, None, ""]}, "cover": [66, 85]}},
                   C.snapshot({"layers": [{"layer": "L", "companies": [{"symbol": "A"}]}], "coverage": cov}))
@@ -201,7 +203,7 @@ def test_the_coverage_control_flags_a_low_share_and_a_fall():
     assert C.coverage_control(cov, again["snap"]) == ctl
     line = C.control_line({**cov, "control": ctl})
     assert line == ("58 of 98 companies placed (59%) are in informative layers, against 66 of 85 (78%) in the previous live placement: "
-                    "19 points fewer, a fall of 8 or more. 59% of the companies placed are in informative layers (58 of 98), under 60%.")
+                    "19 points fewer, a fall of 5 or more. 59% of the companies placed are in informative layers (58 of 98), under 60%.")      # t56: 5 (updated on purpose)
     rows = deck.coverage_table({"coverage": {**cov, "control": ctl, "other_name": "Other consumer retail companies"}, "layers": []}, {"total": 98, "n": 90})
     flag = [r for r in rows if r[0] == "Coverage flag"]
     assert flag == [["Coverage flag", "59%", line]]

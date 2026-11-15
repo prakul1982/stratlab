@@ -30,6 +30,9 @@ export function countsLine(c: ChangeCounts): string {
   return parts.length ? parts.join(", ") : "No change";
 }
 
+/** t56: how the log starts a removal's reason that is a listing one (theme_changes.LISTING). */
+export const LISTING = "listing: ";
+
 export type ChangeRow = { key: string; change: string; company: string; detail: string };
 
 const money = (v: number | null) => (v == null ? "–" : v.toLocaleString("en-IN", { maximumFractionDigits: 0 }));
@@ -38,7 +41,12 @@ const pct = (v: number | null) => (v == null ? "–" : `${v.toFixed(1).replace("
 /** An entry's rows, as the table and the workbook list them: removed, added, moved, layer changes, restated figures. */
 export function changeRows(e: ChangeEntry, unit: string): ChangeRow[] {
   const rows: ChangeRow[] = [];
-  for (const c of e.removed ?? []) rows.push({ key: `r-${c.symbol}`, change: "Removed", company: c.name, detail: `From ${c.layer}: ${c.why}` });
+  // t56 (R55 review): a company removed for a listing reason under a heading of its own, apart from the business-membership decisions
+  for (const c of e.removed ?? []) {
+    const listing = (c.why ?? "").startsWith(LISTING);
+    rows.push({ key: `r-${c.symbol}`, change: listing ? "Removed for a listing reason" : "Removed", company: c.name,
+      detail: `From ${c.layer}: ${listing ? (c.why ?? "").slice(LISTING.length) : c.why}` });
+  }
   for (const c of e.added ?? []) rows.push({ key: `a-${c.symbol}`, change: "Added", company: c.name, detail: `To ${c.layer}` });
   for (const c of e.moved ?? []) rows.push({ key: `m-${c.symbol}`, change: "Moved", company: c.name, detail: `${c.from} → ${c.to}${c.why ? `: ${c.why}` : ""}` });
   (e.layers ?? []).forEach((x, i) => rows.push({ key: `l-${i}`, change: LAYER_WORDS[x.kind] ?? x.kind, company: "",

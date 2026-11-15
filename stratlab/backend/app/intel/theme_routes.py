@@ -436,10 +436,10 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53}  # rules versions whose change only adds to a kept placement (v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54}  # rules versions whose change only adds to a kept placement (t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
-EARLIER_MAX = 9                 # rv51: how many carried versions back an earlier answer of the same map is looked for (v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
+EARLIER_MAX = 10                # rv51: how many carried versions back an earlier answer of the same map is looked for (t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
 
 
 def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
@@ -489,12 +489,14 @@ def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
     # R41: an answer kept under earlier rules sticks (theme_base.place_rest `carried`: nothing it answered is asked again)
     ob = off_before(region, theme, m)                 # d53: the companies an earlier version dropped as another business
     mb = moved_before(region, theme, m)               # c54: the moves the stored change log records, judged on what the layer sells
+    mo = moved_out(region, theme, m)                  # t56: the moves of the re-check that removed each layer the snapshot no longer has
     # v55: each company's stored revenue read only where the map has a layer named by a stage (theme_base.stage_moves)
     staged = any(theme_base.layer_stage(v) for v in out.get("value_chain") or [])
     new, got = theme_base.place_rest(out, theme, lambda s_: about(s_), ask=ask, kept=kept, facts_of=_facts_reader(region),
                                      **({"figures_of": _figures_reader(region)} if staged else {}),
                                      carried=version is not None and version != theme_base.RULES, previous=previous_layers(region, theme, m),
-                                     **({"off_before": ob} if ob else {}), **({"moved_before": mb} if mb else {}))
+                                     **({"off_before": ob} if ob else {}), **({"moved_before": mb} if mb else {}),
+                                     **({"moved_out": mo} if mo else {}))
     if ask is not None and got and got != kept and (got.get("names_for") or any(x.get("by") == "ai" for x in (got.get("assign") or {}).values())):
         try:
             computed.put("theme:place", key, got, label=m.get("sector") or theme, region=region)
@@ -719,6 +721,21 @@ def previous_layers(region: str, theme: str, m: dict) -> dict:
         return {}
 
 
+def previous_confirmed(region: str, theme: str, m: dict) -> dict:
+    """t56 (R55 review): {symbol: "confirmed" (its own words were checked to show the theme's work, theme_changes' snapshot "why") or
+    "member"} of the members of the previous live read of this same map, for theme_base.keep_confirmed. {} when none is stored, or the
+    snapshot is of another map."""
+    try:
+        snap = (theme_changes.stored(region, m.get("_library") or theme) or {}).get("snap") or {}
+        if not isinstance(snap.get("cos"), dict) or int(float(snap.get("stamp") or 0)) != int(float(m.get("generated_at") or 0)):
+            return {}
+        why = snap.get("why") if isinstance(snap.get("why"), dict) else {}
+        return {s_: "confirmed" if theme_base.CONFIRMED_SAID in str(why.get(s_) or "") else "member" for s_ in snap["cos"]}
+    except Exception as e:
+        print("theme: previous members not read:", type(e).__name__, str(e)[:100])
+        return {}
+
+
 def off_before(region: str, theme: str, m: dict) -> dict:
     """d53 (R53): {symbol: [name, industry]} of the companies an earlier stored version of this theme dropped as another business
     (theme_changes.off_memory), whatever map it was of: a company's business doesn't change with the map. {} when none is stored."""
@@ -736,6 +753,16 @@ def moved_before(region: str, theme: str, m: dict) -> dict:
         return theme_changes.move_memory(theme_changes.stored(region, m.get("_library") or theme))
     except Exception as e:
         print("theme: earlier moves not read:", type(e).__name__, str(e)[:100])
+        return {}
+
+
+def moved_out(region: str, theme: str, m: dict) -> dict:
+    """t56 (R55 review): {symbol: [from, to]} of the moves the one re-check that removed each layer the stored snapshot no longer has made
+    out of it (theme_changes.lost_moves), so the taxonomy guard reads the version before exactly. {} when none is stored."""
+    try:
+        return theme_changes.lost_moves(theme_changes.stored(region, m.get("_library") or theme))
+    except Exception as e:
+        print("theme: moves out of lost layers not read:", type(e).__name__, str(e)[:100])
         return {}
 
 
@@ -787,6 +814,8 @@ def _check(region: str, theme: str, m: dict) -> dict:
         if len(VERDICTS) > VERDICT_KEEP:
             VERDICTS.clear()
         out = theme_check.check_placements(m, evidence_reader(region, _map_names(m)), _ask, theme, VERDICTS)
+        # t56: a member of the previous version stays when this check's "yes" only lacked backing words (no evidence against it)
+        out = theme_base.keep_confirmed(out, m, previous_confirmed(region, theme, m))
         missing = None
         if region == "US":
             try:
@@ -1094,6 +1123,7 @@ def placement_inputs(q: str, region: str = "IN", profile=Depends(current_profile
                  "evidence": {s_: about(s_) for s_ in sorted(names)}, "previous": previous_layers(r, theme, m),
                  "off_before": off_before(r, theme, m),        # d53: the companies an earlier version dropped as another business
                  "moved_before": moved_before(r, theme, m),    # c54: the moves the stored change log records
+                 "moved_out": moved_out(r, theme, m),          # t56: the moves of the re-check that removed each layer the snapshot lost
                  "facts": {s_: facts(s_) for s_ in sorted(names)},
                  # v55: each company's latest stored revenue and EBITDA margin, as the placement reads its stage (theme_base.stage_moves)
                  "figures": {s_: f for s_, f in ((s_, figures(s_)) for s_ in sorted(names)) if f}})
