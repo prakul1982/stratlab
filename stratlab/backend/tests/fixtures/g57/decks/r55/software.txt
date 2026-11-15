@@ -1,0 +1,355 @@
+SOFTWARE · FINDINGS
+
+
+Coverage, continued
+How many of the theme's companies, how much of its market value and which figures each total and median covers
+
+
+ Coverage                     Covered                 Of what
+
+                                                      in a layer the map names (by membership evidence: 151 description-verified, 28 industry-supported, 235 not checked); the
+                              414 of 588
+ In informative layers                                other 174 in “Other software companies”, listed, never compared: 27 fit none of the map's layers; 147 not placed yet (no
+                              (70%)
+                                                      description of their own is kept, so nothing placed them); its page lists the 14 of the 174 that have figures
+
+                                                      In “Security software subscriptions”: Palo Alto Networks Inc (Computer hardware): membership: the theme's map names it,
+                                                      from another industry; its own words were checked to show the theme's work; comparison: in its layer's figures: confirmed,
+                                                      how it earns shown and of the layer's kind, with a figure. In “Makers of their own products”: Fortinet, Inc. (Computer hardware):
+ From other industries        2
+                                                      membership: the theme's map names it, from another industry; its own words were checked to show the theme's work;
+                                                      comparison: in its layer's figures; the layer is a group by how its companies earn, of different businesses, shown and never
+                                                      ranked.
+
+ Since the previous                                   On 14 Nov 2026, against the version stored before it, after a re-check under new placement rules: layers changed 1: “Business
+                              0
+ version                                              process outsourcing” added (0 companies).
+
+
+
+
+StratLab · Software · Theme deep dive · 15 Nov 2026                                                                                                           Not investment advice · 6 / 61
+SOFTWARE · THE VALUE CHAIN
+
+
+The value chain by layer (1 of 2)
+Median EBITDA margin by layer: Cloud and AI compute providers 13.0%; Data and developer infrastructure software −1.8%; Enterprise application subscriptions
+18.5% (25 of 26 companies); Security software subscriptions −0.1% (10 of 11 companies); Design and engineering software licences 32.5% (5 of 7 companies).
+
+
+ Layer                           Companies             Revenue     EBITDA margin              Net margin                    ROCE           SBC / revenue               FCF margin
+
+ Cloud and AI
+                                       7 of 8         $424.7 bn            13.0%                   10.7%           12.8% (6 of 7)                    4.3%           18.8% (6 of 7)
+ compute providers
+
+ Data and developer
+ infrastructure                             9          $23.1 bn            −1.8%           −5.9% (5 of 9)          −4.5% (4 of 9)                  21.9%                     26.2%
+ software
+
+ Enterprise
+ application                        26 of 29          $174.8 bn   18.5% (25 of 26)       13.2% (25 of 26)        10.7% (18 of 26)        12.3% (25 of 26)        26.1% (24 of 26)
+ subscriptions
+
+ Security software
+                                           11          $36.6 bn   −0.1% (10 of 11)        −4.7% (9 of 11)         −4.5% (5 of 11)                  22.8%                     25.4%
+ subscriptions
+
+
+
+Each company's latest full year, in $ million; how each figure is built: p. 39. Layer revenue: its companies added together; margins and returns: its median company. A layer is
+ranked only on a median of at least 5 companies with the figure; a layer with fewer is shown, not ranked. A median is shown for 3 companies or more. Each compared layer's
+companies by name, the rules and the capital figures: p. 56. Companies: those in the layer's calculations, “of” those the layer lists where some are left out (who and why: the
+layer's page). Layers whose medians include whole-company (consolidated) figures of companies that also earn another way, no segment figures stored for them: Enterprise
+application subscriptions (1); Security software subscriptions (1); IT services and government contractors (1); each layer's page names them. These layers earn in 3 different
+ways: licences and subscriptions for software they own; fees from clients for IT projects, time worked or multi-year contracts to run their systems; commissions, listing fees or
+advertising on platforms they run. Their figures are of different kinds of business, so they are set side by side and never ranked against each other: a ranking is made only among
+layers of one way of earning. No listed company is shown for Business process outsourcing, Payment networks and processors: none of the companies the map named has a
+description that shows it does the work.
+
+StratLab · Software · Theme deep dive · 15 Nov 2026                                                                                                      Not investment advice · 8 / 61
+SOFTWARE · THE VALUE CHAIN
+
+
+The value chain by layer (2 of 2)
+Median EBITDA margin by layer: Cloud and AI compute providers 13.0%; Data and developer infrastructure software −1.8%; Enterprise application subscriptions
+18.5% (25 of 26 companies); Security software subscriptions −0.1% (10 of 11 companies); Design and engineering software licences 32.5% (5 of 7 companies).
+
+
+                                                                                           EBITDA                                                SBC /
+ Layer                                                Companies               Revenue                          Net margin        ROCE                                FCF margin
+                                                                                           margin                                                revenue
+
+                                                                                                                                 18.1% (4 of                         11.2% (3 of
+ IT services and government contractors                     5 of 6            $73.7 bn     18.7%               10.6%                             0.9% (3 of 5)
+                                                                                                                                 5)                                  5)
+
+ Consumer internet, games and                                                                                  30.1% (5 of                                           12.8% (6 of
+                                                          7 of 12            $655.2 bn     9.5%                                  6.7%            6.2%
+ advertising                                                                                                   7)                                                    7)
+
+ Data centres, hosting and networks                              2            $6.03 bn     – (2)               – (2)             – (2)           – (2)               – (2)
+
+ Makers of their own products                                    2            $9.70 bn     – (2)               – (2)             – (1 of 2)      – (2)               – (2)
+
+                                                                                           17.8% (12 of        7.5% (10 of       10.1% (11       4.2% (11 of         29.1% (12
+ Other software companies                                      14             $48.2 bn
+                                                                                           14)                 14)               of 14)          14)                 of 14)
+
+Each company's latest full year, in $ million; how each figure is built: p. 39. Layer revenue: its companies added together; margins and returns: its median company. A layer is
+ranked only on a median of at least 5 companies with the figure; a layer with fewer is shown, not ranked. A median is shown for 3 companies or more. Each compared layer's
+companies by name, the rules and the capital figures: p. 56. Companies: those in the layer's calculations, “of” those the layer lists where some are left out (who and why: the
+layer's page). Layers whose medians include whole-company (consolidated) figures of companies that also earn another way, no segment figures stored for them: Enterprise
+application subscriptions (1); Security software subscriptions (1); IT services and government contractors (1); each layer's page names them. These layers earn in 3 different
+ways: licences and subscriptions for software they own; fees from clients for IT projects, time worked or multi-year contracts to run their systems; commissions, listing fees or
+advertising on platforms they run. Their figures are of different kinds of business, so they are set side by side and never ranked against each other: a ranking is made only among
+layers of one way of earning. No listed company is shown for Business process outsourcing, Payment networks and processors: none of the companies the map named has a
+description that shows it does the work.
+
+StratLab · Software · Theme deep dive · 15 Nov 2026                                                                                                      Not investment advice · 9 / 61
+SOFTWARE · THE VALUE CHAIN
+
+
+Smaller layers
+2 layers of 2 member companies or fewer, 4 companies: the company, what it does and its key figures, one row each
+
+
+
+                                                                                                                             EBITDA
+ Layer                            Company                   What it does                                    Revenue                       Net margin         ROCE      Year
+                                                                                                                              margin
+
+                                                            As of 2026, the company operates 51
+ Data centres, hosting and
+                                  CoreWeave, Inc.           AI data centers, specialized data               $5.13 bn           46.9%          −22.7%        −0.2%      Dec 2025
+ networks
+                                                            centers designed
+
+                                                            DigitalOcean provides developers,
+                                  DigitalOcean Holdings,
+                                                            startups, and SMBs with cloud                    $901 m            32.7%           28.8%        12.4%      Dec 2025
+                                  Inc.
+                                                            infrastructure-as-a-service platforms
+
+                                                            It develops and sells security products
+ Makers of their own
+                                  Fortinet, Inc.            including firewalls, endpoint security          $6.80 bn           32.9%           27.3%        93.3%      Dec 2025
+ products
+                                                            and intrusion detection systems
+
+                                                            Headquartered in Ventura, California, it
+                                  Trade Desk, Inc.          is the largest independent demand-side          $2.90 bn           24.3%           15.3%              –    Dec 2025
+                                                            platform (DSP) in the world
+
+
+
+
+Each of these layers has 2 member companies or fewer, so it has no median (a median is of 3 or more) and no page of its own; it is in the value chain's table. Rows in the value
+chain's order; each company's latest full year; how each figure is built: p. 39.
+
+StratLab · Software · Theme deep dive · 15 Nov 2026                                                                                                     Not investment advice · 19 / 61
+SOFTWARE · APPENDIX
+
+
+Every company's figures (1 of 6)
+100 companies with figures (96 description-verified, 4 industry-supported), one row each; Microsoft Corp is the largest at $3,890 bn
+
+
+ Company                                Layer                                        Market value    Revenue      Growth     EBITDA          Net     ROCE          P/E       P/B
+ Microsoft Corp                         Cloud and AI compute providers                 $3,890 bn    $331.8 bn    +17.8%       57.1%       40.3%     32.2%       27.4x       8.8x
+ Alphabet Inc.                          Consumer internet, games and advertising       $3,636 bn    $402.8 bn    +15.1%       37.3%       32.8%     27.8%       15.4x       8.8x
+ Meta Platforms, Inc.                   Consumer internet, games and advertising       $1,648 bn     $201 bn     +22.2%       50.7%       30.1%     30.2%       21.9x       7.4x
+ Palantir Technologies Inc.             Data and developer infrastructure software     $404.8 bn     $4.48 bn    +56.2%       32.2%      36.3%†     19.1%      118.3x      55.9x
+ Oracle Corp                            Cloud and AI compute providers                  $379 bn      $67.4 bn    +17.3%       41.9%       25.4%     12.0%       19.6x       9.0x
+ SAP SE                                 Enterprise application subscriptions           $288.6 bn     $40.6 bn     +7.7%       29.7%       19.5%     19.0%       34.9x       5.9x
+ Palo Alto Networks Inc                 Security software subscriptions                $263.6 bn     $11.5 bn    +24.5%       13.5%        2.7%         –      685.6x       9.6x
+ Shopify Inc.                           Cloud and AI compute providers                  $191 bn      $11.6 bn    +30.1%       13.0%       10.7%     10.9%       89.7x      14.2x
+ Salesforce, Inc.                       Enterprise application subscriptions           $179.3 bn     $41.5 bn     +9.6%       23.0%       18.0%     11.3%       19.8x       3.0x
+ AppLovin Corp                          Consumer internet, games and advertising       $135.5 bn     $5.48 bn         –       79.3%       60.8%     73.5%       27.5x      61.1x
+ Automatic Data Processing Inc          Enterprise application subscriptions           $122.3 bn     $21.9 bn     +6.7%       30.9%       20.1%     56.3%       27.5x      20.2x
+ Cloudflare, Inc.                       Security software subscriptions                $109.6 bn     $2.17 bn    +29.8%       −0.8%       −4.7%         –           –      75.1x
+ ServiceNow, Inc.                       Enterprise application subscriptions           $106.1 bn     $13.3 bn    +20.9%       19.3%       13.2%     12.6%       73.5x       8.1x
+ Snowflake Inc.                         Data and developer infrastructure software     $102.7 bn     $4.68 bn    +29.2%      −25.9%      −28.4%         –           –      53.4x
+ Adobe Inc.                             Design and engineering software licences        $94.6 bn     $23.8 bn    +10.5%       40.1%       30.0%     48.8%       13.6x       8.0x
+ Fortinet, Inc.                         Makers of their own products                    $93.5 bn     $6.80 bn    +14.2%       32.9%       27.3%     93.3%       41.4x      77.1x
+ Intuit Inc.                            Enterprise application subscriptions            $91.3 bn     $21.4 bn    +13.9%       28.3%       21.3%     22.1%       20.6x       4.8x
+ Cadence Design Systems Inc             Design and engineering software licences        $88.6 bn     $5.30 bn    +14.1%       32.5%       20.9%     18.8%       64.2x      16.7x
+Latest full year: revenue, its growth, EBITDA and net margins, ROCE; P/E on the last four quarters (none for a loss-maker). † net margin above the EBITDA margin, or unusual,
+that the company's own filed figures don't give.
+
+
+
+StratLab · Software · Theme deep dive · 15 Nov 2026                                                                                                  Not investment advice · 41 / 61
+SOFTWARE · APPENDIX
+
+
+Every company's figures (2 of 6)
+100 companies with figures (96 description-verified, 4 industry-supported), one row each; Microsoft Corp is the largest at $3,890 bn
+
+
+ Company                                   Layer                                        Market value   Revenue    Growth     EBITDA          Net      ROCE         P/E       P/B
+ Synopsys Inc                              Design and engineering software licences        $87.2 bn    $7.05 bn   +15.1%      22.3%       18.9%       2.2%      79.6x       3.1x
+ NetEase, Inc.                             Consumer internet, games and advertising         $78 bn     $16.9 bn    +7.0%      33.8%       30.0%          –      15.6x       3.2x
+ Datadog, Inc.                             Data and developer infrastructure software      $68.4 bn    $3.43 bn   +27.7%       0.1%       3.1%†          –     255.8x      18.4x
+ CrowdStrike Holdings, Inc.                Security software subscriptions                 $56.7 bn    $4.81 bn   +21.7%          –       −3.4%          –          –      13.0x
+ Autodesk, Inc.                            Design and engineering software licences        $55.3 bn    $7.21 bn   +17.5%      24.6%       15.6%      28.5%      34.2x      17.8x
+ Block, Inc.                               Other software companies                        $51.4 bn    $24.2 bn    +0.3%       8.6%        5.4%       5.8%     114.3x       2.3x
+ Infosys Ltd                               IT services and government contractors          $49.8 bn    $20.2 bn    +4.6%      23.0%       16.4%          –      15.4x       5.1x
+ Workday, Inc.                             Enterprise application subscriptions            $49.2 bn    $9.55 bn   +13.1%      10.0%        7.3%       6.7%      39.8x       6.1x
+ Veeva Systems Inc                         Enterprise application subscriptions            $48.8 bn    $3.20 bn   +16.3%          –       28.4%          –      49.4x       6.8x
+ Take Two Interactive Software Inc         Consumer internet, games and advertising        $42.7 bn    $6.66 bn   +18.2%       1.4%       −4.5%      −1.7%          –      12.1x
+ Atlassian Corp                            Enterprise application subscriptions            $38.5 bn    $6.57 bn   +26.0%       2.3%       −0.8%       0.5%     454.5x      36.4x
+ Roblox Corp                               Consumer internet, games and advertising        $35.7 bn    $4.89 bn   +35.8%     −20.6%      −21.8%     −77.8%          –      90.7x
+ Twilio Inc                                Cloud and AI compute providers                  $32.7 bn    $5.07 bn   +13.7%       7.0%        0.7%       1.8%      26.5x       4.2x
+ Okta, Inc.                                Security software subscriptions                 $32.6 bn    $2.92 bn   +11.8%       5.5%       8.1%†          –     110.2x       4.7x
+ Zscaler, Inc.                             Security software subscriptions                 $31.4 bn    $3.35 bn   +25.4%       0.5%       −1.9%          –          –      12.1x
+ Zoom Communications, Inc.                 Enterprise application subscriptions            $29.9 bn    $4.87 bn    +4.4%      25.8%      39.0%†      11.5%       9.2x       3.1x
+ CoreWeave, Inc.                           Data centres, hosting and networks              $29.5 bn    $5.13 bn        –      46.9%      −22.7%      −0.2%          –       8.9x
+ Nebius Group N.V.                         Cloud and AI compute providers                  $29.3 bn     $530 m         –     −36.6%      15.6%†      −7.0%     351.2x       6.4x
+Latest full year: revenue, its growth, EBITDA and net margins, ROCE; P/E on the last four quarters (none for a loss-maker). † net margin above the EBITDA margin, or unusual,
+that the company's own filed figures don't give.
+
+
+
+StratLab · Software · Theme deep dive · 15 Nov 2026                                                                                                  Not investment advice · 42 / 61
+SOFTWARE · APPENDIX
+
+
+Every company's figures (3 of 6)
+100 companies with figures (96 description-verified, 4 industry-supported), one row each; Microsoft Corp is the largest at $3,890 bn
+
+
+ Company                                      Layer                                      Market value   Revenue     Growth     EBITDA          Net     ROCE         P/E       P/B
+ Cognizant Technology Solutions Corp          IT services and government contractors        $28.2 bn    $21.1 bn     +7.0%      18.7%      10.6%      21.7%      11.5x       1.9x
+ Verisign Inc                                 Other software companies                      $28.1 bn    $1.66 bn     +6.4%      69.6%      49.8%          –      33.1x          –
+ MongoDB, Inc.                                Data & developer infrastructure software      $26.9 bn    $2.46 bn    +22.8%      −4.7%      −2.9%          –     464.2x       9.1x
+ Verisk Analytics, Inc.                       Other software companies                      $26.7 bn    $3.07 bn     +6.6%      52.2%      29.6%      26.4%      31.5x      86.2x
+ Baidu, Inc.                                  Consumer internet, games & advertising        $26.6 bn    $19.3 bn     −3.0%       1.2%      4.3%†      −1.8%      31.7x       0.7x
+ Samsara Inc.                                 Enterprise application subscriptions          $24.4 bn    $1.62 bn         –      −1.8%      −0.6%      −3.7%     275.7x      17.2x
+ Unity Software Inc.                          Cloud and AI compute providers                $23.4 bn    $1.85 bn     +2.0%      −1.0%     −21.8%          –          –       7.2x
+ Rubrik, Inc.                                 Security software subscriptions               $22.8 bn    $1.32 bn    +48.5%     −23.4%     −26.5%          –          –          –
+ Wipro Ltd                                    IT services and government contractors        $22.2 bn    $9.82 bn     +4.0%      19.5%      14.2%      14.4%      15.9x       2.4x
+ PTC Inc.                                     Design and engineering software licences      $21.3 bn    $2.74 bn    +19.2%      39.6%      26.8%      19.7%      19.1x       5.6x
+ Toast, Inc.                                  Cloud and AI compute providers                $20.6 bn    $6.15 bn    +24.1%       5.8%       5.6%      13.7%      37.7x       9.7x
+ Reddit, Inc.                                 Consumer internet, games & advertising        $19.9 bn    $2.20 bn         –      20.8%     24.1%†      15.1%      20.1x       6.8x
+ Zeta Global Holdings Corp.                   Enterprise application subscriptions          $18.7 bn    $1.30 bn    +29.7%       5.9%      −2.4%       0.5%     471.2x      23.3x
+ SS&C Technologies Holdings Inc               Enterprise application subscriptions          $18.7 bn    $6.27 bn     +6.6%      34.1%      12.7%      10.0%      22.9x       2.7x
+ Gen Digital Inc.                             Security software subscriptions                $18 bn     $5.00 bn         –      52.3%      19.5%      19.6%      15.4x       6.9x
+ Tyler Technologies Inc                       Enterprise application subscriptions          $16.9 bn    $2.33 bn     +9.1%      21.3%      13.5%       8.3%      53.4x       4.6x
+ Nutanix, Inc.                                Data & developer infrastructure software      $16.3 bn    $2.85 bn    +12.4%      12.1%     52.8%†          –      11.7x      23.2x
+ Leidos Holdings, Inc.                        IT services and government contractors        $15.9 bn    $17.2 bn     +3.1%      14.0%       8.4%      22.1%      11.7x       3.2x
+Latest full year: revenue, its growth, EBITDA and net margins, ROCE; P/E on the last four quarters (none for a loss-maker). † net margin above the EBITDA margin, or unusual,
+that the company's own filed figures don't give. Layer names in full: Data & developer infrastructure software = Data and developer infrastructure software; Consumer internet,
+games & advertising = Consumer internet, games and advertising.
+
+StratLab · Software · Theme deep dive · 15 Nov 2026                                                                                                   Not investment advice · 43 / 61
+SOFTWARE · APPENDIX
+
+
+Every company's figures (4 of 6)
+100 companies with figures (96 description-verified, 4 industry-supported), one row each; Microsoft Corp is the largest at $3,890 bn
+
+
+ Company                                      Layer                                  Market value   Revenue     Growth      EBITDA           Net      ROCE         P/E       P/B
+ Check Point Software Technologies            Security software subscriptions           $15.5 bn    $2.73 bn    +6.3%        31.4%       38.8%†      28.8%      15.3x       5.4x
+ Docusign, Inc.                               Enterprise application subscriptions      $15.1 bn    $3.22 bn    +8.2%        12.9%         9.6%          –      49.2x       7.9x
+ Manhattan Associates Inc                     Enterprise application subscriptions      $14.9 bn    $1.08 bn    +3.7%        26.5%        20.3%      88.9%      72.2x      47.4x
+ Sportradar Group AG                          Other software companies                  $14.4 bn    $1.42 bn   +16.6%        21.1%         7.8%      19.7%     130.3x      13.4x
+ Caci International Inc                       IT services & government contractors      $14.3 bn    $9.57 bn   +10.9%        10.4%         5.6%       9.8%      26.4x       3.2x
+                                              Design and engineering software
+ Bentley Systems Inc                                                                    $14.2 bn    $1.50 bn   +11.0%              –      18.5%            –     43.5x     11.9x
+                                              licences
+                                              Data and developer infrastructure
+ JFrog Ltd                                                                              $14.2 bn     $532 m    +24.1%       −12.7%       −13.5%     −10.3%            –    16.0x
+                                              software
+                                              Consumer internet, games and
+ Flutter Entertainment plc                                                              $14.1 bn    $16.4 bn   +16.6%          9.5%       −1.9%        0.2%           –      1.6x
+                                              advertising
+ GoDaddy Inc.                                 Other software companies                  $13.8 bn    $4.95 bn    +8.3%        25.1%        17.7%      28.2%       15.7x     64.5x
+ Tempus AI, Inc.                              Other software companies                  $13.1 bn    $1.27 bn        –       −17.4%       −19.3%          –           –     26.6x
+ Guidewire Software, Inc.                     Enterprise application subscriptions       $13 bn     $1.48 bn   +22.7%        12.1%         9.4%          –       97.7x     10.9x
+                                              Data and developer infrastructure
+ Dynatrace, Inc.                                                                        $12.9 bn    $2.02 bn   +18.8%        13.1%         8.1%            –     83.0x       4.9x
+                                              software
+ IonQ, Inc.                                   Other software companies                  $12.5 bn     $130 m         –      −424.3%     −392.5%      −16.7%       48.9x       3.5x
+ Jack Henry & Associates Inc                  Enterprise application subscriptions      $12.4 bn    $2.54 bn    +7.1%        26.6%       19.8%       30.4%       24.4x       6.0x
+ SailPoint, Inc.                              Security software subscriptions           $11.9 bn    $1.07 bn   +24.4%        −9.0%      −25.2%       −4.5%           –       1.7x
+Latest full year: revenue, its growth, EBITDA and net margins, ROCE; P/E on the last four quarters (none for a loss-maker). † net margin above the EBITDA margin, or unusual,
+that the company's own filed figures don't give. Layer names in full: IT services & government contractors = IT services and government contractors.
+
+
+
+StratLab · Software · Theme deep dive · 15 Nov 2026                                                                                                  Not investment advice · 44 / 61
+SOFTWARE · APPENDIX
+
+
+Every company's figures (5 of 6)
+100 companies with figures (96 description-verified, 4 industry-supported), one row each; Microsoft Corp is the largest at $3,890 bn
+
+
+ Company                              Layer                                      Market value   Revenue    Growth        EBITDA           Net        ROCE         P/E       P/B
+ Factset Research Systems             Other software companies                      $11.7 bn    $2.48 bn    +6.7%         35.6%        21.5%       20.8%       22.8x       5.9x
+ Procore Technologies, Inc.           Enterprise application subscriptions          $11.6 bn    $1.32 bn   +14.8%         −1.0%        −7.6%           –           –       9.2x
+ Pinterest, Inc.                      Consumer internet, games & advertising        $11.3 bn    $4.22 bn   +15.8%          8.2%        9.9%†        6.7%       76.6x       2.4x
+ Paycom Software, Inc.                Enterprise application subscriptions          $11.2 bn    $2.05 bn    +8.9%         36.2%        22.1%           –       23.9x       6.5x
+ Bilibili Inc.                        Other software companies                       $11 bn     $4.55 bn   +13.1%          5.3%         3.9%        4.5%       61.4x       4.7x
+ HubSpot Inc                          Enterprise application subscriptions          $10.6 bn    $3.13 bn   +19.2%          4.6%         1.5%           –       52.1x       5.1x
+ Figma, Inc.                          Design & engineering software licences        $10.4 bn    $1.06 bn   +41.0%       −120.7%      −118.4%      −85.4%           –       6.9x
+ DigitalOcean Holdings, Inc.          Data centres, hosting and networks            $10.2 bn     $901 m    +15.5%         32.7%        28.8%       12.4%      308.3x          –
+ Match Group, Inc.                    Consumer internet, games & advertising        $9.47 bn    $3.49 bn    +0.2%         26.9%        17.6%       26.5%       14.2x          –
+ Hinge Health, Inc.                   Other software companies                      $9.38 bn     $588 m    +50.6%        −92.1%       −89.9%     −305.8%       55.7x      52.4x
+ Paylocity Holding Corp               Enterprise application subscriptions          $9.26 bn    $1.77 bn   +11.0%         28.1%        15.2%       29.6%       34.6x       7.6x
+ Snap Inc                             Consumer internet, games & advertising        $9.26 bn    $5.93 bn   +10.6%         −6.2%        −7.8%       −9.1%           –       4.0x
+ Elastic N.V.                         Data & developer infrastructure software      $9.26 bn    $1.74 bn   +17.3%         −1.8%       21.1%†       −1.8%       25.2x       7.2x
+ Full Truck Alliance Co. Ltd.         Other software companies                      $9.09 bn    $1.87 bn   +11.1%         34.0%       35.7%†       10.2%       13.8x       1.5x
+ Netskope Inc                         Security software subscriptions               $8.89 bn     $709 m    +31.7%        −85.6%       −95.8%     −335.5%           –      45.3x
+ Aurora Innovation, Inc.              Other software companies                      $8.48 bn       $3 m         –     −29033.3%            –      −42.1%           –       4.0x
+ EPAM Systems, Inc.                   IT services and government contractors        $8.32 bn    $5.46 bn   +15.4%         11.8%         6.9%       14.0%       20.4x       2.3x
+ Duolingo, Inc.                       Other software companies                      $8.24 bn    $1.04 bn   +38.7%         14.5%       39.9%†       10.1%       54.6x       6.1x
+Latest full year: revenue, its growth, EBITDA and net margins, ROCE; P/E on the last four quarters (none for a loss-maker). † net margin above the EBITDA margin, or unusual,
+that the company's own filed figures don't give. Layer names in full: Consumer internet, games & advertising = Consumer internet, games and advertising; Design & engineering
+software licences = Design and engineering software licences; Data & developer infrastructure software = Data and developer infrastructure software.
+
+StratLab · Software · Theme deep dive · 15 Nov 2026                                                                                                 Not investment advice · 45 / 61
+SOFTWARE · APPENDIX
+
+
+Every company's figures (6 of 6)
+100 companies with figures (96 description-verified, 4 industry-supported), one row each; Microsoft Corp is the largest at $3,890 bn
+
+
+ Company                               Layer                                        Market value   Revenue      Growth      EBITDA          Net      ROCE          P/E       P/B
+
+ Descartes Systems Group Inc           Enterprise application subscriptions            $8.12 bn     $729 m      +12.0%       29.6%       22.5%            –     50.5x        5.0x
+
+ Gitlab Inc.                           Data and developer infrastructure software      $8.08 bn     $955 m      +25.8%       −7.0%       −5.9%      −7.1%            –       8.2x
+
+ Appfolio Inc                          Enterprise application subscriptions            $7.99 bn     $951 m      +19.7%       18.5%       14.8%      28.2%       47.3x      14.7x
+
+ ServiceTitan, Inc.                    Enterprise application subscriptions            $7.97 bn     $961 m      +24.5%       −9.0%     −16.6%      −11.1%            –       5.2x
+
+ SentinelOne, Inc.                     Security software subscriptions                 $7.73 bn    $1.00 bn     +21.9%      −26.6%     −45.0%      −22.4%            –       5.4x
+
+ Dropbox, Inc.                         Enterprise application subscriptions            $7.70 bn    $2.52 bn      −1.1%       32.6%       20.2%            –     18.1x           –
+
+ Clear Secure, Inc.                    Cloud and AI compute providers                  $7.63 bn     $901 m      +16.9%       24.5%       12.1%     104.9%       32.9x      43.0x
+
+ Trade Desk, Inc.                      Makers of their own products                    $7.41 bn    $2.90 bn     +18.5%       24.3%       15.3%            –     23.1x        2.9x
+
+ Global-E Online Ltd.                  Other software companies                        $7.05 bn     $962 m      +27.8%        7.7%        7.1%            –    106.9x        7.6x
+
+ UiPath, Inc.                          Enterprise application subscriptions            $6.97 bn    $1.61 bn     +12.7%        4.6%     17.5%†         2.7%      19.8x        3.4x
+
+ Navan, Inc.                           Enterprise application subscriptions            $6.62 bn     $702 m      +30.8%      −19.5%     −56.7%      −14.8%            –       5.5x
+
+ RingCentral, Inc.                     Enterprise application subscriptions            $6.57 bn    $2.52 bn      +4.8%       13.6%        1.7%      18.1%       10.0x           –
+
+ Klaviyo, Inc.                         Enterprise application subscriptions            $6.57 bn    $1.23 bn     +31.6%       −4.0%       −2.6%      −5.7%      737.7x        5.5x
+
+Latest full year: revenue, its growth, EBITDA and net margins, ROCE; P/E on the last four quarters (none for a loss-maker). † net margin above the EBITDA margin, or unusual,
+that the company's own filed figures don't give.
+
+
+
+StratLab · Software · Theme deep dive · 15 Nov 2026                                                                                                  Not investment advice · 46 / 61
+
