@@ -938,7 +938,7 @@ def _recent(t: str, now: datetime) -> bool:
 
 # ---------- the background job ----------
 NIGHT_UTC = (18.5, 1.0)        # India's night, 00:00-06:30 IST
-FAST_RATION = 2                # company pages built a minute in India's night and at the weekend: twice the configured ration (6: config)
+FAST_RATION = 6                # company pages built a minute in India's night and at the weekend: six times the configured ration (6: config)
 
 
 def fast_window(now: datetime | None = None) -> str | None:
@@ -962,7 +962,10 @@ class Indexer:
     # times as many with a shorter gap. Past the pages' per-minute ration a page is served as stored, not rebuilt, so the gap keeps the
     # indexer under the ration of these hours (FAST_RATION times the configured one) with room left for people opening pages
     NIGHT_UTC = NIGHT_UTC
-    WEEKEND_GAP = 7.0
+    WEEKEND_GAP = 7.0                    # kept for callers; the fast pace below uses FAST_GAP
+    FAST_GAP = 2.0                       # night and weekend: 30 builds a minute at most, under the ration of those hours (36)
+    BUSY_STOP = 3                        # busy answers in a row before a market rests till the next run
+    MIN_REST = 60.0                      # seconds between runs at least
 
     def __init__(self, warm=None, every: float = 1800, warm_per_run: int = 20, gap: float = 12.0, night_per_run: int | None = None):
         self.warm, self.every, self.warm_per_run, self.gap = warm, every, warm_per_run, gap
@@ -975,12 +978,13 @@ class Indexer:
         if not self.night_per_run:
             return self.warm_per_run, self.gap
         window = fast_window(now)
-        night, weekend = window == "night", window == "weekend"
-        if not (night or weekend):
+        if window not in ("night", "weekend"):
             return self.warm_per_run, self.gap
-        gap = min(self.gap, self.WEEKEND_GAP) if weekend else self.gap
+        # India's night and the weekend at one pace (owner, 15 Nov: finish the rebuild by tonight): as many pages as fit in the half
+        # hour with the short gap, both markets taken in turn
+        gap = min(self.gap, self.FAST_GAP)
         fit = int(self.every * 0.8 / max(gap, 1.0) / max(len(REGIONS), 1))
-        want = self.night_per_run * (2 if weekend else 1)
+        want = self.night_per_run * 4
         return max(self.warm_per_run, min(want, fit)), gap
 
     def per_run(self, now: datetime | None = None) -> int:
@@ -1013,23 +1017,44 @@ class Indexer:
 
     def run_once(self, sleep=time.sleep) -> dict:
         warmed = 0
+        due, failed = {}, set()
         for region in REGIONS:
             try:
                 with memguard.heavy("screens-index"):         # every stored page of the market gathered: one heavy job at a time (MEM-001)
                     index = build_index(region, store=False)
                 index = {k: v for k, v in index.items() if k != "rows"}      # only the pages' ages are needed through the warming pauses
-                if self.warm:
-                    gap = self.pace()[1]          # _due takes the paced number itself
-                    for i, (sym, co) in enumerate(self._due(region, index["_ages"], index.get("_empty"), index.get("_old"))):
-                        if i:
-                            sleep(gap)              # leave room in the ration for people opening pages
-                        try:
-                            with memguard.heavy("screens-index"):     # a page is built in its turn, not through the pause between pages
-                                self.warm(region, sym, co)
-                            warmed += 1
-                        except Exception as e:           # busy or down: next run
-                            self.status["last_error"] = f"{region} {sym}: {str(e)[:120] or e.__class__.__name__}"
-                            break
+                due[region] = list(self._due(region, index["_ages"], index.get("_empty"), index.get("_old"))) if self.warm else []
+            except Exception as e:
+                failed.add(region)
+                self.status["last_error"] = f"{region}: {str(e)[:160]}"
+                print("screens index failed:", region, str(e)[:160])
+        # both markets' pages taken in turn, one at a time (owner, 15 Nov: "speed it up, finish by tonight"): each market's source
+        # sees half the pace, and a busy source skips that page instead of ending the market's run (a run used to stop at the first
+        # busy answer, so the pages behind it waited the half hour); past BUSY_STOP busy answers in a row the market rests till next run
+        gap = self.pace()[1]              # _due takes the paced number itself
+        queues = {r: list(q) for r, q in due.items()}
+        busy = {r: 0 for r in queues}
+        turn = 0
+        while any(queues.values()):
+            for region in [r for r in REGIONS if queues.get(r)]:
+                sym, co = queues[region].pop(0)
+                if turn:
+                    sleep(gap)                  # leave room in the ration for people opening pages
+                turn += 1
+                try:
+                    with memguard.heavy("screens-index"):     # a page is built in its turn, not through the pause between pages
+                        self.warm(region, sym, co)
+                    warmed += 1
+                    busy[region] = 0
+                except Exception as e:           # busy or down: this page next run
+                    self.status["last_error"] = f"{region} {sym}: {str(e)[:120] or e.__class__.__name__}"
+                    busy[region] += 1
+                    if busy[region] >= self.BUSY_STOP:
+                        queues[region] = []
+        for region in REGIONS:
+            if region in failed:
+                continue
+            try:
                 with memguard.heavy("screens-index", force_release=True):
                     index = build_index(region)
                 self.status["rows"][region] = len(index["rows"])
@@ -1039,12 +1064,17 @@ class Indexer:
         self.status.update(last_run=_now(), warmed=warmed)
         return self.status
 
-    def loop(self):
-        time.sleep(300)                          # after startup traffic and the company lists
-        while True:
+    def loop(self, clock=time.monotonic, sleep=time.sleep, runs: int | None = None):
+        sleep(300)                               # after startup traffic and the company lists
+        while runs is None or runs > 0:
+            start = clock()
             if leader.leading():      # another container leads: it runs this pass
                 self.run_once()
-            time.sleep(self.every)
+            # every half hour from the START of a run: a long run (hundreds of pages at night) is followed by a short rest, not a
+            # full half hour on top of it (the rebuild ran about half the time, 15 Nov)
+            sleep(max(self.MIN_REST, self.every - (clock() - start)))
+            if runs is not None:
+                runs -= 1
 
 
 class Job(news_job.Job):
