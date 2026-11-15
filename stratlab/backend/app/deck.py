@@ -1185,6 +1185,32 @@ def drawn_lines(b: dict) -> dict:
     return {**b, "series": [x for x in b["series"] if sum(1 for y in x[1] if y is not None) >= 2]}
 
 
+_MONTH_YEAR = re.compile(r"^([A-Z][a-z]{2}) (\d{2})(\d{2})$")
+AXIS_GAP = 0.08                 # y57: inches between two category labels on a line chart's axis
+
+
+def axis_labels(cats: list, plot_w: float, size: float = 10) -> list[str]:
+    """y57 (R57, the audit of the live R56 Cement deck, CEM-11: "Mar 2022Mar 2023Mar 2024..." run into each other under a small chart): a line
+    chart's category labels that fit their slots on a plot `plot_w` inches wide: whole where they fit, else short ("Mar 2022" -> "Mar 22"),
+    else every k-th one (the first and the last always) so no two shown labels touch."""
+    cats = [str(c) for c in cats]
+    n = len(cats)
+    if not n:
+        return []
+    slot = plot_w / n
+    forms = [cats, [_MONTH_YEAR.sub(r"\1 \3", c) for c in cats]]
+    widths = [max(_width(c, size) for c in labels) for labels in forms]
+    for every in range(1, n + 1):                 # every label shown, whole or short, before any is left off
+        for labels, widest in zip(forms, widths):
+            if widest + AXIS_GAP <= slot * every:
+                shown = [c if i % every == 0 else "" for i, c in enumerate(labels)]
+                if (n - 1) % every and (n - 1) % every * slot < widest + AXIS_GAP:
+                    shown[(n - 1) // every * every] = ""          # the last label kept, the one too close before it left off
+                shown[-1] = labels[-1]
+                return shown
+    return [forms[1][0]] + [""] * (n - 2) + [forms[1][-1]] if n > 1 else forms[1]
+
+
 def column_labels(cats: list, w: float, size: float) -> tuple[list[list[str]], float]:
     """A column chart's names under their columns, each in lines no wider than its column's share of the plot: two lines at most, at a
     smaller size (10 pt) when that shows more of them whole."""
@@ -1666,7 +1692,8 @@ class PptxRenderer(Canvas):
             return
         x, y, w, h = self._title_box(b)
         cd = CategoryChartData()
-        cd.categories = b["cats"]
+        short = axis_labels(b["cats"], w - 0.9, 10)              # y57: the slide's chart says the same labels as the PDF's, never run together
+        cd.categories = [c or " " * (i + 1) for i, c in enumerate(short)]
         for name, vals, *_ in b["series"]:
             cd.add_series(name, vals)
         ch = self.s.shapes.add_chart(XL_CHART_TYPE.LINE_MARKERS if b.get("labels") else XL_CHART_TYPE.LINE, Inches(x), Inches(y), Inches(w), Inches(h), cd).chart
@@ -1871,8 +1898,7 @@ class PdfRenderer(Canvas):
         ch.x, ch.y, ch.width, ch.height = 46, 28, w * 72 - 62, h * 72 - 70
         ch.data = [list(vs) for _, vs, *_ in b["series"]]
         cats = list(b["cats"])
-        every = max(1, -(-len(cats) // 8))
-        self._axes(ch, [c if i % every == 0 or i == len(cats) - 1 else "" for i, c in enumerate(cats)], 10)
+        self._axes(ch, axis_labels(cats, ch.width / 72, 10), 10)          # y57: labels that never run into each other
         ch.valueAxis.labelTextFormat = f
         vals = [v for _, vs, *_ in b["series"] for v in vs if v is not None]
         if vals:
@@ -2020,6 +2046,9 @@ MEMBER_WIDTHS = [2.6, 1.9, 1.3, 4.3, 2.0]
 MEMBER_SLIDES = 12                        # at most this many slides of companies (in the appendix); the page's CSV has every one (the deck says so)
 ONE_OFF = "†"                             # marks a net margin not reconciled (R44: above the EBITDA margin, or unusual, with nothing stored to give it): an anomaly flagged, never a cause named (R27)
 ONE_OFF_NOTE = "net margin above the EBITDA margin, or unusual, that the company's own filed figures don't give"      # R44
+GAIN = "‡"                                # y57 (R57): a net margin above the EBITDA margin that the filed lines cover: a gain outside the business
+GAIN_NOTE = ("net margin far above the EBITDA margin that the company's own filed lines cover (a gain outside the business: other income, an "
+             "exceptional gain, a tax credit or a share of associates); verified, and left out of the net margin's median and range")
 ANOMALY_WHY = "the filing would show why"   # R27: what a figure that doesn't add up says instead of a guessed cause
 AI_NOTE = "Written by AI from general knowledge, with no figures."
 NOT_SHOWN = "No listed company is shown for this layer: none of the companies the map named has a description that shows it does this work."
@@ -2122,6 +2151,8 @@ def part_note(c: dict, keys: tuple) -> str:
     out of the median (not reconciled, invalid, or on another period basis: n.c.); "" when none is."""
     from .intel.theme_data import DEVELOPER_KEYS, STATE_WORDS, VERIFIED
     held, ver, nc = c.get("held") or {}, c.get("verify") or {}, set(c.get("nc") or ())
+    if c.get("distress"):            # y57 (R57, TEL-5): every margin and return apart, with why
+        return f"partial: margins and returns apart ({c['distress']})"
     gone, odd = [], []
     for k in keys:
         st = (held.get(k) or {}).get("state") or ((ver.get(k) or {}).get("state") if (ver.get(k) or {}).get("state") != VERIFIED else None)
@@ -2159,7 +2190,7 @@ def layer_roll(layer: dict, cos: list, keys: tuple = ("ebitda", "net")) -> tuple
         elif c["symbol"] in wide and apart:
             ins.append((nm, "partial: whole company's figures, revenue only"))
         else:
-            ins.append((nm, part_note(c, keys) if c.get("one_off") or c.get("nc") or c.get("developer") or any(c.get(k) is None for k in keys) else ""))
+            ins.append((nm, part_note(c, keys) if c.get("one_off") or c.get("nc") or c.get("developer") or c.get("distress") or any(c.get(k) is None for k in keys) else ""))
     return ins, outs
 
 
@@ -2317,9 +2348,14 @@ def coverage(v: dict) -> dict:
     universe = f"{total:,} {where}"
     # R27: a share of value always names its denominator: whose market value it is a share of
     of_what = share_of_what(valued, total)
-    figs = f"{n:,} with figures" + (f" ({share}% of {of_what})" if share is not None else "")
+    # y57 (R57, the audit of the live R56 decks, PAY-9: the cover's "With figures 14" beside the appendix's "18 companies with figures", the 4
+    # adjacent lenders with figures too): with adjacent participants, the count is said to be of the core members, the others apart
+    adj = population(v)["adjacent"] if v.get("adjacent") or any(b.get("adjacent") for b in v.get("layers") or []) else 0
+    figs = (f"{n:,} core members with figures" if adj else f"{n:,} with figures") + (f" ({share}% of {of_what})" if share is not None else "") \
+        + (f"; {_n(adj, 'adjacent participant')} with figures apart" if adj else "")
     line = f"{universe} · {figs}"
-    return {"n": n, "total": total, "share": share, "text": line, "line": line, "universe": universe, "figs": figs, "valued": valued, "of_what": of_what}
+    return {"n": n, "total": total, "share": share, "text": line, "line": line, "universe": universe, "figs": figs, "valued": valued, "of_what": of_what,
+            "adjacent": adj}
 
 
 def pct_of(part: float, whole: float):
@@ -2613,9 +2649,17 @@ def layer_common(layer: dict) -> str:
     return f"In common: {line[:1].lower()}{line[1:]}" if line else ""
 
 
-def claim_layers(text: str, layers: list[str]) -> list[str]:
-    """The layers a tailwind or risk names, by the layer's own words (at most two), so each claim says which part of the chain it is about."""
-    from .intel.theme_data import _stems, does_the_work
+def claim_layers(text: str, layers: list[str], members: list | None = None) -> list[str]:
+    """The layers a tailwind or risk names, by the layer's own words (at most two), so each claim says which part of the chain it is about.
+    y57 (R57, the audit of the live R56 decks, PAY-16: "Software platforms such as Toast and Block bundle payments" tagged to two layers neither
+    company is in): a claim that names member companies is tagged to the layers those companies are in (`members`: their names and layers)."""
+    from .intel.theme_data import _name_marks, _stems, does_the_work
+    by_co = []
+    for mb in members or []:
+        if mb.get("layer") in layers and any(re.search(rf"(?<![\w-]){re.escape(m)}(?![\w-])", text or "") for m in _name_marks(clean_name(mb.get("name") or ""))):
+            by_co.append(mb["layer"])
+    if by_co:
+        return list(dict.fromkeys(by_co))[:2]
     out = []
     for name in layers:
         words = _stems(name)
@@ -2651,6 +2695,37 @@ def peer_cover_words(val: dict) -> str:
     return f"Comparable peer sets for {k} of the {pe_n} companies with a P/E."
 
 
+def span_mid(s, f=lambda v: _pc(v)) -> str:
+    """y57 (R57): a headline multiple's range, its 10th to 90th percentile where the stat has them (theme_data.stat_mid), else its full range."""
+    if s and s.get("p10") is not None and s.get("p90") is not None:
+        return _span({"min": s["p10"], "max": s["p90"]}, f)
+    return _span(s, f)
+
+
+_LAYER_WORDS_GENERIC = {"companies", "company", "makers", "maker", "providers", "provider", "operators", "operator", "products", "services",
+                        "service", "players", "firms", "suppliers", "other", "their", "with", "from", "and", "related", "solutions", "larger", "smaller"}
+
+
+def words_naming(layer: str, v: dict) -> list[tuple[str, str]]:
+    """y57 (R57): the theme's members whose own words name an empty layer's work: every one of its distinguishing words, by stem, close
+    together (within a few words, so a bank lending to small businesses names no "small finance bank"); [(name, the layer it sits in)],
+    largest first."""
+    want = {w[:5] for w in re.findall(r"[a-z]+", str(layer or "").lower()) if len(w) >= 4 and w not in _LAYER_WORDS_GENERIC}
+    if not want:
+        return []
+    need = len(want)
+    out = []
+    for mb in sorted(v.get("members") or [], key=lambda m: -(m.get("cap") or 0)):
+        what = str(mb.get("what") or "").lower()
+        if not what or not mb.get("layer") or mb.get("layer") == layer:
+            continue
+        toks = [w[:5] for w in re.findall(r"[a-z]+", what)]
+        span = need + 2
+        if any(want <= set(toks[i:i + span]) for i in range(max(1, len(toks) - span + 1))):
+            out.append((clean_name(mb.get("name") or mb.get("symbol") or ""), mb["layer"]))
+    return out
+
+
 def descriptive_line(val: dict) -> str:
     """The descriptive valuation's headline (R29, when comparable peers cover under half): the theme's own medians, each with its count and
     range, and how far peers go; never a premium, a discount or a market comparison."""
@@ -2658,7 +2733,8 @@ def descriptive_line(val: dict) -> str:
     for key, label in (("pe", "P/E"), ("pb", "P/B"), ("ev_ebitda", "EV/EBITDA")):
         st = val.get(key) or {}
         if st.get("median") is not None and (st.get("n") or 0) >= MIN_BASE:
-            parts.append(f"{label} {_times(st['median'])} ({_n(st['n'], 'company', 'companies')}, {_times(st['min'])} to {_times(st['max'])})")
+            rng = (f"10th to 90th percentile {span_mid(st, _times)}" if st.get("p10") is not None else f"{_times(st['min'])} to {_times(st['max'])}")
+            parts.append(f"{label} {_times(st['median'])} ({_n(st['n'], 'company', 'companies')}, {rng})")
     pe_n = (val.get("pe") or {}).get("n") or 0
     k = (((val.get("peers") or {}).get("pe") or {}).get("n")) or 0
     head = "The theme's own median " + ", ".join(parts) if parts else "The theme's own valuation"
@@ -3005,7 +3081,14 @@ def verified_row(vf: list[dict], short: bool = False) -> list[str]:
     lines used (verified_words)."""
     full, arith = [x for x in vf if not only_arithmetic(x)], [x for x in vf if only_arithmetic(x)]
     shown = (full + arith)[:VERIFIED_SHOWN]
-    said = "; ".join(x["name"] if short else verified_words(x) for x in shown) + (f"; and {len(vf) - VERIFIED_SHOWN} more" if len(vf) > VERIFIED_SHOWN else "")
+    if short:           # y57 (R57, the audit of the live R56 Software deck: "AppLovin Corp; IonQ, Inc.; IonQ, Inc."): a company once, its figures counted
+        by_name = {}
+        for x in shown:
+            by_name[x["name"]] = by_name.get(x["name"], 0) + 1
+        said = "; ".join(nm + (f" ({k} figures)" if k > 1 else "") for nm, k in by_name.items())
+    else:
+        said = "; ".join(verified_words(x) for x in shown)
+    said += f"; and {len(vf) - VERIFIED_SHOWN} more" if len(vf) > VERIFIED_SHOWN else ""
     who = "Its" if len(vf) == 1 else "Each one's"
     if not arith:
         head = f"{_n(len(vf), 'unusual figure')} verified against {'its' if len(vf) == 1 else 'their'} own filed figures"
@@ -3013,7 +3096,11 @@ def verified_row(vf: list[dict], short: bool = False) -> list[str]:
         head = f"{_n(len(vf), 'unusual figure')}, arithmetic reproduced (net profit over revenue worked out again, nothing more checked)"
     else:
         head = f"{_n(len(vf), 'unusual figure')} checked: {len(full)} verified against their own filed figures, {len(arith)} arithmetic reproduced only"
-    return ["Verified figures", f"{head}: {said}. {who} document, stored page and lines: ⟦{SOURCES_TITLE}⟧.", "Kept in every median and ranking."]
+    gains = sum(1 for x in vf if x.get("gain"))
+    return ["Verified figures", f"{head}: {said}. {who} document, stored page and lines: ⟦{SOURCES_TITLE}⟧.",
+            "Kept in every median and ranking." if not gains else       # y57: a verified gain outside the business is out of the net median
+            f"Kept in every median and ranking, but {_n(gains, 'net margin')} far above the EBITDA margin (a gain outside the business, marked {GAIN}): "
+            "out of the net margin's median and range."]
 
 
 def gap_reasons(xs: list[dict]) -> str:
@@ -3095,7 +3182,9 @@ def partial_map(v: dict, cov: dict) -> str:
     # e54: the checked ones are those of the figures' window and those the membership check reached beyond it (evidence_tally)
     unread = len({mb["symbol"] for mb in v.get("members") or [] if mb.get("symbol") and mb.get("unread")})
     t = evidence_tally(v, total)
-    gone = max(t["membership_unverified"] if t else total - int(mem.get("placed") or total), unread)
+    # y57 (R57, the audit of the live R56 Biotech deck: "membership checked for 313 of the theme's 820" on the findings page beside "membership
+    # checked 423 of 820" on the next): the deck's one tally where it has one, the count every other page states
+    gone = t["membership_unverified"] if t else max(total - int(mem.get("placed") or total), unread)
     n = total - gone
     if not total or n * 100 >= PARTIAL_SHARE * total:
         return ""
@@ -3250,7 +3339,9 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> li
     if v.get("duplicates"):        # d53: one company under two symbols, kept once
         ds = v["duplicates"]
         rows.append(["Same company twice", f"{_n(len(ds), 'company', 'companies')} listed under two symbols with the same latest year, revenue and net profit: "
-                     + "; ".join(f"{clean_name(x['name'])} is {clean_name(x['kept_name'])}"
+                     # y57 (R57, the audit of the live R56 Consumer retail deck: "Leslie's, Inc. is Leslie's, Inc."): one name under two symbols said so
+                     + "; ".join((f"{clean_name(x['name'])} under two symbols ({x.get('symbol')} and {x.get('kept')})"
+                                  if clean_name(x["name"]) == clean_name(x["kept_name"]) else f"{clean_name(x['name'])} is {clean_name(x['kept_name'])}")
                                  + (f" (its stored description is {clean_name(x['kept_name'])}'s)" if x.get("by") == "description" else "")
                                  for x in ds[:4]) + (f"; and {len(ds) - 4} more" if len(ds) > 4 else "") + ".",
                      "Kept once, under the symbol with a market value" + (" or the company its description names" if any(x.get("by") for x in ds) else "")
@@ -3260,6 +3351,11 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> li
     if v.get("developers"):        # d53: companies spending ahead of their revenue, apart from the margin medians
         rows.append(["Spending ahead of revenue", f"{_n(v['developers'], 'company', 'companies')} whose costs are over twice their revenue (EBITDA margin below −100%), "
                      "pre-revenue or early-stage.", "Their margins are shown on their rows, verified, and left out of every margin median and range."])
+    if v.get("distress"):          # y57 (R57, TEL-5): companies in distress, each with its reason
+        ds_ = v["distress"]
+        rows.append(["In distress", f"{_n(len(ds_), 'company', 'companies')} in distress: " + "; ".join(f"{clean_name(x['name'])} ({x['why']})" for x in ds_[:4])
+                     + (f"; and {len(ds_) - 4} more" if len(ds_) > 4 else "") + ".",
+                     "Margins and returns shown on their rows, marked (in distress), and left out of every median and range."])
     if ch.get("verified"):         # R44: an unusual figure its own filed figures give: kept, and said so with the count
         rows.append(verified_row(ch["verified"]))
     if ch.get("one_off"):
@@ -3294,12 +3390,13 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> li
     q = sec.get("quarter") or {}
     if q.get("quarter"):
         late = [x for x in q.get("earlier") or [] if x.get("filed_unread")]
+        fis = f" ({q['fiscal']:,} on their latest fiscal quarter, ending within two months of it)" if q.get("fiscal") else ""          # y57
         if q.get("earlier"):
-            rows.append(["One quarter", f"The quarter's median is of {_n(len(q.get('companies') or []), 'company', 'companies')} reporting {q['quarter']}; "
+            rows.append(["One quarter", f"The quarter's median is of {_n(len(q.get('companies') or []), 'company', 'companies')} reporting {q['quarter']}{fis}; "
                          f"{len(q['earlier'])} still on an earlier quarter" + (f", {len(late)} with newer results filed: {names(late)}" if late else "") + ".",
                          "Earlier quarters listed apart, not in the median."])
         else:
-            rows.append(["One quarter", f"Every company's latest quarter is {q['quarter']}.", "One quarter in the median."])
+            rows.append(["One quarter", f"Every company's latest quarter is {q['quarter']}{fis}.", "One quarter in the median."])
     biz = v.get("business") or {}
     held = biz.get("held") or []
     if held:
@@ -3333,7 +3430,8 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> li
     counts = ", ".join(f"{label} {n[k]}" for k, label in keys if n.get(k))
     rows.append(["Bases and counts", ("P/E is on the last four quarters, P/B on the latest book value, margins and returns on the latest full year." if lender else
                                       "P/E is on the last four quarters, EV/EBITDA and margins on the latest full year.")
-                 + (f" Medians are of: {counts} companies." if counts else "") + (f" {_n(val['losses'], 'loss-maker')} with no P/E." if val.get("losses") else ""),
+                 + (f" Medians are of: {counts} companies." if counts else "") + (f" {_n(val['losses'], 'loss-maker')} with no P/E." if val.get("losses") else "")
+                 + (f" {val['no_pe_profit']:,} with a profit in the latest year and no P/E stored." if val.get("no_pe_profit") else ""),
                  "Each slide says its period and count."])
     return rows
 
@@ -3416,7 +3514,7 @@ def not_in_sources(v: dict) -> str:
     return "; ".join(out) + "." if out else ""
 
 
-def coverage_table(v: dict, cov: dict) -> list[list[str]]:
+def coverage_table(v: dict, cov: dict, today: date | None = None) -> list[list[str]]:
     """R30 (the owner's review: "97% of market value" read as companies): coverage in one compact table on the data-confidence page, each
     kind on its own row: (a) companies by count, (b) market value (a share of value, never of companies), (c) each figure's count, (d) each
     layer's companies with figures against those it lists."""
@@ -3477,7 +3575,7 @@ def coverage_table(v: dict, cov: dict) -> list[list[str]]:
     n_moved, moved = refit_line(v)
     if moved:                      # gl50 (R50): companies moved because their words and industry fit neither what their layer is
         rows.append([COVERAGE_KINDS[11], str(n_moved), moved])
-    cohort = cohort_row(v)
+    cohort = cohort_row(v, today)
     if cohort:                     # rv51 (R51): the companies added, removed or moved into "Other" since the previous version, with why
         rows.append(cohort)
     return rows
@@ -3552,10 +3650,10 @@ def removed_said(x: dict) -> str:
     gone, with where its companies went and, when the placement said it, why it was not kept."""
     went = x.get("went") if isinstance(x.get("went"), dict) else {}
     where = ", ".join(f"{n} to “{k}”" if k else f"{n} out of the theme" for k, n in list(went.items())[:4])
-    return f"“{x['from'][0]}” removed ({x.get('n', 0)} companies" + (f": {where}" if where else "") + ")" + (f", {x['why']}" if x.get("why") else "")
+    return f"“{x['from'][0]}” removed ({_n(x.get('n', 0), 'company', 'companies')}" + (f": {where}" if where else "") + ")" + (f", {x['why']}" if x.get("why") else "")
 
 
-def cohort_row(v: dict) -> list[str] | None:
+def cohort_row(v: dict, today: date | None = None) -> list[str] | None:
     """rv51 (R51, the outside review of the live Release 49 decks, P2: a cross-version cohort diff in every deck): the companies with figures
     added, removed or moved into “Other” since the theme's previous stored version, from its change log's latest entry (theme_changes, the
     deck's `changes`), each list with its reason: the cause the theme's figures were stored again and, for one removed, the read's own reason.
@@ -3615,10 +3713,18 @@ def cohort_row(v: dict) -> list[str] | None:
     if lay:
         said = {"renamed": lambda x: f"“{x['from'][0]}” renamed “{x['to'][0]}”", "split": lambda x: f"“{x['from'][0]}” split into " + ", ".join(f"“{t}”" for t in x["to"]),
                 "merged": lambda x: ", ".join(f"“{f}”" for f in x["from"]) + f" merged into “{x['to'][0]}”",
-                "removed": removed_said, "added": lambda x: f"“{x['to'][0]}” added ({x.get('n', 0)} companies)"}
+                "removed": removed_said, "added": lambda x: f"“{x['to'][0]}” added ({_n(x.get('n', 0), 'company', 'companies')})"}
         parts.append(f"layers changed {len(lay)}: " + "; ".join(said[x["kind"]](x) for x in lay[:COHORT_SHOWN] if x["kind"] in said)
                      + (f"; and {len(lay) - COHORT_SHOWN} more" if len(lay) > COHORT_SHOWN else ""))
     day = _day(e.get("d")) if e.get("d") else "its last change"
+    # y57 (R57, the audit of the live R56 decks, DEF-7, IT-7: a log "On 14 Nov 2026" in a deck of 15 Nov, read as this version's activity): a
+    # log carried from an earlier version is said to be, with no change since
+    try:
+        carried = bool(today and e.get("d") and date.fromisoformat(str(e["d"])[:10]) < (today.date() if isinstance(today, datetime) else today))
+    except ValueError:
+        carried = False
+    if carried:
+        day += ", the latest change (no change since)"
     if not parts:
         return [COVERAGE_KINDS[12], "0", f"Against the version stored before {day}: no company with figures added, removed or moved into “Other”."]
     return [COVERAGE_KINDS[12], str(n_add + n_rem + len(into) + len(between)), f"On {day}, against the version stored before it, after {why}: " + "; ".join(parts) + "."]
@@ -3652,6 +3758,12 @@ def screening_row(v: dict, cov: dict) -> list[str]:
     members, rejected = c["members"], c["rejected"]
     head = (f"{c['considered']:,} considered = {rejected:,} screened out as another business (candidates, never members) + {members:,} members"
             if rejected else f"{c['considered']:,} considered, none screened out as another business: {members:,} members")
+    # y57 (R57, the audit of the live R56 Payments deck: "none screened out as another business" beside a removal on business membership in the
+    # change log): a company the latest re-check removed on its business is said here too, with where the reason is
+    ch_ = v.get("changes") if isinstance(v.get("changes"), dict) else {}
+    gone_ = [x for x in ((ch_.get("entries") or [{}])[0].get("removed") or []) if str(x.get("why") or "").startswith("business membership")]
+    if gone_:
+        head += f"; {len(gone_):,} removed by the membership re-check since the previous version, with its reason in the change log"
     parts = [head]
     if c.get("confirmed") is not None:
         parts.append(confirmed_words(c, members))
@@ -3969,7 +4081,7 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
     head, widths = ["Check", "What it found", "What the deck does"], [1.8, 6.6, 3.7]
     counts = coverage_line(v, cov)
     nh = note_h(counts)
-    cov_rows, cov_w = coverage_table(v, cov), [1.8, 1.4, 8.9]
+    cov_rows, cov_w = coverage_table(v, cov, today), [1.8, 1.4, 8.9]
     ch_ = table_height(COVERAGE_HEAD, cov_rows, cov_w, CW) + 0.15 if cov_rows else 0
     room = BOT - TOP - nh - 0.15 - ch_
 
@@ -4458,7 +4570,7 @@ def co_cell(c: dict, key: str, amt) -> str:
     if key == "ebitda":
         return _pcw(c.get("ebitda"), c.get("ebitda_dp") == 0)
     if key == "net":
-        return _pc(c.get("net")) + (ONE_OFF if c.get("one_off") else "")
+        return _pc(c.get("net")) + (ONE_OFF if c.get("one_off") else GAIN if c.get("gain") else "")
     if key in ("deposit_growth", "sales_1y", "advances_growth"):
         return _chg(c.get(key))
     if key == "solvency":
@@ -5043,7 +5155,7 @@ def reconcile_flag(text: str, counts: dict, periods: set) -> str | None:
     return f"period {miss[0]} is in no table" if miss else None
 
 
-_LAYER_PAGE = re.compile(r"^Layer \d+ · (.+)$")
+_LAYER_PAGE = re.compile(r"^Layer \d+ · (.+?)(?: \(notes\))?$")         # y57: a layer page's notes page is of the same layer
 _HEAD_BOTH = re.compile(r"^(\d[\d,]*) compan(?:y|ies) \((\d[\d,]*) in the layer's calculations\)")
 _HEAD_ONE = re.compile(r"^(\d[\d,]*) compan(?:y|ies), revenue")
 _ROLL_OF = re.compile(r"In the layer's calculations \((\d[\d,]*) of (\d[\d,]*)\)")
@@ -5904,7 +6016,8 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     s.add("text", (M, 2.75, 9.6, 2.15), paras=over, size=17, floor=12, color=ON_DARK)
     s.add("stats", (M, 4.98, CW, 1.45), dark=True, items=[       # R35: tall enough for a three-line note under its figure
         ("Companies", f"{total:,}", cov["universe"].split(" ", 1)[1] + (f"; {other_work(v, total):,} own words: other work" if other_work(v, total) else "")), *([("Layers", str(len(shown)))] if chained else []),
-        ("With figures", f"{cov['n']:,}", f"{cov['share']}% of the value of the {cov['valued']:,} with one" if cov.get("share") is not None else ""),
+        ("Core with figures" if cov.get("adjacent") else "With figures", f"{cov['n']:,}",
+         f"{cov['share']}% of the value of the {cov['valued']:,} with one" if cov.get("share") is not None else ""),
         # R29: the total is of the confirmed companies with figures and a market value, said so (the live R27 Semiconductors cover had "58 of
         # 112 with one" beside "the 105 with one")
         ("Their market value", cap(size.get("total_cap")) if size.get("total_cap") is not None else "–", f"{_n(size.get('with_value', 0), 'company', 'companies')} with figures and a market value"),
@@ -6036,8 +6149,17 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         # R34 (GPT review of R31.7, Defence: "No listed company is shown for x."): a layer name with no word in it is no layer to name
         none_ = [x["layer"] for x in layers if not x.get("companies") and re.search(r"[A-Za-z]{3,}", str(x.get("layer") or ""))]
         unsure_ = [x for x in empty if x not in none_ and re.search(r"[A-Za-z]{3,}", str(x or ""))]
-        if none_:
-            foot.append(f"No listed company is shown for {', '.join(none_)}: none of the companies the map named has a description that shows it does the work.")
+        # y57 (R57, the audit of the live R56 decks, SW-6: "No listed company is shown for ... Payment networks and processors: none of the
+        # companies the map named has a description that shows it does the work" while a member in "Other" says it processes payments): the
+        # sentence only after no member's own words name the layer's work; a member whose words do is named, with the layer it sits in
+        named_by = {x: words_naming(x, v) for x in none_}
+        quiet = [x for x in none_ if not named_by[x]]
+        if quiet:
+            foot.append(f"No listed company is shown for {', '.join(quiet)}: no member of the theme is placed there, and no member's own words name its work.")
+        for x in none_:
+            if named_by[x]:
+                foot.append(f"No company is placed in {x}; " + "; ".join(f"{nm}'s own words name its work, and it sits in “{ly}”" for nm, ly in named_by[x][:3])
+                            + (f"; and {len(named_by[x]) - 3} more" if len(named_by[x]) > 3 else "") + ".")
         if unsure_:
             foot.append(f"No slide for {', '.join(unsure_)}: none of its companies is in the theme (each one's own words describe other work).")
         if unplaced:
@@ -6113,6 +6235,8 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
                 return ROLL_TAG.get(why_kind(calc_of(c)), "insufficient evidence")      # ex49: the reason's kind
             if c["symbol"] in nofig:
                 return ROLL_TAG["no figure stored"]
+            if c.get("distress"):          # y57 (R57, TEL-5): its margins on its row, out of every median and range
+                return "in distress"
             return "whole company" if c["symbol"] in lwide else "on its industry" if c.get("on_industry") else "own design" if c.get("own_goods") else \
                 "on its words" if c.get("by_words") else LOW_TAG if c.get("read_low") else ""
         tags = {c["symbol"]: tag(c) for c in cos}
@@ -6134,11 +6258,22 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         head = ["Company"] + [c[1] for c in cols] + ["Year"]
         widths = [2.6] + [c[2] for c in cols] + [1.1]
         tail = [med_row] + ([rng_row] if n_st >= MIN_BASE else [])
+        # y57 (R57, the audit of the live R56 decks, MD-9, SEMI-6: "Orthopedic and surgical device makers −0.5%" while its largest earn 22-27%;
+        # Fabless 7.0% beside NVIDIA and Broadcom): the layer's companies' EBITDA margin together (revenue-weighted) as a row of its own when it
+        # is more than AGG_GAP points from the median, so a few micro-caps don't stand for the layer's economics unseen
+        agg = next((r_.get("aggregate") for r_ in (v.get("chain") or {}).get("rows") or [] if r_.get("layer") == layer.get("layer")), None)
+        med_e = (st.get("ebitda") or {}).get("median")
+        agg_said = ""
+        if not lend and agg is not None and med_e is not None and abs(agg - med_e) > AGG_GAP and any(k == "ebitda" for k, _, _ in cols):
+            tail.append(["Together (revenue-weighted)"] + [_pcw(agg, lwhole) if k == "ebitda" else "" for k, _, _ in cols] + [""])
+            agg_said = f"EBITDA margin together {_pcw(agg, lwhole)} (revenue-weighted)"
         head, every, widths, _ = drop_empty(head, body + tail, widths)
         body, tail = every[:len(body)], every[len(body):]
         meds_ = [(nm_, _medn(st.get(k_), n_lay, f_)) for k_, nm_, f_ in ((("roe", "ROE", _pc),) if lend else (("ebitda", "EBITDA margin", lambda x: _pcw(x, lwhole)),))
                  + (("net", "net margin", _pc),)]
         meds_ = [f"median {nm_} {t_}" for nm_, t_ in meds_ if not t_.startswith("–")]           # a median under 3 companies isn't said (R20)
+        if agg_said and meds_:
+            meds_.insert(1, agg_said)
         # rv51 (R51, the outside review of the live Release 49 Real estate deck: 20 net margins above EBITDA left out unreconciled): the
         # layer's median net margin with them too, when leaving them out moves it as printed
         dag, alln = layer.get("one_off") or [], (layer.get("net_all") or {}).get("median")
@@ -6150,12 +6285,16 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             if tail and tail[0][at] and not tail[0][at].startswith("–"):
                 tail[0][at] = f"{tail[0][at]}; {with_}"             # the table shows it, so the header may say it (the provenance gate)
                 meds_ = [x + f", {with_}" if x.startswith("median net margin") else x for x in meds_]
-        msg = layer.get("line") or (layer_head(layer, cos, amt)
-                                    + (f"; {', '.join(meds_)}" if meds_ else ""))
+        # y57 (R57, the audit of the live R56 decks, FMCG-11: "1 figure is the whole company's ... medians.; 31 in this group in all"): the
+        # header always starts with the layer's companies; the layer's own line (which figures are the whole company's) comes after them
+        msg = layer_head(layer, cos, amt) + (f"; {', '.join(meds_)}" if meds_ else "")
         rc_ = rest_count(v) if layer.get("basis") == "rest" else None
         if rc_ and rc_[0] > len(cos):       # d1: one count of "Other" on every page: the group's whole count, and why this page lists fewer
             msg += (f"; {rc_[0]:,} in this group in all" + (f" ({rc_[3]:,} not placed yet)" if rc_[3] else "")
                     + f", the other {rc_[0] - len(cos):,} smaller companies whose figures the deck doesn't work out")
+        if layer.get("line"):
+            msg += ". " + str(layer["line"]).strip()
+            msg = msg.rstrip(".") + "."
         desc = layer.get("description") or ""
         unread_n = sum(1 for c in cos if c.get("unread"))
         # v55 (R55): which of them are not checked yet, by name, so a reader (and the deck check) can tell them from the in-scope companies
@@ -6227,6 +6366,13 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             fparts.append(nf_note)
         if any(c.get("one_off") for c in cos):
             fparts.append(f"{ONE_OFF}: {ONE_OFF_NOTE} ({ANOMALY_WHY}); left out of the net margin's median.")
+        if any(c.get("gain") and not c.get("one_off") for c in cos):
+            fparts.append(f"{GAIN}: {GAIN_NOTE}.")
+        hurt = [c for c in cos if c.get("distress")]
+        if hurt:                            # y57 (R57, TEL-5): each one with its reason
+            fparts.append("(in distress): " + "; ".join(f"{clean_name(c['name'])}, {c['distress']}" for c in hurt[:4])
+                          + (f"; and {len(hurt) - 4} more" if len(hurt) > 4 else "") + "; its margins and returns are shown on its row and left out of "
+                          "every median and range.")
         if any(c.get("nc") for c in cos):
             fparts.append("n.c.: not comparable, the figure is on another basis than the rest of its column (latest full year against filed "
                           "results annualised), so it is left out of the median.")
@@ -6299,10 +6445,11 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             fnote, fh = foot(fparts)
             room = BOT - fh - below
             k_fit = fits(tw)
+        fparts_all = list(fparts)          # y57: every note, before those of marks no shown row carries are dropped
         on_page = {c["symbol"] for c in cos[:k_fit]}
         on_tags = {tags[x] for x in on_page}
         # ex49: a left-out mark's note (each kind's, kind_notes) and the own-design note only with a row on the page that carries it
-        drop = [p for p in fparts for t_ in ("different model", "another business", "insufficient evidence", "own design", "on its words", LOW_TAG)
+        drop = [p for p in fparts for t_ in ("different model", "another business", "insufficient evidence", "own design", "on its words", LOW_TAG, "in distress")
                 if p.startswith(f"({t_})") and t_ not in on_tags]
         drop += [p for p in fparts if p.startswith("(whole company)") and "whole company" not in on_tags]
         drop += [p for p in fparts if p.startswith("(on its industry)") and "on its industry" not in on_tags]
@@ -6312,7 +6459,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         drop += [nf_note] if not nofig & on_page else []
         if rline and not unsure & on_page:          # R35: the roll's line says who isn't confirmed, so the mark's own note goes with its rows
             drop += [p for p in fparts if p.startswith("(not confirmed)")]
-        if (unmodelled or rline or nofig or lwide or {"on its industry", "own design", "on its words", LOW_TAG, "consolidated"} & shown_tags) and any(p in fparts for p in drop):       # no marked row shown: its note isn't either
+        if (unmodelled or rline or nofig or lwide or {"on its industry", "own design", "on its words", LOW_TAG, "consolidated", "in distress"} & shown_tags) and any(p in fparts for p in drop):       # no marked row shown: its note isn't either
             fparts = [p for p in fparts if p not in drop]
             fnote, fh2 = foot(fparts)
             if rline and fh2 < fh:          # R35: the roll's line took room from the table: the room the dropped notes leave goes back to its rows,
@@ -6323,6 +6470,37 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
                 else:
                     room = room_was
             fh = fh2
+        # y57 (R57, the audit of the live R56 decks: Biotech's largest layer printed its table's heading and no row, its notes over the line
+        # under it; Software's "The largest 1 of 12", 60 layer pages under min(5, N) rows): a page that can't show min(5, N) of its companies
+        # under its notes, or whose table can't hold the rows it is given, sends its notes (and then all but the first line of its intro) to a
+        # notes page right after it, so its table keeps the room
+        cont: list = []
+
+        def short_of(k_, room_):
+            return k_ < want or table_height(head, body[:k_] + tail, widths, tw) > room_ - (REST_H if k_ < len(body) else 0) + 1e-6
+        if short_of(k_fit, room) and (fnote or len(intro) > 1):
+            room = BOT - below
+            k_fit = fits(tw)
+            if short_of(k_fit, room) and len(intro) > 1:
+                cont_intro, intro = intro[1:], intro[:1]
+                below = TOP + note_h(intro[0]) + 0.1
+                room = BOT - below
+                k_fit = fits(tw)
+            else:
+                cont_intro = []
+            on_now = {c["symbol"] for c in cos[:k_fit]}
+            tags_now = {tags[x] for x in on_now}
+            keep = []
+            for p_ in fparts_all:            # the notes of the marks the shown rows carry, as the rules above keep them
+                if any(p_.startswith(f"({t_})") and t_ not in tags_now for t_ in ("different model", "another business", "insufficient evidence",
+                                                                                   "own design", "on its words", "whole company", "on its industry",
+                                                                                   "in distress")):
+                    continue
+                if (p_ == nf_note and not nofig & on_now) or (p_.startswith("(not confirmed)") and rline and not unsure & on_now):
+                    continue
+                keep.append(consolidated_note(cons, False) if p_.startswith("(consolidated)") and "consolidated" not in tags_now else p_)
+            cont = cont_intro + foot(keep)[0]
+            fnote, fh = [], 0.0
         s = Slide(title, msg, eyebrow=eb("The value chain"))
         if card:
             s.add("cards", (M, TOP, CW, chh), cols=1, fill=True, items=[card])
@@ -6339,6 +6517,11 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         if fnote:
             s.add("text", (M, BOT - fh + 0.08, CW, fh - 0.08), paras=fnote, size=BODY_MIN, floor=BODY_MIN, color=MUTED)
         slides.append(s)
+        if cont:
+            s2 = Slide(f"{title} (notes)", "Who is in the layer's calculations, and what its table's marks mean", eyebrow=eb("The value chain"))
+            ch2 = sum(note_h(x) for x in cont) + 0.06 * (len(cont) - 1) + 0.12
+            s2.add("text", (M, TOP, CW, min(BOT - TOP, ch2)), paras=cont, size=BODY_MIN, floor=BODY_MIN, color=MUTED)
+            slides.append(s2)
 
     if sum(confirmed_n(x) for x in small) >= 2:      # LIVE6-008: no page for a table of one row: one such layer is a row of the value chain's
         _smaller_layers(slides, small, amt, eb("The value chain"))         # table and its company a row of the appendix
@@ -6414,6 +6597,11 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     of_ = evidence_of(v)
     mix_ = evidence_mix(of_(x["symbol"]) for x in lead) if of_ else None
     lead_mix = evidence_words(mix_) if mix_ and not mix_["membership_unverified"] and not mix_["not_confirmed"] else ""
+    # y57 (R57, PAY-9): the appendix lists adjacent participants too: its count says how many are core members, the cover's count
+    adj_ = {x.get("symbol") for x in v.get("adjacent") or [] if x.get("symbol")} | {c.get("symbol") for b in layers if b.get("adjacent")
+                                                                                    for c in b.get("companies") or []}
+    n_adj = sum(1 for x in lead if x["symbol"] in adj_)
+    lead_core = f": {len(lead) - n_adj:,} core members and {_n(n_adj, 'adjacent participant')}" if n_adj else ""
     if lead:
         # short headings on one line, so 20 or more rows fit a page (R20: 8 rows a page)
         lcols = [("revenue", "Revenue", 1.15), ("sales_1y", "Growth", 0.95), ("ebitda", "EBITDA", 0.95), ("net", "Net", 0.9), ("roce", "ROCE", 0.85)]
@@ -6428,9 +6616,11 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         if len({r[1] for r in rows}) <= 1:              # one layer for every company says nothing: no column (R19)
             head, rows, widths = [head[0]] + head[2:], [[r[0]] + r[2:] for r in rows], [widths[0]] + widths[2:]
         head, rows, widths, _ = drop_empty(head, rows, widths)
-        note = ("Latest full year: revenue, its growth, EBITDA and net margins, ROCE; P/E on the last four quarters (none for a loss-maker)."
+        note = ("Latest full year: revenue, its growth, EBITDA and net margins, ROCE; P/E on the last four quarters (–: a loss over them, or no "
+                "four quarters stored)."
                 + (" (whole company): whole-company figures." if wide else "")
                 + (f" {ONE_OFF} {ONE_OFF_NOTE}." if any(x.get("one_off") for x in lead) else "")
+                + (f" {GAIN} {GAIN_NOTE}." if any(x.get("gain") and not x.get("one_off") for x in lead) else "")
                 + (f" No reported figures yet: {names5(bare)}." if bare else ""))
         full = {c["symbol"]: c for x in layers for c in x.get("companies") or []}          # the layers' rows carry each company's years
         gb = growth_base_line([{**full.get(x["symbol"], {}), **x} for x in lead], amt)
@@ -6451,7 +6641,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             nh = tallest
         for k, chunk in enumerate(pages):
             s = Slide("Every company's figures" + (f" ({k + 1} of {len(pages)})" if len(pages) > 1 else ""),
-                      f"{_n(len(lead), 'company', 'companies')} with figures" + (f" ({lead_mix})" if lead_mix else "")
+                      f"{_n(len(lead), 'company', 'companies')} with figures" + (f" ({lead_mix})" if lead_mix else "") + lead_core
                       + f", one row each; {lead[0]['name']} is the largest at {cap(lead[0].get('cap'))}",
                       eyebrow=eb("Appendix"))
             s.add("table", (M, TOP, CW, th), head=head, rows=chunk, widths=widths, **cbase)
@@ -6501,7 +6691,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             src = c.get("source") if c.get("status") == "current" else None
             tags = [(kind, UP if kind == "Tailwind" else DOWN, UP_SOFT if kind == "Tailwind" else DOWN_SOFT),
                     ("Dated source", INK2, CHIP) if src else ("General background (AI, no dated source)", MUTED, CHIP)]
-            tied = claim_layers(c.get("text") or "", [x["layer"] for x in shown])
+            tied = claim_layers(c.get("text") or "", [x["layer"] for x in shown], v.get("members") or [])
             sub = f"{src['headline']} · {_day(src.get('at'))} · {src.get('outlet') or ''}".rstrip(" ·") if src else None
             if tied:
                 sub = (sub + " · " if sub else "") + "Layer: " + ", ".join(tied)
@@ -6648,8 +6838,11 @@ def layer_evidence(v: dict, layer: dict, cos: list) -> str:
         return ""
     mix = evidence_mix(of(s_) for s_ in syms)
     more = len(syms) > len(cos)
-    return (f"Membership of its {_n(len(syms), 'company', 'companies')}: {evidence_split(mix)}"
-            + (f" (figures read for this page's {len(cos):,})." if more else "."))
+    # y57 (R57, the audit of the live R56 decks, BIO-12: "43 companies" in the header beside "Membership of its 214 companies"): a count other
+    # than the header's says what it is of, the layer's companies stored in all, and how many of them this page's header counts
+    if more:
+        return f"Membership of its {_n(len(syms), 'company', 'companies')} stored in all (figures read for the header's {len(cos):,}): {evidence_split(mix)}."
+    return f"Membership of its {_n(len(syms), 'company', 'companies')}: {evidence_split(mix)}."
 
 
 def confirmed_n(layer: dict) -> int:
@@ -6657,6 +6850,7 @@ def confirmed_n(layer: dict) -> int:
     return sum(1 for c in layer.get("companies") or [] if c.get("status") != "unverified")
 
 
+AGG_GAP = 10.0                  # y57: points between a layer's median EBITDA margin and its companies' margin together that its page shows
 SMALL_TITLE = "Smaller layers"
 SMALL_MAX = 2                   # d1: a layer of this many confirmed companies or fewer has no page of its own (a median is of MIN_BASE or more)
 LAYER_ROWS_MIN = 5              # d1: a layer's page shows at least this many of its companies (all of a smaller layer)
@@ -7489,10 +7683,13 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
         pp = peers.get("pe") or {}
         # who the P/E is of (R20): the profitable companies, with how many loss-makers have none and the profitable share
         pe_n, losses = (val.get("pe") or {}).get("n", 0), val.get("losses") or 0
-        pop = val.get("n") or (pe_n + losses)
-        pe_label = (f"P/E, the {pe_n} companies with one ({round(pe_n / pop * 100)}% of {pop}; {_n(losses, 'loss-maker')} with none)"
-                    if losses and pe_n else "P/E (last four quarters)")
-        rows = [[pe_label, _medn(val.get("pe"), None, _times), _span(val.get("pe"), _times), str((val.get("pe") or {}).get("n", "–")),
+        other = val.get("no_pe_profit") or 0           # y57 (R57): no P/E but a profit in the latest year, never called a loss-maker
+        pop = val.get("n") or (pe_n + losses + other)
+        apart = "; ".join(x for x in (f"{_n(losses, 'loss-maker')} with none" if losses else "",
+                                      f"{other:,} with a profit in the latest year and no P/E stored" if other else "") if x)
+        pe_label = (f"P/E, the {pe_n} companies with one ({round(pe_n / pop * 100)}% of {pop}; {apart})"
+                    if apart and pe_n else "P/E (last four quarters)")
+        rows = [[pe_label, _medn(val.get("pe"), None, _times), span_mid(val.get("pe"), _times), str((val.get("pe") or {}).get("n", "–")),
                  "–", _med(val.get("market_pe"), _times)]]
         if pp.get("n"):     # the same basis as the headline: the companies with comparable peers, against their peers' median (R17-010)
             rows.append([f"P/E, companies with comparable peers {peer_set_words(pp)}", _times(pp.get("theme")), f"{premium_words(pp['premium'])} peers"
@@ -7500,8 +7697,8 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
         if (pp.get("none") or 0) and pe_n:     # R27: counted as such, never set against the whole market
             rows.append(["P/E, companies with no comparable peer set", "not comparable", "", str(pp["none"]), "not comparable", "–"])
         rows += [r_ for r_ in (
-                ["P/B", _med(val.get("pb"), _times), _span(val.get("pb"), _times), str((val.get("pb") or {}).get("n", "–")), "–", _med(val.get("market_pb"), _times)],
-                ["EV/EBITDA (latest year)", _med(val.get("ev_ebitda"), _times), _span(val.get("ev_ebitda"), _times), str((val.get("ev_ebitda") or {}).get("n", "–")), "n/a", "n/a"])
+                ["P/B", _med(val.get("pb"), _times), span_mid(val.get("pb"), _times), str((val.get("pb") or {}).get("n", "–")), "–", _med(val.get("market_pb"), _times)],
+                ["EV/EBITDA (latest year)", _med(val.get("ev_ebitda"), _times), span_mid(val.get("ev_ebitda"), _times), str((val.get("ev_ebitda") or {}).get("n", "–")), "n/a", "n/a"])
                  if r_[1] != "–"]           # a measure no company has (EV/EBITDA for lenders) is no row (R18)
         for key, label, f in (("sales_3y", "Revenue growth, 3 years a year", _chg), ("roce", "ROCE", _pc)):
             if (peers.get(key) or {}).get("n"):
@@ -7513,9 +7710,9 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
             # R29 (P1): comparable peers for under half of the companies with a P/E: the theme's own medians and spread, by layer and over
             # time, each with its count; no column or sentence sets them against peers or the whole market
             rows = [r_ for r_ in (
-                [pe_label, _medn(val.get("pe"), None, _times), _span(val.get("pe"), _times), str((val.get("pe") or {}).get("n", "–"))],
-                ["P/B", _med(val.get("pb"), _times), _span(val.get("pb"), _times), str((val.get("pb") or {}).get("n", "–"))],
-                ["EV/EBITDA (latest year)", _med(val.get("ev_ebitda"), _times), _span(val.get("ev_ebitda"), _times), str((val.get("ev_ebitda") or {}).get("n", "–"))])
+                [pe_label, _medn(val.get("pe"), None, _times), span_mid(val.get("pe"), _times), str((val.get("pe") or {}).get("n", "–"))],
+                ["P/B", _med(val.get("pb"), _times), span_mid(val.get("pb"), _times), str((val.get("pb") or {}).get("n", "–"))],
+                ["EV/EBITDA (latest year)", _med(val.get("ev_ebitda"), _times), span_mid(val.get("ev_ebitda"), _times), str((val.get("ev_ebitda") or {}).get("n", "–"))])
                 if r_[1] != "–"]
         if descriptive:
             msg = descriptive_line(val)
@@ -7525,15 +7722,20 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
             msg = f"The theme's median P/E is {_times(val['pe']['median'])} against {_times(val['market_pe']['median'])} for all {val.get('market_n', 0):,} listed companies with one"
         else:
             msg = "Price against earnings, book value and EBITDA, the theme against companies of similar market value"
-        if losses and pe_n:
-            msg += f"; P/E of {pe_n} of the {pop} companies, {_n(losses, 'loss-maker')} with none"
+        if apart and pe_n:
+            msg += f"; P/E of {pe_n} of the {pop} companies, {apart.replace('; ', ', ')}"
         s = Slide("Valuation", msg, eyebrow=E())
+        rng_head = ("Range (10th to 90th percentile)" if any((val.get(k) or {}).get("p10") is not None for k in ("pe", "pb", "ev_ebitda"))
+                    else "Range")
         hist = val.get("history") or []
         lw = 7.0 if len(hist) >= MIN_POINTS else CW         # LIVE6-008: no "weekly" line through 2 points; the table keeps the page's width
         # R27 (P2): how each is worked out, and who the peers are, live on the notes page; this page says only what its figures are of
         notes = []
         if val.get("losses"):
             notes.append(f"A loss-maker has no P/E: {_n(val['losses'], 'company', 'companies')} left out of the P/E median.")
+        if other:
+            notes.append(f"{_n(other, 'company', 'companies')} with a profit in the latest full year {'has' if other == 1 else 'have'} no P/E stored "
+                         "(a loss over the last four quarters, or no four quarters on record): left out of the P/E median, not counted as loss-makers.")
         if val.get("ev_missing"):
             notes.append(f"EV/EBITDA is n/a for {_n(val['ev_missing'], 'company', 'companies')} where debt, cash or EBITDA isn't stored; the market's debt and "
                          "cash aren't kept, so it has no comparison.")
@@ -7546,9 +7748,9 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
             notes.insert(0, peer_moved_line(pp))
         notes.append(f"How each is worked out, and who the comparable peers are: {NOTES_POINTER}.")
         if descriptive:
-            vhead, rows, vw, _ = drop_empty(["Measure", "Theme median", "Range", "Companies"], rows, [2.6, 1.3, 1.8, 1.2], keep=(0, 1))
+            vhead, rows, vw, _ = drop_empty(["Measure", "Theme median", rng_head, "Companies"], rows, [2.6, 1.3, 1.8, 1.2], keep=(0, 1))
         else:
-            vhead, rows, vw, _ = drop_empty(["Measure", "Theme median", "Range", "Companies", "Comparable peers", "All listed"], rows,
+            vhead, rows, vw, _ = drop_empty(["Measure", "Theme median", rng_head, "Companies", "Comparable peers", "All listed"], rows,
                                             [2.3, 1.2, 1.7, 1.1, 1.4, 1.1], keep=(0, 1))
         vh = table_height(vhead, rows, vw, lw)
         s.add("table", (M, TOP, lw, vh), head=vhead, rows=rows, widths=vw, tight=True)
@@ -7586,7 +7788,8 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
                  ("Median net profit change", _medn(qt.get("profit"), None, _chg), f"{qt.get('profit_up', 0)} up, {qt.get('profit_down', 0)} down, of {pn}")]
         lw = 6.4 if len(bars) >= 2 else CW
         s.add("stats", (M, TOP, lw, 1.5), items=tiles)
-        lines = [f"Each company against its own quarter a year before; a median of the {_n(len(qc), 'company', 'companies')} reporting {qt.get('quarter') or 'it'}."]
+        lines = [f"Each company against its own quarter a year before; a median of the {_n(len(qc), 'company', 'companies')} reporting {qt.get('quarter') or 'it'}"
+                 + (f", {qt['fiscal']:,} of them on their latest fiscal quarter, ending within two months of it." if qt.get("fiscal") else ".")]
         if later:
             late = [x for x in later if x.get("filed_unread")]
             lines.append(f"{_n(len(later), 'company', 'companies')} still on an earlier quarter, left out of the median: {names5(later)}.")

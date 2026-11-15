@@ -227,7 +227,8 @@ def test_every_rule_holds_on_every_synthetic_theme(name, v, slides):
     # the counts agree: the universe and the figures in one wording on the cover, the findings and data confidence; the quarter's counts
     cov = deck.coverage(v)
     cover = {it[0]: it for b in slides[0].blocks if b["kind"] == "stats" for it in b["items"]}
-    assert cover["With figures"][1] == f"{cov['n']:,}" and cov["line"] in t
+    # y57 (R57, PAY-9): with adjacent participants, the cover's count is said to be of the core members (updated on purpose)
+    assert cover["Core with figures" if cov.get("adjacent") else "With figures"][1] == f"{cov['n']:,}" and cov["line"] in t
     counts = next(p for s in slides if s.title == "Data confidence" for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))
     # R27: the four reconciled counts lead the line, then the universe against the figures in the one wording
     assert counts.startswith(f"Counts: {deck.counts_words(deck.reconciled_counts(v, cov))}.") and cov["line"] in counts
