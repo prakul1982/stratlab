@@ -291,7 +291,8 @@ def test_a_stated_model_is_kept_at_medium_and_a_model_its_words_dont_show_is_not
 UNKNOWN_BEFORE = {"auto": 50, "bank": 0, "semis": 9, "it": 48, "pharma": 0, "insurance": 1, "defence": 7, "cyber": 0, "chem": 125, "realty": 3,
                   "telecom": 1, "retail": 3, "utilities": 1, "metals": 8}
 UNKNOWN_AFTER = {"auto": 17, "bank": 0, "semis": 6, "it": 31, "pharma": 0, "insurance": 1, "defence": 4, "cyber": 0, "chem": 72, "realty": 2,
-                 "telecom": 1, "retail": 3, "utilities": 1, "metals": 7}
+                 "telecom": 1, "retail": 2, "utilities": 1, "metals": 7}
+# (updated on purpose, r571x R57.1: Winmark, "a franchisor of value-oriented retail store concepts", states the new franchising model: retail 3 -> 2)
 
 
 def test_unknown_models_fall_in_every_theme_and_rise_in_none():
@@ -300,7 +301,8 @@ def test_unknown_models_fall_in_every_theme_and_rise_in_none():
         after = sum(1 for c in t["companies"] if G.classify(c)[0] == "unknown")
         assert (before, after) == (UNKNOWN_BEFORE[t["key"]], UNKNOWN_AFTER[t["key"]]), t["key"]
         assert after <= before
-    assert sum(UNKNOWN_BEFORE.values()) == 256 and sum(UNKNOWN_AFTER.values()) == 145          # d53 (R53, updated on purpose): Ichor's "design, engineering and manufacturing of" states its model (semis 7 -> 6)
+    assert sum(UNKNOWN_BEFORE.values()) == 256 and sum(UNKNOWN_AFTER.values()) == 144          # r571x (R57.1, updated on purpose): Winmark states franchising (retail 3 -> 2)
+    assert sum(UNKNOWN_AFTER.values()) == 144          # d53 (R53, updated on purpose): Ichor's "design, engineering and manufacturing of" states its model (semis 7 -> 6)
     # the three layers the owner named
     by_layer = lambda key, layer: [c for t in G.GOLDEN["themes"] if t["key"] == key for c in t["companies"] if c["l"] == layer]   # noqa: E731
     unknown = lambda cos: sum(1 for c in cos if G.classify(c)[0] == "unknown")                                                  # noqa: E731

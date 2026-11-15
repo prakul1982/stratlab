@@ -16,6 +16,9 @@ GOLDEN = json.loads((LIVE / "golden_r36.json").read_text())
 # Corrections to the live R35 result, approved on purpose: "theme:symbol" -> (model, how it counts: "" in the layer's figures, "low" left out
 # as weakly shown, "other" left out as another business). Each with its reason.
 APPROVED = {
+    # r571x (R57.1, on purpose): Winmark's own words, "a franchisor of value-oriented retail store concepts", state the new franchising model
+    # (royalties and fees from franchisees), which the model list lacked
+    "retail:WINA": ("franchising", ""),
     # d53 (R53, LIVE8A-005, on purpose): Ichor's own words, "the design, engineering and manufacturing of critical fluid delivery subsystems",
     # state that it makes its products (theme_check.MAKER_SAYS); it was "insufficient evidence: its own words don't state how it earns"
     "semis:ICHR": ("manufacturing", ""),
