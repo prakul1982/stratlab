@@ -26,7 +26,7 @@ from ..auth import current_profile
 from ..guard import Window
 from ..responses import err
 from . import ai as A
-from . import grounding, theme_base, theme_changes, theme_check, theme_data, theme_library, theme_prices
+from . import grounding, theme_base, theme_changes, theme_check, theme_data, theme_identity, theme_library, theme_prices
 from . import sector_metrics, sector_ops
 from .net import SourceError, TTLCache
 from .news import aggregator_url, company_headline, company_text, fits_company, plain_headline, publisher_url
@@ -46,7 +46,11 @@ NO_DESCRIPTION_DAYS = 3                                                   # ...a
 VERDICTS: dict = {}                                                       # placement answers (a few hundred bytes each), cleared past VERDICT_KEEP
 VERDICT_KEEP = 3000
 DESCRIBE_READS = 6                                                        # descriptions read from the companies' own pages a request
-FILING_READS_PER_MINUTE = DESCRIBE_READS                                  # R35: annual reports read for a thin description a minute, across every theme
+# R35: annual reports read for a description a minute, across every theme. e57 (R57): 30, was 6 (DESCRIBE_READS): a US company's own words
+# are read from its annual report first (evidence_reader), one report's front at a time (sec.SEC.business: at most BUSINESS_BYTES read, a
+# few lines kept a month), well inside the SEC client's own limit; at 6 a minute a theme check read about 6, so Biotech's 650 smaller
+# companies would have waited months
+FILING_READS_PER_MINUTE = 30
 PLACE_READS = 60                                                          # R28: descriptions read for a theme's companies to place, in its check, at most
 PLACE_READS_MAX = 150                                                     # h56: ...for a large theme, as many as its companies without one over
 DESCRIBE_CHECKS_TO_FINISH = 3                                             # ...this many checks (describe_reads), at most this many
@@ -137,15 +141,20 @@ def _business_read(sym: str) -> str:
     return (feed.business(feed.submissions(feed.cik(sym))) or {}).get("text") or ""
 
 
-def filed_business(region: str, sym: str, read=None) -> tuple[str, bool]:
+def filed_business(region: str, sym: str, read=None, until: float | None = None) -> tuple[str, bool]:
     """(what the company's latest annual report says it does, whether that read is still owed), for a description the profile and the
     encyclopedia leave thin (R35). US: the opening of its 10-K's "Item 1. Business" through the SEC feed the company pages use, at most
     FILING_READS_PER_MINUTE across every theme (a read past that is owed and made in a later batch, never a burst); a company that files
-    none has "". India: nothing more is kept in the company's own words than its profile and the lines of its filings (own_filings)."""
+    none has "". India: nothing more is kept in the company's own words than its profile and the lines of its filings (own_filings).
+    e57: `until` (a time.monotonic() deadline, the background read's: describe_missing): with the minute's reads taken, it waits for the next
+    minute while the deadline allows, rather than leaving the read owed; never past the deadline."""
     if region != "US":
         return "", False
-    if not filing_reads.hit("about", FILING_READS_PER_MINUTE):
-        return "", True
+    while not filing_reads.hit("about", FILING_READS_PER_MINUTE):
+        wait = 60.5 - time.time() % 60
+        if until is None or time.monotonic() + wait > until:
+            return "", True
+        time.sleep(wait)
     try:
         return theme_check.clean_description((read or _business_read)(sym)), False
     except SourceError as e:
@@ -162,7 +171,7 @@ def plain_name(name: str) -> str:
     out = re.sub(r"[,.]?\s+(?:inc|incorporated|corp|corporation|co|company|ltd|limited|plc|llc|lp|n\.?v|s\.?a|ag|holdings?)\.?$", "",
                  str(name or "").strip(), flags=re.I)
     out = out.strip(" ,.") or str(name or "")
-    return theme_base.issuer_name(out) if theme_base.listing_line(name) else out
+    return theme_base.issuer_name(out) if theme_base.listing_line(name) or theme_base.unit_line(name) else out
 
 
 def _page_code(sym: str) -> str | None:
@@ -186,6 +195,15 @@ def india_profile(screener, sym: str, code_of=None) -> dict | None:
     except SourceError as e:
         if e.busy:
             raise
+    # e57 (R57: the live R56 Real estate inputs' four REITs, "EMBASSY-RR" and others, looked for in every source under the listing's series
+    # and none found): a symbol with the exchange's series after it (-RR a REIT, -IV an InvIT) is looked up under the symbol alone too
+    plain = re.sub(r"-[A-Z]{2}$", "", str(sym or ""))
+    if plain and plain != sym:
+        try:
+            return screener.company(plain)
+        except SourceError as e:
+            if e.busy:
+                raise
     code = (code_of or _page_code)(sym)
     if code:
         try:
@@ -196,10 +214,49 @@ def india_profile(screener, sym: str, code_of=None) -> dict | None:
     return None
 
 
-def evidence_reader(region: str, names: dict):
+def keep_profile(region: str, sym: str, about, industry: str = "", now: datetime | None = None) -> bool:
+    """e57 (R57, the owner's review of the live R56 decks: CapGoods 185 of 317 and FMCG 128 of 208 description-verified, the rest kept on
+    their official industry): a company's own profile, as its stock page build has just read it from its profile page (the same page and
+    parser the theme reader uses: india_profile), kept as its stored description (the theme:evidence store every theme reads) when no
+    current one is kept, so no source is read again for it. The companies a theme check never reached (largest first, describe_reads a
+    check, the profile source's per-minute limit) had their profile read every time their page was built, and it was thrown away.
+    A profile under ABOUT_WORDS words is not kept here (the theme reader adds the encyclopedia to it). Whether it was kept."""
+    about = theme_check.kept_description(about)
+    if len(about.split()) < ABOUT_WORDS:
+        return False
+    key = f"theme:evidence:{region}:{sym}"
+    now = now or datetime.now(timezone.utc)
+    try:
+        got = db.json_value(db.get_setting(key), {}) or {}
+    except Exception:
+        got = {}
+    if got.get("about") and got.get("at") and not thin_about(got, region):
+        try:
+            if (now - datetime.fromisoformat(got["at"])).days < EVIDENCE_DAYS:
+                return False                      # a current description stands (it may hold the encyclopedia's words beside the profile)
+        except ValueError:
+            pass
+    hit = {"at": now.isoformat(timespec="seconds"), "about": about, "industry": industry or got.get("industry") or "", "v": ABOUT_V,
+           "src": "profile"}
+    try:
+        db.set_setting(key, json.dumps(hit, ensure_ascii=False))
+    except Exception as e:
+        print("theme: profile not kept:", sym, str(e)[:100])
+        return False
+    EVIDENCE_CACHE.pop(key)
+    return True
+
+
+def evidence_reader(region: str, names: dict, budget: float | None = None):
     """A function symbol-list -> ({symbol: {about, industry}}, pending) that reads each company's own description once (the company
-    page's profile), keeps it for EVIDENCE_DAYS, and reads no more than the request's budget allows."""
+    page's profile), keeps it for EVIDENCE_DAYS, and reads no more than the request's budget allows (`budget` seconds, theme_check's
+    EVIDENCE_BUDGET by default).
+    e57 (R57, the owner's review of the live R56 decks: Biotech 159 of 820 and Software 200 of 588 description-verified): a US company's own
+    words come first from its own latest annual report (the opening of a 10-K's Item 1 or a 20-F's Item 4, filed_business), the encyclopedia
+    only beside a filing too thin or none; before, the encyclopedia was read first and the annual report only for a thin line, so a small
+    company with no article waited for one of a few annual-report reads a minute."""
     R = _routes()
+    pace = {"until": None}
 
     def read(sym):
         key = f"theme:evidence:{region}:{sym}"
@@ -214,12 +271,15 @@ def evidence_reader(region: str, names: dict):
                 if age < (EVIDENCE_DAYS if got.get("about") else NO_DESCRIPTION_DAYS):
                     hit = got
         if hit is None:
-            about, industry, no_page = "", "", False
+            about, industry, no_page, owed, filed_first = "", "", False, False, False
             if region == "IN":
                 p = india_profile(R.hub.screener, sym)
                 no_page = p is None
                 p = p or {}
                 about, industry = p.get("about") or "", " > ".join(p.get("industry_path") or [])
+            elif region == "US":
+                about, owed = filed_business(region, sym, until=pace["until"])          # e57: its own annual report first
+                filed_first = True
             if len(about.split()) < ABOUT_WORDS:          # R34: none, or a line too thin to show the business: its encyclopedia summary too
                 try:
                     w = R.hub.wiki.company(plain_name(names.get(sym) or sym)) or {}
@@ -228,17 +288,17 @@ def evidence_reader(region: str, names: dict):
                 if not fits_company(names.get(sym) or sym, w):       # R35: another company's article, or one about no company (Toyo Tires, the myth's Ichor)
                     w = {}
                 about = " ".join(x for x in (about, w.get("extract") or "") if x)
-            owed = False
             # R35: still thin: what its latest annual report says it does (US), a few a minute; lane n2: also when the words it has don't
             # say what it does (UMC's article: where it is and when it was founded), a 20-F's Item 4 as a 10-K's Item 1
             # gl52 (R52, the rotating review of Release 51: Visa, Mastercard, Fortinet, Trade Desk, NetEase and CoreWeave with "No description
             # in its own words yet"): a US company whose words have no sentence of its own about its work (an encyclopedia's opening only)
             # has its annual report's opening added too
-            if len(about.split()) < ABOUT_WORDS or (region == "US" and not (says_work(about) and theme_base.has_own_line(about, names.get(sym) or ""))):
+            if not filed_first and (len(about.split()) < ABOUT_WORDS or (region == "US" and not (says_work(about) and theme_base.has_own_line(about, names.get(sym) or "")))):
                 filed, owed = filed_business(region, sym)
                 about = " ".join(x for x in (about, filed) if x)
             hit = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "about": theme_check.kept_description(about), "industry": industry,
                    "v": ABOUT_V, **({"owed": True} if owed else {}), **({"no_page": True} if no_page else {}),
+                   **({"filed": True} if filed_first and not owed else {}),          # e57: its annual report read first (read_chip_making)
                    # v55: the issuer a listing line was looked up under
                    **({"issuer": plain_name(names.get(sym) or "")} if theme_base.listing_line(names.get(sym) or "") else {})}
             try:
@@ -253,7 +313,10 @@ def evidence_reader(region: str, names: dict):
         return {**hit, "about": " ".join(x for x in (hit.get("about"), filed) if x)}
 
     def evidence_of(symbols):
-        return theme_check.gather_evidence(symbols, read)
+        if budget is None:
+            return theme_check.gather_evidence(symbols, read)
+        pace["until"] = time.monotonic() + budget          # e57: a background read waits for the next minute's annual reports within it
+        return theme_check.gather_evidence(symbols, read, budget=budget)
     return evidence_of
 
 
@@ -520,6 +583,8 @@ def _has_description(region: str, sym: str) -> bool:
         return False
     if hit.get("about"):
         return True
+    if hit.get("owed"):      # e57: its annual report's read was put off (the minute's reads taken): read at the next check, never 3 days on
+        return False
     try:                     # none on its page: asked again after NO_DESCRIPTION_DAYS (evidence_reader)
         return (datetime.now(timezone.utc) - datetime.fromisoformat(hit["at"])).days < NO_DESCRIPTION_DAYS
     except Exception:
@@ -566,6 +631,61 @@ def describe_unplaced(region: str, out: dict, names: dict, kept: dict | None) ->
         except Exception as e:                  # a source busy: placed by the words it has, read on a later check
             print("theme: descriptions to place not read:", type(e).__name__, str(e)[:100])
     return want
+
+
+# e57 (R57, the owner's review of the live R56 decks: Biotech 159 of 820 description-verified, Software 200 of 588): a theme's companies
+# still without a description of their own were read only in its full check, at most once a day (the checked map is kept a day), within one
+# EVIDENCE_BUDGET; a view of a theme whose check is in now also starts one more such read in the background (describe_more), no page
+# waits on it, at most once in DESCRIBE_EVERY a theme, one at a time across every theme, DESCRIBE_BUDGET seconds, the sources' own rates.
+DESCRIBE_EVERY = 3600
+DESCRIBE_BUDGET = 90.0
+_described_at: dict = {}                  # (market, theme) -> when its last such read started (bounded: cleared past VERDICT_KEEP)
+_describe_gate = threading.Lock()
+
+
+def describe_more(region: str, theme: str, m: dict, now: float | None = None) -> bool:
+    """e57: on a view of a theme whose checked map is in, the next of its companies with no stored description are read in the background
+    (describe_missing), at most once in DESCRIBE_EVERY a theme; THEME_DESCRIBE_MORE=0 turns it off (the tests' fake world). Whether one was
+    started."""
+    import os
+    if os.environ.get("THEME_DESCRIBE_MORE", "1").strip().lower() in ("0", "false", "no", "off"):
+        return False
+    now = time.time() if now is None else now
+    k = (region, theme.lower())
+    if now - _described_at.get(k, 0.0) < DESCRIBE_EVERY:
+        return False
+    if len(_described_at) > VERDICT_KEEP:
+        _described_at.clear()
+    _described_at[k] = now
+    later(("describe-more",) + k, lambda: describe_missing(region, m), wait=0)
+    return True
+
+
+def describe_missing(region: str, m: dict, budget: float = DESCRIBE_BUDGET) -> list[str]:
+    """e57: the map's companies with no description kept or looked for lately (_has_description), largest first, at most describe_reads of
+    them, read from their own pages (evidence_reader: the profile page in India, the annual report first in the US, then the encyclopedia)
+    within `budget` seconds and kept in the shared store; one such read at a time across every theme (another running: none). No AI call.
+    The symbols asked."""
+    if not _describe_gate.acquire(blocking=False):
+        return []
+    try:
+        names = _map_names(m)
+        cos = sorted({c["ticker"]: c for v in m.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}.values(),
+                     key=lambda c: (-(c.get("cap") or 0), c["ticker"]))
+        missing = [c["ticker"] for c in cos if not _has_description(region, c["ticker"])]
+        # e57 (RC6): the theme's industry-peer candidates with no description read yet, so they can join on their own words
+        missing += [t for t in theme_identity.peers_unread(m) if t not in missing and not _has_description(region, t)]
+        names = {**{x["ticker"]: x.get("name") or x["ticker"] for x in (m.get("placements") or {}).get("peer_candidates") or []
+                    if isinstance(x, dict) and x.get("ticker")}, **names}
+        want = missing[:describe_reads(len(missing))]
+        if want:
+            try:
+                evidence_reader(region, names, budget=budget)(want)
+            except Exception as e:              # a source busy: read at a later view
+                print("theme: descriptions not read:", type(e).__name__, str(e)[:100])
+        return want
+    finally:
+        _describe_gate.release()
 
 
 def _stored_evidence(region: str, sym: str) -> dict:
@@ -707,11 +827,13 @@ def quick(region: str, theme: str, m: dict) -> dict:
     the AI's pick kept from before, or the industries named like the theme), the AI's own placements shown as not yet confirmed, and the
     tailwinds and risks as general background until they are checked against dated headlines."""
     inds = theme_base.industries_for(region, theme, _rows(region), _no_ai, db.get_setting, db.set_setting)
+    m = theme_identity.resolve_identity(m, _rows(region))          # e57 (RC7)
     unconfirmed = lambda cos: [{**c, "verified": False} for c in cos or []]      # noqa: E731
     out = {**m, "value_chain": [{**v, "companies": unconfirmed(v.get("companies"))} for v in m.get("value_chain") or []],
            "sub_themes": [{**x, "companies": unconfirmed(x.get("companies"))} for x in m.get("sub_themes") or []]}
     out["placements"] = {"checked": False, "pending": len(_map_names(m)), "left_out": 0}
     out = theme_base.with_base(m, out, _rows(region), inds["industries"], grounding.listed_name, **_base_args(region, theme, inds))
+    out = theme_identity.one_listing(out)                          # e57 (RC7)
     out = placed(region, theme, m, out, ask=None)                  # the answer kept with the map, else by the companies' words (no AI here)
     key = check_key(region, theme, m)
     claims = A.get("sector_claims", key) or _plain_claims(m)
@@ -794,6 +916,8 @@ def checked(region: str, theme: str, m: dict, wait: bool = False) -> dict:
     if hit is None:
         later(("check",) + key, lambda: _check(region, theme, m))
         hit = A.get("sector_checked3", key) or A.get("sector_checking", key) or quick(region, theme, m)
+    elif (hit.get("placements") or {}).get("checked"):
+        describe_more(region, theme, hit)          # e57: its companies still without words of their own, read in the background
     return with_caps(hit, _rows(region))
 
 
@@ -828,9 +952,11 @@ def _check(region: str, theme: str, m: dict) -> dict:
             return hit
         if len(VERDICTS) > VERDICT_KEEP:
             VERDICTS.clear()
-        out = theme_check.check_placements(m, evidence_reader(region, _map_names(m)), _ask, theme, VERDICTS)
+        # e57 (RC7): a company the map names under a line the index doesn't list is the index's company, never a second member
+        mi = theme_identity.resolve_identity(m, _rows(region))
+        out = theme_check.check_placements(mi, evidence_reader(region, _map_names(mi)), _ask, theme, VERDICTS)
         # t56: a member of the previous version stays when this check's "yes" only lacked backing words (no evidence against it)
-        out = theme_base.keep_confirmed(out, m, previous_confirmed(region, theme, m))
+        out = theme_base.keep_confirmed(out, mi, previous_confirmed(region, theme, m))
         missing = None
         if region == "US":
             try:
@@ -838,7 +964,13 @@ def _check(region: str, theme: str, m: dict) -> dict:
             except Exception as e:
                 print("theme: SEC codes not filled:", type(e).__name__, str(e)[:100])
         inds = _industries(region, theme, m)
-        out = theme_base.with_base(m, out, _rows(region), inds["industries"], grounding.listed_name, **_base_args(region, theme, inds))
+        out = theme_base.with_base(mi, out, _rows(region), inds["industries"], grounding.listed_name, **_base_args(region, theme, inds))
+        # e57 (RC6): a checked pick's industry peers above the theme's median market value considered, joining on their own stored words
+        try:
+            out = theme_identity.with_peers(out, _rows(region), kept_about(region), theme)
+        except Exception as e:
+            print("theme: industry peers not considered:", type(e).__name__, str(e)[:100])
+        out = theme_identity.one_listing(out)          # e57 (RC7): one member per company, whatever lines the index lists it under
         out = placed(region, theme, m, out, ask=_ask)
         claims = A.get("sector_claims", key)
         if claims is None:
@@ -1258,6 +1390,7 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
     hit = theme_data.build(r, theme, fm, src)
     hit["placements"], hit["figures"] = m.get("placements"), figures
     hit["coverage"] = map_coverage(m)          # R44: of every company the map places, not only those the figures were read for
+    hit["data_gaps"] = dive_gaps(r, m, src)     # e57 (RC7): members above the median market value with no words of their own or no figures
     before = theme_changes.stored(r, m.get("_library") or theme).get("snap")
     # e54 (R54): the membership check moves on through the companies not checked yet, membership_step a stored read (membership_check)
     hit["membership_check"] = membership_check(theme, m, fm, hit, before, getattr(src, "about", lambda s_: None),
@@ -1279,6 +1412,7 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
                      region=r, by=by)
         theme_changes.record(r, m.get("_library") or theme, hit, _map_names(fm), m.get("generated_at"), theme_base.RULES, refresh)   # f4: "What changed"
         theme_changes.flag(r, m.get("_library") or theme, hit.get("coverage"))          # cl48: the admins' alert (coverage_checks)
+        flag_gaps(r, m.get("_library") or theme, hit.get("data_gaps"))                  # e57: the admins' alert (data_gap_checks)
         auto_post(r, theme, hit)
     return hit
 
@@ -1401,6 +1535,78 @@ def coverage_checks() -> list:
         out.append(autofix.Check(id=f"theme-coverage:{k}", name=f"Theme coverage: {x.get('name') or k} ({x.get('region') or ''})",
                                  problem=x.get("problem") or None, action="Open the theme's deck: its coverage page says how many "
                                  "companies are in informative layers and which are in \"Other\".", to="/admin", mail=False))
+    return out
+
+
+GAPS_KEY = "theme:data_gaps"            # e57: {market:theme: {"name", "region", "gaps": [...], "at"}}, one per theme, FLAGS_KEEP at most
+
+
+def dive_gaps(r: str, m: dict, src) -> list[dict]:
+    """e57 (RC7, the audit of the live R56 decks: Alphabet, M&M, eBay and CyberArk with no stored description; SpiceJet, Jyothy, Kovai and
+    RailTel with no figures): the theme's members above its median market value with no description of their own stored or no stored
+    figures (theme_identity.data_gaps). Stored reads only."""
+    about = getattr(src, "about", None) or (lambda s_: None)
+    members = list({c["ticker"]: c for v in m.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}.values())
+
+    def figures(s_):
+        try:
+            hit = computed.get(theme_library.FACTS, [r, s_])
+            return bool(hit and (hit.get("value") or {}).get("years"))
+        except Exception:
+            return True                     # unreadable: not said to be missing
+    try:
+        return theme_identity.data_gaps(members, lambda s_: bool(about(s_)), figures)
+    except Exception as e:
+        print("theme: data gaps not worked out:", type(e).__name__, str(e)[:100])
+        return []
+
+
+def flag_gaps(region: str, name: str, gaps) -> None:
+    """e57: keep a theme's data gaps for the admins' alert (data_gap_checks), cleared once it has none. Never raises."""
+    k = theme_changes.key_of(region, name)
+    gaps = [g for g in gaps or [] if isinstance(g, dict)][:20]
+
+    def put(cur):
+        got = db.json_value(cur, {})
+        got = got if isinstance(got, dict) else {}
+        if not gaps and k not in got:
+            return None
+        got[k] = {"name": name, "region": region, "gaps": gaps, "at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+        if len(got) > theme_changes.FLAGS_KEEP:
+            for old in sorted(got, key=lambda x: str(got[x].get("at") or ""))[:len(got) - theme_changes.FLAGS_KEEP]:
+                del got[old]
+        return json.dumps(got, ensure_ascii=False, separators=(",", ":"))
+    try:
+        db.update_setting(GAPS_KEY, put)
+    except Exception as e:
+        print("theme: data gaps not kept:", type(e).__name__, str(e)[:100])
+
+
+def gap_line(x: dict) -> str | None:
+    """"3 members above the median market value lack data: Alphabet (description), SpiceJet (figures) and 1 more", or None."""
+    gaps = [g for g in x.get("gaps") or [] if isinstance(g, dict)]
+    if not gaps:
+        return None
+    named = ", ".join(f"{g.get('name') or g.get('ticker')} ({' and '.join(g.get('lacks') or [])})" for g in gaps[:3])
+    more = f" and {len(gaps) - 3} more" if len(gaps) > 3 else ""
+    return f"{len(gaps)} member{'s' if len(gaps) != 1 else ''} above the theme's median market value lack{'s' if len(gaps) == 1 else ''} data: {named}{more}."
+
+
+def data_gap_checks() -> list:
+    """e57 (RC7): one Admin check a theme with data gaps (flag_gaps): listed under Needs your attention by the autofix sweep, never mailed;
+    the background reads fill descriptions (describe_more) and the page builds figures, so it clears by itself as they land."""
+    from .. import autofix
+    try:
+        got = db.json_value(db.get_setting(GAPS_KEY), {})
+    except Exception:
+        got = {}
+    out = []
+    for k, x in sorted((got if isinstance(got, dict) else {}).items()):
+        if isinstance(x, dict):
+            out.append(autofix.Check(id=f"theme-gaps:{k}", name=f"Theme data gaps: {x.get('name') or k} ({x.get('region') or ''})",
+                                     problem=gap_line(x), action="Open the theme: its companies above the median market value without a "
+                                     "description or figures are read in the background; a company still listed after a day needs a look.",
+                                     to="/admin", mail=False))
     return out
 
 
@@ -2059,6 +2265,8 @@ def _coverage_source() -> None:
     from .. import autofix
     if not any(getattr(f, "__name__", "") == "coverage_checks" for f in autofix._sources):        # once, however often this is imported
         autofix.source(coverage_checks)          # cl48: the theme coverage control, in the self-healing sweep's Needs your attention
+    if not any(getattr(f, "__name__", "") == "data_gap_checks" for f in autofix._sources):
+        autofix.source(data_gap_checks)          # e57: members above the median with no description or figures
 
 
 _coverage_source()

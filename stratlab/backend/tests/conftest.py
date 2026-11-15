@@ -5,6 +5,7 @@ os.environ.setdefault("BACKTEST_PROCESSES", "0")      # backtests in the test pr
 os.environ["AI_AUTO_PROBE"] = "0"                     # no background AI model measuring (it would use the network)
 os.environ["AUTOFIX"] = "0"                           # no background self-healing sweep (tests run it by hand)
 os.environ["THEME_AUTO_POST"] = "0"                   # no blog post drafted beside a theme read (tests call auto_post with wait=True)
+os.environ["THEME_DESCRIBE_MORE"] = "0"               # no background description read beside a theme view (tests call describe_missing)
 os.environ["OFFICIAL_CLOSE_FETCH"] = "0"               # no exchange file or broker read for official closes (app/official_close.py)
 os.environ["ANTHROPIC_API_KEY_2"] = ""                # no second Claude key from a shell or .env: tests that want one set it
 

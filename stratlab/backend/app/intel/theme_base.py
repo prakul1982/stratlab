@@ -3383,10 +3383,22 @@ _LEGAL_TAIL = re.compile(r"[,.]?\s+(?:inc|incorporated|corp|corporation|co|compa
                          r"holdings?)\.?$", re.I)
 
 
+# e57 (RC7, the live R56 Real estate deck: "Brookfield India Real Estate Trust - REIT", "Property Share Investment Trust- Propshare Titania"
+# looked up as listed, no description found): a unit trust's listing words after its name, the "- REIT"/"- InvIT" mark or an SM REIT's scheme
+_UNIT_TAIL = re.compile(r"\s*-\s*(?:reit|invit)\s*$|(?<=\btrust)\s*-\s*\S.*$|\s+(?:reit|invit)\s*$", re.I)
+
+
+def unit_line(name: str) -> bool:
+    """e57: whether a name is a REIT's or InvIT's listing line, with listing words after the trust's name (issuer_name takes them off)."""
+    return bool(_UNIT_TAIL.search(" ".join(str(name or "").split())))
+
+
 def issuer_name(name: str) -> str:
     """v55: the issuer a listing line stands for, with the line's own words and the legal form taken off ("Adyen Nv-Unspon ADR" -> "Adyen",
-    "Qnity Electronics, Inc." -> "Qnity Electronics"); the name itself when nothing is left."""
+    "Qnity Electronics, Inc." -> "Qnity Electronics"); the name itself when nothing is left. e57: a unit trust's "- REIT"/"- InvIT" mark or
+    an SM REIT's scheme after the trust's name too ("Nexus Select Trust - REIT" -> "Nexus Select Trust")."""
     t = " ".join(str(name or "").split())
+    t = _UNIT_TAIL.sub("", t).strip(" ,.-") or t
     out = _LISTING_LINE.sub("", re.sub(r"\s*\((?:[^()]*\b(?:repr|ord|adrs?|adss?|shares?)\b[^()]*)\)\s*$", "", t, flags=re.I)).strip(" ,.-")
     for _ in range(2):
         out = _LEGAL_TAIL.sub("", out).strip(" ,.-")
