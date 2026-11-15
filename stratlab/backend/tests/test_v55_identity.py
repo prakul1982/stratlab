@@ -315,7 +315,7 @@ def test_one_contract_manufacturer_alone_stays_in_other_with_that_said_on_the_li
 def test_the_membership_checks_progress_is_said_apart_from_the_companies_with_figures():
     v = {"membership_evidence": {"description_verified": 60, "industry_code_supported": 40},
          "membership_check": {"outside": {f"S{i}": "industry_code_supported" for i in range(60)},
-                              "history": [["2026-11-07", 100, 820], ["2026-11-14", 160, 820]]},
+                              "history": [["2026-11-07", 100, 820, 60], ["2026-11-14", 160, 820, 60]]},     # h56: the tally's points (updated on purpose)
          "figures": {"of": 820, "shown": 100}}
     r = DK.progress_row(v, {"total": 820, "n": 98})
     assert r[1] == "160 of 820 (20%)" and "Checked share after each stored version: 12% (07 Nov 2026) → 20% (14 Nov 2026)" in r[2]

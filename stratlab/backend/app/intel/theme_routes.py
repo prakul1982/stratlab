@@ -48,6 +48,8 @@ VERDICT_KEEP = 3000
 DESCRIBE_READS = 6                                                        # descriptions read from the companies' own pages a request
 FILING_READS_PER_MINUTE = DESCRIBE_READS                                  # R35: annual reports read for a thin description a minute, across every theme
 PLACE_READS = 60                                                          # R28: descriptions read for a theme's companies to place, in its check, at most
+PLACE_READS_MAX = 150                                                     # h56: ...for a large theme, as many as its companies without one over
+DESCRIBE_CHECKS_TO_FINISH = 3                                             # ...this many checks (describe_reads), at most this many
 PRICE_READS_PER_MINUTE = 20                                               # companies' candles read from the sources a minute, across every theme
 PRICE_BUDGET = 45.0                                                       # seconds a request may spend reading candles
 price_reads = Window()
@@ -522,27 +524,40 @@ def _has_description(region: str, sym: str) -> bool:
         return False
 
 
+def describe_reads(missing: int) -> int:
+    """h56 (R56, the owner's review of the live R55 decks: Biotech 219 of 820 checked, FMCG 111 of 209 on industry labels): how many
+    companies' own descriptions the background check asks for at one check: PLACE_READS, or the companies still without one over
+    DESCRIBE_CHECKS_TO_FINISH when that is more, at most PLACE_READS_MAX. Still bounded in time: one evidence_reader call (theme_check's
+    EVIDENCE_BUDGET seconds, the sources' own rates: the Indian profile pages' per-minute limit, FILING_READS_PER_MINUTE annual reports);
+    a read the time or a busy source leaves is owed to a later check. No AI call: a description is read from the company's own pages."""
+    n = max(0, int(missing or 0))
+    return min(PLACE_READS_MAX, max(PLACE_READS, -(-n // DESCRIBE_CHECKS_TO_FINISH)))
+
+
 def describe_unplaced(region: str, out: dict, names: dict, kept: dict | None) -> list[str]:
     """R28 (the owner's review: IT services "How they earn is shown for only 6 of these 46 companies"): a description is kept only for the
     companies the AI added (their check reads it) and the largest DESCRIBE_MAX on the page, a few a view, so a small company the placement
     sends to the AI had no words of its own and no revenue model. Before the placement asks, the companies of the theme's industries it
     hasn't placed yet (largest first) with no kept description have their own page's description read once and kept in the shared store
-    (evidence_reader): at most PLACE_READS a theme check, never for a placement already kept, no job of its own. The symbols read."""
+    (evidence_reader): at most describe_reads a theme check, never for a placement already kept, no job of its own. The symbols read.
+    h56 (R56, the owner's review of the live R55 FMCG deck: 98 description-verified, 111 kept on industry labels): after those, every other
+    company of the map with no description looked for yet, largest first, in the same read: its own words, where a source has them, are
+    what the membership check verifies it by (theme_data.evidence_state, membership_recheck) instead of its industry label."""
     kept = kept if isinstance(kept, dict) else {}
     done = set((kept.get("assign") or {}) if isinstance(kept.get("assign"), dict) else ())
     rest = [c for v in out.get("value_chain") or [] if v.get("official") and v.get("basis") in ("industry", "list") and not v.get("by_industry")
             for c in v.get("companies") or [] if c.get("ticker") and c["ticker"] not in done]
     if not any(not v.get("official") and v.get("layer") for v in out.get("value_chain") or []):
-        return []                               # no layers of the map's own to place them in (theme_base.place_rest)
-    want = []
+        rest = []                               # no layers of the map's own to place them in (theme_base.place_rest): none to place
+    by_cap = lambda cs: sorted(cs, key=lambda c: (-(c.get("cap") or 0), c["ticker"]))     # noqa: E731
+    first = {c["ticker"] for c in rest}
+    others = by_cap({c["ticker"]: c for v in out.get("value_chain") or [] for c in v.get("companies") or []
+                     if c.get("ticker") and c["ticker"] not in first}.values())
     # e54 (R54, the owner's review of the live R53 decks: Biotech's 564 and Software's 151 "not checked yet (no description of their own is
     # kept)" after several checks): the candidates were cut to the largest PLACE_MAX before the ones already described were passed over, so
-    # once those had their words no company past them was ever read; the next PLACE_READS without a description, largest first, are read
-    for c in sorted(rest, key=lambda c: (-(c.get("cap") or 0), c["ticker"])):
-        if len(want) >= PLACE_READS:
-            break
-        if not _has_description(region, c["ticker"]):
-            want.append(c["ticker"])
+    # once those had their words no company past them was ever read; the next ones without a description, largest first, are read
+    missing = list(dict.fromkeys(c["ticker"] for c in by_cap(rest) + others if not _has_description(region, c["ticker"])))
+    want = missing[:describe_reads(len(missing))]
     if want:
         try:
             evidence_reader(region, names)(want)
@@ -1163,27 +1178,37 @@ def membership_check(theme: str, m: dict, fm: dict, dive: dict, before: dict | N
     """e54 (R54, the owner's review of the live R53 decks: Biotech "564 still not checked", Software 488, after several checks: the companies
     whose membership was checked were always the figures' window, every one the AI named and then the largest by market value, so the
     check never moved on): the companies outside that window checked so far, earlier stored reads' (the snapshot's "ev") and this read's
-    next theme_data.MEMBERSHIP_STEP, each with its evidence state; with how many are checked of the theme's companies after each stored
-    read ("history", the snapshot's "ev_hist" and this read's point). {"outside": {symbol: state}, "checked", "total", "history"}."""
+    next theme_data.membership_step, each with its evidence state; with how many are checked of the theme's companies after each stored
+    read ("history", the snapshot's "ev_hist" and this read's point). {"outside": {symbol: state}, "checked", "total", "history", "step",
+    "rechecked"}.
+    h56 (R56, the owner's review of the live R55 decks): every point of the history is the evidence tally's (theme_data.checked_tally, the
+    one the deck says the members by state from: Payments' "19 of 20 (95%)" sat beside "100% → 100%", the old point counting the window's
+    companies not checked), with its description-verified count; a point kept before, without the tally's counts, is left out. The step
+    grows with the companies not checked yet (theme_data.membership_step), and a company kept on a label is checked again once its own
+    description is stored (theme_data.membership_recheck)."""
     before = before if isinstance(before, dict) else {}
     every = {c["ticker"] for v in m.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}
-    window = set(dive.get("evidence") or {})
+    window = dive.get("evidence") or {}
     kept = {s_: theme_changes.EV_STATE.get(x, x) for s_, x in (before.get("ev") or {}).items()
             if s_ in every and s_ not in window and theme_changes.EV_STATE.get(x, x) in theme_data.EVIDENCE_STATES}
+    total = (m.get("placements") or {}).get("total") or (dive.get("coverage") or {}).get("placed") or len(every)
+    counts = theme_data.evidence_counts(window)
+    step = theme_data.membership_step(theme_data.checked_tally(counts, kept, total)["total"])
+    new, again = {}, {}
     try:
         words = theme_data.theme_words(fm, theme)
-        new = theme_data.membership_round(m, window | set(kept), words, about)
+        again = theme_data.membership_recheck(m, kept, words, about, step)
+        new = theme_data.membership_round(m, set(window) | set(kept), words, about, step)
     except Exception as e:
         print("theme: membership check not moved on:", type(e).__name__, str(e)[:100])
-        new = {}
-    outside = {**kept, **new}
-    total = (dive.get("coverage") or {}).get("placed") or len(every)
-    checked = len(window | set(outside))
-    hist = [list(p) for p in before.get("ev_hist") or [] if isinstance(p, (list, tuple)) and len(p) == 3]
-    point = [today.isoformat(), checked, total]
+    outside = {**kept, **again, **new}
+    t = theme_data.checked_tally(counts, outside, total)
+    hist = theme_data.tally_points(before.get("ev_hist"))
+    point = theme_data.tally_point(today.isoformat(), t)
     if not hist or hist[-1][1:] != point[1:]:
         hist = (hist + [point])[-theme_changes.KEEP:]
-    return {"outside": dict(sorted(outside.items())), "checked": checked, "total": total, "history": hist, "step": len(new)}
+    return {"outside": dict(sorted(outside.items())), "checked": t["checked"], "total": t["total"], "history": hist, "step": len(new),
+            "rechecked": sum(1 for s_, x in again.items() if x != kept.get(s_))}
 
 
 def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None = None) -> dict:
@@ -1204,7 +1229,7 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
     hit["placements"], hit["figures"] = m.get("placements"), figures
     hit["coverage"] = map_coverage(m)          # R44: of every company the map places, not only those the figures were read for
     before = theme_changes.stored(r, m.get("_library") or theme).get("snap")
-    # e54 (R54): the membership check moves on through the companies not checked yet, MEMBERSHIP_STEP a stored read (membership_check)
+    # e54 (R54): the membership check moves on through the companies not checked yet, membership_step a stored read (membership_check)
     hit["membership_check"] = membership_check(theme, m, fm, hit, before, getattr(src, "about", lambda s_: None),
                                                getattr(src, "today", None) or datetime.now(timezone.utc).date())
     # cl48 (R47): the coverage control, against the previous live read of the theme (theme_changes' snapshot, stored before this one)

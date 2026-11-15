@@ -2460,16 +2460,26 @@ def evidence_tally(v: dict, total: int) -> dict | None:
     ev = v.get("membership_evidence")
     if not isinstance(ev, dict) or not any(ev.get(k) for k, _ in EVIDENCE_WORDS):
         return None            # (a map from before the membership checks, every company as it was: no state to say)
-    out = {k: int(ev.get(k) or 0) for k, _ in EVIDENCE_WORDS}
-    old = int(ev.get("membership_unverified") or 0)          # placed by a map from before the checks: never checked
-    for x in ((v.get("membership_check") or {}).get("outside") or {}).values():
-        if x in out:
-            out[x] += 1
-    checked = sum(out.values())
-    out["checked"], out["total"] = checked, max(total, checked + old)
-    out["membership_unverified"] = out["total"] - checked
-    out["beyond"] = sum(1 for x in ((v.get("membership_check") or {}).get("outside") or {}).values() if x in out)
-    return out
+    # h56 (R56): the one tally (theme_data.checked_tally) the membership check's history is kept from as well
+    from .intel.theme_data import checked_tally
+    return checked_tally(ev, (v.get("membership_check") or {}).get("outside") or {}, total)
+
+
+def verified_lead(t: dict) -> str:
+    """h56 (R56, the owner's review of the live R55 decks: FMCG "checks all 209" with 98 description-verified and 111 on industry labels;
+    "a larger checked count is not stronger direct verification"): the description-verified share, said first wherever the members' count
+    is: "description-verified 98 of 209 (47%)"."""
+    return f"description-verified {t.get('description_verified') or 0:,} of {t.get('total') or 0:,} ({_pct_of(t.get('description_verified'), t.get('total'))})"
+
+
+def _pct_of(a, b) -> str:
+    """A share in whole per cent; never 100% while one is short of the whole (819 of 820 is 99%)."""
+    return f"{share_pct(a, b)}%" if b else "–"
+
+
+def share_pct(a, b) -> int:
+    p = round((a or 0) * 100 / b)
+    return 99 if p == 100 and (a or 0) < b else p
 
 
 def evidence_words(t: dict) -> str:
@@ -2551,8 +2561,9 @@ def membership_words(v: dict, total: int, key: bool = False) -> str:
     if t and t["checked"]:
         # e54: never "confirmed by their own description" for a company kept on its official industry alone; l55: each state by name
         how = "the map's own picks, then the largest by market value" + (f", and {t['beyond']:,} more reached by the membership check" if t["beyond"] else "")
-        head += f"; membership checked {t['checked']:,} of {t['total']:,}" + (f" ({how})" if t["membership_unverified"] or t["beyond"] else "") \
-            + f": {evidence_split(t)}"
+        # h56 (R56): the description-verified share first, then the membership check's count by state
+        head += f"; {verified_lead(t)}; membership checked {t['checked']:,} of {t['total']:,}" \
+            + (f" ({how})" if t["membership_unverified"] or t["beyond"] else "") + f": {evidence_split(t)}"
         if key:
             head += ". " + EVIDENCE_KEY + (EVIDENCE_KEY_LIST if t.get("list_supported") else "")
             head = head.rstrip(".")
@@ -3319,7 +3330,7 @@ STATE_WORDS = {"verified_extreme": "verified", "unverified_extreme": "not reconc
 COVERAGE_HEAD = ["Coverage", "Covered", "Of what"]
 COVERAGE_KINDS = ("Companies, by count", "Market value", "Each figure", "Each layer", "Partly read", "Not in the sources", "In informative layers",
                   "Screened out: another business", "From other industries", "Screening", "Coverage flag", "Moved by what its layer is",
-                  "Since the previous version", "Membership checked")
+                  "Since the previous version", "Membership checked", "Description-verified")
 # R31 (the owner's review of the live R30 Insurance and Real estate decks): the model-specific figures the app's sources don't hold, and why,
 # by business-model family (theme_check.MODELS); said once, on the coverage table (an insurer's, when the sector table doesn't say it)
 NOT_IN_SOURCES = {
@@ -3393,6 +3404,9 @@ def coverage_table(v: dict, cov: dict) -> list[list[str]]:
                                     + (f"; the theme's core members only, the {pop['adjacent']:,} adjacent participants with figures apart" if pop["adjacent"] else "")]]
     if cov.get("share") is not None:
         rows.append([COVERAGE_KINDS[1], f"{cov['share']}%", f"of {cov['of_what']}, held by the companies with figures (a share of value, not of companies)"])
+    ver = dv_share_row(v, cov)
+    if ver:                        # h56 (R56): the description-verified share first, before the membership check's count
+        rows.append(ver)
     if prog:                       # e54: how many of the theme's companies have had their membership checked, and after each version
         rows.append(prog)
     each = next((r[2] for r in coverage_rows(v, cov) if r[0] == "In each median and total"), "")
@@ -3444,24 +3458,63 @@ def coverage_table(v: dict, cov: dict) -> list[list[str]]:
     return rows
 
 
-def progress_row(v: dict, cov: dict) -> list[str] | None:
-    """e54 (R54, the owner's review of the live R53 decks: Biotech "564 still not checked", Software 488, after several checks): how many of
-    the theme's companies have had their membership checked, now and after each earlier stored read of the theme (the membership check
-    moves on through those not checked yet, theme_data.MEMBERSHIP_STEP a stored read), and by what their place rests on. None for a view
+def tally_history(v: dict, t: dict) -> list[list]:
+    """h56 (R56, the owner's review of the live R55 Payments deck: "19 of 20 (95%)" beside "Checked share after each stored version: 100% →
+    100%"): the membership check's history as the deck says it: only the points kept with the evidence tally's counts (theme_data.tally_points:
+    [day, checked, total, description-verified]; a point kept before them has no canonical count and is left out, never guessed), the last one
+    this read's, its counts the tally the deck states (`t`), so the history always ends on the deck's own figure."""
+    from .intel.theme_data import tally_point, tally_points
+    hist = tally_points((v.get("membership_check") or {}).get("history"))
+    if not hist:
+        return []
+    return hist[:-1] + [tally_point(hist[-1][0], t)]
+
+
+def history_words(hist: list[list], k: int) -> str:
+    """h56: "40% (07 Nov 2026) → 47% (14 Nov 2026)": the share each point gives (k: 1 checked, 3 description-verified), the last six; "" with
+    fewer than two points."""
+    return " → ".join(f"{_pct_of(p[k], p[2])} ({_day(p[0])})" for p in hist[-6:]) if len(hist) >= 2 else ""
+
+
+def dv_share_row(v: dict, cov: dict) -> list[str] | None:
+    """h56 (R56, the owner's review of the live R55 decks: Biotech checked 219 of 820, Software 220 of 588, FMCG all 209 but 98 description-
+    verified and 111 on industry labels: "keep the three levels separate; a larger checked count is not stronger direct verification"): the
+    coverage's description-verified share, the row before the membership check's, with the share after each stored version. None for a view
     made before the states were kept."""
     t = evidence_tally(v, cov.get("total") or 0)
     if not t or not t["total"]:
         return None
-    pct = lambda a, b: f"{round(a * 100 / b)}%" if b else "–"      # noqa: E731
-    hist = [p for p in (v.get("membership_check") or {}).get("history") or [] if isinstance(p, (list, tuple)) and len(p) == 3 and p[2]]
-    over = " → ".join(f"{pct(p[1], p[2])} ({_day(p[0])})" for p in hist[-6:]) if len(hist) >= 2 else ""
-    from .intel.theme_data import MEMBERSHIP_STEP
+    lab = t["industry_code_supported"] + t["list_supported"]
+    over = history_words(tally_history(v, t), 3)
+    text = (f"companies whose own description shows the theme's work, of the theme's {t['total']:,}; of the {t['checked']:,} membership-checked, "
+            f"{lab:,} {'are' if lab != 1 else 'is'} industry-supported" + (" or list-supported" if t["list_supported"] else "")
+            + " (a label, not their own words)" + (f" and {t['not_confirmed']:,} {EVIDENCE_SAID_OTHER}" if t["not_confirmed"] else "")
+            + f"; {t['membership_unverified']:,} {UNCHECKED_WORD}"
+            + (f". Description-verified share after each stored version: {over}" if over else "") + ".")
+    return [COVERAGE_KINDS[14], f"{t['description_verified']:,} of {t['total']:,} ({_pct_of(t['description_verified'], t['total'])})", text]
+
+
+def progress_row(v: dict, cov: dict) -> list[str] | None:
+    """e54 (R54, the owner's review of the live R53 decks: Biotech "564 still not checked", Software 488, after several checks): how many of
+    the theme's companies have had their membership checked, now and after each earlier stored read of the theme (the membership check
+    moves on through those not checked yet, theme_data.membership_step a stored read), and by what their place rests on. None for a view
+    made before the states were kept. h56 (R56): its history is the tally's own (tally_history), ending on the count this row states."""
+    t = evidence_tally(v, cov.get("total") or 0)
+    if not t or not t["total"]:
+        return None
+    over = history_words(tally_history(v, t), 1)
+    from .intel.theme_data import membership_step
     # l55 (R55, the owner's review: membership checks must never read as financial coverage growing): the check reads no figure, said
     # beside the count with figures, which it leaves as it is
     n_fig = coverage(v)["n"] if v.get("members") is not None else None
+    # h56: the companies the check hasn't reached yet move on by membership_step a stored read; one it reached that is still not checked
+    # (a check that gave no answer, no words of its own) is checked again once its own words are read
+    reached = len(set(v.get("evidence") or {}) | set((v.get("membership_check") or {}).get("outside") or {}))
+    ahead = min(t["membership_unverified"], max(0, t["total"] - reached))
+    nxt = (f"the next {min(ahead, membership_step(t['total'])):,} by market value checked each time the theme's figures are stored" if ahead
+           else "each checked again once its own words are read")
     text = (f"{evidence_words(t)}"
-            + (f", {t['membership_unverified']:,} not checked; the next {MEMBERSHIP_STEP} by market value checked each time the theme's figures are stored"
-               if t["membership_unverified"] else f", 0 {UNCHECKED_WORD}; every company checked")
+            + (f", {t['membership_unverified']:,} not checked; {nxt}" if t["membership_unverified"] else f", 0 {UNCHECKED_WORD}; every company checked")
             + (f". Checked share after each stored version: {over}" if over else "")
             + (f". The membership check reads no figures: companies with figures {n_fig:,}, a separate count" if n_fig is not None else "") + ".")
     # v55 (R55, the owner: "keep increasing checked membership without implying financial coverage grew"): what the check adds is
@@ -3473,7 +3526,7 @@ def progress_row(v: dict, cov: dict) -> list[str] | None:
                      f"({cov.get('n') or 0:,} with figures), a count of its own that the checks don't change.")
         else:
             text += f" Membership checks only: {cov.get('n') or 0:,} companies with figures, a count of its own that the checks don't change."
-    return [COVERAGE_KINDS[13], f"{t['checked']:,} of {t['total']:,} ({pct(t['checked'], t['total'])})", text]
+    return [COVERAGE_KINDS[13], f"{t['checked']:,} of {t['total']:,} ({_pct_of(t['checked'], t['total'])})", text]
 
 
 # rv51 (R51): why a theme's figures were stored again (theme_changes.cause_of), as the cohort row says it
@@ -5856,7 +5909,9 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     tiles = [("From the official industry list", f"{base_n:,}", "Kept unless their own words describe other work")]
     if tally and tally["checked"]:
         # l55 (R55): each state by its name, the same names as every count of the deck
-        tiles.append(("Description-verified", f"{tally['description_verified']:,}", f"Of the {tally['checked']:,} membership-checked: their own words show the work"))
+        # h56 (R56): its share of the theme's companies first, never read as a share of those checked only
+        tiles.append(("Description-verified", f"{tally['description_verified']:,}",
+                      f"{_pct_of(tally['description_verified'], tally['total'])} of the theme's {tally['total']:,}: their own words show the work"))
         tiles.append(("Industry-supported", f"{tally['industry_code_supported'] + tally['list_supported']:,}",
                       "Of those checked: on their official industry only" + (" or the theme's own list" if tally["list_supported"] else "")))
     if named:

@@ -85,6 +85,9 @@ Failures (the exit code is 1 when any deck has one):
                don't add up (the states to those checked, checked + not checked to the companies); a part of the members (the informative
                layers, "by membership evidence: ...", a layer's "Membership of its 24 companies: ...") with more of a state than the deck's own count of it
   empty page   l55 (the owner's publication preflight: no empty pages): a page that prints its heading and nothing under it
+  history end  h56 (R56, the owner's review of the live R55 Payments deck: "Membership checked 19 of 20 (95%)" beside "Checked share after
+               each stored version: 100% (14 Nov 2026) → 100% (14 Nov 2026)"): a coverage row's share after each stored version (checked,
+               or description-verified) whose last point is not the share the row states ("N of M")
 Reported, and a failure only with --strict:
   cut text     every other text ending in "…" (a label or a sentence cut to its box)
   mixed range  a range with one end whole and the other with a decimal ("19.6% to 20%"; LIVE7A-014)
@@ -106,7 +109,7 @@ FAIL = ("headline", "mid-word", "placeholder", "joining word", "count", "repeate
         "left out>50%", "unchecked as 0", "biz label", "biz making", "stale layer", "same company", "words claim", "partial unsaid",
         "outlier range", "added unexplained", "verified count", "adjacent ranked", "move unexplained", "scope core", "layer lost unsaid",
         "evidence state", "population mismatch", "identity unresolved", "out of scope in Other", "stage mismatch", "coverage blur",
-        "evidence unsplit", "evidence counts", "empty page")
+        "evidence unsplit", "evidence counts", "empty page", "history end")
 WARN = ("cut text", "other>40%", "mixed range")
 # LIVE7A-014: a minus sign as a hyphen before a figure with its unit (never a date's or a range's dash: it follows a space or a bracket)
 _HYPHEN_MINUS = re.compile(r"(?:(?<=\s)|(?<=[(\[])|^)-\d[\d,]*(?:\.\d+)?(?:%|x\b| ?pts\b| ?points\b)")
@@ -318,6 +321,7 @@ def check_pages(pages: list[str]) -> dict:
     e54_checks(pages, add)
     v55_checks(pages, add)
     l55_checks(pages, add)
+    h56_checks(pages, add)
     counts = {k: sum(1 for f in findings if f["kind"] == k) for k in FAIL + WARN}
     return {"pages": len(pages), "counts": counts, "findings": findings}
 
@@ -645,6 +649,50 @@ def l55_checks(pages: list[str], add) -> None:
         lines = [ln for ln in page.split("\n") if ln.strip() and not _FOOTER.search(ln)]
         if page.strip() and _FOOTER.search(page) and len(lines) <= EMPTY_MAX:
             add("empty page", n, " / ".join(ln.strip() for ln in lines)[:140] or "(nothing but the footer)")
+
+
+# h56 (R56): a coverage row's history ("Checked share after each stored version: 64% (07 Nov 2026) → 88% (14 Nov 2026)"; the columns of a
+# PDF's table may put the row's label and count inside the phrase) and the row's own count ("19 of 20 (95%)", a cell of its own)
+_HIST = {"Membership checked": re.compile(r"Checked share after each stored\b"),
+         "Description-verified": re.compile(r"Description-verified share after each stored\b")}
+_HIST_POINT = re.compile(r"(\d{1,3})% \((\d{2} [A-Z][a-z]{2} \d{4})\)")
+_HIST_END = re.compile(r"\)\.(?:\s|$)")
+_ROW_COUNT = re.compile(r"^(\d[\d,]*) of (\d[\d,]*)(?: \(\d{1,3}%\))?$")
+
+
+def h56_checks(pages: list[str], add) -> None:
+    """h56 (R56): a coverage row's history ends on the share the row states (see the module's list)."""
+    for n, page in enumerate(pages, 1):
+        lines = page.split("\n")
+        flat = re.sub(r"\s+", " ", page)
+        for label, rx in _HIST.items():
+            m = rx.search(flat)
+            if not m:
+                continue
+            tail = flat[m.end():m.end() + 700]
+            end = _HIST_END.search(tail)
+            points = _HIST_POINT.findall(tail[:end.end()] if end else tail)
+            if not points:
+                continue
+            at = [i for i, ln in enumerate(lines) if [c for c in re.split(r"\s{2,}", ln.strip()) if c][:1] == [label]]
+            if not at:
+                continue
+            best = None              # the row's count: the "N of M" cell on the label's line or the nearest line by it
+            for i in sorted(range(max(0, at[0] - 3), min(len(lines), at[0] + 4)), key=lambda j: abs(j - at[0])):
+                for c in re.split(r"\s{2,}", lines[i].strip()):
+                    hit = _ROW_COUNT.match(c)
+                    if hit:
+                        best = hit
+                        break
+                if best:
+                    break
+            if not best or not _num(best.group(2)):
+                continue
+            a, b = _num(best.group(1)), _num(best.group(2))
+            share = round(a * 100 / b)
+            share = 99 if share == 100 and a < b else share          # (the deck never says 100% while one is short of the whole)
+            if int(points[-1][0]) != share:
+                add("history end", n, f"{label} {best.group(0)}: its share after each stored version ends on {points[-1][0]}% ({points[-1][1]})")
 
 
 def check_text(text: str) -> dict:
