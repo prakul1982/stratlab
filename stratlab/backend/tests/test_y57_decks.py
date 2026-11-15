@@ -401,3 +401,67 @@ def test_a_claim_naming_members_is_tagged_to_their_layers():
     layers = ["Payment platforms and crypto exchanges", "Cross-border and B2B payments", "Software products and subscriptions", "Merchant acquiring and processing"]
     text = "Software platforms such as Toast and Block bundle payments, lending and payroll for merchants."
     assert deck.claim_layers(text, layers, members) == ["Software products and subscriptions", "Merchant acquiring and processing"]
+
+
+# ---------- 5. second wave: CEM-11 and TEL-5 ----------
+def test_a_line_chart_s_year_labels_never_run_into_each_other():
+    """Fails before (CEM-11): a small layer page's "Margins by year" chart printed "Mar 2022Mar 2023Mar 2024..." (every label, whole, in
+    slots narrower than the labels)."""
+    cats = ["Mar 2022", "Mar 2023", "Mar 2024", "Mar 2025", "Mar 2026"]
+    for w in (1.0, 1.5, 2.2, 2.6, 3.0, 4.5, 8.0):
+        got = deck.axis_labels(cats, w, 10)
+        at = [i for i, c in enumerate(got) if c]
+        assert at[0] == 0 and at[-1] == len(cats) - 1 and len(got) == len(cats), (w, got)
+        slot = w / len(cats)
+        for a, b in zip(at, at[1:]):            # two neighbouring shown labels: each half of each fits the room between their centres
+            assert (deck._width(got[a], 10) + deck._width(got[b], 10)) / 2 + deck.AXIS_GAP <= (b - a) * slot + 1e-9, (w, got)
+    assert deck.axis_labels(cats, 8.0, 10) == cats                             # room for every label whole: each as it is
+    assert deck.axis_labels(cats, 2.6, 10) == ["Mar 22", "Mar 23", "Mar 24", "Mar 25", "Mar 26"]          # short before any is left off
+    if shutil.which("pdftotext"):
+        s = deck.Slide("Layer 1 · Small", "3 companies, revenue ₹1 cr together", eyebrow="X · The value chain")
+        s.add("lines", (deck.M + 8.0, deck.TOP, 3.3, 3.0), title="Margins by year, the same 3 companies", cats=cats,
+              series=[("EBITDA margin", [10.0, 11.0, 12.0, 13.0, 14.0], deck.BLUE), ("Net margin", [5.0, 6.0, 5.5, 7.0, 8.0], deck.ORANGE)], fmt="pct")
+        path = os.path.join(os.environ.get("TMPDIR", "/tmp"), f"y57-axis-{os.getpid()}.pdf")
+        with open(path, "wb") as fh:
+            fh.write(deck._render([deck.Slide("X", "y", dark=True), s], "foot", "t", pdf=True))
+        try:
+            text = "\f".join(DC.pages_of(path))
+        finally:
+            os.remove(path)
+        assert not re.search(r"(?:Mar ?\d{2,4}){2}", text.replace(" ", "")) or not re.search(r"\d{2}Mar", text), text[-400:]
+        assert not re.search(r"20\d\dMar", text)
+
+
+def test_a_company_under_insolvency_or_with_a_loss_over_revenue_on_negative_equity_is_out_of_every_median_with_why():
+    """Fails before (TEL-5): Reliance Communications, in insolvency, "net margin −3543.0%" in a 3-company layer median, its range
+    "−3543.0% to 5.8%"."""
+    now = {"what": "The company has been under Corporate Insolvency Resolution Process since June 2023, with the Committee of Creditors in charge."}
+    assert D.distress_of(now) == "under an insolvency or resolution process, by its own words"
+    for past in ("It underwent CIRP and has since emerged under new management.", "In Feb 2023 the NCLT approved the resolution plan; it was under "
+                 "CIRP before.", "Following insolvency proceedings, it was acquired in 2022.", "It shut down in 2009 after filing for bankruptcy."):
+        assert D.distress_of({"what": past}) == "", past
+    shell = {"what": "Provides telecom services.", "neg_equity": True, "net": -3543.0}
+    assert D.distress_of(shell) == "negative equity and a net loss larger than its revenue"
+    assert D.distress_of({**shell, "net": -40.0}) == "" and D.distress_of({**shell, "neg_equity": False}) == ""      # a loss-maker alone is no shell
+    # in the dive: out of the layer's medians and range, and the theme's, and said with why
+    region, m, f = theme_a()
+    m = copy.deepcopy(m)
+    m["value_chain"][1]["companies"][3]["what"] = now["what"]
+    dive = D.build(region, m["sector"], m, D.Sources(date(2026, 10, 5), facts=f.get))
+    conv = next(b for b in dive["layers"] if b["layer"] == "Converters")
+    hit = next(r for r in conv["companies"] if r.get("distress"))
+    assert hit["symbol"] == "CONV03" and D.in_median(hit, "net") is None and D.in_median(hit, "ebitda") is None
+    assert conv["stats"]["net"]["n"] == conv["n"] - 1 and conv["distress"] == [hit["name"]]
+    assert [x["symbol"] for x in dive["distress"]] == ["CONV03"]
+    from app.intel import theme_routes as T
+    v = T.deck_view(region, m, dive)
+    slides = deck.theme_plan(v, now=NOW)[0]
+    rows = {r[0]: r for s in slides for b in s.blocks if b["kind"] == "table" for r in b.get("rows") or [] if not isinstance(r, dict)}
+    assert rows["In distress"][1] == f"1 company in distress: {deck.clean_name(hit['name'])} (under an insolvency or resolution process, by its own words)."
+    said = " ".join(t for s in slides if s.title.startswith("Layer 2 · Converters") for b in s.blocks if b["kind"] == "text" for t in b["paras"])
+    page = next(s for s in slides if s.title == "Layer 2 · Converters")
+    names = [str(r[0]) for b in page.blocks if b["kind"] == "table" for r in b["rows"] if not isinstance(r, dict)]
+    if any("(in distress)" in n for n in names):
+        assert "(in distress): " in said and "left out of every median and range" in said
+    else:
+        assert "margins and returns apart (under an insolvency or resolution process" in said

@@ -1185,6 +1185,32 @@ def drawn_lines(b: dict) -> dict:
     return {**b, "series": [x for x in b["series"] if sum(1 for y in x[1] if y is not None) >= 2]}
 
 
+_MONTH_YEAR = re.compile(r"^([A-Z][a-z]{2}) (\d{2})(\d{2})$")
+AXIS_GAP = 0.08                 # y57: inches between two category labels on a line chart's axis
+
+
+def axis_labels(cats: list, plot_w: float, size: float = 10) -> list[str]:
+    """y57 (R57, the audit of the live R56 Cement deck, CEM-11: "Mar 2022Mar 2023Mar 2024..." run into each other under a small chart): a line
+    chart's category labels that fit their slots on a plot `plot_w` inches wide: whole where they fit, else short ("Mar 2022" -> "Mar 22"),
+    else every k-th one (the first and the last always) so no two shown labels touch."""
+    cats = [str(c) for c in cats]
+    n = len(cats)
+    if not n:
+        return []
+    slot = plot_w / n
+    forms = [cats, [_MONTH_YEAR.sub(r"\1 \3", c) for c in cats]]
+    widths = [max(_width(c, size) for c in labels) for labels in forms]
+    for every in range(1, n + 1):                 # every label shown, whole or short, before any is left off
+        for labels, widest in zip(forms, widths):
+            if widest + AXIS_GAP <= slot * every:
+                shown = [c if i % every == 0 else "" for i, c in enumerate(labels)]
+                if (n - 1) % every and (n - 1) % every * slot < widest + AXIS_GAP:
+                    shown[(n - 1) // every * every] = ""          # the last label kept, the one too close before it left off
+                shown[-1] = labels[-1]
+                return shown
+    return [forms[1][0]] + [""] * (n - 2) + [forms[1][-1]] if n > 1 else forms[1]
+
+
 def column_labels(cats: list, w: float, size: float) -> tuple[list[list[str]], float]:
     """A column chart's names under their columns, each in lines no wider than its column's share of the plot: two lines at most, at a
     smaller size (10 pt) when that shows more of them whole."""
@@ -1666,7 +1692,8 @@ class PptxRenderer(Canvas):
             return
         x, y, w, h = self._title_box(b)
         cd = CategoryChartData()
-        cd.categories = b["cats"]
+        short = axis_labels(b["cats"], w - 0.9, 10)              # y57: the slide's chart says the same labels as the PDF's, never run together
+        cd.categories = [c or " " * (i + 1) for i, c in enumerate(short)]
         for name, vals, *_ in b["series"]:
             cd.add_series(name, vals)
         ch = self.s.shapes.add_chart(XL_CHART_TYPE.LINE_MARKERS if b.get("labels") else XL_CHART_TYPE.LINE, Inches(x), Inches(y), Inches(w), Inches(h), cd).chart
@@ -1871,8 +1898,7 @@ class PdfRenderer(Canvas):
         ch.x, ch.y, ch.width, ch.height = 46, 28, w * 72 - 62, h * 72 - 70
         ch.data = [list(vs) for _, vs, *_ in b["series"]]
         cats = list(b["cats"])
-        every = max(1, -(-len(cats) // 8))
-        self._axes(ch, [c if i % every == 0 or i == len(cats) - 1 else "" for i, c in enumerate(cats)], 10)
+        self._axes(ch, axis_labels(cats, ch.width / 72, 10), 10)          # y57: labels that never run into each other
         ch.valueAxis.labelTextFormat = f
         vals = [v for _, vs, *_ in b["series"] for v in vs if v is not None]
         if vals:
@@ -2125,6 +2151,8 @@ def part_note(c: dict, keys: tuple) -> str:
     out of the median (not reconciled, invalid, or on another period basis: n.c.); "" when none is."""
     from .intel.theme_data import DEVELOPER_KEYS, STATE_WORDS, VERIFIED
     held, ver, nc = c.get("held") or {}, c.get("verify") or {}, set(c.get("nc") or ())
+    if c.get("distress"):            # y57 (R57, TEL-5): every margin and return apart, with why
+        return f"partial: margins and returns apart ({c['distress']})"
     gone, odd = [], []
     for k in keys:
         st = (held.get(k) or {}).get("state") or ((ver.get(k) or {}).get("state") if (ver.get(k) or {}).get("state") != VERIFIED else None)
@@ -2162,7 +2190,7 @@ def layer_roll(layer: dict, cos: list, keys: tuple = ("ebitda", "net")) -> tuple
         elif c["symbol"] in wide and apart:
             ins.append((nm, "partial: whole company's figures, revenue only"))
         else:
-            ins.append((nm, part_note(c, keys) if c.get("one_off") or c.get("nc") or c.get("developer") or any(c.get(k) is None for k in keys) else ""))
+            ins.append((nm, part_note(c, keys) if c.get("one_off") or c.get("nc") or c.get("developer") or c.get("distress") or any(c.get(k) is None for k in keys) else ""))
     return ins, outs
 
 
@@ -3295,6 +3323,11 @@ def confidence_rows(v: dict, cov: dict, today: date, lender: bool = False) -> li
     if v.get("developers"):        # d53: companies spending ahead of their revenue, apart from the margin medians
         rows.append(["Spending ahead of revenue", f"{_n(v['developers'], 'company', 'companies')} whose costs are over twice their revenue (EBITDA margin below −100%), "
                      "pre-revenue or early-stage.", "Their margins are shown on their rows, verified, and left out of every margin median and range."])
+    if v.get("distress"):          # y57 (R57, TEL-5): companies in distress, each with its reason
+        ds_ = v["distress"]
+        rows.append(["In distress", f"{_n(len(ds_), 'company', 'companies')} in distress: " + "; ".join(f"{clean_name(x['name'])} ({x['why']})" for x in ds_[:4])
+                     + (f"; and {len(ds_) - 4} more" if len(ds_) > 4 else "") + ".",
+                     "Margins and returns shown on their rows, marked (in distress), and left out of every median and range."])
     if ch.get("verified"):         # R44: an unusual figure its own filed figures give: kept, and said so with the count
         rows.append(verified_row(ch["verified"]))
     if ch.get("one_off"):
@@ -6174,6 +6207,8 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
                 return ROLL_TAG.get(why_kind(calc_of(c)), "insufficient evidence")      # ex49: the reason's kind
             if c["symbol"] in nofig:
                 return ROLL_TAG["no figure stored"]
+            if c.get("distress"):          # y57 (R57, TEL-5): its margins on its row, out of every median and range
+                return "in distress"
             return "whole company" if c["symbol"] in lwide else "on its industry" if c.get("on_industry") else "own design" if c.get("own_goods") else \
                 "on its words" if c.get("by_words") else ""
         tags = {c["symbol"]: tag(c) for c in cos}
@@ -6304,6 +6339,11 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             fparts.append(f"{ONE_OFF}: {ONE_OFF_NOTE} ({ANOMALY_WHY}); left out of the net margin's median.")
         if any(c.get("gain") and not c.get("one_off") for c in cos):
             fparts.append(f"{GAIN}: {GAIN_NOTE}.")
+        hurt = [c for c in cos if c.get("distress")]
+        if hurt:                            # y57 (R57, TEL-5): each one with its reason
+            fparts.append("(in distress): " + "; ".join(f"{clean_name(c['name'])}, {c['distress']}" for c in hurt[:4])
+                          + (f"; and {len(hurt) - 4} more" if len(hurt) > 4 else "") + "; its margins and returns are shown on its row and left out of "
+                          "every median and range.")
         if any(c.get("nc") for c in cos):
             fparts.append("n.c.: not comparable, the figure is on another basis than the rest of its column (latest full year against filed "
                           "results annualised), so it is left out of the median.")
@@ -6380,7 +6420,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         on_page = {c["symbol"] for c in cos[:k_fit]}
         on_tags = {tags[x] for x in on_page}
         # ex49: a left-out mark's note (each kind's, kind_notes) and the own-design note only with a row on the page that carries it
-        drop = [p for p in fparts for t_ in ("different model", "another business", "insufficient evidence", "own design", "on its words")
+        drop = [p for p in fparts for t_ in ("different model", "another business", "insufficient evidence", "own design", "on its words", "in distress")
                 if p.startswith(f"({t_})") and t_ not in on_tags]
         drop += [p for p in fparts if p.startswith("(whole company)") and "whole company" not in on_tags]
         drop += [p for p in fparts if p.startswith("(on its industry)") and "on its industry" not in on_tags]
@@ -6390,7 +6430,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         drop += [nf_note] if not nofig & on_page else []
         if rline and not unsure & on_page:          # R35: the roll's line says who isn't confirmed, so the mark's own note goes with its rows
             drop += [p for p in fparts if p.startswith("(not confirmed)")]
-        if (unmodelled or rline or nofig or lwide or {"on its industry", "own design", "on its words", "consolidated"} & shown_tags) and any(p in fparts for p in drop):       # no marked row shown: its note isn't either
+        if (unmodelled or rline or nofig or lwide or {"on its industry", "own design", "on its words", "consolidated", "in distress"} & shown_tags) and any(p in fparts for p in drop):       # no marked row shown: its note isn't either
             fparts = [p for p in fparts if p not in drop]
             fnote, fh2 = foot(fparts)
             if rline and fh2 < fh:          # R35: the roll's line took room from the table: the room the dropped notes leave goes back to its rows,
@@ -6424,7 +6464,8 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             keep = []
             for p_ in fparts_all:            # the notes of the marks the shown rows carry, as the rules above keep them
                 if any(p_.startswith(f"({t_})") and t_ not in tags_now for t_ in ("different model", "another business", "insufficient evidence",
-                                                                                   "own design", "on its words", "whole company", "on its industry")):
+                                                                                   "own design", "on its words", "whole company", "on its industry",
+                                                                                   "in distress")):
                     continue
                 if (p_ == nf_note and not nofig & on_now) or (p_.startswith("(not confirmed)") and rline and not unsure & on_now):
                     continue

@@ -430,10 +430,37 @@ def in_median(r: dict, key: str):
         return None
     if key in DEVELOPER_KEYS and r.get("developer"):      # d53: a company spending ahead of its revenue, counted apart (verify_ebitda)
         return None
+    if key in DISTRESS_KEYS and r.get("distress"):       # y57: a company under insolvency or resolution, counted apart (distress_of)
+        return None
     return r.get(key)
 
 
 DEVELOPER_KEYS = ("ebitda", "net")
+DISTRESS_KEYS = ("ebitda", "net", "roce", "roe")
+# y57 (R57, the audit of the live R56 Telecom deck, TEL-5: Reliance Communications, in insolvency, "net margin −3543.0%" in a 3-company layer
+# median and its range "−3543.0% to 5.8%"): a company whose own words say it is under an insolvency, resolution or liquidation process now
+# (never one that came out of one), or whose equity is negative with a loss larger than its revenue, is in distress: its margins and returns
+# stay on its row, marked, and are left out of every median and range, with the reason printed
+_DISTRESS_NOW = re.compile(r"\b(?:is|has been|remains|continues to be|currently|now)\s+(?:under|in|undergoing)\s+(?:an?\s+|the\s+)?"
+                           r"(?:corporate insolvency resolution process|insolvency resolution process|CIRP|insolvency|liquidation|"
+                           r"bankruptcy|Chapter 11|receivership|administration proceedings)\b|\b(?:admitted (?:in)?to|under) (?:the )?(?:corporate "
+                           r"insolvency resolution process|CIRP)\b|\b(?:managed|run|controlled) by (?:an? |the )?(?:interim )?resolution professional\b|"
+                           r"\bfiled (?:a petition )?for (?:Chapter 11|bankruptcy)\b", re.I)
+_DISTRESS_PAST = re.compile(r"\b(?:emerged|exited|came out|completed|approved|acquired|settled|concluded|post-|following|after|formerly|was under|"
+                            r"discharged|revived|resumed)\b", re.I)
+DISTRESS_LOSS = -100.0        # y57: a net margin at or below this, on negative equity, is distress by the figures alone
+
+
+def distress_of(r: dict) -> str:
+    """y57: why a company is in distress (its margins counted apart from every median and range), or "": its own words say it is under an
+    insolvency, resolution or liquidation process now (a sentence that says it came out of one doesn't count), or its equity is negative and
+    its net loss is larger than its revenue."""
+    for sent in re.split(r"(?<=[.;])\s+", str(r.get("what") or "")):
+        if _DISTRESS_NOW.search(sent) and not _DISTRESS_PAST.search(sent):
+            return "under an insolvency or resolution process, by its own words"
+    if r.get("neg_equity") and r.get("net") is not None and r["net"] <= DISTRESS_LOSS:
+        return "negative equity and a net loss larger than its revenue"
+    return ""
 DEVELOPER_SAID = "costs over twice its revenue (a company spending ahead of its revenue), counted apart from margin medians"
 
 
@@ -859,6 +886,7 @@ def validate_row(r: dict, f: dict, last: dict | None) -> dict:
         hold(r, "net", "revenue_scale", state=state, why=why)
     bv = num(f.get("book_value"))
     if bv is not None and bv < 0 or f.get("net_worth_negative"):
+        r["neg_equity"] = True               # y57: kept, so a loss larger than revenue on negative equity reads as distress (distress_of)
         hold(r, "roe", "neg_equity")
         hold(r, "pb", "neg_book")
     verify_ebitda(r)
@@ -1251,7 +1279,7 @@ def layer_block(name: str, rows: list[dict], wide: set[str]) -> dict:
                      and not (k in BANK_ONLY and r.get("profile") == "insurer")) for k in STAT_KEYS}
     stats.update({k: stat(r.get(k) for r in pool) for k in sector_metrics.KEYS if any(r.get(k) is not None for r in pool)})    # R23: filed sector figures
     return {"layer": name, "companies": rows, "stats": stats, "n": len(sure), "listed": len(rows),
-            "net_all": stat(r.get("net") for r in pool if not r.get("developer")), "one_off": sorted(r["symbol"] for r in pool if r.get("one_off")),
+            "net_all": stat(r.get("net") for r in pool if not r.get("developer") and not r.get("distress")), "one_off": sorted(r["symbol"] for r in pool if r.get("one_off")),
             # gl50: a listed subsidiary whose parent is in the layer's calculations too is left out of its revenue total (the parent's
             # figures consolidate it), and named ("double")
             "revenue": sum(r["revenue"] for r in sure if r.get("revenue") and not consolidated_in(r, sure)) or None,
@@ -1271,6 +1299,7 @@ def layer_block(name: str, rows: list[dict], wide: set[str]) -> dict:
             "in_stats": {k: [r["name"] for r in pool if in_median(r, k) is not None] for k in ("ebitda", "net", "roce", "roe")},
             # d53: the companies spending ahead of their revenue, apart from its margin medians (verify_ebitda)
             "developers": [r["name"] for r in pool if r.get("developer")],
+            "distress": [r["name"] for r in pool if r.get("distress")],            # y57: out of every median and range, with why
             # d53 (LIVE8A-010: Fabless "1.4%" as its median, from its micro-caps, beside NVIDIA's 61.7% on most of its revenue): the EBITDA
             # margin of its companies in the median together (EBITDA over revenue, so each counts by its size)
             "aggregate": together(pool)}
@@ -3318,6 +3347,12 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
                     r["model_out"], r["out_why"] = "other", "adjacent"
         # e54: a company confirmed by its own description shows the words that confirmed it (its stored description's own sentence)
         said = lambda r: what.get(r["symbol"]) or (shown_words({"name": r.get("name")}, src.about(r["symbol"])) if r.get("evidence") == "description_verified" else "")  # noqa: E731
+        for r in mine:                     # y57: a company in distress, from its own words and figures, before any median is taken
+            try:
+                about = str(src.about(r["symbol"]) or "")
+            except Exception:
+                about = ""
+            r["distress"] = distress_of({**r, "what": f"{what.get(r['symbol']) or ''} {about}".strip()})
         b = layer_block(v.get("layer") or "", [{**r, "what": own_words(said(r), r.get("name") or "", r["symbol"]) or None, "company_wide": r["symbol"] in wide, "official_industry": ind.get(r["symbol"]) or "",
                                                 **model_fields(v, r["symbol"]), **refit_of(v, r["symbol"])} for r in mine], wide)
         b["description"] = v.get("description") or ""
@@ -3424,8 +3459,10 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     out["core_kind"] = tkind
     out["adjacent"] = [{"symbol": r["symbol"], "name": r["name"], "kind": r["adjacent"]["kind"], "where": r["adjacent"]["where"],
                         "text": r["adjacent"]["text"], "layer": layer_name.get(r["symbol"]) or ""} for r in adjacent]
-    out["sections"]["medians"]["net_all"] = stat(r.get("net") for r in own if not r.get("developer"))
+    out["sections"]["medians"]["net_all"] = stat(r.get("net") for r in own if not r.get("developer") and not r.get("distress"))
     out["developers"] = sum(1 for r in own if r.get("developer"))          # d53: spending ahead of revenue, apart from the margin medians
+    # y57 (R57, TEL-5): the companies in distress, each with its reason, out of every median and range
+    out["distress"] = [{"symbol": r["symbol"], "name": r["name"], "why": r["distress"]} for r in own if r.get("distress")]
     layer_of = {c["symbol"]: b["layer"] for b in blocks for c in b["companies"]}
     # gl50: the parent and listed subsidiary pairs, and whether the parent's stored figures are consolidated (its basis) or the whole company's
     out["parents"] = [{"symbol": s, "name": rows[s]["name"], "parent": p["parent"], "parent_name": rows[p["parent"]]["name"] if p["parent"] in rows else p["parent_name"],
