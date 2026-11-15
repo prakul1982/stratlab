@@ -175,7 +175,9 @@ FMCG_R55 = (
 def test_deck_check_fails_a_history_that_does_not_end_on_the_rows_share():
     """Fails before: no rule read the history against the row's count (the live R55 Payments deck passed)."""
     got = DC.check_text(PAYMENTS_R55)
-    assert got["counts"]["history end"] == 1 and "19 of 20 (95%)" in got["findings"][0]["text"]
+    assert got["counts"]["history end"] == 1
+    assert [f["text"] for f in got["findings"] if f["kind"] == "history end"] == [
+        "Membership checked 19 of 20 (95%): its share after each stored version ends on 100% (14 Nov 2026)"]
     assert DC.check_text(FMCG_R55)["counts"]["history end"] == 0          # its columns interleaved: 209 of 209 is 100%, the last point 100%
     fixed = PAYMENTS_R55.replace("100% (14 Nov 2026) → 100% (14 Nov 2026)", "90% (07 Nov 2026) → 95% (14 Nov 2026)")
     assert DC.check_text(fixed)["counts"]["history end"] == 0

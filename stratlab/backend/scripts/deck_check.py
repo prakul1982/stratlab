@@ -705,7 +705,7 @@ def _end_check(add, n: int, label: str, count, points) -> None:
     share = round(a * 100 / b)
     share = 99 if share == 100 and a < b else share          # (the deck never says 100% while one is short of the whole)
     if int(points[-1][0]) != share:
-        add("history end", n, f"{label} {count.group(0)}".strip() + ": its share after each stored version ends on {points[-1][0]}% ({points[-1][1]})")
+        add("history end", n, f"{label} {count.group(0)}".strip() + f": its share after each stored version ends on {points[-1][0]}% ({points[-1][1]})")
 
 
 def check_text(text: str) -> dict:
