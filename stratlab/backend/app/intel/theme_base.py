@@ -2461,6 +2461,10 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
         # reason to call its evidence insufficient
         main_said = lambda c: {model_family(x) for x in words_models(principal_words(ev(c)))} - {""}      # noqa: E731
 
+        def same_kin(fam_: str) -> bool:
+            # r571x: the layer's own family, or one of its kin of making (a maker of its own products beside a parts maker)
+            return bool(fam_) and (fam_ == f or any({f, fam_} <= k_ for k_ in KIN_FAMILIES))
+
         def of_layer(c) -> bool:
             # x57: a sign the company is of what the layer is, beside the read: its own words say the layer's name or share a word of its kind
             # with the layer's description, or its official industry is the layer's (never the read of how it earns alone)
@@ -2488,9 +2492,21 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
         # the layer's figures, marked as read at low confidence ("read_low"), never as shown in its own words
         low_ = {c.get("ticker") for c in cos if fam(c) == "" and c.get("ticker") not in kin and c.get("ticker") not in another
                 and c.get("ticker") not in outside and c.get("ticker") not in uf and conf.get(c.get("ticker")) == "low"
-                and own_text(ev(c)).strip() and ((model_family(every.get(c.get("ticker")) or "") == f and main_said(c) <= {f}) or f in main_said(c))
+                and own_text(ev(c)).strip() and ((same_kin(model_family(every.get(c.get("ticker")) or "")) and all(same_kin(x) for x in main_said(c))) or f in main_said(c))
                 and of_layer(c)}
         kin |= low_
+        # r571x (R57.1, the new live Aerospace and defense deck: GE Aerospace and RTX, read at low confidence as makers of their own products,
+        # and Honeywell Aerospace, read as one at medium, left out of "Engines and propulsion", a layer read as parts makers): a maker of its own
+        # products and a parts maker are one kin of making (KIN_FAMILIES); a company of the layer's kin whose own words or industry are of what
+        # the layer is (of_layer) is in its figures, whatever the layer's industries (R40 asked one industry)
+        # (a company the split held in this layer as another way of earning, its read set aside, counts by that read: `read`)
+        kin_any = {c.get("ticker") for c in cos if c.get("ticker") not in kin and c.get("ticker") not in another and c.get("ticker") not in uf
+                   and (fam(c) or c.get("ticker") in outside) and model_family(models.get(c.get("ticker")) or read.get(c.get("ticker")) or "") != f
+                   and same_kin(model_family(models.get(c.get("ticker")) or read.get(c.get("ticker")) or "")) and of_layer(c)}
+        for s_ in kin_any:
+            outside.discard(s_)
+            models.setdefault(s_, read.get(s_) or every.get(s_) or "")
+        kin |= kin_any
         # x57 (RC4: Payoneer, "remove the complexity and barriers of doing business across borders", in "Cross-border and B2B payments" with no
         # way of earning read): a company no answer gave a model, placed in the layer by the map or the AI's placement (never by its words
         # alone), whose own words say the layer's name and name no way of earning, in a layer whose own name and description state no way of
