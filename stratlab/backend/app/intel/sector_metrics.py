@@ -32,8 +32,9 @@ from .. import computed
 from . import metric_registry as registry
 
 KIND = "sector:metrics"
-VERSION = 2                     # part of a stored piece's key and of a dive's: figures read under older rules are read again (R27: NII / assets,
-                                # capex, inventory days, R&D, the bases of growth figures)
+VERSION = 3                     # part of a stored piece's key and of a dive's: figures read under older rules are read again (R27: NII / assets,
+                                # capex, inventory days, R&D, the bases of growth figures; dat57: the larger R&D line, a revenue year far
+                                # behind the latest report)
 BUDGET = 20.0                   # seconds of reading a theme's build may spend on filings before the rest go to the worker
 MAX_QUEUE = 200
 PAUSE = 1.0                     # seconds between documents from the exchange's archive (shareholders.py's pace)
@@ -351,6 +352,7 @@ DEFERRED = ("ContractWithCustomerLiability", "DeferredRevenue")
 DEFERRED_PARTS = (("ContractWithCustomerLiabilityCurrent", "ContractWithCustomerLiabilityNoncurrent"), ("DeferredRevenueCurrent", "DeferredRevenueNoncurrent"))
 INVENTORY = ("InventoryNet", "InventoryGross")
 RD = ("ResearchAndDevelopmentExpense", "ResearchAndDevelopmentExpenseExcludingAcquiredInProcessCost")
+STALE_DAYS = 548            # about 18 months: a period this far behind the company's own latest report, or the theme's typical latest one, isn't current
 MILLION = 1e6
 
 
@@ -364,6 +366,11 @@ def us_figures(facts: dict) -> dict:
     if not rev:
         return {}
     end = max(rev)
+    # a revenue year far behind the company's own latest annual report (lane dat57: Agassi Sports Entertainment's FY2025 10-K tags no
+    # revenue, its latest revenue is of 2014/2015, and the R56 retail deck listed its figures as of "FY Dec 2014"): not current, none shown
+    latest = max((e for e in sec.flows(facts, sec.NET_INCOME + sec.OPERATING, "annual", unit)), default=end)
+    if (_day(latest) - _day(end)).days > STALE_DAYS:
+        return {"_stale": end}
     fy = f"Fiscal year to {_label(end)}"
     src = "Annual report (10-K) facts filed with the SEC"
     r = rev[end]
@@ -420,6 +427,8 @@ def read_us(symbol: str, sec_client) -> dict:
     facts = sec_client._json(f"/api/xbrl/companyfacts/CIK{cik:010d}.json")
     got = us_figures(facts or {})
     end = got.pop("_end", None)
+    if got.get("_stale"):
+        return {"family": "us", "metrics": {}, "end": None, "none": f"latest figures are for FY {_label(got['_stale'])}"}
     return {"family": "us", "metrics": got, "end": end, **({} if got else {"none": "no revenue in the SEC's company facts"})}
 
 
@@ -522,6 +531,7 @@ def apply(row: dict, piece: dict | None) -> None:
     row["sector_src"] = {}
     end = (piece or {}).get("end")
     row["sector_as_of"] = (("FY " if (piece or {}).get("family") == "us" else "") + _label(end)) if end and got else None
+    row["sector_end"] = end if end and got else None
     if (piece or {}).get("kind"):
         row["sector_kind"] = piece["kind"]
     for k, fig in got.items():
@@ -584,6 +594,15 @@ def section(rows: list[dict], region: str, layer_of: dict, pending: list, stat, 
                              "headline": [], "states": {}, "extreme": [], "periods": [], "checked": CHECKED[fam], "not_filed": NOT_FILED[fam]}
             continue
         with_ = [r for r in cos if any(r.get(k) is not None for k in have)]
+        # a company whose figures end far before the family's typical latest period isn't shown with them as current: left out of the
+        # rows and medians, with the reason for the deck to print (lane dat57: "latest figures are for FY Dec 2014")
+        ends = sorted(str(r.get("sector_end")) for r in with_ if r.get("sector_end"))
+        typical = ends[len(ends) // 2] if ends else None
+        gap = lambda r: (_day(typical) - _day(str(r["sector_end"]))).days if typical and r.get("sector_end") and _day(typical) and _day(str(r["sector_end"])) else 0   # noqa: E731
+        stale = [r for r in with_ if gap(r) > STALE_DAYS]
+        with_ = [r for r in with_ if r not in stale]
+        if not with_:
+            continue
         out_rows = [{"symbol": r["symbol"], "name": r["name"], "layer": layer_of.get(r["symbol"]), "as_of": r.get("sector_as_of"),
                      **{k: r.get(k) for k in have}, "src": r.get("sector_src") or {},
                      **({"type": registry.insurer_type(r, r.get("sector_kind") or "")} if fam == "insurer" else {})} for r in with_]
@@ -601,7 +620,9 @@ def section(rows: list[dict], region: str, layer_of: dict, pending: list, stat, 
         f = {"keys": keys, "n": len(with_), "of": len(cos), "pending": late, "read": len(cos) - late, **summ,
              "rows": out_rows,
              "periods": sorted({(r.get("sector_src") or {}).get(k, {}).get("period") or "" for r in with_ for k in keys} - {""}),
-             "checked": CHECKED[fam], "not_filed": NOT_FILED[fam]}
+             "checked": CHECKED[fam], "not_filed": NOT_FILED[fam],
+             "stale": [{"symbol": r["symbol"], "name": r["name"], "as_of": r.get("sector_as_of"),
+                        "reason": f"latest figures are for {r.get('sector_as_of')}"} for r in stale]}
         if fam == "insurer":
             types = {}
             for t in INSURER_TYPES:

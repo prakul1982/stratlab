@@ -168,3 +168,90 @@ def test_a_current_consolidated_table_with_a_short_history_is_the_companys_figur
     # INA: consolidated accounts since Mar 2022 (5 years), standalone since Mar 2020 (7)
     got = scr._pick({"consolidated": {"ratios": {"x": 1}, "pl": pl(2026, 5)}, "standalone": {"ratios": {"x": 1}, "pl": pl(2026, 7)}})
     assert got["basis"] == "consolidated"
+
+
+# ======================= second wave =======================
+# ---------- 7. the parent's profit: the total less the minority's share before profit available to common shareholders ----------
+def test_net_profit_is_the_parents_not_the_profit_left_after_preferred_accretion():
+    # POM: no NetIncomeLoss; ProfitLoss CNY -130.9 m, minority's share nil, -212.6 m available to common shareholders
+    y = lambda v: [_fy("2025-12-31", "2025-01-01", v, "2026-04-30")]   # noqa: E731
+    f = {"us-gaap": {"Revenues": {"units": {"USD": y(399.9e6)}}, "ProfitLoss": {"units": {"USD": y(-130.9e6)}},
+                     "NetIncomeLossAttributableToNoncontrollingInterest": {"units": {"USD": y(0.0)}},
+                     "NetIncomeLossAvailableToCommonStockholdersBasic": {"units": {"USD": y(-212.6e6)}}}}
+    assert sec.build({"facts": f})["pl"]["rows"]["Net Profit"][-1] == pytest.approx(-130.9, abs=0.01)
+    # a minority's real share is taken out of the total
+    f["us-gaap"]["ProfitLoss"] = {"units": {"USD": y(100e6)}}
+    f["us-gaap"]["NetIncomeLossAttributableToNoncontrollingInterest"] = {"units": {"USD": y(20e6)}}
+    f["us-gaap"]["NetIncomeLossAvailableToCommonStockholdersBasic"] = {"units": {"USD": y(75e6)}}
+    assert sec.build({"facts": f})["pl"]["rows"]["Net Profit"][-1] == pytest.approx(80, abs=0.01)
+    # NetIncomeLoss, when filed, stands
+    f["us-gaap"]["NetIncomeLoss"] = {"units": {"USD": y(81e6)}}
+    assert sec.build({"facts": f})["pl"]["rows"]["Net Profit"][-1] == pytest.approx(81, abs=0.01)
+
+
+# ---------- 8. a split after the latest filing's share count ----------
+def test_a_split_after_the_counts_date_puts_the_count_on_the_prices_basis():
+    p = {"shares": 62_842_748.0, "shares_at": "2026-07-31", "annual_form": "10-K"}
+    got = sec.split_since(p, [{"date": "2026-09-08", "numerator": 1.0, "denominator": 20.0},
+                              {"date": "2024-05-01", "numerator": 2.0, "denominator": 1.0}], "2026-11-15")
+    assert got["shares"] == 3_142_137 and got["shares_at"] == "2026-09-08" and "1-for-20 on 2026-09-08" in got["share_note"]
+    assert sec.market_value(got, 4.87) == pytest.approx(15.3, abs=0.05)
+    # a count dated after the split is on the new basis already; a foreign filer's "split" can be a depositary-ratio change
+    assert sec.split_since({**p, "shares_at": "2026-10-01"}, [{"date": "2026-09-08", "numerator": 1.0, "denominator": 20.0}])["shares"] == 62_842_748.0
+    assert sec.split_since({**p, "annual_form": "20-F"}, [{"date": "2026-09-08", "numerator": 1.0, "denominator": 20.0}])["shares"] == 62_842_748.0
+    # the build dates its count: the cover page's day
+    f = _split_facts("2025-12-31", "2025-01-01", "2026-03-10", -59.5e6, -0.50, 120_000_000, ("2026-07-31", 119_000_000), None)
+    assert sec.build(f)["shares_at"] == "2026-07-31"
+
+
+def test_the_us_page_build_applies_the_price_historys_splits(monkeypatch):
+    from app import main as M
+
+    class Y:
+        def events(self, sym, days=400):
+            return {"dividends": [], "splits": [{"date": "2026-09-08", "numerator": 1.0, "denominator": 20.0}]}
+    monkeypatch.setattr(M.research_hub, "yahoo", Y())
+    got = M.us_split_adjusted({"shares": 62_842_748.0, "shares_at": "2026-07-31"}, "CTSO")
+    assert got["shares"] == 3_142_137
+
+
+# ---------- 9. India: the standalone accounts' share count settles the share capital's ----------
+def test_a_consolidated_page_checks_the_share_capital_against_the_standalone_eps_count():
+    from app.intel import screener as scr
+    # JSWSTEEL: source ₹3,29,647 cr at ₹1,348 (244.5 cr shares); capital ₹305 cr at ₹1; consolidated profit ÷ EPS 279.5 cr (minority in
+    # the profit), standalone 6,522 ÷ 26.67 = 244.5 cr
+    assert scr.market_cap(329_647.0, 1348.0, 305.0, 1.0, False, (279.5, 0.05), (244.5, 0.05)) == 329_647.0
+    pl = lambda np_, eps: {"cols": ["Mar 2025", "Mar 2026", "TTM"], "rows": {"Sales": [1, 1, 1], "Net Profit": [1, np_, np_], "EPS in Rs": [1, eps, eps]}}   # noqa: E731
+    got = scr._pick({"consolidated": {"ratios": {"x": 1}, "pl": pl(25_508.0, 91.26)}, "standalone": {"ratios": {"x": 1}, "pl": pl(6_522.0, 26.67)}})
+    assert got["basis"] == "consolidated" and got["std_eps_count"][0] == pytest.approx(244.5, abs=0.1)
+
+
+# ---------- 10. a period far behind isn't shown as current ----------
+def test_a_revenue_year_far_behind_the_latest_report_shows_no_sector_figures():
+    from app.intel import sector_metrics as sm
+    f = {"us-gaap": {"Revenues": {"units": {"USD": [_fy("2015-12-31", "2015-01-01", 2.0e6, "2016-03-30")]}},
+                     "NetIncomeLoss": {"units": {"USD": [_fy("2015-12-31", "2015-01-01", 0.7e6, "2016-03-30"),
+                                                         _fy("2025-12-31", "2025-01-01", -3.0e6, "2026-03-31")]}}}}
+    assert sm.us_figures(f) == {"_stale": "2015-12-31"}
+
+    class C:
+        def cik(self, s):
+            return 930245
+
+        def _json(self, path):
+            return {"facts": f}
+    got = sm.read_us("AGAE", C())
+    assert got["metrics"] == {} and got["none"] == "latest figures are for FY Dec 2015"
+
+
+def test_a_company_far_behind_the_familys_typical_period_is_left_out_with_its_reason():
+    from app.intel import sector_metrics as sm
+    from app.intel.theme_data import stat
+    rows = []
+    for i, end in enumerate(["2025-12-31", "2026-01-31", "2025-12-31", "2014-12-31"]):
+        r = {"symbol": f"C{i}", "name": f"Co {i}", "profile": "other"}
+        sm.apply(r, {"family": "us", "end": end, "metrics": {"sbc_share": {"v": 2.0 + i, "period": f"FY to {end}", "source": "10-K"}}})
+        rows.append(r)
+    fam = sm.section(rows, "US", {}, [], stat)["families"]["us"]
+    assert [r["symbol"] for r in fam["rows"]] == ["C0", "C1", "C2"] and fam["n"] == 3 and fam["of"] == 4
+    assert fam["stale"] == [{"symbol": "C3", "name": "Co 3", "as_of": "FY Dec 2014", "reason": "latest figures are for FY Dec 2014"}]

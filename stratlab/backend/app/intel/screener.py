@@ -370,7 +370,7 @@ def eps_shares(p: dict) -> tuple[float, float] | None:
 
 
 def market_cap(cap_cr: float | None, price: float | None, equity_cr: float | None, face: float | None, issued_since: bool = False,
-               eps_count: tuple[float, float] | None = None) -> float | None:
+               eps_count: tuple[float, float] | None = None, alt_count: tuple[float, float] | None = None) -> float | None:
     """Market value in crore: price times the shares in issue. The source's own figure is price times its share count at
     the moment it was read, which can lag (TCS, 8 Oct 2026: the screener said 370.3 crore shares, the company page
     361.7, from two reads). The share capital over the face value counts the shares from the balance sheet; when the
@@ -390,11 +390,15 @@ def market_cap(cap_cr: float | None, price: float | None, equity_cr: float | Non
         # short, so ₹12.67 lakh crore beside ₹13.05; TONBO ₹6,707 crore beside ₹6,986): the source's count is the shares in issue now
         return cap_cr
     source = cap_cr / price
-    if eps_count and abs(source / eps_count[0] - 1) <= eps_count[1] and abs(shares / eps_count[0] - 1) > eps_count[1]:
-        # the source's count is the one its earnings per share were worked out on, and the share capital's isn't: that capital
-        # holds more than the equity shares in issue (audit, 1 Nov: BSE:531572's 4.26 cr of capital is 42.6 lakh ₹10 shares, its
-        # profit ÷ EPS 26.9 lakh, as the source counts; the value came out 31.1 cr against 19.6 and the P/E check failed)
-        return cap_cr
+    for cnt in (eps_count, alt_count):
+        if cnt and abs(source / cnt[0] - 1) <= cnt[1] and abs(shares / cnt[0] - 1) > cnt[1]:
+            # the source's count is the one its earnings per share were worked out on, and the share capital's isn't: that capital
+            # holds more than the equity shares in issue (audit, 1 Nov: BSE:531572's 4.26 cr of capital is 42.6 lakh ₹10 shares, its
+            # profit ÷ EPS 26.9 lakh, as the source counts; the value came out 31.1 cr against 19.6 and the P/E check failed). The
+            # standalone accounts' count (`alt_count`) settles it for a consolidated page, whose profit includes the minority's share
+            # while its EPS is the parent's (lane dat57: JSW Steel's ₹305 cr of capital at ₹1 against 244.5 cr shares in issue,
+            # standalone profit ₹6,522 cr ÷ EPS 26.67 = 244.5 cr; its value showed ₹4.11 lakh cr against ₹3.30 lakh cr)
+            return cap_cr
     if abs(source / shares - 1) > SHARES_DRIFT and shares >= source * (1 - TRUST_GAP):
         return round(price * shares, 2)
     return cap_cr
@@ -457,7 +461,7 @@ def summary(p: dict, listed_on: str | None = None) -> dict:
         latest_yoy = {"sales": grow(s_now, s_prev), "profit": grow(p_now, p_prev), "basis": "year",
                       "of": f"Year to {y_now} vs year to {y_prev}" if y_now and y_prev else None}
     cap = market_cap(num(r.get("Market Cap")), price, equity[-1] if equity else None, face, balance_ends_before(p, listed_on),
-                     eps_shares(p))
+                     eps_shares(p), tuple(p["std_eps_count"]) if p.get("std_eps_count") else None)
     pe, pe_why = checked_pe(p, price, cap)
     src_cap = num(r.get("Market Cap"))
     if pe is not None and pe_basis(p) is None and src_cap and cap and price and equity and face and abs(cap / src_cap - 1) > SHARES_DRIFT:
@@ -518,6 +522,9 @@ def _pick(pages: dict) -> dict:
         stop = next(str(c) for c in reversed(con["pl"]["cols"]) if str(c).upper() != "TTM")
         return {**std, "basis": "standalone", "basis_note": f"Standalone results: the consolidated accounts stop at {stop}."}
     if con and con_end:
+        if std_end and eps_shares(std):
+            # the standalone accounts' share count (their profit has no minority's share in it), to check the share capital by
+            con = {**con, "std_eps_count": list(eps_shares(std))}
         # the company's own figures are the group's, however few years its consolidated accounts cover: a short consolidated history
         # once put the standalone part in its place (lane dat57: Insolation Energy showed ₹98 cr of revenue against ₹2,146 cr
         # consolidated, Leela Palaces ₹437 cr against ₹1,527 cr), while every figure is defined "consolidated where filed"
