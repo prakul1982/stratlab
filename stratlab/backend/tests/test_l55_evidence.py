@@ -36,7 +36,7 @@ def partial_view():
     v["placements"] = {**(v.get("placements") or {}), "total": 30}
     v["coverage"] = {"informative": 30, "placed": 30, "share": 100, "other": 0, "unread": 0, "other_name": ""}
     v["membership_check"] = {"outside": {"XTRA0": "description_verified", "XTRA1": "industry_code_supported"}, "checked": 22, "total": 30,
-                             "history": [["2026-11-07", 20, 30], ["2026-11-14", 22, 30]]}
+                             "history": [["2026-11-07", 20, 30, 3], ["2026-11-14", 22, 30, 4]]}          # h56: the tally's points (updated on purpose)
     return v, first
 
 
@@ -55,10 +55,12 @@ def test_every_count_of_the_members_says_its_evidence_states_and_none_says_confi
     conf = next(p for s in slides if s.title == "Data confidence" for b in s.blocks for p in b.get("paras") or [] if p.startswith("Counts:"))
     assert split in find and split in conf
     rows = {r[0]: r for s in slides for b in s.blocks if b["kind"] == "table" for r in b.get("rows") or [] if not isinstance(r, dict)}
-    assert rows["Universe"][1].startswith("30 companies (20 in the exchange's industry list); membership checked 22 of 30 (the map's own picks")
+    # h56 (R56, updated on purpose): the description-verified share first, then the membership check's count
+    assert rows["Universe"][1].startswith("30 companies (20 in the exchange's industry list); description-verified 4 of 30 (13%); "
+                                          "membership checked 22 of 30 (the map's own picks")
     assert rows["Universe"][1].endswith(": " + split.split(": ", 1)[1] + ".") and split in rows["Screening"][2]
-    assert rows["Membership checked"][1] == "22 of 30 (73%)" and rows["Membership checked"][2].startswith(
-        "4 description-verified, 16 industry-supported, 2 own words describe other work, 8 not checked; ")
+    assert rows["Membership checked"][1] == "22 of 30 (73%)" and (      # h56 (R56): led by the description-verified share (updated on purpose)
+        ". By state: 4 description-verified, 16 industry-supported, 2 own words describe other work, 8 not checked; ") in rows["Membership checked"][2]
     # the companies with figures by state, adding up to the deck's count (every median and total is of these)
     n = v["members_with_figures"]
     by = re.search(r"companies with figures, of every company the deck lists: (\d+) description-verified, (\d+) industry-supported", rows["Companies, by count"][2])

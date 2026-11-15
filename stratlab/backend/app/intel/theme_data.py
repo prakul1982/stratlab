@@ -2763,6 +2763,55 @@ def evidence_counts(states) -> dict:
 
 
 MEMBERSHIP_STEP = 60       # e54: companies beyond those checked so far whose membership is checked each time the theme's figures are stored
+# h56 (R56, the owner's review of the live R55 decks: Biotech checked 219 of 820, Software 220 of 588, 60 a stored read): for a large theme
+# the step is a share of its companies (1 / MEMBERSHIP_SHARE), so the rest past the figures' window are checked in about three stored reads,
+# never more than MEMBERSHIP_STEP_MAX a read. The check makes no AI call and reads no source: one stored-description lookup per company
+MEMBERSHIP_STEP_MAX = 300
+MEMBERSHIP_SHARE = 4
+# h56: the states of a company whose membership was checked (the deck's evidence tally counts these); "membership_unverified" is not checked
+CHECKED_STATES = ("description_verified", "industry_code_supported", "list_supported", "not_confirmed")
+RECHECK_STATES = ("industry_code_supported", "list_supported", "membership_unverified")      # read again once its own words are stored
+RECHECK_LOOKS = 4 * MEMBERSHIP_STEP_MAX      # h56: stored descriptions looked up a read for those (membership_recheck), at most
+
+
+def membership_step(total: int) -> int:
+    """h56: how many companies the membership check moves on through at one stored read, of a theme of `total` companies: MEMBERSHIP_STEP, or
+    a MEMBERSHIP_SHARE-th of them when that is more, at most MEMBERSHIP_STEP_MAX (Biotech's 820: 205 a read, its 601 past the window in 3
+    reads; Software's 588: 147, 368 in 3; a theme of 240 or fewer: 60, as before)."""
+    n = max(0, int(total or 0))
+    return min(MEMBERSHIP_STEP_MAX, max(MEMBERSHIP_STEP, -(-n // MEMBERSHIP_SHARE)))
+
+
+def checked_tally(counts: dict | None, outside: dict | None, total: int) -> dict:
+    """h56 (R56, the owner's review of the live R55 Payments deck: "19 of 20 (95%)" beside a history of "100% → 100%"): the one tally every
+    count of the members by evidence state is said from, and every point of the membership check's history is kept from: {state: n} over
+    CHECKED_STATES for the figures' window (`counts`, theme_data.evidence_counts of the dive's `evidence`) and the companies the check reached
+    beyond it (`outside`, {symbol: state}), "checked" (their sum: a company not checked yet is never among them), "total" (the theme's
+    companies, never fewer than those the window and the check hold), "membership_unverified" (total - checked) and "beyond"."""
+    counts = counts if isinstance(counts, dict) else {}
+    outside = outside if isinstance(outside, dict) else {}
+    out = {k: int(counts.get(k) or 0) for k in CHECKED_STATES}
+    old = int(counts.get("membership_unverified") or 0)          # in the window, never checked (or a check that gave no answer)
+    for x in outside.values():
+        if x in out:
+            out[x] += 1
+    checked = sum(out[k] for k in CHECKED_STATES)
+    out["checked"], out["total"] = checked, max(int(total or 0), checked + old)
+    out["membership_unverified"] = out["total"] - checked
+    out["beyond"] = sum(1 for x in outside.values() if x in CHECKED_STATES)
+    return out
+
+
+def tally_point(day: str, t: dict) -> list:
+    """h56: one point of the membership check's history, from the tally (checked_tally): [day, checked, total, description-verified]. A
+    point of three (kept before h56, its checked count not the tally's) has no canonical count and is left out, never guessed."""
+    return [str(day)[:10], int(t["checked"]), int(t["total"]), int(t["description_verified"])]
+
+
+def tally_points(hist) -> list[list]:
+    """h56: the points of a kept history that carry the tally's counts (tally_point), in order; any other point is left out."""
+    return [list(p) for p in hist or [] if isinstance(p, (list, tuple)) and len(p) == 4 and all(isinstance(x, int) for x in p[1:])
+            and p[2] and 0 <= p[3] <= p[1] <= p[2]]
 
 
 def membership_round(m: dict, done, words: set[str], about, step: int = MEMBERSHIP_STEP) -> dict:
@@ -2780,15 +2829,39 @@ def membership_round(m: dict, done, words: set[str], about, step: int = MEMBERSH
                 seen.add(t)
                 todo.append(c)
     todo.sort(key=lambda c: (-(c.get("cap") or 0), c["ticker"]))
+    return {c["ticker"]: _state_of(c, words, about) for c in todo[:max(0, step)]}
+
+
+def _state_of(c: dict, words: set[str], about) -> str:
+    """One company's evidence state from its map record and its own stored description (`about(symbol)`, stored only)."""
+    try:
+        text = about(c["ticker"])
+    except Exception:
+        text = None
+    from .theme_base import one_line
+    rec = {**c, "what": c.get("what") or (one_line(text) if text else "")}
+    return evidence_state(rec, words, text, None)
+
+
+def membership_recheck(m: dict, kept: dict, words: set[str], about, limit: int = MEMBERSHIP_STEP) -> dict:
+    """h56 (R56, the owner's review of the live R55 FMCG deck: every company checked, 98 description-verified and 111 on industry labels): a
+    company an earlier stored read checked beyond the figures' window and kept on its official industry or the theme's list (or could not
+    check) is checked again once its own description is stored (the background check reads those it lacks, theme_routes.describe_unplaced),
+    so its own words, where a source has them, take the place of the label. The largest by market value first, at most `limit` a read;
+    stored descriptions only, never read from a source, no AI. {symbol: state} of those checked again."""
+    cos = {c["ticker"]: c for v in m.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}
+    todo = sorted((cos[s_] for s_, x in (kept or {}).items() if x in RECHECK_STATES and s_ in cos),
+                  key=lambda c: (-(c.get("cap") or 0), c["ticker"]))
     out = {}
-    for c in todo[:max(0, step)]:
+    for c in todo[:RECHECK_LOOKS]:
+        if len(out) >= max(0, limit):
+            break
         try:
-            text = about(c["ticker"])
+            has = bool(about(c["ticker"]))
         except Exception:
-            text = None
-        from .theme_base import one_line
-        rec = {**c, "what": c.get("what") or (one_line(text) if text else "")}
-        out[c["ticker"]] = evidence_state(rec, words, text, None)
+            has = False
+        if has:
+            out[c["ticker"]] = _state_of(c, words, about)
     return out
 
 

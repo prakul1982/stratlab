@@ -105,7 +105,9 @@ def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None) -> dict
     left = {str(x["ticker"]): dropped_why(x) for x in ((dive.get("placements") or {}).get("dropped") or []) if isinstance(x, dict) and x.get("ticker")}
     mc = dive.get("membership_check") if isinstance(dive.get("membership_check"), dict) else {}
     ev = {s_: EV_CODE[x] for s_, x in (mc.get("outside") or {}).items() if x in EV_CODE}
-    hist = [list(p) for p in mc.get("history") or [] if isinstance(p, (list, tuple)) and len(p) == 3]
+    # h56 (R56): only the points with the evidence tally's counts ([day, checked, total, description-verified]) are kept
+    from .theme_data import tally_points
+    hist = tally_points(mc.get("history"))
     return {"layers": layers, "cos": cos, "off": off, "map": sorted({s_ for s_ in members if s_}), "stamp": int(_num(stamp) or 0),
             "rules": rules, "unit": dive.get("unit"), **({"cover": cover} if cover else {}), **({"back": back} if back else {}),
             **({"why": why} if why else {}), **({"gone": gone} if gone else {}), **({"dups": dups} if dups else {}),
