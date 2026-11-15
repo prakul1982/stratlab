@@ -1,0 +1,113 @@
+{
+ "r55_moves": {
+  "metals": {
+   "BMAL": [
+    "Aluminium",
+    "Other metals and mining companies"
+   ],
+   "HINDALUMI": [
+    "Aluminium",
+    "Other metals and mining companies"
+   ],
+   "JIVIAL": [
+    "Aluminium",
+    "Other metals and mining companies"
+   ],
+   "KANISHK": [
+    "Aluminium",
+    "Other metals and mining companies"
+   ],
+   "MAANALU": [
+    "Aluminium",
+    "Other metals and mining companies"
+   ],
+   "MAITRI": [
+    "Aluminium",
+    "Other metals and mining companies"
+   ],
+   "MMP": [
+    "Aluminium",
+    "Other metals and mining companies"
+   ],
+   "MSAFE": [
+    "Aluminium",
+    "Other metals and mining companies"
+   ],
+   "PALCO": [
+    "Aluminium",
+    "Other metals and mining companies"
+   ],
+   "PGFOILQ": [
+    "Aluminium",
+    "Other metals and mining companies"
+   ],
+   "SACHEMT": [
+    "Aluminium",
+    "Other metals and mining companies"
+   ],
+   "SUDAI": [
+    "Aluminium",
+    "Other metals and mining companies"
+   ],
+   "MANAKALUCO": [
+    "Aluminium",
+    "Steel and alloy pipe and tube makers"
+   ],
+   "NAGPI": [
+    "Ferro alloys",
+    "Other metals and mining companies"
+   ]
+  },
+  "retail": {
+   "CAHO": [
+    "Catalog and mail-order houses",
+    "Other consumer retail companies"
+   ],
+   "DDL": [
+    "Catalog and mail-order houses",
+    "Other consumer retail companies"
+   ],
+   "LVLU": [
+    "Catalog and mail-order houses",
+    "Other consumer retail companies"
+   ],
+   "LUXE": [
+    "Catalog and mail-order houses",
+    "Other consumer retail companies"
+   ],
+   "NXH": [
+    "Catalog and mail-order houses",
+    "Other consumer retail companies"
+   ],
+   "QVCG": [
+    "Catalog and mail-order houses",
+    "Other consumer retail companies"
+   ]
+  }
+ },
+ "r54_src": {
+  "retail": {
+   "CAHO": "Other consumer retail companies",
+   "DDL": "Online stock-holding retailers",
+   "LVLU": "Other consumer retail companies",
+   "LUXE": "Other consumer retail companies",
+   "NXH": "Online stock-holding retailers",
+   "QVCG": "Online stock-holding retailers"
+  },
+  "metals": {
+   "BMAL": "Other metals and mining companies",
+   "HINDALUMI": "Other metals and mining companies",
+   "JIVIAL": "Other metals and mining companies",
+   "KANISHK": "Other metals and mining companies",
+   "MAANALU": "Steel and alloy pipe and tube makers",
+   "MAITRI": "Other metals and mining companies",
+   "MMP": "Other metals and mining companies",
+   "MSAFE": "Other metals and mining companies",
+   "PALCO": "Other metals and mining companies",
+   "PGFOILQ": "Other metals and mining companies",
+   "SACHEMT": "Other metals and mining companies",
+   "SUDAI": "Other metals and mining companies",
+   "MANAKALUCO": "Steel and alloy pipe and tube makers"
+  }
+ }
+}

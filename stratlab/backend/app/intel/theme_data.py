@@ -37,7 +37,7 @@ FEW_BASE = 4                  # a highest or lowest median on this many companie
 COMPARE_MIN = MIN_BASE
 # R31 (the owner's review of the live R30 decks): a layer-vs-layer headline (the value chain's line, findings, questions) needs at least this
 # many companies with the figure in each layer it compares; tables still show every layer and mark (green, red) those of COMPARE_MIN or more
-DIVE_TEXT = 25         # v55 (R55 review): a company the map named from another industry whose check gave no answer is in the theme when its principal business, in its own words, fits the theme (membership), else not checked yet, never "own words describe other work" (evidence_state, unchecked_why, data_checks "unchecked"); c54 (R53 review): scope boundaries apart from the core members (SCOPE_KINDS, scope_adjacent), a member with no stored figures listed (no_figures_row), one company under two symbols merged when its stored description names the other (same_company); d53 (R53): one company under two symbols merged (same_company), adjacent participants apart from the core members (BUSINESS_KINDS, adjacent_of), companies spending ahead of their revenue apart from the margin medians (DEVELOPER), an early-stage layer's commercial companies against its own stage's median (stage_check), layer names a line says as the dive shows them (same_names); gl52 (R52): "none_found" and "unfit" reasons, no "read as" for a low-confidence model, one precision in a headline gap, halves ranked as one, the stock-pay rule, theme size by a conglomerate's theme segment; rv51 (R51): a layer's business model only from its own records (named_fit); a company of the theme's industries whose principal business fits it never screened out by its words (membership); gl50 (R50): a chain with no way of earning read shown, not ranked; a parent's listed subsidiary out of totals adding both; the latest quarter most companies report; a clinical-stage layer's commercial companies out of its figures; ex49 (R49): each company left out of a layer's figures with its precise reason (a different revenue model with both models, insufficient evidence with what is missing, the part of a partial one), the capital-intensity proxy labelled and its inputs checked, layers ranked only of one business model the map's words support, which net-above-EBITDA lines are still missing; vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R47): a company listed in its layer as another way of earning is said so in the layer's line, the coverage control (theme_changes.coverage_control); vf46 (R46): each checked figure's source record and statement lines, a net margin above EBITDA reconciled line by line; c1 (R44): each company's place in the theme with its reason ("theme": theme_record) apart from its comparison decision ("comparison"), a layer named by how its companies earn says why it is never ranked; R44.1: a loss in a verification reason printed with the real minus (deck 55, dive text 15, updated on purpose); R44 (lane v1): each unusual figure verified against its own filed figures, not reconciled or invalid (verify_net, figure_states), never dropped by a cutoff alone; the dive's coverage of informative layers; R43.1: the whole-point margins counted among the margins there are ("3 of the 1" on the live Insurance deck); d1: halves of a split layer never ranked, no ranking on a gap under a point, peers named and like for like, every company in a layer or "Other", the not-checked-yet mark; LIVE7A (lane t1): every company at the index's newest close and one price date, own words without encyclopedia leads or a cut word, whole-point margins and gaps printed whole, operating figures of old periods left out and listed once, click-bait headlines left out, "Dividend: Dividend" said once; R40: a layer the split named only by how its companies earn is never ranked ("a group by how they earn, of different businesses"), a market-value half with fewer than 3 companies in its figures undone; LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
+DIVE_TEXT = 26         # t56 (R55 review): the placements' taxonomy guard (layers restored, the informative share guarded) and each company the map's check left out with its business-membership reason; v55 (R55 review): a company the map named from another industry whose check gave no answer is in the theme when its principal business, in its own words, fits the theme (membership), else not checked yet, never "own words describe other work" (evidence_state, unchecked_why, data_checks "unchecked"); c54 (R53 review): scope boundaries apart from the core members (SCOPE_KINDS, scope_adjacent), a member with no stored figures listed (no_figures_row), one company under two symbols merged when its stored description names the other (same_company); d53 (R53): one company under two symbols merged (same_company), adjacent participants apart from the core members (BUSINESS_KINDS, adjacent_of), companies spending ahead of their revenue apart from the margin medians (DEVELOPER), an early-stage layer's commercial companies against its own stage's median (stage_check), layer names a line says as the dive shows them (same_names); gl52 (R52): "none_found" and "unfit" reasons, no "read as" for a low-confidence model, one precision in a headline gap, halves ranked as one, the stock-pay rule, theme size by a conglomerate's theme segment; rv51 (R51): a layer's business model only from its own records (named_fit); a company of the theme's industries whose principal business fits it never screened out by its words (membership); gl50 (R50): a chain with no way of earning read shown, not ranked; a parent's listed subsidiary out of totals adding both; the latest quarter most companies report; a clinical-stage layer's commercial companies out of its figures; ex49 (R49): each company left out of a layer's figures with its precise reason (a different revenue model with both models, insufficient evidence with what is missing, the part of a partial one), the capital-intensity proxy labelled and its inputs checked, layers ranked only of one business model the map's words support, which net-above-EBITDA lines are still missing; vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R47): a company listed in its layer as another way of earning is said so in the layer's line, the coverage control (theme_changes.coverage_control); vf46 (R46): each checked figure's source record and statement lines, a net margin above EBITDA reconciled line by line; c1 (R44): each company's place in the theme with its reason ("theme": theme_record) apart from its comparison decision ("comparison"), a layer named by how its companies earn says why it is never ranked; R44.1: a loss in a verification reason printed with the real minus (deck 55, dive text 15, updated on purpose); R44 (lane v1): each unusual figure verified against its own filed figures, not reconciled or invalid (verify_net, figure_states), never dropped by a cutoff alone; the dive's coverage of informative layers; R43.1: the whole-point margins counted among the margins there are ("3 of the 1" on the live Insurance deck); d1: halves of a split layer never ranked, no ranking on a gap under a point, peers named and like for like, every company in a layer or "Other", the not-checked-yet mark; LIVE7A (lane t1): every company at the index's newest close and one price date, own words without encyclopedia leads or a cut word, whole-point margins and gaps printed whole, operating figures of old periods left out and listed once, click-bait headlines left out, "Dividend: Dividend" said once; R40: a layer the split named only by how its companies earn is never ranked ("a group by how they earn, of different businesses"), a market-value half with fewer than 3 companies in its figures undone; LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
 HEADLINE_MIN = 5
 # R27 (headline eligibility): a comparison is said as a headline only on a figure for at least this share of the companies of each group it
 # compares (a layer, a family); one with less is shown as data, never ranked (the live R26 Semis deck: "RPO growth -3.9%" of 21 of 53)
@@ -2763,6 +2763,55 @@ def evidence_counts(states) -> dict:
 
 
 MEMBERSHIP_STEP = 60       # e54: companies beyond those checked so far whose membership is checked each time the theme's figures are stored
+# h56 (R56, the owner's review of the live R55 decks: Biotech checked 219 of 820, Software 220 of 588, 60 a stored read): for a large theme
+# the step is a share of its companies (1 / MEMBERSHIP_SHARE), so the rest past the figures' window are checked in about three stored reads,
+# never more than MEMBERSHIP_STEP_MAX a read. The check makes no AI call and reads no source: one stored-description lookup per company
+MEMBERSHIP_STEP_MAX = 300
+MEMBERSHIP_SHARE = 4
+# h56: the states of a company whose membership was checked (the deck's evidence tally counts these); "membership_unverified" is not checked
+CHECKED_STATES = ("description_verified", "industry_code_supported", "list_supported", "not_confirmed")
+RECHECK_STATES = ("industry_code_supported", "list_supported", "membership_unverified")      # read again once its own words are stored
+RECHECK_LOOKS = 4 * MEMBERSHIP_STEP_MAX      # h56: stored descriptions looked up a read for those (membership_recheck), at most
+
+
+def membership_step(total: int) -> int:
+    """h56: how many companies the membership check moves on through at one stored read, of a theme of `total` companies: MEMBERSHIP_STEP, or
+    a MEMBERSHIP_SHARE-th of them when that is more, at most MEMBERSHIP_STEP_MAX (Biotech's 820: 205 a read, its 601 past the window in 3
+    reads; Software's 588: 147, 368 in 3; a theme of 240 or fewer: 60, as before)."""
+    n = max(0, int(total or 0))
+    return min(MEMBERSHIP_STEP_MAX, max(MEMBERSHIP_STEP, -(-n // MEMBERSHIP_SHARE)))
+
+
+def checked_tally(counts: dict | None, outside: dict | None, total: int) -> dict:
+    """h56 (R56, the owner's review of the live R55 Payments deck: "19 of 20 (95%)" beside a history of "100% → 100%"): the one tally every
+    count of the members by evidence state is said from, and every point of the membership check's history is kept from: {state: n} over
+    CHECKED_STATES for the figures' window (`counts`, theme_data.evidence_counts of the dive's `evidence`) and the companies the check reached
+    beyond it (`outside`, {symbol: state}), "checked" (their sum: a company not checked yet is never among them), "total" (the theme's
+    companies, never fewer than those the window and the check hold), "membership_unverified" (total - checked) and "beyond"."""
+    counts = counts if isinstance(counts, dict) else {}
+    outside = outside if isinstance(outside, dict) else {}
+    out = {k: int(counts.get(k) or 0) for k in CHECKED_STATES}
+    old = int(counts.get("membership_unverified") or 0)          # in the window, never checked (or a check that gave no answer)
+    for x in outside.values():
+        if x in out:
+            out[x] += 1
+    checked = sum(out[k] for k in CHECKED_STATES)
+    out["checked"], out["total"] = checked, max(int(total or 0), checked + old)
+    out["membership_unverified"] = out["total"] - checked
+    out["beyond"] = sum(1 for x in outside.values() if x in CHECKED_STATES)
+    return out
+
+
+def tally_point(day: str, t: dict) -> list:
+    """h56: one point of the membership check's history, from the tally (checked_tally): [day, checked, total, description-verified]. A
+    point of three (kept before h56, its checked count not the tally's) has no canonical count and is left out, never guessed."""
+    return [str(day)[:10], int(t["checked"]), int(t["total"]), int(t["description_verified"])]
+
+
+def tally_points(hist) -> list[list]:
+    """h56: the points of a kept history that carry the tally's counts (tally_point), in order; any other point is left out."""
+    return [list(p) for p in hist or [] if isinstance(p, (list, tuple)) and len(p) == 4 and all(isinstance(x, int) for x in p[1:])
+            and p[2] and 0 <= p[3] <= p[1] <= p[2]]
 
 
 def membership_round(m: dict, done, words: set[str], about, step: int = MEMBERSHIP_STEP) -> dict:
@@ -2780,15 +2829,39 @@ def membership_round(m: dict, done, words: set[str], about, step: int = MEMBERSH
                 seen.add(t)
                 todo.append(c)
     todo.sort(key=lambda c: (-(c.get("cap") or 0), c["ticker"]))
+    return {c["ticker"]: _state_of(c, words, about) for c in todo[:max(0, step)]}
+
+
+def _state_of(c: dict, words: set[str], about) -> str:
+    """One company's evidence state from its map record and its own stored description (`about(symbol)`, stored only)."""
+    try:
+        text = about(c["ticker"])
+    except Exception:
+        text = None
+    from .theme_base import one_line
+    rec = {**c, "what": c.get("what") or (one_line(text) if text else "")}
+    return evidence_state(rec, words, text, None)
+
+
+def membership_recheck(m: dict, kept: dict, words: set[str], about, limit: int = MEMBERSHIP_STEP) -> dict:
+    """h56 (R56, the owner's review of the live R55 FMCG deck: every company checked, 98 description-verified and 111 on industry labels): a
+    company an earlier stored read checked beyond the figures' window and kept on its official industry or the theme's list (or could not
+    check) is checked again once its own description is stored (the background check reads those it lacks, theme_routes.describe_unplaced),
+    so its own words, where a source has them, take the place of the label. The largest by market value first, at most `limit` a read;
+    stored descriptions only, never read from a source, no AI. {symbol: state} of those checked again."""
+    cos = {c["ticker"]: c for v in m.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}
+    todo = sorted((cos[s_] for s_, x in (kept or {}).items() if x in RECHECK_STATES and s_ in cos),
+                  key=lambda c: (-(c.get("cap") or 0), c["ticker"]))
     out = {}
-    for c in todo[:max(0, step)]:
+    for c in todo[:RECHECK_LOOKS]:
+        if len(out) >= max(0, limit):
+            break
         try:
-            text = about(c["ticker"])
+            has = bool(about(c["ticker"]))
         except Exception:
-            text = None
-        from .theme_base import one_line
-        rec = {**c, "what": c.get("what") or (one_line(text) if text else "")}
-        out[c["ticker"]] = evidence_state(rec, words, text, None)
+            has = False
+        if has:
+            out[c["ticker"]] = _state_of(c, words, about)
     return out
 
 

@@ -203,7 +203,10 @@ def changes(log: dict, region: str) -> tuple:
     for e in (log or {}).get("entries") or []:
         d, why = _day(e.get("d")), CAUSE_WORDS.get(e.get("cause"), e.get("cause") or "")
         for c in e.get("removed") or []:
-            rows.append([d, why, "Company removed", c.get("name"), c.get("symbol"), c.get("layer"), None, c.get("why")])
+            # t56: a removal for a listing reason under its own heading, apart from the business-membership decisions
+            listed = str(c.get("why") or "").startswith("listing: ")
+            rows.append([d, why, "Company removed for a listing reason" if listed else "Company removed", c.get("name"), c.get("symbol"),
+                         c.get("layer"), None, str(c["why"])[len("listing: "):] if listed else c.get("why")])
         for c in e.get("added") or []:
             rows.append([d, why, "Company added", c.get("name"), c.get("symbol"), None, c.get("layer")])
         for c in e.get("moved") or []:

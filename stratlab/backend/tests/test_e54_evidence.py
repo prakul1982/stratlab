@@ -171,21 +171,22 @@ def test_each_stored_read_keeps_what_was_checked_and_the_checked_share_after_it(
     m = _map(250)
     window = {f"C{i:03d}": "industry_code_supported" for i in range(100)}
     dive = {"evidence": window, "coverage": {"placed": 250}}
+    # (updated on purpose, h56: each point is the evidence tally's, with its description-verified count; a theme of 250: 63 a read)
     one = TR.membership_check("Drug makers", m, m, dive, None, lambda s: None, date(2026, 11, 7))
-    assert (one["checked"], one["total"], one["step"]) == (160, 250, 60) and one["history"] == [["2026-11-07", 160, 250]]
+    assert (one["checked"], one["total"], one["step"]) == (163, 250, 63) and one["history"] == [["2026-11-07", 163, 250, 0]]
     snap = TC.snapshot({**dive, "membership_check": one, "layers": [{"layer": "Drug makers", "companies": [{"symbol": "C000", "name": "Co 0"}]}]}, ["C000"])
-    assert len(snap["ev"]) == 60 and set(snap["ev"].values()) == {"i"} and snap["ev_hist"] == [["2026-11-07", 160, 250]]
+    assert len(snap["ev"]) == 63 and set(snap["ev"].values()) == {"i"} and snap["ev_hist"] == [["2026-11-07", 163, 250, 0]]
     stored = TC.apply({}, snap)["snap"]
     two = TR.membership_check("Drug makers", m, m, dive, stored, lambda s: None, date(2026, 11, 14))
-    assert (two["checked"], two["step"]) == (220, 60) and two["history"] == [["2026-11-07", 160, 250], ["2026-11-14", 220, 250]]
+    assert (two["checked"], two["step"]) == (226, 63) and two["history"] == [["2026-11-07", 163, 250, 0], ["2026-11-14", 226, 250, 0]]
     # the deck says the progress, and the tally adds up to the theme's companies
     v = {"membership": {"placed": 100, "confirmed": 100, "not_confirmed": 0}, "membership_evidence": {"industry_code_supported": 100}, "membership_check": two}
     row = deck.progress_row(v, {"total": 250})
-    assert row[0] == "Membership checked" and row[1] == "220 of 250 (88%)"
-    assert "30 not checked; the next 60 by market value checked each time the theme's figures are stored" in row[2]          # l55 (updated on purpose)
-    assert row[2].endswith("Checked share after each stored version: 64% (07 Nov 2026) → 88% (14 Nov 2026).")
+    assert row[0] == "Membership checked" and row[1] == "226 of 250 (90%)"          # h56 (updated on purpose: 63 a read)
+    assert "24 not checked; the next 24 by market value checked each time the theme's figures are stored" in row[2]          # l55, h56 (updated on purpose)
+    assert row[2].endswith("Checked share after each stored version: 65% (07 Nov 2026) → 90% (14 Nov 2026).")
     t = deck.evidence_tally(v, 250)
-    assert t["checked"] + t["membership_unverified"] == 250 and t["industry_code_supported"] == 220
+    assert t["checked"] + t["membership_unverified"] == 250 and t["industry_code_supported"] == 226
 
 
 # ---------- the public page and the deck gate ----------

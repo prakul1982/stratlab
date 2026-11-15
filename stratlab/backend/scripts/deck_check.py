@@ -85,6 +85,10 @@ Failures (the exit code is 1 when any deck has one):
                don't add up (the states to those checked, checked + not checked to the companies); a part of the members (the informative
                layers, "by membership evidence: ...", a layer's "Membership of its 24 companies: ...") with more of a state than the deck's own count of it
   empty page   l55 (the owner's publication preflight: no empty pages): a page that prints its heading and nothing under it
+  history end  h56 (R56, the owner's review of the live R55 Payments deck: "Membership checked 19 of 20 (95%)" beside "Checked share after
+               each stored version: 100% (14 Nov 2026) → 100% (14 Nov 2026)"): the "Membership checked" row's checked share after each
+               stored version whose last point is not the share of the row's count ("N of M"), or its description-verified share after each
+               stored version whose last point is not the share of the "Description-verified N of M" it says just before
 Reported, and a failure only with --strict:
   cut text     every other text ending in "…" (a label or a sentence cut to its box)
   mixed range  a range with one end whole and the other with a decimal ("19.6% to 20%"; LIVE7A-014)
@@ -106,7 +110,7 @@ FAIL = ("headline", "mid-word", "placeholder", "joining word", "count", "repeate
         "left out>50%", "unchecked as 0", "biz label", "biz making", "stale layer", "same company", "words claim", "partial unsaid",
         "outlier range", "added unexplained", "verified count", "adjacent ranked", "move unexplained", "scope core", "layer lost unsaid",
         "evidence state", "population mismatch", "identity unresolved", "out of scope in Other", "stage mismatch", "coverage blur",
-        "evidence unsplit", "evidence counts", "empty page")
+        "evidence unsplit", "evidence counts", "empty page", "layer vanished", "share fall unsaid", "removal unnamed", "history end")
 WARN = ("cut text", "other>40%", "mixed range")
 # LIVE7A-014: a minus sign as a hyphen before a figure with its unit (never a date's or a range's dash: it follows a space or a bracket)
 _HYPHEN_MINUS = re.compile(r"(?:(?<=\s)|(?<=[(\[])|^)-\d[\d,]*(?:\.\d+)?(?:%|x\b| ?pts\b| ?points\b)")
@@ -318,6 +322,8 @@ def check_pages(pages: list[str]) -> dict:
     e54_checks(pages, add)
     v55_checks(pages, add)
     l55_checks(pages, add)
+    t56_checks(pages, add)
+    h56_checks(pages, add)
     counts = {k: sum(1 for f in findings if f["kind"] == k) for k in FAIL + WARN}
     return {"pages": len(pages), "counts": counts, "findings": findings}
 
@@ -645,6 +651,133 @@ def l55_checks(pages: list[str], add) -> None:
         lines = [ln for ln in page.split("\n") if ln.strip() and not _FOOTER.search(ln)]
         if page.strip() and _FOOTER.search(page) and len(lines) <= EMPTY_MAX:
             add("empty page", n, " / ".join(ln.strip() for ln in lines)[:140] or "(nothing but the footer)")
+
+
+# t56 (R55): an established layer gone with no restore or reason; a fall in the informative share said with no reason; a removal from the
+# theme with no named reason
+_GONE_LINE = re.compile(r"gone, their companies taken by no new layer: (.+?)\.(?: [A-Z]|$)")
+_GONE_ITEM = re.compile(r"“([^”]+)” \((\d[\d,]*) companies([^;)]*)(;[^)]*)?\)")
+_REASON_OF = re.compile(r"of its (\d[\d,]*) companies")
+_FALL = re.compile(r"in the previous live placement: (\d+) points\b")
+_REMOVED_LIST = re.compile(r"\bremoved (?:for a listing reason )?(\d[\d,]*): (.+?)(?=; (?:moved|added|removed|layers changed)\b|\.\s*$|\. [A-Z]|$)")
+_NAMED_REASON = re.compile(r"business membership: |listing: |another business|the same company as|outside the theme's definition|"
+                           r"no figures stored for it|filed under", re.I)
+FALL_MIN = 5
+
+
+def _top_items(text: str) -> list[str]:
+    """A list's items split at "; " outside brackets."""
+    out, depth, cur = [], 0, ""
+    for i, ch in enumerate(text):
+        depth += (ch == "(") - (ch == ")")
+        if ch == ";" and depth <= 0:
+            out.append(cur.strip())
+            cur = ""
+            continue
+        cur += ch
+    return [x for x in out + [cur.strip()] if x]
+
+
+def _last_paren(item: str) -> str:
+    """The bracket an item ends with (its reason), "" when it ends with none."""
+    s = item.rstrip(" .,")
+    if not s.endswith(")"):
+        return ""
+    depth = 0
+    for i in range(len(s) - 1, -1, -1):
+        depth += (s[i] == ")") - (s[i] == "(")
+        if depth == 0:
+            return s[i + 1:-1]
+    return ""
+
+
+def t56_checks(pages: list[str], add) -> None:
+    """t56 (R55, the owner's review of the live R55 decks: Metals lost its 13-company "Aluminium" layer and Consumer retail its "Catalog and
+    mail-order houses" with nothing restored, informative 52 of 66 to 39 of 66; Adyen's ADR "removed ... (no longer in the theme's map)"):
+      layer vanished     a removed layer of five companies or more (the change log's "“X” removed (N companies ...)", or the coverage flag's
+                         "Layers ... gone ...: “X” (N companies ...)") with no restore and no reason, or with a reason counting another
+                         number of its companies than were removed ("none restored: 0 of its 5" for 6 removed)
+      share fall unsaid  "N points fewer" in the informative share, N of five or more, with no "Why:" said beside it
+      removal unnamed    a company removed from the theme (the change log's "removed N: ...") whose reason names neither a listing nor a
+                         business-membership decision ("no longer in the theme's map", or none)"""
+    flat_pages = [re.sub(r"\s+", " ", p) for p in pages]
+    for n, flat in enumerate(flat_pages, 1):
+        for m in _REMOVED.finditer(flat):
+            k = _num(m.group(2))
+            why = m.group(4) or ""
+            r = _REASON_OF.search(why)
+            if k >= LOST_MIN and (not why or (r and _num(r.group(1)) != k and "restored:" in why and not why.startswith(", restored"))):
+                add("layer vanished", n, m.group(0)[:200])
+        for g in _GONE_LINE.finditer(flat):
+            for m in _GONE_ITEM.finditer(g.group(1)):
+                if _num(m.group(2)) >= LOST_MIN and not m.group(4):
+                    add("layer vanished", n, m.group(0)[:200])
+        for m in _FALL.finditer(flat):
+            if int(m.group(1)) >= FALL_MIN and "Why:" not in flat[m.end():m.end() + 400]:
+                add("share fall unsaid", n, flat[max(0, m.start() - 120):m.end()][:220])
+        if "Since the previous version" not in flat and "against the version stored before it" not in flat:
+            continue
+        for m in _REMOVED_LIST.finditer(flat):
+            listing = m.group(0).startswith("removed for a listing reason")          # its heading names the kind: each item its reason
+            for it in _top_items(m.group(2)):
+                if not (_NAMED_REASON.search(_last_paren(it)) or (listing and _last_paren(it).strip())):
+                    add("removal unnamed", n, it[:200])
+
+
+# h56 (R56): a coverage row's history ("Checked share after each stored version: 64% (07 Nov 2026) → 88% (14 Nov 2026)"; the columns of a
+# PDF's table may put the row's label and count inside the phrase) and the row's own count ("19 of 20 (95%)", a cell of its own)
+_HIST = {"Membership checked": re.compile(r"Checked share after each stored\b"),
+         "Description-verified": re.compile(r"description-verified share after each stored\b")}
+_DV_SAID = re.compile(r"Description-verified (\d[\d,]*) of (\d[\d,]*)\b")
+_HIST_POINT = re.compile(r"(\d{1,3})% \((\d{2} [A-Z][a-z]{2} \d{4})\)")
+_HIST_END = re.compile(r"\)\.(?:\s|$)")
+_ROW_COUNT = re.compile(r"^(\d[\d,]*) of (\d[\d,]*)(?: \(\d{1,3}%\))?$")
+
+
+def h56_checks(pages: list[str], add) -> None:
+    """h56 (R56): a coverage row's history ends on the share the row states (see the module's list)."""
+    for n, page in enumerate(pages, 1):
+        lines = page.split("\n")
+        flat = re.sub(r"\s+", " ", page)
+        for label, rx in _HIST.items():
+            m = rx.search(flat)
+            if not m:
+                continue
+            tail = flat[m.end():m.end() + 700]
+            end = _HIST_END.search(tail)
+            points = _HIST_POINT.findall(tail[:end.end()] if end else tail)
+            if not points:
+                continue
+            if label == "Description-verified":          # (said in the row's own words, just before its history)
+                said = list(_DV_SAID.finditer(flat[max(0, m.start() - 300):m.start()]))
+                if said:
+                    _end_check(add, n, "", said[-1], points)
+                continue
+            at = [i for i, ln in enumerate(lines) if [c for c in re.split(r"\s{2,}", ln.strip()) if c][:1] == [label]]
+            if not at:
+                continue
+            best = None              # the row's count: the "N of M" cell on the label's line or the nearest line by it
+            for i in sorted(range(max(0, at[0] - 3), min(len(lines), at[0] + 4)), key=lambda j: abs(j - at[0])):
+                for c in re.split(r"\s{2,}", lines[i].strip()):
+                    hit = _ROW_COUNT.match(c)
+                    if hit:
+                        best = hit
+                        break
+                if best:
+                    break
+            if best:
+                _end_check(add, n, label, best, points)
+
+
+def _end_check(add, n: int, label: str, count, points) -> None:
+    """h56: the history's last point against the share of the row's count ("N of M")."""
+    a, b = _num(count.group(1)), _num(count.group(2))
+    if not b:
+        return
+    share = round(a * 100 / b)
+    share = 99 if share == 100 and a < b else share          # (the deck never says 100% while one is short of the whole)
+    if int(points[-1][0]) != share:
+        add("history end", n, f"{label} {count.group(0)}".strip() + f": its share after each stored version ends on {points[-1][0]}% ({points[-1][1]})")
 
 
 def check_text(text: str) -> dict:

@@ -239,7 +239,8 @@ def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None
                 gtext = f"{g['name']} {g['text']}"
                 quote = v["quote"] if quote_in(v["quote"], ev["about"]) and supports(v["quote"], gtext) else (own_words(ev["about"], gtext, v["quote"]) if v["does"] else "")
                 ok = bool(v["does"]) and bool(quote)
-                answer = {"does": ok, "quote": quote if ok else ""}
+                # t56: a "yes" whose quote its words don't back is told apart from a "no" (theme_routes.keep_confirmed)
+                answer = {"does": ok, "quote": quote if ok else "", **({"unbacked": True} if v["does"] and not ok else {})}
                 cache[(theme, gid, g["name"], c["symbol"], norm(ev["about"])[:200])] = answer
                 got[f"{gid}|{c['symbol']}"] = answer
     left_out = 0
@@ -267,8 +268,23 @@ def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None
     placed = {c["ticker"] for v in out["value_chain"] + out["sub_themes"] for c in v["companies"]}
     out["screen"] = [x for x in out.get("screen") or [] if x.get("ticker") in placed]
     out["clusters"] = [c for c in ({**c, "companies": [x for x in c.get("companies") or [] if x.get("ticker") in placed]} for c in out.get("clusters") or []) if c["companies"]]
+    # t56 (R55 review, the live R55 Payments deck: "removed 1: Adyen Nv-Unspon ADR (no longer in the theme's map)"): each company the check
+    # left out of every group the map named it in, with what the check said (a "no" of its own words, or a "yes" its words don't back) and
+    # what kind of listing line it is, so its removal says it is a business-membership decision, never a listing one
+    dropped = []
+    for sym, gids in syms.items():
+        if sym in placed:
+            continue
+        said = [got.get(f"{gid}|{sym}") for gid in gids]
+        if not said or any(x is None for x in said):
+            continue
+        from .theme_base import issuer_name, listing_line
+        line = listing_line(names[sym])
+        dropped.append({"ticker": sym, "name": names[sym], "groups": [by_id[g]["name"] for g in gids],
+                        "said": "unbacked" if all(x.get("unbacked") for x in said) else "no",
+                        **({"listing": line, "issuer": issuer_name(names[sym])} if line else {})})
     out["placements"] = {"checked": not pending and not failed, "pending": len(pending), "left_out": left_out, "placed": len(placed),
-                         "unconfirmed": len(unconfirmed)}
+                         "unconfirmed": len(unconfirmed), **({"dropped": dropped} if dropped else {})}
     return out
 
 

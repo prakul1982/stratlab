@@ -178,9 +178,17 @@ PAST = re.compile(r"\b(?:no longer|lost|former(?:ly)?|ceased|terminat\w*|cancel\
                   r"not (?:be )?renewed|exited|wound down|withdrawn)\b", re.I)
 HYPO_LEAD = re.compile(r"^(?:if|should|were|in the event|assuming|suppose|unless|although no|no single)\b|\b(?:loss of|if|could|would|might)\b", re.I)
 ASIDE = re.compile(r"\banalysts?\b|\?", re.I)
-# an "order" in the legal sense (a court's or a regulator's), not a customer's
-LEGAL = re.compile(r"\b(?:court|tribunal|NCLT|NCLAT|SEBI|commissioner|penalty|show cause|demand notice|GST|income tax|arbitra\w*|"
-                   r"adjudicat\w*|appellate)\b", re.I)
+# an "order" in the legal sense (a court's or a regulator's), not a customer's. h56 (R56, the nightly map's 14 Nov run: 22 documents
+# read, 0 links kept): "SEBI", "GST", "income tax" and "commissioner" alone ruled out nearly every order win, whose sentence cites
+# "Regulation 30 of the SEBI (Listing Obligations ...) Regulations" or gives its value "excluding GST"; they rule one out only as the
+# order's issuer (LEGAL_ISSUER) or its kind ("a SEBI order", "a tax order"), the words of a court's or a tax office's order still alone
+LEGAL = re.compile(r"\b(?:court|tribunal|NCLT|NCLAT|penalty|show cause|demand (?:notice|order)|assessment order|arbitra\w*|"
+                   r"adjudicat\w*|appellate|(?:SEBI|GST|CGST|SGST|tax|regulatory|interim|ex[- ]parte)\s+orders?)\b", re.I)
+LEGAL_ISSUER = re.compile(r"\b(?:orders?|directions?|directives?)\b[^.;]{0,60}?\b(?:of|from|by)\s+(?:the\s+)?(?:office of\s+(?:the\s+)?)?"
+                          r"(?:Hon'?ble\s+)?(?:SEBI\b|Securities and Exchange Board|Enforcement Directorate|Directorate of Enforcement|"
+                          r"(?:Principal\s+|Chief\s+|Assistant\s+|Deputy\s+|Joint\s+|Additional\s+)?Commissioner of (?:Income[- ]tax|Customs|"
+                          r"Central (?:Excise|Tax|GST)|State Tax|CGST|SGST|GST|Commercial Tax)|(?:Income[- ]tax|GST|CGST|SGST|tax|customs) "
+                          r"(?:department|authorit\w*|officer|office))", re.I)
 
 
 def ruled_out(sentence: str, before_name: str = "") -> bool:
@@ -206,6 +214,17 @@ ORDER_TRIGGERS = [
 ORDER_WORDS = re.compile(r"\b(?:orders?|contracts?|letter of (?:award|acceptance)|LoA|work order|award(?:ed)?|bagg(?:ed|ing))\b", re.I)
 
 
+# h56 (R56): a full stop that ends no sentence ("Rs. 450 crore", "Rs 45.6 crore", "M/s. ABC", "No. 12") stopped the triggers' reach
+# ([^.;]), so an order win giving its value that way had no buyer read by the rules
+_INNER_DOT = re.compile(r"(?<=\d)\.(?=\d)|(?:\b(?:Rs|Nos?|Co|Ltd|Pvt|Inc|INR|Corp)|(?<![\w/])M/s)\.", re.I)
+
+
+def _masked(s: str) -> str:
+    """The sentence with each full stop that ends no sentence made another mark, the same length (the triggers' positions stay those of
+    the sentence, whose own words are what is kept)."""
+    return _INNER_DOT.sub(lambda m: m.group(0)[:-1] + "\u2024", s)
+
+
 def extract_order(text: str, filer: str | None = None) -> tuple[list[dict], bool]:
     """Customers an order-win filing names: (links, unsure). `unsure` is True when the filing talks of an order and names no
     one the rules could read (and doesn't plainly leave the buyer unnamed): then the AI may read it."""
@@ -216,11 +235,11 @@ def extract_order(text: str, filer: str | None = None) -> tuple[list[dict], bool
         if not ORDER_WORDS.search(s):
             continue
         saw_order = True
-        if ruled_out(s) or LEGAL.search(s):
+        if ruled_out(s) or LEGAL.search(s) or LEGAL_ISSUER.search(s):
             decided = True
             continue
         for rx in ORDER_TRIGGERS:
-            for m in rx.finditer(s):
+            for m in rx.finditer(_masked(s)):
                 after = s[m.end():]
                 if UNNAMED.match(re.sub(r"^the\s+", "", after, flags=re.I)):
                     decided = True                 # "from a leading global OEM": the buyer is not named

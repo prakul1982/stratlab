@@ -48,6 +48,8 @@ VERDICT_KEEP = 3000
 DESCRIBE_READS = 6                                                        # descriptions read from the companies' own pages a request
 FILING_READS_PER_MINUTE = DESCRIBE_READS                                  # R35: annual reports read for a thin description a minute, across every theme
 PLACE_READS = 60                                                          # R28: descriptions read for a theme's companies to place, in its check, at most
+PLACE_READS_MAX = 150                                                     # h56: ...for a large theme, as many as its companies without one over
+DESCRIBE_CHECKS_TO_FINISH = 3                                             # ...this many checks (describe_reads), at most this many
 PRICE_READS_PER_MINUTE = 20                                               # companies' candles read from the sources a minute, across every theme
 PRICE_BUDGET = 45.0                                                       # seconds a request may spend reading candles
 price_reads = Window()
@@ -436,10 +438,10 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53}  # rules versions whose change only adds to a kept placement (v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54}  # rules versions whose change only adds to a kept placement (t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
-EARLIER_MAX = 9                 # rv51: how many carried versions back an earlier answer of the same map is looked for (v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
+EARLIER_MAX = 10                # rv51: how many carried versions back an earlier answer of the same map is looked for (t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
 
 
 def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
@@ -489,12 +491,14 @@ def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
     # R41: an answer kept under earlier rules sticks (theme_base.place_rest `carried`: nothing it answered is asked again)
     ob = off_before(region, theme, m)                 # d53: the companies an earlier version dropped as another business
     mb = moved_before(region, theme, m)               # c54: the moves the stored change log records, judged on what the layer sells
+    mo = moved_out(region, theme, m)                  # t56: the moves of the re-check that removed each layer the snapshot no longer has
     # v55: each company's stored revenue read only where the map has a layer named by a stage (theme_base.stage_moves)
     staged = any(theme_base.layer_stage(v) for v in out.get("value_chain") or [])
     new, got = theme_base.place_rest(out, theme, lambda s_: about(s_), ask=ask, kept=kept, facts_of=_facts_reader(region),
                                      **({"figures_of": _figures_reader(region)} if staged else {}),
                                      carried=version is not None and version != theme_base.RULES, previous=previous_layers(region, theme, m),
-                                     **({"off_before": ob} if ob else {}), **({"moved_before": mb} if mb else {}))
+                                     **({"off_before": ob} if ob else {}), **({"moved_before": mb} if mb else {}),
+                                     **({"moved_out": mo} if mo else {}))
     if ask is not None and got and got != kept and (got.get("names_for") or any(x.get("by") == "ai" for x in (got.get("assign") or {}).values())):
         try:
             computed.put("theme:place", key, got, label=m.get("sector") or theme, region=region)
@@ -522,27 +526,40 @@ def _has_description(region: str, sym: str) -> bool:
         return False
 
 
+def describe_reads(missing: int) -> int:
+    """h56 (R56, the owner's review of the live R55 decks: Biotech 219 of 820 checked, FMCG 111 of 209 on industry labels): how many
+    companies' own descriptions the background check asks for at one check: PLACE_READS, or the companies still without one over
+    DESCRIBE_CHECKS_TO_FINISH when that is more, at most PLACE_READS_MAX. Still bounded in time: one evidence_reader call (theme_check's
+    EVIDENCE_BUDGET seconds, the sources' own rates: the Indian profile pages' per-minute limit, FILING_READS_PER_MINUTE annual reports);
+    a read the time or a busy source leaves is owed to a later check. No AI call: a description is read from the company's own pages."""
+    n = max(0, int(missing or 0))
+    return min(PLACE_READS_MAX, max(PLACE_READS, -(-n // DESCRIBE_CHECKS_TO_FINISH)))
+
+
 def describe_unplaced(region: str, out: dict, names: dict, kept: dict | None) -> list[str]:
     """R28 (the owner's review: IT services "How they earn is shown for only 6 of these 46 companies"): a description is kept only for the
     companies the AI added (their check reads it) and the largest DESCRIBE_MAX on the page, a few a view, so a small company the placement
     sends to the AI had no words of its own and no revenue model. Before the placement asks, the companies of the theme's industries it
     hasn't placed yet (largest first) with no kept description have their own page's description read once and kept in the shared store
-    (evidence_reader): at most PLACE_READS a theme check, never for a placement already kept, no job of its own. The symbols read."""
+    (evidence_reader): at most describe_reads a theme check, never for a placement already kept, no job of its own. The symbols read.
+    h56 (R56, the owner's review of the live R55 FMCG deck: 98 description-verified, 111 kept on industry labels): after those, every other
+    company of the map with no description looked for yet, largest first, in the same read: its own words, where a source has them, are
+    what the membership check verifies it by (theme_data.evidence_state, membership_recheck) instead of its industry label."""
     kept = kept if isinstance(kept, dict) else {}
     done = set((kept.get("assign") or {}) if isinstance(kept.get("assign"), dict) else ())
     rest = [c for v in out.get("value_chain") or [] if v.get("official") and v.get("basis") in ("industry", "list") and not v.get("by_industry")
             for c in v.get("companies") or [] if c.get("ticker") and c["ticker"] not in done]
     if not any(not v.get("official") and v.get("layer") for v in out.get("value_chain") or []):
-        return []                               # no layers of the map's own to place them in (theme_base.place_rest)
-    want = []
+        rest = []                               # no layers of the map's own to place them in (theme_base.place_rest): none to place
+    by_cap = lambda cs: sorted(cs, key=lambda c: (-(c.get("cap") or 0), c["ticker"]))     # noqa: E731
+    first = {c["ticker"] for c in rest}
+    others = by_cap({c["ticker"]: c for v in out.get("value_chain") or [] for c in v.get("companies") or []
+                     if c.get("ticker") and c["ticker"] not in first}.values())
     # e54 (R54, the owner's review of the live R53 decks: Biotech's 564 and Software's 151 "not checked yet (no description of their own is
     # kept)" after several checks): the candidates were cut to the largest PLACE_MAX before the ones already described were passed over, so
-    # once those had their words no company past them was ever read; the next PLACE_READS without a description, largest first, are read
-    for c in sorted(rest, key=lambda c: (-(c.get("cap") or 0), c["ticker"])):
-        if len(want) >= PLACE_READS:
-            break
-        if not _has_description(region, c["ticker"]):
-            want.append(c["ticker"])
+    # once those had their words no company past them was ever read; the next ones without a description, largest first, are read
+    missing = list(dict.fromkeys(c["ticker"] for c in by_cap(rest) + others if not _has_description(region, c["ticker"])))
+    want = missing[:describe_reads(len(missing))]
     if want:
         try:
             evidence_reader(region, names)(want)
@@ -719,6 +736,21 @@ def previous_layers(region: str, theme: str, m: dict) -> dict:
         return {}
 
 
+def previous_confirmed(region: str, theme: str, m: dict) -> dict:
+    """t56 (R55 review): {symbol: "confirmed" (its own words were checked to show the theme's work, theme_changes' snapshot "why") or
+    "member"} of the members of the previous live read of this same map, for theme_base.keep_confirmed. {} when none is stored, or the
+    snapshot is of another map."""
+    try:
+        snap = (theme_changes.stored(region, m.get("_library") or theme) or {}).get("snap") or {}
+        if not isinstance(snap.get("cos"), dict) or int(float(snap.get("stamp") or 0)) != int(float(m.get("generated_at") or 0)):
+            return {}
+        why = snap.get("why") if isinstance(snap.get("why"), dict) else {}
+        return {s_: "confirmed" if theme_base.CONFIRMED_SAID in str(why.get(s_) or "") else "member" for s_ in snap["cos"]}
+    except Exception as e:
+        print("theme: previous members not read:", type(e).__name__, str(e)[:100])
+        return {}
+
+
 def off_before(region: str, theme: str, m: dict) -> dict:
     """d53 (R53): {symbol: [name, industry]} of the companies an earlier stored version of this theme dropped as another business
     (theme_changes.off_memory), whatever map it was of: a company's business doesn't change with the map. {} when none is stored."""
@@ -736,6 +768,16 @@ def moved_before(region: str, theme: str, m: dict) -> dict:
         return theme_changes.move_memory(theme_changes.stored(region, m.get("_library") or theme))
     except Exception as e:
         print("theme: earlier moves not read:", type(e).__name__, str(e)[:100])
+        return {}
+
+
+def moved_out(region: str, theme: str, m: dict) -> dict:
+    """t56 (R55 review): {symbol: [from, to]} of the moves the one re-check that removed each layer the stored snapshot no longer has made
+    out of it (theme_changes.lost_moves), so the taxonomy guard reads the version before exactly. {} when none is stored."""
+    try:
+        return theme_changes.lost_moves(theme_changes.stored(region, m.get("_library") or theme))
+    except Exception as e:
+        print("theme: moves out of lost layers not read:", type(e).__name__, str(e)[:100])
         return {}
 
 
@@ -787,6 +829,8 @@ def _check(region: str, theme: str, m: dict) -> dict:
         if len(VERDICTS) > VERDICT_KEEP:
             VERDICTS.clear()
         out = theme_check.check_placements(m, evidence_reader(region, _map_names(m)), _ask, theme, VERDICTS)
+        # t56: a member of the previous version stays when this check's "yes" only lacked backing words (no evidence against it)
+        out = theme_base.keep_confirmed(out, m, previous_confirmed(region, theme, m))
         missing = None
         if region == "US":
             try:
@@ -1094,6 +1138,7 @@ def placement_inputs(q: str, region: str = "IN", profile=Depends(current_profile
                  "evidence": {s_: about(s_) for s_ in sorted(names)}, "previous": previous_layers(r, theme, m),
                  "off_before": off_before(r, theme, m),        # d53: the companies an earlier version dropped as another business
                  "moved_before": moved_before(r, theme, m),    # c54: the moves the stored change log records
+                 "moved_out": moved_out(r, theme, m),          # t56: the moves of the re-check that removed each layer the snapshot lost
                  "facts": {s_: facts(s_) for s_ in sorted(names)},
                  # v55: each company's latest stored revenue and EBITDA margin, as the placement reads its stage (theme_base.stage_moves)
                  "figures": {s_: f for s_, f in ((s_, figures(s_)) for s_ in sorted(names)) if f}})
@@ -1163,27 +1208,37 @@ def membership_check(theme: str, m: dict, fm: dict, dive: dict, before: dict | N
     """e54 (R54, the owner's review of the live R53 decks: Biotech "564 still not checked", Software 488, after several checks: the companies
     whose membership was checked were always the figures' window, every one the AI named and then the largest by market value, so the
     check never moved on): the companies outside that window checked so far, earlier stored reads' (the snapshot's "ev") and this read's
-    next theme_data.MEMBERSHIP_STEP, each with its evidence state; with how many are checked of the theme's companies after each stored
-    read ("history", the snapshot's "ev_hist" and this read's point). {"outside": {symbol: state}, "checked", "total", "history"}."""
+    next theme_data.membership_step, each with its evidence state; with how many are checked of the theme's companies after each stored
+    read ("history", the snapshot's "ev_hist" and this read's point). {"outside": {symbol: state}, "checked", "total", "history", "step",
+    "rechecked"}.
+    h56 (R56, the owner's review of the live R55 decks): every point of the history is the evidence tally's (theme_data.checked_tally, the
+    one the deck says the members by state from: Payments' "19 of 20 (95%)" sat beside "100% → 100%", the old point counting the window's
+    companies not checked), with its description-verified count; a point kept before, without the tally's counts, is left out. The step
+    grows with the companies not checked yet (theme_data.membership_step), and a company kept on a label is checked again once its own
+    description is stored (theme_data.membership_recheck)."""
     before = before if isinstance(before, dict) else {}
     every = {c["ticker"] for v in m.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}
-    window = set(dive.get("evidence") or {})
+    window = dive.get("evidence") or {}
     kept = {s_: theme_changes.EV_STATE.get(x, x) for s_, x in (before.get("ev") or {}).items()
             if s_ in every and s_ not in window and theme_changes.EV_STATE.get(x, x) in theme_data.EVIDENCE_STATES}
+    total = (m.get("placements") or {}).get("total") or (dive.get("coverage") or {}).get("placed") or len(every)
+    counts = theme_data.evidence_counts(window)
+    step = theme_data.membership_step(theme_data.checked_tally(counts, kept, total)["total"])
+    new, again = {}, {}
     try:
         words = theme_data.theme_words(fm, theme)
-        new = theme_data.membership_round(m, window | set(kept), words, about)
+        again = theme_data.membership_recheck(m, kept, words, about, step)
+        new = theme_data.membership_round(m, set(window) | set(kept), words, about, step)
     except Exception as e:
         print("theme: membership check not moved on:", type(e).__name__, str(e)[:100])
-        new = {}
-    outside = {**kept, **new}
-    total = (dive.get("coverage") or {}).get("placed") or len(every)
-    checked = len(window | set(outside))
-    hist = [list(p) for p in before.get("ev_hist") or [] if isinstance(p, (list, tuple)) and len(p) == 3]
-    point = [today.isoformat(), checked, total]
+    outside = {**kept, **again, **new}
+    t = theme_data.checked_tally(counts, outside, total)
+    hist = theme_data.tally_points(before.get("ev_hist"))
+    point = theme_data.tally_point(today.isoformat(), t)
     if not hist or hist[-1][1:] != point[1:]:
         hist = (hist + [point])[-theme_changes.KEEP:]
-    return {"outside": dict(sorted(outside.items())), "checked": checked, "total": total, "history": hist, "step": len(new)}
+    return {"outside": dict(sorted(outside.items())), "checked": t["checked"], "total": t["total"], "history": hist, "step": len(new),
+            "rechecked": sum(1 for s_, x in again.items() if x != kept.get(s_))}
 
 
 def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None = None) -> dict:
@@ -1204,7 +1259,7 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
     hit["placements"], hit["figures"] = m.get("placements"), figures
     hit["coverage"] = map_coverage(m)          # R44: of every company the map places, not only those the figures were read for
     before = theme_changes.stored(r, m.get("_library") or theme).get("snap")
-    # e54 (R54): the membership check moves on through the companies not checked yet, MEMBERSHIP_STEP a stored read (membership_check)
+    # e54 (R54): the membership check moves on through the companies not checked yet, membership_step a stored read (membership_check)
     hit["membership_check"] = membership_check(theme, m, fm, hit, before, getattr(src, "about", lambda s_: None),
                                                getattr(src, "today", None) or datetime.now(timezone.utc).date())
     # cl48 (R47): the coverage control, against the previous live read of the theme (theme_changes' snapshot, stored before this one)

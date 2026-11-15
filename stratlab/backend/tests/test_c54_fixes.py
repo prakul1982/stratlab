@@ -333,7 +333,7 @@ def test_deck_check_finds_moves_without_a_reason_scope_layers_counted_core_and_l
 def test_the_rules_version_and_the_new_inputs():
     from app import deck as K
     from app.intel import theme_routes as TR
-    assert B.RULES == 54 and TR.PLACE_CARRY[54] == 53 and TR.PLACE_CARRY[53] == 52 and K.THEME_DECK_VERSION == 65 and D.DIVE_TEXT == 25          # v55 (R55 review): RULES 54, PLACE_CARRY[54] = 53, deck 65, dive text 25 (updated on purpose)
+    assert B.RULES == 55 and TR.PLACE_CARRY[55] == 54 and TR.PLACE_CARRY[54] == 53 and TR.PLACE_CARRY[53] == 52 and K.THEME_DECK_VERSION == 66 and D.DIVE_TEXT == 26          # t56 (R55 review): RULES 55, PLACE_CARRY[55] = 54, deck 66, dive text 26 (updated on purpose); v55 (R55 review): RULES 54, PLACE_CARRY[54] = 53, deck 65, dive text 25 (updated on purpose)
     assert "moved_before" in B.place_rest.__code__.co_varnames
     assert re.search(r'"moved_before": moved_before\(r, theme, m\)', pathlib.Path(TR.__file__).read_text())
 

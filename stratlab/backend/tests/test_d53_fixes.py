@@ -300,11 +300,13 @@ def test_a_layer_the_previous_live_read_had_lost_with_no_new_layer_taking_its_co
     was = TC.snapshot(_dive([("Electrical cables", ["C1", "C2", "C3", "C4"]), ("Generators", ["G1", "G2", "G3"])]), [])
     # its companies to "Other" and to the halves of a split by market value: lost
     now = _dive([("Generators", ["G1", "G2", "G3"]), ("Other utility companies", ["C1", "C2"]), ("Makers (larger)", ["C3"]), ("Makers (smaller)", ["C4"])])
-    assert TC.lost_layers(was, now) == [{"layer": "Electrical cables", "n": 4}]
+    # t56 (R55 review, updated on purpose): each lost layer says where its companies went
+    assert TC.lost_layers(was, now) == [{"layer": "Electrical cables", "n": 4, "went": {"Other utility companies": 2, "Makers (larger)": 1, "Makers (smaller)": 1}}]
     # renamed, or taken by a business layer: not lost
     assert TC.lost_layers(was, _dive([("Generators", ["G1", "G2", "G3"]), ("Cable and wire makers", ["C1", "C2", "C3", "C4"])])) == []
     ctl = TC.coverage_control({"informative": 7, "placed": 7}, was, now)
-    assert TC.control_line({"informative": 7, "placed": 7, "control": ctl}).endswith("“Electrical cables” (4 companies).")
+    assert TC.control_line({"informative": 7, "placed": 7, "control": ctl}).endswith(
+        "“Electrical cables” (4 companies: 2 to “Other utility companies”, 1 to “Makers (larger)”, 1 to “Makers (smaller)”).")      # t56: where they went (updated on purpose)
 
 
 # ---------- deck_check ----------
