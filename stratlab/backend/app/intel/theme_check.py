@@ -107,6 +107,20 @@ def own_words(about, group_text, claimed) -> str:
     return ""
 
 
+def group_sentence(about, group_text) -> str:
+    """p57: the first sentence of a company's own description (word for word, MIN_QUOTE_WORDS to MAX_QUOTE_WORDS words) that speaks of a
+    group's work (supports), or "": the quote a published member kept in its group shows (theme_base.keep_published, check_placements
+    `held`), with no answer of the AI's to compare."""
+    for part in _SENTENCE.findall(str(about or "")):
+        words = part.split()
+        if len(words) < MIN_QUOTE_WORDS:
+            continue
+        quote = " ".join(words[:MAX_QUOTE_WORDS])
+        if supports(quote, group_text) and quote_in(quote, about):
+            return quote
+    return ""
+
+
 # ---------- the groups of a map ----------
 def groups_of(out: dict) -> list[dict]:
     """[{id, kind, index, name, text, companies}] for the map's value-chain layers ("L0"...) and sub-themes ("S0"...)."""
@@ -183,12 +197,17 @@ def gather_evidence(symbols: list[str], read, budget: float = EVIDENCE_BUDGET, w
     return got, pending
 
 
-def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None, budget: float = EVIDENCE_BUDGET) -> dict:
+def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None, budget: float = EVIDENCE_BUDGET, held: dict | None = None) -> dict:
     """The map with only the companies whose own description shows they do their group's work. Each kept company in a
     layer or sub-theme carries "what" (the words from its description). Also gives "placements": {"checked": every company
     could be checked, "pending": how many couldn't be yet, "left_out": how many named pairs were dropped}. `evidence_of(symbols)`
     -> ({symbol: {about, industry}}, pending symbols); `ask(system, text)` is the AI's JSON answer; `verdict_cache` is a
-    dict that keeps a pair's answer for the next request."""
+    dict that keeps a pair's answer for the next request.
+    p57 (R56 review: Capital One and Sarepta out on a re-check's "no" for the same stored words the version before had checked to show
+    their group's work): `held`, {symbol: the map group of its published layer, "" when none of the map's (theme_base.published_group)}:
+    a published member is not asked again: it stays in that group (else the first the map names it in), its own words' sentence of the
+    group's work its quote when there is one ("verified"), else kept unconfirmed ("kept_member"), unless its own words contradict that group
+    (theme_base.contradicted): then it is asked like a new company. "held" in the placements counts those not asked."""
     out = dict(out)
     groups = groups_of(out)
     by_id = {g["id"]: g for g in groups}
@@ -203,9 +222,24 @@ def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None
     cache = verdict_cache if verdict_cache is not None else {}
     got: dict[str, dict] = {}
     todo = []
+    not_asked = 0
+    from .theme_base import KEPT_SAID, contradicted
+    for sym, gids in syms.items():
+        if sym not in (held or {}):
+            continue
+        ev = evidence.get(sym) or {}
+        home = next((g for g in gids if by_id[g]["name"] == held[sym]), gids[0])
+        g = by_id[home]
+        if contradicted(g["name"], ev.get("about") or "", ev.get("industry") or "", g["text"]):
+            continue                         # its own words contradict its published group: asked like a new company
+        quote = group_sentence(ev.get("about") or "", f"{g['name']} {g['text']}")
+        for gid in gids:
+            got[f"{gid}|{sym}"] = {"does": gid == home, "quote": quote if gid == home else "", "held": True}
+        pending.discard(sym)
+        not_asked += 1
     for sym, gids in syms.items():
         ev = evidence.get(sym)
-        if not ev:
+        if not ev or f"{gids[0]}|{sym}" in got:
             continue
         need = []
         for gid in gids:
@@ -252,7 +286,12 @@ def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None
         for c in cos:
             sym = c.get("ticker")
             v = got.get(f"{gid}|{sym}")
-            if v and v["does"]:
+            if v and v["does"] and v.get("held"):          # p57: a published member, not asked again
+                kept.append({**c, "what": v["quote"].strip(" ,;:-–—"), "verified": bool(v["quote"]),
+                             "kept_member": KEPT_SAID.format(layer=by_id[gid]["name"])})
+            elif v and v.get("held"):
+                pass                                      # its other groups: it is kept once, in its published one
+            elif v and v["does"]:
                 kept.append({**c, "what": v["quote"].strip(" ,;:-–—"), "verified": True})
             elif v is None:
                 # not checked yet (the AI or a source busy) or nothing to check it by (no description found): shown, marked not yet
@@ -280,11 +319,16 @@ def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None
             continue
         from .theme_base import issuer_name, listing_line
         line = listing_line(names[sym])
+        # p57 (R56 review: "its own words don't show the work of “Card issuers and lenders”" printed of a card issuer): whether its own words
+        # use the vocabulary of a group it was left out of, so its reason never says they don't show a work they name
+        from .theme_base import shares_vocabulary
+        about_ = (evidence.get(sym) or {}).get("about") or ""
+        names_it = [by_id[g]["name"] for g in gids if about_ and shares_vocabulary(by_id[g]["name"], about_)]
         dropped.append({"ticker": sym, "name": names[sym], "groups": [by_id[g]["name"] for g in gids],
-                        "said": "unbacked" if all(x.get("unbacked") for x in said) else "no",
+                        "said": "unbacked" if all(x.get("unbacked") for x in said) else "no", **({"words_name": names_it} if names_it else {}),
                         **({"listing": line, "issuer": issuer_name(names[sym])} if line else {})})
     out["placements"] = {"checked": not pending and not failed, "pending": len(pending), "left_out": left_out, "placed": len(placed),
-                         "unconfirmed": len(unconfirmed), **({"dropped": dropped} if dropped else {})}
+                         "unconfirmed": len(unconfirmed), **({"dropped": dropped} if dropped else {}), **({"held": not_asked} if not_asked else {})}
     return out
 
 

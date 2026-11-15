@@ -110,7 +110,8 @@ FAIL = ("headline", "mid-word", "placeholder", "joining word", "count", "repeate
         "left out>50%", "unchecked as 0", "biz label", "biz making", "stale layer", "same company", "words claim", "partial unsaid",
         "outlier range", "added unexplained", "verified count", "adjacent ranked", "move unexplained", "scope core", "layer lost unsaid",
         "evidence state", "population mismatch", "identity unresolved", "out of scope in Other", "stage mismatch", "coverage blur",
-        "evidence unsplit", "evidence counts", "empty page", "layer vanished", "share fall unsaid", "removal unnamed", "history end")
+        "evidence unsplit", "evidence counts", "empty page", "layer vanished", "share fall unsaid", "removal unnamed", "history end",
+        "removal unbacked", "layer words", "words contradict")
 WARN = ("cut text", "other>40%", "mixed range")
 # LIVE7A-014: a minus sign as a hyphen before a figure with its unit (never a date's or a range's dash: it follows a space or a bracket)
 _HYPHEN_MINUS = re.compile(r"(?:(?<=\s)|(?<=[(\[])|^)-\d[\d,]*(?:\.\d+)?(?:%|x\b| ?pts\b| ?points\b)")
@@ -324,10 +325,19 @@ def check_pages(pages: list[str]) -> dict:
     l55_checks(pages, add)
     t56_checks(pages, add)
     h56_checks(pages, add)
+    p57_checks(pages, add)
     counts = {k: sum(1 for f in findings if f["kind"] == k) for k in FAIL + WARN}
     return {"pages": len(pages), "counts": counts, "findings": findings}
 
 
+# the labels of a way of earning a layer made by how its companies earn takes (the app's theme_check.MODELS labels that name no kinds)
+EARNING_LABELS = {"Project and consulting services", "Managed and outsourced IT services", "Business process outsourcing",
+                  "Software products and subscriptions", "Designs licensed for royalties", "Platforms and marketplaces",
+                  "Hardware resale and integration", "Distribution and trading", "Retail", "Makers of their own products",
+                  "Product designers that outsource making", "Parts, component and ingredient makers", "Contract manufacturing",
+                  "Engineering and construction contracts", "Lenders", "Insurers", "Payment networks and processors", "Property and leasing",
+                  "Transport and logistics", "Media and content", "Diversified groups", "Resale and distribution", "IT services for clients",
+                  "Financial fees and commissions"}
 _LAYER_HEAD = re.compile(r"(?m)^\s*Layer \d+ · (.+?)\s*$")
 _SAME_WAY = re.compile(r"earn the same way as those of ((?:“[^”]+”(?:, )?)+)")
 _QUOTED = re.compile(r"“([^”]+)”")
@@ -778,6 +788,123 @@ def _end_check(add, n: int, label: str, count, points) -> None:
     share = 99 if share == 100 and a < b else share          # (the deck never says 100% while one is short of the whole)
     if int(points[-1][0]) != share:
         add("history end", n, f"{label} {count.group(0)}".strip() + f": its share after each stored version ends on {points[-1][0]}% ({points[-1][1]})")
+
+
+# p57 (R56, the owner's review: Capital One "removed ... its own words don't show the work of “Card issuers and lenders”", Sarepta removed on
+# "“Commercial specialty biotechs”", neither a layer the deck has; Duolingo, a language-course app, alone in "Hotels, travel and consumer
+# services"): the placement contract read from a deck's text
+_PLAIN_NAME = {"and", "the", "of", "for", "with", "other", "company", "companies", "provider", "providers", "maker", "makers", "supplier",
+               "suppliers", "product", "products", "service", "services", "business", "businesses", "own", "their", "large", "larger",
+               "smaller", "small", "mid", "sized", "based", "leading", "specialty", "diversified", "portfolio", "portfolios", "mixed", "various",
+               "general", "group", "groups", "makers", "producers", "producer", "manufacturers", "manufacturer", "manufacturing", "operators",
+               "operator", "consumer", "consumers", "integrated", "regional", "pan", "india", "national", "domestic", "global", "focused",
+               "tier", "high", "value", "added", "basic", "performance", "premium", "quality", "commercial", "stage", "scale", "makers",
+               "platform", "platforms", "system", "systems", "solution", "solutions", "software", "technology", "technologies"}
+# the labels of a way of earning a layer made by how its companies earn takes (the app's theme_check.MODELS labels that name no kinds)
+EARNING_LABELS = {"Project and consulting services", "Managed and outsourced IT services", "Business process outsourcing",
+                  "Software products and subscriptions", "Designs licensed for royalties", "Platforms and marketplaces",
+                  "Hardware resale and integration", "Distribution and trading", "Retail", "Makers of their own products",
+                  "Product designers that outsource making", "Parts, component and ingredient makers", "Contract manufacturing",
+                  "Engineering and construction contracts", "Lenders", "Insurers", "Payment networks and processors", "Property and leasing",
+                  "Transport and logistics", "Media and content", "Diversified groups", "Resale and distribution", "IT services for clients",
+                  "Financial fees and commissions"}
+_LAYER_HEAD = re.compile(r"^\s*Layer \d+ · (.+?)\s*$", re.M)
+_CITED = re.compile(r"“([^”]{3,80})”")
+_SAYS_NOT = re.compile(r"(?:don't|doesn't|do not|does not) (?:show the work of|support|say what|say it sells what) “([^”]{3,80})”")
+_OFFICIAL_SAID = re.compile(r"an official industry of the theme")
+
+
+def _kind_words(name: str) -> set:
+    out = set()
+    for w in re.findall(r"[a-z]+", name.lower().replace("-", " ")):
+        w = w[:-1] if w.endswith("s") and len(w) > 4 and not w.endswith("ss") else w
+        if len(w) >= 3 and w not in _PLAIN_NAME and f"{w}s" not in _PLAIN_NAME:
+            out.add(w)
+    return out
+
+
+def _says_word(text: str, w: str) -> bool:
+    return bool(re.search(r"\b" + re.escape(w[:max(5, len(w) - 2)] if len(w) > 6 else w), text.lower()))
+
+
+def _layer_names(pages: list[str]) -> set:
+    names = set()
+    for p in pages:
+        for m in _LAYER_HEAD.finditer(p):
+            names.add(re.sub(r" \((?:larger|smaller)\)$", "", m.group(1)))
+    return names
+
+
+def _small_layer_chunks(page: str) -> list[tuple[str, str]]:
+    """(layer name, the rest of its rows' text) of a "Smaller layers" table: a layer's cell starts at the line's start with a capital, a
+    lower-case start continues its name."""
+    out, name, body = [], None, []
+    started = False
+    for ln in page.split("\n"):
+        if re.match(r"^\s*Layer\s{2,}Company\b", ln):
+            started = True
+            continue
+        if not started or not ln.strip() or ln.startswith("StratLab ·"):
+            continue
+        cells = re.split(r"\s{2,}", ln.strip())
+        cell = cells[0] if ln[:2].strip() else ""
+        rest = ln.strip()[len(cell):] if cell else ln
+        if cell and ln[:2].strip() and cell[:1].isupper():
+            if name is not None:
+                out.append((name, " ".join(body)))
+            name, body = cell, [rest]
+        elif cell and ln[:2].strip() and name is not None:
+            name, body = f"{name} {cell}", body + [rest]
+        else:
+            body.append(ln)
+    if name is not None:
+        out.append((name, " ".join(body)))
+    return out
+
+
+def p57_checks(pages: list[str], add) -> None:
+    """p57 (R56): the placement contract, failures:
+      removal unbacked   a company removed from the theme on a check's answer naming a group that is no layer of the deck ("its own words
+                         were checked and don't show the work of “Card issuers and lenders”" beside "Card issuers and consumer lenders"), or
+                         one said to be filed under an official industry of the theme with no other reason
+      layer words        a layer (its page, or its rows of the "Smaller layers" table) whose name's words of a kind of business are said by
+                         none of its companies' lines ("Hotels, travel and consumer services" holding a language-course app)
+      words contradict   a removal or move whose reason says a company's words don't show a layer's work ("don't show the work of “X”",
+                         "doesn't support “X”") while the deck prints that company's own words saying a word of that layer's name"""
+    layers = _layer_names(pages)
+    flat_pages = [re.sub(r"\s+", " ", p) for p in pages]
+    for n, page in enumerate(pages, 1):
+        flat = re.sub(r"\s+", " ", page)
+        if "Since the previous version" in flat or "against the version stored before it" in flat:
+            for m in _REMOVED_LIST.finditer(flat):
+                for it in _top_items(m.group(2)):
+                    why = _last_paren(it)
+                    cited = [c for c in _CITED.findall(why) if c not in layers]
+                    if layers and "business membership" in why and _SAYS_NOT.search(why) and cited:
+                        add("removal unbacked", n, it[:200])
+                    elif _OFFICIAL_SAID.search(why) and not re.search(r"listing: |another business|outside the theme's definition|the same company as", why):
+                        add("removal unbacked", n, it[:200])
+                    said = _SAYS_NOT.search(why)
+                    if said:
+                        who = re.sub(r"\s*\(.*$", "", it).strip()
+                        who = re.sub(r"\s+\d+\s+version\s+", " ", who)
+                        words = _kind_words(said.group(1))
+                        seen = ""
+                        for k, other in enumerate(flat_pages, 1):          # its own words as another page prints them beside its name
+                            at = other.find(who) if len(who) >= 6 and k != n else -1
+                            if at >= 0:
+                                seen = other[at + len(who):at + len(who) + 300]
+                                break
+                        if seen and words and any(_says_word(seen, w) for w in words):
+                            add("words contradict", n, it[:200])
+        if re.search(r"^\s*Smaller layers\s*$", page, re.M):
+            for name, body in _small_layer_chunks(page):
+                name = re.sub(r" \((?:larger|smaller)\)$", "", name)
+                if name.startswith("Other ") or name in EARNING_LABELS:
+                    continue                 # "Other", and a label of how its companies earn (their models show it), name no kind
+                words = _kind_words(name)
+                if words and body.strip() and not any(_says_word(body, w) for w in words):
+                    add("layer words", n, f"“{name}”: none of its companies' lines says {', '.join(sorted(words))}")
 
 
 def check_text(text: str) -> dict:
