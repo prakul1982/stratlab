@@ -369,6 +369,13 @@ def revenue(facts: dict, kind: str, unit: str = "USD") -> dict[str, float]:
     for c in TOP_LINE:
         for end, v in read((c,)).items():
             seen.setdefault(end, []).append(v)
+    # a lender's or broker's whole revenue net of interest expense beside a top-line concept that holds only a part of it: the
+    # fee revenue in scope of the contract-revenue standard (lane dat57: American Express's 2025 10-K tags $41.3 bn of contract
+    # revenue and $72.2 bn of revenue net of interest expense; the part made its revenue, growth and net margin wrong). It
+    # counts as one more top-line figure, so the larger is the top line and a thousandfold slip is still caught
+    for end, v in read(("RevenuesNetOfInterestExpense",)).items():
+        if end in seen and v > 0:
+            seen[end].append(v)
     cost = read(COST_OF_SALES)
     for end, vs in seen.items():
         out[end] = top_line(vs, cost.get(end))
@@ -740,7 +747,7 @@ PROFIT_TOTAL = ("ProfitLoss",)
 MINORITY_PROFIT = ("ProfitLossAttributableToNoncontrollingInterests", "NetIncomeLossAttributableToNoncontrollingInterest")
 
 
-def owner_sign(owners: dict, total: dict, minority: dict) -> None:
+def owner_sign(owners: dict, total: dict, minority: dict, pretax: dict | None = None) -> None:
     """The shareholders' profit filed with the wrong sign, put right in place (R7V-003: Santander Chile's reports for
     2019 to 2021 tag the profit attributable to its shareholders as -842,467 for a year whose total profit was +852,428,
     so the page showed a bank losing money in a year it made one). A period whose shareholders' profit has the opposite
@@ -750,6 +757,12 @@ def owner_sign(owners: dict, total: dict, minority: dict) -> None:
     for end, v in list(owners.items()):
         t = total.get(end)
         if not v or not t or (v > 0) == (t > 0):
+            continue
+        # ...unless the profit before tax has the shareholders' sign and the total's is the one filed the wrong way round (lane dat57:
+        # Aeluma's 10-K tags its net loss of $9.2 m as NetIncomeLoss -9.2 m, profit before tax -9.2 m, and ProfitLoss +9.2 m; the page
+        # turned the loss into a 205% net margin)
+        p = (pretax or {}).get(end)
+        if p and (p > 0) == (v > 0) and 0.5 <= abs(v) / abs(p) <= 2:
             continue
         if end in minority:
             parent = t - minority[end]
@@ -865,8 +878,8 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
     cur = currency(facts) or "USD"
     rev_a, rev_q = revenue(facts, "annual", cur), revenue(facts, "quarter", cur)
     ni_a, ni_q = flows(facts, NET_INCOME, "annual", cur), quarterly(facts, NET_INCOME, cur)
-    owner_sign(ni_a, flows(facts, PROFIT_TOTAL, "annual", cur), flows(facts, MINORITY_PROFIT, "annual", cur))
-    owner_sign(ni_q, quarterly(facts, PROFIT_TOTAL, cur), quarterly(facts, MINORITY_PROFIT, cur))
+    owner_sign(ni_a, flows(facts, PROFIT_TOTAL, "annual", cur), flows(facts, MINORITY_PROFIT, "annual", cur), flows(facts, PRETAX, "annual", cur))
+    owner_sign(ni_q, quarterly(facts, PROFIT_TOTAL, cur), quarterly(facts, MINORITY_PROFIT, cur), quarterly(facts, PRETAX, cur))
     # a loss-making company whose income statement stops at the loss before tax (nothing to tax): that is its profit
     # (MS1-013: Micromem's 20-F tags ProfitLossBeforeTax and no ProfitLoss)
     for ni, tax, pre in ((ni_a, flows(facts, TAX, "annual", cur), flows(facts, PRETAX, "annual", cur)),
@@ -1050,10 +1063,21 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
     # $279M against $1.2B)
     year_end_held = [float(f["val"]) for c in SHARES_HELD for f in _facts(facts, c, "shares")
                      if f.get("val") and float(f["val"]) > 0 and not f.get("start") and f.get("end") == last]
+    # ...or unless a report after that year, on a new share basis, agrees with it: a split or reverse split since the annual
+    # report changes every count after it, and the year's earnings per share stay on the old basis until the next annual report
+    # (lane dat57: CrowdStrike's 4:1 split of July 2026 put 1,023,934,842 shares on its August cover, the year to January 2026
+    # implied 250 M, and its market value showed $56.7 bn against $232 bn; SkinHealth's 1:20 reverse split showed $1.94 bn
+    # against $107 m). The later count is a quarter's average or a balance sheet's, from a filing other than the cover's own fact
+    later = [float(f["val"]) for c in ("WeightedAverageNumberOfSharesOutstandingBasic", "WeightedAverageNumberOfDilutedSharesOutstanding")
+             + SHARES_HELD for f in _facts(facts, c, "shares")
+             if f.get("val") and float(f["val"]) > 0 and f.get("end", "") > ends[-1] and (f["end"], float(f["val"])) != shares]
     if shares and abs(eps_basic.get(last) or 0) >= 0.05 and ni_a.get(last):
         implied = ni_a[last] / eps_basic[last]
         # (a count that grew, by at most ten times: a thousandfold count is a unit error whatever the balance sheet says)
         agrees = 1 < shares[1] / implied <= 10 and any(0.5 <= shares[1] / h <= 2 for h in year_end_held)
+        thousandfold = implied > 0 and any(abs(shares[1] / implied / k - 1) < 0.1 or abs(implied / shares[1] / k - 1) < 0.1
+                                           for k in SCALE_SLIP)
+        agrees = agrees or (not thousandfold and any(0.5 <= shares[1] / h <= 2 for h in later))
         if implied > 0 and not 1 / 3 <= shares[1] / implied <= 3 and not agrees:
             shares = (last, float(round(implied)))
             from_cover = False

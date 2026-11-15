@@ -495,15 +495,35 @@ def _years_of(p: dict) -> int:
     return sum(1 for c in pl.get("cols") or [] if str(c).upper() != "TTM")
 
 
+def _last_year(p: dict | None):
+    """The latest full year a page's results table gives ("Mar 2026" -> (2026, 3)), None without one."""
+    for c in reversed((p or {}).get("pl", {}).get("cols") or []):
+        try:
+            d = datetime.strptime(str(c).strip(), "%b %Y")
+        except ValueError:
+            continue
+        return (d.year, d.month)
+    return None
+
+
 def _pick(pages: dict) -> dict:
-    """Consolidated numbers, unless they go back much less far than the standalone ones (a subsidiary set up
-    recently): then standalone, with a note saying so."""
+    """Consolidated numbers where filed, else standalone. A page counts only with a year in its results table, and consolidated
+    accounts that stop before the standalone ones' latest year (the subsidiaries sold or merged) give way to the standalone
+    ones, with a note saying so (lane dat57: Kovai Medical Center's consolidated table stops at Mar 2018, Jyothy Labs' at Mar
+    2025 and RailTel's at Mar 2023, each with a standalone Mar 2026; Indraprastha Medical's consolidated page has no table at
+    all; the stale or empty consolidated page was picked, and the R56 decks listed all four as having no figures)."""
     con, std = pages.get("consolidated"), pages.get("standalone")
-    if con and con.get("pl") and not (std and std.get("pl") and _years_of(con) < 6 and _years_of(std) >= _years_of(con) + 2):
+    con_end, std_end = _last_year(con), _last_year(std)
+    if con_end and std_end and std_end > con_end:
+        stop = next(str(c) for c in reversed(con["pl"]["cols"]) if str(c).upper() != "TTM")
+        return {**std, "basis": "standalone", "basis_note": f"Standalone results: the consolidated accounts stop at {stop}."}
+    if con and con_end:
+        # the company's own figures are the group's, however few years its consolidated accounts cover: a short consolidated history
+        # once put the standalone part in its place (lane dat57: Insolation Energy showed ₹98 cr of revenue against ₹2,146 cr
+        # consolidated, Leela Palaces ₹437 cr against ₹1,527 cr), while every figure is defined "consolidated where filed"
         return {**con, "basis": "consolidated"}
-    if std and std.get("pl"):
-        note = (f"Standalone results: the consolidated accounts only go back {_years_of(con)} years." if con and con.get("pl") else None)
-        return {**std, "basis": "standalone", "basis_note": note}
+    if std and std_end:
+        return {**std, "basis": "standalone"}
     return {**(con or std), "basis": "consolidated" if con else "standalone"}
 
 
@@ -623,12 +643,22 @@ class Screener(Source):
             pages = {}
             # consolidated first; companies without subsidiaries only have standalone numbers. Both read at once (R29A-001:
             # one after the other, a company page waited for two reads and two parses in a row)
+            con_busy = None
             for kind, got in self._both(base):
                 if isinstance(got, SourceError):
                     last = got
+                    if kind == "consolidated" and getattr(got, "busy", False):
+                        con_busy = got
                     continue
                 if got:
                     pages[kind] = got
+            if con_busy and set(pages) == {"standalone"}:
+                # the consolidated page didn't come (busy, blocked, rate limited) while the standalone one did: the standalone
+                # numbers are never passed off as the company's own, they are a part of a group that files consolidated results
+                # (lane dat57: the R56 Airlines deck showed The Indian Hotels Company's standalone ₹5,380 cr and Automotive Tata
+                # Motors Passenger Vehicles' standalone ₹57,859 cr, a 151% net margin, against consolidated ₹9,689 cr and
+                # ₹3.36 lakh cr). Busy: asked again later, the stored page kept meanwhile
+                raise con_busy
             if pages:
                 got = _pick(pages)
                 if (got.get("pl") or {}).get("cols") or reloaded or self.cache.get(("reloaded", sym)):
@@ -644,7 +674,9 @@ class Screener(Source):
                 for kind, path in (("consolidated", base + "consolidated/"), ("standalone", base)):
                     try:
                         p = self._page(path)
-                    except SourceError:
+                    except SourceError as e:
+                        if kind == "consolidated" and e.busy:
+                            raise
                         continue
                     if p:
                         pages[kind] = p

@@ -382,7 +382,11 @@ def us_figures(facts: dict) -> dict:
     inv = sec.instants(facts, INVENTORY, unit).get(end)
     if cost and cost > 0 and inv is not None and inv >= 0:
         out["inventory_days"] = _fig(_within(round(inv / cost * 365), 0, 2000), f"{_label(end)}, over the fiscal year to {_label(end)}", src)
-    rd = sec.flows(facts, RD, "annual", unit).get(end)
+    # the larger of the two R&D lines: the total includes the part without acquired in-process R&D, so a total filed below that part is
+    # another line under the total's name (lane dat57: Johnson & Johnson's 2025 10-K gives $109 m as ResearchAndDevelopmentExpense
+    # beside $14,665 m excluding acquired in-process R&D, and its R&D showed 0.1% of revenue against 15.6%)
+    rds = [v for v in (sec.flows(facts, (c,), "annual", unit).get(end) for c in RD) if v is not None]
+    rd = max(rds) if rds else None
     out["rd_share"] = _fig(_within(share(rd), 0, 300), fy, src)
     rpo = sec.instants(facts, RPO, unit)
     if rpo:
