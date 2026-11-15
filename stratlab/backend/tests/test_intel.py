@@ -204,11 +204,14 @@ def test_screener_follows_a_renamed_symbol():
     assert p["url"] == "https://www.screener.in/company/TMPV/consolidated/" and p["basis"] == "consolidated"
 
 
-def test_screener_prefers_standalone_when_consolidated_history_is_short():
+def test_screener_prefers_consolidated_even_when_its_history_is_short():
+    # (updated on purpose, lane dat57: a short consolidated history used to give way to the standalone part, so a group showed one
+    # subsidiary's or the parent's own figures, e.g. Insolation Energy ₹98 cr of revenue against ₹2,146 cr consolidated, while every
+    # figure is defined "consolidated where filed"; the group's figures now stand, with fewer years)
     pl = lambda n: {"cols": [f"Mar {2026 - n + i}" for i in range(n)] + ["TTM"], "rows": {"Sales": [1] * (n + 1)}}
     con, std = {"ratios": {"x": 1}, "pl": pl(4)}, {"ratios": {"x": 1}, "pl": pl(11)}
     picked = scr._pick({"consolidated": con, "standalone": std})
-    assert picked["basis"] == "standalone" and "only go back 4 years" in picked["basis_note"]
+    assert picked["basis"] == "consolidated" and not picked.get("basis_note")
     assert scr._pick({"consolidated": {**con, "pl": pl(8)}, "standalone": std})["basis"] == "consolidated"
     assert scr._pick({"consolidated": con})["basis"] == "consolidated"
 
