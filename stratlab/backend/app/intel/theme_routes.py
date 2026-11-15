@@ -247,7 +247,7 @@ def keep_profile(region: str, sym: str, about, industry: str = "", now: datetime
     return True
 
 
-def evidence_reader(region: str, names: dict, budget: float | None = None):
+def evidence_reader(region: str, names: dict, budget: float | None = None, again=()):
     """A function symbol-list -> ({symbol: {about, industry}}, pending) that reads each company's own description once (the company
     page's profile), keeps it for EVIDENCE_DAYS, and reads no more than the request's budget allows (`budget` seconds, theme_check's
     EVIDENCE_BUDGET by default).
@@ -266,7 +266,8 @@ def evidence_reader(region: str, names: dict, budget: float | None = None):
                 got = db.json_value(db.get_setting(key), {})
             except Exception:
                 got = {}
-            if got.get("at") and not thin_about(got, region, names.get(sym) or ""):
+            # r571e: `again`, companies whose kept "none found" is read once more (describe_top: the theme's largest)
+            if got.get("at") and not thin_about(got, region, names.get(sym) or "") and not (sym in again and not got.get("about")):
                 age = (datetime.now(timezone.utc) - datetime.fromisoformat(got["at"])).days
                 if age < (EVIDENCE_DAYS if got.get("about") else NO_DESCRIPTION_DAYS):
                     hit = got
@@ -591,6 +592,43 @@ def _has_description(region: str, sym: str) -> bool:
         return (datetime.now(timezone.utc) - datetime.fromisoformat(hit["at"])).days < NO_DESCRIPTION_DAYS
     except Exception:
         return False
+
+
+TOP_DESCRIBE = 30            # r571e: the theme's largest companies whose own words are read before its evidence check
+TOP_BUDGET = 60.0            # ...within this many seconds (the check runs in the background: no page waits on it)
+TOP_AGAIN_HOURS = 6          # ...and one of them kept as "none found" is read once more after this long
+
+
+def describe_top(region: str, m: dict, rows: list[dict], industries, n: int = TOP_DESCRIBE, budget: float = TOP_BUDGET) -> list[str]:
+    """r571e (R57, ten new themes built on R57: McDonald's "no description found in any source", GE Aerospace and RTX left out as
+    insufficient evidence on a first build): before a theme's evidence check, its `n` largest companies by market value (the map's and the
+    theme's official industries' companies, as the index lists them) with no description of their own kept, or kept as "none found" more
+    than TOP_AGAIN_HOURS ago, are read synchronously, largest first, within `budget` seconds (evidence_reader: the annual report first in the
+    US, the profile page in India; the annual-report reads wait for the next minute within the budget). At most `n` reads; no AI call. The
+    symbols read."""
+    idx = {r["symbol"]: r for r in rows or [] if r.get("symbol")}
+    inds = {theme_base.key(i) for i in industries or []}
+    names = {**{s_: r.get("name") or s_ for s_, r in idx.items() if theme_base.key(r.get("industry")) in inds}, **_map_names(m)}
+    top = sorted(names, key=lambda s_: (-((idx.get(s_) or {}).get("market_cap") or 0), s_))[:n]
+    now = datetime.now(timezone.utc)
+    want, again = [], set()
+    for s_ in top:
+        got = _stored_evidence(region, s_)
+        if got.get("about") and not got.get("owed"):
+            continue
+        if got.get("at") and not got.get("owed"):
+            try:
+                if (now - datetime.fromisoformat(got["at"])).total_seconds() < TOP_AGAIN_HOURS * 3600:
+                    continue                    # looked for lately, none found
+            except ValueError:
+                pass
+            again.add(s_)
+        want.append(s_)
+    if want:
+        for s_ in want:
+            EVIDENCE_CACHE.pop(f"theme:evidence:{region}:{s_}")
+        evidence_reader(region, names, budget=budget, again=again)(want)
+    return want
 
 
 def describe_reads(missing: int) -> int:
@@ -985,11 +1023,6 @@ def _check(region: str, theme: str, m: dict) -> dict:
         # its answer alone goes back to its published group (keep_published), unless its own words contradict that group
         pub = published_layers(region, theme, m)
         kept_ans, _ = kept_placement(region, theme, m)
-        out = theme_check.check_placements(mi, evidence_reader(region, _map_names(mi)), _ask, theme, VERDICTS, held=held_groups(mi, pub, kept_ans))
-        # t56: a member of the previous version stays when this check's "yes" only lacked backing words (no evidence against it)
-        out = theme_base.keep_confirmed(out, mi, previous_confirmed(region, theme, m))
-        about_ = _about_reader(region, _map_names(mi), 0)
-        out = theme_base.keep_published(out, pub, lambda s_: about_(s_), rename=theme_base.answer_renames(kept_ans))
         missing = None
         if region == "US":
             try:
@@ -997,6 +1030,16 @@ def _check(region: str, theme: str, m: dict) -> dict:
             except Exception as e:
                 print("theme: SEC codes not filled:", type(e).__name__, str(e)[:100])
         inds = _industries(region, theme, m)
+        # r571e: the theme's largest companies have their own words read before the evidence check and the placement read them
+        try:
+            describe_top(region, mi, _rows(region), inds["industries"])
+        except Exception as e:
+            print("theme: largest companies' descriptions not read:", type(e).__name__, str(e)[:100])
+        out = theme_check.check_placements(mi, evidence_reader(region, _map_names(mi)), _ask, theme, VERDICTS, held=held_groups(mi, pub, kept_ans))
+        # t56: a member of the previous version stays when this check's "yes" only lacked backing words (no evidence against it)
+        out = theme_base.keep_confirmed(out, mi, previous_confirmed(region, theme, m))
+        about_ = _about_reader(region, _map_names(mi), 0)
+        out = theme_base.keep_published(out, pub, lambda s_: about_(s_), rename=theme_base.answer_renames(kept_ans))
         out = theme_base.with_base(mi, out, _rows(region), inds["industries"], grounding.listed_name, **_base_args(region, theme, inds))
         # e57 (RC6): a checked pick's industry peers above the theme's median market value considered, joining on their own stored words
         try:
