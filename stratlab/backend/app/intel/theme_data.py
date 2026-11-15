@@ -3047,7 +3047,7 @@ SCOPE_KINDS = (
     ("miners, drillers and growers",
      r"\bcoal\b|\bmining\b|\bminerals?\b|crude|oil exploration|natural gas|plantations?|agricultural products|fisheries|aquaculture",
      r"",
-     r"\bmines?\b|\bmining\b|oil and gas (?:exploration|production)|\bplantations?\b|tea estates?|\bgrow(?:s|ers?|ing)\b",
+     r"\bmines?\b|\bmining\b|oil and gas (?:exploration|production)|\bplantations?\b|tea estates?|\bgrow(?:s|ers?|ing)\b|\bcultivat\w*",
      r"mining|metal|\boil\b|\bgas\b|energy|commodit|agri|farm|plantation|fertili|\bcoal\b|steel|petro|chemical|resource", ("resources",)),
 )
 
@@ -3075,9 +3075,58 @@ def scope_adjacent(c: dict, theme: str, sector: str = "", about: str | None = No
         # (theme_way) does the theme's work as its principal business, whatever else the kind's words say of it
         if ind and broad_rx and re.search(broad_rx, ind, re.I) and text and re.search(says_rx, text, re.I) and not theme_way(about, theme):
             return {**said, "where": where, "text": shown[:120]}
-        if model in models and confidence in ("high", "medium") and text and re.search(says_rx, text, re.I) and not theme_way(about, theme):
+        # x57 (second wave, FMCG-5: McLeod Russel, "in the business of cultivation and manufacturing of tea ... a tea plantation company",
+        # adjacent as a grower on a read of medium confidence, while Goodricke, Rossell, Dhunseri and B&A, "in the business of cultivation,
+        # manufacture and sale of tea", stayed core members on the same read at low confidence): its principal words stating the kind's own
+        # work decide, so the same words give the same verdict; the read's confidence only says how sure the answer was
+        if model in models and confidence in ("high", "medium", "low") and text and re.search(says_rx, text, re.I) and not theme_way(about, theme):
             return {**said, "where": where, "text": shown[:120]}
     return None
+
+
+# x57 (second wave, AIR-4: Adani Enterprises, "business interests in various economic areas such as mining, integrated resources management
+# (IRM), infrastructure such as airports, roads, ...", an adjacent "miner, driller and grower" in Airlines and travel on its official industry,
+# "Trading - Minerals"): a company whose own words say it runs several businesses
+MULTI_WORDS = re.compile(r"business interests in|interests in (?:various|diverse|several)|\bdiversified (?:group|conglomerate|business(?:es)?|portfolio) "
+                         r"(?:with|of|spanning|across)|various economic areas|portfolio of businesses", re.I)
+_LIST_SPLIT = re.compile(r",\s*|\s+and\s+|\s+such as\s+|\s*/\s*")
+
+
+def theme_business(about, segments, layer_words: set, kind_rx: str = "") -> dict | None:
+    """x57 (second wave): {"business", "main", "basis"} for a company that runs several businesses (its own words, MULTI_WORDS, list them; or
+    its reported segments are of two businesses or more), one of which is of the theme's own layers (a word of a layer's name: `layer_words`,
+    stems), never the kind's work its industry or words make it adjacent for (`kind_rx`); "main" is its largest segment by revenue ("basis"
+    "segment") or the business its own words name first ("basis" "words"). None else."""
+    segs = [x for x in segments or [] if isinstance(x, dict) and str(x.get("name") or "").strip()]
+    if len({segment_business(x["name"]) for x in segs} - {""}) >= 2:
+        for x in sorted(segs, key=lambda y: -(num(y.get("share_pct")) or 0)):
+            if _stems(x["name"]) & layer_words and not (kind_rx and re.search(kind_rx, x["name"], re.I)):
+                top = max(segs, key=lambda y: num(y.get("share_pct")) or 0)
+                if top is x or not num(top.get("share_pct")):
+                    continue
+                return {"business": str(x["name"]), "main": str(top["name"]), "basis": "segment"}
+    t = str(about or "")
+    m = MULTI_WORDS.search(t)
+    if not m:
+        return None
+    sent = re.split(r"(?<=[.;])\s+", t[m.end():], maxsplit=1)[0]
+    items = [" ".join(x.split()) for x in _LIST_SPLIT.split(sent) if x and x.strip()]
+    items = [re.sub(r"^(?:various economic areas|several businesses|sectors|businesses)\s*", "", x, flags=re.I).strip(" .") for x in items]
+    items = [x for x in items if x]
+    if len(items) < 2:
+        return None
+    for x in items[1:]:
+        if _stems(x) & layer_words and not (kind_rx and re.search(kind_rx, x, re.I)):
+            return {"business": x, "main": items[0], "basis": "words"}
+    return None
+
+
+def business_said(b: dict) -> str:
+    """x57 (second wave): "<its business of the theme> (part of a diversified group; its <main business> is the largest)", the largest said
+    only where reported segments show it; else the business its own words name first."""
+    if b.get("basis") == "segment":
+        return f"{b['business']} (part of a diversified group; its {b['main']} is the largest)"
+    return f"{b['business']} (part of a diversified group; its own words name {b['main']} first)"
 
 
 def theme_way(about, theme: str) -> bool:
@@ -3345,11 +3394,20 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
             if a:
                 rows[s]["adjacent"] = a
     # c54 (R53 review): lenders, contractors, laboratories and primary producers in a theme whose name doesn't state them (scope_adjacent)
+    lwords = _stems(" ".join(f"{v.get('layer') or ''} {v.get('was') or ''}" for v in checked.get("value_chain") or [] if not v.get("official"))) \
+        - _stems("other companies group groups makers operators providers services products")
     for s in rows:
         if not rows[s].get("adjacent"):
             c_ = placed[s]
             a = scope_adjacent(c_, theme, checked.get("sector") or "", src.about(s), seg_list(s), c_.get("model") or "",
                                c_.get("model_confidence") or "")
+            # x57 (second wave, AIR-4): a company that runs several businesses, one of them a business of the theme's own layers, is in the
+            # theme as that business, labelled by it, never by its largest unrelated business (its figures are the whole company's: wide)
+            tb = theme_business(src.about(s) or c_.get("what"), seg_list(s), lwords, next((k[3] for k in SCOPE_KINDS if a and k[0] == a["kind"]), "")) if a else None
+            if tb:
+                rows[s]["theme_business"] = {**tb, "said": business_said(tb)}
+                rows[s]["theme"]["why"] += f"; in the theme as {business_said(tb)}"
+                continue
             if a:
                 rows[s]["adjacent"] = a
     # d53 (R53): one company under two symbols with the same filed figures, merged before any median, total or list (same_company)

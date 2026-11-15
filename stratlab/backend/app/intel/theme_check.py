@@ -505,7 +505,8 @@ def own_words_show(model, evidence) -> bool:
         return False
     _, own = _split_evidence(evidence)
     words = _words_of(model)
-    return bool(words and re.search(words, own, re.I)) or family_shown(model, own)
+    # x57 (second wave): the words that name a way beside a company's other words (WORDS_SAY: "Contract Research Organization (CRO)") show it
+    return bool(words and re.search(words, own, re.I)) or family_shown(model, own) or bool(WORDS_SAY.get(model) and re.search(WORDS_SAY[model], own, re.I))
 
 
 def family_shown(model, own) -> bool:
@@ -1606,6 +1607,50 @@ SECONDARY = re.compile(r"\b(?:through|via|by) (?:its |their |the group'?s? )?(?:
                        r"\b(?:it|the company|the group) also (?:has|runs|operates|owns)\b|\balso has (?:a )?presence\b|"
                        r"\balso has certain other businesses\b|\bcertain other businesses\b", re.I)
 _SENTENCES = re.compile(r"(?<=[.;])\s+(?=[A-Z(•])")
+
+
+# x57 (second wave, the release gate's "model contradicted" rows: EverestIMS and Kratikal, "Software-as-a-Service (SaaS)", printed as
+# managed or project IT services; Pharmaids, "Custom Research and Manufacturing Services (CRAMS)", as project services; BILL, "total payment
+# volume", as software): the families of making are one kin (a maker, a parts maker, a contract maker, a miner, a metal processor)
+KIN_OF_MAKING = {"making", "components", "contract_making", "mining", "metal_processing", "resources"}
+
+
+def words_state(evidence) -> str:
+    """x57 (second wave): the one model a company's own words state in so many words (stated_model), never one only inferred (a chip
+    designer's design words read as fabless); "" else."""
+    st = stated_model(evidence)
+    if not st:
+        return ""
+    _, own = _split_evidence(evidence)
+    rx = MODEL_SAYS.get(st) or OWN_SAYS.get(st)
+    if st == "fabless" and not (rx and re.search(rx, own, re.I)):
+        return ""
+    return st
+
+
+_WORK_WITH = re.compile(r"\b(?:collaborate|partner|work)s? with (?:us|it|the company|[A-Z][A-Za-z]{1,})\b")     # its customers named as who works with it
+_ALSO = re.compile(r"^\s*(?:it|the company|additionally,?)\s+(?:also\s+)?(?:provides|offers|has|runs|operates|undertakes)\b|^\s*(?:it|the company) also\b", re.I)
+
+
+def contradicted_read(model, evidence, confidence: str = "") -> str:
+    """x57 (second wave): the model a company's own words state in so many words (words_state) when the read it was given (low or medium
+    confidence) is of another family, not of the kin of making with it, and its own words show nothing of the read (own_words_show, the ways
+    its words name); "" when the read stands."""
+    if model not in MODELS or confidence not in ("low", "medium"):
+        return ""
+    # read on the words of its principal business: never a sentence on what it also does ("It also provides software development") nor
+    # the operators it names as its customers ("Telecom operators ... collaborate with" it: telecom_operator)
+    industry, own = _split_evidence(principal_words(evidence))
+    own = " ".join(x for x in _SENTENCES.split(own) if not _ALSO.search(x) and not _WORK_WITH.search(x))
+    st = words_state((f"Industry: {industry}. " if industry else "") + own)
+    if not st or st == model or (st == "telecom_services" and not telecom_operator(evidence)):
+        return ""
+    fa, fb = model_family(st), model_family(model)
+    if fa == fb or (fa in KIN_OF_MAKING and fb in KIN_OF_MAKING):
+        return ""
+    if own_words_show(model, evidence) or model in words_models(evidence):
+        return ""
+    return st
 
 
 def principal_words(evidence) -> str:

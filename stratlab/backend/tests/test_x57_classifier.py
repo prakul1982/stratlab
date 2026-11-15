@@ -338,3 +338,73 @@ def test_a_parent_in_one_layer_and_its_subsidiary_in_another_add_its_revenue_onc
     assert "Orient Cement Ltd's revenue taken out of Ambuja Cements Ltd's, as it holds 72.7% and Orient Cement Ltd is counted in “Regional”" in head
     assert "taken out of the parent's layer's revenue when the two are in different layers" in deck.parents_row(
         {"parents": [{"name": "Orient Cement Ltd", "parent_name": "Ambuja Cements Ltd", "pct": 72.7, "quarter": "2026-09"}]})[2]
+
+
+# ---------- second wave: AIR-4, FMCG-5 and the release gate's "model contradicted" rows ----------
+ADANI = ("Adani Enterprises Ltd has business interests in various economic areas such as mining, integrated resources management (IRM), "
+         "infrastructure such as airports, roads, rail/ metro, water, data centres, solar manufacturing, agro and defence. Part of the Adani Group.")
+AIR_LAYERS = D._stems("Airlines and air charter operators Airport operators Online travel booking platforms Tour operators and holiday packagers "
+                      "Hotels and resorts") - D._stems("other companies group groups makers operators providers services products")
+
+
+def test_a_multi_business_company_is_labelled_by_its_business_of_the_theme_never_its_largest_unrelated_one():
+    """Fails before (AIR-4): Adani Enterprises, whose own words list mining, resources management and infrastructure such as airports, was an
+    adjacent "miners, drillers and growers" in Airlines and travel on its official industry ("Trading - Minerals"). Now it is in the theme as
+    its airports business, said with the business its own words name first (no segment shares stored, so "largest" is not claimed)."""
+    a = D.scope_adjacent({"industry": "Trading - Minerals"}, "Airlines and travel", "", ADANI)
+    assert a and a["kind"] == "miners, drillers and growers"          # what its industry alone says
+    kind_rx = next(k[3] for k in D.SCOPE_KINDS if k[0] == a["kind"])
+    tb = D.theme_business(ADANI, None, AIR_LAYERS, kind_rx)
+    assert tb == {"business": "airports", "main": "mining", "basis": "words"}
+    assert D.business_said(tb) == "airports (part of a diversified group; its own words name mining first)"
+    segs = [{"name": "Mining services", "share_pct": 60}, {"name": "Airports", "share_pct": 25}, {"name": "Roads", "share_pct": 15}]
+    tb2 = D.theme_business("", segs, AIR_LAYERS, kind_rx)
+    assert D.business_said(tb2) == "Airports (part of a diversified group; its Mining services is the largest)"
+    # one business only (a maker of what it makes, a miner): no relabel
+    assert D.theme_business("Coal Co is engaged in mining of coal and lignite.", None, AIR_LAYERS, kind_rx) is None
+    assert D.theme_business("Larsen Ltd is a multinational conglomerate primarily engaged in EPC solutions in sectors such as Infrastructure, "
+                            "Power and Defence.", None, D._stems("Solar and energy EPC contractors power"), "") is None
+
+
+def test_the_same_tea_estate_words_give_the_same_scope_verdict_whatever_the_read_s_confidence():
+    """Fails before (FMCG-5): McLeod Russel ("cultivation and manufacturing of tea ... a tea plantation company", read medium) was adjacent as a
+    grower while Goodricke, Rossell, Dhunseri and B&A ("cultivation, manufacture and sale of tea", read low) stayed core members. McLeod's label
+    is right by its principal business; its peers now get the same verdict. A branded tea and beverages maker stays core."""
+    mc = D.scope_adjacent({"industry": "Tea & Coffee"}, "FMCG", "", "McLeod Ltd is in the business of cultivation and manufacturing of tea. "
+                          "It is a tea plantation company.", None, "resources", "medium")
+    gd = D.scope_adjacent({"industry": "Tea & Coffee"}, "FMCG", "", "Goodricke Ltd is in the business of cultivation, manufacture and sale of tea.",
+                          None, "resources", "low")
+    assert mc["kind"] == gd["kind"] == "miners, drillers and growers"
+    assert D.scope_adjacent({"industry": "Tea & Coffee"}, "FMCG", "", "Brand Co is engaged in the food & beverages segment globally, selling "
+                            "packaged tea and coffee.", None, "manufacturing", "medium") is None
+
+
+def test_a_read_its_own_words_contradict_gives_way_to_the_way_they_state():
+    """Fails before (the release gate's "model contradicted"): EverestIMS ("a software enterprise that offers both Software as a Service (SaaS)")
+    printed as managed IT services, Pharmaids ("provider of Custom Research and Manufacturing Services (CRAMS)") as project services, BILL
+    ("total payment volume") as software. Kept: a read its words also show (Syngene's "Contract Research Organization (CRO)"), a way only
+    inferred (a chip designer's design words), what it "also provides", and operators named as who works with it."""
+    eims = "Industry: IT Enabled Services. EverestIMS Ltd is a software enterprise that offers both Software as a Service (SaaS) solutions."
+    assert C.contradicted_read("managed_services", eims, "low") == "software"
+    assert C.contradicted_read("managed_services", eims, "high") == ""                       # a high read stands
+    ph = "Pharmaids Ltd operates in research and manufacturing. PPL is a fully integrated provider of Custom Research and Manufacturing Services (CRAMS)."
+    assert C.contradicted_read("project_services", ph, "low") == "contract_manufacturing"
+    bill = "BILL is the finance platform for businesses. Our platform's total payment volume represents over 1% of U.S. gross domestic product."
+    assert C.contradicted_read("software", bill, "medium") == "payments"
+    syn = "Syngene is India's first Contract Research Organization (CRO) offering discovery and manufacturing services (CRAMS)."
+    assert C.contradicted_read("project_services", syn, "low") == ""
+    arm = "Industry: Semiconductors. Arm plc's primary business is the design of central processing unit (CPU) cores."
+    assert C.contradicted_read("project_services", arm, "medium") == ""
+    zf = "WABCO India makes braking systems for trucks and buses. It also provides software development and other services."
+    assert C.contradicted_read("components", zf, "low") == ""
+    stl = ("Sterlite Technologies is an optical and digital technology company making optical fibre and cables. Data Centre & Cloud companies, "
+           "Telecom operators and Large enterprises collaborate with STL to build their infrastructure.")
+    assert C.contradicted_read("manufacturing", stl, "low") == ""
+
+
+def test_fiserv_s_low_read_gives_way_to_its_payment_processing_words_on_the_live_inputs(monkeypatch):
+    """Fiserv ("processes debit and credit card transactions"), read at low confidence as managed IT services, now carries the payments way
+    its words state, in its layer's figures as one of the layer's own (no "on its words" note needed); no company changes layer."""
+    d, out = replay("payments", monkeypatch)
+    v, c = rows(out)["FISV"]
+    assert c["model"] == "payments" and c["model_confidence"] == "medium" and "model_out" not in c and not c.get("by_words")

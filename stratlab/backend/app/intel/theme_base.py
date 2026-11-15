@@ -927,7 +927,7 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
     if models:
         before = {v["layer"]: {c.get("ticker") for c in v["companies"]} for v in out_vc if not v.get("official")}
         out_vc = by_model(out_vc, models, theme, tags=tags, confidence=conf, evidence_of=evidence, settled=settled,
-                          previous=map_names_of(previous, kept), moved_before=moved_before)
+                          previous=map_names_of(previous, kept), moved_before=moved_before, about_of=about_of)
         # R26: a layer of the map the split reshaped (companies moved in or out) whose name no longer fits how its companies earn is renamed by
         # the same check as the placement's; asked once a map and its split, kept with the rest
         reshaped = [v for v in out_vc if v["layer"] in before and not v.get("official") and not v.get("scale") and (v.get("model") or {}).get("line")
@@ -1779,7 +1779,7 @@ MODEL_LINE_MIN = 3              # gl52: companies a sparse layer's way of earnin
 
 
 def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = None, confidence: dict | None = None,
-             evidence_of=None, settled=(), previous: dict | None = None, moved_before: dict | None = None) -> list[dict]:
+             evidence_of=None, settled=(), previous: dict | None = None, moved_before: dict | None = None, about_of=None) -> list[dict]:
     """The placed map's layers with one revenue model family each, from `models` ({symbol: model id}, theme_check.MODELS):
     1. a layer of the map whose companies earn in different ways keeps its main family (the most of its companies; a tie, the family of the first
        of them, the map's own pick); each other company moves to the layer whose main family is its own (the largest), else to a new layer named
@@ -2250,6 +2250,28 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
         if conf.get(s_) == "low" and every.get(s_):
             return "weak"
         return "no_model"
+
+    # x57 (second wave, the release gate's "model contradicted"): a read of low or medium confidence that the company's own words contradict
+    # (they state another way of earning in so many words, of another family, and show nothing of the read: theme_check.contradicted_read)
+    # gives way to the way its words state, at "medium", for what is printed and for its layer's figures; set after every move, so it moves
+    # no company to another layer
+    from .theme_check import contradicted_read
+
+    def whole_ev(c) -> str:
+        # its whole stored description (`about_of`), never only the first characters the model evidence keeps, its industry line first
+        try:
+            whole = str(about_of(c.get("ticker")) or "") if about_of is not None else ""
+        except Exception:
+            whole = ""
+        return f"Industry: {c.get('industry')}. {whole}" if whole and c.get("industry") else (whole or ev(c))
+    for v in out:
+        for c in v["companies"]:
+            s_ = c.get("ticker")
+            if s_ in every and s_ not in another:
+                st_ = contradicted_read(every[s_], whole_ev(c), conf.get(s_, ""))
+                if st_:
+                    every[s_], conf[s_], models[s_] = st_, "medium", st_
+                    outside.discard(s_)
 
     # 4. what each layer's companies have in common, and who is left out of its figures
     # gl52 (R52, the integrator, on the Capital goods replay: 128 "Industrial Products" companies with no words of their own counted on their
