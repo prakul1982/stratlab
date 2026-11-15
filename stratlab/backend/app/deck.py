@@ -4732,7 +4732,8 @@ _NOTE_LABELS = {"Revenue": "revenue", "Growth": "sales_1y", "Revenue growth, 1 y
                 "Net NPA": "nnpa", "Deposit growth": "deposit_growth", "P/E": "pe", "P/B": "pb", "EV/EBITDA": "ev_ebitda", "Market value": "cap",
                 "Solvency": "solvency", "Combined ratio": "combined_ratio", "SBC / revenue": "sbc_share", "FCF margin": "fcf_margin",
                 "Capex / revenue": "capex_share", "Inventory days": "inventory_days", "R&D / revenue": "rd_share"}
-_NOTE_ORDER = ("revenue", "sales_1y", "ebitda", "net", "roce", "roe", "nii_assets", "gnpa", "nnpa", "deposit_growth", "pe", "pb", "ev_ebitda", "cap")
+_NOTE_ORDER = ("revenue", "sales_1y", "ebitda", "net", "roce", "roe", "nii_assets", "gnpa", "nnpa", "deposit_growth", "pe", "pb", "ev_ebitda", "cap",
+               "debt_ebitda", "interest_cover", "cfo_to_profit")
 
 
 def shown_metrics(slides: list) -> list[str]:
@@ -4757,6 +4758,8 @@ def shown_metrics(slides: list) -> list[str]:
     for s in slides:
         sector = s.title.startswith(SECTOR_TITLE)
         for b in s.blocks:
+            for k in b.get("keys") or ():          # m57: a table that names the figures its cells state (each layer on its own measures)
+                add(k)
             if b["kind"] == "table":
                 for h in b.get("head") or []:
                     add(by_label.get(h) if sector else label_key(h))
@@ -7357,6 +7360,190 @@ def _src_short(src: dict) -> str:
     return "; ".join(out[:2]) or "–"
 
 
+LAYER_PROFILE_TITLE = "Each layer on its own measures"
+LAYER_PROFILE_HEAD = ["Layer", "How its companies earn", "Its own figures: median (companies with it)", "Sector operating measures, as stated",
+                      "Top and bottom in the layer"]
+NOT_AVAILABLE = "Not available"
+
+
+def _lp_fmt(key: str, amt=None):
+    """m57: how a layer profile's figure prints: an EBITDA margin as precise as it is filed, a multiple to one decimal (a solvency ratio to two)."""
+    if key == "ebitda":
+        return lambda x: _pcw(x, float(x).is_integer())
+    from .intel.metric_registry import BY_ID
+    if key == "solvency":
+        return lambda x: _times(x, 2)
+    if BY_ID[key].unit == "x":
+        return lambda x: _times(x, 1)
+    return sector_fmt(key, amt)
+
+
+def _lp_label(key: str) -> str:
+    from .intel.metric_registry import BY_ID
+    return BY_ID[key].label
+
+
+def layer_fin_cell(fin: dict, amt=None) -> str:
+    """m57: a layer's own figures, each its median and "N of M" (M its companies in its calculations), "– (n of M)" under the floor; the figures
+    of its way of earning that none of its companies has, and those no source the app reads stores, said."""
+    parts, none = [], []
+    for f in fin["figs"]:
+        lab = _lp_label(f["key"])
+        if not f["n"]:
+            none.append(_low(lab))
+        elif f["median"] is not None:
+            parts.append(f"{lab} {_lp_fmt(f['key'], amt)(f['median'])} ({f['n']} of {f['of']})")
+        else:
+            parts.append(f"{lab} – ({f['n']} of {f['of']})")
+    text = "; ".join(parts)
+    if none:
+        text += ("; " if text else "") + "none of its companies has " + ", ".join(none)
+    if fin.get("not_stored"):
+        text += ("; " if text else "") + "not stored: " + fin["not_stored"]
+    return text or "–"
+
+
+def layer_ops_cell(ops: dict | None, amt=None) -> str:
+    """m57: a layer's sector operating measures as its companies' own documents state them: a share's median where at least half of the
+    companies the profile fits state it (three or more), an amount's or count's range, else the count only; one "Not available" line when none
+    of them states any, never a gap."""
+    if not ops:
+        return "–"
+    from .intel import sector_ops
+    p = sector_ops.BY_PROFILE[ops["profile"]]
+    of = ops["of"]
+    if not ops["measures"]:
+        labs = ", ".join(_low(_lp_label(k)) for k in ops["none"])
+        return f"{NOT_AVAILABLE}: {labs} (stated in no document the app holds from its {_n(of, p.one, p.many)})"
+    parts, under = [], []
+    for m in ops["measures"]:
+        lab, fmt = _lp_label(m["key"]), _lp_fmt(m["key"], amt)
+        if not m["ok"]:
+            under.append(f"{_low(lab)} {m['n']} of {of}")
+        elif m["median"] is not None:
+            parts.append(f"{lab} {fmt(m['median'])} ({m['n']} of {of})")
+        elif m["min"] == m["max"]:
+            parts.append(f"{lab} {fmt(m['min'])} ({m['n']} of {of})")
+        else:
+            parts.append(f"{lab} {fmt(m['min'])} to {fmt(m['max'])} ({m['n']} of {of})")
+    from .intel.metric_registry import period_end
+    latest = max((m["period"] for m in ops["measures"] if m.get("period")), default="", key=lambda x: period_end(x) or date.min)
+    if under:
+        parts.append("stated by under half, no layer figure: " + ", ".join(under))
+    text = "; ".join(parts) + (f"; latest {latest}" if latest else "")
+    text = text[0].upper() + text[1:]
+    if ops["none"]:
+        text += "; not stated: " + ", ".join(_low(_lp_label(k)) for k in ops["none"])
+    return text
+
+
+def layer_top_cell(fin: dict) -> str:
+    """m57: the layer's highest and lowest company on its lead figure (the first with a median), within the layer only."""
+    t = fin.get("top")
+    if not t:
+        return "–"
+    fmt, lab = _lp_fmt(t["key"]), _low(_lp_label(t["key"]))
+    return f"{lab}: top {t['high'][1]} {fmt(t['high'][0])}, bottom {t['low'][1]} {fmt(t['low'][0])} (of {t['n']})"
+
+
+def _layer_profile_slides(slides: list, v: dict, amt, eyebrow: str) -> None:
+    """m57 (R57, the owner's review of the live R56 decks): each layer on the figures that fit how its companies earn (layer_profiles.FIN: power
+    producers on debt over EBITDA and interest cover, contractors on cash conversion, lenders on interest income over assets and bad loans) and
+    on its sector's operating measures as its companies' own documents state them, with each one's count; a layer whose companies fit an
+    operating profile but state none of its measures says so in one line. Layers that earn differently are never ranked against each other."""
+    from .intel import layer_profiles as LP
+    from .intel import sector_ops
+    region = v.get("region") or "IN"
+    figs = {pid: sector_ops.merged_figs(pid, prof, region, v.get("business"))
+            for pid, prof in (((v.get("sections") or {}).get("ops") or {}).get("profiles") or {}).items() if pid in sector_ops.BY_PROFILE}
+    figs = LP.figs_with_orders(figs, order_family(v))
+    got = LP.rows(v, figs)
+    if not got:
+        return
+    body = [[adjacent_label(r["layer"], r["adjacent"]), _earns(r["model"], r["family"]), layer_fin_cell(r["fin"], amt), layer_ops_cell(r["ops"], amt),
+             layer_top_cell(r["fin"])] for r in got]
+    with_ops = [r for r in got if r["ops"]]
+    stated = [r for r in with_ops if any(m["ok"] for m in r["ops"]["measures"])]
+    fams = len({r["family"] for r in got})
+    sub = (f"{_n(len(got), 'layer')}, each on the figures that fit how its companies earn"
+           + (f" ({fams} ways of earning, never ranked against each other)" if fams > 1 else "")
+           + (f"; {len(with_ops)} with sector operating measures, {len(stated)} of them with one stated by at least half of their companies"
+              if with_ops else "; no layer's companies fit a sector operating profile"))
+    big, of_big = LP.largest_cover(v, figs)
+    paged = bool(ops_families(v)) or bool(order_family(v))
+    source_rows = [r for r in got if (r["family"], region) in LP.EBITDA_SOURCE]
+    others = [x.get("layer") for x in v.get("layers") or [] if x.get("layer") and not LP.fin_keys((x.get("model") or {}).get("family"), region)]
+    note = (f"Its own figures: each layer's companies in its calculations, latest full year; how each is worked out: ⟦{NOTES_TITLE}⟧. A median "
+            f"where at least {LP.MIN_BASE} companies and half of the layer have the figure, else “–” with the count. Sector operating measures: "
+            f"from {sector_ops.NOTE_CHECKED.get(region, sector_ops.NOTE_CHECKED['US'])}, as each company states them; a layer figure only "
+            "where at least half of the companies the profile fits state the measure, else the count; an amount or a count (capacity, rooms, "
+            "beds, orders) as its range, never a median" + (f"; each company's figure, period and source: ⟦{SECTOR_TITLE}⟧" if paged else "")
+            + "." + (" " + profile_summary(with_ops) if with_ops else "")
+            # R57 audit RC12: how far the measures reach among the largest companies they fit
+            + (f" The {_n(of_big, 'largest company', 'largest companies')} a profile fits: {big} state one of its measures." if of_big else "")
+            + (" Its last column: the layer's own companies with the top and the bottom value of its first figure with a median, inside the "
+               "layer only." if any(r["fin"].get("top") for r in got) else "")
+            + (f" Not in this table (no one way of earning): {', '.join(others)}." if others else "")
+            + (f" {', '.join(r['layer'] for r in source_rows)}: {LP.EBITDA_SOURCE_NOTE}." if source_rows else ""))
+    nh = note_h(note)
+    room = BOT - TOP - nh - 0.15
+    keys = sorted({f["key"] for r in got for f in r["fin"]["figs"] if f["n"]} | {m["key"] for r in with_ops for m in r["ops"]["measures"] if m["ok"]})
+    if len(body) == 1:              # one layer: its lines on a card (a page for a table of one row joins nothing: LIVE6-008)
+        s = Slide(LAYER_PROFILE_TITLE, sub, eyebrow=eyebrow)
+        card = {"title": body[0][0], "lines": [f"{h}: {c}" for h, c in zip(LAYER_PROFILE_HEAD[1:], body[0][1:]) if c and c != "–"]}
+        s.add("cards", (M, TOP, CW, min(room, card_height(card, CW, True, 12) + 0.1)), cols=1, fill=True, bullets=True, size=12, items=[card],
+              keys=keys)
+        s.add("text", (M, BOT - nh, CW, nh), paras=[note], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
+        slides.append(s)
+        return
+    head0, body, widths0, _ = drop_empty(LAYER_PROFILE_HEAD, body, [2.0, 1.9, 3.4, 3.1, 1.75])     # never a column of "–" in every row
+    pages = table_pages(head0, body, widths0, CW, room, most=12)
+    for k, chunk in enumerate(pages):
+        head, chunk, widths, _ = drop_empty(head0, chunk, widths0)           # ...on each page of the table too
+        s = Slide(LAYER_PROFILE_TITLE + (f" ({k + 1} of {len(pages)})" if len(pages) > 1 else ""), sub, eyebrow=eyebrow)
+        s.add("table", (M, TOP, CW, min(room, table_height(head, chunk, widths, CW))), head=head, rows=chunk,
+              widths=widths, numeric=[False] * len(head), tight=True, keys=keys)
+        s.add("text", (M, BOT - nh, CW, nh), paras=[note], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
+        slides.append(s)
+
+
+PROFILES_SAID = "Operating profiles"
+
+
+def profile_summary(rows_: list) -> str:
+    """m57: each layer with a sector operating profile and how many of its measures its companies' documents state, in one sentence a reader
+    (and deck_check) reads whole: "Operating profiles: Airlines, airlines: none of its 4 measures stated; Hotels, hotel operators: 2 of 4
+    stated, 1 by half or more of its companies."."""
+    from .intel import sector_ops
+    items = []
+    for r in rows_:
+        o = r["ops"]
+        k = len(o["measures"]) + len(o["none"])
+        many = sector_ops.BY_PROFILE[o["profile"]].many
+        if not o["measures"]:
+            items.append(f"{r['layer']}, {many}: none of its {k} measures stated")
+        else:
+            ok = sum(1 for m in o["measures"] if m["ok"])
+            items.append(f"{r['layer']}, {many}: {len(o['measures'])} of {k} stated, {ok} by half or more of its companies")
+    return f"{PROFILES_SAID}: " + "; ".join(items) + "."
+
+
+def pooled_ways(v: dict) -> bool:
+    """m57 (R57 audit REN-2): whether the theme's own medians pool core layers of more than one way of earning (layer_profiles.FIN families)."""
+    from .intel import layer_profiles as LP
+    return len({r["family"] for r in LP.rows(v) if not r["adjacent"]}) > 1
+
+
+def _earns(model: dict, family: str) -> str:
+    """m57: how a layer's companies earn, in a few words: its model's name, else its family's."""
+    from .intel.theme_check import FAMILIES, MODELS
+    if model.get("id") in MODELS:
+        return MODELS[model["id"]][1]
+    if family in FAMILIES:
+        return FAMILIES[family][0]
+    return next((m[1] for m in MODELS.values() if m[0] == family), family or "–")
+
+
 def _sector_slides(slides: list, v: dict, amt, eyebrow: str) -> None:
     """A page for each family's filed operating figures (R23): every company's figures in their state (R27: value, "–", "n/a", "n.c.", one
     legend line), the median of each over the companies that have it with "N of M" the companies it applies to (none under MIN_BASE), insurers'
@@ -7364,6 +7551,7 @@ def _sector_slides(slides: list, v: dict, amt, eyebrow: str) -> None:
     from .intel.metric_registry import LEGEND
     from .intel.metric_registry import BY_ID
     from .intel.sector_metrics import TYPE_NAMES
+    _layer_profile_slides(slides, v, amt, eyebrow)      # m57: each layer on its own measures first
     sec = (v.get("sections") or {}).get("sector") or {}
     fams = dict(sec.get("families") or {})
     orders = order_family(v)
@@ -7646,6 +7834,8 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
         if meds.get("ebitda") and mk.get("opm"):
             msg += (f"; the median company's EBITDA margin is {_pcw(meds['ebitda']['median'], bool(whole))} ({meds['ebitda']['n']}) against {_pcw(mk['opm']['median'], bool(whole))} "
                     "for all listed companies")
+        if pooled_ways(v):          # m57 (R57 audit REN-2): figures over layers that earn differently say they are pooled, and where each is apart
+            msg += f"; pooled across layers that earn in different ways (each layer on its own figures: ⟦{LAYER_PROFILE_TITLE}⟧)"
         s = Slide("Growth and profitability", msg, eyebrow=E())
         lw = 7.0
         gh_ = ["Measure", "Together, 1 year", "Together, 3 years a year", "Median company, 1 year", "Median company, 3 years a year"]

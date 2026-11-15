@@ -65,7 +65,9 @@ def test_the_appendix_is_one_table_of_every_confirmed_company():
             assert [b["kind"] for b in s.blocks if b["kind"] != "text"] == ["table"], (name, s.title)
             assert s.blocks[0]["head"] == tail[0].blocks[0]["head"]
         # changed on purpose (R25): the page on how the figures are built sits between the notes and the appendix
-        assert slides[at - 1].title.startswith(deck.NOTES_TITLE) and slides[at - 2].title == "How to read this deck", name
+        # m57 (updated on purpose): the notes may take two pages (as test_r25_deck allows), both between "How to read this deck" and the appendix
+        k_ = 3 if slides[at - 2].title.startswith(deck.NOTES_TITLE) else 2
+        assert slides[at - 1].title.startswith(deck.NOTES_TITLE) and slides[at - k_].title == "How to read this deck", name
     v, slides = deck_of(*maker_theme())
     rows = [r[0] for s in slides[appendix_at(slides):] for b in s.blocks if b["kind"] == "table" for r in b["rows"]]
     assert len(rows) == len(set(rows)) == 4 and not any("not confirmed" in r for r in rows)          # one row each, confirmed only

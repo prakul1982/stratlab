@@ -149,7 +149,8 @@ def test_the_valuation_says_its_bases_the_loss_makers_left_out_and_each_medians_
     t = texts(slides)
     # changed on purpose (R27, P2): how each is worked out lives on the notes page; the valuation page points there once
     assert "A loss-maker has no P/E: 2 companies left out of the P/E median." in t and "How each is worked out, and who the comparable peers are: p. " in t
-    assert "Market value over net profit of the last four quarters" in t and "P/E: the price over the last four" not in t
+    # m57 (updated on purpose: the data check of the live R56 decks, the words now say what is computed, the price over EPS first)
+    assert "Price over earnings per share of the last four quarters; else market value over their net profit" in t and "P/E: the price over the last four" not in t
     # changed on purpose (R20): a median of fewer than 3 companies isn't shown as one: "–" with its count, the companies' own values beside
     # it (lane d1, updated on purpose: a layer of 2 is rows of "Smaller layers", its "– (2)" in the value chain's table)
     # changed on purpose (R25): a count beside the layer's own reads "N of M" ("– (1 of 2)"), the layer's full count alone ("– (2)")

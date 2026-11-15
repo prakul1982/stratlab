@@ -55,7 +55,8 @@ CONTRACTED = ("software", "royalties", "services")          # models paid ahead 
 ASSETS_HEAVY = ("making", "capacity", "telecom_services", "resources", "utility", "transport", "semis", "hardware", "regulated_utility", "generation", "mining",
                 "metal_processing")
 STOCK_HOLDERS = ("making", "resale", "semis", "hardware", "mining", "metal_processing")    # companies that hold goods for sale
-RESEARCH = ("making", "semis", "hardware", "software", "royalties", "pharma")
+# m57 (R57 audit PAY-17): R&D is a line any US company outside finance may file: one that files none shows "–" (not filed), never "n/a"
+RESEARCH = ("us",)
 ORDERS = ("defence", "capital_goods", "construction")
 _BQ, _IQ, _US = "Latest quarter; exchange filing", "Latest period; exchange filing", "Latest fiscal year; SEC filing"
 
@@ -78,8 +79,13 @@ METRICS = (
     _m("nnpa", "Net NPA", "Net non-performing assets over net advances", "pct", "quarter", "Latest quarter given; results", "One quarter's end; after provisions",
        LENDING, ("IN",)),
     _m("deposit_growth", "Deposit growth", "Deposits against a year before", "chg", "year", "Reported balance sheets", "Two balance-sheet dates only", BANK, ("IN",)),
-    _m("pe", "P/E", "Market value over net profit of the last four quarters", "x", "year", "Last close; last four quarters", "None for a loss-maker", "*"),
-    _m("pb", "P/B", "Market value over shareholders' equity", "x", "year", "Last close; latest balance sheet", "Book value at the balance-sheet date", "*"),
+    # m57 (R57, the data check of the live R56 decks): the words say what is computed: the price over earnings per share of the last four
+    # quarters (market value over profit only where no quarterly EPS is filed, or where the EPS doesn't agree with it), and equity at the
+    # fiscal year's end for US companies
+    _m("pe", "P/E", "Price over earnings per share of the last four quarters; else market value over their net profit", "x", "year",
+       "Last close; last four quarters", "None for a loss-maker", "*"),
+    _m("pb", "P/B", "Market value over shareholders' equity", "x", "year", "Last close; equity at the latest year's end (US), latest balance sheet "
+       "(India)", "Book value at that date", "*"),
     _m("ev_ebitda", "EV/EBITDA", "Market value plus debt less cash, over the year's EBITDA", "x", "year", "Last close; latest full year",
        "None for banks, lenders, insurers", "*"),
     _m("cap", "Market value", "Price times shares in issue", "amt", "year", "Last close", "Moves with the price every day", "*", headline=False),
@@ -202,6 +208,53 @@ METRICS += (
        _DOC, "As stated; what counts as a transaction differs", _PAY, headline=False, group="payments"),
     _m("take_rate", "Take rate", "Transaction revenue over payment volume, as the company states it for the quarter", "pct", "quarter", _DOC,
        "Only where the company states it", _PAY, group="payments"),
+)
+# m57 (R57, the owner's review of the live R56 decks: "Airlines and travel: limited airline/hotel operating measures; Cement: limited capacity,
+# utilisation and volume statistics"; EPC "order book and book-to-bill"): cement's EBITDA a tonne, hotels' rooms, occupancy, room rate and
+# RevPAR, contractors' orders, each only as the company's own stored document states it
+_HOTEL, _EPC = ("ops:hotel",), ("ops:epc",)
+METRICS += (
+    _m("cem_ebitda_t", "EBITDA (₹ a tonne)", "Operating EBITDA per tonne of cement sold, as the company states it for the quarter (never worked out "
+       "from EBITDA over a volume)", "num", "quarter", _DOC, "Only where stated per tonne; bases differ (blended, cement only)", _CEM, ("IN",),
+       group="cement"),
+    _m("rooms", "Rooms in operation", "Operational rooms (keys) as the hotel company states them at the latest date, its own and managed as it "
+       "counts them (rooms signed or in the pipeline not counted)", "num", "quarter", _AS_AT, "As stated; some count managed and franchised rooms",
+       _HOTEL, headline=False, group="hotel"),
+    _m("room_occ", "Room occupancy", "Room nights sold over room nights available, as the company states it for the quarter (the figure beside its "
+       "rooms, else the one every passage agrees on)", "pct", "quarter", _DOC, "As stated; owned, managed or all hotels as the company gives it",
+       _HOTEL, group="hotel"),
+    _m("arr", "Average room rate (₹)", "Room revenue per room night sold (ARR or ADR), in rupees, as the company states it for the quarter", "num",
+       "quarter", _DOC, "As stated; portfolios differ in mix and location", _HOTEL, ("IN",), group="hotel"),
+    _m("adr", "Average daily rate ($)", "Room revenue per room night sold (ADR), in US dollars, as the company states it for the quarter", "num",
+       "quarter", _DOC, "As stated; portfolios differ in mix and location", _HOTEL, ("US",), group="hotel"),
+    _m("revpar_in", "RevPAR (₹)", "Room revenue per room night available, in rupees, as the company states it for the quarter", "num", "quarter",
+       _DOC, "As stated; comparable or all hotels as the company gives it", _HOTEL, ("IN",), group="hotel"),
+    _m("revpar_us", "RevPAR ($)", "Room revenue per room night available, in US dollars, as the company states it for the quarter", "num",
+       "quarter", _DOC, "As stated; comparable or all hotels as the company gives it", _HOTEL, ("US",), group="hotel"),
+    _m("orders_held", "Orders in hand", "Orders not yet executed (the order book; the backlog in a US release), in the theme's money, as the "
+       "company's own document states them at the latest date", "amt", "quarter", _AS_AT, "As stated; not revenue, and contracts can be cancelled",
+       _EPC, headline=False, group="epc"),
+    _m("orders_won", "Orders won in the quarter", "New orders received in the quarter (order inflow or intake), in the theme's money, as the "
+       "company's own document states them", "amt", "quarter", _DOC, "As stated; one quarter's orders are lumpy", _EPC, headline=False, group="epc"),
+    _m("book_to_bill", "Book-to-bill (times)", "Orders won over revenue billed in the period, as the company states the ratio (never worked out "
+       "here)", "num", "quarter", _DOC, "Only where the company states it", _EPC, group="epc"),
+    _m("presales", "Pre-sales (bookings)", "Value of homes and space sold (booked) in the quarter, in the theme's money, as the developer's own "
+       "document states it", "amt", "quarter", _DOC, "As stated; bookings, not revenue (recognised on completion)", ("ops:realty",), ("IN",),
+       headline=False, group="realty"),
+    _m("collections", "Collections", "Cash collected from customers in the quarter, in the theme's money, as the developer's own document states it",
+       "amt", "quarter", _DOC, "As stated; some include other income", ("ops:realty",), ("IN",), headline=False, group="realty"),
+    _m("headcount", "Headcount", "People employed at the period's end, as the IT services company states it", "num", "quarter", _AS_AT,
+       "As stated; some count contractors", ("ops:it",), headline=False, group="it"),
+    _m("attrition", "Attrition", "People who left over the average headcount, as the company states it (a rolling twelve months' where it says so)",
+       "pct", "quarter", _DOC, "As stated; voluntary or all leavers, quarterly annualised or twelve months", ("ops:it",), group="it"),
+    # m57: the page figures a layer's financial profile reads (layer_profiles.FIN), each from the company's stored annual figures
+    _m("debt_ebitda", "Debt / EBITDA", "Borrowings at the latest full year's end over that year's EBITDA (revenue times the EBITDA margin), both "
+       "from the same year's filed lines", "x", "year", _YEAR_SRC,
+       "None for a year whose EBITDA isn't positive; lease liabilities as the company files them", "*"),
+    _m("interest_cover", "Interest cover", "Profit before interest and tax over interest, the latest full year", "x", "year", _YEAR_SRC,
+       "None for banks, lenders, insurers", "*"),
+    _m("cfo_to_profit", "Cash from operations / net profit", "Cash generated by operations over net profit, the latest full year; a proxy for how "
+       "much profit turns into cash (no working-capital days are stored)", "x", "year", _YEAR_SRC, "None for a loss; one year", "*"),
 )
 BY_ID = {m.id: m for m in METRICS}
 # figures no source the app reads carries for these structures: listed so the report and the notes can say so, never filled by a proxy

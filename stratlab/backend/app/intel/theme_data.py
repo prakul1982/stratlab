@@ -268,6 +268,11 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
     profit = money(num(last.get("profit"))) if last else None
     net = (profit / sales * 100) if sales and sales > 0 and profit is not None else None
     ebitda = num(last.get("opm")) if last and not lender else None
+    # m57 (R57 audit HOS-9): an EBITDA margin filed in whole points is worked out to one decimal from the same year's filed operating profit
+    # and revenue, where both are stored and agree with the filed margin (within its rounding); else the filed margin as it is
+    fine = margin_of(last) if ebitda is not None else None
+    if fine is not None and float(ebitda).is_integer() and abs(fine - ebitda) <= 0.5 + 1e-9:
+        ebitda = fine
     cfo = money(num(last.get("cfo"))) if last else None
     if k is None and last:                 # no rate: its margin from its own figures, its money figures out
         s_, p_ = num(last.get("sales")), num(last.get("profit"))
@@ -300,7 +305,7 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
         # R46 (the outside review of the live R45 decks): where the year's figures come from, for each checked figure's source record
         "source": source_record(region, symbol, f, last),
         # the page files the EBITDA margin in whole points (13, never 13.04): printed as 13%, not 13.0% (false precision)
-        "ebitda_dp": 0 if opms and all(float(x).is_integer() for x in opms) else 1,
+        "ebitda_dp": 0 if opms and all(float(x).is_integer() for x in opms) and (ebitda is None or float(ebitda).is_integer()) else 1,
         "roce": None if lender or old else r1(num(f.get("roce"))),
         "cap": cap, "pe": base.get("pe"), "pb": None if old else r1(num(f.get("pb"))),
         "roe": None if old else r1(num(f.get("roe"))),
@@ -309,6 +314,9 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
         "quarter": {"of": yoy.get("of"), "sales": r1(num(yoy.get("sales"))), "profit": r1(num(yoy.get("profit")))} if yoy else None,
         "debt_equity": None if lender else base.get("debt_equity"),
         "cfo_to_profit": round(cfo / profit, 2) if cfo is not None and profit and profit > 0 else None,
+        # m57 (R57: generators and other asset-heavy layers summarised on their own measures): the year's borrowings over the same year's EBITDA,
+        # both from its filed lines (no currency needed: one filing's unit); None for a lender, without both, or where EBITDA isn't positive
+        "debt_ebitda": debt_ebitda(last) if not lender else None,
         "sales_1y": r1(growth_between(years, "sales", 1)) if not old else None,
         "sales_3y": r1(num(base.get("sales_cagr_3y"))) if not old else None,
         "sales_5y": r1(num((f.get("growth") or {}).get("sales_cagr_5y"))) if not old else None,
@@ -326,6 +334,25 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
         **({} if lender else capital_inputs(cap, num(f.get("pb")), debt, base.get("debt_equity"), sales,
                                             money(num(last.get("debt"))) if last else None, last.get("year") if last else None)),
     }, f, last)
+
+
+def margin_of(year: dict | None) -> float | None:
+    """m57: a year's EBITDA margin to one decimal from its filed operating profit (EBITDA) over its revenue; None without both."""
+    if not year:
+        return None
+    op, s_ = num(year.get("op")), num(year.get("sales"))
+    return round(op / s_ * 100, 1) if op is not None and s_ and s_ > 0 else None
+
+
+def debt_ebitda(year: dict | None) -> float | None:
+    """m57: borrowings at a full year's end over that year's EBITDA (its revenue times its EBITDA margin), both from the one year's filed lines;
+    None without both, or where the EBITDA isn't positive."""
+    if not year:
+        return None
+    d, s_, m_ = num(year.get("debt")), num(year.get("sales")), margin_of(year) or num(year.get("opm"))
+    if d is None or d < 0 or not s_ or s_ <= 0 or m_ is None or m_ <= 0:
+        return None
+    return round(d / (s_ * m_ / 100), 1)
 
 
 CAPITAL_PROXY = "book equity plus debt over revenue, a proxy for capital needs"      # ex49: how every page that uses it labels it
@@ -3672,7 +3699,8 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     out["sections"]["sector"] = sector_metrics.section([r for r in own if r.get("status") != "unverified"], region, layer_of, pending, stat, model_of)
     # m53 (R53): each sector's own operating measures (airlines, hospitals, cement, power, payments) where the companies' own stored documents
     # state them, for the companies whose layer the sector's profile fits
-    out["sections"]["ops"] = sector_ops.section([r for r in own if r.get("status") != "unverified"], region, layer_of, model_of, src.passages,
+    # m57: adjacent participants too (shown in their layers: a renewable theme's EPC contractors are read on their own orders)
+    out["sections"]["ops"] = sector_ops.section([r for r in own + adjacent if r.get("status") != "unverified"], region, layer_of, model_of, src.passages,
                                                 {s: p["parent"] for s, p in parents.items()}, layer_of)
     out["metrics_pending"] = sorted(pending)
     out["metrics_families"] = pending_fam           # R29: each one's family, so a kept dive can queue a read the worker dropped again

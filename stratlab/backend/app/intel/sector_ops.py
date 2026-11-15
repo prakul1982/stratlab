@@ -26,8 +26,9 @@ from typing import NamedTuple
 
 from . import metric_registry as registry
 
-VERSION = 1
+VERSION = 2                     # m57: hotel and contractor profiles, cement EBITDA a tonne (a kept dive's ops section is read again)
 PASSAGES = 900                  # passages one profile's search reads at most (each at most doc_index.CHUNK_CHARS)
+PER_COMPANY = 40                # m57: passages of one company at most, the largest companies read first (RC12: the 10 largest carry the measures)
 DOC_DAYS = 200                  # documents filed this recently are read (the latest quarter's, and the one before)
 LAG_DAYS = 100                  # a document's own quarter: the latest quarter end at most this many days before it was filed
 KINDS = {"IN": ("presentation",), "US": ("earnings_release",)}
@@ -43,6 +44,9 @@ class Profile(NamedTuple):
     words: str                  # words of a company's industry or work that make it one
     not_words: str              # ...and words that rule it out
     query: str                  # the filings index search (websearch syntax) that finds the passages
+    own: bool = False           # m57: only the company's own words (official industry, what it does) say it, never its layer's name alone (a
+                                # layer named by a way of earning, "Hotels, travel and consumer services", holds companies of no hotel)
+    by_model: frozenset = frozenset()   # m57: ways of earning that say it on their own (contracts to design and build: a contractor's orders)
 
 
 PROFILES = (
@@ -63,10 +67,34 @@ PROFILES = (
             r"equipment|modules?\b|cells?\b|turbines? mak|cables?|transformers?|inverters?",
             'MW or GW or megawatts or gigawatts or CUF or PLF or "load factor" or generation or "units generated" or "energy sold"'),
     Profile("payments", "payments company", "payments companies", frozenset({"payments"}),
-            r"payment (?:processing|network|gateway|solutions|services)|card networks?|digital payments|transaction processing|"
-            r"merchant acquir",
+            r"payment (?:processing|processors?|network|gateway|solutions|services)|card networks?|digital payments|transaction processing|"
+            r"merchant acquir|\bpayments\b|cross-border|remittances?|money transfer",       # m57: with a payments way of earning (the models above)
             r"payment (?:of|for) (?:dividend|interest)",
             '"payment volume" or "payments volume" or TPV or "dollar volume" or GMV or transactions or "take rate"'),
+    # m57 (R57, the owner's review of the live R56 decks: Airlines and travel "limited airline/hotel operating measures"; Renewable energy
+    # "generation, equipment and EPC businesses need distinct profiles"): hotel operators and contractors (EPC, equipment makers paid on orders)
+    Profile("hotel", "hotel operator", "hotel operators", frozenset({"consumer_services", "property"}),
+            r"\bhotels?\b|\bresorts?\b|hospitality|\blodging\b",
+            r"online travel|travel (?:agen|book|portal|platform)|booking (?:platform|portal|engine)|hotel (?:software|booking|management software|"
+            r"supplies|linen|equipment)|\bcruise",
+            'occupancy or ARR or RevPAR or ADR or "average room rate" or "average daily rate" or "operational rooms" or "operational keys"', True),
+    Profile("epc", "contractor or equipment maker", "contractors and equipment makers",
+            frozenset({"construction", "making", "components"}),
+            r"\bEPC\b|engineering,? procurement|\bcontractors?\b|construction (?:&|and) engineering|civil construction|turnkey|heavy electrical|"
+            r"power equipment|switchgear|industrial machinery|capital goods|defen[cs]e|ship ?build|rolling stock|railway wagons?",
+            r"\bcement\b|airline|airport|hospital|pharma|software",
+            '"order book" or "order backlog" or "orders in hand" or "order inflow" or "order intake" or backlog or "book-to-bill" or "book to bill"',
+            True, frozenset({"construction"})),
+    # m57 (R57 audit RC12: Real estate "pre-sales not in the sources", IT services headcount and attrition for one company): developers' sales
+    # bookings and collections, IT services companies' headcount and attrition, each only as the company's own document states it
+    Profile("realty", "property developer", "property developers", frozenset({"development"}),
+            r"real estate|realty|residential|property develop|housing projects?|township",
+            r"housing finance|home loans?|\breits?\b|investment trust|cement|construction materials",
+            '"pre-sales" or presales or "sales bookings" or "booking value" or bookings or collections', False, frozenset({"development"})),
+    Profile("it", "IT services company", "IT services companies", frozenset({"services", "bpo"}),
+            r"IT services|IT consulting|software services|computers - software|information technology|IT enabled|business process|\bBPO\b",
+            r"IT hardware|computer hardware",
+            'headcount or attrition or "employee strength" or "total employees"', True),
 )
 BY_PROFILE = {p.id: p for p in PROFILES}
 
@@ -93,6 +121,9 @@ _GWH = ((r"\bTWh\b|\bBUs?\b|billion units", 1000.0), (r"\bGWh\b|\bMUs?\b|million
 _PLAN = re.compile(r"target|planned|plan(?:s|ning)? to|post[- ]expansion|projected|pipeline|\bby (?:fy|20\d\d|end)|to be (?:commissioned|added|operational)|"
                    r"expected|under[- ]construction|under[- ]development|addition|added|adding|guidance|outlook|\baim|backlog|locked[- ]in|"
                    r"potential|\bup ?to\b|at the time of acquisition|contracted|awarded|signed|ppa|ppas|\bto add\b|\badd\b", re.I)
+# m57: a plan said after its figure ("Order inflow of ₹ 9,000 crore expected in H2 FY27")
+_PLAN_AFTER = re.compile(r"\s*(?:crores?|cr|billion|million|bn|mn)?\.?\s*(?:is |are |was )?(?:expected|targeted|projected|planned|guided|anticipated|"
+                         r"to be (?:commissioned|added|executed|achieved)|by (?:fy|20\d\d|the end))", re.I)
 _SCOPE = re.compile(r"industry|market|country|nation|all[- ]india|india['’]s|sector|peers?|clinker|grinding|storage|bess|battery|transmission|"
                     r"manufacturing|module|cell|production line|same[- ]facility|same[- ]store|established units?|mature|emerging|new units?", re.I)
 RULES = {
@@ -132,6 +163,32 @@ RULES = {
                 size=True, flow=True),
     "txn": Rule(r"(?:payment|processed|switched) transactions|transactions processed", "num", _BILLIONS, None, 0.001, 2000, size=True, flow=True),
     "take_rate": Rule(r"(?:transaction )?take rate", "pct", lo=0.01, hi=10, anchor="tpv"),
+    # m57: cement's EBITDA per tonne only as the company states it (never worked out from EBITDA over a volume)
+    "cem_ebitda_t": Rule(r"(?:operating |blended )?EBITDA (?:per (?:tonne|ton|mt)\b|/ ?(?:t|tonne|ton|mt)\b|PMT\b)|EBITDA/t\b", "num",
+                         ((r"₹|\brs\.?|\binr\b", 1.0),), None, 100, 6000),
+    # m57: hotels: rooms in operation (a size), occupancy beside them, and the average room rate and RevPAR in the theme's currency
+    "rooms": Rule(r"(?:total )?(?:operational|operating) (?:rooms|keys|inventory)|(?:rooms|keys) in operation", "num", lo=10, hi=2000000, size=True,
+                  before=r"(\d[\d,]*)()\s+(?:operational|operating)\s+(?:rooms|keys)\b"),
+    "room_occ": Rule(r"(?:average |room )?occupancy(?: rate)?|\bOCC\b", "pct", lo=10, hi=100, anchor="rooms"),
+    "arr": Rule(r"\bARR\b|average (?:room|daily) rate|\bADR\b", "num", ((r"₹|\brs\.?|\binr\b", 1.0),), None, 500, 200000, anchor="rooms"),
+    "adr": Rule(r"\bADR\b|average daily (?:room )?rate", "num", ((r"\$|\busd\b|us\$", 1.0),), None, 20, 5000, anchor="rooms"),
+    "revpar_in": Rule(r"\bRevPAR\b|revenue per available room", "num", ((r"₹|\brs\.?|\binr\b", 1.0),), None, 200, 200000, anchor="rooms"),
+    "revpar_us": Rule(r"\bRevPAR\b|revenue per available room", "num", ((r"\$|\busd\b|us\$", 1.0),), None, 10, 5000, anchor="rooms"),
+    # m57: contractors' orders in hand (order book; the US "backlog") and orders won in the period, in the theme's money, and the book-to-bill
+    # ratio only where the company states it (never worked out from orders over revenue)
+    "orders_held": Rule(r"(?:total |closing |consolidated |unexecuted |outstanding |current )?(?:order ?book|order backlog|orders? in hand)"
+                        r"(?: position| size)?|(?<!order )\bbacklog\b", "amt", (), None, 1, 1e9, size=True),
+    "orders_won": Rule(r"order (?:inflows?|intake|wins)|new orders? (?:received|won)", "amt", (), None, 0.5, 1e9, size=True, flow=True),
+    "book_to_bill": Rule(r"book[- ]to[- ]bill(?: ratio)?", "num", lo=0.1, hi=10),
+    # m57: a developer's sales booked (pre-sales) and cash collected from customers in the quarter, in the theme's money
+    "presales": Rule(r"(?:gross |net |total )?(?:pre-?sales|sales bookings|booking value|bookings)(?: value)?", "amt", (), None, 1, 1e9,
+                     size=True, flow=True),
+    "collections": Rule(r"(?:gross |total |customer )?collections", "amt", (), None, 1, 1e9, size=True, flow=True),
+    # m57: an IT services company's people at the period's end and its attrition as it states it (a rolling twelve months' where it says so)
+    "headcount": Rule(r"(?:total |closing |global )?(?:headcount|employee (?:strength|count|base))|total employees", "num", lo=50, hi=2000000,
+                      size=True),
+    "attrition": Rule(r"(?:LTM |voluntary |annuali[sz]ed |IT services |trailing twelve months )?attrition(?: rate)?(?: \(?LTM\)?)?", "pct",
+                      lo=1, hi=60, anchor="headcount"),
 }
 MEASURES = {p.id: tuple(m.id for m in registry.METRICS if m.group == p.id) for p in PROFILES}
 NOTE_CHECKED = {"IN": "the companies' investor presentations held in the app's filings index and, where the plan includes them, their business updates",
@@ -150,7 +207,7 @@ def profile_of(row: dict, model_family: str | None = None, layer: str = "") -> s
     other company (a bank, a maker of hospital equipment, an airport)."""
     text = _text(row)
     for p in PROFILES:
-        said = re.search(p.words, text, re.I) or re.search(p.words, str(layer or ""), re.I)
+        said = re.search(p.words, text, re.I) or (not p.own and re.search(p.words, str(layer or ""), re.I)) or (model_family in p.by_model)
         if said and not re.search(p.not_words, text, re.I) and (not model_family or model_family in p.models):
             return p.id
     return None
@@ -363,12 +420,12 @@ def find(text: str, rule: Rule, region: str = "IN", filed: str = "") -> list[Fou
             if pr is None:
                 continue
             val = _value_of(rule, region, pr.group("v") or pr.group("w"), unit_par, False)
-            if val is not None and (per or own):
+            if val is not None and (per or own) and not _PLAN_AFTER.match(t, pr.end()):
                 p = per or own
                 out.append(Found(val, p[0], p[1], m.start(), t[m.start():pr.end()][:240], per is not None))
             continue
         val = _value_of(rule, region, _raw(got), unit_par, bool(got.group("pct")))
-        if val is None:
+        if val is None or _PLAN_AFTER.match(t, got.end()):
             continue
         p, stop, sure = per, got.end(), True
         if p is None:
@@ -389,11 +446,13 @@ def find(text: str, rule: Rule, region: str = "IN", filed: str = "") -> list[Fou
         out.append(Found(val, p[0], p[1], m.start(), t[m.start():stop][:240], sure))
     if rule.before:
         for m in re.finditer(rule.before, t, re.I):
-            if _PLAN.search(t[max(0, m.start() - 40):m.start()]) or t[max(0, m.start() - 1):m.start()] in "+":
-                continue
+            if _PLAN.search(t[max(0, m.start() - 40):m.start()]) or (m.start() and t[m.start() - 1] in "+") or \
+                    re.match(r"[\w.,]", t[max(0, m.start() - 1):m.start()] or " "):
+                continue            # m57: a number of its own, never the tail of a period ("FY27 Operational rooms") or of another figure
             val = _value_of(rule, region, m.group(1) + " " + (m.group(2) or ""), "", False)
             head = _header(t, m.start())
-            p = head[0] if head and head.count(head[0]) == 1 else own
+            # m57: one period in the heads is the figure's; several (a table's columns, "Q2 FY26 Q2 FY27") leave it to the document's own
+            p = head[0] if len(set(head)) == 1 else own
             if val is not None and p is not None and not (dq is not None and p[0] > dq + timedelta(days=95)):
                 out.append(Found(val, p[0], p[1], m.start(), m.group(0)[:240], p is not own))
     return out
@@ -424,8 +483,9 @@ def _value_of(rule: Rule, region: str, raw: str, unit_par: str, pct: bool) -> fl
                     return None
                 k = rule.default
             v *= k
-        elif re.match(r"\s?[A-Za-z]{2,}", raw[n.end():]) and not re.match(r"\s?(?:beds?|nos?\.?)\b", raw[n.end():], re.I):
-            return None             # a count stated in some other unit
+        elif re.match(r"\s?[A-Za-z]{2,}", raw[n.end():]) and not re.match(r"\s?(?:beds?|nos?\.?|rooms|keys)\b", raw[n.end():], re.I) and \
+                not (rule.size and re.match(r"\s?[A-Z][A-Za-z]", raw[n.end():])):
+            return None             # a count stated in some other unit (m57: never the next row's label of a table, "5,210 Occupancy")
     if v is None or not rule.lo <= v <= rule.hi:
         return None
     return round(v, 4)
@@ -557,6 +617,7 @@ def section(rows: list[dict], region: str, layer_of: dict, model_of: dict, passa
     """The dive's operating measures by sector profile: {"profiles": {id: {"fit": [{"symbol", "name", "layer"}], "figs": {symbol: {measure:
     figure}}, "held": [...]}}}, only profiles some company of the theme fits; {} when none does."""
     out = {}
+    rows = sorted(rows, key=lambda r: -(r.get("cap") or 0))       # m57: the largest companies' passages read first
     for p in PROFILES:
         fit = [r for r in rows if profile_of(r, model_of.get(r["symbol"]), (layer_names or {}).get(r["symbol"], "")) == p.id]
         if not fit:
@@ -576,7 +637,7 @@ def passages_reader(region: str, store=None, today: date | None = None):
         if s is None or not hasattr(s, "passages"):
             return []
         since = ((today or date.today()) - timedelta(days=DOC_DAYS)).isoformat()
-        return s.passages(q, region, list(symbols), list(KINDS[region]), since, PASSAGES)
+        return s.passages(q, region, list(symbols), list(KINDS[region]), since, PASSAGES, PER_COMPANY)
     return read
 
 
@@ -615,16 +676,23 @@ def from_business(business: dict | None, pid: str, region: str) -> dict:
     return out
 
 
-def family(pid: str, prof: dict, region: str, stat, business: dict | None = None) -> dict | None:
-    """One profile's page: each company's measures in their state (metric_registry), the measures some company states only (no column of
-    "n/a"), the median of each share over the companies that state it with "N of M" those it applies to (sizes never: companies of different
-    sizes), where each is from, and the measures none of them states. None when no company states any."""
+def merged_figs(pid: str, prof: dict, region: str, business: dict | None = None) -> dict:
+    """{symbol: {measure: figure}}: the dive's figures from the companies' stored documents, a business update's where it is as recent or newer
+    (m57: shared by the profile's page and each layer's line, layer_profiles)."""
     figs = {s: dict(f) for s, f in (prof.get("figs") or {}).items()}
     for s, f in from_business(business, pid, region).items():
         for k, fig in f.items():
             have = figs.setdefault(s, {}).get(k)
             if have is None or (registry.period_end(have.get("period")) or date.min) <= fig["_end"]:
                 figs[s][k] = {x: y for x, y in fig.items() if x != "_end"}
+    return figs
+
+
+def family(pid: str, prof: dict, region: str, stat, business: dict | None = None) -> dict | None:
+    """One profile's page: each company's measures in their state (metric_registry), the measures some company states only (no column of
+    "n/a"), the median of each share over the companies that state it with "N of M" those it applies to (sizes never: companies of different
+    sizes), where each is from, and the measures none of them states. None when no company states any."""
+    figs = merged_figs(pid, prof, region, business)
     fit = [c for c in prof.get("fit") or []]
     names = {c["symbol"]: c for c in fit}
     tag = f"ops:{pid}"

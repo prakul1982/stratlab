@@ -179,7 +179,7 @@ def test_the_r56_texts_fail_the_new_rules_where_the_audit_found_the_defect():
             "checked counts": ("biotech",), "figures count": ("payments",), "none screened": ("payments",), "empty table": ("biotech",),
             "few rows": ("software", "biotech"), "same name": ("retail",), "carried log": ("defence",), "reason layer": ("payments", "biotech"),
             "thin layer": ("software",), "largest left out": ("biotech", "auto", "it"), "duplicate member": ("telecom",)}
-    assert set(want) == set(DC.FAIL[-15:])
+    assert set(want) == set(DC.FAIL[DC.FAIL.index("layer counts"):DC.FAIL.index("duplicate member") + 1])          # updated on purpose (rel20): m57's "profile unsaid" follows y57's fifteen
     for kind, keys in want.items():
         for key in keys:
             assert found(r56(key), kind), (kind, key)
