@@ -14,6 +14,7 @@ whether to apply, and nothing here forecasts a listing. An allotment or listing 
 the one SEBI's timetable gives (allotment the working day after the close, listing three working days after it), and is
 marked as expected."""
 import json
+import os
 import re
 import threading
 import time
@@ -64,6 +65,28 @@ AWAITS = ("filed a red herring prospectus with SEBI", "not yet checked whether i
 
 def awaits(line: str) -> bool:
     return any(a in line for a in AWAITS)
+
+
+# e57 (owner, 15 Nov: a red herring prospectus filed three days before, no exchange list naming the issue yet, was a Check that the
+# self-healing re-ran and mailed about): an issuer files its red herring prospectus some days before the exchanges list its dates, so
+# within RHP_WAIT_DAYS of its filing such an issue is waiting for the exchange's dates: shown in Admin, the job's state stays ok, no re-run
+# and no mail. Only one still unlisted after the window is a Check (awaits), which the self-healing follows up as before.
+RHP_WAIT_DAYS_DEFAULT = 10
+WAITING = "waiting for the exchange's dates"
+
+
+def rhp_wait_days() -> int:
+    """The window, in days after its filing, that a red herring prospectus no exchange lists yet waits for the exchange's dates
+    (IPO_RHP_WAIT_DAYS, default RHP_WAIT_DAYS_DEFAULT; at least 1)."""
+    try:
+        return max(1, int(os.environ.get("IPO_RHP_WAIT_DAYS") or RHP_WAIT_DAYS_DEFAULT))
+    except ValueError:
+        return RHP_WAIT_DAYS_DEFAULT
+
+
+def waiting(line: str) -> bool:
+    """Whether a line of the check is an issue waiting for the exchange's dates within the window (not a failure, not a Check)."""
+    return WAITING in line
 
 
 TIMETABLE_DAYS = 14                   # days after SEBI's timetable listing day that its dates still show for an issue not confirmed listed
@@ -768,11 +791,21 @@ def india_gaps(rows: list[dict], nse: dict, bse: list[dict], perf: list[dict], r
             elif stage_of(row, now) != "listed" and not row.get("issue_status") and not row.get("social"):
                 out.append(f"{p['name']} is listed on BSE ({p['listed']}); our row is not marked listed.")
     late = (today - timedelta(days=3)).isoformat()
+    # e57: one filed within the window waits for the exchange's dates (a line Admin shows, not a Check); past it, a Check as before
+    wait_days = rhp_wait_days()
+    fresh = (today - timedelta(days=wait_days)).isoformat()
     for e in red:
-        if e["kind"] in ("rhp", "prospectus") and since <= e["date"] <= late:
-            row = by_key.get(S.name_key(e["company"]))
-            if row is None or not row.get("open"):
-                out.append(f"{e['company']} filed a red herring prospectus with SEBI on {e['date']}; no exchange list names the issue and our row has no dates.")
+        if e["kind"] not in ("rhp", "prospectus") or not since <= e["date"] <= today.isoformat():
+            continue
+        row = by_key.get(S.name_key(e["company"]))
+        if row is not None and row.get("open"):
+            continue
+        if e["date"] > fresh:
+            age = (today - date.fromisoformat(e["date"])).days
+            out.append(f"{e['company']}: red herring prospectus filed with SEBI on {e['date']} ({age} day{'' if age == 1 else 's'} ago); {WAITING}, "
+                       f"no exchange list names the issue yet (a Check if still so {wait_days} days after its filing).")
+        elif e["date"] <= late:
+            out.append(f"{e['company']} filed a red herring prospectus with SEBI on {e['date']}; no exchange list names the issue and our row has no dates.")
     return list(dict.fromkeys(out))
 
 
@@ -1516,6 +1549,8 @@ class Job:
             # the listed issues go into the two-year history too (ipo_history.py), so it stays current without reading anything again
             from . import ipo_history
             _try(problems, "the IPO history", lambda: ipo_history.absorb(rows, today, now))
+        # e57: the issues waiting for the exchange's dates last, so a gap or a Check is never pushed out of the kept lines by them
+        missing.sort(key=lambda x: waiting(x))
         load_ = load(market)
         # (the check compares with what the lists said this read; when they weren't read, nothing is compared)
         checked = {**load_["checked"], "read": now.isoformat(timespec="seconds"), "problems": problems[:6], "missing": missing[:12]}
@@ -1540,8 +1575,10 @@ class Job:
         # Admin shows a gap the same day: what a list has that ours doesn't, from both markets' last reads, as the job's problems (IPO-002);
         # a line that waits on the issuer (AWAITS) is a Check, not a Problem
         lines = [(f"{'India' if m == 'IN' else 'US'}", x) for m in ("IN", "US") for x in (st.get(m) or {}).get("missing", [])[:6]]
-        gaps = [f"Missing ({where}): {x}" for where, x in lines if not awaits(x)]
+        gaps = [f"Missing ({where}): {x}" for where, x in lines if not awaits(x) and not waiting(x)]
         waits = [f"To check ({where}): {x}" for where, x in lines if awaits(x)]
+        # e57: a red herring prospectus filed within the window, no exchange list naming the issue yet: waiting, never a failure or a Check
+        pending = [f"Waiting ({where}): {x}" for where, x in lines if waiting(x)]
         # one company's filing page the SEC answered with a 500 is a Check with its own words, not a red feed (LIVE1C-002): a Problem is
         # the feed itself failing, and the same feed reads India's issues and bids besides
         # ...and only a page that keeps failing (or many at once) is one: one that didn't answer in a single run is in the log, and the job
@@ -1553,7 +1590,7 @@ class Job:
         self.status.update(last_run=now.isoformat(timespec="seconds"), read=market, problems=(gaps + waits + problems[:5])[:10],
                            last_error=(f"{len(gaps)} issue{'s' if len(gaps) != 1 else ''} on the exchanges' lists {'is' if len(gaps) == 1 else 'are'} missing from ours."
                                        if gaps else major[0][:200] if major else None),
-                           check=" ".join(notes) or None)
+                           check=" ".join(notes) or None, waiting=pending)
         return {"rows": len(rows), "problems": problems, "missing": missing}
 
     def read_open(self, now: datetime, final: bool = False) -> int:

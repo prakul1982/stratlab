@@ -465,11 +465,17 @@ def rows() -> list[dict]:
         st = _plain(ipo.job, "ipo")
         ai = ipo.ai_counts()
         at, why = _ran(st, "last_run", data=lambda: max(filter(None, ((ipo.state().get(r) or {}).get("read") for r in ("IN", "US"))), default=None))
+        # e57: the issues waiting for the exchange's dates (a red herring prospectus filed within the window): listed, the state unchanged
+        wait = [str(x) for x in st.get("waiting") or []]
+        days = ipo.rhp_wait_days()
         return _row("ipo", "IPOs", "India 7:40 AM and 8:10 PM IST, US 8:30 AM and 9:30 PM IST; bids every 15 minutes from 9:55 AM to 5:30 PM IST while an issue is open; "
-                    "alerts 8:00 AM (India) and 7:00 PM (US dates) IST", at, st.get("last_error"), _problems(st) + why,
+                    "alerts 8:00 AM (India) and 7:00 PM (US dates) IST", at, st.get("last_error"), _problems(st) + wait + why,
                     [{"label": "Run now", "path": "/admin/ipos/refresh"}, {"label": "Import two-year history", "path": "/admin/ipos/history/backfill"}], check=st.get("check") or ipo_docs_check(st.get("docs_pass"), ai),
-                    note="Offer documents are read and summarised a few at a time between the reads. After each read the lists are checked against the exchanges' and the regulators' own: "
-                         "an issue an exchange lists that ours does not is a Problem; a prospectus filed with the regulator that no exchange lists yet is a Check. "
+                    note=(f"{len(wait)} red herring prospectus{'' if len(wait) == 1 else 'es'} filed in the last {days} days {'is' if len(wait) == 1 else 'are'} "
+                          "waiting for the exchange's dates (not a failure). " if wait else "")
+                         + "Offer documents are read and summarised a few at a time between the reads. After each read the lists are checked against the exchanges' and the regulators' own: "
+                         f"an issue an exchange lists that ours does not is a Problem; a red herring prospectus filed with the regulator is waiting for the exchange's dates for {days} days, "
+                         "and one no exchange lists after that is a Check. "
                          # item 40: the AI summaries today, and the backlog the catch-up still has
                          f"AI summaries today: {ai['scheduled']} of {ai['cap']} by the catch-up, {ai['asked']} written when someone opened an IPO (never capped). "
                          f"{ai['waiting']} document{'' if ai['waiting'] == 1 else 's'} wait{'s' if ai['waiting'] == 1 else ''} for a summary"
