@@ -1064,7 +1064,9 @@ class Indexer:
         self.status.update(last_run=_now(), warmed=warmed)
         return self.status
 
-    def loop(self, clock=time.monotonic, sleep=time.sleep, runs: int | None = None):
+    def loop(self, clock=None, sleep=None, runs: int | None = None):
+        # looked up at each call, not bound at definition: tests (and the leader check) replace this module's time
+        clock, sleep = clock or time.time, sleep or time.sleep
         sleep(300)                               # after startup traffic and the company lists
         while runs is None or runs > 0:
             start = clock()
