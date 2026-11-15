@@ -282,6 +282,19 @@ def _layer_events(was: dict, now: dict) -> tuple[list[dict], set]:
             used_g.add(g)
             used_d.add(d)
             pairs.add((g, d))
+    # r571 (the live R57 Software deck: 7 companies of "Ad-funded platforms and online games" printed as 7 moves into "Consumer internet,
+    # games and advertising", a layer new to it): a new layer most of whose companies come from one layer that stays was split off it,
+    # said once, its companies' moves explained by it
+    kept_names = set(old_names) & set(new_names)
+    for d in fresh:
+        if d in used_d or not dst[d]:
+            continue
+        came = Counter(was["layers"][was["cos"][s_][1]] if s_ in was["cos"] else rest_layer(was, s_) for s_ in dst[d])
+        src_, k_ = (came.most_common(1) or [(None, 0)])[0]
+        if src_ in kept_names and not str(src_).startswith("Other ") and k_ >= 2 and k_ * 2 >= len(dst[d]):
+            out.append({"kind": "split", "from": [src_], "to": [src_, d], "n": k_})
+            used_d.add(d)
+            pairs.add((src_, d))
     # c54 (R53 review): a removed layer says where its companies went ({layer: n}) and, when the placement listed it, why it was not kept
     went = lambda g: dict(Counter(now["layers"][now["cos"][s_][1]] if s_ in now["cos"] else "" for s_ in src[g]).most_common())      # noqa: E731
     why = {x.get("layer"): x.get("why") for x in now.get("gone") or [] if isinstance(x, dict)}

@@ -20,6 +20,9 @@ LEGAL = re.compile(r"\b(?:limited|ltd|inc|incorporated|corp|corporation|co|compa
 SERIES = re.compile(r"-[A-Z]{2}$")          # the exchange's series after a symbol: -BE, -BZ, -SM, -ST, -RR (a REIT), -IV (an InvIT)
 PEER_MAX = 12                               # candidates a pick's industry gives a theme, largest first
 PEERS_MAX = 40                              # ...and a theme in all
+PEERS_ON = False                            # r571 (the live R57 decks: Adobe, Intuit and Salesforce pulled into Semiconductors, Adobe and
+                                            # Cadence into Cybersecurity, Bajaj Finance into Automotive): the peer pull adds no member unless
+                                            # turned on; the code stays for a stricter version
 
 
 def norm_name(name) -> str:
@@ -120,6 +123,8 @@ def with_peers(out: dict, rows: list[dict], about, theme: str, key=None) -> dict
     "peer_of" the pick, "verified" (its own words were read and checked); "placements" gets "peer_candidates": every candidate considered,
     [{ticker, name, industry, cap, peer_of, joined, why}]."""
     from . import theme_base as TB, theme_data as TD
+    if not PEERS_ON:
+        return out
     key = key or TB.key
     idx = {r["symbol"]: r for r in rows or [] if r.get("symbol")}
     held = {key(i) for i in (out.get("placements") or {}).get("industries") or []}

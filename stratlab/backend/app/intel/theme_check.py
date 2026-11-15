@@ -230,7 +230,10 @@ def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None
         ev = evidence.get(sym) or {}
         home = next((g for g in gids if by_id[g]["name"] == held[sym]), gids[0])
         g = by_id[home]
-        if contradicted(g["name"], ev.get("about") or "", ev.get("industry") or "", g["text"]):
+        # r571 (the live R57 Defence deck: Bharat Forge, published in "Parts, component and ingredient makers", a layer the split made and no
+        # group of the map, was judged against the first map group naming it, "Combat aircraft and helicopters", asked, and dropped): only a
+        # published group of the map's own is a test of its words; one published elsewhere stays, its layer held by the placement's last step
+        if held[sym] and contradicted(g["name"], ev.get("about") or "", ev.get("industry") or "", g["text"]):
             continue                         # its own words contradict its published group: asked like a new company
         quote = group_sentence(ev.get("about") or "", f"{g['name']} {g['text']}")
         for gid in gids:

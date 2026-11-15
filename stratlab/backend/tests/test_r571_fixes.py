@@ -1,0 +1,163 @@
+"""Lane r571 (Release 57.1): the live R57 decks' regressions, each proven on the live placement inputs read under RULES 56 on 15 Nov
+2026 (tests/fixtures/themes_live/r571/: semis, software, meddev and defence as served, with a company the map's check dropped given its
+stored words from the R56 inputs; retail with the R56 published memory the live R57 re-check read). The model's own R57 answers (the
+misfit and the layer audit, kept with the placement) are replayed as the model's answer under the new rules: no other model call."""
+import copy
+import json
+import pathlib
+
+from app.intel import theme_base as B
+from app.intel import theme_changes as C
+from app.intel import theme_check as TC
+from app.intel import theme_identity as TI
+from tests import test_exact_replay as X
+
+LIVE = pathlib.Path(__file__).parent / "fixtures" / "themes_live" / "r571"
+ORIGIN = {"semis": {"MU": "Design software and IP licensing", "INTC": "Foundry and memory manufacturing"}}
+STALE = ("out_why", "on_industry", "refit", "own_goods", "by_words", "unfit", "sold_by")
+
+
+def inputs(key: str) -> dict:
+    d = json.loads((LIVE / f"{key}.json").read_text())
+    d = d.get("data", d)
+    for v in d["value_chain"]:
+        v["companies"] = [{k: x for k, x in c.items() if k not in STALE} for c in v["companies"]]
+    return d
+
+
+def stored_answers(d: dict):
+    """The model as it answered on live: its kept misfit and audit answers, by layer name; nothing else."""
+    def ask(system, text):
+        if system == TC.AUDIT_SYSTEM:
+            p = json.loads(text.split("AUDIT:\n", 1)[1])
+            ids = {x["name"]: k for k, x in p["layers"].items()}
+            moves = (d["kept"].get("audit") or {}).get("moves") or {}
+            return {"moves": [{"symbol": s, "to": ids.get(x["to"], "other") if x["to"] else "other", "quote_new": x["quote_new"],
+                               "quote_old": x["quote_old"]} for s, x in moves.items() if not x["to"] or x["to"] in ids]}
+        if system == TC.FIT_SYSTEM:
+            p = json.loads(text.split("MAP:\n", 1)[1])
+            ids = {x["name"]: k for k, x in p["layers"].items()}
+            moves = (d["kept"].get("fit") or {}).get("moves") or {}
+            return {"moves": [{"symbol": s, "layer": ids.get(t, "other")} for s, t in moves.items()]}
+        return {}
+    return ask
+
+
+def place(key: str, monkeypatch, published=None, answers: bool = True) -> dict:
+    d = inputs(key)
+    sig = ((d.get("kept") or {}).get("model_names") or {}).get("sig")
+    if sig:
+        monkeypatch.setattr(B, "model_names_signature", lambda layers: sig)
+    pub = d.get("published") if published is None else published
+    m = X.pre_map(copy.deepcopy(d), ORIGIN.get(key, {}), {})
+    m["placements"] = dict(d["placements"])
+    m = B.keep_published(m, pub, lambda s: d["evidence"].get(s), rename=B.answer_renames(d["kept"]))
+    out, _ = B.place_rest(m, d["theme"], lambda s: d["evidence"].get(s), ask=stored_answers(d) if answers else None, kept=d["kept"],
+                          facts_of=lambda s: d["facts"].get(s) or {}, figures_of=lambda s: (d.get("figures") or {}).get(s) or {},
+                          carried=d["kept_version"] != B.RULES, previous=d["previous"], off_before=d.get("off_before") or {},
+                          moved_before=d.get("moved_before") or {}, **({"moved_out": d["moved_out"]} if d.get("moved_out") else {}),
+                          published=pub)
+    return out
+
+
+def where(out: dict) -> dict:
+    return {c["ticker"]: ("Other" if v.get("official") and v.get("basis") == "rest" else X._HALF.sub("", v["layer"]), c)
+            for v in out["value_chain"] for c in v["companies"]}
+
+
+def test_1_the_peer_pull_adds_no_member_by_default(monkeypatch):
+    """Fails before: with_peers pulled Adobe, Intuit and Salesforce into Semiconductors (live R57). Off by default; behind PEERS_ON."""
+    out = {"value_chain": [{"layer": "Design software", "companies": [{"ticker": "SNPS", "verified": True, "base": False}]}],
+           "placements": {"industries": ["Semiconductors"]}}
+    rows = [{"symbol": "SNPS", "industry": "Software", "market_cap": 50.0}, {"symbol": "ADBE", "industry": "Software", "market_cap": 90.0}]
+    assert TI.with_peers(copy.deepcopy(out), rows, lambda s: "Adobe makes design software.", "Semiconductors") == out
+    assert TI.PEERS_ON is False
+
+
+def test_2_a_check_s_verified_never_vouches_for_a_layer_it_was_not_asked_about(monkeypatch):
+    """Fails before: Intel in "Chip equipment and subsystem suppliers", "its own words were checked to show it is of" it: the check had
+    confirmed it for the map's foundry group, then the published memory (an R53 move) held it among the equipment makers."""
+    got = where(place("semis", monkeypatch))
+    lay, c = got["INTC"]
+    assert lay != "Chip equipment and subsystem suppliers" and "were checked to show" not in str(c.get("sold_by") or "")
+
+
+def test_3_a_renamed_published_layer_is_kept_not_undone(monkeypatch):
+    """Fails before: "Single-category specialty retailers" (9 companies in R56), renamed by an answer to "Niche specialty and category
+    retailers", was not made and all went to "Other"."""
+    out = place("retail", monkeypatch)
+    got = where(out)
+    members = [s for s, (x, _) in got.items() if x == "Single-category specialty retailers"]
+    assert len(members) >= 7 and {"WOOF", "BQ", "TITN"} <= set(members)
+
+
+def test_4_the_live_audit_answer_moves_twilio_once_its_old_quote_is_read_like_a_stable_placement(monkeypatch):
+    """Fails before: the model's own R57 answer moved Twilio to "Data and developer infrastructure software", refused because its quote
+    "an American cloud communications company" said "cloud", one of its layer's three core words. Shopify's and Toast's quotes name nothing
+    of their new layer: still refused (the model's answer, not the check's)."""
+    got = where(place("software", monkeypatch))
+    assert got["TWLO"][0] == "Data and developer infrastructure software"
+    assert got["SHOP"][0].startswith("Cloud and AI compute") and got["TOST"][0].startswith("Cloud and AI compute")
+
+
+def test_5_a_published_member_outside_the_map_s_groups_stays_in_the_theme():
+    """Fails before: Bharat Forge, published in "Parts, component and ingredient makers" (a layer the split made, no map group), was judged
+    against "Combat aircraft and helicopters", the first map group naming it, asked, and dropped from Defence."""
+    words = inputs("defence")["evidence"]["BHARATFORG"]
+    m = {"value_chain": [{"layer": "Combat aircraft and helicopters", "description": "Fighter jets and helicopters.",
+                          "companies": [{"ticker": "BHARATFORG", "name": "Bharat Forge Limited"}]}]}
+    asked = []
+
+    def no(system, text):
+        asked.append(1)
+        return {"checks": [{"id": "L0|BHARATFORG", "does": False, "quote": ""}]}
+    out = TC.check_placements(copy.deepcopy(m), lambda syms: ({"BHARATFORG": {"about": words, "industry": ""}}, set()), no, "Defence",
+                              held={"BHARATFORG": ""})
+    assert asked == [] and [c["ticker"] for c in out["value_chain"][0]["companies"]] == ["BHARATFORG"]
+    dropped = {"value_chain": [{"layer": "Combat aircraft and helicopters", "description": "", "companies": []}],
+               "placements": {"dropped": [{"ticker": "BHARATFORG", "name": "Bharat Forge Limited", "groups": ["Combat aircraft and helicopters"],
+                                           "said": "no"}]}}
+    back = B.keep_published(dropped, {"BHARATFORG": "Parts, component and ingredient makers"}, lambda s: words)
+    assert [c["ticker"] for c in back["value_chain"][0]["companies"]] == ["BHARATFORG"]
+
+
+def test_6_3m_leaves_medical_devices_and_no_thin_groups_layer_is_made(monkeypatch):
+    """Fails before: 3M stayed in "Other" ("electrical" read as "electromedical"), and a 2-company "Diversified groups" layer was made."""
+    out = place("meddev", monkeypatch)
+    got = where(out)
+    assert "MMM" not in got and any(x["ticker"] == "MMM" for x in out["placements"].get("off_industry") or [])
+    assert not [v for v in out["value_chain"] if v["layer"] == "Diversified groups" and v["companies"]]
+    assert not any(v["layer"].startswith("Surgical robotics") for v in out["value_chain"] if v["companies"])     # no return to a contradicted name
+
+
+def test_7_a_layer_split_off_another_is_said_once_not_as_moves():
+    mk = lambda cos: {"layers": [{"layer": n, "companies": [{"symbol": s, "name": s} for s in ss]} for n, ss in cos.items()]}      # noqa: E731
+    was = C.snapshot(mk({"Ad-funded platforms": list("ABCDEFG")}), list("ABCDEFG"), 1, 56)
+    now = C.snapshot(mk({"Ad-funded platforms": list("ABC"), "Consumer internet": list("DEFG")}), list("ABCDEFG"), 1, 57)
+    d = C.diff(was, now)
+    assert d["moved"] == [] and d["layers"] == [{"kind": "split", "from": ["Ad-funded platforms"], "to": ["Ad-funded platforms", "Consumer internet"],
+                                                 "n": 4}]
+
+
+def test_8_a_layer_s_notes_page_is_not_another_layer():
+    import sys
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "scripts"))
+    import deck_check as DC
+    pages = ["Layer 1 · Cloud and AI compute providers\nrows", "Layer 1 · Cloud and AI compute providers (notes)\nmore", "Layer 2 · X (continued)"]
+    assert DC._layer_names(pages) == {"Cloud and AI compute providers", "X"}
+
+
+def test_9_rules_57_carries_56():
+    from app.intel import theme_routes as TR
+    assert B.RULES == 57 and TR.PLACE_CARRY[57] == 56 and TR.EARLIER_MAX == 12
+
+
+def test_8b_deck_diff_counts_a_layer_from_its_page_and_never_its_notes_page():
+    """Fails before: the live R57 Consumer retail deck read as 5 layers (rows the table's layout put off its column), and a "(notes)"
+    page would read as a layer of its own."""
+    import sys
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "scripts"))
+    import deck_diff as DD
+    pages = ["RETAIL · THE VALUE CHAIN\nLayer 3 · Catalog and mail-order houses\n6 companies, revenue $9 bn together\n",
+             "Layer 3 · Catalog and mail-order houses (notes)\n6 companies are said here too\n"]
+    assert DD.layer_counts(pages) == {"Catalog and mail-order houses": 6}

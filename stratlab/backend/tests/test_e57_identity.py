@@ -14,6 +14,12 @@ from app import main  # noqa: F401, I001  (main first: it loads the modules in t
 from app.intel import theme_base as TB, theme_identity as I, theme_routes as TR
 
 
+@pytest.fixture(autouse=True)
+def _peers_on(monkeypatch):
+    """r571 (R57.1, updated on purpose): the peer pull is off by default (theme_identity.PEERS_ON); these tests prove the code behind it."""
+    monkeypatch.setattr(I, "PEERS_ON", True)
+
+
 # ---------- RC7 (a): one member per company ----------
 def test_a_map_line_with_the_exchanges_series_is_the_index_company_never_a_second_member():
     rows = [{"symbol": "HFCL", "name": "HFCL Ltd", "industry": "Telecom - Equipment & Accessories", "market_cap": 31521.1},
