@@ -89,6 +89,28 @@ Failures (the exit code is 1 when any deck has one):
                each stored version: 100% (14 Nov 2026) → 100% (14 Nov 2026)"): the "Membership checked" row's checked share after each
                stored version whose last point is not the share of the row's count ("N of M"), or its description-verified share after each
                stored version whose last point is not the share of the "Description-verified N of M" it says just before
+  y57 (R57, the full audit of the 24 live R56 decks: counts that contradict across pages, presentation gaps and the P0s a text can show):
+  layer counts  a layer page's header "N companies" and its "Membership of its M companies" with M other than N, not said to count the
+               companies "stored in all" (Biotech "43 companies" beside "Membership of its 214 companies")
+  layer header  a layer page's header that doesn't start with "<N> companies" (FMCG "1 figure is the whole company's ...; 31 in this group")
+  pe partition  "P/E of A of the N companies, B loss-makers with none" with A + B more than N (Software 78 + 29 of 100)
+  loss-maker profit  an appendix whose P/E note says "none for a loss-maker" over a row with a positive net margin and no P/E (Biotech's
+               Gilead at 28.9% net)
+  checked counts  two counts of the companies whose membership was checked, of one total, on two pages (Biotech 313 and 423 of 820)
+  figures count  the cover's "With figures" count against the appendix's "N companies with figures" with neither said to be core members
+               (Payments 14 against 18)
+  none screened  "none screened out as another business" in a deck whose change log removes a company on its business membership
+  empty table  a layer page that prints its table's heading and no company row (Biotech's largest layer)
+  few rows     a layer page that shows fewer than min(5, N) of its N companies ("The largest 1 of 12") with no continuation page after it
+  same name    one name said twice where two are meant ("Leslie's, Inc. is Leslie's, Inc."; "IonQ, Inc.; IonQ, Inc." in one list)
+  carried log  a change log dated before the deck's own day that doesn't say "no change since" (a log carried from an earlier version)
+  reason layer  a removal's or move's reason that names a layer (“X”) the deck has in none of its versions (Payments' “Card issuers and
+               lenders” for its “Card issuers and consumer lenders”)
+  thin layer   a change log's layer "added (N companies)" with N under 3
+  largest left out  the theme's largest company left out of its layer's calculations as another business or for insufficient evidence, or a
+               company left out for insufficient evidence whose market value is above every named company in its layer's calculations
+  duplicate member  one company in a layer's calculations and left out of them in the same sentence, or two members whose names differ only
+               in their legal form ("HFCL Limited" and "HFCL Ltd")
 Reported, and a failure only with --strict:
   cut text     every other text ending in "…" (a label or a sentence cut to its box)
   mixed range  a range with one end whole and the other with a decimal ("19.6% to 20%"; LIVE7A-014)
@@ -110,7 +132,9 @@ FAIL = ("headline", "mid-word", "placeholder", "joining word", "count", "repeate
         "left out>50%", "unchecked as 0", "biz label", "biz making", "stale layer", "same company", "words claim", "partial unsaid",
         "outlier range", "added unexplained", "verified count", "adjacent ranked", "move unexplained", "scope core", "layer lost unsaid",
         "evidence state", "population mismatch", "identity unresolved", "out of scope in Other", "stage mismatch", "coverage blur",
-        "evidence unsplit", "evidence counts", "empty page", "layer vanished", "share fall unsaid", "removal unnamed", "history end")
+        "evidence unsplit", "evidence counts", "empty page", "layer vanished", "share fall unsaid", "removal unnamed", "history end",
+        "layer counts", "layer header", "pe partition", "loss-maker profit", "checked counts", "figures count", "none screened", "empty table",
+        "few rows", "same name", "carried log", "reason layer", "thin layer", "largest left out", "duplicate member")
 WARN = ("cut text", "other>40%", "mixed range")
 # LIVE7A-014: a minus sign as a hyphen before a figure with its unit (never a date's or a range's dash: it follows a space or a bracket)
 _HYPHEN_MINUS = re.compile(r"(?:(?<=\s)|(?<=[(\[])|^)-\d[\d,]*(?:\.\d+)?(?:%|x\b| ?pts\b| ?points\b)")
@@ -324,7 +348,8 @@ def check_pages(pages: list[str]) -> dict:
     l55_checks(pages, add)
     t56_checks(pages, add)
     h56_checks(pages, add)
-    counts = {k: sum(1 for f in findings if f["kind"] == k) for k in FAIL + WARN}
+    y57_checks(pages, add)
+    counts ={k: sum(1 for f in findings if f["kind"] == k) for k in FAIL + WARN}
     return {"pages": len(pages), "counts": counts, "findings": findings}
 
 
@@ -426,7 +451,7 @@ _SCOPE_THEME = re.compile(r"bank|lend|loan|credit|financ|nbfc|construct|infrastr
                           r"health ?care services|mining|metal|oil|gas|energy|commodit|agri|farm|plantation|fertili|coal|steel|petro|chemical|resource|"
                           r"utilit|power|renewable", re.I)
 _TITLE = re.compile(r"THEME DEEP DIVE\s+(.+?)\s{2,}|THEME DEEP DIVE\s*\n\s*(.+)|^\s*(.+)\n.*· Theme deep dive", re.I)
-_REMOVED = re.compile(r"“([^”]+)” removed \((\d[\d,]*) companies([^)]*)\)(, [a-z][^;.]*)?")
+_REMOVED = re.compile(r"“([^”]+)” removed \((\d[\d,]*) compan(?:y|ies)([^)]*)\)(, [a-z][^;.]*)?")
 LOST_MIN = 5
 
 
@@ -778,6 +803,259 @@ def _end_check(add, n: int, label: str, count, points) -> None:
     share = 99 if share == 100 and a < b else share          # (the deck never says 100% while one is short of the whole)
     if int(points[-1][0]) != share:
         add("history end", n, f"{label} {count.group(0)}".strip() + f": its share after each stored version ends on {points[-1][0]}% ({points[-1][1]})")
+
+
+# y57 (R57): the full audit of the 24 live R56 decks (see the module's list)
+_LAYER_TOP = re.compile(r"^\s*Layer \d+ · (.+?)\s*$")
+_HEAD_COUNT = re.compile(r"^(\d[\d,]*) compan(?:y|ies)\b")
+_MEMBERSHIP_OF = re.compile(r"Membership of its (\d[\d,]*) compan(?:y|ies)\b([^:]{0,90}):")
+_PE_SPLIT = re.compile(r"P/E of (\d[\d,]*) of the (\d[\d,]*) companies, (\d[\d,]*) loss-makers? with none")
+_CHECKED_N = re.compile(r"[Mm]embership checked (\d[\d,]*) of (\d[\d,]*)\b|\bchecked for (\d[\d,]*) of the theme's (\d[\d,]*)\b")
+_APX_WITH = re.compile(r"(\d[\d,]*) companies with figures([^;]{0,160}?), one row each")
+_NONE_SCREENED = "none screened out as another business"
+_REMOVED_BIZ = re.compile(r"\bremoved \d[\d,]*: [^.;]{0,200}?\(business membership:")
+_SHOWN_OF = re.compile(r"The (?:first|largest) (\d[\d,]*) of (\d[\d,]*)\b")
+_TABLE_END = re.compile(r"^\s*(?:Median\b|Range\b|The (?:first|largest) \d|In the layer's calculations|Membership of its|StratLab ·)")
+_ROW_FIG = re.compile(r"(?:^|\s)(?:[−-]?\d[\d,]*(?:\.\d+)?(?:%|x)|[$₹]\s?[\d,.]+(?: lakh)?(?: ?(?:bn|m|cr|k))?|–|[A-Z][a-z]{2} \d{4})(?:\s|$)")
+_IS_SELF = re.compile(r"(?<![\w'’])([A-Z][\w.,&'’ -]{2,70}?) is \1(?=[;.,]?(?:\s|$))")
+_LIST_TWICE = re.compile(r"(?:: |; )([A-Z][^;:]{2,60}?); \1(?=;|\.|,| and \d|$)")
+_DECK_DAY = re.compile(r"Theme deep dive · (\d{1,2} [A-Z][a-z]{2} \d{4})")
+_LOG_DAY = re.compile(r"On (\d{1,2} [A-Z][a-z]{2} \d{4})(, the latest change \(no change since\))?, against the version stored before it")
+_WORK_OF = re.compile(r"(?:don't show the work of|show it is of|not the work of|the work of) “([^”]+)”")
+_LAYER_SAID = re.compile(r"“([^”]+)” (?:renamed|removed|added|split|merged)|renamed “([^”]+)”|from “([^”]+)” to “([^”]+)”|from “([^”]+)”\)|into “([^”]+)”")
+_ADDED_LAYER = re.compile(r"“([^”]+)” added \((\d[\d,]*) compan(?:y|ies)\)")
+_LARGEST = re.compile(r"; (.{3,80}?) is the largest at ")
+_ROLL = re.compile(r"In the layer's calculations \((\d[\d,]*) of (\d[\d,]*)\): (.*?)\. Left out \((\d[\d,]*)\): (.*?)\.(?= Every one| Membership| [A-Z(]|$)")
+_MV = re.compile(r"^([$₹])\s?([\d,]+(?:\.\d+)?)\s?(lakh cr|bn|m|cr|k)?$")
+_LEGAL_WORDS = {"inc", "incorporated", "corp", "corporation", "co", "company", "ltd", "limited", "plc", "llc", "lp", "nv", "sa", "ag", "se", "the",
+                "and"}
+_DAY_ORDER = {m: i for i, m in enumerate(("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"))}
+
+
+def _day_key(d: str) -> tuple:
+    dd, mon, yy = d.split()
+    return int(yy), _DAY_ORDER.get(mon, 0), int(dd)
+
+
+def _name_key(name: str) -> tuple:
+    """A company's name with its legal form, punctuation and "&"/"and" left off: "HFCL Limited" and "HFCL Ltd" are one."""
+    words = re.sub(r"[^a-z0-9]+", " ", name.lower().replace("&", " ")).split()
+    return tuple(w for w in words if w not in _LEGAL_WORDS)
+
+
+def _same_co(a: tuple, b: tuple) -> bool:
+    """Two name keys of one company: one the start of the other (a roll's short name, "Eli Lilly", of "Eli Lilly & Co")."""
+    if not a or not b:
+        return False
+    k = min(len(a), len(b))
+    return a[:k] == b[:k] and (k >= 2 or len(a) == len(b) == 1)
+
+
+def _mv(cell: str) -> float | None:
+    """A market value cell in $ million or ₹ crore ("$1,358 bn", "₹4.13 lakh cr", "₹28,053 cr")."""
+    m = _MV.match(cell.strip())
+    if not m:
+        return None
+    x, u = _num(m.group(2)), m.group(3) or ""
+    return x * 100000 if u == "lakh cr" else x * 1000 if u == "bn" else x / 1000 if u == "k" else x
+
+
+def _roll_names(text: str) -> list[str]:
+    """The names a roll's part lists ("A, B (partial: ...) and 3 more; C"), each reason before its names dropped."""
+    out = []
+    for part in _top_items(text):
+        part = re.sub(r"^[a-z][^:]*: ", "", part)                       # "another business: ...", "insufficient evidence (...): ..."
+        depth, cur = 0, ""
+        for ch in part:
+            depth += (ch == "(") - (ch == ")")
+            if ch == "," and depth == 0:
+                out.append(cur)
+                cur = ""
+            else:
+                cur += ch
+        out.append(cur)
+    names = []
+    for x in out:
+        x = re.sub(r"\([^()]*(?:\([^()]*\)[^()]*)*\)", "", x)
+        x = re.sub(r" and \d[\d,]* more$", "", x.strip()).strip(" .")
+        if x and not re.match(r"^(?:and )?\d[\d,]* more$", x):
+            names.append(x)
+    return names
+
+
+def _appendix_values(pages: list[str]) -> dict:
+    """{name key: market value} of the appendix's rows (the first money cell after the company's name)."""
+    got = {}
+    for page in pages:
+        if _APPENDIX not in page:
+            continue
+        for ln in page.split("\n"):
+            if _indent(ln) > 2:
+                continue
+            cells = [c for c in re.split(r"\s{2,}", ln.strip()) if c]
+            if len(cells) < 4 or cells[0] == "Company":
+                continue
+            v = next((_mv(c) for c in cells[1:4] if _mv(c) is not None), None)
+            if v is not None:
+                got.setdefault(_name_key(cells[0]), v)
+    return got
+
+
+def _value_of(key: tuple, values: dict) -> float | None:
+    return next((v for k, v in values.items() if _same_co(key, k)), None)
+
+
+def y57_checks(pages: list[str], add) -> None:
+    """y57 (R57, the full audit of the 24 live R56 decks): see the module's list."""
+    flat_pages = [re.sub(r"\s+", " ", p) for p in pages]
+    whole = " ".join(flat_pages)
+    for n, page in enumerate(pages, 1):
+        lines = [ln for ln in page.split("\n") if ln.strip()]
+        top = next((i for i, ln in enumerate(lines) if _LAYER_TOP.match(ln)), None)
+        if top is None:
+            continue
+        layer = _LAYER_TOP.match(lines[top]).group(1)
+        if layer.endswith(("(continued)", "(notes)")):     # a layer page's notes: its header and table are on the page before
+            continue
+        head = lines[top + 1].strip() if top + 1 < len(lines) else ""
+        hc = _HEAD_COUNT.match(head)
+        if not hc:
+            add("layer header", n, f"{layer}: {head[:120]}")
+        flat = flat_pages[n - 1]
+        mo = _MEMBERSHIP_OF.search(flat)
+        if hc and mo and _num(mo.group(1)) != _num(hc.group(1)) and "stored in all" not in mo.group(2):
+            add("layer counts", n, f"{layer}: “{hc.group(0)}” beside “Membership of its {mo.group(1)} companies”")
+        # the table: its heading's line, then its rows until the median, the shown line or the notes
+        at = next((i for i, ln in enumerate(lines) if i > top and re.match(r"^\s*Company\s{2,}\S", ln)), None)
+        if at is not None:
+            rows = 0
+            for ln in lines[at + 1:]:
+                if _TABLE_END.match(ln):
+                    break
+                cells = [c for c in re.split(r"\s{2,}", ln.strip()) if c]
+                if len(cells) >= 3 and len(_ROW_FIG.findall(" " + "  ".join(cells[1:]) + " ")) >= 2:
+                    rows += 1
+            if rows == 0:
+                add("empty table", n, f"{layer}: its table's heading and no company row")
+        so = _SHOWN_OF.search(flat)
+        nxt = flat_pages[n] if n < len(flat_pages) else ""
+        if so and _num(so.group(1)) < min(5, _num(so.group(2))) and not (layer in nxt[:300] and "(continued)" in nxt[:300]):      # (a notes page shows no row)
+            add("few rows", n, f"{layer}: {so.group(0)}")
+    for n, flat in enumerate(flat_pages, 1):
+        for m in _PE_SPLIT.finditer(flat):
+            if _num(m.group(1)) + _num(m.group(3)) > _num(m.group(2)):
+                add("pe partition", n, m.group(0))
+        for m in _IS_SELF.finditer(flat):
+            add("same name", n, m.group(0).strip(":;. "))
+        for m in _LIST_TWICE.finditer(flat):
+            add("same name", n, m.group(0).strip(":;. "))
+    # the appendix's P/E note against its rows: a profitable row with no P/E is no loss-maker
+    for n, page in enumerate(pages, 1):
+        if _APPENDIX not in page or "none for a loss-maker" not in flat_pages[n - 1]:
+            continue
+        right = None
+        for ln in page.split("\n"):
+            cells = [c for c in re.split(r"\s{2,}", ln.strip()) if c]
+            if "P/E" in cells and "Net" in cells:
+                right = cells[cells.index("Net"):]
+                continue
+            if not right or len(cells) < len(right) + 2 or _indent(ln) > 2:
+                continue
+            got = dict(zip(right, cells[-len(right):]))
+            net = _PCT.match(got.get("Net", "").replace("†", "").replace("‡", ""))
+            if net and _num(net.group(1).replace("−", "-")) > 0 and got.get("P/E") == "–":
+                add("loss-maker profit", n, f"{cells[0]}: net margin {got['Net']}, no P/E, under “none for a loss-maker”")
+    # one count of the companies whose membership was checked
+    seen: dict = {}
+    for n, flat in enumerate(flat_pages, 1):
+        for m in _CHECKED_N.finditer(flat):
+            a, b = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
+            seen.setdefault(_num(b), {}).setdefault(_num(a), n)
+    for b, by in seen.items():
+        if len(by) > 1:
+            (a1, p1), (a2, p2) = sorted(by.items(), key=lambda x: x[1])[:2]
+            add("checked counts", p2, f"membership checked {a2:g} of {b:g} (p.{p2}) against {a1:g} of {b:g} (p.{p1})")
+    # the cover's companies with figures against the appendix's
+    cover = None
+    if pages:
+        cl = pages[0].split("\n")
+        for i, ln in enumerate(cl):
+            x = ln.find("With figures")
+            if x < 0:
+                continue
+            for ln2 in cl[i + 1:i + 4]:
+                m = re.compile(r"\d[\d,]*").search(ln2, max(0, x - 4))
+                if m and m.start() <= x + 12:
+                    cover = (_num(m.group(0)), "core" in ln + " ".join(cl[i + 1:i + 6]))
+                    break
+            break
+    apx = next(((n, m) for n, f in enumerate(flat_pages, 1) for m in [_APX_WITH.search(f)] if m and _APPENDIX in f), None)
+    if cover and apx and cover[0] != _num(apx[1].group(1)) and not cover[1] and "core" not in (apx[1].group(2) or ""):
+        add("figures count", apx[0], f"cover “With figures {cover[0]:g}” against “{apx[1].group(0)}”")
+    if _NONE_SCREENED in whole and _REMOVED_BIZ.search(whole) and "removed by the membership re-check" not in whole:
+        n = next(i for i, f in enumerate(flat_pages, 1) if _NONE_SCREENED in f)
+        add("none screened", n, f"“{_NONE_SCREENED}” beside “{_REMOVED_BIZ.search(whole).group(0)[:100]}”")
+    # the change log: its day, the layers its reasons name, the layers it adds
+    dd = _DECK_DAY.search(whole)
+    for n, flat in enumerate(flat_pages, 1):
+        for m in _LOG_DAY.finditer(flat):
+            if dd and _day_key(m.group(1)) < _day_key(dd.group(1)) and not m.group(2):
+                add("carried log", n, f"a change log of {m.group(1)} in a deck of {dd.group(1)}, not said to be carried")
+        for m in _ADDED_LAYER.finditer(flat):
+            if _num(m.group(2)) < 3:
+                add("thin layer", n, m.group(0))
+    names = set()
+    for p in pages:
+        names |= {re.sub(r" \((?:continued|notes)\)$", "", m.group(1).strip()) for ln in p.split("\n") for m in [_LAYER_TOP.match(ln)] if m}
+    for f in flat_pages:
+        for m in _LAYER_SAID.finditer(f):
+            names |= {g for g in m.groups() if g}
+        for e in _EACH.finditer(f.replace(" Each layer ", " ")):
+            for cell in e.group(1).split(" · "):
+                lm = _LAYER_COUNT.match(cell.strip())
+                if lm:
+                    names.add(lm.group(1).strip())
+    names |= {re.sub(r" \((?:larger|smaller)\)$", "", x) for x in names}
+    for n, flat in enumerate(flat_pages, 1):
+        for m in _WORK_OF.finditer(flat):
+            q = re.sub(r" \((?:larger|smaller)\)$", "", m.group(1))
+            if names and q not in names and not any(x.startswith(q) for x in names):
+                add("reason layer", n, f"“{m.group(1)}”, a layer the deck has in none of its versions: {flat[max(0, m.start() - 100):m.end()]}"[:200])
+    # who is left out of a layer's calculations against the theme's largest company and the layer's own
+    values = _appendix_values(pages)
+    big = _LARGEST.search(whole)
+    big_key = _name_key(big.group(1)) if big else ()
+    for n, flat in enumerate(flat_pages, 1):
+        for m in _ROLL.finditer(flat):
+            ins = [_name_key(x) for x in _roll_names(m.group(3))]
+            out_part = m.group(5)
+            for item in _top_items(out_part):
+                kind = item.split(":", 1)[0]
+                for name in _roll_names(item):
+                    k = _name_key(name)
+                    if any(_same_co(k, i) for i in ins):
+                        add("duplicate member", n, f"{name}: in the layer's calculations and left out ({kind}) in one sentence")
+                        continue
+                    if kind.startswith(("another business", "insufficient evidence")) and _same_co(k, big_key):
+                        add("largest left out", n, f"{name}, the theme's largest company, left out: {kind}")
+                        continue
+                    if kind.startswith("insufficient evidence"):
+                        mine, theirs = _value_of(k, values), [v for v in (_value_of(i, values) for i in ins) if v is not None]
+                        if mine is not None and theirs and mine > max(theirs):
+                            add("largest left out", n, f"{name} (market value above every named company in the layer's calculations) left out: {kind}")
+    # two members whose names differ only in their legal form
+    rows: dict = {}
+    for n, page in enumerate(pages, 1):
+        if _APPENDIX not in page:
+            continue
+        for ln in page.split("\n"):
+            cells = [c for c in re.split(r"\s{2,}", ln.strip()) if c]
+            if len(cells) >= 4 and cells[0] != "Company" and _indent(ln) <= 2 and any(_mv(c) is not None for c in cells[1:4]):
+                rows.setdefault(_name_key(cells[0]), set()).add((cells[0], n))
+    for k, got in rows.items():
+        named = sorted({nm for nm, _ in got})
+        if k and len(named) > 1:
+            add("duplicate member", min(p for _, p in got), f"{' and '.join(named)}: one name but for its legal form, on two rows")
 
 
 def check_text(text: str) -> dict:

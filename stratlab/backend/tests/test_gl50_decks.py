@@ -264,7 +264,9 @@ def test_the_latest_quarter_is_the_newest_a_third_of_the_companies_report_not_th
     rows = [{"symbol": f"S{i}", "name": f"S{i}", "quarter": {"of": "Sep 2026 vs Sep 2025", "sales": 10.0, "profit": 5.0}} for i in range(90)] + \
            [{"symbol": f"O{i}", "name": f"O{i}", "quarter": {"of": "Oct 2026 vs Oct 2025", "sales": 12.0, "profit": 3.0}} for i in range(2)]
     q = D.quarter_section(rows)
-    assert q["quarter"] == "Sep 2026" and len(q["companies"]) == 90 and len(q["earlier"]) == 2
+    # y57 (R57, the audit of the live R56 Software and Cyber decks, SW-16, CYB-6): the median is still September's, and the two whose own fiscal
+    # quarter ends in October (within two months of it) are on their latest quarter, counted so, never "still on an earlier quarter" (updated on purpose)
+    assert q["quarter"] == "Sep 2026" and len(q["companies"]) == 92 and q["fiscal"] == 2 and len(q["earlier"]) == 0
     india = [{"symbol": f"J{i}", "name": "", "quarter": {"of": "Jun 2026", "sales": 1.0, "profit": 1.0}} for i in range(6)] + \
             [{"symbol": f"S{i}", "name": "", "quarter": {"of": "Sep 2026", "sales": 1.0, "profit": 1.0}} for i in range(4)]
     assert D.quarter_section(india)["quarter"] == "Sep 2026"          # results season: the newer quarter, once a third report it

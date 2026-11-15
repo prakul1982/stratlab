@@ -88,6 +88,23 @@ def stat(values) -> dict | None:
     return {"n": len(xs), "median": round(median(xs), 2), "min": round(min(xs), 2), "max": round(max(xs), 2)}
 
 
+PCT_MIN = 10                  # y57: a headline multiple's range is its 10th to 90th percentile from this many companies (its extremes apart)
+
+
+def stat_mid(values) -> dict | None:
+    """stat, with (y57, R57: the live R56 headlines' "P/E 2.3x to 960.0x", "EV/EBITDA 0.3x to 448.5x") the 10th and 90th percentiles ("p10",
+    "p90", linear between ranks) from PCT_MIN companies, so a headline range is not one company's extreme."""
+    xs = sorted(x for x in (num(v) for v in values) if x is not None)
+    s = stat(xs)
+    if s and len(xs) >= PCT_MIN:
+        def at(q):
+            k = (len(xs) - 1) * q
+            lo = int(k)
+            return round(xs[lo] + (xs[min(lo + 1, len(xs) - 1)] - xs[lo]) * (k - lo), 2)
+        s.update({"p10": at(0.10), "p90": at(0.90)})
+    return s
+
+
 def r1(v):
     return None if v is None else round(float(v), 1)
 
@@ -361,6 +378,7 @@ def capital_per_revenue(cap, pb, debt, de, sales) -> float | None:
 # (sign_reconcile, page_reconcile; a unit gap, a year's revenue jump and an EBITDA margin above 100% the same way), and its record says which
 # explanation the lines give, or that they don't reconcile.
 VERIFIED, UNVERIFIED, INVALID = "verified_extreme", "unverified_extreme", "invalid"
+GAIN_GAP = 25.0               # y57: points a covered net margin sits above the EBITDA margin from which it is a gain outside the business (‡)
 NET_UNUSUAL = 60.0            # a net margin beyond ±60% of revenue is reconciled before it is used (R44: never left out for that alone)
 EBITDA_UNUSUAL = 90.0         # an EBITDA margin above 90%, outside the models that earn fees or royalties with few costs (EBITDA_FREE)
 EBITDA_FREE = {"royalties", "financial_fees", "lending", "underwriting", "life_insurance", "general_insurance", "reinsurance", "property"}
@@ -408,7 +426,7 @@ def in_median(r: dict, key: str):
     """A row's figure as every median and ranking takes it (R44): None when its state is not reconciled (a net margin shown with † but
     left out) or invalid (already "–")."""
     rec = (r.get("verify") or {}).get(key)
-    if rec and rec.get("state") != VERIFIED or key == "net" and r.get("one_off"):      # (a row kept before R44 carries only its †)
+    if rec and rec.get("state") != VERIFIED or key == "net" and (r.get("one_off") or r.get("gain")):      # (a row kept before R44 carries only its †; y57: ‡)
         return None
     if key in DEVELOPER_KEYS and r.get("developer"):      # d53: a company spending ahead of its revenue, counted apart (verify_ebitda)
         return None
@@ -682,6 +700,7 @@ def verify_net(r: dict) -> None:
         return
     r.get("verify", {}).pop("net", None)
     r["one_off"] = False
+    r["gain"] = False
     net, fd = r.get("net"), r.get("filed") or {}
     if net is None:
         return
@@ -758,6 +777,13 @@ def verify_net(r: dict) -> None:
                                          "why": "; ".join(([base] if ok and base else []) + why), **(bits if "net_above_ebitda" in flags else {}),
                                          **({"sign": sg} if sg else {}), **({"sign_page": sp} if sp else {})}
     r["one_off"] = not ok                       # shown with †, out of every median (in_median)
+    # y57 (R57, the audit of the live R56 decks: Tata Motors PV's 151.3% net on a 4.5% EBITDA margin, Kiri's 662.7%, Raymond's 242.4%, each a
+    # demerger or stake gain the filed lines cover, kept unmarked in medians and ranges while a US deck's like case is marked † and left out): a
+    # net margin far above the EBITDA margin (GAIN_GAP points or more, or beyond ±NET_UNUSUAL%) that the year's lines cover is a gain outside
+    # the business: verified, marked (‡) and left out of the net margin's median and range as the † cases are, in every region; a smaller
+    # covered gap (recurring income outside operations, R44) stays in the median
+    r["gain"] = bool(ok and "net_above_ebitda" in flags and bits.get("bridge", {}).get("gap") is not None and bits["bridge"]["gap"] > 0
+                     and (net - (e or 0) >= GAIN_GAP or abs(net) > NET_UNUSUAL))
 
 
 def verify_ebitda(r: dict) -> None:
@@ -907,6 +933,7 @@ def figure_states(rows: list[dict]) -> list[dict]:
     lines with their values and unit, so a reader can work the figure out again. One list, so every page counts the same records."""
     return [{"symbol": r["symbol"], "name": r["name"], "key": k, "value": x["value"], "state": x["state"], "checks": list(x.get("checks") or []),
              "why": x.get("why") or "", **({"ebitda": r.get("ebitda"), "net": r.get("net")} if k == "net" else {}),
+             **({"gain": True} if k == "net" and r.get("gain") else {}),          # y57: verified, a gain outside the business, out of the net median
              **({"checked": x["checked"]} if x.get("checked") else {}),
              # R46: its source record: the document, period and page the year's figures come from, and the statement lines used, as stored
              "source": r.get("source"), "lines": source_lines(r.get("filed")), **({"bridge": x["bridge"]} if x.get("bridge") else {}),
@@ -2149,14 +2176,19 @@ def peer_moved(points: list[dict]) -> dict | None:
 def valuation_section(rows: list[dict], market: list[dict]) -> dict:
     """The theme's median P/E, P/B and EV/EBITDA, each over the companies that have one (a loss-maker has no P/E and is left out, and the
     count says so), beside companies of similar market value (peers_section) and the whole market's median."""
-    pe = stat(r["pe"] for r in rows if r.get("pe"))
+    pe = stat_mid(r["pe"] for r in rows if r.get("pe"))
     mkt = stat(m.get("pe") for m in market if m.get("pe") and 0 < m["pe"] <= stock_pages.PE_MAX)
-    pb = stat(r["pb"] for r in rows if r.get("pb") is not None and r["pb"] > 0)
+    pb = stat_mid(r["pb"] for r in rows if r.get("pb") is not None and r["pb"] > 0)
     mpb = stat(m.get("pb") for m in market if m.get("pb") and m["pb"] > 0)
-    ev = stat(r["ev_ebitda"] for r in rows)
-    losses = sum(1 for r in rows if r.get("profit") is not None and r["profit"] <= 0)
+    ev = stat_mid(r["ev_ebitda"] for r in rows)
+    # y57 (R57, the audit of the live R56 decks: Software "P/E of 78 of the 100 companies, 29 loss-makers with none", 107 of 100; Biotech's
+    # Gilead, 28.9% net, read as a loss-maker): one partition of the companies by P/E. A loss-maker is one with no P/E and a loss in its
+    # latest year; one with no P/E and a profit in it (a loss over the last four quarters, or no four quarters stored) is counted apart
+    no_pe = [r for r in rows if not r.get("pe")]
+    losses = sum(1 for r in no_pe if r.get("profit") is not None and r["profit"] <= 0)
     return {"pe": pe, "market_pe": mkt, "market_n": mkt["n"] if mkt else 0, "pb": pb, "market_pb": mpb, "ev_ebitda": ev,
             "ev_missing": sum(1 for r in rows if r.get("ev_ebitda") is None and not r.get("bank")), "losses": losses,
+            "no_pe_profit": len(no_pe) - losses,
             "peers": peers_section(rows, market, max((str(r["price_at"])[:10] for r in rows if r.get("price_at")), default=None)),
             "n": len(rows)}                 # the population every count here is of (R22: 11 with a P/E and 6 loss-makers of 15)
 
@@ -2209,6 +2241,9 @@ def quarter_end(label) -> date | None:
 QUARTER_SHARE = 1 / 3        # gl50: the share of the companies with a quarter that the median's quarter end needs
 
 
+FISCAL_DAYS = 62             # y57: a company's latest quarter ending within this many days of the median's quarter is its latest (fiscal)
+
+
 def quarter_section(rows: list[dict], filed: list[dict] | None = None) -> dict:
     """The latest reported quarter of each company against the same quarter a year before (revenue and net profit change), as the company page's
     "Latest YoY" gives it, with how many are up and down. One quarter per median (the owner, 7 Nov: June and September mixed in one median): the
@@ -2223,7 +2258,12 @@ def quarter_section(rows: list[dict], filed: list[dict] | None = None) -> dict:
     # end at least QUARTER_SHARE of the companies with one report, and MIN_LAYER; else the one most of them report
     usual = max((d for d, k in ends.items() if k >= MIN_LAYER and k >= QUARTER_SHARE * len(have)), default=None) or \
         (max(ends, key=lambda d: (ends[d], d)) if ends else None)
-    cur = [r for r in have if quarter_end(r["quarter"]["of"]) == usual] if usual else have
+    # y57 (R57, the audit of the live R56 decks, SW-16, CYB-6: Oracle, Salesforce, Palo Alto and 33 more "still on an earlier quarter", each on
+    # its own latest fiscal quarter ending in August or October): a quarter ending within FISCAL_DAYS of the median's is the company's latest
+    # (fiscal), in the median and counted so, never "earlier"
+    near = lambda d: bool(d and usual and abs((d - usual).days) <= FISCAL_DAYS)        # noqa: E731
+    cur = [r for r in have if quarter_end(r["quarter"]["of"]) == usual or near(quarter_end(r["quarter"]["of"]))] if usual else have
+    fiscal = sum(1 for r in cur if usual and quarter_end(r["quarter"]["of"]) != usual)
     late = {f["symbol"]: f["date"] for f in filed or [] if f.get("date")}
     earlier = []
     for r in have:
@@ -2234,7 +2274,7 @@ def quarter_section(rows: list[dict], filed: list[dict] | None = None) -> dict:
         earlier.append({"symbol": r["symbol"], "name": r["name"], "of": r["quarter"]["of"], "sales": r["quarter"]["sales"], "profit": r["quarter"]["profit"],
                         "filed_unread": newer if newer and end and str(newer) > end.isoformat() else None})
     return {"companies": [{"symbol": r["symbol"], "name": r["name"], "of": r["quarter"]["of"], "sales": r["quarter"]["sales"], "profit": r["quarter"]["profit"]} for r in cur],
-            "quarter": usual.strftime("%b %Y") if usual else None, "earlier": earlier,
+            "quarter": usual.strftime("%b %Y") if usual else None, "earlier": earlier, "fiscal": fiscal,
             "sales_up": sum(1 for r in cur if (r["quarter"]["sales"] or 0) > 0), "sales_down": sum(1 for r in cur if (r["quarter"]["sales"] or 0) < 0),
             "profit_up": sum(1 for r in cur if (r["quarter"]["profit"] or 0) > 0), "profit_down": sum(1 for r in cur if (r["quarter"]["profit"] or 0) < 0),
             "sales": stat(r["quarter"]["sales"] for r in cur), "profit": stat(r["quarter"]["profit"] for r in cur)}
@@ -3313,7 +3353,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     subs = []
     for s in checked.get("sub_themes") or []:
         cos = []
-        for c in sub_members(s, checked.get("value_chain") or [], src.about):
+        for c in sub_picked(s, checked.get("value_chain") or [], src.about):
             r = rows.get(c["ticker"])
             if r:
                 cos.append({"symbol": r["symbol"], "name": r["name"], "what": own_words(c.get("what"), r["name"] or "", r["symbol"]) or None, "cap": r["cap"], "sales_1y": r["sales_1y"], "ebitda": r["ebitda"], "ebitda_dp": r.get("ebitda_dp"),
@@ -3741,6 +3781,60 @@ def _names_word(word: str, text: str, wide: bool) -> bool:
         return False
     same, wider, narrower = SUB_ALSO[word]
     return bool(re.search(same, live)) or bool(re.search(wider, live) and not re.search(narrower, live))
+
+
+SUB_NAME_GENERIC = {"inc", "corp", "corporation", "ltd", "limited", "plc", "holdings", "holding", "group", "company", "international", "industries",
+                    "therapeutics", "pharmaceuticals", "pharma", "technologies", "technology", "systems", "global", "india", "the", "and", "of",
+                    "services", "solutions", "enterprises", "co", "sciences", "bank", "financial", "energy", "power", "health"}
+
+
+def _name_marks(name: str) -> list[str]:
+    """The words a text would name a company by ("Eli Lilly & Co" -> "Eli Lilly", "Lilly"; "Novo Nordisk A/S" -> "Novo Nordisk", "Novo")."""
+    words = [w for w in re.findall(r"[A-Z][A-Za-z'’.-]+", str(name or "")) if w.lower().strip(".") not in SUB_NAME_GENERIC]
+    if not words:
+        return []
+    out = [" ".join(words[:2])] if len(words) >= 2 else []
+    out += [w for w in words[:2] if len(w) >= 4]
+    return list(dict.fromkeys(out))
+
+
+def _has_words(c: dict, about_of) -> bool:
+    """Whether a company has a description of its own stored (its line, or its whole stored description)."""
+    if str(c.get("what") or "").strip(" ."):
+        return True
+    if about_of is None:
+        return False
+    try:
+        return bool(str(about_of(c.get("ticker")) or "").strip(" ."))
+    except Exception:
+        return False
+
+
+def sub_picked(sub: dict, layers: list, about_of=None) -> list:
+    """y57 (R57, the audit of the live R56 decks, RC11: a sub-theme company with no description under "shown only where its own description
+    says it does that work"; "Metabolic and obesity drugs" with Viking alone while its text names two members; "Regional and mid-sized
+    hospital operators" listing 1 of its layer's 26): the sub-theme's companies (sub_members), then every member of the one layer whose name
+    the sub-theme's name maps to (two of its distinguishing words, or all of them, and no other layer as close), then each member its own text
+    names; only companies with a description of their own stored are listed, so the page's footnote holds."""
+    got = list(sub_members(sub, layers, about_of))
+    have = {c.get("ticker") for c in got}
+    words = {w for w in re.findall(r"[a-z]+", str(sub.get("name") or "").lower()) if w not in SUB_GENERIC and len(w) > 2}
+    if words:
+        scored = sorted(((len(words & {w for w in re.findall(r"[a-z]+", str(v.get("layer") or "").lower())}), i) for i, v in enumerate(layers)
+                         if not v.get("official")), reverse=True)
+        if scored and scored[0][0] >= min(2, len(words)) and (len(scored) == 1 or scored[1][0] < scored[0][0]):
+            for c in layers[scored[0][1]].get("companies") or []:
+                if c.get("ticker") not in have:
+                    got.append(c)
+                    have.add(c.get("ticker"))
+    text = str(sub.get("detail") or "")
+    if text:
+        for v in layers:
+            for c in v.get("companies") or []:
+                if c.get("ticker") not in have and any(re.search(rf"(?<![\w-]){re.escape(m)}(?![\w-])", text) for m in _name_marks(c.get("name"))):
+                    got.append(c)
+                    have.add(c.get("ticker"))
+    return [c for c in got if _has_words(c, about_of)]
 
 
 def sub_members(sub: dict, layers: list, about_of=None) -> list:
