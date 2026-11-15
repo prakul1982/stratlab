@@ -943,18 +943,68 @@ def one_off(ebitda, net) -> bool:
 MAIN_SEGMENT = 66.0           # a company whose largest business segment brings in less than this share of revenue runs several businesses
 
 
-def is_diversified(row: dict, segments: list | None = None) -> bool:
+SECOND_BUSINESS = 20.0        # x57: the share of revenue a second business must bring in for a company's figures to be the whole company's
+# x57 (R57, the audit of the 24 live R56 decks, RC5 c: Sun Pharma, whose reported segments are its formulations by market, US, India,
+# emerging markets and rest of world, flagged "whole company: it runs other businesses too" and dropped from the medians): the words of a
+# segment's name that say where it sells, never what business it is
+_GEO_WORDS = re.compile(r"\b(?:u\.?s\.?a?|united states|north america[n]?|americas?|india[n]?|domestic|international|overseas|exports?|europe(?:an)?|emea|"
+                        r"apac|asia(?:[- ]pacific)?|emerging markets?|rest of (?:the )?world|row|global|japan|china|latam|latin america|middle east|"
+                        r"africa|uk|germany|branded|generics?|others?|and|&)\b", re.I)
+
+
+def segment_business(name) -> str:
+    """x57: a reported segment's business, the words of where it sells left out ("US Formulations" and "India Formulations" are one business,
+    "formulations"); "" when its name says only where (a segment by geography)."""
+    return " ".join(sorted(_stems(_GEO_WORDS.sub(" ", str(name or "")))))
+
+
+def business_shares(segments: list | None) -> list[float]:
+    """x57: the shares of revenue of a company's businesses, largest first, from its reported segments with shares: segments of one business
+    sold in different places summed as one; a segment by geography alone counted with the largest business."""
+    by: dict = {}
+    for i, x in enumerate(segments or []):
+        if not isinstance(x, dict):
+            continue
+        sh = num(x.get("share_pct"))
+        if sh is None or sh <= 0:
+            continue
+        k = segment_business(x.get("name")) if str(x.get("name") or "").strip() else f"#{i}"      # a segment with no name: a business of its own
+        by[k] = by.get(k, 0.0) + sh
+    geo = by.pop("", 0.0)
+    out = sorted(by.values(), reverse=True)
+    if out:
+        out[0] += geo
+    elif geo:
+        out = [geo]
+    return out
+
+
+def is_diversified(row: dict, segments: list | None = None, words: set | None = None, about: str | None = None) -> bool:
     """Whether a company's figures are the whole company's, not one layer's, from its own data: the segments its documents report (no one
     segment brings in MAIN_SEGMENT% of revenue), else the exchange filing it as diversified or a conglomerate. Only a company with no segments
     read falls back to the groups known to run several businesses (DIVERSIFIED). A company placed in two layers is not diversified for that:
-    it is kept in its first layer only (one layer per company)."""
-    ind = " ".join(row.get("industry") or []).lower()
-    if "diversified" in ind or "conglomerate" in ind:
+    it is kept in its first layer only (one layer per company).
+    x57 (R57, RC5 c): reported segments are read as businesses (business_shares: one business sold in several markets is one), and the
+    figures are the whole company's only when a second business brings in SECOND_BUSINESS% or more; an official industry "Diversified <the
+    theme's own business>" (Hindustan Unilever's "Diversified FMCG" in an FMCG theme; `words`, the theme's words) is no other business by
+    itself: only its own words naming the other businesses it runs (theme_check.SECONDARY) or the segments make it one."""
+    parts = [str(x) for x in row.get("industry") or []]
+    ind = " ".join(parts).lower()
+    shares = business_shares(segments)
+    if "conglomerate" in ind:
         return True
-    shares = [num(x.get("share_pct")) for x in segments or [] if isinstance(x, dict)]
-    shares = [x for x in shares if x is not None and x > 0]
+    if "diversified" in ind:
+        own_kind = bool(words) and any(re.match(r"\s*diversified\s+(\S.*)$", p_, re.I) and does_the_work(re.match(r"\s*diversified\s+(\S.*)$", p_, re.I).group(1), words)
+                                       for p_ in parts)
+        if not own_kind:
+            return True
+        from .theme_check import SECONDARY
+        if about and SECONDARY.search(str(about)):
+            return True
     if len(shares) >= 2:
-        return max(shares) < MAIN_SEGMENT
+        return shares[0] < MAIN_SEGMENT and shares[1] >= SECOND_BUSINESS
+    if len(shares) == 1 and len([x for x in segments or [] if isinstance(x, dict) and num(x.get("share_pct"))]) >= 2:
+        return False                     # x57: several segments, one business
     return row["symbol"] in DIVERSIFIED
 
 
@@ -982,7 +1032,10 @@ def model_fields(layer: dict, sym: str) -> dict:
         if c.get("model_out") else {}
     return {"model": c.get("model") or "", "model_tags": list(c.get("model_tags") or []), "model_confidence": c.get("model_confidence") or "",
             **({"model_out": c.get("model_out")} if c.get("model_out") else {}), **({"on_industry": True} if c.get("on_industry") else {}),
-            **({"own_goods": True} if c.get("own_goods") else {}), **({"by_words": True} if c.get("by_words") else {}), **out}
+            **({"own_goods": True} if c.get("own_goods") else {}), **({"by_words": True} if c.get("by_words") else {}),
+            **({"read_low": True} if c.get("read_low") and not c.get("model_out") else {}),
+            **{k: True for k in ("read_agrees", "no_read") if c.get(k) and c.get("by_words") and not c.get("model_out")},
+            **({"also_earns": list(c["also_earns"])} if c.get("also_earns") and not c.get("model_out") else {}), **out}
 
 
 def refit_of(layer: dict, sym: str) -> dict:
@@ -1205,6 +1258,27 @@ def consolidated_in(r: dict, rows: list[dict]) -> bool:
     return bool(p) and any(x.get("symbol") == p.get("parent") for x in rows)
 
 
+def holding_across(rows: dict, parents: dict, layer_of: dict, wide: set, theme: str) -> None:
+    """x57 (R57, the audit of the 24 live R56 decks, RC10: Grasim, whole company, holding 56% of UltraTech, in "Regional integrated
+    producers (larger)" with its consolidated revenue, UltraTech's and India Cements' inside it, while UltraTech and India Cements are counted
+    again in their own layers; the deck's rule that a subsidiary's revenue is left out of every total adding the parent's was kept within one
+    layer only): across layers, (a) a parent whose listed subsidiary is a member in another layer carries that subsidiary's revenue
+    ("holds_elsewhere"), taken out of the parent's layer's revenue total, so no revenue is added twice in the deck; (b) one whose figures are
+    the whole company's (it runs other businesses too) is an adjacent participant, a holding company of a member: shown, in no core figure."""
+    for sub, p in parents.items():
+        par = p.get("parent")
+        if par not in rows or sub not in rows or layer_of.get(sub) == layer_of.get(par):
+            continue
+        r_sub = rows[sub]
+        if r_sub.get("status") == "unverified" or not r_sub.get("revenue"):
+            continue
+        rows[par].setdefault("holds_elsewhere", []).append({"symbol": sub, "name": r_sub.get("name") or sub, "pct": p.get("pct"),
+                                                            "revenue": r_sub["revenue"], "layer": layer_of.get(sub) or ""})
+        if par in wide and not rows[par].get("adjacent"):
+            rows[par]["adjacent"] = {"kind": "holding companies of other members", "theme": f"own business ({theme})", "where": "holding",
+                                     "text": f"holds {p.get('pct'):g}% of {r_sub.get('name') or sub}, a member of the theme, and its figures are the whole company's"}
+
+
 def layer_block(name: str, rows: list[dict], wide: set[str]) -> dict:
     """A layer's table and its median and range for each figure. A company-wide figure (a group that runs other businesses too) is
     marked and left out of the median when the layer has any company that is its own; the layer says how many were left out. A company
@@ -1227,9 +1301,13 @@ def layer_block(name: str, rows: list[dict], wide: set[str]) -> dict:
             "net_all": stat(r.get("net") for r in pool if not r.get("developer")), "one_off": sorted(r["symbol"] for r in pool if r.get("one_off")),
             # gl50: a listed subsidiary whose parent is in the layer's calculations too is left out of its revenue total (the parent's
             # figures consolidate it), and named ("double")
-            "revenue": sum(r["revenue"] for r in sure if r.get("revenue") and not consolidated_in(r, sure)) or None,
+            # x57 (RC10 a): a parent's subsidiary counted in another layer is taken out of the parent's consolidated revenue here
+            "revenue": max(0.0, sum(r["revenue"] - sum(x.get("revenue") or 0 for x in r.get("holds_elsewhere") or [])
+                                    for r in sure if r.get("revenue") and not consolidated_in(r, sure))) or None,
             "double": [{"symbol": r["symbol"], "name": r["name"], "parent": r["parent"]["parent_name"], "pct": r["parent"]["pct"], "revenue": r["revenue"]}
                        for r in sure if r.get("revenue") and consolidated_in(r, sure)],
+            "double_elsewhere": [{**x, "parent": r["name"]} for r in sure if r.get("revenue") and not consolidated_in(r, sure)
+                                 for x in r.get("holds_elsewhere") or []],
             "company_wide": sorted(r["symbol"] for r in sure if r["symbol"] in wide),
             "unverified": sorted(r["symbol"] for r in rows if r.get("status") == "unverified"),
             "model_out": sorted(r["symbol"] for r in rows if r.get("model_out") and r.get("status") != "unverified"),
@@ -2880,7 +2958,22 @@ BUSINESS_KINDS = (("hospitals and care providers", r"\bhospitals?\b|\bclinics?\b
                    r"x-ray apparatus|equipment & supplies"),
                   ("drug developers and makers", r"pharmaceutic|biopharma|\bdrugs?\b|therapeutics|biological products|biotechnolog|medicines?\b"),
                   ("contract research and life-science services", r"contract research|\bcros?\b|\bcdmos?\b|contract development and manufactur|"
-                   r"life[- ]science services|research, analytics|clinical trial services"))
+                   r"life[- ]science services|research, analytics|clinical trial services"),
+                  # x57 (R57, the audit of the 24 live R56 decks, RC5 d: 59 of the Utilities deck's 99 companies with figures, its power
+                  # equipment, transformer and cable makers, counted as its core members): suppliers of a utility's equipment take part in
+                  # its theme as an adjacent kind of business
+                  ("power, gas and water utilities", r"power generation|power - transmission|power transmission|power distribution|"
+                   r"integrated power utilit|power trading|gas transmission|gas distribution|city gas|lpg/cng|\bwater (?:supply|utilit)|"
+                   r"electric (?:utilit|services)|services-electric|\butilit(?:y|ies)\b|cogeneration"),
+                  ("electrical equipment and cable makers", r"\bcables?\b|\bwires?\b|heavy electrical|electrical equipment|\btransformers?\b|"
+                   r"switchgear|current-carrying wiring|electric(?:al)? (?:lighting|wiring) equipment"))
+# x57 (RC5 a: the Medical devices deck's "hospitals and care providers 24 (HCA Healthcare, Natera, Labcorp, Quest Diagnostics ...)"): a
+# laboratory is told apart from a hospital in the name an adjacent participant is said by, while the two stay one kind of business (a
+# Hospitals theme keeps its diagnostic chains as core members)
+LAB_KIND = ("diagnostic and testing laboratories", r"medical laborator|clinical laborator|laboratory services|testing laborator|"
+            r"diagnostic (?:labs?|laborator|centres?|centers?|chains?|services|tests?)|pathology|genetic (?:tests?|testing)|"
+            r"services-medical laboratories")
+_HOSPITAL_WORDS = r"\bhospitals?\b|\bclinics?\b|nursing (?:home|facilit)|surgery cent|rehabilitation|\bpatient care\b|services-hospitals"
 
 
 def business_kind(text) -> str:
@@ -2911,7 +3004,8 @@ def company_kind(c: dict, about: str | None = None, segments=None) -> tuple[str,
 
 
 ADJACENT_WHERE = {"industry": "its official industry", "segment": "its largest reported segment",
-                  "description": "the first sentence of its description that says what it does now"}
+                  "description": "the first sentence of its description that says what it does now",
+                  "holding": "its listed subsidiary's stored shareholding filing"}
 
 
 def adjacent_of(c: dict, kind: str, about: str | None = None, segments=None) -> dict | None:
@@ -2921,6 +3015,8 @@ def adjacent_of(c: dict, kind: str, about: str | None = None, segments=None) -> 
     k, where, text = company_kind(c, about, segments)
     if not k or k == kind:
         return None
+    if k == BUSINESS_KINDS[0][0] and re.search(LAB_KIND[1], text, re.I) and not re.search(_HOSPITAL_WORDS, text, re.I):
+        k = LAB_KIND[0]                  # x57: said as the laboratory it is, never a hospital
     return {"kind": k, "theme": kind, "where": where, "text": text[:120]}
 
 
@@ -2933,7 +3029,7 @@ def adjacent_of(c: dict, kind: str, about: str | None = None, segments=None) -> 
 SCOPE_KINDS = (
     ("lenders and financiers",
      r"\bnbfc\b|non[- ]banking financial|personal credit|consumer financ|commercial banks?|savings institution|housing financ|micro ?financ|"
-     r"\bbanks?\b|credit institution|lending|federal savings",
+     r"\bbanks?\b|credit institution|lending|federal savings|financial institution|infrastructure financ",
      r"finance services|financial services|other financial|investment company|diversified financ",
      r"\blend(?:s|ing|ers?)\b|\bloans?\b|credit cards?|card issuer|bank holding|consumer financ|\bbank(?:ing)?\b|deposits|instal?lment loans?",
      r"\bbank|lend|loan|credit|financ|nbfc", ("lending",)),
@@ -2973,11 +3069,26 @@ def scope_adjacent(c: dict, theme: str, sector: str = "", about: str | None = No
         if not text and about:          # a description whose sentences are an encyclopedia's: its opening still says what the company is
             where, text = "description", " ".join(str(about).split())[:300]
         shown = (_one_line(about) or text) if where == "description" and about else text      # its own line, as the deck shows it
-        if ind and broad_rx and re.search(broad_rx, ind, re.I) and text and re.search(says_rx, text, re.I):
+        # x57 (R57, RC5 a: American Express, "a bank holding company ... that specializes in payment cards" whose own words name its
+        # "card-issuing, merchant-acquiring and card network businesses", made an adjacent lender in the Payments theme on its official
+        # industry, "Finance Services"): a company of a broad industry whose own words state a way of earning the theme's own name says
+        # (theme_way) does the theme's work as its principal business, whatever else the kind's words say of it
+        if ind and broad_rx and re.search(broad_rx, ind, re.I) and text and re.search(says_rx, text, re.I) and not theme_way(about, theme):
             return {**said, "where": where, "text": shown[:120]}
-        if model in models and confidence in ("high", "medium") and text and re.search(says_rx, text, re.I):
+        if model in models and confidence in ("high", "medium") and text and re.search(says_rx, text, re.I) and not theme_way(about, theme):
             return {**said, "where": where, "text": shown[:120]}
     return None
+
+
+def theme_way(about, theme: str) -> bool:
+    """x57: whether a company's own words state a way of earning (theme_check.words_models) whose name or what it earns from shares a word with
+    the theme's own name ("payment cards ... card network" names the payments way, "Payment networks and processors", of "Payments and
+    fintech")."""
+    from .theme_check import MODELS, words_models
+    if not about:
+        return False
+    name = _stems(theme)
+    return any(_stems(f"{MODELS[m_][1]} {MODELS[m_][2]}") & name for m_ in words_models(about) if m_ in MODELS)
 
 
 def _one_line(about) -> str:
@@ -2986,8 +3097,11 @@ def _one_line(about) -> str:
 
 
 def adjacent_said(a: dict) -> str:
-    return (f"an adjacent participant: its principal business ({ADJACENT_WHERE.get(a.get('where'), 'its official industry')}, "
-            f"“{a.get('text')}”) is of {a.get('kind')}, not of the theme's {a.get('theme')}")
+    # x57 (R57, RC5 b): its place in the theme said apart from its statistics decision ("in the theme as <its business>; not in core
+    # statistics because <reason>")
+    return (f"in the theme as an adjacent participant ({a.get('kind')}); not in its core statistics because its principal business "
+            f"({ADJACENT_WHERE.get(a.get('where'), 'its official industry')}, “{a.get('text')}”) is of {a.get('kind')}, not of the theme's "
+            f"{a.get('theme')}")
 
 
 SAME_SAID = " Its companies earn the same way as those of "
@@ -3056,6 +3170,19 @@ def theme_record(c: dict, status: str, about: str | None = None) -> dict:
     return {"in": status != "unverified", "status": status, "by": by, "why": why}
 
 
+def also_said(r: dict) -> str:
+    """x57 (R57, the audit of the 24 live R56 decks, RC4 c): what a company in its layer's figures by its words also earns from: "; it also
+    earns from <the ways its words name beside the layer's>" when its words name others, "; one reportable segment is stored and its words
+    name no other way of earning" only when its stored segments show one; "" otherwise (nothing is said of other ways)."""
+    from .theme_check import MODELS
+    also = [m_ for m_ in r.get("also_earns") or [] if m_ in MODELS]
+    if also:
+        return "; its words name the layer's business, and it also earns from " + " and ".join(MODELS[m_][2] for m_ in also)
+    if r.get("segments_n") == 1:
+        return "; one reportable segment is stored and its words name no other way of earning"
+    return ""
+
+
 def comparison_said(rec: dict, b: dict) -> str:
     """c1 (R44, ask 3): a company's comparison decision as one sentence, from its kept record (calc_record) and its layer: in its layer's
     figures or not and why, and whether those figures are compared with other layers' (the "Other" group never is, nor a half of a layer by
@@ -3079,9 +3206,14 @@ def comparison_said(rec: dict, b: dict) -> str:
         # gl50 (R50, the live Capital goods deck said "how it earns shown and of the layer's kind" of every company beside "no way of earning
         # read for these companies"): with no way of earning read, nothing is said of the layer's kind, and the layer is never ranked
         return "in its layer's figures: confirmed, with a figure; how its layer's companies earn is not read, so the layer is shown, not ranked"
-    if rec.get("by_words"):             # ex49 (R48, G3): the map's pick, its own words say the layer's name and no other way of earning
-        return ("in its layer's figures: confirmed, with a figure; the map placed it here and its own words say the layer's name and no other "
-                "way of earning; only the AI's read gave it another")
+    if rec.get("by_words"):             # ex49 (R48, G3): the map's pick, its own words say the layer's name
+        # x57 (R57, RC4 c: Fiserv, J&J, Merck, L&T and Fortinet "(on its words) ... no other way of earning", each with other businesses):
+        # "no other way of earning" only on one reportable segment stored; another way its words name is said as what it also earns from
+        return ("in its layer's figures: confirmed, with a figure; the map placed it here and its own words say the layer's name"
+                + ("" if rec.get("read_agrees") or rec.get("no_read") else "; only the AI's read gave it another way of earning") + also_said(rec))
+    if rec.get("read_low"):             # x57 (RC4): the read of how it earns, at low confidence, agrees with the layer it was placed in
+        return ("in its layer's figures: confirmed, with a figure; how it earns is read at low confidence as the layer's way, and the "
+                "sentences of its own words on its principal business name no other" + also_said(rec))
     if rec.get("own_goods"):            # ex49 (R48): read as a retailer of them, its own words say it designs the goods it sells
         return ("in its layer's figures: confirmed, with a figure; read as a retailer, its own words say it designs the goods it sells, "
                 "so it sells products of its own, as the layer's companies do")
@@ -3195,6 +3327,9 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
                 where, said = principal_business(c, src.about(s), seg_list(s))
                 rows[s]["theme"]["why"] += (f"; its own words name other work, but its principal business ({PRINCIPAL_WORDS[where]}"
                                             + (f", “{said}”" if where == "segment" else "") + ") fits the theme, so it stays in the theme")
+            segs_ = seg_list(s)
+            if isinstance(segs_, list):        # x57 (RC4 c): how many reportable segments are stored ("no other way of earning" only on one)
+                rows[s]["segments_n"] = len([x for x in segs_ if (isinstance(x, dict) and x.get("name")) or (isinstance(x, str) and x.strip())])
             rows[s]["map_industry"] = c.get("industry") or ""          # the exchange's (or the SEC's) industry the map gives (R27: metric_registry)
             rows[s]["map_what"] = c.get("what") or ""                  # what the map says the company does (an insurer's type: metric_registry)
             if c.get("unread"):        # d1: in "Other" because nothing it says was read yet (theme_base.place_rest), not because it fits no layer
@@ -3244,13 +3379,14 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
             pending.append(s)
             pending_fam[s] = fam
         sector_metrics.apply(r, piece)
-    wide = {s for s, r in rows.items() if is_diversified(r, segs(s))}
+    wide = {s for s, r in rows.items() if is_diversified(r, segs(s), words, src.about(s))}
     names = {s: r["name"] for s, r in rows.items()}
     market = [m for m in (src.index_rows() or []) if isinstance(m, dict)]
     # gl50: each listed subsidiary of another company of the theme, from the stored shareholding filings (parents_of)
     parents = parents_of(sorted(s for s, r in rows.items() if r.get("status") != "unverified"), names, src)
     for s, p in parents.items():
         rows[s]["parent"] = p
+    holding_across(rows, parents, first, wide, theme)
 
     blocks, histories = [], {}
     # R32: a split by market value one of whose halves shows no company is undone (theme_base.unsplit_unshown)
@@ -3301,7 +3437,8 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     for b in blocks:                        # c1: each company's comparison decision, said with its reason beside the in-theme one
         for r in b["companies"]:
             if isinstance(r.get("calc"), dict):
-                r["comparison"] = comparison_said({**calc_of(r), **({k: True for k in ("own_goods", "by_words") if r.get(k)})}, b)
+                r["comparison"] = comparison_said({**calc_of(r), **({k: True for k in ("own_goods", "by_words", "read_low", "read_agrees", "no_read") if r.get(k)}),
+                                                   **{k: r[k] for k in ("also_earns", "segments_n") if r.get(k)}}, b)
     chain = chain_table(blocks)
     counted = [r for b in blocks for r in b["companies"] if r.get("status") != "unverified"]
     pool = [r for r in counted if not r["company_wide"]] or counted
