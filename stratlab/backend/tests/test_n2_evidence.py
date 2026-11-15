@@ -93,7 +93,9 @@ def test_a_full_article_that_says_nothing_of_the_business_gets_the_annual_report
     monkeypatch.setattr(TR, "_business_read", lambda sym: reads.append(sym) or UMC_20F)
     assert len(UMC_WIKI.split()) >= TR.ABOUT_WORDS and not TR.says_work(UMC_WIKI) and TR.says_work(UMC_20F)
     got, _ = TR.evidence_reader("US", {"UMC": "United Microelectronics Corp"})(["UMC"])
-    assert reads == ["UMC"] and got["UMC"]["about"].endswith(UMC_20F) and got["UMC"]["about"].startswith("United Microelectronics")
+    # e57 (R57, updated on purpose): a US company's own annual report is read first, the article beside it only when the report's opening is
+    # thin (this one, 19 words), so its own words lead
+    assert reads == ["UMC"] and got["UMC"]["about"].startswith(UMC_20F) and got["UMC"]["about"].endswith(UMC_WIKI)
     # stored in the old format, it is read once more; in this format it keeps its time
     assert TR.ABOUT_V == 5 and TR.thin_about({"at": "2026-11-01T00:00:00+00:00", "about": UMC_WIKI, "v": 3}, "US")
     assert not TR.thin_about({"at": "2026-11-01T00:00:00+00:00", "about": UMC_WIKI, "v": TR.ABOUT_V}, "US")

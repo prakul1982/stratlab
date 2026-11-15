@@ -145,7 +145,8 @@ def test_a_us_company_whose_words_are_only_an_encyclopedias_opening_gets_its_ann
     reads = []
     monkeypatch.setattr(TR, "_business_read", lambda sym: reads.append(sym) or VISA_10K)
     got, _ = TR.evidence_reader("US", {"V": "Visa Inc."})(["V"])
-    assert reads == ["V"] and got["V"]["about"].endswith(VISA_10K)
+    # e57 (R57, updated on purpose): the annual report is read first for every US company, the article beside its thin opening
+    assert reads == ["V"] and got["V"]["about"].startswith(VISA_10K) and got["V"]["about"].endswith(VISA)
     assert B.own_words(B.own_line(got["V"]["about"], "Visa Inc."), "Visa Inc.").startswith("We are a global payments technology company")
     # a stored description in the old format with no sentence of its own is read once more
     now = datetime.now(timezone.utc).isoformat()

@@ -183,7 +183,10 @@ def test_a_full_article_needs_no_annual_report_and_a_wrong_article_is_replaced_b
     reads = []
     monkeypatch.setattr(TR, "_business_read", lambda sym: reads.append(sym) or "We are a leader in the design and manufacturing of fluid delivery subsystems for semiconductor capital equipment.")
     got, _ = TR.evidence_reader("US", {"MRVL": "Marvell Technology, Inc.", "ICHR": "Ichor Holdings, Ltd."})(["MRVL", "ICHR"])
-    assert got["MRVL"]["about"] == C.clean_description(full) and reads == ["ICHR"]
+    # e57 (R57, updated on purpose): every US company's own annual report is read first (the report's opening here is 18 words, so the
+    # article that fits the company is added beside it); a wrong article is still never kept
+    assert sorted(reads) == ["ICHR", "MRVL"]
+    assert got["MRVL"]["about"].startswith("We are a leader") and got["MRVL"]["about"].endswith(C.clean_description(full)[-60:])
     assert got["ICHR"]["about"].startswith("We are a leader in the design and manufacturing of fluid delivery subsystems") and "mythology" not in got["ICHR"]["about"]
 
 
@@ -202,9 +205,10 @@ def test_annual_reports_are_read_a_few_a_minute_and_the_rest_are_owed_never_a_bu
     _hub(monkeypatch)
     reads = []
     monkeypatch.setattr(TR, "_business_read", lambda sym: reads.append(sym) or f"{sym} Corp is a maker of power chips for cars and factories, sold to makers of vehicles in thirty countries.")
-    syms = [f"S{i:02d}" for i in range(20)]
+    # e57 (R57, updated on purpose): FILING_READS_PER_MINUTE is 30 (was DESCRIBE_READS, 6), so 40 companies are asked to see the rest owed
+    syms = [f"S{i:02d}" for i in range(40)]
     got, pending = TR.evidence_reader("US", {})(syms)
-    assert len(reads) == TR.FILING_READS_PER_MINUTE == TR.DESCRIBE_READS and not pending
+    assert len(reads) == TR.FILING_READS_PER_MINUTE == 30 and not pending
     owed = [s for s in syms if json.loads(store[f"theme:evidence:US:{s}"]).get("owed")]
     assert len(owed) == len(syms) - TR.FILING_READS_PER_MINUTE and set(owed) == set(syms) - set(reads)
     assert all(TR.thin_about(json.loads(store[f"theme:evidence:US:{s}"]), "US") for s in owed)

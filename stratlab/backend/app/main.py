@@ -4668,6 +4668,14 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
             exchange, red = "Listed in the US", None
         else:
             p = with_industry(sym, research_hub.screener.company(co["bse"] or sym))
+            if (p or {}).get("about"):
+                # e57 (R57): the company's own profile, just read for its page, kept as its description for every theme (theme_routes.
+                # keep_profile), so a theme's check never reads the same page again and its membership rests on these words, not its label
+                try:
+                    from .intel import theme_routes as _theme_routes
+                    _theme_routes.keep_profile("IN", sym, p["about"], " > ".join(str(x) for x in p.get("industry_path") or []))
+                except Exception as e:
+                    print("stock pages: profile not kept for themes:", sym, type(e).__name__, str(e)[:100])
             try:
                 p = research_hub.screener.with_cash(p)       # cash on hand, for a theme's enterprise value (left as it is when the breakdown is busy)
             except Exception:
