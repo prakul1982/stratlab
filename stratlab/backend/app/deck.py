@@ -7246,6 +7246,7 @@ def _layer_profile_slides(slides: list, v: dict, amt, eyebrow: str) -> None:
               if with_ops else "; no layer's companies fit a sector operating profile"))
     big, of_big = LP.largest_cover(v, figs)
     paged = bool(ops_families(v)) or bool(order_family(v))
+    source_rows = [r for r in got if (r["family"], region) in LP.EBITDA_SOURCE]
     others = [x.get("layer") for x in v.get("layers") or [] if x.get("layer") and not LP.fin_keys((x.get("model") or {}).get("family"), region)]
     note = (f"Its own figures: each layer's companies in its calculations, latest full year; how each is worked out: ⟦{NOTES_TITLE}⟧. A median "
             f"where at least {LP.MIN_BASE} companies and half of the layer have the figure, else “–” with the count. Sector operating measures: "
@@ -7257,7 +7258,8 @@ def _layer_profile_slides(slides: list, v: dict, amt, eyebrow: str) -> None:
             + (f" The {_n(of_big, 'largest company', 'largest companies')} a profile fits: {big} state one of its measures." if of_big else "")
             + (" Its last column: the layer's own companies with the top and the bottom value of its first figure with a median, inside the "
                "layer only." if any(r["fin"].get("top") for r in got) else "")
-            + (f" Not in this table (no one way of earning): {', '.join(others)}." if others else ""))
+            + (f" Not in this table (no one way of earning): {', '.join(others)}." if others else "")
+            + (f" {', '.join(r['layer'] for r in source_rows)}: {LP.EBITDA_SOURCE_NOTE}." if source_rows else ""))
     nh = note_h(note)
     room = BOT - TOP - nh - 0.15
     keys = sorted({f["key"] for r in got for f in r["fin"]["figs"] if f["n"]} | {m["key"] for r in with_ops for m in r["ops"]["measures"] if m["ok"]})
@@ -7299,6 +7301,12 @@ def profile_summary(rows_: list) -> str:
             ok = sum(1 for m in o["measures"] if m["ok"])
             items.append(f"{r['layer']}, {many}: {len(o['measures'])} of {k} stated, {ok} by half or more of its companies")
     return f"{PROFILES_SAID}: " + "; ".join(items) + "."
+
+
+def pooled_ways(v: dict) -> bool:
+    """m57 (R57 audit REN-2): whether the theme's own medians pool core layers of more than one way of earning (layer_profiles.FIN families)."""
+    from .intel import layer_profiles as LP
+    return len({r["family"] for r in LP.rows(v) if not r["adjacent"]}) > 1
 
 
 def _earns(model: dict, family: str) -> str:
@@ -7601,6 +7609,8 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
         if meds.get("ebitda") and mk.get("opm"):
             msg += (f"; the median company's EBITDA margin is {_pcw(meds['ebitda']['median'], bool(whole))} ({meds['ebitda']['n']}) against {_pcw(mk['opm']['median'], bool(whole))} "
                     "for all listed companies")
+        if pooled_ways(v):          # m57 (R57 audit REN-2): figures over layers that earn differently say they are pooled, and where each is apart
+            msg += f"; pooled across layers that earn in different ways (each layer on its own figures: ⟦{LAYER_PROFILE_TITLE}⟧)"
         s = Slide("Growth and profitability", msg, eyebrow=E())
         lw = 7.0
         gh_ = ["Measure", "Together, 1 year", "Together, 3 years a year", "Median company, 1 year", "Median company, 3 years a year"]

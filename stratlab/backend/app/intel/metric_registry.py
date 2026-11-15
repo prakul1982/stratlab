@@ -55,7 +55,8 @@ CONTRACTED = ("software", "royalties", "services")          # models paid ahead 
 ASSETS_HEAVY = ("making", "capacity", "telecom_services", "resources", "utility", "transport", "semis", "hardware", "regulated_utility", "generation", "mining",
                 "metal_processing")
 STOCK_HOLDERS = ("making", "resale", "semis", "hardware", "mining", "metal_processing")    # companies that hold goods for sale
-RESEARCH = ("making", "semis", "hardware", "software", "royalties", "pharma")
+# m57 (R57 audit PAY-17): R&D is a line any US company outside finance may file: one that files none shows "–" (not filed), never "n/a"
+RESEARCH = ("us",)
 ORDERS = ("defence", "capital_goods", "construction")
 _BQ, _IQ, _US = "Latest quarter; exchange filing", "Latest period; exchange filing", "Latest fiscal year; SEC filing"
 
@@ -78,8 +79,13 @@ METRICS = (
     _m("nnpa", "Net NPA", "Net non-performing assets over net advances", "pct", "quarter", "Latest quarter given; results", "One quarter's end; after provisions",
        LENDING, ("IN",)),
     _m("deposit_growth", "Deposit growth", "Deposits against a year before", "chg", "year", "Reported balance sheets", "Two balance-sheet dates only", BANK, ("IN",)),
-    _m("pe", "P/E", "Market value over net profit of the last four quarters", "x", "year", "Last close; last four quarters", "None for a loss-maker", "*"),
-    _m("pb", "P/B", "Market value over shareholders' equity", "x", "year", "Last close; latest balance sheet", "Book value at the balance-sheet date", "*"),
+    # m57 (R57, the data check of the live R56 decks): the words say what is computed: the price over earnings per share of the last four
+    # quarters (market value over profit only where no quarterly EPS is filed, or where the EPS doesn't agree with it), and equity at the
+    # fiscal year's end for US companies
+    _m("pe", "P/E", "Price over earnings per share of the last four quarters; else market value over their net profit", "x", "year",
+       "Last close; last four quarters", "None for a loss-maker", "*"),
+    _m("pb", "P/B", "Market value over shareholders' equity", "x", "year", "Last close; equity at the latest year's end (US), latest balance sheet "
+       "(India)", "Book value at that date", "*"),
     _m("ev_ebitda", "EV/EBITDA", "Market value plus debt less cash, over the year's EBITDA", "x", "year", "Last close; latest full year",
        "None for banks, lenders, insurers", "*"),
     _m("cap", "Market value", "Price times shares in issue", "amt", "year", "Last close", "Moves with the price every day", "*", headline=False),

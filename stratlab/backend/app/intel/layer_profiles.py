@@ -28,7 +28,8 @@ _SOFTWARE = ("sales_1y", "ebitda", "fcf_margin", "sbc_share", "rpo_growth")
 _ASSETS = ("ebitda", "debt_ebitda", "roce", "sales_1y")
 # a way of earning's (theme_check.MODELS family) own figures, the lead first (its ranking inside the layer)
 FIN = {
-    "generation": _POWER, "power_trading": _POWER, "utility": _POWER, "regulated_utility": ("ebitda", "debt_ebitda", "interest_cover", "roe"),
+    # regulated networks led by return on equity: their stored EBITDA can hold regulatory deferral movements (EBITDA_SOURCE)
+    "generation": _POWER, "power_trading": _POWER, "utility": _POWER, "regulated_utility": ("roe", "interest_cover", "ebitda", "debt_ebitda"),
     "construction": ("ebitda", "net", "cfo_to_profit", "roce"),
     "making": _MAKING, "components": _MAKING, "contract_making": ("ebitda", "roce", "sales_1y", "inventory_days"),
     "lending": ("roe", "nii_assets", "gnpa", "credit_cost", "pb"),
@@ -53,6 +54,13 @@ NOT_STORED = {
     ("lending", "IN"): "net interest margin (no element of the results format; NII over assets is shown instead)",
     ("lending", "US"): "net interest margin and credit cost (not in the figures the app stores for US lenders)",
 }
+# m57 (the data check of the live R56 decks, second wave item 5): the stored source books regulated power companies' regulatory deferral
+# movement (and joint ventures' share) inside operating profit, so their EBITDA margin reads below the audited statement's while revenue,
+# interest, depreciation, profit before tax and net profit reconcile; said on the layers of these ways of earning until EBITDA is read
+# from the exchange's results filing
+EBITDA_SOURCE = {("generation", "IN"), ("utility", "IN"), ("regulated_utility", "IN")}
+EBITDA_SOURCE_NOTE = ("EBITDA as the source classifies it; for regulated utilities it includes regulatory deferral movements that the audited "
+                      "statement shows below profit before tax")
 # the sector operating profiles' amounts and counts: never a median across companies of different sizes, their range only
 SIZES = ("ask", "rpk", "asm", "rpm", "beds_op", "beds_cap", "cem_capacity", "cem_volume", "mw_installed", "generation", "tpv", "txn", "rooms",
          "orders_held", "orders_won")

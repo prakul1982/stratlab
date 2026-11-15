@@ -278,3 +278,41 @@ except Exception:            # pragma: no cover
 def test_postgres_passages_read_the_given_order_first_and_at_most_a_cap_a_company(pg):
     _alphabet_store(pg, _put)
     _check_order(pg)
+
+
+# ---------- 6. handed over by y57 and dat57 (R57 audit REN-2, HOS-9, PAY-17; the data check's P/E and P/B words) ----------
+def test_an_ebitda_margin_filed_in_whole_points_is_worked_out_to_one_decimal_from_the_years_filed_lines():
+    from tests.test_theme1 import facts
+    f = facts("ONE", "One Ltd", [1000, 1100, 1210, 1330], [20, 21, 22, 23], [100, 110, 121, 133])
+    f["years"][-1]["op"] = 302.0                                         # 22.7% of 1,330, filed as 23
+    row = D.company_row("IN", "ONE", f)
+    assert row["ebitda"] == 22.7 and row["ebitda_dp"] == 1
+    f["years"][-1]["op"] = 400.0                                         # 30.1%: doesn't agree with the filed 23, so the filed margin stays
+    assert D.company_row("IN", "ONE", f)["ebitda"] == 23.0
+    assert D.margin_of({"op": 302.0, "sales": 1330}) == 22.7 and D.margin_of({"sales": 1330}) is None
+
+
+def test_a_median_over_layers_that_earn_differently_says_it_is_pooled():
+    v, slides = _travel()                                               # transport and consumer services
+    growth = next(s for s in slides if s.title == "Growth and profitability")
+    assert "pooled across layers that earn in different ways (each layer on its own figures: p. " in growth.subtitle
+    one = _slides("IN", "Hotels", [("Hotels and resorts", "HT", "Hotels & Resorts", 4, "consumer_services"),
+                                   ("Resorts", "RS", "Hotels & Resorts", 3, "consumer_services")], lambda i, s, n, ind: _in(i, s, n, ind),
+                  _synthetic_passages({}))[1]
+    assert "pooled" not in next(s for s in one if s.title == "Growth and profitability").subtitle
+
+
+def test_r_and_d_not_filed_is_a_dash_for_any_us_company_and_the_pe_and_pb_words_say_what_is_computed():
+    assert R.applies("rd_share", "US", {"us", "payments"})              # a payments company that files no R&D line: "–", never "n/a"
+    assert R.BY_ID["pe"].definition.startswith("Price over earnings per share of the last four quarters")
+    assert "latest year's end (US)" in R.BY_ID["pb"].source
+
+
+def test_power_layers_say_how_the_source_classifies_ebitda_and_regulated_networks_lead_on_return_on_equity():
+    v, slides = _slides("IN", "Utilities", [("Power generators", "PG", "Power Generation", 4, "generation"),
+                                            ("Transmission networks", "TN", "Power - Transmission", 3, "regulated_utility")],
+                        lambda i, s, n, ind: _in(i, s, n, ind), _synthetic_passages({}))
+    pages, rows, note = _page(slides)
+    assert ("Power generators, Transmission networks: " + LP.EBITDA_SOURCE_NOTE + ".") in note
+    assert rows["Transmission networks"][2].startswith("ROE ") and not rows["Transmission networks"][4].startswith("EBITDA")     # never ranked on EBITDA
+    assert LP.FIN["regulated_utility"][0] == "roe"
