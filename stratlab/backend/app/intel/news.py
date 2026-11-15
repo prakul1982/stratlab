@@ -250,8 +250,11 @@ def fits_company(name: str, article: dict | None) -> bool:
     the company's name lacks, and its text speaks of a company."""
     if not article or not article.get("extract"):
         return False
-    have = set(_words(name))
-    title = re.sub(r"\([^)]*\)", " ", str(article.get("title") or ""))
+    # r571e (R57: "McDonalds" as the index writes it, the article "McDonald's": its "s" was a word the name lacked, so McDonald's was left
+    # with "no description found in any source"): an apostrophe joins the words on both sides
+    flat = lambda t: re.sub(r"[\'\u2019]", "", unescape(str(t or "")))      # noqa: E731
+    have = set(_words(flat(name)))
+    title = re.sub(r"\([^)]*\)", " ", flat(article.get("title")))
     if any(w not in _GENERIC and w not in have for w in _words(title)):
         return False
     return company_text(f"{article.get('description') or ''} {article['extract']}")

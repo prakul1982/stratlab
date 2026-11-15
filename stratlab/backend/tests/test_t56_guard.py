@@ -380,5 +380,5 @@ def test_the_rules_version_and_the_new_inputs():
     from app import deck as K
     from app.intel import theme_data as D
     from app.intel import theme_routes as TR
-    assert B.RULES == 56 and TR.PLACE_CARRY[56] == 55 and TR.PLACE_CARRY[55] == 54 and K.THEME_DECK_VERSION == 67 and D.DIVE_TEXT == 27 and TR.EARLIER_MAX == 11
+    assert B.RULES == 57 and TR.PLACE_CARRY[57] == 56 and TR.PLACE_CARRY[56] == 55 and TR.PLACE_CARRY[55] == 54 and K.THEME_DECK_VERSION == 67 and D.DIVE_TEXT == 27 and TR.EARLIER_MAX == 12
     assert "moved_out" in B.place_rest.__code__.co_varnames

@@ -508,8 +508,10 @@ def test_the_audit_moves_the_named_cases_on_the_live_inputs_and_keeps_stable_pla
     bio = where(place("biotech", monkeypatch, ask=audit_fake()))
     for s_ in ("NVO", "ABBV", "GILD", "BMY", "LLY"):
         assert bio[s_][0] == "Large pharma and biotech portfolios", s_
-    # Amgen's stored words (as sent) hold no sentence naming the new layer's work: no quote passes the check, so it stays where it is
-    assert bio["AMGN"][0] == "Specialty and clinical-stage biotechs"
+    # Amgen's stored words (as sent) hold no sentence naming the new layer's work: no audit quote passes the check; r571: the scale rule
+    # moves it by its revenue (at or above the layer's median) and its own words, with that reason printed
+    assert bio["AMGN"][0] == "Large pharma and biotech portfolios" and bio["AMGN"][1]["refit"].get("scale") is True
+    assert "at or above the median" in bio["AMGN"][1]["refit"]["why"] and bio["SRPT"][0] == "Specialty and clinical-stage biotechs"
     sw = where(place("software", monkeypatch, ask=audit_fake()))
     moved = [s_ for s_ in ("SHOP", "TOST", "TWLO", "U", "YOU") if not sw[s_][0].startswith("Cloud and AI compute")]
     assert set(moved) >= {"TWLO", "U"}, moved          # Shopify, Toast: no sentence of the words sent names the new layer; Clear Secure: past the 60 largest

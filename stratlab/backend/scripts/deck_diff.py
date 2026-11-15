@@ -148,7 +148,20 @@ def layer_counts(pages: list[str]) -> dict:
             elif left:
                 (cur[0] if cur is not None else pending).append(left)
         close()
+    # r571 (the live R57 decks: Consumer retail "layers 9 -> 5", Biotech "6 -> 4"): a row the table's layout put off its "Companies" column
+    # is read from the layer's own page ("Layer N · X", its "(notes)" and "(continued)" pages aside): "N companies, ..." under its title
+    for page in pages:
+        for m in _LAYER_PAGE.finditer(page):
+            name = _ADJ.sub("", m.group(1).strip())
+            if name in out or re.search(r"\((?:notes|continued)\)$", name):
+                continue
+            n = re.search(r"(\d[\d,]*) compan", page[m.end():m.end() + 400])
+            if n:
+                out[name] = int(n.group(1).replace(",", ""))
     return out
+
+
+_LAYER_PAGE = re.compile(r"(?m)^\s*Layer \d+ · (.+?)\s*$")
 
 
 def descriptions(pages: list[str]) -> dict:

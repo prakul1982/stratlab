@@ -370,7 +370,7 @@ EARNING_LABELS = {"Project and consulting services", "Managed and outsourced IT 
                   "Engineering and construction contracts", "Lenders", "Insurers", "Payment networks and processors", "Property and leasing",
                   "Transport and logistics", "Media and content", "Diversified groups", "Resale and distribution", "IT services for clients",
                   "Financial fees and commissions"}
-_LAYER_HEAD = re.compile(r"(?m)^\s*Layer \d+ · (.+?)\s*$")
+_LAYER_HEAD = re.compile(r"(?m)^\s*Layer \d+ · (.+?)(?:\s*\((?:notes|continued)\))?\s*$")      # r571: a layer's "(notes)" page is the same layer
 _SAME_WAY = re.compile(r"earn the same way as those of ((?:“[^”]+”(?:, )?)+)")
 _QUOTED = re.compile(r"“([^”]+)”")
 _WORDS_CLAIM = "Every company with figures has words of its own"
@@ -1141,7 +1141,7 @@ EARNING_LABELS = {"Project and consulting services", "Managed and outsourced IT 
                   "Engineering and construction contracts", "Lenders", "Insurers", "Payment networks and processors", "Property and leasing",
                   "Transport and logistics", "Media and content", "Diversified groups", "Resale and distribution", "IT services for clients",
                   "Financial fees and commissions"}
-_LAYER_HEAD = re.compile(r"^\s*Layer \d+ · (.+?)\s*$", re.M)
+_LAYER_HEAD = re.compile(r"^\s*Layer \d+ · (.+?)(?:\s*\((?:notes|continued)\))?\s*$", re.M)          # r571: "(notes)" pages aside
 _CITED = re.compile(r"“([^”]{3,80})”")
 _SAYS_NOT = re.compile(r"(?:don't|doesn't|do not|does not) (?:show the work of|support|say what|say it sells what) “([^”]{3,80})”")
 _OFFICIAL_SAID = re.compile(r"an official industry of the theme")

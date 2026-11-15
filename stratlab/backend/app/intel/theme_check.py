@@ -230,7 +230,10 @@ def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None
         ev = evidence.get(sym) or {}
         home = next((g for g in gids if by_id[g]["name"] == held[sym]), gids[0])
         g = by_id[home]
-        if contradicted(g["name"], ev.get("about") or "", ev.get("industry") or "", g["text"]):
+        # r571 (the live R57 Defence deck: Bharat Forge, published in "Parts, component and ingredient makers", a layer the split made and no
+        # group of the map, was judged against the first map group naming it, "Combat aircraft and helicopters", asked, and dropped): only a
+        # published group of the map's own is a test of its words; one published elsewhere stays, its layer held by the placement's last step
+        if held[sym] and contradicted(g["name"], ev.get("about") or "", ev.get("industry") or "", g["text"]):
             continue                         # its own words contradict its published group: asked like a new company
         quote = group_sentence(ev.get("about") or "", f"{g['name']} {g['text']}")
         for gid in gids:
@@ -393,6 +396,10 @@ MODELS = {
     "transport": ("transport", "Transport and logistics", "fees for moving and storing goods or people"),
     "consumer_services": ("consumer_services", "Hotels, travel and consumer services", "fees paid by consumers for stays, trips, meals or courses"),
     "holding": ("holding", "Diversified groups", "several businesses that earn in different ways"),
+    # r571x (R57.1, the 10 new live R57 themes: Yum Brands and Restaurant Brands International, in "Franchisors earning royalties", left out
+    # as "its words don't state how it earns", the model list having no franchisor): a franchisor earns royalties and fees from the franchisees
+    # who run outlets under its brands
+    "franchising": ("franchising", "Franchisors", "royalties and fees from franchisees who run outlets under their brands"),
 }
 
 
@@ -602,6 +609,18 @@ MODEL_SAYS = {
                 r"(?:facilitates|processes) electronic funds? transfers?",
     "telecom_services": r"telecom(?:munications?)? (?:service providers?|operators?)|providers? of telecommunications? services|mobile network operators?|"
                         r"(?:mobile|wireless|broadband|cellular) (?:and (?:home )?broadband )?operators?|wireless carriers?",
+    # r571x (R57.1, the 10 new live R57 themes: franchisors, gas distribution utilities, pipelines, logistics providers and media companies
+    # left out as "insufficient evidence" though their own words say their business): each business in so many words
+    "franchising": r"\bfranchisors?\b|\bfranchising\b|franchised (?:restaurants|outlets|stores|units|locations|hotels)|royalt(?:y|ies) (?:and fees )?(?:from|paid by) franchisees",
+    "regulated_utility": r"(?<!for )(?<!to )(?<!serving )(?<!supplies )natural[- ]gas(?:[- ]only)? distribut(?:ors?\b|ion (?:compan|utilit|business|services|operations))|(?<!for )(?<!to )(?<!serving )(?<!natural )gas distribution (?:utilit|compan|business)|"
+                         r"local distribution compan|regulated (?:natural gas |gas |electric |water )?(?:and (?:gas|electric) )?utilit|"
+                         r"public utility holding compan|(?:electric|natural gas|gas|water) utility (?:holding )?compan",
+    "transport": r"pipelines? (?:that |which )?(?:transport|carr(?:y|ies)|move)|(?:crude oil|natural gas|liquids) pipelines? (?:and|network|system|operator)|"
+                 r"midstream (?:energy |infrastructure |services )?(?:compan|business|operator)|gathering,? (?:and )?processing|"
+                 r"(?:integrated |third[- ]party |contract )logistics|\b3pl\b|logistics (?:services?|solutions) (?:provider|company)|"
+                 r"supply chain (?:solutions|services|management) (?:provider|company)|freight forwarding|less[- ]than[- ]truckload",
+    "media": r"mass media|media and entertainment (?:company|conglomerate|group)|entertainment conglomerate|(?:television|tv|cable|broadcast) networks?\b|"
+             r"film (?:and television )?studios?|streaming (?:service|platform)s?\b|(?:television|radio) broadcast(?:ing|ers?)\b",
 }
 
 
