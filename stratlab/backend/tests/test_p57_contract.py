@@ -111,7 +111,10 @@ def test_duolingo_is_in_no_travel_or_hotel_layer_and_software_has_none(monkeypat
 
 @pytest.mark.parametrize("key,layer,n", [("metals", "Aluminium", 13), ("retail", "Catalog and mail-order houses", 6)])
 def test_the_restored_layers_hold(key, layer, n, monkeypatch):
-    got = where(place(key, monkeypatch))
+    from app.intel import theme_check as C
+    # second wave (updated on purpose): with the misfit answer as live gets it (the deterministic stand-in offline), Manaksia Aluminium,
+    # which the replay's own layer rename sends to the pipe makers, is flagged and back in "Aluminium" by its own words
+    got = where(place(key, monkeypatch, ask=C.vocabulary_fake))
     assert sum(1 for x, _ in got.values() if x == layer) == n
 
 
@@ -223,20 +226,70 @@ def test_a_way_of_earning_layer_is_named_by_what_its_companies_say_and_no_new_si
     assert {r.get("renamed") or r.get("undone") for r in rows} == {"Education and courses", 1}
 
 
-def test_a_misfit_goes_to_the_existing_layer_its_own_words_name_and_a_fitting_company_stays():
-    vc = [{"layer": "Specialty and clinical-stage biotechs", "description": "Develop specialty medicines.", "companies": [
-              {"ticker": "BIG", "name": "Big Co", "model": "manufacturing"}, {"ticker": "DEV", "name": "Dev Co", "model": "manufacturing"}]},
+VC_FIT = [{"layer": "Specialty and clinical-stage biotechs", "description": "Develop specialty medicines.", "companies": [
+              {"ticker": "BIG", "name": "Big Co", "model": "manufacturing", "cap": 900.0},
+              {"ticker": "DEV", "name": "Dev Co", "model": "manufacturing", "cap": 5.0},
+              {"ticker": "DV2", "name": "Dev Two", "model": "manufacturing", "cap": 4.0}]},
           {"layer": "Large pharma and biotech portfolios", "description": "", "companies": [
               {"ticker": "P1", "name": "P1", "model": "manufacturing"}, {"ticker": "P2", "name": "P2", "model": "manufacturing"}]}]
-    words = {"BIG": "Big Co is an American multinational pharmaceutical company with offices in thirty countries and products in ninety.",
+WORDS_FIT = {"BIG": "Big Co is an American multinational pharmaceutical company with offices in thirty countries and products in ninety.",
              "DEV": "Dev Co is a clinical-stage company developing a gene therapy for a rare muscle disease, its candidates in trials.",
+             "DV2": "Dev Two is a clinical-stage company developing antibodies for rare diseases, with two candidates in trials.",
              "P1": "P1 is a global pharmaceutical company selling medicines in a hundred countries.",
              "P2": "P2 is a large pharmaceutical group selling branded drugs worldwide."}
-    out, rows = B.best_layer_moves(copy.deepcopy(vc), lambda s: words.get(s, ""), "Biotech", lambda s: words.get(s, ""))
+
+
+def test_a_flagged_misfit_moves_on_one_answer_only_where_its_own_words_bear_it_out():
+    """R56 audit RC2/RC3 (second wave): the strict test flags only the company whose words say nothing of its layer and clearly say an
+    existing other one's; one answer a theme names its layer (here the deterministic vocabulary stand-in the offline replays use; live, the
+    model); an answer its words don't bear out is refused, and the answer is kept so the same rules version asks no more."""
+    from app.intel import theme_check as C
+    flagged = B.flag_misfits(copy.deepcopy(VC_FIT), WORDS_FIT.get, "Biotech")
+    assert [f["symbol"] for f in flagged] == ["BIG"] and flagged[0]["targets"] == ["Large pharma and biotech portfolios"]
+    calls = []
+
+    def fake(system, text):
+        calls.append(system)
+        return C.vocabulary_fake(system, text)
+    out, rows, kept = B.misfit_moves(copy.deepcopy(VC_FIT), WORDS_FIT.get, "Biotech", WORDS_FIT.get, ask=fake)
     got = {c["ticker"]: v["layer"] for v in out for c in v["companies"]}
     assert got["BIG"] == "Large pharma and biotech portfolios" and got["DEV"] == "Specialty and clinical-stage biotechs"
-    assert rows == [{"ticker": "BIG", "name": "Big Co", "from": "Specialty and clinical-stage biotechs", "to": "Large pharma and biotech portfolios",
-                     "said": ["pharma"]}]
+    assert calls == [C.FIT_SYSTEM] and rows[0]["said"] == ["pharma"] and kept == {"rules": B.RULES, "moves": {"BIG": "Large pharma and biotech portfolios"}}
+    # the same rules version: the kept answer, nothing asked
+    B.misfit_moves(copy.deepcopy(VC_FIT), WORDS_FIT.get, "Biotech", WORDS_FIT.get, ask=lambda s, t: pytest.fail("asked again"), kept_fit=kept)
+    # a wrong answer (a pharmaceutical company into the clinical-stage layer it already is in, or out of the theme) moves nothing
+    wrong = lambda s, t: {"moves": [{"symbol": "BIG", "layer": "L0"}]}      # noqa: E731
+    out, rows, _ = B.misfit_moves(copy.deepcopy(VC_FIT), WORDS_FIT.get, "Biotech", WORDS_FIT.get, ask=wrong)
+    assert rows == [] and {c["ticker"]: v["layer"] for v in out for c in v["companies"]}["BIG"] == "Specialty and clinical-stage biotechs"
+    # no answer (an empty one): nothing moves, nothing kept
+    out, rows, kept2 = B.misfit_moves(copy.deepcopy(VC_FIT), WORDS_FIT.get, "Biotech", WORDS_FIT.get, ask=lambda s, t: {})
+    assert rows == [] and kept2 is None
+
+
+def test_a_conglomerate_whose_words_name_none_of_the_theme_s_business_leaves_with_its_reason():
+    vc = [{"layer": "Surgical robotics systems", "description": "Robotic platforms for surgery.", "companies": [
+        {"ticker": "MMM", "name": "3M Co", "industry": "Surgical & Medical Instruments & Apparatus"},
+        {"ticker": "ISRG", "name": "Intuitive Surgical"}]}]
+    words = {"MMM": "The 3M Company is an American multinational conglomerate operating in the fields of industry, worker safety, and consumer goods.",
+             "ISRG": "Intuitive Surgical is a diversified technology company that develops and markets robotic products for minimally invasive surgery."}
+    out, gone = B.whole_company_out(copy.deepcopy(vc), words.get, "Medical devices")
+    assert [x["ticker"] for x in gone] == ["MMM"] and gone[0]["industry"].startswith("Surgical")
+    assert [c["ticker"] for v in out for c in v["companies"]] == ["ISRG"]
+
+
+def test_the_second_wave_on_the_live_inputs_with_the_vocabulary_stand_in(monkeypatch):
+    """The offline proof (the deterministic vocabulary stand-in for the model; production asks the model, bounded and checked the same
+    way): Eli Lilly moves to "Large pharma and biotech portfolios", 3M leaves Medical devices with its reason, Fortinet joins Palo Alto's
+    security layer, Qorvo leaves "Makers of their own products"; Mahindra and the other vehicle makers stay; Aluminium keeps its 13."""
+    from app.intel import theme_check as C
+    bio = where(place("biotech", monkeypatch, ask=C.vocabulary_fake))
+    assert bio["LLY"][0] == "Large pharma and biotech portfolios" and "the placement contract" in bio["LLY"][1]["refit"]["why"]
+    sw = where(place("software", monkeypatch, ask=C.vocabulary_fake))
+    assert sw["FTNT"][0] == "Security software subscriptions" == sw["PANW"][0]
+    metals = where(place("metals", monkeypatch, ask=C.vocabulary_fake))
+    assert sum(1 for x, _ in metals.values() if x == "Aluminium") == 13
+    pay = where(place("payments", monkeypatch, ask=C.vocabulary_fake))
+    assert pay["COF"][0] == "Card issuers and consumer lenders"
 
 
 def test_the_contract_steps_run_only_with_the_published_memory_so_stored_versions_replay_as_before(monkeypatch):
@@ -353,3 +406,19 @@ def test_a_failing_company_is_asked_once_more_under_new_rules_and_no_more():
                               published={})
     assert len(asked) == 1 and "SH2" in asked[0] and "EL2" not in asked[0] and retried["reasked_rules"] == B.RULES
     B.place_rest(mapped(), "Defence", ABOUT.get, ask=lambda s, t: pytest.fail("asked again"), kept=retried, carried=True, published={})
+
+
+def test_3m_leaves_medical_devices_and_the_vehicle_makers_stay(monkeypatch):
+    """R56 audit MD-2: "3M Co (whole company)" in Medical devices after its health business left; its own words name industry, worker
+    safety and consumer goods. It leaves with its reason (another business, filed under its official industry); Mahindra and the other
+    vehicle makers keep their layers on the Automotive inputs (the golden placements stay)."""
+    from app.intel import theme_check as C
+    out = place("meddev", monkeypatch, ask=C.vocabulary_fake)
+    assert "MMM" not in where(out)
+    off = {x["ticker"]: x for x in out["placements"]["off_industry"]}
+    assert "group of other businesses" in off["MMM"]["why"] and off["MMM"]["industry"]
+    live = {c["ticker"]: X._HALF.sub("", v["layer"]) for v in inputs("auto")["value_chain"] for c in v["companies"]}
+    got = {s_: x for s_, (x, _) in where(place("auto", monkeypatch, ask=C.vocabulary_fake)).items()}
+    for s_ in ("M&M", "MARUTI", "TATAMOTORS", "BAJAJ-AUTO", "EICHERMOT", "HEROMOTOCO", "TVSMOTOR"):
+        if s_ in live:
+            assert got[s_] == live[s_], s_

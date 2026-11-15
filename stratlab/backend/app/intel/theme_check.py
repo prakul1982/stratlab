@@ -1309,6 +1309,57 @@ def recheck_models(rejected: list[dict], ask, theme: str) -> dict:
     return {s: str(m) for s, m in pairs if s in ev and str(m) in MODELS and model_supported(str(m), ev[s])}
 
 
+# p57 (R56 audit RC2/RC3, second wave): the companies a strict test flags as misfits of their layer, judged against the map's existing
+# layers in one bounded answer a theme and rules version (theme_base.misfit_moves); the answer is kept only where the company's own words
+# bear it out
+FIT_SYSTEM = """You place listed companies into the EXISTING layers of a map of an industry theme. For each COMPANY, using ONLY its own
+description given, pick the one existing layer (by its id) whose definition describes what the company itself mainly does, or "other" when
+none does. Never invent a layer. Being a customer of, or a supplier to, a layer's companies is not doing its work.
+Reply with ONLY this JSON: {"moves": [{"symbol": "<symbol>", "layer": "<layer id>|other"}]}"""
+
+
+def best_existing_layers(layers: list[dict], companies: list[dict], ask, theme: str) -> dict:
+    """p57: {symbol: an existing layer's name, or "" for "other"} for the flagged companies ([{symbol, name, words, layer}]) against the
+    map's existing layers ([{layer, description}]), one answer. An id not on the list, or a symbol not asked, is dropped; an empty answer
+    is no answer (raises), so nothing moves on it."""
+    import json
+    if not companies or not layers:
+        return {}
+    ids = {f"L{i}": v["layer"] for i, v in enumerate(layers)}
+    payload = {"theme": theme, "layers": {k: {"name": n, "definition": str(layers[int(k[1:])].get("description") or "")[:300]} for k, n in ids.items()},
+               "companies": [{"symbol": c["symbol"], "name": c.get("name") or c["symbol"], "now_in": c.get("layer") or "", "flag": c.get("why") or "",
+                              "description": clean_description(c.get("words") or "", 420)} for c in companies]}
+    got = ask(FIT_SYSTEM, "MAP:\n" + json.dumps(payload, ensure_ascii=False))
+    if not isinstance(got, dict) or not got:
+        raise ValueError("no answer")
+    want = {c["symbol"] for c in companies}
+    out = {}
+    for x in got.get("moves") or []:
+        if isinstance(x, dict) and x.get("symbol") in want:
+            lay = str(x.get("layer") or "")
+            if lay in ids:
+                out[x["symbol"]] = ids[lay]
+            elif lay.lower() == "other":
+                out[x["symbol"]] = ""
+    return out
+
+
+def vocabulary_fake(system: str, text: str) -> dict:
+    """p57: a deterministic stand-in for the model in offline replays only (the release gate, the tests): it answers FIT_SYSTEM from the
+    vocabulary test (theme_base.vocabulary_choice) and nothing else ({}: no answer). The live placement asks the real model."""
+    import json
+    from .theme_base import vocabulary_choice
+    if system != FIT_SYSTEM:
+        return {}
+    p = json.loads(text.split("MAP:\n", 1)[1])
+    names = {x["name"]: k for k, x in p["layers"].items()}
+    vc = [{"layer": x["name"], "description": x.get("definition") or "", "companies": [{"ticker": ""}]} for x in p["layers"].values()]
+    flagged = [{"symbol": c["symbol"], "why": c.get("flag") or "", "words": c.get("description") or "",
+                "targets": [n for n in names if n != c.get("now_in")]} for c in p["companies"]]
+    got = vocabulary_choice(flagged, vc, None, p.get("theme") or "")
+    return {"moves": [{"symbol": s_, "layer": names[t] if t else "other"} for s_, t in got.items()]}
+
+
 # ---------- a layer's name fits how its companies earn once each holds one model (R26) ----------
 # The live R25 IT services deck: "Cloud, hardware and IT infrastructure" held only hardware resellers once the layers were split by model
 # ("In common: selling and installing hardware that others make"). The split's layers go to the same name check as the placement's (RENAME).

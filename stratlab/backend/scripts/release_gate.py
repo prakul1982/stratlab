@@ -242,12 +242,23 @@ class _NoAnswer:
         return {}
 
 
+class _Vocabulary(_NoAnswer):
+    """p57: the engine's model offline with the misfit question answered by the vocabulary test (theme_check.vocabulary_fake, a
+    deterministic stand-in: production asks the model), every other question answered with nothing."""
+
+    def __call__(self, system, text, *a, **k):
+        self.calls += 1
+        return C.vocabulary_fake(system, text)
+
+
 def _kwargs(d: dict) -> dict:
     names = B.place_rest.__code__.co_varnames
     kw = {"previous": d.get("previous") or {}, "carried": d.get("kept_version") != B.RULES}
-    for k in ("off_before", "moved_before", "moved_out"):
+    for k in ("off_before", "moved_before", "moved_out", "published"):          # p57: the published memory the live placement reads
         if k in names and d.get(k) is not None:
             kw[k] = d.get(k) or {}
+    if "published" in names and "published" not in kw:
+        kw["published"] = d.get("previous") or {}      # p57: inputs served before "published" was: the stored snapshot stands for it
     if "figures_of" in names and d.get("figures"):
         kw["figures_of"] = lambda s: (d.get("figures") or {}).get(s) or {}
     return kw
@@ -257,6 +268,7 @@ def run(d: dict, origin: dict, ask) -> tuple[dict, dict]:
     """place_rest on the map as live handed it. The split's renames the kept answer holds are keyed by a signature of the members the
     live split saw; the replay applies them as live did (the signature pinned to the kept one, as lane t56's exact replays do)."""
     m = pre_map(json.loads(json.dumps(d)), origin)
+    m["placements"] = json.loads(json.dumps(d.get("placements") or {}))      # p57: as with_base hands the checked map's placements on
     ev, facts = d.get("evidence") or {}, d.get("facts") or {}
     sig = ((d.get("kept") or {}).get("model_names") or {}).get("sig")
     was = B.model_names_signature
@@ -293,7 +305,7 @@ def recover_origin(d: dict, ask) -> dict:
 def engine(d: dict, model: str = "stub") -> tuple[dict, int]:
     """(the placement the current engine gives offline, how often it asked the stub model). `model` "none": no model at all (the
     engine's own path when the AI is not set up), to tell a change an empty answer makes from one the rules make."""
-    ask = _NoAnswer() if model == "stub" else None
+    ask = _NoAnswer() if model == "stub" else _Vocabulary() if model == "vocab" else None
     origin = recover_origin(d, ask)
     out, _ = run(d, origin, ask)
     return out, ask.calls if ask is not None else 0
@@ -474,7 +486,9 @@ def gate(d: dict, model: str = "stub") -> dict:
     changes = diff(d, new_vc, new_pl)
     moved_in = {r["symbol"] for r in changes if r["kind"] in ("moved", "joined")}
     eng_pl = {**stored_pl, **{k: v for k, v in new_pl.items() if k in ("off_industry", "layers_gone", "dropped")}}
-    if "dropped" not in new_pl:
+    if "layer_no" in new_pl:
+        eng_pl["dropped"] = new_pl.get("dropped") or []          # p57: the engine moved the rest (a layer decision, "layer_no")
+    elif "dropped" not in new_pl:
         eng_pl["dropped"] = stored_pl.get("dropped") or []       # the membership check is not re-run offline: its removals stand
     fs = checks(d, d["value_chain"], stored_pl)
     fe = checks(d, new_vc, eng_pl, moved_in)
@@ -556,8 +570,9 @@ def main(argv=None) -> int:
     ap.add_argument("--only", default="", help="comma-separated keys (file stems) to gate")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--show", type=int, default=40, help="rows shown per table")
-    ap.add_argument("--model", choices=("stub", "none"), default="stub",
-                    help="the engine's model offline: a stub that answers nothing (default), or none at all")
+    ap.add_argument("--model", choices=("stub", "none", "vocab"), default="stub",
+                    help="the engine's model offline: a stub that answers nothing (default), none at all, or the vocabulary stand-in for the "
+                         "misfit question (p57)")
     a = ap.parse_args(argv)
     if not a.folder.is_dir():
         print(f"not a folder: {a.folder}", file=sys.stderr)

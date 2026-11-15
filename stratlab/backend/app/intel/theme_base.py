@@ -1026,10 +1026,14 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
     # published member held in its published layer unless printed evidence moved it
     # the contract's steps run where the placement reads the published memory (`published`, {} for a theme read for the first time: every
     # live placement, theme_routes.placed); a replay of a stored version without it places as that version's rules did
-    truth, fit_rows, held_rows = [], [], []
+    truth, fit_rows, held_rows, fit_answer = [], [], [], None
     if published is not None:
         out_vc, truth = truthful_layers(out_vc, published, evidence, theme)
-        out_vc, fit_rows = best_layer_moves(out_vc, evidence, theme, words_of)
+        out_vc, whole_out = whole_company_out(out_vc, words_of, theme)
+        if whole_out:
+            off = list(off or []) + [{"ticker": x["ticker"], "name": x["name"], "industry": x["industry"], "why": x["why"]} for x in whole_out]
+        out_vc, fit_rows, fit_answer = misfit_moves(out_vc, evidence, theme, words_of, ask,
+                                                    kept.get("fit") if isinstance(kept.get("fit"), dict) else None)
         out_vc, held_rows = hold_published(out_vc, published, evidence, theme)
     back = [{"ticker": s_, "name": (by_sym.get(s_) or {}).get("name") or (off_before or {})[s_][0],
              "why": "an earlier version found its own words describe another business; its own words read now show the theme's work"}
@@ -1070,6 +1074,7 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
                                           **({"model_tags": tags} if models is not None and tags else {}),
                                           **({"model_confidence": conf} if models is not None and conf is not None else {}),
                                           **({"reasked": reasked} if reasked else {}),
+                                          **({"fit": fit_answer} if fit_answer else {}),
                                           **({"reasked_rules": RULES} if reasked and published is not None and ask is not None else
                                              {"reasked_rules": kept["reasked_rules"]} if kept.get("reasked_rules") else {})}
 
@@ -3327,6 +3332,9 @@ def _name_words(text) -> set[str]:
     return out
 
 
+_JOINED = ("cyber", "agro", "petro", "nano", "tele", "electro", "hydro", "geo", "aero", "thermo")      # a prefix joined to a word
+
+
 def _word_near(a: str, b: str) -> bool:
     """p57: the same word, one the start of the other (five letters or more: "pharma" of "pharmaceutical"), or six first letters in common
     ("computing" and "compute"); never five alone ("enterprise" and "entertainment")."""
@@ -3334,6 +3342,9 @@ def _word_near(a: str, b: str) -> bool:
         return True
     short, long_ = (a, b) if len(a) <= len(b) else (b, a)
     if len(short) >= 5 and long_.startswith(short):
+        return True
+    at = long_.find(short)
+    if len(short) >= 6 and at > 0 and long_[:at] in _JOINED:          # "pharma" of "biopharmaceutical", "security" of "cybersecurity"
         return True
     n = 0
     for x, y in zip(a, b):
@@ -3366,7 +3377,7 @@ def name_fit(v: dict, words: str, theme_words: set, every: bool = True) -> list[
         for w in _name_words(nm.lower()):
             if _stem(w) in theme_words or w in said:
                 continue
-            if any(_word_near(a, w) for a in mine):
+            if any(_word_near(a, w) for a in mine if _stem(a) not in theme_words):      # its theme word says no layer ("chemical" of "agrochemical")
                 said.append(w)
     return said
 
@@ -3400,92 +3411,245 @@ def desc_fit(v: dict, words: str, theme_words: set) -> list[str]:
     return sorted(b for b in lay if len(b) >= 4 and any(_near(a, b) for a in mine))
 
 
-def best_layer_moves(vc: list[dict], evidence, theme: str, words_of=None) -> tuple[list[dict], list[dict]]:
-    """p57 (contract 3, the R56 audit's RC2/RC3): (the layers, the moves) with each company of a named layer whose own words (forty
-    characters or more of them) say no word of its layer's names (name_fit) moved to the one other existing named layer whose names its
-    words say the most of (a tie moves nobody; never a layer of another stage than its own, layer_stage/company_stage; never into or out of a
-    half by market value apart from its layer, the larger half for a company as large as its smallest), with why ("refit"). A company whose
-    words say no layer's name stays where it is: "Other" is never where a misfit goes when a layer fits it, nor does a layer lose a company
-    no other layer's name fits."""
+CONTRADICTED_SHARE = 0.25       # p57: a layer's name is contradicted when fewer than this share of its companies with words say its own words
+FIT_ASK_MAX = 40                # p57: flagged companies one answer a theme judges, the largest first
+_BASED = re.compile(r"\b[a-z0-9]+-(?:based|enabled|powered|driven|native|first)\b", re.I)      # "cloud-based software": how, not what it is
+_CONGLOMERATE = re.compile(r"\bconglomerate\b|\bdiversified (?:group|company|industrial|technology)\b|\boperat\w* in the fields of\b", re.I)
+
+
+def _fit_text(text) -> str:
+    """p57: a company's own words for the fit test, a "<word>-based" kind of delivery left out ("cloud-based restaurant software")."""
+    return _CUSTOMERS.sub(" ", _BASED.sub(" ", own_text(text)))          # the customers it names are not what it does
+
+
+def distinct_words(v: dict, layers: list[dict], theme_words: set) -> set[str]:
+    """p57: the words of a layer's name (shown and the map's own) that say a kind of business no other layer's name says, the theme's own
+    words left out ("robotic" of "Surgical robotics systems" beside "Orthopedic and surgical device makers")."""
+    nm = lambda x: {_HALF_RX.sub("", x.get("layer") or ""), x.get("was") or ""} - {""}      # noqa: E731
+    mine = {w for n in nm(v) for w in _name_words(n.lower()) if _stem(w) not in theme_words}
+    others = {w for x in layers if x is not v and _HALF_RX.sub("", x.get("layer") or "") != _HALF_RX.sub("", v.get("layer") or "")
+              for n in nm(x) for w in _name_words(n.lower())}
+    return {w for w in mine if not any(_word_near(w, o) for o in others)}
+
+
+def fits_layer(v: dict, text, industry, theme_words: set) -> list[str]:
+    """p57: the vocabulary test: the words of a layer's names (no filler word) a company's own words say, or its official industry's."""
+    said = [w for w in name_fit(v, _fit_text(text), theme_words, every=False) if w not in _TARGET_FILLER]
+    if not said and industry and not re.search(NO_ONE_BUSINESS, plain_industry(industry), re.I):
+        said = [w for w in name_fit(v, plain_industry(industry), theme_words, every=False) if w not in _TARGET_FILLER]
+    return said
+
+
+def shares_layer(v: dict, text, industry) -> bool:
+    """p57: whether a company's own words or official industry share any word of its layer's names (every name it had; the theme's own
+    words and the plain words of a name counted: "hospital", "component"): the strict test's "shares no vocabulary" read loosely."""
+    words = _name_words(_CUSTOMERS.sub(" ", _fit_text(text)).lower()) | (_name_words(plain_industry(industry).lower()) if industry else set())
+    return any(_word_near(a, w) for nm in _names(v) for w in _name_words(nm.lower()) | _fit_words(nm) for a in words)
+
+
+def clearly_fits(v: dict, text, theme_words: set) -> list[str]:
+    """p57: the words of an existing layer's name its principal sentences clearly say: two of them, or one it calls itself by ("an
+    American multinational pharmaceutical company"), or one long distinctive word of its first sentence."""
+    first = principal_words(_fit_text(text))
+    said = [w for w in name_fit(v, first, theme_words, every=False) if w not in _TARGET_FILLER]
+    if len(said) >= 2:
+        return said
+    if len(said) == 1 and (any(_word_near(a, said[0]) for a in self_words(text)) or
+                           (len(said[0]) >= 9 and name_fit(v, (_sentences(own_text(text)) or [""])[0], theme_words, every=False))):
+        return said
+    return []
+
+
+def flag_misfits(vc: list[dict], words_of, theme: str) -> list[dict]:
+    """p57 (R56 audit RC2, second wave): the strict test. A company with words of its own is flagged when
+    1. its own words and official industry share no word with its layer's name (fits_layer), and its principal sentences clearly say an
+       existing other layer's (clearly_fits), or it is in "Other" and they do; or
+    2. its layer's own name is contradicted by most of its companies (fewer than LAYER_FIT_SHARE of those with words say a word only its
+       name says, distinct_words: "Surgical robotics systems" whose companies make no robots) and it says none of those words.
+    A company a rule placed with its printed reason, or kept from the published version, is never flagged. [{"symbol", "name", "layer",
+    "why": "fits another" | "name contradicted", "targets": [layer names], "words"}], the largest first."""
     tw = kind_stems(theme)
     shown = lambda v: _HALF_RX.sub("", v.get("layer") or "")      # noqa: E731
     named = [v for v in vc if not v.get("official") and v.get("companies")]
     groups: dict = {}
     for v in named:
         groups.setdefault(shown(v), []).append(v)
-    from collections import Counter
-
-    from .theme_check import model_family
-    words = lambda c: (words_of(c.get("ticker")) if words_of else None) or c.get("what") or ""      # noqa: E731
-    health, family = {}, {}
-    for nm, vs in groups.items():
-        cos = [c for x in vs for c in x["companies"]]
-        worded = [c for c in cos if len(own_text(words(c)).strip()) >= 40]
-        health[nm] = (sum(1 for c in worded if name_fit(vs[0], words(c), tw)) / len(worded)) if worded else 1.0
-        fams = Counter(model_family(c.get("model")) for c in cos if c.get("model") and c.get("model") != "unknown")
-        family[nm] = fams.most_common(1)[0][0] if fams and fams.most_common(1)[0][1] * 2 > sum(fams.values()) else ""
-    # a layer whose names state no kind of business beyond the theme's own (a scale or a region: "Pan-India integrated producers") fits all
-    kinded = lambda v: any(_stem(w) not in tw for nm in _names(v) for w in _name_words(nm.lower()))      # noqa: E731
     rest_v = next((v for v in vc if v.get("official") and v.get("basis") == "rest"), None)
-    moves = []
+    words = lambda c: (words_of(c.get("ticker")) if words_of else None) or c.get("what") or ""      # noqa: E731
+    contradicted, catch_all = {}, set()
+    for nm, vs in groups.items():
+        dw = distinct_words(vs[0], named, tw)
+        worded = [c for x in vs for c in x["companies"] if len(own_text(words(c)).strip()) >= 40]
+        says = lambda c: any(_word_near(a, w) for a in _name_words(_fit_text(words(c)).lower()) for w in dw)      # noqa: E731
+        if dw and len(worded) >= 3 and sum(1 for c in worded if says(c)) < CONTRADICTED_SHARE * len(worded):
+            contradicted[nm] = (dw, says)
+        if worded and sum(1 for c in worded if name_fit(vs[0], words(c), tw)) < LAYER_FIT_SHARE * len(worded):
+            catch_all.add(nm)
+    out = []
     for v in named + ([rest_v] if rest_v is not None else []):
+        here = shown(v) if v is not rest_v else ""
         for c in v["companies"]:
-            if isinstance(c.get("refit"), dict) or c.get("fallback") or (v is rest_v and (c.get("unread") or c.get("out_why"))):
-                continue                     # where a rule put it with its printed reason, or in "Other" with no words read: where it is
             text = words(c)
-            if len(own_text(text).strip()) < 40 or (v is not rest_v and (name_fit(v, text, tw) or len(desc_fit(v, text, tw)) > 2)):
+            if len(own_text(text).strip()) < 40 or isinstance(c.get("refit"), dict) or c.get("fallback") or c.get("kept_member") \
+                    or c.get("held_published") or (v is rest_v and (c.get("unread") or c.get("out_why"))):
                 continue
-            if v is not rest_v and not kinded(v) and (any(_stem(w) in tw for w in self_words(text)) or kind_stems(principal_words(text)) & tw):
-                continue                     # a layer of the theme's own business by scale or region, and it calls itself of that business
-                continue
-            first = principal_words(text)          # where it goes: what its principal business says, never a word further on
-            scores = {}
-            for nm, vs in groups.items():
-                if nm == shown(v):
-                    continue
-                if health[nm] < LAYER_FIT_SHARE:
-                    continue                 # never into a layer most of whose own companies' words don't say its name (a catch-all)
-                mine = model_family(c.get("model")) if c.get("model") and c.get("model") != "unknown" else ""
-                if mine and family[nm] and mine != family[nm]:
-                    continue                 # never into a layer of another way of earning (a maker into the financiers)
-                said = [w for w in name_fit(vs[0], first, tw, every=False) if w not in _TARGET_FILLER]
-                if len(said) == 1 and not any(_word_near(a, said[0]) for a in self_words(text)) and not (
-                        len(said[0]) >= 9 and name_fit(vs[0], (_sentences(own_text(text)) or [""])[0], tw, every=False)):
-                    continue                 # one word of its name, said only in passing: not where it belongs
-                if said:
-                    scores[nm] = said
-            if not scores:
-                continue
-            top = max(len(x) for x in scores.values())
-            best = [nm for nm, x in scores.items() if len(x) == top]
-            if len(best) != 1:
-                continue
-            dest_vs = groups[best[0]]
-            st = layer_stage(dest_vs[0])
-            if st and company_stage(own_text(text))[0] not in ("", st):
-                continue
-            moves.append((v, c, dest_vs, scores[best[0]]))
-    # never a layer a rule made left with one company (a move out of it leaves it to the rules that made it)
-    made = lambda v: bool(v.get("by_model") or v.get("by_place") or v.get("industry_group"))      # noqa: E731
-    leaving = Counter(id(v) for v, _, _, _ in moves)
-    moves = [x for x in moves if not (made(x[0]) and len(x[0]["companies"]) - leaving[id(x[0])] < 2)]
+            plain = _CUSTOMERS.sub(" ", own_text(text))          # the customers it names are not what it does ("for passenger vehicles")
+            # never into a layer whose own name its companies contradict, nor a catch-all most of whose companies don't say its name
+            targets = [nm for nm, vs in groups.items() if nm != here and nm not in contradicted and nm not in catch_all
+                       and clearly_fits(vs[0], plain, tw)]
+            if here in contradicted and not contradicted[here][1](c):
+                targets = [t for t in targets if len(clearly_fits(groups[t][0], plain, tw)) >= 2]
+                if targets:
+                    out.append({"c": c, "why": "name contradicted", "targets": targets})
+            elif targets and (v is rest_v or not shares_layer(v, text, c.get("industry"))):
+                out.append({"c": c, "why": "fits another", "targets": targets})
+    out.sort(key=lambda x: (-(x["c"].get("cap") or 0), x["c"].get("ticker") or ""))
+    return [{"symbol": x["c"].get("ticker"), "name": x["c"].get("name") or x["c"].get("ticker"), "why": x["why"], "targets": x["targets"],
+             "layer": next((("" if v is rest_v else shown(v)) for v in named + ([rest_v] if rest_v else []) if x["c"] in v["companies"]), ""),
+             "words": own_text(words(x["c"]))} for x in out]
+
+
+def vocabulary_choice(flagged: list[dict], vc: list[dict], words_of, theme: str) -> dict:
+    """p57: the vocabulary test's own answer for flagged companies ({symbol: existing layer name, or "" for "Other"}): the one target whose
+    name its principal sentences say the most of (a tie answers nothing), else "Other" for a company whose layer's name is contradicted.
+    It stands in for the model only in offline replays (the release gate, the tests); the live placement asks the model
+    (theme_check.best_existing_layers) and checks its answer with the same test."""
+    tw = kind_stems(theme)
+    by = {}
+    for v in vc:
+        if not v.get("official") and v.get("companies"):
+            by.setdefault(_HALF_RX.sub("", v.get("layer") or ""), v)
+    out = {}
+    for f in flagged:
+        text = (words_of(f["symbol"]) if words_of else None) or f.get("words") or ""
+        def score(t):                    # the words of its name said, then the share of its name they are ("Aluminium" over "Aluminium
+            said = len(clearly_fits(by[t], text, tw))           # and copper mining and smelting" for an aluminium maker)
+            of = len({w for w in _name_words(t.lower()) if _stem(w) not in tw}) or 1
+            return (said, round(said / of, 3)) if said else (0, 0)
+        scores = {t: score(t) for t in f.get("targets") or [] if t in by}
+        top = max(scores.values(), default=(0, 0))
+        best = [t for t, n in scores.items() if n == top and n[0]]
+        if len(best) == 1:
+            out[f["symbol"]] = best[0]
+
+    return out
+
+
+def misfit_moves(vc: list[dict], evidence, theme: str, words_of=None, ask=None, kept_fit: dict | None = None
+                 ) -> tuple[list[dict], list[dict], dict | None]:
+    """p57 (R56 audit RC2/RC3, second wave; contract 3): (the layers, the moves, the answer to keep). The strict test flags misfits
+    (flag_misfits); for those only, one answer a theme and rules version (`kept_fit` {"rules", "moves"} when this version already has one;
+    else `ask`, theme_check.best_existing_layers, at most FIT_ASK_MAX companies, the largest first) names the best existing layer or "Other".
+    An answer is taken only when it passes the same vocabulary test (fits_layer on the company's own words or official industry; "Other"
+    for a flagged company), never into a layer of another stage; anything else keeps the published placement. No layer is made."""
+    from .theme_check import best_existing_layers
+    flagged = flag_misfits(vc, words_of, theme)
+    answer = None
+    if isinstance(kept_fit, dict) and kept_fit.get("rules") == RULES:
+        moves, answer = dict(kept_fit.get("moves") or {}), kept_fit
+    elif ask is not None and flagged:
+        layers = []
+        for v in vc:
+            if not v.get("official") and v.get("companies") and _HALF_RX.sub("", v.get("layer") or "") not in [x["layer"] for x in layers]:
+                layers.append({"layer": _HALF_RX.sub("", v.get("layer") or ""), "description": v.get("description") or ""})
+        try:
+            moves = best_existing_layers(layers, flagged[:FIT_ASK_MAX], ask, theme)
+        except Exception as e:           # the AI busy or no answer: nothing moves; asked again on a later check
+            print("theme base: misfits not asked:", theme[:40], type(e).__name__, str(e)[:100])
+            return vc, [], None
+        answer = {"rules": RULES, "moves": moves}
+    else:
+        return vc, [], None
+    tw = kind_stems(theme)
+    flag = {f["symbol"]: f for f in flagged}
+    shown = lambda v: _HALF_RX.sub("", v.get("layer") or "")      # noqa: E731
+    groups: dict = {}
+    for v in vc:
+        if not v.get("official") and v.get("companies"):
+            groups.setdefault(shown(v), []).append(v)
+    rest_v = next((v for v in vc if v.get("official") and v.get("basis") == "rest"), None)
     rows = []
-    for v, c, dest_vs, said in moves:
-        target = dest_vs[0]
-        if len(dest_vs) == 2:
-            big = next((x for x in dest_vs if x.get("scale") == "larger"), dest_vs[0])
-            floor = min((x.get("cap") or 0) for x in big["companies"]) if big["companies"] else 0
-            target = big if (c.get("cap") or 0) >= floor else next(x for x in dest_vs if x is not big)
-        frm, to = shown(v), shown(target)
-        why = (f"its own words say “{'”, “'.join(said)}” of “{to}”" + (f" and nothing “{frm}” names" if v is not rest_v else "")
-               + ": in the existing layer its words fit (the placement contract)")
+    sizes = {id(v): len(v.get("companies") or []) for v in vc}
+    for s_, to in moves.items():
+        f = flag.get(s_)
+        if f is None:
+            continue                         # no longer a misfit by the strict test: where it is
+        cur = next(((v, c) for v in vc for c in v.get("companies") or [] if c.get("ticker") == s_), None)
+        if cur is None:
+            continue
+        v, c = cur
+        if v is not rest_v and sizes[id(v)] <= 2:
+            continue                         # never a layer left with one company by a move out of it
+        text = (words_of(s_) if words_of else None) or c.get("what") or ""
+        frm = "" if v is rest_v else shown(v)
+        if to:
+            dest_vs = groups.get(to)
+            if not dest_vs or to == frm:
+                continue
+            said = fits_layer(dest_vs[0], text, c.get("industry"), tw)
+            if frm:                          # a word its present layer's name says too places it nowhere new
+                here_w = {w for n in _names(v) for w in _name_words(n.lower())}
+                said = [w for w in said if not any(_word_near(w, h) for h in here_w)]
+            st = layer_stage(dest_vs[0])
+            if not said or (st and company_stage(own_text(text))[0] not in ("", st)):
+                continue                     # the answer isn't borne out by its own words: the published placement stays
+            target = dest_vs[0]
+            if len(dest_vs) == 2:
+                big = next((x for x in dest_vs if x.get("scale") == "larger"), dest_vs[0])
+                floor = min((x.get("cap") or 0) for x in big["companies"]) if big["companies"] else 0
+                target = big if (c.get("cap") or 0) >= floor else next(x for x in dest_vs if x is not big)
+            why = (f"its own words say “{'”, “'.join(said)}” of “{to}”" + (f", nothing “{frm}” names" if f["why"] == "fits another" and frm else
+                   f"; few of “{frm}”'s companies say what its name says, and it doesn't" if frm else "") + " (the placement contract)")
+        else:
+            if v is rest_v or f["why"] != "fits another" or shares_layer(v, text, c.get("industry")) or len(desc_fit(v, text, tw)) > 1:
+                continue                     # "Other" only for one whose words share nothing with its layer's names or definition
+            if rest_v is None:
+                rest_v = {"layer": other_label(theme), "description": "", "official": True, "basis": "rest", "companies": []}
+                vc = vc + [rest_v]
+            target, said = rest_v, []
+            why = (f"its own words say nothing of what “{frm}” names, nor of any other layer's work"
+                   if f["why"] == "fits another" else f"few of “{frm}”'s companies say what its name says, and its own words don't") + \
+                " (the placement contract)"
         v["companies"] = [x for x in v["companies"] if x is not c]
+        sizes[id(v)] -= 1
         target["companies"] = list(target["companies"]) + [{**{k: x for k, x in c.items() if k not in ("single", "unfit", "unfit_why", "sold_by")},
-                                                            "moved": True, "fit": True, "refit": {"from": frm, "to": to, "why": why, "words": said}}]
-        rows.append({"ticker": c.get("ticker"), "name": c.get("name") or c.get("ticker"), "from": frm, "to": to, "said": said})
+                                                            "moved": True, **({"fit": True} if to else {}),
+                                                            "refit": {"from": frm or other_label(theme), "to": to, "why": why, "words": said}}]
+        rows.append({"ticker": s_, "name": c.get("name") or s_, "from": frm or "Other", "to": to or "Other", "said": said, "flag": f["why"]})
     if rows:
         vc = [v for v in vc if v.get("companies") or not (v.get("by_model") or v.get("by_place") or v.get("industry_group") or v.get("official"))]
-    return vc, rows
+    return vc, rows, answer
+
+
+def whole_company_out(vc: list[dict], words_of, theme: str) -> tuple[list[dict], list[dict]]:
+    """p57 (R56 audit MD-2: "3M Co (whole company)" in Medical devices after its health business was spun off): a company whose own words
+    call it a conglomerate or diversified group, and whose words share no word with the theme's own business (the theme's name, any
+    layer's name or definition), leaves the theme with that printed reason ("another business", its official industry said): its filing
+    alone keeps no company in. (the layers, the companies out: [{ticker, name, industry, why}])."""
+    tw = kind_stems(theme)
+    vocab = {w for w in _name_words(str(theme).lower())}
+    for v in vc:
+        if not v.get("official"):
+            vocab |= {w for n in _names(v) for w in _name_words(n.lower())}
+            vocab |= {w for w in _name_words(_CONTRAST.sub(" ", _CUSTOMERS.sub(" ", str(v.get("description") or ""))).lower())
+                      if len(w) >= 6}
+    vocab -= _TARGET_FILLER
+    out, gone = [], set()
+    for v in vc:
+        for c in v.get("companies") or []:
+            text = own_text((words_of(c.get("ticker")) if words_of else None) or c.get("what") or "")
+            if len(text.strip()) < 40 or not _CONGLOMERATE.search(text):
+                continue
+            mine = _name_words(text.lower())
+            if any(_word_near(a, w) for a in mine for w in vocab) or kind_stems(text) & tw:
+                continue
+            gone.add(id(c))
+            out.append({"ticker": c.get("ticker"), "name": c.get("name") or c.get("ticker"), "industry": c.get("industry") or "",
+                        "why": "another business: its own words describe a group of other businesses, none of them the theme's (the placement contract)"})
+    if not gone:
+        return vc, []
+    vc = [{**v, "companies": [c for c in v.get("companies") or [] if id(c) not in gone]} for v in vc]
+    return [v for v in vc if v.get("companies") or not (v.get("by_model") or v.get("by_place") or v.get("industry_group") or v.get("official"))], out
 
 
 # p57: the kinds of business a way of earning's label names, each with the words that say it: a layer made by how its companies earn is
