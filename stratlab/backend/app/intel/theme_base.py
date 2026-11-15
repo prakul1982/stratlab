@@ -1026,7 +1026,7 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
     # published member held in its published layer unless printed evidence moved it
     # the contract's steps run where the placement reads the published memory (`published`, {} for a theme read for the first time: every
     # live placement, theme_routes.placed); a replay of a stored version without it places as that version's rules did
-    truth, fit_rows, held_rows, fit_answer = [], [], [], None
+    truth, fit_rows, held_rows, fit_answer, audit_rows, audit_answer = [], [], [], None, [], None
     if published is not None:
         out_vc, truth = truthful_layers(out_vc, published, evidence, theme)
         out_vc, whole_out = whole_company_out(out_vc, words_of, theme)
@@ -1034,6 +1034,8 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
             off = list(off or []) + [{"ticker": x["ticker"], "name": x["name"], "industry": x["industry"], "why": x["why"]} for x in whole_out]
         out_vc, fit_rows, fit_answer = misfit_moves(out_vc, evidence, theme, words_of, ask,
                                                     kept.get("fit") if isinstance(kept.get("fit"), dict) else None)
+        out_vc, audit_rows, audit_answer = audit_moves(out_vc, evidence, theme, words_of, ask,
+                                                       kept.get("audit") if isinstance(kept.get("audit"), dict) else None)
         out_vc, held_rows = hold_published(out_vc, published, evidence, theme)
     back = [{"ticker": s_, "name": (by_sym.get(s_) or {}).get("name") or (off_before or {})[s_][0],
              "why": "an earlier version found its own words describe another business; its own words read now show the theme's work"}
@@ -1057,8 +1059,9 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
                 placements["dropped"] = gone
             else:
                 placements = {k: x for k, x in placements.items() if k != "dropped"}
-    if truth or held_rows or fit_rows:   # p57: the contract's steps: layers named by what their companies say or not made, misfits moved
+    if truth or held_rows or fit_rows or audit_rows:   # p57: the contract's steps: layers named by their companies, misfits moved
         placements = {**(placements or {}), "contract": {**({"layers": truth} if truth else {}), **({"fit": fit_rows} if fit_rows else {}),
+                                                        **({"audit": audit_rows} if audit_rows else {}),
                                                         **({"held": held_rows} if held_rows else {})}}
     if staged_n:             # v55: companies displayed in the layer of their own stage
         placements = {**(placements or {}), "stage_moved": staged_n}
@@ -1075,6 +1078,7 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
                                           **({"model_confidence": conf} if models is not None and conf is not None else {}),
                                           **({"reasked": reasked} if reasked else {}),
                                           **({"fit": fit_answer} if fit_answer else {}),
+                                          **({"audit": audit_answer} if audit_answer else {}),
                                           **({"reasked_rules": RULES} if reasked and published is not None and ask is not None else
                                              {"reasked_rules": kept["reasked_rules"]} if kept.get("reasked_rules") else {})}
 
@@ -3582,6 +3586,8 @@ def misfit_moves(vc: list[dict], evidence, theme: str, words_of=None, ask=None, 
             continue                         # never a layer left with one company by a move out of it
         text = (words_of(s_) if words_of else None) or c.get("what") or ""
         frm = "" if v is rest_v else shown(v)
+        if frm and names_core(text, v, theme):
+            continue                         # third wave: its principal sentences name its present layer's work: a stable placement
         if to:
             dest_vs = groups.get(to)
             if not dest_vs or to == frm:
@@ -3616,6 +3622,130 @@ def misfit_moves(vc: list[dict], evidence, theme: str, words_of=None, ask=None, 
                                                             "moved": True, **({"fit": True} if to else {}),
                                                             "refit": {"from": frm or other_label(theme), "to": to, "why": why, "words": said}}]
         rows.append({"ticker": s_, "name": c.get("name") or s_, "from": frm or "Other", "to": to or "Other", "said": said, "flag": f["why"]})
+    if rows:
+        vc = [v for v in vc if v.get("companies") or not (v.get("by_model") or v.get("by_place") or v.get("industry_group") or v.get("official"))]
+    return vc, rows, answer
+
+
+_CORE_STOP = {"and", "the", "for", "with", "other", "company", "companies", "maker", "makers", "producer", "producers", "provider", "providers",
+              "supplier", "suppliers", "product", "products", "service", "services", "business", "businesses", "regional", "integrated", "large",
+              "larger", "smaller", "small", "mid", "sized", "pan", "india", "specialty", "diversified", "leading", "mixed", "general", "focused",
+              "based", "their", "own", "group", "groups", "operator", "operators", "manufacturing", "manufacturers", "manufacturer",
+              "platform", "platforms", "solution", "solutions", "system", "systems", "technology", "technologies"}
+
+
+def core_words(v: dict, theme: str) -> set[str]:
+    """p57 (third wave): the words of what a layer's name says its companies do (shown name and the map's own; plain and scale words out),
+    or the theme's own words when it names nothing beyond them ("Regional integrated producers" of Cement: cement)."""
+    out = set()
+    for n in {_HALF_RX.sub("", v.get("layer") or ""), v.get("was") or ""} - {""}:
+        for w in re.findall(r"[a-z]+", n.lower().replace("-", " ")):
+            w = w[:-1] if w.endswith("s") and len(w) > 4 and not w.endswith("ss") else w
+            if len(w) >= 4 and w not in _CORE_STOP and f"{w}s" not in _CORE_STOP:
+                out.add(w)
+    tw = {w[:-1] if w.endswith("s") and len(w) > 4 else w for w in re.findall(r"[a-z]+", str(theme).lower()) if len(w) >= 4 and w not in _CORE_STOP}
+    return out or tw
+
+
+def names_core(text, v: dict, theme: str) -> list[str]:
+    """p57 (third wave): the core words of a company's present layer (core_words) its principal sentences say: a stable placement (a cement
+    maker in a cement layer, a developer among the developers) no answer moves."""
+    mine = {(w[:-1] if w.endswith("s") and len(w) > 4 else w) for w in re.findall(r"[a-z]+", principal_words(_fit_text(text)).lower())}
+    core = core_words(v, theme)
+    said = sorted(w for w in core if any(_word_near(a, w) for a in mine))
+    return said if len(said) * 2 >= len(core) else []          # half its core or more ("cloud" alone of "cloud ... compute ... infrastructure": no)
+
+
+def verbatim(quote: str, text: str) -> bool:
+    """p57 (third wave): a quote of at least four words found word for word in a company's stored words (case and punctuation aside)."""
+    from .theme_check import norm
+    q = norm(quote)
+    return len(q.split()) >= 4 and f" {q} " in f" {norm(text)} "
+
+
+def audit_moves(vc: list[dict], evidence, theme: str, words_of=None, ask=None, kept_audit: dict | None = None
+                ) -> tuple[list[dict], list[dict], dict | None]:
+    """p57 (third wave; the R56 audit's RC2 P0s, which shared words can't separate): (the layers, the moves, the answer to keep). One model
+    answer a theme and rules version (`kept_audit` {"rules", "moves"} when kept; else `ask`, theme_check.audit_layers) audits the named
+    layers' largest AUDIT_MAX members: which don't do what their layer says, and each one's best existing layer or "Other", with a quote for
+    the new layer and one against the old. A move is taken only when both quotes are word for word in its stored words (description,
+    segments, filings), the new quote says a word of the new layer's name or definition, the old quote says nothing of the old layer's core
+    and its principal sentences don't name the old layer's core activity (a stable placement: names_core); never into a layer of another
+    stage, never leaving a layer with one company. Anything else keeps the published placement. No layer is made."""
+    from .theme_check import AUDIT_MAX, audit_layers
+    shown = lambda v: _HALF_RX.sub("", v.get("layer") or "")      # noqa: E731
+    words = lambda c: (words_of(c.get("ticker")) if words_of else None) or c.get("what") or ""      # noqa: E731
+    stored = lambda c: " ".join(x for x in (words(c), evidence(c.get("ticker")) if evidence else "") if x)      # noqa: E731
+    groups: dict = {}
+    for v in vc:
+        if not v.get("official") and v.get("companies"):
+            groups.setdefault(shown(v), []).append(v)
+    answer = None
+    if isinstance(kept_audit, dict) and kept_audit.get("rules") == RULES:
+        moves, answer = dict(kept_audit.get("moves") or {}), kept_audit
+    elif ask is not None and groups:
+        every = sorted(((c, nm) for nm, vs in groups.items() for x in vs for c in x["companies"] if len(own_text(words(c)).strip()) >= 40
+                        and not isinstance(c.get("refit"), dict)),
+                       key=lambda t: (-(t[0].get("cap") or 0), t[0].get("ticker") or ""))[:AUDIT_MAX]
+        layers = [{"layer": nm, "description": vs[0].get("description") or "",
+                   "members": [{"symbol": c.get("ticker"), "name": c.get("name"), "words": own_text(words(c))} for c, n in every if n == nm]}
+                  for nm, vs in groups.items()]
+        layers = [x for x in layers if x["members"]] + [{"layer": nm, "description": vs[0].get("description") or "", "members": []}
+                                                        for nm, vs in groups.items() if not any(c for c, n in every if n == nm)]
+        try:
+            moves = audit_layers(layers, ask, theme)
+        except Exception as e:           # the AI busy or no answer: nothing moves; asked again on a later check
+            print("theme base: layers not audited:", theme[:40], type(e).__name__, str(e)[:100])
+            return vc, [], None
+        answer = {"rules": RULES, "moves": moves}
+    else:
+        return vc, [], None
+    tw = kind_stems(theme)
+    rest_v = next((v for v in vc if v.get("official") and v.get("basis") == "rest"), None)
+    sizes = {id(v): len(v.get("companies") or []) for v in vc}
+    rows = []
+    for s_, x in moves.items():
+        cur = next(((v, c) for v in vc if not v.get("official") for c in v.get("companies") or [] if c.get("ticker") == s_), None)
+        if cur is None or not isinstance(x, dict):
+            continue
+        v, c = cur
+        to, qn, qo = x.get("to") or "", x.get("quote_new") or "", x.get("quote_old") or ""
+        text = stored(c)
+        if not verbatim(qo, text) or names_core(words(c), v, theme) or \
+                any(_word_near(a, w) for a in re.findall(r"[a-z]+", qo.lower()) for w in core_words(v, theme)):
+            continue                         # a quote not in its words, or its own words name its present layer's work: it stays
+        if sizes[id(v)] <= 2 or to == shown(v):
+            continue
+        if to:
+            dest_vs = groups.get(to)
+            if not dest_vs or not verbatim(qn, text):
+                continue
+            said = [w for w in name_fit(dest_vs[0], qn, tw, every=False) if w not in _TARGET_FILLER] or \
+                desc_fit(dest_vs[0], qn, tw)
+            st = layer_stage(dest_vs[0])
+            if not said or (st and company_stage(own_text(words(c)))[0] not in ("", st)):
+                continue
+            target = dest_vs[0]
+            if len(dest_vs) == 2:
+                big = next((y for y in dest_vs if y.get("scale") == "larger"), dest_vs[0])
+                floor = min((y.get("cap") or 0) for y in big["companies"]) if big["companies"] else 0
+                target = big if (c.get("cap") or 0) >= floor else next(y for y in dest_vs if y is not big)
+            why = (f"its own words: “{qn}” (what “{to}” is), and “{qo}”, not what “{shown(v)}” names (the placement contract's audit)")
+        else:
+            if shares_layer(v, words(c), c.get("industry")):
+                continue                     # "Other" only for one whose words share nothing with its layer
+            if rest_v is None:
+                rest_v = {"layer": other_label(theme), "description": "", "official": True, "basis": "rest", "companies": []}
+                vc = vc + [rest_v]
+                sizes[id(rest_v)] = 0
+            target, said = rest_v, []
+            why = f"its own words: “{qo}”, not what “{shown(v)}” names, nor any other layer's work (the placement contract's audit)"
+        v["companies"] = [y for y in v["companies"] if y is not c]
+        sizes[id(v)] -= 1
+        target["companies"] = list(target["companies"]) + [{**{k: y for k, y in c.items() if k not in ("single", "unfit", "unfit_why", "sold_by")},
+                                                            "moved": True, **({"fit": True} if to else {}),
+                                                            "refit": {"from": shown(v), "to": to, "why": why, "quotes": [qn, qo]}}]
+        rows.append({"ticker": s_, "name": c.get("name") or s_, "from": shown(v), "to": to or "Other", "quote_new": qn, "quote_old": qo})
     if rows:
         vc = [v for v in vc if v.get("companies") or not (v.get("by_model") or v.get("by_place") or v.get("industry_group") or v.get("official"))]
     return vc, rows, answer

@@ -402,10 +402,12 @@ def test_a_failing_company_is_asked_once_more_under_new_rules_and_no_more():
     B.place_rest(mapped(), "Defence", ABOUT.get, ask=lambda s, t: plain.append(t) or {"models": {}}, kept=once, carried=True)
     assert plain == []
     asked = []
-    _, retried = B.place_rest(mapped(), "Defence", ABOUT.get, ask=lambda s, t: asked.append(t) or {"models": {}}, kept=once, carried=True,
-                              published={})
+    # (third wave, updated on purpose: the same call also asks the layer audit once; only the models' questions are counted here)
+    _, retried = B.place_rest(mapped(), "Defence", ABOUT.get, ask=lambda s, t: (asked.append(t) if s == C.MODEL_SYSTEM else None) or {"models": {}},
+                              kept=once, carried=True, published={})
     assert len(asked) == 1 and "SH2" in asked[0] and "EL2" not in asked[0] and retried["reasked_rules"] == B.RULES
-    B.place_rest(mapped(), "Defence", ABOUT.get, ask=lambda s, t: pytest.fail("asked again"), kept=retried, carried=True, published={})
+    B.place_rest(mapped(), "Defence", ABOUT.get, ask=lambda s, t: pytest.fail("asked again") if s == C.MODEL_SYSTEM else {}, kept=retried,
+                 carried=True, published={})
 
 
 def test_3m_leaves_medical_devices_and_the_vehicle_makers_stay(monkeypatch):
@@ -422,3 +424,98 @@ def test_3m_leaves_medical_devices_and_the_vehicle_makers_stay(monkeypatch):
     for s_ in ("M&M", "MARUTI", "TATAMOTORS", "BAJAJ-AUTO", "EICHERMOT", "HEROMOTOCO", "TVSMOTOR"):
         if s_ in live:
             assert got[s_] == live[s_], s_
+
+
+# ---------- third wave: the judged audit with a hard factual check ----------
+# The deterministic stand-in for the model's audit answer in these offline proofs (production asks the real model, theme_check.audit_layers,
+# and checks its answer the same way): the R56 audit's named cases, each with quotes taken from the company's own description as sent
+AUDIT_NAMED = {"NVO": "Large pharma and biotech portfolios", "ABBV": "Large pharma and biotech portfolios",
+               "AMGN": "Large pharma and biotech portfolios", "GILD": "Large pharma and biotech portfolios",
+               "BMY": "Large pharma and biotech portfolios", "LLY": "Large pharma and biotech portfolios",
+               "SHOP": "Enterprise application subscriptions", "TOST": "Payment networks and processors",
+               "TWLO": "Data and developer infrastructure software", "U": "Ad-funded platforms and online games",
+               "YOU": "Security software subscriptions",
+               "MDT": "Implantable devices", "PEN": "High-volume disposables and supplies", "INMD": "Orthopedic and surgical device makers",
+               "AXGN": "Implantable devices", "INTC": "Analog and power integrated device makers", "MU": "Analog and power integrated device makers"}
+
+
+def audit_fake(named=AUDIT_NAMED, fabricate=()):
+    """A model stand-in: answers the audit for the named companies it is sent, quoting their own descriptions (a sentence naming a word of
+    the new layer's name or definition, and one that names nothing of the old layer's name); `fabricate`: symbols whose quotes it makes up."""
+    from app.intel import theme_check as C
+
+    def sentences(t):
+        return [" ".join(x.split()[:40]) for x in B._sentences(t) if len(x.split()) >= 4]
+
+    def ask(system, text):
+        if system == C.FIT_SYSTEM:
+            return C.vocabulary_fake(system, text)
+        if system != C.AUDIT_SYSTEM:
+            return {}
+        p = json.loads(text.split("AUDIT:\n", 1)[1])
+        ids = {x["name"]: k for k, x in p["layers"].items()}
+        moves = []
+        for k, lay in p["layers"].items():
+            old = B.core_words({"layer": lay["name"]}, p["theme"])
+            for m in lay["members"]:
+                to = named.get(m["symbol"])
+                if not to or to not in ids:
+                    continue
+                if m["symbol"] in fabricate:
+                    moves.append({"symbol": m["symbol"], "to": ids[to], "quote_new": "it is the largest maker of branded medicines on earth",
+                                  "quote_old": "it has never run a clinical trial of any kind"})
+                    continue
+                tgt = p["layers"][ids[to]]
+                vocab = {"layer": tgt["name"], "description": tgt["definition"]}
+                tw = B.kind_stems(p["theme"])
+                new = next((x for x in sentences(m["description"]) if B.name_fit(vocab, x, tw, every=False) or B.desc_fit(vocab, x, tw)), "")
+                old_q = next((x for x in sentences(m["description"]) if x != new and not any(B._word_near(a, w) for a in
+                                                                                          __import__("re").findall(r"[a-z]+", x.lower()) for w in old)), "")
+                if new and old_q:
+                    moves.append({"symbol": m["symbol"], "to": ids[to], "quote_new": new, "quote_old": old_q})
+        return {"moves": moves}
+    return ask
+
+
+def test_a_move_whose_quotes_are_not_in_its_stored_words_or_whose_words_name_its_layer_is_refused():
+    vc = [{"layer": "Specialty and clinical-stage biotechs", "description": "Develop specialty medicines.", "companies": [
+              {"ticker": "BIG", "name": "Big Co", "cap": 900.0}, {"ticker": "DEV", "name": "Dev Co", "cap": 5.0},
+              {"ticker": "DV2", "name": "Dev Two", "cap": 4.0}]},
+          {"layer": "Large pharma and biotech portfolios", "description": "Broad portfolios of branded medicines sold worldwide.", "companies": [
+              {"ticker": "P1", "name": "P1"}, {"ticker": "P2", "name": "P2"}]}]
+    words = {"BIG": "Big Co sells a broad portfolio of branded medicines in ninety countries. It was founded in 1923 in Copenhagen.",
+             "DEV": "Dev Co is a clinical-stage company developing a gene therapy for a rare muscle disease, its candidates in trials.",
+             "DV2": "Dev Two is a clinical-stage company developing antibodies for rare diseases, with two candidates in trials.",
+             "P1": "P1 is a global pharmaceutical company selling medicines in a hundred countries.", "P2": "P2 sells branded drugs worldwide."}
+    named = {"BIG": "Large pharma and biotech portfolios", "DEV": "Large pharma and biotech portfolios"}
+    ev = lambda s: words.get(s, "")      # noqa: E731
+    out, rows, kept = B.audit_moves(copy.deepcopy(vc), ev, "Biotech", ev, ask=audit_fake(named))
+    got = {c["ticker"]: v["layer"] for v in out for c in v["companies"]}
+    # BIG moves on its own quotes; DEV's own words name its layer's work ("clinical-stage"): a stable placement, refused
+    assert got["BIG"] == "Large pharma and biotech portfolios" and got["DEV"] == "Specialty and clinical-stage biotechs"
+    assert rows[0]["quote_new"] in words["BIG"] and kept["rules"] == B.RULES
+    # a made-up quote is refused, whatever layer it names
+    out, rows, _ = B.audit_moves(copy.deepcopy(vc), ev, "Biotech", ev, ask=audit_fake(named, fabricate=("BIG",)))
+    assert rows == [] and {c["ticker"]: v["layer"] for v in out for c in v["companies"]}["BIG"] == "Specialty and clinical-stage biotechs"
+    # the kept answer: nothing asked again under the same rules
+    B.audit_moves(copy.deepcopy(vc), ev, "Biotech", ev, ask=lambda s, t: pytest.fail("asked again"), kept_audit=kept)
+
+
+def test_the_audit_moves_the_named_cases_on_the_live_inputs_and_keeps_stable_placements(monkeypatch):
+    """The offline proof with the stand-in (production asks the model): Novo, AbbVie, Amgen, Gilead and Bristol Myers join Lilly in
+    "Large pharma and biotech portfolios"; the named software companies leave "Cloud and AI compute providers"; each move quotes its own
+    stored words; Capital One, Aluminium and the vehicle makers hold."""
+    bio = where(place("biotech", monkeypatch, ask=audit_fake()))
+    for s_ in ("NVO", "ABBV", "GILD", "BMY", "LLY"):
+        assert bio[s_][0] == "Large pharma and biotech portfolios", s_
+    # Amgen's stored words (as sent) hold no sentence naming the new layer's work: no quote passes the check, so it stays where it is
+    assert bio["AMGN"][0] == "Specialty and clinical-stage biotechs"
+    sw = where(place("software", monkeypatch, ask=audit_fake()))
+    moved = [s_ for s_ in ("SHOP", "TOST", "TWLO", "U", "YOU") if not sw[s_][0].startswith("Cloud and AI compute")]
+    assert set(moved) >= {"TWLO", "U"}, moved          # Shopify, Toast: no sentence of the words sent names the new layer; Clear Secure: past the 60 largest
+    for s_ in moved:
+        q = sw[s_][1]["refit"].get("quotes") or []
+        assert all(B.verbatim(x, inputs("software")["evidence"][s_]) for x in q if x), s_
+    assert sw["NBIS"][0].startswith("Cloud and AI compute")
+    assert sum(1 for x, _ in where(place("metals", monkeypatch, ask=audit_fake())).values() if x == "Aluminium") == 13
+    assert where(place("payments", monkeypatch, ask=audit_fake()))["COF"][0] == "Card issuers and consumer lenders"

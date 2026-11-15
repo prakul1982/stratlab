@@ -1344,6 +1344,42 @@ def best_existing_layers(layers: list[dict], companies: list[dict], ask, theme: 
     return out
 
 
+AUDIT_SYSTEM = """You audit the membership of the layers of a map of an industry theme. For each LAYER you get its name, its definition and
+some of its member companies, each with its own stored description. Name only the members that do NOT do what their layer says; for each,
+give the one EXISTING layer (by its id) whose definition fits what the company itself mainly does, or "other" when none does, with two
+quotes copied word for word from THAT company's description: "quote_new" showing the work of the new layer, "quote_old" showing its main
+business is not the old layer's. Use only the descriptions given. When unsure, leave the company out.
+Reply with ONLY this JSON: {"moves": [{"symbol": "<symbol>", "to": "<layer id>|other", "quote_new": "", "quote_old": ""}]}"""
+AUDIT_MAX = 60                  # p57: members one audit answer reads, the largest by value first
+
+
+def audit_layers(layers: list[dict], ask, theme: str) -> dict:
+    """p57 (third wave): {symbol: {"to": an existing layer's name or "" for "other", "quote_new", "quote_old"}} from one answer auditing the
+    map's layers ([{layer, description, members: [{symbol, name, words}]}]). An id not on the list or a symbol not sent is dropped; an empty
+    answer is no answer (raises)."""
+    import json
+    if not layers:
+        return {}
+    ids = {f"L{i}": v["layer"] for i, v in enumerate(layers)}
+    sent = {m["symbol"] for v in layers for m in v.get("members") or []}
+    payload = {"theme": theme, "layers": {k: {"name": layers[int(k[1:])]["layer"],
+                                              "definition": str(layers[int(k[1:])].get("description") or "")[:300],
+                                              "members": [{"symbol": m["symbol"], "name": m.get("name") or m["symbol"],
+                                                           "description": clean_description(m.get("words") or "", 600)}
+                                                          for m in layers[int(k[1:])].get("members") or []]} for k in ids}}
+    got = ask(AUDIT_SYSTEM, "AUDIT:\n" + json.dumps(payload, ensure_ascii=False))
+    if not isinstance(got, dict) or not got:
+        raise ValueError("no answer")
+    out = {}
+    for x in got.get("moves") or []:
+        if isinstance(x, dict) and x.get("symbol") in sent:
+            to = str(x.get("to") or "")
+            if to in ids or to.lower() == "other":
+                out[x["symbol"]] = {"to": ids.get(to, ""), "quote_new": " ".join(str(x.get("quote_new") or "").split()),
+                                    "quote_old": " ".join(str(x.get("quote_old") or "").split())}
+    return out
+
+
 def vocabulary_fake(system: str, text: str) -> dict:
     """p57: a deterministic stand-in for the model in offline replays only (the release gate, the tests): it answers FIT_SYSTEM from the
     vocabulary test (theme_base.vocabulary_choice) and nothing else ({}: no answer). The live placement asks the real model."""

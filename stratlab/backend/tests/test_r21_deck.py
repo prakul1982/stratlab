@@ -82,7 +82,7 @@ def test_the_answer_is_kept_in_the_shared_store_with_the_map(monkeypatch):
     from app.intel import theme_check as C
 
     def ask(system, text):
-        calls.append("models" if system == C.MODEL_SYSTEM else "place")
+        calls.append("models" if system == C.MODEL_SYSTEM else "audit" if system == C.AUDIT_SYSTEM else "place")
         if system == C.MODEL_SYSTEM:
             return {"models": {}}
         return {"place": [{"symbol": "EL2", "layer": "L2"}, {"symbol": "MS2", "layer": "L0"}, {"symbol": "SH2", "layer": "L1"}, {"symbol": "XX1", "layer": "none"}]}
@@ -92,7 +92,8 @@ def test_the_answer_is_kept_in_the_shared_store_with_the_map(monkeypatch):
     third = T.placed("IN", "Defence", m, mapped(), ask=ask)
     page = T.placed("IN", "Defence", m, mapped(), ask=None)                # the page's quick read: the kept answer, no AI
     # gl50 (R50, updated on purpose): the placement asked once; the models it didn't give asked once on the next check, then never again
-    assert calls == ["place", "models"] and first == second == third == page
+    # p57 (R57, updated on purpose): and the layer audit once a rules version, kept with the answer, never asked again
+    assert calls == ["place", "audit", "models"] and first == second == third == page
     assert ("theme:place", json.dumps(["place", "IN", "defence", 7, B.RULES])) in store
 
 
