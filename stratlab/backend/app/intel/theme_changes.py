@@ -58,10 +58,14 @@ def _num(v):
     return x if x == x and abs(x) != float("inf") else None
 
 
-def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None) -> dict:
+def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None, everyone: dict | None = None) -> dict:
     """A stored read, as compared: {"layers": [names in order], "cos": {symbol: [name, layer index, year, revenue, margin, "e"|"n"]},
     "off": {symbol: [name, industry]} (dropped as another business), "map": the map's symbols, "stamp": the map's time, "rules"}.
-    Each company in its first layer (a dive lists a company once)."""
+    Each company in its first layer (a dive lists a company once).
+    p57 (R56 review: Jyoti Resins, Picard Medical, Meghna Infracon and Infineon printed as removed, "no longer in the theme's map", and
+    Sarepta as removed from Biotech, all still members, only past the largest companies whose figures are worked out): `everyone`,
+    {symbol: [name, layer]} of every member of the theme's checked map, keeps each member outside the dive's companies too ("rest":
+    {symbol: [name, index into "rest_layers"]}), so a company leaving the figures is never said to leave the theme."""
     layers, cos = [], {}
     for b in dive.get("layers") or []:
         name = str(b.get("layer") or "")
@@ -108,7 +112,16 @@ def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None) -> dict
     # h56 (R56): only the points with the evidence tally's counts ([day, checked, total, description-verified]) are kept
     from .theme_data import tally_points
     hist = tally_points(mc.get("history"))
+    rest, rest_layers = {}, []
+    for s_, x in (everyone or {}).items():
+        if not s_ or s_ in cos or not isinstance(x, (list, tuple)) or len(x) < 2:
+            continue
+        lay = str(x[1] or "")
+        if lay not in rest_layers:
+            rest_layers.append(lay)
+        rest[s_] = [str(x[0] or s_), rest_layers.index(lay)]
     return {"layers": layers, "cos": cos, "off": off, "map": sorted({s_ for s_ in members if s_}), "stamp": int(_num(stamp) or 0),
+            **({"rest": rest, "rest_layers": rest_layers} if everyone is not None else {}),
             "rules": rules, "unit": dive.get("unit"), **({"cover": cover} if cover else {}), **({"back": back} if back else {}),
             **({"why": why} if why else {}), **({"gone": gone} if gone else {}), **({"dups": dups} if dups else {}),
             **({"mwhy": mwhy} if mwhy else {}), **({"ev": ev} if ev else {}), **({"ev_hist": hist} if hist else {}),
@@ -130,6 +143,9 @@ def dropped_why(x: dict) -> str:
         out = BUSINESS + str(x.get("scope") or "outside the theme's own scope")
     elif said == "unbacked":
         out = BUSINESS + f"the check's answer that it does the work of {work} is not backed by its own words{whose}, and the version before didn't have it as a member"
+    elif x.get("words_name"):
+        # p57: its own words use that group's terms: the check's answer is said as an answer, never as what its words don't show
+        out = BUSINESS + f"the check's answer on its own words{whose} was no for {work}, though its words use that group's terms"
     else:
         out = BUSINESS + f"its own words{whose} were checked and don't show the work of {work}"
     if x.get("listing"):
@@ -192,6 +208,40 @@ def lost_moves(got: dict | None) -> dict:
     return out
 
 
+# p57 (R56 review: Capital One, Sarepta (and in R55 Adyen) removed by a re-check under new placement rules whose only reason was the map
+# check's answer on the same stored words that had kept them in the version before): a removal on a check's answer alone is no evidence
+# against a published member, so such a company is still a published member of the layer it was removed from
+WEAK_REMOVALS = ("were checked and don't show the work of", "is not backed by its own words", "no longer in the theme's map",
+                 "the check's answer on its own words")
+
+
+def published_members(got: dict | None) -> dict:
+    """p57: {symbol: its layer in the published version} of every member of the stored version (the dive's companies, "cos", and every other
+    member, "rest"), and of each company a re-check under new placement rules removed since the theme's map last changed on a check's
+    answer alone (WEAK_REMOVALS), at the layer it was removed from: what the placement contract (theme_base.keep_published, hold_published,
+    theme_check.check_placements `held`) keeps unless stronger evidence moves it. {} when nothing is stored."""
+    got = got if isinstance(got, dict) else {}
+    snap = got.get("snap") if isinstance(got.get("snap"), dict) else {}
+    out: dict = {}
+    entries = [e for e in got.get("log") or [] if isinstance(e, dict)]
+    since = max((i for i, e in enumerate(entries) if e.get("cause") == "map"), default=-1)
+    for e in entries[since + 1:]:
+        if e.get("cause") != "rules":
+            continue
+        for r in e.get("removed") or []:
+            if isinstance(r, dict) and r.get("symbol") and r.get("layer") and any(w in str(r.get("why") or "") for w in WEAK_REMOVALS):
+                out[str(r["symbol"])] = str(r["layer"])
+    layers = snap.get("layers") or []
+    for s_, c in (snap.get("cos") or {}).items() if isinstance(snap.get("cos"), dict) else ():
+        if isinstance(c, list) and len(c) > 1 and isinstance(c[1], int) and 0 <= c[1] < len(layers):
+            out[s_] = str(layers[c[1]])
+    for s_ in (snap.get("rest") or {}) if isinstance(snap.get("rest"), dict) else ():
+        lay = rest_layer(snap, s_)
+        if lay is not None:
+            out[s_] = lay
+    return out
+
+
 def _layer_events(was: dict, now: dict) -> tuple[list[dict], set]:
     """(the layers renamed, split, merged, added or removed, the (from, to) pairs those events explain)."""
     old_names, new_names = was["layers"], now["layers"]
@@ -199,7 +249,9 @@ def _layer_events(was: dict, now: dict) -> tuple[list[dict], set]:
     fresh = [x for x in new_names if x not in old_names]
     if not gone and not fresh:
         return [], set()
-    members = lambda snap, name: {s_ for s_, c in snap["cos"].items() if snap["layers"][c[1]] == name}      # noqa: E731
+    # p57 (R56 audit: "added (0 companies)"): a layer's members past the figures count too
+    members = lambda snap, name: ({s_ for s_, c in snap["cos"].items() if snap["layers"][c[1]] == name}      # noqa: E731
+                                  | {s_ for s_ in (snap.get("rest") or {}) if rest_layer(snap, s_) == name})
     src = {g: members(was, g) for g in gone}
     dst = {d: members(now, d) for d in fresh}
     m = {(g, d): len(src[g] & dst[d]) for g in gone for d in fresh}
@@ -235,7 +287,7 @@ def _layer_events(was: dict, now: dict) -> tuple[list[dict], set]:
     why = {x.get("layer"): x.get("why") for x in now.get("gone") or [] if isinstance(x, dict)}
     out += [{"kind": "removed", "from": [g], "to": [], "n": len(src[g]), "went": went(g), **({"why": why[g]} if why.get(g) else {})}
             for g in gone if g not in used_g]
-    out += [{"kind": "added", "from": [], "to": [d], "n": len(dst[d])} for d in fresh if d not in used_d]
+    out += [{"kind": "added", "from": [], "to": [d], "n": len(dst[d])} for d in fresh if d not in used_d and dst[d]]
     return out, pairs
 
 
@@ -263,13 +315,32 @@ def _moved_much(old, new, share: bool) -> bool:
     return abs(new - old) > MARGIN_POINTS
 
 
+def rest_layer(snap: dict, s_: str):
+    """p57: the layer of a member kept outside the dive's companies ("rest"), or None when the snapshot keeps no such member."""
+    r = (snap.get("rest") or {}).get(s_) if isinstance(snap.get("rest"), dict) else None
+    ls = snap.get("rest_layers") or []
+    if isinstance(r, list) and len(r) > 1 and isinstance(r[1], int) and 0 <= r[1] < len(ls):
+        return str(ls[r[1]])
+    return None
+
+
+OUTSIDE_FIGURES = "still in the theme, outside the largest companies whose figures are worked out"
+
+
 def diff(was: dict, now: dict) -> dict:
-    """What differs between two snapshots: {"counts": {kind: n}, kind: [rows]} for KINDS. Empty lists when nothing differs."""
+    """What differs between two snapshots: {"counts": {kind: n}, kind: [rows]} for KINDS. Empty lists when nothing differs.
+    p57: a member of either version kept outside the dive's companies ("rest") counts as a member: a company entering or leaving the
+    figures is never said to join or leave the theme (only a change of its layer is said)."""
     lay_w, lay_n = was["layers"], now["layers"]
     events, pairs = _layer_events(was, now)
     added, removed, moved, restated = [], [], [], []
     for s_, c in now["cos"].items():
         old = was["cos"].get(s_)
+        if old is None and rest_layer(was, s_) is not None:          # p57: a member before, outside the figures then
+            a, b = rest_layer(was, s_), lay_n[c[1]]
+            if a != b and (a, b) not in pairs:
+                moved.append({"symbol": s_, "name": c[0], "from": a, "to": b})
+            continue
         if old is None:
             # d53 (R53): every addition with why it is in the theme, and one an earlier version dropped as another business said so
             why = (now.get("why") or {}).get(s_) or ""
@@ -289,8 +360,29 @@ def diff(was: dict, now: dict) -> dict:
                                  "measure": "EBITDA margin" if c[5] == "e" else "Net margin" if c[5] == "n" else "",
                                  "what": [k for k, on in (("revenue", rev), ("margin", mar)) if on]})
     for s_, c in was["cos"].items():
+        if s_ not in now["cos"] and rest_layer(now, s_) is not None:      # p57: still a member, outside the figures now
+            a, b = lay_w[c[1]], rest_layer(now, s_)
+            if a != b and (a, b) not in pairs:
+                moved.append({"symbol": s_, "name": c[0], "from": a, "to": b, "why": OUTSIDE_FIGURES})
+            continue
         if s_ not in now["cos"]:
             removed.append({"symbol": s_, "name": c[0], "layer": lay_w[c[1]], "why": _why_removed(s_, now, was)})
+    if isinstance(was.get("rest"), dict) and isinstance(now.get("rest"), dict):
+        # p57: the members outside the figures in both versions: each that left the theme, joined it, or changed layer
+        names_now = set(lay_n) | {str(x) for x in now.get("rest_layers") or []}
+        for s_, r in was["rest"].items():
+            if s_ in now["cos"] or not isinstance(r, list) or not r:
+                continue
+            a, b = rest_layer(was, s_), rest_layer(now, s_)
+            if b is None:
+                removed.append({"symbol": s_, "name": str(r[0]), "layer": a or "", "why": _why_removed(s_, now, was)})
+            elif a != b and (a, b) not in pairs and a in names_now:
+                moved.append({"symbol": s_, "name": str(r[0]), "from": a, "to": b, "why": OUTSIDE_FIGURES})
+        for s_, r in now["rest"].items():
+            if s_ in was["cos"] or s_ in was["rest"] or not isinstance(r, list) or not r:
+                continue
+            why = (now.get("why") or {}).get(s_) or ""
+            added.append({"symbol": s_, "name": str(r[0]), "layer": rest_layer(now, s_) or "", **({"why": why} if why else {})})
     by_name = lambda r: str(r.get("name") or "").lower()          # noqa: E731
     out = {"removed": sorted(removed, key=by_name), "added": sorted(added, key=by_name), "moved": sorted(moved, key=by_name),
            "layers": events, "restated": sorted(restated, key=by_name)}
@@ -344,10 +436,12 @@ def apply(cur: dict | None, now: dict, refresh: bool = False, at: datetime | Non
     return {"snap": now, "log": log, "since": since or at.date().isoformat()}
 
 
-def record(region: str, name: str, dive: dict, members=(), stamp=0, rules=None, refresh: bool = False, at: datetime | None = None) -> None:
-    """Keep this read in the theme's log (atomically: two requests storing the same theme at once both land). Never raises."""
+def record(region: str, name: str, dive: dict, members=(), stamp=0, rules=None, refresh: bool = False, at: datetime | None = None,
+           everyone: dict | None = None) -> None:
+    """Keep this read in the theme's log (atomically: two requests storing the same theme at once both land). Never raises. p57:
+    `everyone`, every member of the theme's checked map ({symbol: [name, layer]}), kept with the snapshot (snapshot "rest")."""
     try:
-        now = snapshot(dive, members, stamp, rules)
+        now = snapshot(dive, members, stamp, rules, everyone=everyone)
         if not now["cos"]:
             return
         db.update_setting(key_of(region, name), lambda cur: json.dumps(apply(db.json_value(cur, {}), now, refresh, at), ensure_ascii=False,

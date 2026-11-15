@@ -501,10 +501,10 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54}  # rules versions whose change only adds to a kept placement (t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55}  # rules versions whose change only adds to a kept placement (p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
-EARLIER_MAX = 10                # rv51: how many carried versions back an earlier answer of the same map is looked for (t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
+EARLIER_MAX = 11                # rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
 
 
 def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
@@ -561,8 +561,10 @@ def placed(region: str, theme: str, m: dict, out: dict, ask=None) -> dict:
                                      **({"figures_of": _figures_reader(region)} if staged else {}),
                                      carried=version is not None and version != theme_base.RULES, previous=previous_layers(region, theme, m),
                                      **({"off_before": ob} if ob else {}), **({"moved_before": mb} if mb else {}),
-                                     **({"moved_out": mo} if mo else {}))
-    if ask is not None and got and got != kept and (got.get("names_for") or any(x.get("by") == "ai" for x in (got.get("assign") or {}).values())):
+                                     **({"moved_out": mo} if mo else {}), published=published_layers(region, theme, m))
+    # p57: the misfit and audit answers (and the retry mark) are kept too, so each is asked at most once a theme and rules version
+    if ask is not None and got and got != kept and (got.get("names_for") or any(x.get("by") == "ai" for x in (got.get("assign") or {}).values())
+                                                    or any(got.get(k) != kept.get(k) for k in ("fit", "audit", "reasked_rules") if got.get(k))):
         try:
             computed.put("theme:place", key, got, label=m.get("sector") or theme, region=region)
         except Exception as e:
@@ -873,6 +875,31 @@ def previous_confirmed(region: str, theme: str, m: dict) -> dict:
         return {}
 
 
+def published_layers(region: str, theme: str, m: dict) -> dict:
+    """p57 (R56 review, the placement contract): {symbol: its layer in the published version} of every member of the stored version of
+    this same map (the dive's companies and every other member) and of each company a re-check under new placement rules removed on a
+    check's answer alone (theme_changes.published_members), for theme_check.check_placements `held`, theme_base.keep_published and
+    hold_published. {} for a theme read for the first time, or a snapshot of another map."""
+    try:
+        got = theme_changes.stored(region, m.get("_library") or theme) or {}
+        snap = got.get("snap") or {}
+        if not snap or int(float(snap.get("stamp") or 0)) != int(float(m.get("generated_at") or 0)):
+            return {}
+        return theme_changes.published_members(got)
+    except Exception as e:
+        print("theme: published members not read:", type(e).__name__, str(e)[:100])
+        return {}
+
+
+def held_groups(m: dict, published: dict, kept: dict | None) -> dict:
+    """p57: {symbol: the map group of its published layer ("" when none of the map's)} of each published member the map names, for
+    theme_check.check_placements `held` (a published member that passes the contract is not asked again)."""
+    rename = theme_base.answer_renames(kept)
+    groups = [v.get("layer") or "" for v in m.get("value_chain") or [] if not v.get("official")]
+    named = {c.get("ticker") for v in m.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}
+    return {s_: theme_base.published_group(lay, groups, rename) or "" for s_, lay in (published or {}).items() if s_ in named}
+
+
 def off_before(region: str, theme: str, m: dict) -> dict:
     """d53 (R53): {symbol: [name, industry]} of the companies an earlier stored version of this theme dropped as another business
     (theme_changes.off_memory), whatever map it was of: a company's business doesn't change with the map. {} when none is stored."""
@@ -954,9 +981,15 @@ def _check(region: str, theme: str, m: dict) -> dict:
             VERDICTS.clear()
         # e57 (RC7): a company the map names under a line the index doesn't list is the index's company, never a second member
         mi = theme_identity.resolve_identity(m, _rows(region))
-        out = theme_check.check_placements(mi, evidence_reader(region, _map_names(mi)), _ask, theme, VERDICTS)
+        # p57: the placement contract: a published member that passes it is not asked again (held), and one the check still leaves out on
+        # its answer alone goes back to its published group (keep_published), unless its own words contradict that group
+        pub = published_layers(region, theme, m)
+        kept_ans, _ = kept_placement(region, theme, m)
+        out = theme_check.check_placements(mi, evidence_reader(region, _map_names(mi)), _ask, theme, VERDICTS, held=held_groups(mi, pub, kept_ans))
         # t56: a member of the previous version stays when this check's "yes" only lacked backing words (no evidence against it)
         out = theme_base.keep_confirmed(out, mi, previous_confirmed(region, theme, m))
+        about_ = _about_reader(region, _map_names(mi), 0)
+        out = theme_base.keep_published(out, pub, lambda s_: about_(s_), rename=theme_base.answer_renames(kept_ans))
         missing = None
         if region == "US":
             try:
@@ -1271,6 +1304,7 @@ def placement_inputs(q: str, region: str = "IN", profile=Depends(current_profile
                  "off_before": off_before(r, theme, m),        # d53: the companies an earlier version dropped as another business
                  "moved_before": moved_before(r, theme, m),    # c54: the moves the stored change log records
                  "moved_out": moved_out(r, theme, m),          # t56: the moves of the re-check that removed each layer the snapshot lost
+                 "published": published_layers(r, theme, m),   # p57: every published member's layer (the placement contract)
                  "facts": {s_: facts(s_) for s_ in sorted(names)},
                  # v55: each company's latest stored revenue and EBITDA margin, as the placement reads its stage (theme_base.stage_moves)
                  "figures": {s_: f for s_, f in ((s_, figures(s_)) for s_ in sorted(names)) if f}})
@@ -1410,7 +1444,14 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
         pieces = getattr(src, "pieces", None) or {}
         computed.put(theme_library.DIVE, key, {"dive": hit, "pieces": pieces, "priced": priced_mark(r, list(pieces))}, label=m.get("sector") or theme,
                      region=r, by=by)
-        theme_changes.record(r, m.get("_library") or theme, hit, _map_names(fm), m.get("generated_at"), theme_base.RULES, refresh)   # f4: "What changed"
+        # p57: every member of the checked map with its layer, so a company leaving the figures is never said to leave the theme
+        everyone: dict = {}
+        for v in m.get("value_chain") or []:
+            for c in v.get("companies") or []:
+                if c.get("ticker"):
+                    everyone.setdefault(c["ticker"], [c.get("name") or c["ticker"], v.get("layer") or ""])
+        theme_changes.record(r, m.get("_library") or theme, hit, _map_names(fm), m.get("generated_at"), theme_base.RULES, refresh,
+                             everyone=everyone)   # f4: "What changed"
         theme_changes.flag(r, m.get("_library") or theme, hit.get("coverage"))          # cl48: the admins' alert (coverage_checks)
         flag_gaps(r, m.get("_library") or theme, hit.get("data_gaps"))                  # e57: the admins' alert (data_gap_checks)
         auto_post(r, theme, hit)

@@ -107,6 +107,20 @@ def own_words(about, group_text, claimed) -> str:
     return ""
 
 
+def group_sentence(about, group_text) -> str:
+    """p57: the first sentence of a company's own description (word for word, MIN_QUOTE_WORDS to MAX_QUOTE_WORDS words) that speaks of a
+    group's work (supports), or "": the quote a published member kept in its group shows (theme_base.keep_published, check_placements
+    `held`), with no answer of the AI's to compare."""
+    for part in _SENTENCE.findall(str(about or "")):
+        words = part.split()
+        if len(words) < MIN_QUOTE_WORDS:
+            continue
+        quote = " ".join(words[:MAX_QUOTE_WORDS])
+        if supports(quote, group_text) and quote_in(quote, about):
+            return quote
+    return ""
+
+
 # ---------- the groups of a map ----------
 def groups_of(out: dict) -> list[dict]:
     """[{id, kind, index, name, text, companies}] for the map's value-chain layers ("L0"...) and sub-themes ("S0"...)."""
@@ -183,12 +197,17 @@ def gather_evidence(symbols: list[str], read, budget: float = EVIDENCE_BUDGET, w
     return got, pending
 
 
-def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None, budget: float = EVIDENCE_BUDGET) -> dict:
+def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None, budget: float = EVIDENCE_BUDGET, held: dict | None = None) -> dict:
     """The map with only the companies whose own description shows they do their group's work. Each kept company in a
     layer or sub-theme carries "what" (the words from its description). Also gives "placements": {"checked": every company
     could be checked, "pending": how many couldn't be yet, "left_out": how many named pairs were dropped}. `evidence_of(symbols)`
     -> ({symbol: {about, industry}}, pending symbols); `ask(system, text)` is the AI's JSON answer; `verdict_cache` is a
-    dict that keeps a pair's answer for the next request."""
+    dict that keeps a pair's answer for the next request.
+    p57 (R56 review: Capital One and Sarepta out on a re-check's "no" for the same stored words the version before had checked to show
+    their group's work): `held`, {symbol: the map group of its published layer, "" when none of the map's (theme_base.published_group)}:
+    a published member is not asked again: it stays in that group (else the first the map names it in), its own words' sentence of the
+    group's work its quote when there is one ("verified"), else kept unconfirmed ("kept_member"), unless its own words contradict that group
+    (theme_base.contradicted): then it is asked like a new company. "held" in the placements counts those not asked."""
     out = dict(out)
     groups = groups_of(out)
     by_id = {g["id"]: g for g in groups}
@@ -203,9 +222,24 @@ def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None
     cache = verdict_cache if verdict_cache is not None else {}
     got: dict[str, dict] = {}
     todo = []
+    not_asked = 0
+    from .theme_base import KEPT_SAID, contradicted
+    for sym, gids in syms.items():
+        if sym not in (held or {}):
+            continue
+        ev = evidence.get(sym) or {}
+        home = next((g for g in gids if by_id[g]["name"] == held[sym]), gids[0])
+        g = by_id[home]
+        if contradicted(g["name"], ev.get("about") or "", ev.get("industry") or "", g["text"]):
+            continue                         # its own words contradict its published group: asked like a new company
+        quote = group_sentence(ev.get("about") or "", f"{g['name']} {g['text']}")
+        for gid in gids:
+            got[f"{gid}|{sym}"] = {"does": gid == home, "quote": quote if gid == home else "", "held": True}
+        pending.discard(sym)
+        not_asked += 1
     for sym, gids in syms.items():
         ev = evidence.get(sym)
-        if not ev:
+        if not ev or f"{gids[0]}|{sym}" in got:
             continue
         need = []
         for gid in gids:
@@ -252,7 +286,12 @@ def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None
         for c in cos:
             sym = c.get("ticker")
             v = got.get(f"{gid}|{sym}")
-            if v and v["does"]:
+            if v and v["does"] and v.get("held"):          # p57: a published member, not asked again
+                kept.append({**c, "what": v["quote"].strip(" ,;:-–—"), "verified": bool(v["quote"]),
+                             "kept_member": KEPT_SAID.format(layer=by_id[gid]["name"])})
+            elif v and v.get("held"):
+                pass                                      # its other groups: it is kept once, in its published one
+            elif v and v["does"]:
                 kept.append({**c, "what": v["quote"].strip(" ,;:-–—"), "verified": True})
             elif v is None:
                 # not checked yet (the AI or a source busy) or nothing to check it by (no description found): shown, marked not yet
@@ -280,11 +319,16 @@ def check_placements(out: dict, evidence_of, ask, theme: str, verdict_cache=None
             continue
         from .theme_base import issuer_name, listing_line
         line = listing_line(names[sym])
+        # p57 (R56 review: "its own words don't show the work of “Card issuers and lenders”" printed of a card issuer): whether its own words
+        # use the vocabulary of a group it was left out of, so its reason never says they don't show a work they name
+        from .theme_base import shares_vocabulary
+        about_ = (evidence.get(sym) or {}).get("about") or ""
+        names_it = [by_id[g]["name"] for g in gids if about_ and shares_vocabulary(by_id[g]["name"], about_)]
         dropped.append({"ticker": sym, "name": names[sym], "groups": [by_id[g]["name"] for g in gids],
-                        "said": "unbacked" if all(x.get("unbacked") for x in said) else "no",
+                        "said": "unbacked" if all(x.get("unbacked") for x in said) else "no", **({"words_name": names_it} if names_it else {}),
                         **({"listing": line, "issuer": issuer_name(names[sym])} if line else {})})
     out["placements"] = {"checked": not pending and not failed, "pending": len(pending), "left_out": left_out, "placed": len(placed),
-                         "unconfirmed": len(unconfirmed), **({"dropped": dropped} if dropped else {})}
+                         "unconfirmed": len(unconfirmed), **({"dropped": dropped} if dropped else {}), **({"held": not_asked} if not_asked else {})}
     return out
 
 
@@ -1264,6 +1308,93 @@ def recheck_models(rejected: list[dict], ask, theme: str) -> dict:
     pairs = [(s, x.get("model") if isinstance(x, dict) else x) for s, x in model_items(got.get("models") if isinstance(got, dict) else None)]
     ev = {c["symbol"]: c.get("evidence") or "" for c in rejected}
     return {s: str(m) for s, m in pairs if s in ev and str(m) in MODELS and model_supported(str(m), ev[s])}
+
+
+# p57 (R56 audit RC2/RC3, second wave): the companies a strict test flags as misfits of their layer, judged against the map's existing
+# layers in one bounded answer a theme and rules version (theme_base.misfit_moves); the answer is kept only where the company's own words
+# bear it out
+FIT_SYSTEM = """You place listed companies into the EXISTING layers of a map of an industry theme. For each COMPANY, using ONLY its own
+description given, pick the one existing layer (by its id) whose definition describes what the company itself mainly does, or "other" when
+none does. Never invent a layer. Being a customer of, or a supplier to, a layer's companies is not doing its work.
+Reply with ONLY this JSON: {"moves": [{"symbol": "<symbol>", "layer": "<layer id>|other"}]}"""
+
+
+def best_existing_layers(layers: list[dict], companies: list[dict], ask, theme: str) -> dict:
+    """p57: {symbol: an existing layer's name, or "" for "other"} for the flagged companies ([{symbol, name, words, layer}]) against the
+    map's existing layers ([{layer, description}]), one answer. An id not on the list, or a symbol not asked, is dropped; an empty answer
+    is no answer (raises), so nothing moves on it."""
+    import json
+    if not companies or not layers:
+        return {}
+    ids = {f"L{i}": v["layer"] for i, v in enumerate(layers)}
+    payload = {"theme": theme, "layers": {k: {"name": n, "definition": str(layers[int(k[1:])].get("description") or "")[:300]} for k, n in ids.items()},
+               "companies": [{"symbol": c["symbol"], "name": c.get("name") or c["symbol"], "now_in": c.get("layer") or "", "flag": c.get("why") or "",
+                              "description": clean_description(c.get("words") or "", 420)} for c in companies]}
+    got = ask(FIT_SYSTEM, "MAP:\n" + json.dumps(payload, ensure_ascii=False))
+    if not isinstance(got, dict) or not got:
+        raise ValueError("no answer")
+    want = {c["symbol"] for c in companies}
+    out = {}
+    for x in got.get("moves") or []:
+        if isinstance(x, dict) and x.get("symbol") in want:
+            lay = str(x.get("layer") or "")
+            if lay in ids:
+                out[x["symbol"]] = ids[lay]
+            elif lay.lower() == "other":
+                out[x["symbol"]] = ""
+    return out
+
+
+AUDIT_SYSTEM = """You audit the membership of the layers of a map of an industry theme. For each LAYER you get its name, its definition and
+some of its member companies, each with its own stored description. Name only the members that do NOT do what their layer says; for each,
+give the one EXISTING layer (by its id) whose definition fits what the company itself mainly does, or "other" when none does, with two
+quotes copied word for word from THAT company's description: "quote_new" showing the work of the new layer, "quote_old" showing its main
+business is not the old layer's. Use only the descriptions given. When unsure, leave the company out.
+Reply with ONLY this JSON: {"moves": [{"symbol": "<symbol>", "to": "<layer id>|other", "quote_new": "", "quote_old": ""}]}"""
+AUDIT_MAX = 60                  # p57: members one audit answer reads, the largest by value first
+
+
+def audit_layers(layers: list[dict], ask, theme: str) -> dict:
+    """p57 (third wave): {symbol: {"to": an existing layer's name or "" for "other", "quote_new", "quote_old"}} from one answer auditing the
+    map's layers ([{layer, description, members: [{symbol, name, words}]}]). An id not on the list or a symbol not sent is dropped; an empty
+    answer is no answer (raises)."""
+    import json
+    if not layers:
+        return {}
+    ids = {f"L{i}": v["layer"] for i, v in enumerate(layers)}
+    sent = {m["symbol"] for v in layers for m in v.get("members") or []}
+    payload = {"theme": theme, "layers": {k: {"name": layers[int(k[1:])]["layer"],
+                                              "definition": str(layers[int(k[1:])].get("description") or "")[:300],
+                                              "members": [{"symbol": m["symbol"], "name": m.get("name") or m["symbol"],
+                                                           "description": clean_description(m.get("words") or "", 600)}
+                                                          for m in layers[int(k[1:])].get("members") or []]} for k in ids}}
+    got = ask(AUDIT_SYSTEM, "AUDIT:\n" + json.dumps(payload, ensure_ascii=False))
+    if not isinstance(got, dict) or not got:
+        raise ValueError("no answer")
+    out = {}
+    for x in got.get("moves") or []:
+        if isinstance(x, dict) and x.get("symbol") in sent:
+            to = str(x.get("to") or "")
+            if to in ids or to.lower() == "other":
+                out[x["symbol"]] = {"to": ids.get(to, ""), "quote_new": " ".join(str(x.get("quote_new") or "").split()),
+                                    "quote_old": " ".join(str(x.get("quote_old") or "").split())}
+    return out
+
+
+def vocabulary_fake(system: str, text: str) -> dict:
+    """p57: a deterministic stand-in for the model in offline replays only (the release gate, the tests): it answers FIT_SYSTEM from the
+    vocabulary test (theme_base.vocabulary_choice) and nothing else ({}: no answer). The live placement asks the real model."""
+    import json
+    from .theme_base import vocabulary_choice
+    if system != FIT_SYSTEM:
+        return {}
+    p = json.loads(text.split("MAP:\n", 1)[1])
+    names = {x["name"]: k for k, x in p["layers"].items()}
+    vc = [{"layer": x["name"], "description": x.get("definition") or "", "companies": [{"ticker": ""}]} for x in p["layers"].values()]
+    flagged = [{"symbol": c["symbol"], "why": c.get("flag") or "", "words": c.get("description") or "",
+                "targets": [n for n in names if n != c.get("now_in")]} for c in p["companies"]]
+    got = vocabulary_choice(flagged, vc, None, p.get("theme") or "")
+    return {"moves": [{"symbol": s_, "layer": names[t] if t else "other"} for s_, t in got.items()]}
 
 
 # ---------- a layer's name fits how its companies earn once each holds one model (R26) ----------

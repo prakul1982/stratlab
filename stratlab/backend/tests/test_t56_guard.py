@@ -311,15 +311,19 @@ def test_a_company_the_map_s_check_leaves_out_says_it_was_a_business_decision_it
     out = TC.check_placements(_map(), ev, _ask({"L0|FISV": "provides payment processing for merchants"}), "Payments and fintech")
     assert [c["ticker"] for c in out["value_chain"][0]["companies"]] == ["FISV"]
     drop = out["placements"]["dropped"]
+    # p57 (R56 review, updated on purpose): its words ("an acquiring bank") use the group's terms, recorded so its reason never says they
+    # don't show that work
     assert drop == [{"ticker": "ADYEY", "name": "Adyen Nv-Unspon ADR", "groups": ["Merchant acquiring and processing"], "said": "no",
+                     "words_name": ["Merchant acquiring and processing"],
                      "listing": "listed as an unsponsored depositary receipt of Adyen", "issuer": "Adyen"}]
     was = C.snapshot({"layers": [{"layer": "Merchant acquiring and processing", "companies": [{"symbol": "ADYEY", "name": "Adyen Nv-Unspon ADR"},
                                                                                             {"symbol": "FISV", "name": "Fiserv"}]}]}, ["ADYEY", "FISV"])
     now = C.snapshot({"layers": [{"layer": "Merchant acquiring and processing", "companies": [{"symbol": "FISV", "name": "Fiserv"}]}],
                       "placements": out["placements"]}, ["FISV"])
     why = C.diff(was, now)["removed"][0]["why"]
-    assert why == ("business membership: its own words (read as Adyen's) were checked and don't show the work of “Merchant acquiring and "
-                   "processing”; listing: listed as an unsponsored depositary receipt of Adyen, which removes no company")
+    assert why == ("business membership: the check's answer on its own words (read as Adyen's) was no for “Merchant acquiring and "
+                   "processing”, though its words use that group's terms; listing: listed as an unsponsored depositary receipt of Adyen, "
+                   "which removes no company")          # p57 (updated on purpose): the answer said as an answer, its words naming the work
     # a "yes" its words don't back is told apart from a "no"
     out = TC.check_placements(_map(), ev, _ask({"L0|ADYEY": "processes payments for the largest merchants worldwide",
                                                 "L0|FISV": "provides payment processing for merchants"}), "Payments and fintech")
@@ -376,5 +380,5 @@ def test_the_rules_version_and_the_new_inputs():
     from app import deck as K
     from app.intel import theme_data as D
     from app.intel import theme_routes as TR
-    assert B.RULES == 55 and TR.PLACE_CARRY[55] == 54 and K.THEME_DECK_VERSION == 66 and D.DIVE_TEXT == 26 and TR.EARLIER_MAX == 10
+    assert B.RULES == 56 and TR.PLACE_CARRY[56] == 55 and TR.PLACE_CARRY[55] == 54 and K.THEME_DECK_VERSION == 67 and D.DIVE_TEXT == 27 and TR.EARLIER_MAX == 11
     assert "moved_out" in B.place_rest.__code__.co_varnames
