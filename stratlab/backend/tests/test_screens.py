@@ -440,7 +440,9 @@ def test_the_indexer_builds_missing_pages_through_the_ration_then_the_index(w, m
     monkeypatch.setattr(main, "stock_page_store", store)
     job = screens.Indexer(main.screen_warm, warm_per_run=5, gap=0)
     status = job.run_once(sleep=lambda s: None)
-    assert built == ["RELIANCE", "TCS", "INFY"]          # the sector lists' companies first; the ration stops the run
+    # updated on purpose (owner 15 Nov, rebuild faster): the two markets are taken in turn, each market's sector-list companies
+    # first (RELIANCE, TCS before INFY); the ration of 3 stops the run (was IN's three, then US)
+    assert built == ["RELIANCE", "AAPL", "TCS"]
     assert status["rows"]["IN"] >= 1 and "Busy" in status["last_error"]
     index = screens.load_index("IN")
     assert {r["symbol"] for r in index["rows"]} <= set(built) and w["ai"].calls == 0

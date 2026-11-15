@@ -5344,8 +5344,8 @@ def screen_warm(region: str, sym: str, co: dict):
     stock_page_store.get(region, sym, co)
 
 
-screen_indexer = screens.Indexer(lambda r, s, c: screen_warm(r, s, c), night_per_run=60)   # three times as many pages a run in India's night
-stock_page_store.limit = lambda: stock_page_store.per_minute * (screens.FAST_RATION if screens.fast_window() else 1)   # twice the pages a minute in India's night and at the weekend
+screen_indexer = screens.Indexer(lambda r, s, c: screen_warm(r, s, c), night_per_run=60)   # more pages a run in India's night and at the weekend (screens.Indexer.pace)
+stock_page_store.limit = lambda: stock_page_store.per_minute * (screens.FAST_RATION if screens.fast_window() else 1)   # FAST_RATION times the pages a minute in India's night and at the weekend
 stock_page_store.on_built = screens.note_page       # a page built is in the screens and the largest list at once (R8O-005)
 stock_page_store.on_priced = screens.note_price     # ...and a page moved to a newer close, its price and market value (LIVE3-003)
 
