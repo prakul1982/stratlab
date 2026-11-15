@@ -370,7 +370,7 @@ def eps_shares(p: dict) -> tuple[float, float] | None:
 
 
 def market_cap(cap_cr: float | None, price: float | None, equity_cr: float | None, face: float | None, issued_since: bool = False,
-               eps_count: tuple[float, float] | None = None) -> float | None:
+               eps_count: tuple[float, float] | None = None, alt_count: tuple[float, float] | None = None) -> float | None:
     """Market value in crore: price times the shares in issue. The source's own figure is price times its share count at
     the moment it was read, which can lag (TCS, 8 Oct 2026: the screener said 370.3 crore shares, the company page
     361.7, from two reads). The share capital over the face value counts the shares from the balance sheet; when the
@@ -390,11 +390,15 @@ def market_cap(cap_cr: float | None, price: float | None, equity_cr: float | Non
         # short, so ₹12.67 lakh crore beside ₹13.05; TONBO ₹6,707 crore beside ₹6,986): the source's count is the shares in issue now
         return cap_cr
     source = cap_cr / price
-    if eps_count and abs(source / eps_count[0] - 1) <= eps_count[1] and abs(shares / eps_count[0] - 1) > eps_count[1]:
-        # the source's count is the one its earnings per share were worked out on, and the share capital's isn't: that capital
-        # holds more than the equity shares in issue (audit, 1 Nov: BSE:531572's 4.26 cr of capital is 42.6 lakh ₹10 shares, its
-        # profit ÷ EPS 26.9 lakh, as the source counts; the value came out 31.1 cr against 19.6 and the P/E check failed)
-        return cap_cr
+    for cnt in (eps_count, alt_count):
+        if cnt and abs(source / cnt[0] - 1) <= cnt[1] and abs(shares / cnt[0] - 1) > cnt[1]:
+            # the source's count is the one its earnings per share were worked out on, and the share capital's isn't: that capital
+            # holds more than the equity shares in issue (audit, 1 Nov: BSE:531572's 4.26 cr of capital is 42.6 lakh ₹10 shares, its
+            # profit ÷ EPS 26.9 lakh, as the source counts; the value came out 31.1 cr against 19.6 and the P/E check failed). The
+            # standalone accounts' count (`alt_count`) settles it for a consolidated page, whose profit includes the minority's share
+            # while its EPS is the parent's (lane dat57: JSW Steel's ₹305 cr of capital at ₹1 against 244.5 cr shares in issue,
+            # standalone profit ₹6,522 cr ÷ EPS 26.67 = 244.5 cr; its value showed ₹4.11 lakh cr against ₹3.30 lakh cr)
+            return cap_cr
     if abs(source / shares - 1) > SHARES_DRIFT and shares >= source * (1 - TRUST_GAP):
         return round(price * shares, 2)
     return cap_cr
@@ -457,7 +461,7 @@ def summary(p: dict, listed_on: str | None = None) -> dict:
         latest_yoy = {"sales": grow(s_now, s_prev), "profit": grow(p_now, p_prev), "basis": "year",
                       "of": f"Year to {y_now} vs year to {y_prev}" if y_now and y_prev else None}
     cap = market_cap(num(r.get("Market Cap")), price, equity[-1] if equity else None, face, balance_ends_before(p, listed_on),
-                     eps_shares(p))
+                     eps_shares(p), tuple(p["std_eps_count"]) if p.get("std_eps_count") else None)
     pe, pe_why = checked_pe(p, price, cap)
     src_cap = num(r.get("Market Cap"))
     if pe is not None and pe_basis(p) is None and src_cap and cap and price and equity and face and abs(cap / src_cap - 1) > SHARES_DRIFT:
@@ -495,15 +499,38 @@ def _years_of(p: dict) -> int:
     return sum(1 for c in pl.get("cols") or [] if str(c).upper() != "TTM")
 
 
+def _last_year(p: dict | None):
+    """The latest full year a page's results table gives ("Mar 2026" -> (2026, 3)), None without one."""
+    for c in reversed((p or {}).get("pl", {}).get("cols") or []):
+        try:
+            d = datetime.strptime(str(c).strip(), "%b %Y")
+        except ValueError:
+            continue
+        return (d.year, d.month)
+    return None
+
+
 def _pick(pages: dict) -> dict:
-    """Consolidated numbers, unless they go back much less far than the standalone ones (a subsidiary set up
-    recently): then standalone, with a note saying so."""
+    """Consolidated numbers where filed, else standalone. A page counts only with a year in its results table, and consolidated
+    accounts that stop before the standalone ones' latest year (the subsidiaries sold or merged) give way to the standalone
+    ones, with a note saying so (lane dat57: Kovai Medical Center's consolidated table stops at Mar 2018, Jyothy Labs' at Mar
+    2025 and RailTel's at Mar 2023, each with a standalone Mar 2026; Indraprastha Medical's consolidated page has no table at
+    all; the stale or empty consolidated page was picked, and the R56 decks listed all four as having no figures)."""
     con, std = pages.get("consolidated"), pages.get("standalone")
-    if con and con.get("pl") and not (std and std.get("pl") and _years_of(con) < 6 and _years_of(std) >= _years_of(con) + 2):
+    con_end, std_end = _last_year(con), _last_year(std)
+    if con_end and std_end and std_end > con_end:
+        stop = next(str(c) for c in reversed(con["pl"]["cols"]) if str(c).upper() != "TTM")
+        return {**std, "basis": "standalone", "basis_note": f"Standalone results: the consolidated accounts stop at {stop}."}
+    if con and con_end:
+        if std_end and eps_shares(std):
+            # the standalone accounts' share count (their profit has no minority's share in it), to check the share capital by
+            con = {**con, "std_eps_count": list(eps_shares(std))}
+        # the company's own figures are the group's, however few years its consolidated accounts cover: a short consolidated history
+        # once put the standalone part in its place (lane dat57: Insolation Energy showed ₹98 cr of revenue against ₹2,146 cr
+        # consolidated, Leela Palaces ₹437 cr against ₹1,527 cr), while every figure is defined "consolidated where filed"
         return {**con, "basis": "consolidated"}
-    if std and std.get("pl"):
-        note = (f"Standalone results: the consolidated accounts only go back {_years_of(con)} years." if con and con.get("pl") else None)
-        return {**std, "basis": "standalone", "basis_note": note}
+    if std and std_end:
+        return {**std, "basis": "standalone"}
     return {**(con or std), "basis": "consolidated" if con else "standalone"}
 
 
@@ -623,12 +650,22 @@ class Screener(Source):
             pages = {}
             # consolidated first; companies without subsidiaries only have standalone numbers. Both read at once (R29A-001:
             # one after the other, a company page waited for two reads and two parses in a row)
+            con_busy = None
             for kind, got in self._both(base):
                 if isinstance(got, SourceError):
                     last = got
+                    if kind == "consolidated" and getattr(got, "busy", False):
+                        con_busy = got
                     continue
                 if got:
                     pages[kind] = got
+            if con_busy and set(pages) == {"standalone"}:
+                # the consolidated page didn't come (busy, blocked, rate limited) while the standalone one did: the standalone
+                # numbers are never passed off as the company's own, they are a part of a group that files consolidated results
+                # (lane dat57: the R56 Airlines deck showed The Indian Hotels Company's standalone ₹5,380 cr and Automotive Tata
+                # Motors Passenger Vehicles' standalone ₹57,859 cr, a 151% net margin, against consolidated ₹9,689 cr and
+                # ₹3.36 lakh cr). Busy: asked again later, the stored page kept meanwhile
+                raise con_busy
             if pages:
                 got = _pick(pages)
                 if (got.get("pl") or {}).get("cols") or reloaded or self.cache.get(("reloaded", sym)):
@@ -644,7 +681,9 @@ class Screener(Source):
                 for kind, path in (("consolidated", base + "consolidated/"), ("standalone", base)):
                     try:
                         p = self._page(path)
-                    except SourceError:
+                    except SourceError as e:
+                        if kind == "consolidated" and e.busy:
+                            raise
                         continue
                     if p:
                         pages[kind] = p

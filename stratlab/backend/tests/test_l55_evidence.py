@@ -90,8 +90,9 @@ def test_the_informative_layers_and_each_layer_say_their_evidence_mix():
     # (in the headline where its two lines hold it, else the page's first note)
     said = [page.subtitle] + [p for b in page.blocks if b["kind"] == "text" for p in b.get("paras") or []]
     line = next(re.search(r"[Mm]embership of its .*", p).group(0) for p in said if re.search(r"[Mm]embership of its ", p))
-    lm = re.match(r"[Mm]embership of its (\d+) companies: (\d+) description-verified, (\d+) industry-supported, "
-                  r"(?:(\d+) own words describe other work, )?(\d+) not checked \(figures read for this page's (\d+)\)", line)
+    # y57 (R57, BIO-12): a count other than the header's says it is of the layer's companies stored in all (updated on purpose)
+    lm = re.match(r"[Mm]embership of its (\d+) companies stored in all \(figures read for the header's (?:\d+)\): (\d+) description-verified, "
+                  r"(\d+) industry-supported, (?:(\d+) own words describe other work, )?(\d+) not checked", line)
     assert lm and int(lm.group(5)) == 8 and sum(int(x) for x in lm.groups()[1:5] if x) == int(lm.group(1))
     # a deck whose layers are all checked says so, and every layer page carries its line
     region, mm, f = theme_a()

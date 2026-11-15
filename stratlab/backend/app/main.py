@@ -2875,8 +2875,21 @@ def us_price_ratios(p: dict, sym: str) -> dict:
         p["share_note"] = (f"{sym.upper()} is a preferred share, warrant or unit of the company, not its common stock: "
                            "the figures are the company's, and its price isn't used for market value or P/E.")
     else:
+        p.update(us_split_adjusted(p, sym))
         p["ratios"] = sec.ratios(p, m.get("price"), m.get("high52"), m.get("low52"))
     return m
+
+
+def us_split_adjusted(p: dict, sym: str) -> dict:
+    """`p` with its share count on today's basis after a split the price history lists since the count's date (sec.split_since);
+    unchanged when the history can't be read. The same read as the page's dividends (one cached call)."""
+    if not p.get("shares_at") or sec.non_common(sym):
+        return p
+    try:
+        splits = research_hub.yahoo.events(sec.price_symbol(sym), 400)["splits"]
+    except Exception:
+        return p
+    return sec.split_since(p, splits, date.today().isoformat())
 
 
 def deep_base_us(sym: str, years: int = 2) -> dict:
@@ -4668,6 +4681,14 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
             exchange, red = "Listed in the US", None
         else:
             p = with_industry(sym, research_hub.screener.company(co["bse"] or sym))
+            if (p or {}).get("about"):
+                # e57 (R57): the company's own profile, just read for its page, kept as its description for every theme (theme_routes.
+                # keep_profile), so a theme's check never reads the same page again and its membership rests on these words, not its label
+                try:
+                    from .intel import theme_routes as _theme_routes
+                    _theme_routes.keep_profile("IN", sym, p["about"], " > ".join(str(x) for x in p.get("industry_path") or []))
+                except Exception as e:
+                    print("stock pages: profile not kept for themes:", sym, type(e).__name__, str(e)[:100])
             try:
                 p = research_hub.screener.with_cash(p)       # cash on hand, for a theme's enterprise value (left as it is when the breakdown is busy)
             except Exception:
@@ -4712,6 +4733,7 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
         # the ratios at the same close the page shows (the quote read above is the live price), and the dividend yield
         # from the dividends the price history lists for the year to that close: none in the year is a real 0%, a
         # history that couldn't be read is n/a (the filings' dividend line is missing for many foreign filers)
+        p = us_split_adjusted(p, sym)
         p["ratios"] = sec.ratios(p, close, prices.get("high52"), prices.get("low52"))
         # the app's own dividends list first (its Corporate actions card), so both pages have one yield (R7O-004)
         dy = us_page_dividend_yield(sym, close, prices.get("price_at"))

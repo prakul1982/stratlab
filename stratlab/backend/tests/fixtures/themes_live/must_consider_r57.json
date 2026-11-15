@@ -1,0 +1,11 @@
+{"note": "The audit of the 24 live R56 decks (aud57, RC6 b): well-known listed companies each theme must consider, as a member or as a candidate with its reason. Keys are the placement-inputs files' names.",
+ "retail": ["Best Buy", "AutoZone", "Tractor Supply", "Gap", "Dick's Sporting Goods"],
+ "capgoods": ["SKF India", "Schaeffler India", "Carborundum Universal", "KEI Industries", "AIA Engineering", "Cochin Shipyard"],
+ "metals": ["Shyam Metalics", "Jindal Saw", "Godawari Power", "NMDC Steel"],
+ "semis": ["Onto Innovation", "MKS", "Coherent", "Lumentum"],
+ "meddev": ["GE HealthCare", "Steris", "Cooper Companies", "Align Technology"],
+ "payments": ["SoFi", "Chime", "Nu Holdings", "Circle Internet", "Western Union", "Adyen"],
+ "bank": ["AU Small Finance Bank", "Equitas Small Finance Bank", "Ujjivan Small Finance Bank"],
+ "utilities": ["Gujarat Gas", "Gujarat State Petronet", "VA Tech Wabag"],
+ "cyber": ["Netskope", "Rubrik"],
+ "it": ["eClerx", "Firstsource"]}

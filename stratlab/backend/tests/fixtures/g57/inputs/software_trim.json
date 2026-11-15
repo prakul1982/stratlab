@@ -1,0 +1,456 @@
+{
+"region": "US",
+"theme": "Software",
+"rules": 55,
+"kept_version": 55,
+"kept": {},
+"placements": {
+"checked": true,
+"pending": 0,
+"left_out": 0,
+"placed": 588,
+"unconfirmed": 0,
+"dropped": [],
+"total": 588,
+"base": 586,
+"named": 0,
+"added": 2,
+"confirmed": 2,
+"industries": [
+"Services-Prepackaged Software",
+"Services-Computer Programming Services",
+"Services-Computer Integrated Systems Design",
+"Services-Computer Processing & Data Preparation",
+"Services-Computer Programming, Data Processing, Etc."
+],
+"industries_by": "list",
+"unclassified": 535
+},
+"value_chain": [
+{
+"layer": "Security software subscriptions",
+"description": "These companies sell subscriptions that protect devices, networks, identities and cloud workloads. Margin is set by the ability to bundle many modules into one platform, while competition among platforms and the cost of keeping up with new threats weigh on it.",
+"companies": [
+{
+"name": "CrowdStrike Holdings, Inc.",
+"ticker": "CRWD",
+"listed": true,
+"what": "It provides endpoint security, threat intelligence, and cyberattack response services.",
+"verified": true,
+"base": true,
+"basis": "industry",
+"industry": "Services-Prepackaged Software",
+"cap": 56653.19,
+"model": "software",
+"model_tags": [],
+"model_confidence": "medium"
+},
+{
+"name": "Zscaler, Inc.",
+"ticker": "ZS",
+"listed": true,
+"what": "The company offers cloud-based services to protect enterprise networks and data.",
+"verified": true,
+"base": true,
+"basis": "industry",
+"industry": "Services-Computer Programming Services",
+"cap": 31383.1,
+"model": "software",
+"model_tags": [],
+"model_confidence": "medium"
+},
+{
+"name": "Okta, Inc.",
+"ticker": "OKTA",
+"listed": true,
+"what": "It provides cloud software that helps companies manage and secure user authentication into applications, and for developers to build identity controls into applications",
+"verified": true,
+"base": true,
+"basis": "industry",
+"industry": "Services-Prepackaged Software",
+"cap": 32593.5,
+"model": "software",
+"model_tags": [],
+"model_confidence": "medium"
+},
+{
+"ticker": "NET",
+"name": "Cloudflare, Inc.",
+"what": "The company's services act primarily as a reverse proxy between website visitors and a customer's hosting provider, improving performance and protecting against malicious traffic",
+"verified": false,
+"base": true,
+"basis": "industry",
+"industry": "Services-Prepackaged Software",
+"cap": 109599.9,
+"placed": "ai",
+"fit": true,
+"model": "software",
+"model_tags": [],
+"model_confidence": "medium"
+},
+{
+"ticker": "RBRK",
+"name": "Rubrik, Inc.",
+"what": "Realizing that cyberattacks ultimately target data, we created Zero Trust Data Security to deliver cyber resilience so that organizations can secure their data across the cloud and recover from cyberattacks",
+"verified": false,
+"base": true,
+"basis": "industry",
+"industry": "Services-Prepackaged Software",
+"cap": 22778.6,
+"placed": "ai",
+"fit": true,
+"model": "software",
+"model_tags": [],
+"model_confidence": "medium"
+},
+{
+"ticker": "GEN",
+"name": "Gen Digital Inc.",
+"what": "The company provides cybersecurity software, financial technology, and services",
+"verified": false,
+"base": true,
+"basis": "industry",
+"industry": "Services-Prepackaged Software",
+"cap": 18035.6,
+"placed": "ai",
+"fit": true,
+"model": "software",
+"model_tags": [],
+"model_confidence": "high"
+},
+{
+"ticker": "CHKP",
+"name": "Check Point Software Technologies Ltd",
+"what": "Our solutions deliver leading protection across infrastructure, to make sure organizations are protected from AI-driven attacks",
+"verified": false,
+"base": true,
+"basis": "industry",
+"industry": "Services-Prepackaged Software",
+"cap": 15541.6,
+"placed": "ai",
+"fit": true,
+"model": "software",
+"model_tags": [],
+"model_confidence": "medium"
+},
+{
+"ticker": "SAIL",
+"name": "SailPoint, Inc.",
+"what": "SailPoint, Inc. (together with its consolidated subsidiaries, as appropriate, “SailPoint,” the “Company,” “our,” or “we”) delivers solutions to enable adaptive identity security for the enterprise",
+"verified": false,
+"base": true,
+"basis": "industry",
+"industry": "Services-Prepackaged Software",
+"cap": 11869.3,
+"placed": "ai",
+"fit": true,
+"model": "software",
+"model_tags": [],
+"model_confidence": "high"
+},
+{
+"ticker": "NTSK",
+"name": "Netskope Inc",
+"what": "the company offers security and networking for cloud and AI. Netskope is publicly listed on the Nasdaq under the ticker symbol NTSK",
+"verified": false,
+"base": true,
+"basis": "industry",
+"industry": "Services-Prepackaged Software",
+"cap": 8886.8,
+"placed": "ai",
+"fit": true,
+"model": "software",
+"model_tags": [],
+"model_confidence": "medium"
+},
+{
+"ticker": "S",
+"name": "SentinelOne, Inc.",
+"what": "The company uses machine learning for monitoring personal computers, IoT devices, and cloud workloads",
+"verified": false,
+"base": true,
+"basis": "industry",
+"industry": "Services-Prepackaged Software",
+"cap": 7726.7,
+"placed": "ai",
+"fit": true,
+"model": "software",
+"model_tags": [],
+"model_confidence": "medium"
+},
+{
+"ticker": "QLYS",
+"name": "Qualys, Inc.",
+"what": "We are a leading provider of a cloud-based platform delivering information technology (IT), security and compliance solutions",
+"verified": false,
+"base": true,
+"basis": "industry",
+"industry": "Services-Prepackaged Software",
+"cap": 6037.2,
+"placed": "ai",
+"fit": true,
+"model": "software",
+"model_tags": [],
+"model_confidence": "medium"
+},
+{
+"ticker": "VRNS",
+"name": "Varonis Systems Inc",
+"what": "Varonis Systems, Inc. is a software company based in Miami, Florida with R&D offices in Herzliya, Israel",
+"verified": false,
+"base": true,
+"basis": "industry",
+"industry": "Services-Prepackaged Software",
+"cap": 5642.7,
+"placed": "ai",
+"fit": true,
+"model": "software",
+"model_tags": [],
+"model_confidence": "high"
+},
+{
+"ticker": "BB",
+"name": "Blackberry Ltd",
+"what": "it was known for developing the BlackBerry brand of wireless mobile devices from 1999 to 2016",
+"verified": false,
+"base": true,
+"basis": "industry",
+"industry": "Services-Prepackaged Software",
+"cap": 5224.6,
+"placed": "ai",
+"fit": true,
+"model": "software",
+"model_tags": [],
+"model_confidence": "medium"
+},
+{
+"ticker": "TENB",
+"name": "Tenable Holdings, Inc.",
+"what": "Its vulnerability scanner software Nessus, developed in 1998, is one of the most widely deployed vulnerability assessment solutions in the cybersecurity industry",
+"verified": false,
+"base": true,
+"basis": "industry",
+"industry": "Services-Prepackaged Software",
+"cap": 4259.7,
+"placed": "ai",
+"fit": true,
+"model": "software",
+"model_tags": [],
+"model_confidence": "high"
+},
+{
+"name": "Palo Alto Networks Inc",
+"ticker": "PANW",
+"listed": true,
+"what": "The core product is a platform that includes advanced firewalls and cloud-based offerings that extend those firewalls to cover other aspects of security",
+"verified": true,
+"base": false,
+"basis": "added",
+"industry": "Computer Peripheral Equipment, Nec",
+"cap": 263592.33,
+"placed": "ai",
+"fit": true,
+"model": "software",
+"model_tags": [
+"manufacturing"
+],
+"model_confidence": "medium"
+}
+],
+"model": {
+"id": "software",
+"family": "software",
+"line": "They earn mainly from licences and subscriptions for software they own. 1 of the 15 also earn from making and selling finished products of their own. Its companies earn the same way as those of “Data and developer infrastructure software”, “Enterprise application subscriptions”, “Design and engineering software licences”; the map keeps them as separate layers.",
+"known": 15,
+"of": 15,
+"out": 0,
+"also": [
+{
+"id": "manufacturing",
+"n": 1
+}
+],
+"same_as": [
+"Data and developer infrastructure software",
+"Enterprise application subscriptions",
+"Design and engineering software licences"
+]
+}
+},
+{
+"layer": "Hotels, travel and consumer services",
+"description": "",
+"by_model": true,
+"companies": [
+{
+"ticker": "COUR",
+"name": "Coursera, Inc.",
+"what": "",
+"verified": false,
+"base": true,
+"basis": "industry",
+"industry": "Services-Prepackaged Software",
+"cap": 889.1,
+"placed": "words",
+"fit": true,
+"moved": true,
+"model": "consumer_services",
+"model_tags": [],
+"model_confidence": "medium"
+},
+{
+"ticker": "DUOL",
+"name": "Duolingo, Inc.",
+"what": "Duolingo offers courses on 42 languages, ranging from English, French, and Spanish to less commonly studied languages such as Hawaiian, Scottish Gaelic, and Navajo, and even constructed languages such as Esperanto, Klingon and High Valyrian",
+"verified": false,
+"base": true,
+"basis": "industry",
+"industry": "Services-Prepackaged Software",
+"cap": 8239.1,
+"placed": "ai",
+"fit": true,
+"moved": true,
+"model": "consumer_services",
+"model_tags": [],
+"model_confidence": "medium"
+}
+],
+"model": {
+"id": "consumer_services",
+"family": "consumer_services",
+"line": "They earn mainly from fees paid by consumers for stays, trips, meals or courses. Shown, never ranked: a group by how its companies earn, of different businesses.",
+"known": 2,
+"of": 2,
+"out": 0,
+"also": [],
+"by_how": true
+}
+}
+],
+"evidence": {
+"BB": "BlackBerry Limited, formerly Research In Motion (RIM), is a Canadian software company specializing in secure communications and the Internet of Things (IoT). Founded in 1984, it was known for developing the BlackBerry brand of wireless mobile devices from 1999 to 2016. After the mobile division was spun off into BlackBerry Mobile in 2016 until its discontinuation in 2020, BlackBerry Limited transitioned to providing software and services and holds critical software application patents.",
+"CHKP": "The Check Point Mission – Securing Our Customers’ AI Transformation We are constantly doing the hard work of getting our solutions ready to enable a secure AI transformation. Our solutions deliver leading protection across infrastructure, to make sure organizations are protected from AI-driven attacks. Regularly updating our security solutions to defend against the full spectrum of evolving threats. Applying a comprehensive prevention-first approach to protect against the most sophisticated attacks.",
+"COUR": "Coursera Inc. is an American online learning platform, originally known for offering massive open online courses (MOOCs). It was founded in 2012 by Stanford University computer science professors Andrew Ng and Daphne Koller. Coursera works with universities and other organizations to offer online courses, certifications and degrees in a variety of subjects.",
+"CRWD": "CrowdStrike Holdings, Inc. is an American cybersecurity technology company based in Austin, Texas. It provides endpoint security, threat intelligence, and cyberattack response services. The company was co-founded in 2011 by George Kurtz, Dmitri Alperovitch, and Gregg Marston. Kurtz is the CEO. CrowdStrike went public on the Nasdaq in 2019 and joined the S&P 500 index in 2024.",
+"DUOL": "Duolingo, Inc. is an American educational technology company that produces learning apps and provides language certification. Duolingo offers courses on 42 languages, ranging from English, French, and Spanish to less commonly studied languages such as Hawaiian, Scottish Gaelic, and Navajo, and even constructed languages such as Esperanto, Klingon and High Valyrian It also offers courses on music, math, and chess. The learning method incorporates gamification to motivate users with points, rewards and interactive lessons featuring spaced repetition. The app promotes short, daily lessons for consistent, phased practice.",
+"GEN": "Gen Digital Inc. is a multinational software company co-headquartered in Tempe, Arizona, United States, and Prague, Czech Republic. The company provides cybersecurity software, financial technology, and services. Gen is a Fortune 500 company and a member of the S&P 500 stock-market index. It is listed on the NASDAQ and Prague Stock Exchange. Its portfolio includes Norton, Avast, LifeLock, Avira, AVG, ReputationDefender, MoneyLion and CCleaner.",
+"NET": "Cloudflare, Inc., is an American technology company headquartered in San Francisco, California, that provides a range of internet services, including content delivery network (CDN) services, cloud cybersecurity, DDoS mitigation, and ICANN-accredited domain registration. The company's services act primarily as a reverse proxy between website visitors and a customer's hosting provider, improving performance and protecting against malicious traffic.",
+"NTSK": "Netskope, Inc. is a cybersecurity company headquartered in Santa Clara, California, United States. Established in 2012, the company offers security and networking for cloud and AI. Netskope is publicly listed on the Nasdaq under the ticker symbol NTSK.",
+"OKTA": "Okta, Inc. is an American identity and access management company based in San Francisco. It provides cloud software that helps companies manage and secure user authentication into applications, and for developers to build identity controls into applications, websites, web services, and devices. It was founded in 2009 and had its initial public offering in 2017, reaching a valuation of over $6 billion.",
+"PANW": "Palo Alto Networks, Inc. is an American multinational cybersecurity company with headquarters in Santa Clara, California. The core product is a platform that includes advanced firewalls and cloud-based offerings that extend those firewalls to cover other aspects of security. The company serves over 70,000 organizations in over 150 countries, including 85 of the Fortune 100. It is home to the Unit 42 threat research team and hosts the Ignite cybersecurity conference. It is a partner organization of the World Economic Forum.",
+"QLYS": "Qualys, Inc. is an American technology firm based in Foster City, California, specializing in cloud security, compliance and related services. We are a leading provider of a cloud-based platform delivering information technology (IT), security and compliance solutions. Our integrated suite of IT, security and compliance solutions delivered on Qualys' Enterprise TruRisk Platform enables our customers to: 1) identify and manage their internal and external IT and operational technology (OT) assets across on-premises, endpoints, cloud, containers, and mobile environments; 2) collect and analyze large amounts of IT security data; 3) discover and prioritize vulnerabilities; 4) quantify cyber risk ",
+"RBRK": "Rubrik, Inc. is an American cloud data management and data security company based in Palo Alto, California, founded in January 2014. The company is listed on the New York Stock Exchange after going public in April 2024. We are on a mission to secure and accelerate the world’s AI transformation. Prevention and detection are not enough. Realizing that cyberattacks ultimately target data, we created Zero Trust Data Security to deliver cyber resilience so that organizations can secure their data across the cloud and recover from cyberattacks. As enterprises embrace the forthcoming AI transformation, they are grappling with a threat landscape that is now amplified at an AI-scale. We believe that ",
+"S": "SentinelOne, Inc. is an American cybersecurity company listed on NYSE based in Mountain View, California. The company was founded in 2013 by Tomer Weingarten, Almog Cohen and Ehud (\"Udi\") Shamir. Weingarten acts as the company's CEO. The company has approximately 2,800 employees and offices in Mountain View, Boston, Prague, Tokyo, and Tel Aviv. The company uses machine learning for monitoring personal computers, IoT devices, and cloud workloads. The company's platform utilizes a heuristic model, specifically its patented behavioral AI. The company is AV-TEST certified.",
+"SAIL": "SailPoint, Inc. (together with its consolidated subsidiaries, as appropriate, “SailPoint,” the “Company,” “our,” or “we”) delivers solutions to enable adaptive identity security for the enterprise. We do this via the SailPoint Platform that unifies identity data across systems and identity types, including employee identities, non-employee identities, machine identities, and AI agents for real-time governance. Our SaaS and customer-hosted offerings leverage intelligent analytics to provide organizations with critical visibility into which identities currently have access to which resources, which identities should have access to those resources, and how that access is being used.",
+"TENB": "Tenable Holdings, Inc. is a cybersecurity company based in Columbia, Maryland. Its vulnerability scanner software Nessus, developed in 1998, is one of the most widely deployed vulnerability assessment solutions in the cybersecurity industry. As of December 31, 2023, the company had approximately 44,000 customers, including 65% of the Fortune 500.",
+"VRNS": "Varonis Systems, Inc. is a software company based in Miami, Florida with R&D offices in Herzliya, Israel. The company’s Data Security Platform analyzes data, identities, and activity to find and remediate data exposure in cloud and multi-cloud environments, and in software-as-a-service (SaaS) and infrastructure-as-a-service (IaaS) applications that include AWS, Azure, Google Cloud, Salesforce, ServiceNow, and databases.",
+"ZS": "Zscaler, Inc. is an American cloud security company based in San Jose, California. The company offers cloud-based services to protect enterprise networks and data. We are the cybersecurity platform for the AI era. We empower our customers with the cybersecurity solutions necessary to protect their enterprises, drive growth and outpace competitors where success depends on securely adopting the technologies required to operate and compete effectively in an AI world. As AI redefines how businesses operate, and powerful AI-enabled cyberthreats proliferate, enterprises must now adopt a zero trust approach to security."
+},
+"facts": {
+"BB": {
+"industry": "",
+"segments": [],
+"filings": "From its own filings: Quarterly report (10-Q). Earnings release (8-K). Annual report (10-K).",
+"business": ""
+},
+"CHKP": {
+"industry": "",
+"segments": [],
+"filings": "From its own filings: Annual report (20-F).",
+"business": ""
+},
+"COUR": {
+"industry": "",
+"segments": [],
+"filings": "From its own filings: Quarterly report (10-Q). Earnings release (8-K).",
+"business": ""
+},
+"CRWD": {
+"industry": "",
+"segments": [],
+"filings": "From its own filings: Quarterly report (10-Q). Earnings release (8-K). Annual report (10-K).",
+"business": ""
+},
+"DUOL": {
+"industry": "",
+"segments": [],
+"filings": "From its own filings: Quarterly report (10-Q). Earnings release (8-K).",
+"business": ""
+},
+"GEN": {
+"industry": "",
+"segments": [],
+"filings": "From its own filings: Quarterly report (10-Q). Earnings release (8-K). Annual report (10-K).",
+"business": ""
+},
+"NET": {
+"industry": "",
+"segments": [],
+"filings": "From its own filings: Quarterly report (10-Q). Earnings release (8-K).",
+"business": ""
+},
+"NTSK": {
+"industry": "",
+"segments": [],
+"filings": "From its own filings: Quarterly report (10-Q). Earnings release (8-K). Annual report (10-K).",
+"business": ""
+},
+"OKTA": {
+"industry": "",
+"segments": [],
+"filings": "From its own filings: Quarterly report (10-Q). Earnings release (8-K). Annual report (10-K).",
+"business": ""
+},
+"PANW": {
+"industry": "",
+"segments": [],
+"filings": "From its own filings: Annual report (10-K). Earnings release (8-K). Quarterly report (10-Q).",
+"business": ""
+},
+"QLYS": {
+"industry": "",
+"segments": [],
+"filings": "From its own filings: Quarterly report (10-Q). Earnings release (8-K).",
+"business": ""
+},
+"RBRK": {
+"industry": "",
+"segments": [],
+"filings": "From its own filings: Quarterly report (10-Q). Earnings release (8-K). Annual report (10-K).",
+"business": ""
+},
+"S": {
+"industry": "",
+"segments": [],
+"filings": "From its own filings: Quarterly report (10-Q). Earnings release (8-K). Annual report (10-K).",
+"business": ""
+},
+"SAIL": {
+"industry": "",
+"segments": [],
+"filings": "From its own filings: Quarterly report (10-Q). Earnings release (8-K). Annual report (10-K).",
+"business": ""
+},
+"TENB": {
+"industry": "",
+"segments": [],
+"filings": "From its own filings: Quarterly report (10-Q). Earnings release (8-K).",
+"business": ""
+},
+"VRNS": {
+"industry": "",
+"segments": [],
+"filings": "From its own filings: Quarterly report (10-Q). Earnings release (8-K).",
+"business": ""
+},
+"ZS": {
+"industry": "",
+"segments": [],
+"filings": "From its own filings: Annual report (10-K). Earnings release (8-K). Quarterly report (10-Q).",
+"business": ""
+}
+},
+"previous": {},
+"off_before": {},
+"moved_before": {}
+}

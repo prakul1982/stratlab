@@ -369,6 +369,13 @@ def revenue(facts: dict, kind: str, unit: str = "USD") -> dict[str, float]:
     for c in TOP_LINE:
         for end, v in read((c,)).items():
             seen.setdefault(end, []).append(v)
+    # a lender's or broker's whole revenue net of interest expense beside a top-line concept that holds only a part of it: the
+    # fee revenue in scope of the contract-revenue standard (lane dat57: American Express's 2025 10-K tags $41.3 bn of contract
+    # revenue and $72.2 bn of revenue net of interest expense; the part made its revenue, growth and net margin wrong). It
+    # counts as one more top-line figure, so the larger is the top line and a thousandfold slip is still caught
+    for end, v in read(("RevenuesNetOfInterestExpense",)).items():
+        if end in seen and v > 0:
+            seen[end].append(v)
     cost = read(COST_OF_SALES)
     for end, vs in seen.items():
         out[end] = top_line(vs, cost.get(end))
@@ -740,7 +747,23 @@ PROFIT_TOTAL = ("ProfitLoss",)
 MINORITY_PROFIT = ("ProfitLossAttributableToNoncontrollingInterests", "NetIncomeLossAttributableToNoncontrollingInterest")
 
 
-def owner_sign(owners: dict, total: dict, minority: dict) -> None:
+def owners_profit(read) -> dict[str, float]:
+    """{period end: the profit attributable to the parent's shareholders}: as filed (NetIncomeLoss, or the IFRS line), else the total
+    profit less the minority's share where both are filed, and only then the narrower or wider lines (profit available to common
+    shareholders after preferred dividends and accretion, the total profit). Lane dat57: Pomdoctor's 20-F files no NetIncomeLoss, its
+    loss of CNY 130.9 m as ProfitLoss with a nil minority share, and CNY 212.6 m available to common shareholders after the accretion of
+    its preferred shares; the page showed the latter, a net margin of -53.2% against -32.7%. `read`: concepts -> {end: value}."""
+    out = read(NET_INCOME[:2])
+    total, minority = read(PROFIT_TOTAL), read(MINORITY_PROFIT)
+    for end, t in total.items():
+        if end not in out and end in minority:
+            out[end] = t - minority[end]
+    for end, v in read(NET_INCOME[2:]).items():
+        out.setdefault(end, v)
+    return out
+
+
+def owner_sign(owners: dict, total: dict, minority: dict, pretax: dict | None = None) -> None:
     """The shareholders' profit filed with the wrong sign, put right in place (R7V-003: Santander Chile's reports for
     2019 to 2021 tag the profit attributable to its shareholders as -842,467 for a year whose total profit was +852,428,
     so the page showed a bank losing money in a year it made one). A period whose shareholders' profit has the opposite
@@ -750,6 +773,12 @@ def owner_sign(owners: dict, total: dict, minority: dict) -> None:
     for end, v in list(owners.items()):
         t = total.get(end)
         if not v or not t or (v > 0) == (t > 0):
+            continue
+        # ...unless the profit before tax has the shareholders' sign and the total's is the one filed the wrong way round (lane dat57:
+        # Aeluma's 10-K tags its net loss of $9.2 m as NetIncomeLoss -9.2 m, profit before tax -9.2 m, and ProfitLoss +9.2 m; the page
+        # turned the loss into a 205% net margin)
+        p = (pretax or {}).get(end)
+        if p and (p > 0) == (v > 0) and 0.5 <= abs(v) / abs(p) <= 2:
             continue
         if end in minority:
             parent = t - minority[end]
@@ -864,9 +893,9 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
     subs = subs or {}
     cur = currency(facts) or "USD"
     rev_a, rev_q = revenue(facts, "annual", cur), revenue(facts, "quarter", cur)
-    ni_a, ni_q = flows(facts, NET_INCOME, "annual", cur), quarterly(facts, NET_INCOME, cur)
-    owner_sign(ni_a, flows(facts, PROFIT_TOTAL, "annual", cur), flows(facts, MINORITY_PROFIT, "annual", cur))
-    owner_sign(ni_q, quarterly(facts, PROFIT_TOTAL, cur), quarterly(facts, MINORITY_PROFIT, cur))
+    ni_a, ni_q = owners_profit(lambda cs: flows(facts, cs, "annual", cur)), owners_profit(lambda cs: quarterly(facts, cs, cur))
+    owner_sign(ni_a, flows(facts, PROFIT_TOTAL, "annual", cur), flows(facts, MINORITY_PROFIT, "annual", cur), flows(facts, PRETAX, "annual", cur))
+    owner_sign(ni_q, quarterly(facts, PROFIT_TOTAL, cur), quarterly(facts, MINORITY_PROFIT, cur), quarterly(facts, PRETAX, cur))
     # a loss-making company whose income statement stops at the loss before tax (nothing to tax): that is its profit
     # (MS1-013: Micromem's 20-F tags ProfitLossBeforeTax and no ProfitLoss)
     for ni, tax, pre in ((ni_a, flows(facts, TAX, "annual", cur), flows(facts, PRETAX, "annual", cur)),
@@ -1050,17 +1079,32 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
     # $279M against $1.2B)
     year_end_held = [float(f["val"]) for c in SHARES_HELD for f in _facts(facts, c, "shares")
                      if f.get("val") and float(f["val"]) > 0 and not f.get("start") and f.get("end") == last]
+    # ...or unless a report after that year, on a new share basis, agrees with it: a split or reverse split since the annual
+    # report changes every count after it, and the year's earnings per share stay on the old basis until the next annual report
+    # (lane dat57: CrowdStrike's 4:1 split of July 2026 put 1,023,934,842 shares on its August cover, the year to January 2026
+    # implied 250 M, and its market value showed $56.7 bn against $232 bn; SkinHealth's 1:20 reverse split showed $1.94 bn
+    # against $107 m). The later count is a quarter's average or a balance sheet's, from a filing other than the cover's own fact
+    later = [float(f["val"]) for c in ("WeightedAverageNumberOfSharesOutstandingBasic", "WeightedAverageNumberOfDilutedSharesOutstanding")
+             + SHARES_HELD for f in _facts(facts, c, "shares")
+             if f.get("val") and float(f["val"]) > 0 and f.get("end", "") > ends[-1] and (f["end"], float(f["val"])) != shares]
     if shares and abs(eps_basic.get(last) or 0) >= 0.05 and ni_a.get(last):
         implied = ni_a[last] / eps_basic[last]
         # (a count that grew, by at most ten times: a thousandfold count is a unit error whatever the balance sheet says)
         agrees = 1 < shares[1] / implied <= 10 and any(0.5 <= shares[1] / h <= 2 for h in year_end_held)
+        thousandfold = implied > 0 and any(abs(shares[1] / implied / k - 1) < 0.1 or abs(implied / shares[1] / k - 1) < 0.1
+                                           for k in SCALE_SLIP)
+        agrees = agrees or (not thousandfold and any(0.5 <= shares[1] / h <= 2 for h in later))
         if implied > 0 and not 1 / 3 <= shares[1] / implied <= 3 and not agrees:
-            shares = (last, float(round(implied)))
+            # (dated by the annual report that gave the earnings per share: they are restated for a split before it was filed)
+            filed = max((f.get("filed") or "" for c in ("EarningsPerShareBasic", "BasicEarningsLossPerShare")
+                         for f in _facts(facts, c, f"{cur}/shares") if f.get("end") == last and f.get("form") in ANNUAL), default="")
+            shares = (filed or last, float(round(implied)))
             from_cover = False
     out = {"name": subs.get("name") or facts_json.get("entityName") or "", "ratios": {}, "growth": {}, "pros": [], "cons": [],
            "pl": {"cols": pl_cols, "rows": pl_rows}, "balance": bal, "cashflow": cf, "quarters": quarters,
            "basis": "consolidated", "unit": "$ million" if cur == "USD" else f"{cur} million", "currency": cur, "region": "US",
-           "cik": facts_json.get("cik"), "sic": sic, "shares": shares[1] if shares else None, "fiscal_year_end": subs.get("fiscalYearEnd"),
+           "cik": facts_json.get("cik"), "sic": sic, "shares": shares[1] if shares else None, "shares_at": shares[0] if shares else None,
+           "fiscal_year_end": subs.get("fiscalYearEnd"),
            "shares_from": "cover" if shares and from_cover else None, "avg_shares": avg, "no_cover_count": no_cover_count,
            # the periods the latest figures run to, and earnings per share for the P/E (R7V-002, R7V-003)
            "year_end": ends[-1], "ttm_end": max(rev_q) if has_ttm else None, "eps": eps_ttm(facts, cur, ends[-1], eps_a),
@@ -1510,7 +1554,7 @@ class SEC(Source):
                 got = self.filing_data(cik, latest)
                 cs = (got or {}).get("cover_shares")
                 if cs and cs.get("end", "") >= (date.fromisoformat(p["year_end"]) - timedelta(days=400)).isoformat():
-                    p["shares"], p["shares_from"] = cs["value"], "cover"
+                    p["shares"], p["shares_from"], p["shares_at"] = cs["value"], "cover", cs.get("end") or p.get("shares_at")
                     if cs.get("treasury"):         # a count of the shares issued: net of those held in treasury (R12-005)
                         p = net_of_treasury({**p, "avg_shares": p.get("avg_shares") or cs.get("avg")}, cs["treasury"])
             elif p.get("no_cover_count") and len([t for t in subs.get("tickers") or [] if not non_common(t)]) <= 1:
@@ -1522,7 +1566,7 @@ class SEC(Source):
                 cs = (got or {}).get("cover_shares")
                 if (cs and cs.get("classes", 0) > 1 and cs["value"] > (p.get("shares") or 0)
                         and cs.get("end", "") >= (date.fromisoformat(p["year_end"]) - timedelta(days=400)).isoformat()):
-                    p["shares"], p["shares_from"] = cs["value"], "cover"
+                    p["shares"], p["shares_from"], p["shares_at"] = cs["value"], "cover", cs.get("end") or p.get("shares_at")
         except SourceError as e:
             if not e.busy:
                 with self._build_lock:
@@ -1710,6 +1754,42 @@ def market_value(p: dict, price: float | None) -> float | None:
     if shares and p.get("ads_ratio"):
         shares = shares / p["ads_ratio"]
     return price * shares / M if price and shares else None
+
+
+def split_since(p: dict, splits: list[dict] | None, today: str | None = None) -> dict:
+    """`p` with its share count on the price's basis: a split or reverse split the price history lists after the day the count is
+    dated (`shares_at`: a cover page's or balance sheet's day, or the annual report's filing day for a count its earnings per share
+    imply) multiplies it by the split's ratio, said in `share_note`. The price is already on the new basis from the split's ex-date,
+    while no filing gives the new count until the next report (lane dat57: Cytosorbents' 1:20 reverse split of 8 Sep 2026 beside
+    62,842,748 shares on its 31 Jul cover put its value at $306 m against $15 m). `splits`: [{"date", "numerator", "denominator"}]."""
+    at, shares = p.get("shares_at"), p.get("shares")
+    if not at or not shares or not splits:
+        return p
+    if p.get("ads_ratio") or str(p.get("annual_form") or "").startswith(("20-F", "40-F")) or p.get("ads_unread"):
+        # a foreign filer: its US price history's "split" is often a change in how many ordinary shares a depositary share stands for
+        # (AstraZeneca's 1-for-2 of 2 Feb 2026, its ordinary shares listed in place of ADSs), which the depositary ratio already covers
+        return p
+    k, done = 1.0, []
+    for s_ in sorted(splits, key=lambda s_: str(s_.get("date") or "")):
+        d, n, m = str(s_.get("date") or "")[:10], s_.get("numerator"), s_.get("denominator")
+        if d > at and (today is None or d <= today) and n and m and n > 0 and m > 0 and n != m:
+            k *= n / m
+            done.append(f"{_fmt_ratio(n, m)} on {d}")
+    if not done:
+        return p
+    out = {**p, "shares": round(shares * k), "shares_at": max(str(s_.get("date"))[:10] for s_ in splits if str(s_.get("date"))[:10] > at)}
+    for key in ("class_shares",):
+        if isinstance(p.get(key), dict):
+            out[key] = {c: round(v * k) for c, v in p[key].items() if isinstance(v, (int, float))}
+    note = (f"Shares: the {shares:,.0f} counted at {at} are put on today's basis for the split{'s' if len(done) > 1 else ''} since "
+            f"({', '.join(done)}): {out['shares']:,.0f}.")
+    out["share_note"] = (p["share_note"] + " " + note) if p.get("share_note") else note
+    return out
+
+
+def _fmt_ratio(n: float, m: float) -> str:
+    f = lambda x: str(int(x)) if float(x).is_integer() else f"{x:g}"      # noqa: E731
+    return f"{f(n)}-for-{f(m)}"
 
 
 def pe_and_basis(p: dict, price: float | None, mcap: float | None = None) -> tuple[float | None, dict | None]:

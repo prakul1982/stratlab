@@ -173,7 +173,8 @@ def test_a_request_never_reads_descriptions_to_place_only_the_background_check_d
     calls = []
     monkeypatch.setattr(TR, "describe_unplaced", lambda *a, **k: calls.append(a) or [])
     # tx2 (R45, updated on purpose): place_rest also takes the previous live layers (`previous`)
-    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None, carried=False, previous=None: (out, {}))
+    # p57 (R56, updated on purpose): place_rest also takes the published memory (`published`, every live placement)
+    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None, carried=False, previous=None, published=None: (out, {}))
     m = {"sector": "IT services", "generated_at": 1.0}
     TR.placed("IN", "IT services", m, _place_map(), ask=None)
     assert calls == []

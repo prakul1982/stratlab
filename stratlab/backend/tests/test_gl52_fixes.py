@@ -145,7 +145,8 @@ def test_a_us_company_whose_words_are_only_an_encyclopedias_opening_gets_its_ann
     reads = []
     monkeypatch.setattr(TR, "_business_read", lambda sym: reads.append(sym) or VISA_10K)
     got, _ = TR.evidence_reader("US", {"V": "Visa Inc."})(["V"])
-    assert reads == ["V"] and got["V"]["about"].endswith(VISA_10K)
+    # e57 (R57, updated on purpose): the annual report is read first for every US company, the article beside its thin opening
+    assert reads == ["V"] and got["V"]["about"].startswith(VISA_10K) and got["V"]["about"].endswith(VISA)
     assert B.own_words(B.own_line(got["V"]["about"], "Visa Inc."), "Visa Inc.").startswith("We are a global payments technology company")
     # a stored description in the old format with no sentence of its own is read once more
     now = datetime.now(timezone.utc).isoformat()
@@ -374,7 +375,7 @@ def test_the_walk_back_reaches_the_answer_that_still_has_the_extra_layers(monkey
 
 
 def test_versions():
-    assert B.RULES == 55 and TR.PLACE_CARRY[55] == 54 and TR.PLACE_CARRY[54] == 53 and TR.PLACE_CARRY[53] == 52 and TR.PLACE_CARRY[52] == 51 and TR.PLACE_CARRY[51] == 50 and deck.THEME_DECK_VERSION == 66 and D.DIVE_TEXT == 26          # t56 (R55 review): RULES 55, PLACE_CARRY[55] = 54, deck 66, dive text 26 (updated on purpose); v55 (R55 review): RULES 54, PLACE_CARRY[54] = 53, deck 65, dive text 25 (updated on purpose); c54 (R53 review): RULES 53, PLACE_CARRY[53] = 52, deck 64, dive text 24 (updated on purpose); d53 (R53): RULES 52, PLACE_CARRY[52] = 51, deck 63, dive text 23 (updated on purpose)
+    assert B.RULES == 56 and TR.PLACE_CARRY[56] == 55 and TR.PLACE_CARRY[55] == 54 and TR.PLACE_CARRY[54] == 53 and TR.PLACE_CARRY[53] == 52 and TR.PLACE_CARRY[52] == 51 and TR.PLACE_CARRY[51] == 50 and deck.THEME_DECK_VERSION == 67 and D.DIVE_TEXT == 27          # p57 (R56 review): RULES 56, PLACE_CARRY[56] = 55, deck 67, dive text 27 (updated on purpose); t56 (R55 review): RULES 55, PLACE_CARRY[55] = 54, deck 66, dive text 26 (updated on purpose); v55 (R55 review): RULES 54, PLACE_CARRY[54] = 53, deck 65, dive text 25 (updated on purpose); c54 (R53 review): RULES 53, PLACE_CARRY[53] = 52, deck 64, dive text 24 (updated on purpose); d53 (R53): RULES 52, PLACE_CARRY[52] = 51, deck 63, dive text 23 (updated on purpose)
 
 
 # ---------- integrator: "on its industry" for a company with no words only where its industry points to this layer ----------

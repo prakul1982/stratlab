@@ -47,7 +47,9 @@ def test_the_check_is_kept_with_the_placements_in_the_shared_store(monkeypatch):
     monkeypatch.setattr(computed, "put", lambda kind, key, value, **kw: store.__setitem__((kind, json.dumps(key)), value) or {"value": value})
     monkeypatch.setattr(T, "_about_reader", lambda region, names, limit=0: (lambda s: None))
     calls = []
-    ask = lambda s, t: calls.append(1) or {"place": [], "rename": [{"layer": "L0", "name": "Forgings and metal components", "description": "x y."}], "extra": []}   # noqa: E731
+    # p57 (R57, updated on purpose): the placement's one layer audit (theme_check.AUDIT_SYSTEM, asked once a rules version) is counted apart
+    from app.intel import theme_check as C_
+    ask = lambda s, t: (calls.append(1) if s != C_.AUDIT_SYSTEM else None) or {"place": [], "rename": [{"layer": "L0", "name": "Forgings and metal components", "description": "x y."}], "extra": []}   # noqa: E731
     m = {"sector": "Automotive", "generated_at": 9.0}
     first = T.placed("IN", "Automotive", m, fully_placed(), ask=ask)
     second = T.placed("IN", "Automotive", m, fully_placed(), ask=ask)

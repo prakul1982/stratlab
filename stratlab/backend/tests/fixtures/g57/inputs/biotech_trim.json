@@ -1,0 +1,76 @@
+{
+"region": "US",
+"theme": "Biotech",
+"rules": 55,
+"kept_version": 55,
+"kept": {},
+"placements": {
+"checked": true,
+"pending": 0,
+"left_out": 2,
+"placed": 820,
+"unconfirmed": 0,
+"dropped": [
+{
+"ticker": "SRPT",
+"name": "Sarepta Therapeutics, Inc.",
+"groups": [
+"Commercial specialty biotechs"
+],
+"said": "no"
+}
+],
+"total": 820,
+"base": 818,
+"named": 0,
+"added": 2,
+"confirmed": 2,
+"industries": [
+"Pharmaceutical Preparations",
+"Biological Products, (No Diagnostic Substances)",
+"Medicinal Chemicals & Botanical Products",
+"In Vitro & In Vivo Diagnostic Substances"
+],
+"stage_moved": 1,
+"industries_by": "list",
+"unclassified": 535
+},
+"value_chain": [
+{
+"layer": "Other biotech companies",
+"description": "",
+"official": true,
+"basis": "rest",
+"companies": [
+{
+"ticker": "SRPT",
+"name": "Sarepta Therapeutics, Inc.",
+"what": "",
+"verified": false,
+"base": true,
+"basis": "industry",
+"industry": "Pharmaceutical Preparations",
+"cap": 1723.23,
+"placed": "words",
+"model": "manufacturing",
+"model_tags": [],
+"model_confidence": "low"
+}
+]
+}
+],
+"evidence": {
+"SRPT": "Sarepta Therapeutics, Inc. is a medical research and drug development company with corporate offices and research facilities in Cambridge, Massachusetts, United States. Incorporated in 1980 as AntiVirals, shortly before going public the company changed its name from AntiVirals to AVI BioPharma soon with stock symbol AVII and in July 2012 changed name from AVI BioPharma to Sarepta Therapeutics and SRPT respectively. As of 2023, the company has four approved drugs. We are a commercial-stage biopharmaceutical company focused on helping patients through the discovery and development of unique RNA-targeted therapeutics, siRNA knockdown therapies, gene therapy and other genetic therapeutic modalit"
+},
+"facts": {
+"SRPT": {
+"industry": "",
+"segments": [],
+"filings": "From its own filings: Earnings release (8-K). Quarterly report (10-Q).",
+"business": ""
+}
+},
+"previous": {},
+"off_before": {},
+"moved_before": {}
+}

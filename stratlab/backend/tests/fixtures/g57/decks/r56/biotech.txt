@@ -1,0 +1,322 @@
+BIOTECH · FINDINGS
+
+
+Coverage, continued
+How many of the theme's companies, how much of its market value and which figures each total and median covers
+
+
+ Coverage                      Covered               Of what
+
+                                                     IDEXX Laboratories Inc: from “Pipeline-stage and royalty-funded drug developers” to “Research tools and diagnostics
+                                                     suppliers”, as its own words don't say what “Pipeline-stage and royalty-funded drug developers” is; its official industry,
+                                                     Diagnostics, is what “Research tools and diagnostics suppliers” names; Exelixis, Inc.: from “Pipeline-stage and royalty-funded
+                                                     drug developers” to “Specialty and clinical-stage biotechs”, as its own words say what “Specialty and clinical-stage biotechs”
+                                                     is, not what “Pipeline-stage and royalty-funded drug developers” is; Amgen Inc: from “Pipeline-stage and royalty-funded drug
+                                                     developers” to “Specialty and clinical-stage biotechs”, as its own words don't say it sells what “Pipeline-stage and
+                                                     royalty-funded drug developers” is (“stage” or “developers”), nor does its official industry (Biotech products); Merck & Co.,
+                                                     Inc.: from “Pipeline-stage and royalty-funded drug developers” to “Large pharma and biotech portfolios”, as its own words
+ Moved by what its
+                               7                     don't say it sells what “Pipeline-stage and royalty-funded drug developers” is (“stage” or “developers”), nor does its official
+ layer is
+                                                     industry (Pharmaceuticals); Novartis AG: from “Pipeline-stage and royalty-funded drug developers” to “Large pharma and
+                                                     biotech portfolios”, as its own words don't say it sells what “Pipeline-stage and royalty-funded drug developers” is (“stage” or
+                                                     “developers”), nor does its official industry (Pharmaceuticals); BeOne Medicines Ltd.: from “Clinical-stage gene editing and
+                                                     drug developers” to “Large pharma and biotech portfolios”, as it is a commercial-stage company, a revenue business with
+                                                     products on sale (revenue 10 times the layer's median developer's or more, with an operating profit (EBITDA margin 11%)),
+                                                     and “Clinical-stage gene editing and drug developers” is named by a development stage; Takeda Pharmaceutical Co Ltd: from
+                                                     “Specialty and clinical-stage biotechs” to “Other”, as its own words don't say what “Specialty and clinical-stage biotechs” is,
+                                                     nor does its official industry (Pharmaceuticals).
+
+                                                     On 15 Nov 2026, against the version stored before it, after a re-check under new placement rules: added 1: Enliven
+ Since the previous
+                               2                     Therapeutics, Inc. (filed under Pharmaceuticals, an official industry of the theme); removed 1: Sarepta Therapeutics, Inc.
+ version
+                                                     (business membership: its own words were checked and don't show the work of “Commercial specialty biotechs”).
+
+
+
+
+StratLab · Biotech · Theme deep dive · 15 Nov 2026                                                                                                           Not investment advice · 7 / 63
+BIOTECH · THE VALUE CHAIN
+
+
+The value chain by layer
+Median EBITDA margin by layer: Research tools and diagnostics suppliers 28.7%; Bioprocessing suppliers and diversified healthcare 21.4%; Large pharma and biotech portfolios
+30.1% (14 of 15 companies). Stock-based pay differs 2.1 times between these layers (Research tools and diagnostics suppliers 2.4% of revenue, Large pharma and biotech
+portfolios 5.1%), and an EBITDA margin counts it as a cost, so they are not ranked on it.
+
+ Layer                                               Companies           Revenue          EBITDA margin      Net margin        ROCE            SBC / revenue       FCF margin
+
+ Research tools and diagnostics
+                                                             5           $56.5 bn                   28.7%    19.6%             9.8% (4 of 5)   2.4%                21.7%
+ suppliers
+
+ Bioprocessing suppliers and diversified                                                                                                                           20.4% (4 of
+                                                         5 of 6          $64.3 bn                   21.4%    14.7%             12.4%           3.0% (4 of 5)
+ healthcare                                                                                                                                                        5)
+
+ Clinical-stage gene editing and drug                                                                                          −34.6% (3 of
+                                                         4 of 5            $211 m                        –   –                                 – (2 of 4)          – (1 of 4)
+ developers                                                                                                                    4)
+
+                                                                                                             10.6% (14 of      −17.1% (19      10.5% (17 of        −4.9% (15 of
+ Specialty and clinical-stage biotechs                 30 of 43            $81 bn        17.5% (14 of 30)
+                                                                                                             30)               of 30)          30)                 30)
+
+                                                                                                             17.4% (13 of      17.6% (13 of    5.1% (12 of         19.9% (12 of
+ Large pharma and biotech portfolios                        15          $448.3 bn        30.1% (14 of 15)
+                                                                                                             15)               15)             15)                 15)
+
+ Designs licensed for royalties                              3           $4.04 bn                   34.4%    – (2 of 3)        – (2 of 3)      12.2%               – (2 of 3)
+
+
+
+
+Each company's latest full year, in $ million; how each figure is built: p. 35. Layer revenue: its companies added together; margins and returns: its median company. A layer is
+ranked only on a median of at least 5 companies with the figure; a layer with fewer is shown, not ranked. A median is shown for 3 companies or more. Each compared layer's
+companies by name, the rules and the capital figures: p. 58. Companies: those in the layer's calculations, “of” those the layer lists where some are left out (who and why: the
+layer's page). Layers whose medians include whole-company (consolidated) figures of companies that also earn another way, no segment figures stored for them: Specialty and
+clinical-stage biotechs (2); Designs licensed for royalties (1); each layer's page names them.
+
+
+
+StratLab · Biotech · Theme deep dive · 15 Nov 2026                                                                                                     Not investment advice · 9 / 63
+BIOTECH · APPENDIX
+
+
+Every company's figures (1 of 7)
+100 companies with figures (97 description-verified, 3 industry-supported), one row each; Eli Lilly & Co is the largest at $1,358 bn
+
+
+ Company                             Layer                                                Market value   Revenue    Growth   EBITDA        Net     ROCE          P/E       P/B
+ Eli Lilly & Co                      Specialty and clinical-stage biotechs                  $1,358 bn    $65.2 bn   +44.7%     43.9%    31.7%     38.6%       46.8x      50.6x
+ Johnson & Johnson                   Large pharma and biotech portfolios                    $687.9 bn    $94.2 bn    +6.0%     43.6%    28.5%     25.5%       43.3x       8.4x
+ AbbVie Inc.                         Specialty and clinical-stage biotechs                  $521.5 bn    $61.2 bn    +8.6%     25.9%     6.9%     23.7%       50.8x          –
+ Merck & Co., Inc.                   Large pharma and biotech portfolios                    $364.3 bn     $65 bn     +1.3%     39.2%    28.1%     22.0%      150.7x       6.9x
+ Novartis AG                         Large pharma and biotech portfolios                    $306.3 bn    $54.5 bn    +8.4%     34.6%    25.6%     23.6%       22.4x       6.6x
+ Astrazeneca PLC                     Large pharma and biotech portfolios                    $288.1 bn    $58.7 bn    +8.6%     32.7%    17.4%     17.6%       28.2x       5.9x
+ Thermo Fisher Scientific Inc.       Research tools and diagnostics suppliers               $259.4 bn    $44.6 bn    +3.9%     19.7%    15.0%      8.4%       36.9x       4.9x
+ Amgen Inc                           Specialty and clinical-stage biotechs                  $251.9 bn    $36.8 bn   +10.0%     38.8%    21.0%     14.4%       27.0x      29.2x
+ Gilead Sciences, Inc.               Specialty and clinical-stage biotechs                  $208.5 bn    $29.4 bn    +2.4%     35.3%    28.9%     21.0%           –       9.2x
+ Abbott Laboratories                 Bioprocessing suppliers and diversified healthcare      $188 bn     $44.3 bn    +5.7%     21.4%    14.7%     12.4%       40.4x       3.6x
+ Novo Nordisk A S                    Specialty and clinical-stage biotechs                   $185 bn     $45.6 bn    +6.4%     46.1%    33.1%     39.3%       12.3x       6.5x
+ Pfizer Inc                          Large pharma and biotech portfolios                    $164.7 bn    $62.6 bn    −1.6%     26.8%    12.4%      6.7%       41.3x       1.9x
+ Vertex Pharmaceuticals Inc          Large pharma and biotech portfolios                    $136.6 bn     $12 bn     +8.9%     36.5%    32.9%     22.4%       34.6x       7.4x
+ Bristol Myers Squibb Co             Specialty and clinical-stage biotechs                  $129.7 bn    $48.2 bn    −0.2%     31.6%    14.6%     17.1%       14.1x       7.0x
+ Sanofi                              Specialty and clinical-stage biotechs                   $118 bn     $48.1 bn    +6.2%         –    17.9%         –       13.8x       1.5x
+ GSK plc                             Large pharma and biotech portfolios                    $102.8 bn    $43.1 bn    +4.1%     31.4%    17.5%     25.7%       13.8x       4.8x
+Latest full year: revenue, its growth, EBITDA and net margins, ROCE; P/E on the last four quarters (none for a loss-maker). † net margin above the EBITDA margin, or unusual,
+that the company's own filed figures don't give. Revenue growth above 100% either way, or from a base under 5% of the median company's, with its base: Kymera Therapeutics,
+Inc. −16.7%, from $47 m to $39 m; Madrigal Pharmaceuticals, Inc. +432.1%, from $180 m to $958 m; Adaptive Biotechnologies Corp +54.8%, from $179 m to $277 m; Tango
+Therapeutics, Inc. +48.3%, from $42 m to $62 m; Intellia Therapeutics, Inc. +16.9%, from $58 m to $68 m.
+
+
+
+
+StratLab · Biotech · Theme deep dive · 15 Nov 2026                                                                                                 Not investment advice · 37 / 63
+BIOTECH · APPENDIX
+
+
+Every company's figures (2 of 7)
+100 companies with figures (97 description-verified, 3 industry-supported), one row each; Eli Lilly & Co is the largest at $1,358 bn
+
+
+ Company                                 Layer                                     Market value   Revenue    Growth     EBITDA            Net      ROCE          P/E       P/B
+ Regeneron Pharmaceuticals               Large pharma and biotech portfolios         $101.6 bn    $14.3 bn    +1.0%      28.7%        31.4%†      10.8%       21.1x       3.2x
+ Moderna, Inc.                           Specialty and clinical-stage biotechs        $90.4 bn    $1.94 bn   −39.9%    −147.3%       −145.2%     −33.3%           –      10.8x
+ Takeda Pharmaceutical Co Ltd            Other biotech companies                      $68.2 bn    $28.4 bn    −1.7%      16.1%         −3.4%       0.1%           –       1.5x
+ Argenx SE                               Specialty and clinical-stage biotechs        $59.4 bn    $4.15 bn        –          –         31.1%          –       49.1x       8.1x
+ IDEXX Laboratories Inc                  Research tools & diagnostics suppliers       $55.5 bn    $4.30 bn   +10.4%      35.0%         24.6%      66.2%       47.5x      34.6x
+ Teva Pharmaceutical Industries          Large pharma and biotech portfolios          $51.9 bn    $17.3 bn    +4.3%      18.3%          8.2%      22.2%      103.5x       6.6x
+ BeOne Medicines Ltd.                    Large pharma and biotech portfolios          $47.6 bn    $5.34 bn   +40.2%      11.0%          5.4%       8.6%       53.4x      10.9x
+ Biogen Inc.                             Specialty and clinical-stage biotechs        $37.5 bn    $9.89 bn    +2.2%      26.3%         13.1%       7.4%      109.3x       2.0x
+                                         Bioprocessing suppliers and diversified
+ Zoetis Inc.                                                                          $34.1 bn    $9.47 bn    +2.3%       43.0%        28.2%      28.8%        14.1x     10.0x
+                                         healthcare
+ Genmab A/s                              Other biotech companies                       $33 bn     $3.72 bn   +19.2%          –        25.9%           –        33.4x      5.6x
+ Illumina, Inc.                          Research tools & diagnostics suppliers       $31.3 bn    $4.34 bn        –      24.8%        19.6%           –        35.6x     11.5x
+ Royalty Pharma plc                      Designs licensed for royalties               $31.1 bn    $2.38 bn    +5.1%      65.7%        32.4%       10.1%        45.3x      4.8x
+ Roivant Sciences Ltd.                   Other biotech companies                      $28.6 bn       $8 m         –   −6195.2%     −3629.2%      −11.4%            –      6.3x
+ Insmed Inc                              Specialty and clinical-stage biotechs        $26.6 bn     $606 m         –    −203.9%      −210.5%      −97.0%            –     36.0x
+ United Therapeutics Corp                Large pharma and biotech portfolios          $25.2 bn    $3.18 bn   +10.6%      49.6%        41.9%           –        22.3x      3.6x
+Latest full year: revenue, its growth, EBITDA and net margins, ROCE; P/E on the last four quarters (none for a loss-maker). † net margin above the EBITDA margin, or unusual,
+that the company's own filed figures don't give. Revenue growth above 100% either way, or from a base under 5% of the median company's, with its base: Kymera Therapeutics,
+Inc. −16.7%, from $47 m to $39 m; Madrigal Pharmaceuticals, Inc. +432.1%, from $180 m to $958 m; Adaptive Biotechnologies Corp +54.8%, from $179 m to $277 m; Tango
+Therapeutics, Inc. +48.3%, from $42 m to $62 m; Intellia Therapeutics, Inc. +16.9%, from $58 m to $68 m. Layer names in full: Research tools & diagnostics suppliers =
+Research tools and diagnostics suppliers.
+
+
+
+StratLab · Biotech · Theme deep dive · 15 Nov 2026                                                                                                 Not investment advice · 38 / 63
+BIOTECH · APPENDIX
+
+
+Every company's figures (3 of 7)
+100 companies with figures (97 description-verified, 3 industry-supported), one row each; Eli Lilly & Co is the largest at $1,358 bn
+
+
+ Company                                        Layer                                 Market value   Revenue    Growth   EBITDA          Net      ROCE          P/E        P/B
+ Viatris Inc                                    Large pharma & biotech portfolios        $23.9 bn    $14.3 bn    −3.0%      0.9%    −24.6%       −9.1%           –        1.6x
+ Alnylam Pharmaceuticals, Inc.                  Specialty & clinical-stage biotechs      $22.1 bn    $3.71 bn        –     15.0%      8.4%           –       70.8x       26.6x
+ BioNTech SE                                    Specialty & clinical-stage biotechs      $20.8 bn    $3.16 bn    +4.3%    −35.6%    −39.6%           –           –        1.0x
+ Ascendis Pharma A/S                            Specialty & clinical-stage biotechs      $17.1 bn     $794 m         –    −14.8%    −31.7%      −24.4%           –           –
+ Neurocrine Biosciences Inc                     Specialty & clinical-stage biotechs      $16.9 bn    $2.86 bn   +21.4%     22.6%     16.7%       19.0%       24.8x        5.3x
+ Exelixis, Inc.                                 Specialty & clinical-stage biotechs      $16.8 bn    $2.32 bn    +7.0%     38.8%     33.7%       40.4%       20.6x        7.9x
+ Jazz Pharmaceuticals plc                       Other biotech companies                  $15.5 bn    $4.27 bn    +4.9%     −9.1%     −8.3%       −4.4%       78.7x        3.6x
+ BridgeBio Pharma, Inc.                         Specialty & clinical-stage biotechs      $15.3 bn     $502 m         –   −103.2%   −144.4%           –           –           –
+ Kiniksa Pharmaceuticals International          Other biotech companies                  $15.1 bn     $678 m         –     11.6%      8.7%       13.6%      138.2x       26.7x
+ Elanco Animal Health Inc                       Specialty & clinical-stage biotechs      $13.4 bn    $4.71 bn    +6.2%         –     −4.9%           –           –        2.0x
+ DR Reddys Laboratories Ltd                     Specialty & clinical-stage biotechs      $12.3 bn    $3.56 bn    +3.2%     21.2%     12.8%       12.8%       27.0x        3.1x
+ Bio-Techne Corp                                Research tools & diagnostics             $11.4 bn    $1.22 bn    −0.4%     28.7%     15.0%       10.9%       66.8x        5.4x
+ Halozyme Therapeutics, Inc.                    Designs licensed for royalties           $11.4 bn    $1.40 bn   +37.6%     34.4%     22.7%       21.4%       25.0x      233.2x
+ Summit Therapeutics Inc.                       Specialty & clinical-stage biotechs      $11.3 bn           –        –         –         –           –           –       17.3x
+ Biomarin Pharmaceutical Inc                    Large pharma & biotech portfolios        $11.1 bn    $3.22 bn   +12.9%     15.2%     10.8%        6.1%           –        1.8x
+ Kymera Therapeutics, Inc.                      Specialty & clinical-stage biotechs      $10.9 bn      $39 m    −16.7%   −869.9%   −794.1%           –           –        6.9x
+Latest full year: revenue, its growth, EBITDA and net margins, ROCE; P/E on the last four quarters (none for a loss-maker). † net margin above the EBITDA margin, or unusual,
+that the company's own filed figures don't give. Revenue growth above 100% either way, or from a base under 5% of the median company's, with its base: Kymera Therapeutics,
+Inc. −16.7%, from $47 m to $39 m; Madrigal Pharmaceuticals, Inc. +432.1%, from $180 m to $958 m; Adaptive Biotechnologies Corp +54.8%, from $179 m to $277 m; Tango
+Therapeutics, Inc. +48.3%, from $42 m to $62 m; Intellia Therapeutics, Inc. +16.9%, from $58 m to $68 m. Layer names in full: Large pharma & biotech portfolios = Large
+pharma and biotech portfolios; Specialty & clinical-stage biotechs = Specialty and clinical-stage biotechs; Research tools & diagnostics = Research tools and diagnostics
+suppliers.
+
+StratLab · Biotech · Theme deep dive · 15 Nov 2026                                                                                                 Not investment advice · 39 / 63
+BIOTECH · APPENDIX
+
+
+Every company's figures (4 of 7)
+100 companies with figures (97 description-verified, 3 industry-supported), one row each; Eli Lilly & Co is the largest at $1,358 bn
+
+
+ Company                                Layer                                      Market value   Revenue      Growth      EBITDA           Net      ROCE        P/E       P/B
+ Qiagen N.V.                            Research tools and diagnostics suppliers      $10.8 bn    $2.09 bn      +5.7%       31.6%        20.3%       8.6%      25.7x       2.9x
+                                        Bioprocessing suppliers and diversified
+ Repligen Corp                                                                        $10.7 bn     $738 m      +16.4%       18.1%         6.6%       2.1%           –      5.1x
+                                        healthcare
+ Vaxcyte, Inc.                          Specialty and clinical-stage biotechs          $10 bn           –          –            –           –     −34.4%           –      3.7x
+ Madrigal Pharmaceuticals, Inc.         Specialty and clinical-stage biotechs         $9.93 bn     $958 m    +432.1%       −31.2%      −30.1%     −31.8%           –     16.5x
+ Spyre Therapeutics, Inc.               Specialty and clinical-stage biotechs         $9.88 bn          –          –            –           –     −29.3%           –     13.8x
+ TG Therapeutics, Inc.                  Specialty and clinical-stage biotechs         $9.75 bn     $616 m          –        20.0%      72.6%†      13.8%       96.3x     15.0x
+                                        Bioprocessing suppliers and diversified
+ Praxis Precision Medicines, Inc.                                                     $9.17 bn           –           –            –           –   −37.1%            –    10.4x
+                                        healthcare
+ Krystal Biotech, Inc.                  Specialty and clinical-stage biotechs         $9.04 bn     $389 m           –       42.9%      52.6%†      13.2%       41.4x      7.4x
+ Protagonist Therapeutics, Inc          Large pharma and biotech portfolios           $8.55 bn      $46 m           –     −340.9%     −282.8%     −25.7%       27.8x     13.9x
+ Corcept Therapeutics Inc               Other biotech companies                       $7.98 bn     $761 m      +12.8%        6.0%      13.1%†       6.9%       57.4x     12.3x
+ Rhythm Pharmaceuticals, Inc.           Other biotech companies                       $7.97 bn     $190 m           –     −100.9%     −103.6%     −77.7%           –     57.2x
+                                        Bioprocessing suppliers and diversified
+ Alkermes plc.                                                                        $7.90 bn    $1.48 bn      −5.2%       19.0%        16.4%      14.0%           –      4.3x
+                                        healthcare
+ Cytokinetics Inc                       Specialty and clinical-stage biotechs         $7.82 bn      $88 m            –    −683.9%     −891.6%             –         –         –
+Latest full year: revenue, its growth, EBITDA and net margins, ROCE; P/E on the last four quarters (none for a loss-maker). † net margin above the EBITDA margin, or unusual,
+that the company's own filed figures don't give. Revenue growth above 100% either way, or from a base under 5% of the median company's, with its base: Kymera Therapeutics,
+Inc. −16.7%, from $47 m to $39 m; Madrigal Pharmaceuticals, Inc. +432.1%, from $180 m to $958 m; Adaptive Biotechnologies Corp +54.8%, from $179 m to $277 m; Tango
+Therapeutics, Inc. +48.3%, from $42 m to $62 m; Intellia Therapeutics, Inc. +16.9%, from $58 m to $68 m.
+
+
+
+
+StratLab · Biotech · Theme deep dive · 15 Nov 2026                                                                                                 Not investment advice · 40 / 63
+BIOTECH · APPENDIX
+
+
+Every company's figures (5 of 7)
+100 companies with figures (97 description-verified, 3 industry-supported), one row each; Eli Lilly & Co is the largest at $1,358 bn
+
+
+ Company                                Layer                                     Market value   Revenue    Growth     EBITDA            Net      ROCE          P/E        P/B
+ Axsome Therapeutics, Inc.              Specialty and clinical-stage biotechs        $7.45 bn     $638 m         –     −26.0%       −28.7%      −60.4%           –       84.3x
+ Amneal Pharmaceuticals, Inc.           Specialty and clinical-stage biotechs        $7.45 bn    $3.02 bn    +8.0%      15.0%         2.4%       15.8%       50.9x           –
+ Kodiak Sciences Inc.                   Specialty and clinical-stage biotechs        $7.27 bn           –        –          –            –           –           –       46.1x
+ Immunovant, Inc.                       Specialty and clinical-stage biotechs        $7.07 bn           –        –          –            –           –           –        8.3x
+ Twist Bioscience Corp                  Large pharma and biotech portfolios          $7.00 bn     $377 m    +20.3%     −29.6%       −20.6%           –           –       14.8x
+ Abivax S.A.                            Other biotech companies                      $6.88 bn       $5 m         –   −5360.7%     −7354.5%           –           –       13.7x
+ Arrowhead Pharmaceuticals              Specialty and clinical-stage biotechs        $6.75 bn     $451 m         –    −151.4%      −160.6%           –           –      132.7x
+ CG Oncology, Inc.                      Specialty and clinical-stage biotechs        $6.65 bn       $4 m         –   −4686.4%     −3985.1%      −25.2%           –        8.8x
+ Lantheus Holdings, Inc.                Specialty and clinical-stage biotechs        $6.64 bn    $1.54 bn    +0.5%      24.7%        15.2%       18.7%       25.1x        6.1x
+ Belite Bio, Inc                        Other biotech companies                      $6.47 bn           –        –          –            –           –           –        8.4x
+ ImmunityBio, Inc.                      Specialty and clinical-stage biotechs        $6.40 bn     $113 m         –    −212.3%      −310.2%           –           –           –
+ Ligand Pharmaceuticals Inc             Designs licensed for royalties               $6.18 bn     $268 m         –      27.9%       46.4%†           –      134.3x        6.1x
+ Mirum Pharmaceuticals, Inc.            Specialty and clinical-stage biotechs        $6.14 bn     $521 m         –       0.4%        −4.5%           –           –       19.5x
+                                        Bioprocessing suppliers and diversified
+ Grifols SA                                                                          $5.92 bn    $8.30 bn    +4.3%      22.5%          5.3%       9.6%       13.4x         1.0x
+                                        healthcare
+ Erasca, Inc.                           Specialty and clinical-stage biotechs        $5.50 bn          –         –            –            –    −43.3%             –     16.8x
+Latest full year: revenue, its growth, EBITDA and net margins, ROCE; P/E on the last four quarters (none for a loss-maker). † net margin above the EBITDA margin, or unusual,
+that the company's own filed figures don't give. Revenue growth above 100% either way, or from a base under 5% of the median company's, with its base: Kymera Therapeutics,
+Inc. −16.7%, from $47 m to $39 m; Madrigal Pharmaceuticals, Inc. +432.1%, from $180 m to $958 m; Adaptive Biotechnologies Corp +54.8%, from $179 m to $277 m; Tango
+Therapeutics, Inc. +48.3%, from $42 m to $62 m; Intellia Therapeutics, Inc. +16.9%, from $58 m to $68 m.
+
+
+
+
+StratLab · Biotech · Theme deep dive · 15 Nov 2026                                                                                                 Not investment advice · 41 / 63
+BIOTECH · APPENDIX
+
+
+Every company's figures (6 of 7)
+100 companies with figures (97 description-verified, 3 industry-supported), one row each; Eli Lilly & Co is the largest at $1,358 bn
+
+
+ Company                              Layer                                   Market value   Revenue    Growth         EBITDA            Net       ROCE         P/E        P/B
+ PTC Therapeutics, Inc.               Specialty and clinical-stage biotechs      $5.30 bn    $1.73 bn          –        52.3%         39.4%     1066.1%            –          –
+                                      Clinical-stage gene editing and drug
+ Scholar Rock Holding Corp                                                       $5.27 bn           –          –              –            –    −111.4%            –     21.5x
+                                      developers
+ Liquidia Corp                        Other biotech companies                    $5.17 bn     $158 m         –        −31.5%        −43.5%            –          –      114.8x
+ Dianthus Therapeutics, Inc.          Other biotech companies                    $5.17 bn       $2 m         –      −8733.9%      −7957.8%            –          –       10.6x
+ Edgewise Therapeutics, Inc.          Other biotech companies                    $5.03 bn           –        –             –             –       −36.6%       5.6x        9.6x
+ Cogent Biosciences, Inc.             Other biotech companies                    $4.97 bn           –        –             –             –       −38.8%          –        7.8x
+ Travere Therapeutics, Inc.           Other biotech companies                    $4.86 bn     $491 m         –         −0.4%         −5.2%            –          –       42.2x
+ Ionis Pharmaceuticals Inc            Other biotech companies                    $4.84 bn     $944 m    +33.8%        −39.4%        −40.4%       −16.6%          –        9.3x
+ Adaptive Biotechnologies             Specialty and clinical-stage biotechs      $4.70 bn     $277 m    +54.8%        −14.8%        −21.5%       −16.3%          –       21.5x
+ Vireo Growth Inc.                    Specialty and clinical-stage biotechs      $4.64 bn     $269 m         –          5.6%        −25.3%        −0.3%          –       14.9x
+ Definium Therapeutics, Inc.          Other biotech companies                    $4.39 bn           –        –             –             –            –          –       13.2x
+ Tango Therapeutics, Inc.             Other biotech companies                    $4.32 bn      $62 m    +48.3%       −174.7%       −162.9%       −32.1%          –       12.5x
+ Indivior Pharmaceuticals             Other biotech companies                    $4.28 bn    $1.24 bn    +4.3%         22.0%         16.9%       118.6%      10.1x           –
+                                      Clinical-stage gene editing and drug
+ CRISPR Therapeutics AG                                                          $4.10 bn       $4 m           –   −18378.7%               –     −34.6%            –       2.1x
+                                      developers
+Latest full year: revenue, its growth, EBITDA and net margins, ROCE; P/E on the last four quarters (none for a loss-maker). † net margin above the EBITDA margin, or unusual,
+that the company's own filed figures don't give. Revenue growth above 100% either way, or from a base under 5% of the median company's, with its base: Kymera Therapeutics,
+Inc. −16.7%, from $47 m to $39 m; Madrigal Pharmaceuticals, Inc. +432.1%, from $180 m to $958 m; Adaptive Biotechnologies Corp +54.8%, from $179 m to $277 m; Tango
+Therapeutics, Inc. +48.3%, from $42 m to $62 m; Intellia Therapeutics, Inc. +16.9%, from $58 m to $68 m.
+
+
+
+
+StratLab · Biotech · Theme deep dive · 15 Nov 2026                                                                                                 Not investment advice · 42 / 63
+BIOTECH · APPENDIX
+
+
+Every company's figures (7 of 7)
+100 companies with figures (97 description-verified, 3 industry-supported), one row each; Eli Lilly & Co is the largest at $1,358 bn
+
+
+ Company                              Layer                                     Market value    Revenue     Growth        EBITDA            Net      ROCE        P/E       P/B
+ Relay Therapeutics, Inc.             Specialty and clinical-stage biotechs         $4.00 bn       $15 m           –   −1948.4%      −1800.0%     −53.4%            –      7.0x
+ Xenon Pharmaceuticals Inc.           Other biotech companies                       $3.98 bn        $8 m           –   −4940.4%      −4612.1%     −64.1%            –      6.8x
+ Tarsus Pharmaceuticals, Inc.         Specialty and clinical-stage biotechs         $3.96 bn     $451 m            –      −15.5%       −14.7%     −17.1%            –    11.5x
+ Amylyx Pharmaceuticals, Inc.         Other biotech companies                       $3.89 bn            –          –            –             –   −50.2%            –    12.8x
+ AbCellera Biologics Inc.             Other biotech companies                       $3.75 bn       $75 m           –    −264.4%       −194.9%     −22.5%            –      3.9x
+                                      Clinical-stage gene editing and drug
+ Viking Therapeutics, Inc.                                                          $3.73 bn            –          –            –             –           –         –      5.8x
+                                      developers
+ Organon & Co.                        Specialty and clinical-stage biotechs         $3.65 bn    $6.22 bn     −2.9%         17.5%          3.0%       9.9%      18.1x       4.9x
+ Disc Medicine, Inc.                  Other biotech companies                       $3.64 bn            –          –            –             –   −30.7%            –      4.9x
+ Enliven Therapeutics, Inc.           Other biotech companies                       $3.59 bn            –          –            –             –   −26.0%            –      7.8x
+                                      Clinical-stage gene editing and drug
+ Beam Therapeutics Inc.                                                             $2.36 bn     $140 m            –    −258.6%        −57.2%     −31.0%            –      1.9x
+                                      developers
+                                      Clinical-stage gene editing and drug
+ Intellia Therapeutics, Inc.                                                        $1.36 bn       $68 m    +16.9%      −637.2%       −609.9%     −65.7%            –      2.0x
+                                      developers
+Latest full year: revenue, its growth, EBITDA and net margins, ROCE; P/E on the last four quarters (none for a loss-maker). † net margin above the EBITDA margin, or unusual,
+that the company's own filed figures don't give. Revenue growth above 100% either way, or from a base under 5% of the median company's, with its base: Kymera Therapeutics,
+Inc. −16.7%, from $47 m to $39 m; Madrigal Pharmaceuticals, Inc. +432.1%, from $180 m to $958 m; Adaptive Biotechnologies Corp +54.8%, from $179 m to $277 m; Tango
+Therapeutics, Inc. +48.3%, from $42 m to $62 m; Intellia Therapeutics, Inc. +16.9%, from $58 m to $68 m.
+
+
+
+
+StratLab · Biotech · Theme deep dive · 15 Nov 2026                                                                                                 Not investment advice · 43 / 63
+
