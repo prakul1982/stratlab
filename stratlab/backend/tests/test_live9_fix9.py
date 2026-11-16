@@ -178,3 +178,41 @@ def test_a_us_size_with_the_underwriters_option_says_so():
     assert s["basis"] == ipo.OPTION_BASIS and s["base"] == 64_350_000_000
     plain = ipo.sizes({"market": "US", "shares": 10_000_000, "high": 13.0, "amount": 130_000_000})
     assert plain["basis"] == "stated" and "base" not in plain
+
+
+# ---------- LIVE9A-021: a stored brief's day change follows the exchange's own closes, a special session included ----------
+def test_the_9_nov_brief_is_measured_against_the_muhurat_session(monkeypatch):
+    from datetime import date
+    from app import blog, official_close
+    from app.data import calendar as tc
+    files = {"2026-11-09": {"NIFTY 50": 25043.85, "NIFTY BANK": 56000.0}, "2026-11-08": {"NIFTY 50": 24986.40, "NIFTY BANK": 55900.0}}
+    monkeypatch.setattr(official_close, "index_closes", lambda d, fetch=False, now=None: files.get(d))
+    monkeypatch.setattr(tc, "is_trading_day", lambda m, d: d.weekday() < 5 or d.isoformat() == "2026-11-08")
+    monkeypatch.setattr(tc, "special_days", lambda m: {"2026-11-08"})
+    issue = {"kind": "market", "region": "IN", "day": "2026-11-09", "at": "2026-11-09T19:00:00+05:30",
+             "indices": [{"name": "NIFTY 50", "price": 25043.85, "change_pct": 0.06}, {"name": "SENSEX", "price": 81500.0, "change_pct": 0.05},
+                         {"name": "NIFTY BANK", "price": 56000.0, "change_pct": 0.3}],
+             "sections": [{"title": "Indices", "items": [{"text": "NIFTY 50: 25,043.85, +0.06% on the day"}]}]}
+    post = blog.brief_post(issue)
+    assert "NIFTY 50 +0.23%" in post["title"]
+    text = blog.plain_text(post["blocks"])
+    assert "+0.06%" not in text and "+0.23%" in text
+    fixed, changed = blog.official_changes("IN", date(2026, 11, 9), issue["indices"])
+    assert changed and [i["change_pct"] for i in fixed] == [0.23, None, 0.18]       # SENSEX: no file, the session before was special
+    # a US brief and a day without the files are left as they are
+    assert blog.official_changes("US", date(2026, 11, 9), issue["indices"]) == (issue["indices"], False)
+    assert blog.official_changes("IN", date(2026, 11, 10), issue["indices"])[1] is False
+
+
+# ---------- LIVE9A-024: a bank with 31 billion shares and a holding company have their market value ----------
+def test_large_share_counts_and_holding_companies_keep_their_value():
+    from app import stock_pages as sp
+    yes = {"region": "IN", "market_cap": 56_600.0, "price": 18.02, "unit": "₹ crore", "market_cap_unit": "₹ crore",
+           "years": [{"year": "Mar 2026", "sales": 30_000.0, "profit": 2_400.0}]}
+    assert sp.cap_problem(yes) is None and sp.shown_cap(yes) == 56_600.0
+    holding = {"region": "IN", "market_cap": 130_000.0, "price": 11_700.0, "unit": "₹ crore", "market_cap_unit": "₹ crore",
+               "years": [{"year": "Mar 2026", "sales": 1_500.0, "profit": 7_000.0}]}
+    assert sp.cap_problem(holding) is None
+    # still caught: a value 1,000 times off, with no profit to bear it out
+    assert sp.cap_problem({**holding, "market_cap": 130_000_00.0, "years": [{"year": "Mar 2026", "sales": 1_500.0, "profit": 7_000.0}]}) is not None
+    assert sp.cap_problem({**yes, "market_cap": 56_600_000.0}) is not None

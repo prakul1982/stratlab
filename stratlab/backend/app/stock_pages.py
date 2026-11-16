@@ -97,8 +97,11 @@ US_INDICES = {"SPX", "GSPC", "^GSPC", "NDX", "IXIC", "^IXIC", "DJI", "^DJI", "DJ
 IN_INDEX = re.compile(r"^(NIFTY|SENSEX|BANKNIFTY|FINNIFTY|MIDCPNIFTY|BANKEX|INDIAVIX|CNX)[A-Z0-9 &-]*$")
 # a market value above this (in the page's unit: $ million, ₹ crore) is a data error: no company is worth $8 trillion
 CAP_CEILING = {"US": 8_000_000.0, "IN": 10_000_000.0}
-IN_SHARES_MAX = 30e9        # an Indian company's implied share count (market value ÷ price) above this is a unit or share-count error (R26-001)
-IN_PS_MAX = 50              # an Indian market value over this many times its latest year's revenue is out of line (R26-001)
+# an Indian company's implied share count (market value ÷ price) above this is a unit or share-count error (R26-001); LIVE9A-024: 30 billion
+# left YES Bank (about 31 billion shares) without a value, and Vodafone Idea has over 100 billion
+IN_SHARES_MAX = 150e9
+IN_PS_MAX = 50              # an Indian market value over this many times its latest year's revenue is out of line (R26-001)...
+IN_PE_BACKED = 150          # ...unless its latest year's profit bears it out (LIVE9A-024: a holding company, Bajaj Holdings, earns little revenue)
 # an exchange operator that is not itself a listed company, which an instrument list can carry under its own code (R26-001)
 UNLISTED_NAMES = re.compile(r"^\s*national stock exchange of india\b", re.I)
 PE_MAX = 1000.0                # a P/E above this says the market value or the profit is off, not the company: n/a
@@ -908,6 +911,16 @@ def _latest_sales(f: dict):
     return vals[-1] if vals else None
 
 
+def _latest_profit(f: dict):
+    """The latest year's profit from the page's own table, when it is in the market value's unit (LIVE9A-024)."""
+    unit, cap_unit = str(f.get("unit") or ""), str(f.get("market_cap_unit") or "")
+    if not unit or unit != cap_unit:
+        return None
+    vals = [_num(y.get("profit")) for y in f.get("years") or [] if str(y.get("year") or "").strip().upper() != "TTM"]
+    vals = [v for v in vals if v is not None]
+    return vals[-1] if vals else None
+
+
 def cap_problem(f: dict | None) -> str | None:
     """Why a page's market value can't be right, or None when it passes every check (or there is none). Checked:
     - depositary shares whose ratio to ordinary shares couldn't be read (the value counts ordinary shares at the ADS price);
@@ -947,7 +960,9 @@ def cap_problem(f: dict | None) -> str | None:
         if price and price > 0 and cap * 1e7 / price > IN_SHARES_MAX:
             return "implied share count out of range"
         if sales is not None and sales > 0 and cap / sales > IN_PS_MAX:
-            return "out of line with revenue"
+            profit = _latest_profit(f)
+            if not (profit is not None and profit > 0 and cap / profit <= IN_PE_BACKED):
+                return "out of line with revenue"
     if region == "US":
         profit, pe = _num(f.get("profit_usd")), _num(f.get("pe"))
         if profit is None and str(f.get("unit") or "$").startswith("$"):
