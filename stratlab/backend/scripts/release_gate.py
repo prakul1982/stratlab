@@ -41,7 +41,8 @@ FAIL (the exit code is 1 when any theme has one; each row says on which side it 
                        in the layer's figures (r572: the live R57.1 decks left McDonald's, Yum, SLB and Disney out while every fixture passed)
   layer lost           a named layer of the published version, with a company still in the theme, that no layer of the placement holds
                        under any of its names, unless half or more of its companies sit in one or two layers new to this version
-                       (r58: Consumer retail's "Single-category specialty retailers" lost twice)
+                       or every one of its companies was moved out by a rule naming it with its reason (r58: Consumer retail's
+                       "Single-category specialty retailers" lost twice)
   model contradicted   a company's printed way of earning that its own words contradict: they state another way of earning in so many
                        words (theme_check.model_from_words), of a family not kin to it (the families of making are one kin), and
                        show no word of its own
@@ -554,10 +555,19 @@ def lost_layers(d: dict, vc: list) -> list[dict]:
         if lay and lay != rest and not lay.startswith("Other "):
             by_layer.setdefault(lay, []).append(s_)
     held = set().union(*[B._names(v) for v in vc if not v.get("official")] or [set()])
-    where = {s_: x[0] for s_, x in rows_of(vc).items()}
+    rows = rows_of(vc)
+    where = {s_: x[0] for s_, x in rows.items()}
+
+    def said_out(lay, syms) -> bool:
+        """every one of its companies moved out by a rule that names the layer and says why (a layer not made, with its reason)"""
+        for s_ in syms:
+            r = rows[s_][2].get("refit") if s_ in rows and isinstance(rows[s_][2].get("refit"), dict) else {}
+            if _HALF.sub("", str(r.get("from") or "")) != lay or not r.get("why"):
+                return False
+        return bool(syms)
     out = []
     for lay, syms in sorted(by_layer.items()):
-        if lay in held:
+        if lay in held or said_out(lay, syms):
             continue
         new = {}
         for s_ in syms:

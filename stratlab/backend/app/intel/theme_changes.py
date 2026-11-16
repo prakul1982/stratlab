@@ -297,7 +297,10 @@ def _layer_events(was: dict, now: dict) -> tuple[list[dict], set]:
             used_d.add(d)
             pairs.add((src_, d))
     # c54 (R53 review): a removed layer says where its companies went ({layer: n}) and, when the placement listed it, why it was not kept
-    went = lambda g: dict(Counter(now["layers"][now["cos"][s_][1]] if s_ in now["cos"] else "" for s_ in src[g]).most_common())      # noqa: E731
+    # r58 (the owner's review of the live R57.2 Textiles deck: "185 companies: 163 out of the theme", while all 325 were in it before and
+    # after): a company past the figures count is still in the theme, in the layer the snapshot's rest says (rest_layer)
+    went = lambda g: dict(Counter(now["layers"][now["cos"][s_][1]] if s_ in now["cos"] else (rest_layer(now, s_) or "")      # noqa: E731
+                                  if s_ in (now.get("rest") or {}) else "" for s_ in src[g]).most_common())
     why = {x.get("layer"): x.get("why") for x in now.get("gone") or [] if isinstance(x, dict)}
     out += [{"kind": "removed", "from": [g], "to": [], "n": len(src[g]), "went": went(g), **({"why": why[g]} if why.get(g) else {})}
             for g in gone if g not in used_g]
@@ -501,7 +504,10 @@ def first_sentence(words) -> str:
     if len(one) > QUOTE_MAX:
         cut = max(one.rfind(", ", 0, QUOTE_MAX), one.rfind("; ", 0, QUOTE_MAX))
         one = one[:cut] if cut > 40 else one[:one.rfind(" ", 0, QUOTE_MAX)]
-    return one.strip(" ,;:").replace("“", "‘").replace("”", "’")
+    # r58 (the live R57.2 Automotive deck: SBI Cards' removal "(business membership: ...; its own words say “SBI Cards and Payment Services
+    # Limited (...) is ...”)", a bracket inside the reason's own bracket, read as the reason): an aside in brackets is left out of the quote
+    one = re.sub(r"\s*\([^()]*\)", "", one)
+    return one.strip(" ,;:").replace("“", "‘").replace("”", "’").replace("(", "").replace(")", "")
 
 
 def unnamed_why(why: str, words=None, industry: str = "", theme_words: set | None = None) -> str:
@@ -675,6 +681,18 @@ def fall_why(snap: dict | None, dive: dict | None) -> dict:
             out["nothing of its own read yet"] += 1
         else:
             out["fit none of this version's layers"] += 1
+    # r58 (R58, the owner's review of the live R57.2 decks: Payments 90% -> 83% and Media US 89% -> 82% with the fall unsaid, two companies
+    # kept in "Other" on their own words): a fall can come from companies new to the theme placed in "Other", the count it is a share of
+    # growing, not from any company leaving a layer; and a core member now shown apart as an adjacent participant. Each said with its count
+    rest = snap.get("rest") if isinstance(snap.get("rest"), dict) else {}
+    for s_, c in rows.items():
+        if s_ in snap["cos"] or s_ in rest:
+            continue
+        if layer_of[s_].startswith("Other"):
+            out["new to the theme, placed in “Other” (the count of companies placed grew; no company left a layer for it)"] += 1
+    for s_, c in snap["cos"].items():
+        if s_ in rows and rows[s_].get("adjacent") and isinstance(c, list) and len(c) > 1:
+            out["now an adjacent participant (another kind of business), shown apart from the core members"] += 1
     return dict(out)
 
 

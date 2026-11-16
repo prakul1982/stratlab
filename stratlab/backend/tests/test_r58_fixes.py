@@ -204,3 +204,118 @@ def test_p17_a_theme_s_data_gaps_are_tried_before_they_escalate_and_each_left_sa
     assert got == {"tried": 3, "filled": 2, "left": 1}
     left = TR.data_gap_checks()[0]
     assert "Ccc Inc (figures: its company page could not be built now (the pages' per-minute ration was taken))" in left.problem
+
+
+# ---------- P1-6: the owner's open items ----------
+from app.intel import theme_changes as TCH       # noqa: E402
+
+
+def test_p16_a_removed_layer_never_says_its_companies_left_the_theme_when_they_are_past_the_figures_count():
+    was = {"layers": ["Home textiles (larger)", "Spinning mills"], "cos": {"A": ["A", 0], "B": ["B", 0], "C": ["C", 0], "S": ["S", 1]}}
+    now = {"layers": ["Spinning mills"], "cos": {"S": ["S", 0]},
+           "rest": {"A": ["A", 0], "B": ["B", 0], "C": ["C", 0]}, "rest_layers": ["Home textiles (smaller)"]}
+    ev, _ = TCH._layer_events(was, now)
+    gone = next(x for x in ev if x["kind"] == "removed")
+    assert gone["went"] == {"Home textiles (smaller)": 3}, gone          # none said to be out of the theme
+
+
+def test_p16_a_parent_and_its_subsidiary_filer_merge_when_the_dive_s_descriptions_leave_the_filer_s_titles_out():
+    rows = [{"symbol": "TRP", "name": "TC Energy Corp", "year": "2025", "revenue": 10681.0, "profit": 2470.0, "cap": 67400.0},
+            {"symbol": "TCPA", "name": "Transcanada Pipelines Ltd", "year": "2025", "revenue": 10679.5, "profit": 2466.0, "cap": 21400.0}]
+    raw = {"TRP": "TC Energy Corporation is a Canadian energy company.", "TCPA": "From its own filings: Annual report (40-F)."}
+
+    def about(s_):
+        t = raw.get(s_) or ""
+        return None if t.startswith("From its own filings:") else t
+    about.filed_only = lambda s_: str(raw.get(s_) or "").startswith("From its own filings:")
+    assert TD.same_company(rows, about=about) == {"TCPA": "TRP"}
+    del about.filed_only                     # guard: with no word of the filer, two companies with no words stay apart
+    assert TD.same_company(rows, about=about) == {}
+
+
+def test_p16_a_computing_layer_made_by_how_companies_earn_is_not_made_in_an_oil_theme():
+    vc = [{"layer": "Midstream pipelines", "companies": [{"ticker": "P"}]},
+          {"layer": "Data centres, hosting and networks", "by_model": True, "companies": [{"ticker": "NUAI", "name": "New Era"}, {"ticker": "SEI"}]},
+          {"layer": "Other oil and gas companies", "official": True, "basis": "rest", "companies": []}]
+    out, rows = B.off_theme_compute([dict(v) for v in vc], "Oil and gas")
+    assert [v["layer"] for v in out] == ["Midstream pipelines", "Other oil and gas companies"] and len(rows) == 2
+    assert out[-1]["companies"][0]["refit"]["why"].startswith("a group by how they earn")
+    out, rows = B.off_theme_compute([dict(v) for v in vc], "Software")         # guard: a computing theme keeps it
+    assert not rows
+
+
+def test_p16_a_name_none_of_its_companies_say_takes_their_word_in_place_not_in_brackets():
+    texts = ["Boeing is among the largest global aerospace manufacturers; it builds commercial jetliners and military aircraft",
+             "Embraer designs and builds aircraft"]
+    assert B.in_place_name("Commercial airframe integration", "aircraft", texts) == "Commercial aircraft"
+    assert B.in_place_name("Commercial and business lenders", "bank", ["a bank holding company for commercial and business customers"]) \
+        == "Commercial and business banks"
+    assert B.in_place_name("Aircraft makers", "aircraft", texts) == ""          # guard: their word in it already
+
+
+def test_p16_a_company_kept_on_its_own_words_against_one_layer_s_answer_says_so_never_true():
+    c = {"base": True, "basis": "words", "verified": False, "industry": "", "placed": "words",
+         "kept_member": "kept in the theme: the map's check said no for “Engines” only, one layer's answer; its own words say the theme's work"}
+    rec = TD.theme_record(c, "core")
+    assert rec["by"] == "words" and "True" not in rec["why"] and rec["why"].startswith("the map's check said no")
+    c2 = {"base": True, "industry": "Banks", "kept_member": True}
+    assert "True" not in TD.theme_record(c2, "core")["why"]
+
+
+# ---------- P1-5: national money-centre banks and small community banks are not one comparison ----------
+def test_p15_a_layer_joining_a_large_and_a_small_scale_is_split_by_scale():
+    caps = [800, 300, 250, 90, 40, 30, 20, 9, 5, 4, 3, 2, 1, 0.5]
+    vc = [{"layer": "Large national banks and small community banks", "companies": [{"ticker": f"B{i}", "cap": c * 1000} for i, c in enumerate(caps)]}]
+    out = B.scale_bands(vc)
+    names = {v["layer"]: [c["ticker"] for c in v["companies"]] for v in out}
+    assert set(names) == {"Large national banks", "Mid-sized banks", "Small community banks"}
+    assert names["Large national banks"] == ["B0", "B1", "B2", "B3"] and "B13" in names["Small community banks"]
+    assert all(c["refit"]["why"].startswith("“Large national banks and small community banks” split by scale") for v in out for c in v["companies"])
+    assert B.scale_bands([{"layer": "Deposit-funded banks", "companies": vc[0]["companies"]}])[0]["layer"] == "Deposit-funded banks"   # guard
+
+
+def test_p16_a_removal_s_quoted_words_hold_no_bracket_of_their_own():
+    w = ("SBI Cards and Payment Services Limited (“SBI Card” or the “Company”) is a non-deposit accepting systemically "
+         "important nonbanking financial company. It issues credit cards.")
+    why = TCH.unnamed_why("no longer in the theme's map", w, "", {"autom", "vehic"})
+    assert "(" not in why and ")" not in why and "SBI Cards and Payment Services Limited is a non-deposit" in why
+
+
+def test_p16_broadband_operators_are_adjacent_in_a_media_theme_and_a_media_group_is_not():
+    ch = "Charter Communications is a leading broadband connectivity company with services available to more than 57 million homes."
+    cm = "Comcast Corporation is a global media and technology company. Our Connectivity & Platforms business provides broadband and video."
+    a = TD.scope_adjacent({"industry": "Cable & Other Pay Television Services"}, "Media and entertainment", "", ch, None, "telecom_services", "medium")
+    assert a and a["kind"] == "telecom and broadband operators"
+    assert TD.scope_adjacent({"industry": "Cable & Other Pay Television Services"}, "Media and entertainment", "", cm, None, "telecom_services", "medium") is None
+    assert TD.scope_adjacent({"industry": ""}, "Telecom", "", ch, None, "telecom_services", "medium") is None
+
+
+# ---------- P1-4: a coverage fall says why, in companies new to the theme and core vs adjacent ----------
+def test_p14_a_fall_from_companies_new_to_the_theme_in_other_is_said():
+    snap = {"layers": ["Card networks", "Other payments companies"], "cos": {"V": ["Visa", 0], "MA": ["Mastercard", 0], "X": ["X", 1]}}
+    dive = {"layers": [{"layer": "Card networks", "companies": [{"symbol": "V"}, {"symbol": "MA", "adjacent": {"kind": "lenders"}}]},
+                       {"layer": "Other payments companies", "companies": [{"symbol": "X"}, {"symbol": "JPM"}, {"symbol": "NU"}]}]}
+    why = TCH.fall_why(snap, dive)
+    assert why.get("new to the theme, placed in “Other” (the count of companies placed grew; no company left a layer for it)") == 2
+    assert why.get("now an adjacent participant (another kind of business), shown apart from the core members") == 1
+
+
+# ---------- P2-8: no near-empty continuation page, no row's words lost ----------
+def test_p28_a_row_taller_than_a_page_is_carried_on_in_pieces_never_a_page_that_draws_none_of_it():
+    from app import deck as D
+    head, w = D.COVERAGE_HEAD, [1.8, 1.6, 8.0]
+    long = " ".join(f"Filed under Retail-Catalog but in another business: Company{i} Inc, a maker of things;" for i in range(120))
+    rows = [["A", "1", "short"], ["Screened out:", "", long], ["Since the previous version", "2", "On 16 Nov added 2."]]
+    pages = D.table_pages(head, rows, w, D.CW, D.BOT - D.TOP)
+    for p in pages:          # every row of every page is drawn
+        lay = D.table_layout({"head": head, "rows": p, "widths": w, "numeric": [False] * 3, "strong": (), "compact": False}, D.CW, D.BOT - D.TOP)
+        assert len(lay["rows"]) == len(p) >= 2
+    assert " ".join(r[2] for p in pages for r in p if r[0].startswith("Screened out:")) == long
+
+
+def test_p03_guard_a_layer_a_rule_did_not_make_with_its_reason_is_no_lost_layer():
+    d = {"theme": "Oil and gas", "published": {"N": "Data centres, hosting and networks", "P": "Midstream"}}
+    vc = [{"layer": "Midstream", "companies": [{"ticker": "P"}]},
+          {"layer": "Other oil and gas companies", "official": True, "basis": "rest",
+           "companies": [{"ticker": "N", "refit": {"from": "Data centres, hosting and networks", "to": "", "why": "a group by how they earn"}}]}]
+    assert G.lost_layers(d, vc) == []
