@@ -97,7 +97,10 @@ def test_4_the_live_audit_answer_moves_twilio_once_its_old_quote_is_read_like_a_
     of their new layer: still refused (the model's answer, not the check's)."""
     got = where(place("software", monkeypatch))
     assert got["TWLO"][0] == "Data and developer infrastructure software"
-    assert got["SHOP"][0].startswith("Cloud and AI compute") and got["TOST"][0].startswith("Cloud and AI compute")
+    # r572 round 2 (updated on purpose): the audit still refuses Shopify's and Toast's moves, and the compute layer's fit then re-places them:
+    # their own words ("a cloud e-commerce management platform", "cloud-based restaurant management software") say no computing, capacity,
+    # hosting or data centres, and no other layer's name, so they go to the theme's "Other" group (theme_base.compute_fit)
+    assert got["SHOP"][0] == "Other" and got["TOST"][0] == "Other"
 
 
 def test_5_a_published_member_outside_the_map_s_groups_stays_in_the_theme():

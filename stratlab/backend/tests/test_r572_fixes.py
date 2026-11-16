@@ -334,3 +334,12 @@ def test_r2_6b_a_split_move_into_a_layer_its_words_never_say_goes_to_other_unles
     out, rows = B.unsaid_moves(vc, lambda s: words.get(s), "IT services", {"PUB": "Engineering R&D services"})
     where = {c["ticker"]: v["layer"] for v in out for c in v["companies"]}
     assert where["RID"] == "Other IT service companies" and where["PUB"] == "Engineering R&D services" and [r["ticker"] for r in rows] == ["RID"]
+
+
+def test_r2_5c_a_layer_s_notes_page_is_read_as_that_layer_for_its_operating_profile():
+    page = ("THEME · THE VALUE CHAIN\nEach layer on its own measures\nx\n\n Operating profiles: Residential developers (larger), property developers: "
+            "1 of 3 stated, 1 by half or more of its companies. Its last column: the layer's own companies.\n\f"
+            "THEME · THE VALUE CHAIN\n\nLayer 2 · Residential developers (larger) (notes)\nWho is in it\n In common: they earn mainly from selling "
+            "homes, offices and plots they build.\n\f")
+    assert not DC.check_text(page)["counts"].get("profile unsaid")
+    assert DC.check_text(page.replace("Residential developers (larger), property", "Office landlords, property"))["counts"].get("profile unsaid") == 1

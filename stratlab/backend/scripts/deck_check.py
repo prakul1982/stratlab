@@ -1176,7 +1176,9 @@ def m57_checks(pages: list[str], add) -> None:
         em = _EARNS.search(flat)
         if not lm or not em:
             continue
-        name, earns = lm.group(1).strip(), em.group(1)
+        # r572 round 2: a layer's notes or continued page is that layer's (the offline R57.2 Real estate deck: "Residential developers
+        # (larger) (notes)" read as a layer of its own)
+        name, earns = re.sub(r" \((?:notes|continued)\)$", "", lm.group(1).strip()), em.group(1)
         for many, name_rx, ways in PROFILE_HINTS:
             if not any(w in earns for w in ways) or not re.search(name_rx, name, re.I):
                 continue
