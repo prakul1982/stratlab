@@ -116,8 +116,10 @@ def test_a_company_placed_after_the_map_has_its_own_words_and_figures_by_size():
     el2 = next(c for v in desc["value_chain"] for c in v["companies"] if c["ticker"] == "EL2")
     assert el2["what"] == "Elec Two makes radars and electronic warfare systems for the armed forces"
     fm, figs = B.for_figures(out, cap=5)
-    assert figs == {"shown": 5, "of": 7}                                   # the three the AI named, then the two largest placed ones
-    assert {c["ticker"] for v in fm["value_chain"] for c in v["companies"]} == {"MS1", "SH1", "EL1", "EL2", "MS2"}
+    # r582 (R58.2, updated on purpose: a layer the window holds fewer than 3 companies of gains its next largest, so "Warships" is never
+    # printed with one of its two): the three the AI named, the two largest placed ones, then SH2
+    assert figs == {"shown": 6, "of": 7}
+    assert {c["ticker"] for v in fm["value_chain"] for c in v["companies"]} == {"MS1", "SH1", "EL1", "EL2", "MS2", "SH2"}
     assert set(B.to_describe(out)) >= {"EL2", "MS2", "SH2", "XX1"}
 
 

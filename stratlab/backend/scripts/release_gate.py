@@ -35,8 +35,9 @@ FAIL (the exit code is 1 when any theme has one; each row says on which side it 
                        a layer whose name has no word of three letters or more
   financial margin     r581 (the live R58 Regional banks deck: Fifth Third's 3,152.5%): a bank's, lender's or insurer's net margin above 100% in
                        the figures the input carries (its revenue line is not its total revenue)
-  one-company layer    a named layer (not "Other ...", not an official group) holding one company whose own words don't say its name
-                       (r58: one valid member keeps its layer, with no median)
+  one-company layer    a named layer (not "Other ...", not an official group) holding one company (r582, R58.2: its member's words saying
+                       its name or not; r58 let one whose words say it stand), or holding one company in the dive's figures window
+                       (theme_base.for_figures) while it has more
   largest left out     a company of a named layer left out of its figures on insufficient evidence alone (read only weakly, no words, none
                        found, no way of earning stated) that is one of the theme's 10 largest by market value (never more than its
                        largest quarter: theme_base.TOP_MEMBERS, TOP_SHARE) or larger than every company
@@ -210,6 +211,11 @@ def pre_map(d: dict, origin: dict | None = None) -> dict:
     # lenders" and "Commercial and business lenders", sent elsewhere offline): a map layer renamed in place after the placement (theme_base's
     # name-word rule, "Real estate-focused lenders (bank)") is handed on under the map's name it keeps in "aka", the one the kept answer names
     answer_names = {x.get("layer") for x in (kept.get("assign") or {}).values() if isinstance(x, dict) and x.get("layer")}
+    # r582 (the R58.1 replay of Regional banks: Columbia Banking, placed by the kept answer in "Commercial and business lenders", sent to
+    # "Specialty, niche and digital lenders" offline): a map layer the placement contract renamed in place with its words changed
+    # ("Commercial and business banks", no bracket) is handed on under the map's name the contract renamed, when the kept answer names it
+    contract_renamed = {x.get("renamed"): x.get("layer") for x in ((d.get("placements") or {}).get("contract") or {}).get("layers") or []
+                        if isinstance(x, dict) and x.get("renamed") and x.get("layer")}
 
     def map_name(v) -> tuple[str, str]:
         name = shown(v)
@@ -217,6 +223,9 @@ def pre_map(d: dict, origin: dict | None = None) -> dict:
         own = v["was"] if v.get("was") and seen == name else placed_as.get(seen, seen)
         if own not in answer_names:
             own = next((a for a in v.get("aka") or [] if a in answer_names and a not in placed_as and own.startswith(a + " (")), own)
+        if own not in answer_names and contract_renamed.get(own) in answer_names and contract_renamed[own] in (v.get("aka") or []) \
+                and contract_renamed[own] not in placed_as:
+            own = contract_renamed[own]
         return own, seen
     layers: dict = {}
     for v in d["value_chain"]:
@@ -514,11 +523,11 @@ def checks(d: dict, vc: list, placements: dict, moved_in: set = frozenset(), why
             continue
         if len(cos) == 1:
             s, c = cos[0]
-            # r58 (R58, the owner: "a category with one valid member can remain useful even if it cannot support a median"): a layer of one
-            # company whose own words say its name is valid; one whose words don't is the FAIL
+            # r582 (R58.2, the live R58.1 decks: 19 layers of one company): a layer of one company is a FAIL, its member's words saying its
+            # name or not (r58 let one whose words say it stand); it gains the companies whose words say it, or its company goes elsewhere
             w1 = words_of(d, s, c)
-            if not (shares(name, w1) is True or B.words_support(name, w1, d.get("theme") or "")):
-                fail("one-company layer", f"“{name}”", f"{c.get('name') or s} ({s}) alone, its own words not saying the layer's name")
+            said_ = shares(name, w1) is True or B.words_support(name, w1, d.get("theme") or "")
+            fail("one-company layer", f"“{name}”", f"{c.get('name') or s} ({s}) alone" + ("" if said_ else ", its own words not saying the layer's name"))
         said = [shares(name, words_of(d, s, c)) for s, c in cos]
         if said and all(x is False for x in said):
             who = ", ".join(f"{c.get('name') or s}" for s, c in cos[:4]) + (f" and {len(cos) - 4} more" if len(cos) > 4 else "")
@@ -527,6 +536,18 @@ def checks(d: dict, vc: list, placements: dict, moved_in: set = frozenset(), why
         for s, c in cos:
             if s in moved_in and shares(name, words_of(d, s, c)) is False:
                 fail("layer words", f"“{name}”", f"{c.get('name') or s} ({s}) moved in; its own words, industry and name say no word of it")
+    # r582 (R58.2, the live R58.1 decks: "Payment networks and processors" printed with Block alone of its 7 companies): a named layer the
+    # dive's figures window (theme_base.for_figures) holds one company of, the deck's value chain printing it alone
+    # (a half by market value the window shows too few of is undone into its layer by the dive, theme_base.unsplit_unshown)
+    win = B.for_figures({"value_chain": vc})[0]
+    for v in win.get("value_chain") or []:
+        name = str(v.get("layer") or "")
+        if v.get("official") or v.get("scale") or _HALF.search(name) or name.startswith("Other ") or len(v.get("companies") or []) != 1 \
+                or len(by_layer.get(name, (None, []))[1]) < 2:
+            continue
+        c = v["companies"][0]
+        fail("one-company layer", f"“{name}”", f"{c.get('name') or c.get('ticker')} ({c.get('ticker')}) alone of {len(by_layer[name][1])} in the "
+                                               f"dive's figures")
     # r572 (R57.2, the live R57.1 decks: McDonald's, the Restaurants theme's largest company, Yum, SLB, Baker Hughes, Enbridge and Disney
     # left out of their layers' figures as "insufficient evidence", while every replay of the fixes' own fixtures passed): a company of a
     # named layer left out of its figures on insufficient evidence alone, that is one of the theme's TOP_MEMBERS largest by market value or

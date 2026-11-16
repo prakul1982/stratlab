@@ -113,7 +113,10 @@ def test_p03_a_one_company_layer_of_the_published_version_stays_when_its_words_s
           {"layer": "Distribution and aggregation", "companies": [{"ticker": "PB", "name": "PB Fintech"}]},
           {"layer": "Other insurance companies", "official": True, "basis": "rest", "companies": []}]
     out, rows = B.single_layers([dict(v) for v in vc], lambda s: words if s == "PB" else "", "Insurance", {"PB": "Distribution and aggregation"})
-    assert [c["ticker"] for v in out if v["layer"] == "Distribution and aggregation" for c in v["companies"]] == ["PB"] and not rows
+    # r582 (R58.2, updated on purpose: the brief on the live R58.1 decks, "a layer with one company either gains the stored members whose own
+    # words support it, or the company folds into the best-fitting layer by its own words"): no company says its name, so the layer of one
+    # is not kept; its company goes to "Other", with why
+    assert not [v for v in out if v["layer"] == "Distribution and aggregation"] and rows and rows[0]["to"] == "Other insurance companies"
     # guard: a one-company layer no published version had, whose words don't say it, is still folded
     out, rows = B.single_layers([dict(v) for v in vc], lambda s: words if s == "PB" else "", "Insurance", {})
     assert rows and rows[0]["to"] == "Other insurance companies"
