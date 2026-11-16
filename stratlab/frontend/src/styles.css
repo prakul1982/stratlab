@@ -1270,6 +1270,7 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .mc-evs { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .mc-ev { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 10px; align-items: start; }
 .mc-ev.past { opacity: .6; }
+.mc-ev.untagged { grid-template-columns: minmax(0, 1fr); }
 .mc-ev-title { font-weight: 500; overflow-wrap: anywhere; }
 /* an earnings call's line ends with the webcast address from its filing, one long word: it breaks rather than push a phone's page sideways (ui-lint R10) */
 .mc-ev-body > .k-note { overflow-wrap: anywhere; }

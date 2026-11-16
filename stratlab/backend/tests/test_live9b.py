@@ -112,3 +112,24 @@ def test_live9b_007_a_one_off_investment_is_no_business_figure_and_my_stocks_are
     monkeypatch.setattr(screens, "load_index", lambda region: {"rows": [{"symbol": "BHARATCOAL", "name": "Bharat Coking Coal"}]})
     v = B.my_view("u1")
     assert v["without"][0]["name"] == "Bharat Coking Coal"
+
+
+def test_live9b_008_a_meeting_on_two_days_is_two_calendar_dates_with_the_filing_as_a_link(monkeypatch):
+    import time_machine
+    from datetime import datetime as _dt
+    from app import concalls as C, db, money_calendar
+    url = "https://nsearchives.nseindia.com/corporate/SBIN_11112026185620_BSE_NSE_Intimation_11112026.pdf"
+    monkeypatch.setattr(money_calendar, "tracked", lambda uid: ({"SBIN": {}}, []))
+    monkeypatch.setattr(db, "cached_profile", lambda uid: {"id": uid, "plan": "basic", "_plan": "basic"})
+    monkeypatch.setattr(C, "india_rows", lambda frm, to: [{"id": "SBIN|2026-11-17|meet", "symbol": "SBIN", "name": "State Bank of India",
+                                                            "date": "2026-11-17", "until": "2026-11-18", "dates": ["2026-11-17", "2026-11-18"],
+                                                            "time": None, "tz": None, "type": "meet", "type_label": "Analyst or investor meet",
+                                                            "links": [{"kind": "notice", "url": url}]}])
+    with time_machine.travel(_dt(2026, 11, 16, 6, 0)):
+        got = C.calendar_dates("u1", 30)
+    assert [e["date"] for e in got] == ["2026-11-17", "2026-11-18"]
+    assert len({e["id"] for e in got}) == 2
+    assert all(e["link"] == url and "http" not in e["detail"] and "meet" not in e["detail"] for e in got)
+    ev = money_calendar._ev(date(2026, 11, 17), got[0]["title"], "holdings", "concall_meet", got[0]["detail"], link=got[0]["link"])
+    assert ev["link"] == url
+    assert "Filing: " + url[:30] in money_calendar.to_ics([ev], False).replace("\r\n ", "")

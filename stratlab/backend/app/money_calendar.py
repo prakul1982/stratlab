@@ -110,11 +110,13 @@ def clean_reminders(r) -> dict:
 
 
 # ---------- tax dates: the law's own ----------
-def _ev(day: date, title: str, cat: str, kind: str, detail: str = "", *, amount=None, symbol=None, ref=None, url=None) -> dict:
+def _ev(day: date, title: str, cat: str, kind: str, detail: str = "", *, amount=None, symbol=None, ref=None, url=None, link=None) -> dict:
     eid = f"{cat}:{kind}:{day.isoformat()}:{ref or symbol or ''}"[:120]
     return {"id": eid, "date": day.isoformat(), "title": title[:120], "cat": cat, "kind": kind, "detail": detail[:400],
             "amount": round(float(amount), 2) if isinstance(amount, (int, float)) and math.isfinite(amount) else None,
-            "symbol": symbol, "url": url}
+            "symbol": symbol, "url": url,
+            # the filing an event is read from, shown as a link (LIVE9B-008: its address was written out in every row's text)
+            **({"link": link} if isinstance(link, str) and link.startswith("https://") else {})}
 
 
 def fy_label(y: int) -> str:
@@ -344,7 +346,8 @@ def hook_events(uid: str, frm: date, to: date) -> list[dict]:
             kind = re.sub(r"[^a-z0-9_]", "", str(x.get("kind") or module).lower())[:30] or module
             out.append(_ev(d, x["title"].strip(), cat, kind, str(x.get("detail") or "")[:400],
                            amount=x.get("amount") if isinstance(x.get("amount"), (int, float)) and not isinstance(x.get("amount"), bool) else None,
-                           ref=f"{module}:{str(x.get('id') or x['title'])[:40]}", url=x.get("url") if str(x.get("url") or "").startswith("/") else None))
+                           ref=f"{module}:{str(x.get('id') or x['title'])[:40]}", url=x.get("url") if str(x.get("url") or "").startswith("/") else None,
+                           link=x.get("link")))
     return out
 
 
@@ -474,6 +477,8 @@ def to_ics(evs: list[dict], amounts: bool, now: datetime | None = None) -> str:
     for e in evs:
         d = date.fromisoformat(e["date"])
         desc = e.get("detail") or ""
+        if e.get("link"):                      # a calendar app shows the filing's address in the event's notes
+            desc = f"{desc} Filing: {e['link']}".strip()
         if amounts and e.get("amount") is not None:
             desc = f"Amount: {_money(e['amount'])}. {desc}"
         uid = hashlib.sha256(e["id"].encode()).hexdigest()[:32]

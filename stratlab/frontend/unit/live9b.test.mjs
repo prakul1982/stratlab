@@ -45,3 +45,11 @@ test("LIVE9B-007: business updates in one unit per kind, old figures aged, filin
   assert.doesNotMatch(page, /<Badge tone="plain" dot=\{false\}>\{kindName/);
   assert.match(read("src/components/BizUpdates.tsx"), /thisYear \? \{ year: false \} : \{\}/);
 });
+
+test("LIVE9B-008: the money calendar links the filing instead of writing its address, and tags rows only when kinds mix", () => {
+  const src = read("src/pages/money/MoneyCalendarPage.tsx");
+  assert.match(src, /<a className="link" href=\{safeHref\(e\.link\)\} target="_blank" rel="noopener noreferrer">Filing ↗<\/a>/);
+  assert.match(src, /const tag = new Set\(events\.map\(\(e\) => e\.cat\)\)\.size > 1;/);
+  assert.match(src, /\{tag && <span className=\{`badge mc-cat/);
+  assert.match(read("src/styles.css"), /\.mc-ev\.untagged \{ grid-template-columns: minmax\(0, 1fr\); \}/);
+});
