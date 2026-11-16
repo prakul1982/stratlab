@@ -4914,12 +4914,19 @@ _ADDS = re.compile(r"^(?:in\s+addition\b|additionally\b|also\b|(?:we|it|they|the
 _WHERE = re.compile(r"^(?:it|we|the\s+company)\s+(?:is|are)\s+(?:headquartered|based|located|domiciled|incorporated)\b", re.I)
 
 
+_DEFINES = re.compile(r"\s*\((?=[^()]*(?:\btogether with\b|\bcollectively\b|“(?:we|our|us|Company|the Company)[,”]|\bthe “Company))[^()]*\)")
+
+
 def own_words(text, name: str = "") -> str:
     """A company's line as its own words on a page, a CSV or a slide, or "" when it isn't one (LIVE6-007): the titles of its filings (the
     "From its own filings:" lines stand in for a missing description in the checks, never as one), its name alone, or a sentence that says
     where it is and what it is called but not what it does (says no work: provides, makes, sells, operates; its software, its customers);
     LIVE7A-004: an encyclopedia's opening line, a line that only adds to an earlier one, or one that only says where the company is."""
     t = " ".join(str(text or "").split()).strip(" “”\"'")
+    # r581 (the live R58 Cybersecurity deck: SailPoint's line "(together with its consolidated subsidiaries, as appropriate, “SailPoint,” the
+    # “Company,” “our,” or “we”)"): the bracket a filing defines its own name in says nothing of the work, and is left out
+    t = _DEFINES.sub("", t).strip()
+    t = t[:1].upper() + t[1:] if t[:1].islower() and str(text or "").lstrip(" “”\"'").startswith("(") else t
     if not t or t.startswith("From its own filings:") or _FILING_TITLE.match(t) or _ENCYCLOPEDIA.search(_ABBR_DOT.sub(r"\1", t)) or _ADDS.match(t) or _WHERE.match(t):
         return ""
     words = lambda x: [w for w in re.findall(r"[a-z0-9]+", _LEGAL_WORDS.sub(" ", x.lower()))]        # noqa: E731
@@ -5084,3 +5091,59 @@ def fill_sic(rows: list[dict], stored: dict, read, now=None, limit: int = SIC_PE
         else:
             stored["tried"][s] = now.date().isoformat()
     return stored, n
+
+
+# r581 (the live R58 decks' "layer words": Insurance's "Distribution and aggregation" over PB Fintech's "popularly known as Policy Bazar is
+# India's largest online platform for insurance", Pharma's "Biologics and novel drug developers" over Biocon's "engaged in the business of
+# manufacture of biotechnology products"): a company's line in its layer says the words that place it there when its own words have them
+LINE_PLAIN = NAME_GENERIC | {"manufacturer", "manufacturers", "manufacturing", "platform", "platforms", "software", "technology", "technologies",
+                             "stage", "portfolio", "portfolios", "leading", "mixed", "various", "regional", "national", "tier", "high", "value",
+                             "added", "basic", "performance", "premium", "quality", "operator", "solution", "system", "pan", "india"}
+LINE_MAX = 110                  # the characters of a line a deck's table shows (deck.whole_clause)
+_LINE_HEADING = re.compile(r"^(?:Business (?:Model|Overview|Profile|Segments?|Divisions?)\b\s*:?|[A-Z][A-Za-z&/ -]{2,40}\s*:|[a-z]\)|\d+[.)])\s*")
+_GLUED_HEADING = re.compile(r"\s+(?=Business (?:Model|Overview|Profile|Segments?|Divisions?)\b)")      # a description's heading run into the text
+
+
+def layer_words(layer: str) -> set[str]:
+    """The words of a layer's name that say a kind of business (plural "s" off), the generic ones left out."""
+    out = set()
+    for w in re.findall(r"[a-z]+", _HALF_RX.sub("", str(layer or "")).lower().replace("-", " ")):
+        if len(w) >= 3 and w not in LINE_PLAIN:
+            out.add(w[:-1] if w.endswith("s") and len(w) > 4 and not w.endswith("ss") else w)
+    return out - LINE_PLAIN
+
+
+def _line_says(text: str, w: str) -> re.Match | None:
+    return re.search(r"\b" + re.escape(w[:max(5, len(w) - 2)] if len(w) > 6 else w), text.lower())
+
+
+def layer_line(line: str, about, name: str, layer: str) -> str:
+    """A company's line for its layer: `line` when it says a word of the layer's name (layer_words; the company's own name aside), else the
+    first sentence of its own words about its work (own_words) that does, up to the clause that says it, with a heading ("Business
+    Segments: a) Biosimilars:") and asides in brackets left out, the word within the LINE_MAX characters a table shows; else `line`."""
+    ws = layer_words(layer)
+    text = " ".join(str(about or "").split())
+    if not ws or not text or text.startswith("From its own filings:"):
+        return line
+    named = {w.lower() for w in re.findall(r"[A-Za-z]+", str(name or ""))}
+    bare = lambda t: " ".join(w for w in re.findall(r"[A-Za-z][A-Za-z'’-]*", t) if w.lower() not in named)      # noqa: E731
+    if line and any(_line_says(bare(line), w) for w in ws):
+        return line
+    for sent in [p for x in _sentences(text) for p in _GLUED_HEADING.split(x)]:
+        sent = re.sub(r"\s*\([^()]*\)", "", sent).strip()
+        for _ in range(4):
+            sent = _LINE_HEADING.sub("", sent, count=1).strip()
+        sent = re.sub(r"\s+([,;:])", r"\1", sent).rstrip(" .;:")
+        upto = ""
+        for clause in re.split(r"(?<=[,;])\s+", sent):
+            upto = f"{upto} {clause}".strip()
+            hit = next((m for m in (_line_says(bare(clause), w) for w in ws) if m), None)
+            if hit is None:
+                continue
+            one = upto.rstrip(" ,;:")
+            at = len(upto) - len(clause) + clause.lower().find(hit.group(0))
+            if len(one) <= LINE_MAX or at + len(hit.group(0)) <= LINE_MAX - 10:
+                if own_words(one, name):
+                    return one[:1].upper() + one[1:]
+            break
+    return line

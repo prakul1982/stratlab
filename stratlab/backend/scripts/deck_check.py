@@ -107,6 +107,9 @@ Failures (the exit code is 1 when any deck has one):
   reason layer  a removal's or move's reason that names a layer (“X”) the deck has in none of its versions (Payments' “Card issuers and
                lenders” for its “Card issuers and consumer lenders”)
   thin layer   a change log's layer "added (N companies)" with N under 3
+  financial margin  r581 (the live R58 Regional banks deck: Fifth Third $80 m, 3152.5%; Huntington 141.5%): a net margin above 100% for a bank,
+               lender or insurer (a deck whose theme names banks, lenders, finance or insurance, or a row naming one): its revenue line is
+               not its total revenue
   largest left out  the theme's largest company left out of its layer's calculations as another business or for insufficient evidence, or a
                company left out for insufficient evidence whose market value is above every named company in its layer's calculations
   duplicate member  one company in a layer's calculations and left out of them in the same sentence, or two members whose names differ only
@@ -141,7 +144,7 @@ FAIL = ("headline", "mid-word", "placeholder", "joining word", "count", "repeate
         "evidence unsplit", "evidence counts", "empty page", "layer vanished", "share fall unsaid", "removal unnamed", "history end",
         "layer counts", "layer header", "pe partition", "loss-maker profit", "checked counts", "figures count", "none screened", "empty table",
         "few rows", "same name", "carried log", "reason layer", "thin layer", "largest left out", "duplicate member", "profile unsaid",
-        "removal unbacked", "layer words", "words contradict")
+        "removal unbacked", "layer words", "words contradict", "financial margin")
 WARN = ("cut text", "other>40%", "mixed range")
 # LIVE7A-014: a minus sign as a hyphen before a figure with its unit (never a date's or a range's dash: it follows a space or a bracket)
 _HYPHEN_MINUS = re.compile(r"(?:(?<=\s)|(?<=[(\[])|^)-\d[\d,]*(?:\.\d+)?(?:%|x\b| ?pts\b| ?points\b)")
@@ -419,6 +422,7 @@ def check_pages(pages: list[str]) -> dict:
     y57_checks(pages, add)
     m57_checks(pages, add)
     p57_checks(pages, add)
+    financial_checks(pages, add)
     counts = {k: sum(1 for f in findings if f["kind"] == k) for k in FAIL + WARN}
     return {"pages": len(pages), "counts": counts, "findings": findings}
 
@@ -1235,26 +1239,40 @@ def _layer_names(pages: list[str]) -> set:
 
 def _small_layer_chunks(page: str) -> list[tuple[str, str]]:
     """(layer name, the rest of its rows' text) of a "Smaller layers" table: a layer's cell starts at the line's start with a capital, a
-    lower-case start continues its name."""
+    lower-case start continues its name. r581 (the live R58 Cybersecurity and Insurance decks: the layer's cell is set in the middle of its
+    first row, so the row's lines above it, "It provides endpoint security", were read as the layer before's): a row is the lines between
+    blank lines, all of them the layer's whose cell the row holds; a row with none holds another company of the layer before."""
     out, name, body = [], None, []
-    started = False
+    started, row = False, []
+
+    def flush():
+        nonlocal name, body
+        cells = []
+        for ln in row:
+            cell = re.split(r"\s{2,}", ln.strip())[0] if ln[:2].strip() else ""
+            cells.append(cell)
+        rests = [ln.strip()[len(c):] if c else ln for ln, c in zip(row, cells)]
+        heads = [c for c in cells if c]
+        if heads and heads[0][:1].isupper():
+            if name is not None:
+                out.append((name, " ".join(body)))
+            name, body = " ".join(heads), rests
+        elif name is not None:
+            name, body = " ".join([name] + heads), body + rests
+        row.clear()
     for ln in page.split("\n"):
         if re.match(r"^\s*Layer\s{2,}Company\b", ln):
             started = True
             continue
-        if not started or not ln.strip() or ln.startswith("StratLab ·"):
+        if not started or ln.startswith("StratLab ·"):
             continue
-        cells = re.split(r"\s{2,}", ln.strip())
-        cell = cells[0] if ln[:2].strip() else ""
-        rest = ln.strip()[len(cell):] if cell else ln
-        if cell and ln[:2].strip() and cell[:1].isupper():
-            if name is not None:
-                out.append((name, " ".join(body)))
-            name, body = cell, [rest]
-        elif cell and ln[:2].strip() and name is not None:
-            name, body = f"{name} {cell}", body + [rest]
-        else:
-            body.append(ln)
+        if not ln.strip():
+            if row:
+                flush()
+            continue
+        row.append(ln)
+    if row:
+        flush()
     if name is not None:
         out.append((name, " ".join(body)))
     return out
@@ -1303,6 +1321,26 @@ def p57_checks(pages: list[str], add) -> None:
                 words = _kind_words(name)
                 if words and body.strip() and not any(_says_word(body, w) for w in words):
                     add("layer words", n, f"“{name}”: none of its companies' lines says {', '.join(sorted(words))}")
+
+
+_FIN_THEME = re.compile(r"\b(?:banks?|banking|lenders?|lending|financ\w*|insur\w*|nbfcs?)\b", re.I)
+_BIG_PCT = re.compile(r"(?<![+−\-(\d.,])(\d{3,}(?:,\d{3})*(?:\.\d+)?)%(?!\s+(?:of|more|less|above|below)\b)")
+
+
+def financial_checks(pages: list[str], add) -> None:
+    """r581: "financial margin", a net margin above 100% printed for a bank, lender or insurer (the deck's theme names them, its name read
+    under the cover's head, or the row's own line does). A margin column's figure is the one checked: a growth figure carries its sign, a share its bracket."""
+    lines = [ln.strip() for ln in (pages[0].split("\n") if pages else []) if ln.strip()]
+    title = next((lines[i + 1] for i, ln in enumerate(lines[:-1]) if "THEME DEEP DIVE" in ln), "")      # the theme's name, under the cover's head
+    fin_deck = bool(_FIN_THEME.search(title))
+    for n, page in enumerate(pages, 1):
+        for ln in page.split("\n"):
+            if not (fin_deck or _FIN_THEME.search(ln)):
+                continue
+            for m in _BIG_PCT.finditer(ln):
+                if float(m.group(1).replace(",", "")) > 100.0:
+                    add("financial margin", n, ln.strip()[:200])
+                    break
 
 
 def check_text(text: str) -> dict:

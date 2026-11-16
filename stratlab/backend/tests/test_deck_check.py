@@ -62,7 +62,7 @@ def test_each_thing_that_must_never_ship_is_found_with_its_page():
                            "none screened": 0, "empty table": 0, "few rows": 0, "same name": 0, "carried log": 0, "reason layer": 0, "thin layer": 0,
                            "largest left out": 0, "duplicate member": 0,
                            "profile unsaid": 0,
-                           "removal unbacked": 0, "layer words": 0, "words contradict": 0}          # p57 (R57): three more (updated on purpose)          # m57 (R57): one more (updated on purpose)          # y57 (R57): fifteen more (updated on purpose)
+                           "removal unbacked": 0, "layer words": 0, "words contradict": 0, "financial margin": 0}          # r581 (R58.1): one more, "financial margin" (updated on purpose)          # p57 (R57): three more (updated on purpose)          # m57 (R57): one more (updated on purpose)          # y57 (R57): fifteen more (updated on purpose)
 
 
 def test_counts_that_reconcile_and_figures_beside_of_are_not_flagged():
@@ -98,13 +98,13 @@ def test_the_script_reads_a_folder_reports_a_row_for_each_deck_and_exits_non_zer
                                            "figures", "count", "none", "screened", "empty", "table", "few", "rows", "same", "name", "carried", "log",
                                            "reason", "layer", "thin", "layer", "largest", "left", "out", "duplicate", "member",
                                            "profile", "unsaid",          # m57 (R57): one more column (updated on purpose)
-                                           "removal", "unbacked", "layer", "words", "words", "contradict",          # p57: three more (updated on purpose)
+                                           "removal", "unbacked", "layer", "words", "words", "contradict", "financial", "margin",          # r581: one more (updated on purpose)  # p57: three more (updated on purpose)
                                            "cut", "text", "other>40%", "mixed", "range", "result"]          # t56 (R55 review): three more columns (updated on purpose)          # v55 (R55 review): four more columns (updated on purpose)          # c54 (R53 review): three more columns (updated on purpose)          # d53 (R53): eight more columns (updated on purpose)          # rv51 (R51): "biz label", "biz making" (updated on purpose); gl50 (R50): four more columns (updated on purpose)   # lane s3-r40: two columns; lane t1: two more; lane d1: "no layer" (updated on purpose)
-    assert out.splitlines()[1].split() == ["a.txt", "2"] + ["0"] * 60 + ["ok"]          # y57: 56 columns (updated on purpose)          # t56 + h56: 41 columns (updated on purpose)          # t56: 40 columns (updated on purpose)          # v55 + l55: 37 columns (updated on purpose)          # v55: 34 columns (updated on purpose)          # c54 + e54: 30 columns (updated on purpose)          # c54: 28 columns (updated on purpose)          # d53: 25 columns (updated on purpose)          # rv51: 17 columns; gl50: 15 columns (updated on purpose)
+    assert out.splitlines()[1].split() == ["a.txt", "2"] + ["0"] * 61 + ["ok"]          # r581: 61 columns (updated on purpose)          # y57: 56 columns (updated on purpose)          # t56 + h56: 41 columns (updated on purpose)          # t56: 40 columns (updated on purpose)          # v55 + l55: 37 columns (updated on purpose)          # v55: 34 columns (updated on purpose)          # c54 + e54: 30 columns (updated on purpose)          # c54: 28 columns (updated on purpose)          # d53: 25 columns (updated on purpose)          # rv51: 17 columns; gl50: 15 columns (updated on purpose)
     assert DC.main([str(bad)]) == 1
     out = capsys.readouterr().out
     # lane t1: the "hyphen minus" and "mixed range" columns (updated on purpose)
-    assert re.search(r"b\.txt\s+2\s+1\s+1\s+5\s+1\s+1\s+0\s+0\s+0\s+0\s+0\s+0\s+0\s+0\s+0" + r"\s+0" * 43 + r"\s+1\s+0\s+0\s+FAIL", out) and "b.txt: headline (1)" in out and "p.2: '14 of 12'" in out  # y57: the fifteen new columns (updated on purpose); t56: the three new columns (updated on purpose); v55: the four new columns (updated on purpose); c54: the three new columns (updated on purpose); d53: the eight new columns (updated on purpose); rv51: the two biz columns; gl50: the four new columns (updated on purpose)
+    assert re.search(r"b\.txt\s+2\s+1\s+1\s+5\s+1\s+1\s+0\s+0\s+0\s+0\s+0\s+0\s+0\s+0\s+0" + r"\s+0" * 44 + r"\s+1\s+0\s+0\s+FAIL", out) and "b.txt: headline (1)" in out and "p.2: '14 of 12'" in out  # r581: one new column (updated on purpose); y57: the fifteen new columns (updated on purpose); t56: the three new columns (updated on purpose); v55: the four new columns (updated on purpose); c54: the three new columns (updated on purpose); d53: the eight new columns (updated on purpose); rv51: the two biz columns; gl50: the four new columns (updated on purpose)
     assert DC.main([str(tmp_path / "missing")]) == 2 and DC.main([]) == 2
     empty = tmp_path / "empty"
     empty.mkdir()

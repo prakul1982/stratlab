@@ -3690,7 +3690,13 @@ def removed_said(x: dict) -> str:
     gone, with where its companies went and, when the placement said it, why it was not kept."""
     went = x.get("went") if isinstance(x.get("went"), dict) else {}
     where = ", ".join(f"{n} to “{k}”" if k else f"{n} out of the theme" for k, n in list(went.items())[:4])
-    return f"“{x['from'][0]}” removed ({_n(x.get('n', 0), 'company', 'companies')}" + (f": {where}" if where else "") + ")" + (f", {x['why']}" if x.get("why") else "")
+    why = x.get("why") or ""
+    if not why and went.get(""):
+        # r581 (the live R58 Cybersecurity deck: "“Identity access and broad enterprise software (larger)” removed (6 companies: 5 out of the
+        # theme, ...)" and no reason, a layer vanishing unsaid): a layer emptied by its companies leaving the theme says so, each one's reason
+        # being among those removed
+        why = f"its companies out of the theme each removed with its own reason, {went['']} of its {_n(x.get('n', 0), 'company', 'companies')}"
+    return f"“{x['from'][0]}” removed ({_n(x.get('n', 0), 'company', 'companies')}" + (f": {where}" if where else "") + ")" + (f", {why}" if why else "")
 
 
 def cohort_row(v: dict, today: date | None = None) -> list[str] | None:
@@ -3753,7 +3759,8 @@ def cohort_row(v: dict, today: date | None = None) -> list[str] | None:
     if lay:
         said = {"renamed": lambda x: f"“{x['from'][0]}” renamed “{x['to'][0]}”", "split": lambda x: f"“{x['from'][0]}” split into " + ", ".join(f"“{t}”" for t in x["to"]),
                 "merged": lambda x: ", ".join(f"“{f}”" for f in x["from"]) + f" merged into “{x['to'][0]}”",
-                "removed": removed_said, "added": lambda x: f"“{x['to'][0]}” added ({_n(x.get('n', 0), 'company', 'companies')})"}
+                "removed": removed_said, "added": lambda x: (f"“{x['to'][0]}” back ({_n(x.get('n', 0), 'company', 'companies')}), {x['back']}" if x.get("back") else
+                                   f"“{x['to'][0]}” added ({_n(x.get('n', 0), 'company', 'companies')})")}
         parts.append(f"layers changed {len(lay)}: " + "; ".join(said[x["kind"]](x) for x in lay[:COHORT_SHOWN] if x["kind"] in said)
                      + (f"; and {len(lay) - COHORT_SHOWN} more" if len(lay) > COHORT_SHOWN else ""))
     day = _day(e.get("d")) if e.get("d") else "its last change"

@@ -856,7 +856,8 @@ def _figures_reader(region: str):
         except Exception as e:
             print("theme: stored figures not read:", sym, type(e).__name__, str(e)[:100])
             r = None
-        return {"revenue": r.get("revenue"), "ebitda": r.get("ebitda")} if r and r.get("revenue") is not None else {}
+        # r581: its net margin too, which the release gate checks for a bank or insurer (above 100%: a revenue line that is not the total)
+        return {"revenue": r.get("revenue"), "ebitda": r.get("ebitda"), "net": r.get("net")} if r and r.get("revenue") is not None else {}
     return figures_of
 
 
@@ -1242,6 +1243,17 @@ def facts_piece(region: str, sym: str, fresh: bool = False) -> tuple[dict | None
             # company pages were being rebuilt to keep them, FACTS_VERSION 10): a piece kept from a page built before the current version is
             # taken again once its stored page has been rebuilt, so a theme reads the year's profit before tax, tax and other income as
             # soon as the page keeps them, with no Refresh
+            # r581 (the live R58 Regional banks deck: Fifth Third $80 m, a 3,152.5% net margin, from a piece kept before R58's sector
+            # schema, never taken again since FACTS_VERSION stayed 10): a bank's or insurer's piece whose net profit is above its revenue is
+            # taken again from its stored page once that page no longer is (rebuilt: stock_pages.financial_mismatch); until then the dive
+            # withholds that revenue (theme_data.company_row)
+            from ..stock_pages import financial_mismatch
+            if financial_mismatch(hit["value"]) and callable(R.public_facts):
+                page = R.public_facts(region, sym)
+                if page and not financial_mismatch(page) and (page.get("v") or 1) >= (hit["value"].get("v") or 1):
+                    kept = computed.put(theme_library.FACTS, [region, sym], page, label=sym, region=region)
+                    return page, (kept or {}).get("at")
+                return hit["value"], hit.get("at")
             if (hit["value"].get("v") or 1) >= _facts_version() or not callable(R.public_facts):
                 return hit["value"], hit.get("at")
             page = R.public_facts(region, sym)

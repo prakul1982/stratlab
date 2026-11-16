@@ -257,9 +257,23 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
         return None
     old = stock_pages.figures_stale(f)
     years = full_years(f)
-    last = years[-1] if years and not old else None
     profile = profile_of(f)
     lender = profile != "other"
+    # r581 (the live R58 Regional banks deck: Fifth Third $80 m and a 3,152.5% net margin, Huntington 141.5%, M&T 172.1%, from pages stored
+    # before R58's sector schema): a bank's, lender's or insurer's year whose net profit is above its revenue holds a revenue line that is
+    # not its total revenue; that year's revenue is withheld, so no margin, total or growth is made from it, until its page is built again
+    withheld = []
+    if lender:
+        kept_years = []
+        for y in years:
+            s_, p_ = num(y.get("sales")), num(y.get("profit"))
+            if s_ is not None and p_ is not None and s_ > 0 and p_ > s_:
+                withheld.append(f"{y['year']}: a {'bank' if profile == 'bank' else profile}'s net profit {p_:,.1f} is above its revenue "
+                                f"{s_:,.1f} ({f.get('unit') or 'its unit'}), a line that is not its total revenue; withheld")
+                y = {**y, "sales": None}
+            kept_years.append(y)
+        years = kept_years
+    last = years[-1] if years and not old else None
     # every money figure in the theme's one currency (R22): a company reporting in another is converted at the rate its page states; with no
     # rate its money figures are left out (margins, growth and returns don't depend on the currency and stay)
     cur, k, fx_at = report_fx(f, region)
@@ -318,8 +332,9 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
         # both from its filed lines (no currency needed: one filing's unit); None for a lender, without both, or where EBITDA isn't positive
         "debt_ebitda": debt_ebitda(last) if not lender else None,
         "sales_1y": r1(growth_between(years, "sales", 1)) if not old else None,
-        "sales_3y": r1(num(base.get("sales_cagr_3y"))) if not old else None,
-        "sales_5y": r1(num((f.get("growth") or {}).get("sales_cagr_5y"))) if not old else None,
+        "sales_3y": r1(num(base.get("sales_cagr_3y"))) if not old and not withheld else None,
+        "sales_5y": r1(num((f.get("growth") or {}).get("sales_cagr_5y"))) if not old and not withheld else None,
+        **({"figure_errors": withheld} if withheld else {}),
         "profit_1y": r1(growth_between(years, "profit", 1)) if not old else None,
         "profit_3y": r1(num((f.get("growth") or {}).get("profit_cagr_3y"))) if not old else None,
         "profit_5y": r1(num((f.get("growth") or {}).get("profit_cagr_5y"))) if not old else None,
@@ -3395,6 +3410,10 @@ def theme_record(c: dict, status: str, about: str | None = None) -> dict:
         # r58: a company kept in the theme on its own words against one layer's answer (theme_base.layer_answer_removals) is in it by those
         # words, never "filed under an official industry of the theme"
         by, why = "words", c["kept_member"][len("kept in the theme: "):]
+    elif c.get("basis") == "words" and isinstance(c.get("theme"), dict) and str(c["theme"].get("why") or "").strip():
+        # r581 (the live R58 Regional banks deck: "added 1: Comerica Inc" with no reason, its placement's own reason, "the map's check said no
+        # for ... only, one layer's answer; its own words say the theme's work", under a kept_member flag of True): the placement's reason
+        by, why = "words", str(c["theme"]["why"])
     elif isinstance(c.get("kept_member"), str) and c["kept_member"]:
         # p57 (R56 review: Capital One said not to be a card issuer, its words unchanged): a published member a re-check's answer alone
         # would have dropped says it was kept, its business model read from its own evidence, apart from any comparison decision
@@ -3638,7 +3657,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
 
     blocks, histories = [], {}
     # R32: a split by market value one of whose halves shows no company is undone (theme_base.unsplit_unshown)
-    from .theme_base import own_words as _own, unsplit_unshown, whole_words
+    from .theme_base import layer_line, own_words as _own, unsplit_unshown, whole_words
     own_words = lambda t, n, sym=None: _own(whole_words(t, src.about(sym)) if sym and t else t, n)     # noqa: E731  (LIVE7A-004: no word cut)
     for v in unsplit_unshown(checked.get("value_chain") or [], {s for s, r in rows.items() if r.get("status") != "unverified"
                                                                 and r.get("figures") != "not_available"}):          # c54: a listed row with no figure shows none
@@ -3660,6 +3679,16 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
             for r in mine:
                 if r.get("adjacent") and not r.get("model_out"):
                     r["model_out"], r["out_why"] = "other", "adjacent"
+        # r581 (the live R58 decks' "layer words"): a line that says no word of its layer's name gives way to the sentence of the company's
+        # own words that does (theme_base.layer_line); a company with no line keeps none
+        def line_for(line, r, v=v):
+            if not line:
+                return line
+            try:
+                about = src.about(r["symbol"])
+            except Exception:
+                about = ""
+            return layer_line(line, about, r.get("name") or "", v.get("layer") or "")
         # e54: a company confirmed by its own description shows the words that confirmed it (its stored description's own sentence)
         said = lambda r: what.get(r["symbol"]) or (shown_words({"name": r.get("name")}, src.about(r["symbol"])) if r.get("evidence") == "description_verified" else "")  # noqa: E731
         for r in mine:                     # y57: a company in distress, from its own words and figures, before any median is taken
@@ -3668,7 +3697,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
             except Exception:
                 about = ""
             r["distress"] = distress_of({**r, "what": f"{what.get(r['symbol']) or ''} {about}".strip()})
-        b = layer_block(v.get("layer") or "", [{**r, "what": own_words(said(r), r.get("name") or "", r["symbol"]) or None, "company_wide": r["symbol"] in wide, "official_industry": ind.get(r["symbol"]) or "",
+        b = layer_block(v.get("layer") or "", [{**r, "what": line_for(own_words(said(r), r.get("name") or "", r["symbol"]), r, v) or None, "company_wide": r["symbol"] in wide, "official_industry": ind.get(r["symbol"]) or "",
                                                 **model_fields(v, r["symbol"]), **refit_of(v, r["symbol"])} for r in mine], wide)
         b["description"] = v.get("description") or ""
         if adj_layer:
@@ -3677,6 +3706,8 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         b["policy"] = v.get("policy")
         b["official"], b["basis"] = bool(v.get("official")), v.get("basis")     # a layer that is one official industry's companies the AI didn't place (theme_base.py)
         b["by_industry"] = bool(v.get("by_industry"))
+        if v.get("single_kept"):          # r581: a layer of the published version kept with its one member, as the change log says it
+            b["single_kept"] = v["single_kept"]
         if v.get("scale"):          # d1: a half of a layer split by market value (theme_base.by_model step 2), never ranked on its own
             b["scale"], b["sibling"] = v["scale"], v.get("sibling")
         b["model"] = named_fit(v.get("model"), v) or None   # what the layer's companies have in common: how they earn (theme_base.by_model, R25)
