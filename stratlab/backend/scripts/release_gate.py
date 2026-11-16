@@ -204,10 +204,18 @@ def pre_map(d: dict, origin: dict | None = None) -> dict:
     after_split = {x["name"]: k for k, x in ((kept.get("model_names") or {}).get("rename") or {}).items() if isinstance(x, dict) and x.get("name")}
     placed_as = {x["name"]: k for k, x in (kept.get("rename") or {}).items() if isinstance(x, dict) and x.get("name")}
 
+    # r581 (the R58 replay of Regional banks: TFS Financial, Columbia Banking and Flagstar, placed by the kept answer in "Real estate-focused
+    # lenders" and "Commercial and business lenders", sent elsewhere offline): a map layer renamed in place after the placement (theme_base's
+    # name-word rule, "Real estate-focused lenders (bank)") is handed on under the map's name it keeps in "aka", the one the kept answer names
+    answer_names = {x.get("layer") for x in (kept.get("assign") or {}).values() if isinstance(x, dict) and x.get("layer")}
+
     def map_name(v) -> tuple[str, str]:
         name = shown(v)
         seen = after_split.get(name, name)
-        return (v["was"] if v.get("was") and seen == name else placed_as.get(seen, seen)), seen
+        own = v["was"] if v.get("was") and seen == name else placed_as.get(seen, seen)
+        if own not in answer_names:
+            own = next((a for a in v.get("aka") or [] if a in answer_names and a not in placed_as and own.startswith(a + " (")), own)
+        return own, seen
     layers: dict = {}
     for v in d["value_chain"]:
         if not _is_map_layer(v):
