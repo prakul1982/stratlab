@@ -52,3 +52,39 @@ test("a read another visit is writing is asked again a few times", () => {
   assert.ok(PULSE_AI_TRIES >= 4);
   assert.match(src("pages/Research.tsx"), /pulseBeingWritten\(\(e as Error\)\.message\) && tries < PULSE_AI_TRIES/);
 });
+
+// ---------- LIVE9A-031: one Mood title ----------
+test("the Mood page keeps one title for both markets", async () => {
+  const { PULSE_TITLE } = await import("../src/lib/pulseMood.ts");
+  assert.equal(PULSE_TITLE, "Market mood");
+  assert.doesNotMatch(src("pages/Research.tsx"), /How the market feels today/);
+});
+
+// ---------- LIVE9A-016: breadth rows even, shares plain, (i) inline ----------
+test("breadth: the alert is in the card head, shares are plain, the (i) keeps to its word", async () => {
+  const { partTone } = await import("../src/lib/breadthTable.ts");
+  assert.equal(partTone({ tone: "share" }, 75), undefined);
+  assert.equal(partTone({ tone: "share" }, 33.2), undefined);
+  assert.equal(partTone({ tone: "up" }, 10), "k-up");
+  const page = src("pages/BreadthPage.tsx");
+  assert.match(page, /actions=\{!locked \? <BreadthAlertButton group=\{group\} \/> : undefined\}/);
+  assert.doesNotMatch(page, /extra=\{r\.key === "p50"/);
+  assert.match(page, /<span className="k-keep">/);
+  assert.match(page, /<Box title="Share above averages"/);
+  assert.match(src("styles.css"), /\.k-keep \{ white-space: nowrap; \}/);
+});
+
+// ---------- LIVE9A-018: the Flows lock said once ----------
+test("flows: the lock is the page's own plan note, so the banner isn't added", () => {
+  const page = src("pages/FlowsPage.tsx");
+  assert.match(page, /<PlanNote>Each recorded day's FII and DII net buying/);
+  assert.match(src("components/PageLock.tsx"), /main \.plan-note:not\(\.page-lock\)/);
+});
+
+// ---------- LIVE9A-010: the heatmap says its day is the last close while the market trades ----------
+test("heatmap: the facts line says the last close while the market is open", async () => {
+  const { closesTail } = await import("../src/lib/heatmap.ts");
+  assert.equal(closesTail(false), "");
+  assert.match(closesTail(true), /^, the last close · the market is open; the map is redrawn after today's close$/);
+  assert.match(src("pages/HeatmapPage.tsx"), /Closes of <b>\{asOf\}<\/b>\{closesTail\(open\)\}/);
+});

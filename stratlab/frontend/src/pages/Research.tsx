@@ -39,7 +39,7 @@ import { CompanyLinksCard } from "../components/CompanyLinks";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge, EtfGapDetailView } from "../components/EtfGap";
 import { typingFirst } from "../lib/typingFirst";
-import { companyRows, moodBehindNote, moodDay, PULSE_AI_RETRY_MS, PULSE_AI_TRIES, pulseBeingWritten } from "../lib/pulseMood";
+import { companyRows, moodBehindNote, moodDay, PULSE_TITLE, PULSE_AI_RETRY_MS, PULSE_AI_TRIES, pulseBeingWritten } from "../lib/pulseMood";
 import { BreadthTable, CalendarTable, FlowsTable, GlobalTable, HeadlinesTable, HotTable, IndexTable, MoodCard, MoodSkeleton, MoversTable, Pair, RiskTable, SectorsTable, ThemesTable, TopicsTable, usePulseMood } from "./PulseMood";
 import { FoBadges } from "../components/FoBadges";
 import { IndexBadges } from "../components/IndexBadges";
@@ -549,7 +549,7 @@ export function PulsePage() {
   const aiNothing = !!ai && !ai.tone && !ai.hot.length && !ai.flows.length && !ai.themes.length;
   return (
     <div className="k-page">
-      <PageHeader eyebrow={eyebrowOf("/research/pulse")} title={pulseClosedDay(data?.indices) ? "How the market felt at the last close" : "How the market feels today"}
+      <PageHeader eyebrow={eyebrowOf("/research/pulse")} title={PULSE_TITLE}
         lede={pulseLede((() => { const d = pulseClosedDay(data?.indices); return d ? fmtDate(d, { year: false }) : null; })(), !!data?.indices.some((i) => i.settling))}
         asOf={data?.indices.map((i) => i.at).filter(Boolean).sort().pop() ?? undefined} asOfPending={!data} asOfLabel="Prices as of" asOfTz={marketTz(region)} />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>

@@ -5,7 +5,7 @@ import { arrowOf } from "../lib/format";
 import { crore, dayName, spanLine, statusLine, type CashPoint, type Summary } from "../lib/positioning";
 import { cutPoints } from "../lib/range";
 import { LineChart } from "../components/Charts";
-import { Card, CardHead, DataTable, EmptyState, ErrorState, PageHeader, RangeChips, Signed, Skeleton, useRange, type Column } from "../components/kit";
+import { Card, CardHead, DataTable, EmptyState, ErrorState, PageHeader, PlanNote, RangeChips, Signed, Skeleton, useRange, type Column } from "../components/kit";
 
 /* /invest/flows (IA-1: Market today's Flows tab): what foreign portfolio investors (FII/FPI) and domestic institutions (DII)
  * bought and sold in India's cash market, from the exchange's provisional evening figures. The latest day for everyone;
@@ -73,8 +73,9 @@ export function FlowsPage() {
             {!full ? (
               <Card label="Every recorded day" testId="flows-locked">
                 <CardHead title="Every recorded day" />
-                <p className="k-small k-muted">Each recorded day's FII and DII net buying, as a table and a chart, is on the {s.plan_needed} plan, as on Positioning. The latest day above is on every plan.</p>
-                <Link to="/plans" className="btn sm k-btn-end">See the {s.plan_needed} plan</Link>
+                {/* LIVE9A-018: the lock said once, here, as the page's own plan note (the banner over the page said it a second time and
+                    arrived after the figures, moving the page: CLS 0.277) */}
+                <PlanNote>Each recorded day's FII and DII net buying, as a table and a chart, is on the {s.plan_needed} plan, as on Positioning. The latest day above is on every plan.</PlanNote>
               </Card>
             ) : (
               <Card label="Every recorded day" testId="flows-days">

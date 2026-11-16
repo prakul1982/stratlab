@@ -32,7 +32,7 @@ def test_changes_over_each_period_by_hand():
     closes = [50.0, 80.0, 100.0, 125.0, 160.0, 190.0, 200.0]
     # the last close is 200 on 10 Nov 2026: a day before 190; a week before (3 Nov) 160; a month before (11 Oct) the 9 Oct close 125;
     # three months before (11 Aug) the 10 Aug close 100; the year so far from the 31 Dec close 80; a year before (10 Nov 2025) 50
-    assert heatmap.changes(days, closes) == [5.26, 25.0, 60.0, 100.0, 150.0, 300.0]
+    assert heatmap.changes(days, closes) == [5.2632, 25.0, 60.0, 100.0, 150.0, 300.0]   # (updated on purpose, LIVE9A-010: a day's change to 4 places)
     assert heatmap.PERIODS == ("1d", "1w", "1m", "3m", "ytd", "1y")
 
 
@@ -77,10 +77,10 @@ def test_the_breadth_run_stores_every_stocks_row_and_each_groups_index(mem):
     assert doc["day"] == LAST and set(doc["stocks"]) == {"UP", "DOWN", "FLAT"}
     assert doc["stocks"]["FLAT"][:2] == [105.0, 5.0]            # 100 every day, 105 on the last
     up = doc["stocks"]["UP"]
-    assert up[0] == 999.0 and up[1] == round((999 / 998 - 1) * 100, 2)
+    assert up[0] == 999.0 and up[1] == round((999 / 998 - 1) * 100, 4)    # (updated on purpose, LIVE9A-010)
     assert up[7] == 1000.0 and up[8] == 1000.0
     idx = doc["index"]["nifty500"]                              # the index rises by 1 a day from 20000
-    assert idx[0] == round((20899 / 20898 - 1) * 100, 2) and len(idx) == 6
+    assert idx[0] == round((20899 / 20898 - 1) * 100, 4) and len(idx) == 6    # (updated on purpose, LIVE9A-010)
     assert set(doc["index"]) == {g for g, v in breadth.GROUPS.items() if v["region"] == "IN"}
 
 

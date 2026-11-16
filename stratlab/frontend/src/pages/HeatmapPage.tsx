@@ -3,8 +3,10 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { bigMoney, fmtDate, pct, price } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
+import { useApp } from "../lib/app";
+import { marketState } from "../lib/marketHours";
 import { researchApi, useRegion, type Region } from "../lib/research";
-import { PERIODS, PERIOD_LABEL, PERIOD_SHORT, closesNote, colorValue, isPeriod, matches, type ColorBy, type GroupBy, type HeatView, type Period, type Placed, type SizeBy, type Tile } from "../lib/heatmap";
+import { PERIODS, PERIOD_LABEL, PERIOD_SHORT, closesNote, closesTail, colorValue, isPeriod, matches, type ColorBy, type GroupBy, type HeatView, type Period, type Placed, type SizeBy, type Tile } from "../lib/heatmap";
 import { Treemap, TreemapLegend } from "../components/chart/Treemap";
 import { Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, Field, FieldGroup, PageHeader, Seg, Select, Signed, Working, type Column } from "../components/kit";
 import { ReportScope } from "../components/kit/ReportFigure";
@@ -149,6 +151,8 @@ export function HeatmapPage() {
     { key: "vol", header: "Volume vs average", numeric: true, sortable: true, tight: false, cell: (t) => figureText(t.vx, "volume") },
   ];
   const asOf = view?.as_of ? fmtDate(view.as_of) : null;
+  const { markets } = useApp();
+  const open = (() => { const m = markets.find((x) => x.id === region); return m ? marketState(m).open : false; })();      // LIVE9A-010
   const cut = !!view && !cos && view.matching > view.shown;
   return (
     <div className="k-page hm-page">
@@ -194,7 +198,7 @@ export function HeatmapPage() {
               actions={<><input className="k-input sm hm-search" type="search" aria-label="Find a company" placeholder="Find a company" autoComplete="off" value={query} onChange={(e) => setQuery(e.target.value)} />
                 <Seg label="Show as" value={table ? "table" : "map"} onChange={(v) => set({ view: v === "table" ? "table" : null })} options={[{ value: "map", label: "Map" }, { value: "table", label: "Table" }]} /></>} />
             <p className="hm-facts" data-testid="hm-facts">
-              {asOf && <span>Closes of <b>{asOf}</b></span>}
+              {asOf && <span data-testid="hm-day">Closes of <b>{asOf}</b>{closesTail(open)}</span>}
               {!cos && index?.[pi] != null && <span>{view.index.name} <b><Signed value={index[pi]} fmt={(v) => pct(v, 2)} /></b></span>}
               <span><b>{counts.up}</b> up, <b>{counts.down}</b> down{counts.flat ? <>, <b>{counts.flat}</b> unchanged</> : null}</span>
               <span><b>{tiles.length.toLocaleString("en-IN")}</b> {tiles.length === 1 ? "company" : "companies"}</span>

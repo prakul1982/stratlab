@@ -111,7 +111,9 @@ test("R90-005: the watchlist's price column says last session whenever the tab's
 
 test("R90-008/010/012: a US company's move says its day after the close; Pulse and the money calendar say what their dates are", () => {
   assert.match(read("src/components/Research.tsx"), /closed && \(q\.change_day \|\| quoteDay\) \? `on \$\{fmtDate\(\(q\.change_day \|\| quoteDay\)!, \{ year: false \}\)\}` : since/);
-  assert.match(read("src/pages/Research.tsx"), /title=\{pulseClosedDay\(data\?\.indices\) \? "How the market felt at the last close" : "How the market feels today"\}/);
+  // (updated on purpose, LIVE9A-031: one fixed title; live or last close is said in the line under it, pulseLede)
+  assert.match(read("src/pages/Research.tsx"), /title=\{PULSE_TITLE\}/);
+  assert.match(read("src/lib/researchFormat.ts"), /closedDay \? `Last close, \$\{closedDay\}: index levels` : "Live index levels"/);
   assert.match(read("src/pages/money/MoneyCalendarPage.tsx"), /asOfLabel="As of"/);
 });
 

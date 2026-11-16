@@ -131,7 +131,7 @@ for (const group of ["nifty500", "sp500"]) {
       const day = (await rows.nth(n - 1).locator("th").innerText()).trim();
       return { day, n };
     };
-    const A = "Advance/decline line", B = "Above the 50- and 200-day averages";
+    const A = "Advance/decline line", B = "Share above averages"   /* (updated on purpose, LIVE9A-016: one-line title) */;
     const chips = (await ranges.getByRole("button").allInnerTexts()).filter((t) => !/Custom|Remove/.test(t));
     expect(chips.length).toBeGreaterThanOrEqual(2);
     let widest = Infinity, last = "";

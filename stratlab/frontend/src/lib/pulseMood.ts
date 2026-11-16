@@ -101,3 +101,7 @@ export const sessionWord = (day: string | null | undefined, _today: string, dayT
 export const pulseBeingWritten = (message: string | null | undefined): boolean => /being written now/i.test(message ?? "");
 export const PULSE_AI_RETRY_MS = 15_000;
 export const PULSE_AI_TRIES = 8;
+
+/** LIVE9A-031: one page title for both markets and every hour ("How the market feels today" on the US beside "…felt at the last close" on
+ * India); whether the levels are live or the last close is said once, in the line under it (pulseLede) and the "Prices as of" stamp. */
+export const PULSE_TITLE = "Market mood";

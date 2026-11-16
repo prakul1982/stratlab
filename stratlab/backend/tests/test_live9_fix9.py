@@ -141,3 +141,19 @@ def test_my_usage_says_a_grace_count_is_kept_until_a_date(plan_env):
             assert rows["research_ai"]["limit"] == 60 and rows["deck"]["limit"] == 1
         else:
             assert u["grace"] is None
+
+
+# ---------- LIVE9A-010 / 023: the heatmap's day count is the breadth count, and placeholders are not companies ----------
+def test_a_tiny_fall_is_a_fall_on_the_heatmap():
+    from app import heatmap
+    days, closes = ["2026-11-12", "2026-11-13"], [250.0, 249.99]          # −0.004%
+    assert heatmap.changes(days, closes)[0] < 0
+
+
+def test_a_placeholder_symbol_is_not_counted_as_a_member(monkeypatch):
+    from app import breadth, heatmap
+    monkeypatch.setattr(heatmap, "load", lambda region: {"day": "2026-11-16", "stocks": {"AAA": [10.0, 1.0, 0, 0, 0, 0, 0, 1.0, 1.0]}})
+    monkeypatch.setattr(breadth, "members", lambda group: ["AAA", "DUMMYHEG"])
+    monkeypatch.setattr(heatmap, "_facts", lambda region: ({}, {}))
+    v = heatmap.view("IN", "nifty500")
+    assert v["members"] == 1 and v["with_prices"] == 1
