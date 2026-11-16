@@ -174,7 +174,7 @@ def test_a_request_never_reads_descriptions_to_place_only_the_background_check_d
     monkeypatch.setattr(TR, "describe_unplaced", lambda *a, **k: calls.append(a) or [])
     # tx2 (R45, updated on purpose): place_rest also takes the previous live layers (`previous`)
     # p57 (R56, updated on purpose): place_rest also takes the published memory (`published`, every live placement)
-    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None, carried=False, previous=None, published=None: (out, {}))
+    monkeypatch.setattr(B, "place_rest", lambda out, theme, about, ask=None, kept=None, facts_of=None, carried=False, previous=None, published=None, figures_of=None: (out, {}))  # r59 (updated on purpose): `figures_of` too, the placement always gets the stored-figures reader (theme_base.listed_out)
     m = {"sector": "IT services", "generated_at": 1.0}
     TR.placed("IN", "IT services", m, _place_map(), ask=None)
     assert calls == []
