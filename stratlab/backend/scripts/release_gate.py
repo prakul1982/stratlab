@@ -33,11 +33,15 @@ FAIL (the exit code is 1 when any theme has one; each row says on which side it 
   layer words          a layer whose name shares no word with any of its members' own words, official industry or name (a hotels and
                        travel layer holding a language-learning app); a company the engine moved into a layer its own words don't name;
                        a layer whose name has no word of three letters or more
-  one-company layer    a named layer (not "Other ...", not an official group) holding one company
+  one-company layer    a named layer (not "Other ...", not an official group) holding one company whose own words don't say its name
+                       (r58: one valid member keeps its layer, with no median)
   largest left out     a company of a named layer left out of its figures on insufficient evidence alone (read only weakly, no words, none
                        found, no way of earning stated) that is one of the theme's 10 largest by market value (never more than its
                        largest quarter: theme_base.TOP_MEMBERS, TOP_SHARE) or larger than every company
                        in the layer's figures (r572: the live R57.1 decks left McDonald's, Yum, SLB and Disney out while every fixture passed)
+  layer lost           a named layer of the published version, with a company still in the theme, that no layer of the placement holds
+                       under any of its names, unless half or more of its companies sit in one or two layers new to this version
+                       (r58: Consumer retail's "Single-category specialty retailers" lost twice)
   model contradicted   a company's printed way of earning that its own words contradict: they state another way of earning in so many
                        words (theme_check.model_from_words), of a family not kin to it (the families of making are one kin), and
                        show no word of its own
@@ -295,6 +299,13 @@ def run(d: dict, origin: dict, ask) -> tuple[dict, dict]:
         d = {**d, "kept": as_current(d["kept"])}
     m = pre_map(json.loads(json.dumps(d)), origin)
     m["placements"] = json.loads(json.dumps(d.get("placements") or {}))      # p57: as with_base hands the checked map's placements on
+    # r58: a company the stored placement kept on a layer's answer alone ("layer_no", theme_base.layer_answer_removals) was in the check's
+    # "dropped" when the placement read it: the replay hands it on as the check gave it, so the same rule decides it again (offline, BWX,
+    # Curtiss-Wright, Howmet, Palantir and Spirit left Aerospace "with no reason", a replay that skipped the rule live had applied)
+    pl_ = m["placements"]
+    if pl_.get("layer_no"):
+        have = {x.get("ticker") for x in pl_.get("dropped") or [] if isinstance(x, dict)}
+        pl_["dropped"] = list(pl_.get("dropped") or []) + [x for x in pl_.pop("layer_no") if isinstance(x, dict) and x.get("ticker") not in have]
     ev, facts = d.get("evidence") or {}, d.get("facts") or {}
     sig = ((d.get("kept") or {}).get("model_names") or {}).get("sig")
     was = B.model_names_signature
@@ -485,7 +496,11 @@ def checks(d: dict, vc: list, placements: dict, moved_in: set = frozenset(), why
             continue
         if len(cos) == 1:
             s, c = cos[0]
-            fail("one-company layer", f"“{name}”", f"{c.get('name') or s} ({s}) alone")
+            # r58 (R58, the owner: "a category with one valid member can remain useful even if it cannot support a median"): a layer of one
+            # company whose own words say its name is valid; one whose words don't is the FAIL
+            w1 = words_of(d, s, c)
+            if not (shares(name, w1) is True or B.words_support(name, w1, d.get("theme") or "")):
+                fail("one-company layer", f"“{name}”", f"{c.get('name') or s} ({s}) alone, its own words not saying the layer's name")
         said = [shares(name, words_of(d, s, c)) for s, c in cos]
         if said and all(x is False for x in said):
             who = ", ".join(f"{c.get('name') or s}" for s, c in cos[:4]) + (f" and {len(cos) - 4} more" if len(cos) > 4 else "")
@@ -522,6 +537,45 @@ def checks(d: dict, vc: list, placements: dict, moved_in: set = frozenset(), why
     return out
 
 
+def lost_layers(d: dict, vc: list) -> list[dict]:
+    """r58 (R58, the owner's review of the live R57.2 decks: Consumer retail's "Single-category specialty retailers", 9 companies, and
+    Insurance's one-company "Distribution and aggregation" gone): each named layer of the published version (the previous live version)
+    with a company still in the theme that no layer of the placement holds under any of its names, unless half or more of its companies
+    sit in one or two layers new to this version (renamed or split). A layer whose companies all left the theme is their removals' case."""
+    theme = d.get("theme") or ""
+    pub = d.get("published") or {}
+    rest = B.other_label(theme)
+    inside = set(rows_of(vc))
+    by_layer: dict = {}
+    for s_, lay in pub.items():
+        if s_ not in inside:
+            continue
+        lay = _HALF.sub("", str(lay or ""))
+        if lay and lay != rest and not lay.startswith("Other "):
+            by_layer.setdefault(lay, []).append(s_)
+    held = set().union(*[B._names(v) for v in vc if not v.get("official")] or [set()])
+    where = {s_: x[0] for s_, x in rows_of(vc).items()}
+    out = []
+    for lay, syms in sorted(by_layer.items()):
+        if lay in held:
+            continue
+        new = {}
+        for s_ in syms:
+            w = where.get(s_)
+            if w and w not in by_layer and not w.startswith("Other "):
+                new[w] = new.get(w, 0) + 1
+        took = sorted(new.values(), reverse=True)[:2]
+        if syms and sum(took) * 2 >= len(syms) and (took[0] >= 2 or len(syms) == 1):
+            continue
+        went = {}
+        for s_ in syms:
+            went[where.get(s_) or "not in the theme"] = went.get(where.get(s_) or "not in the theme", 0) + 1
+        out.append({"fail": "layer lost", "subject": lay, "side": "engine",
+                    "detail": f"a layer of the published version with {len(syms)} compan{'y' if len(syms) == 1 else 'ies'}, gone; now: "
+                              + ", ".join(f"{k} {n}" for k, n in sorted(went.items(), key=lambda kv: -kv[1]))})
+    return out
+
+
 def gate(d: dict, model: str = "stub") -> dict:
     new, asked = engine(d, model)
     new_vc, new_pl = new.get("value_chain") or [], new.get("placements") or {}
@@ -546,6 +600,7 @@ def gate(d: dict, model: str = "stub") -> dict:
             fails.append({"fail": "removal unreasoned", "subject": subj, "detail": f"left “{r['from']}”, no reason", "side": "engine"})
         if own_industry(d, r.get("industry") or "") and not OWN_REASON.search(r["reason"]):
             fails.append({"fail": "own industry out", "subject": subj, "detail": f"filed under {r['industry']}; {r['reason'] or 'no reason'}", "side": "engine"})
+    fails += lost_layers(d, new_vc)
     inf_a, n_a = informative(rows_of(d["value_chain"]))
     inf_b, n_b = informative(rows_of(new_vc))
     return {"theme": d.get("theme"), "region": d.get("region"), "rules": d.get("rules"), "engine_rules": B.RULES, "asked": asked,

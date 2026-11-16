@@ -78,6 +78,21 @@ INTEREST = ("InterestExpense", "InterestExpenseNonoperating", "InterestExpenseDe
 BANK_INTEREST = ("InterestAndDividendIncomeOperating", "InterestIncomeOperating", "InterestAndFeeIncomeLoansAndLeases",
                  "InterestAndFeeIncomeLoansAndLeasesHeldInPortfolio", "RevenueFromInterest")
 BANK_OTHER = ("NoninterestIncome", "FeeAndCommissionIncome")
+# r58 (R58, the owner's review of the live R57.2 decks: a regional bank's revenue read as $80 m, its lease income alone, and a net
+# margin of 3,152.5%; two others' fee revenue in scope of the contract-revenue standard, $1.56 bn and $1.66 bn, as their whole
+# revenue): each sector's own accounting. A bank's revenue is its net interest income plus its non-interest income (its own total
+# net of interest expense when it files one). A filing that reports both is a bank's, whatever narrower line named like revenue it
+# also tags. Net interest income is the filed line, else interest income less interest expense. IFRS banks: net interest and net fee
+# and commission income.
+BANK_NET_TOTAL = ("RevenuesNetOfInterestExpense",)
+BANK_NII = ("InterestIncomeExpenseNet", "InterestRevenueExpense")
+BANK_NONINTEREST = ("NoninterestIncome", "FeeAndCommissionIncomeExpense")
+BANK_INTEREST_COST = ("InterestExpenseOperating", "InterestExpense")
+# an insurer's revenue: its total revenue, else premiums earned plus net investment income and fees and commissions. A total below
+# its premiums earned is a part (a fee line in scope of the contract-revenue standard), never the insurer's revenue
+INSURER_PREMIUMS = ("PremiumsEarnedNet", "InsuranceRevenue")
+INSURER_INVESTMENT = ("NetInvestmentIncome", "InvestmentIncomeInterestAndDividend")
+INSURER_FEES = ("InsuranceCommissionsAndFees", "InsuranceServicesRevenue")
 NET_INCOME = ("NetIncomeLoss", "ProfitLossAttributableToOwnersOfParent", "NetIncomeLossAvailableToCommonStockholdersBasic",
               "ProfitLoss", "IncomeLossFromContinuingOperations",
               "IncomeLossFromContinuingOperationsIncludingPortionAttributableToNoncontrollingInterest",
@@ -409,7 +424,78 @@ def revenue(facts: dict, kind: str, unit: str = "USD") -> dict[str, float]:
     op_costs = read(OPERATING_COSTS)
     for end in [e for e in out if out[e] and no_sales_in_statement(op, op_costs, e)]:      # a nil stays: it is the right figure
         del out[end]
+    for end, v in sector_revenue(read).items():
+        out[end] = v
     return out
+
+
+def sector_revenue(read) -> dict[str, float]:
+    """{period end: revenue} by the sector's own accounting (r58), for the periods a bank's or an insurer's lines are filed: a bank's
+    total net of interest expense, else net interest income plus non-interest income; an insurer's premiums earned plus net investment
+    income and fees, where its total revenue is missing or below its premiums. `read` reads a tuple of concepts by period."""
+    out: dict[str, float] = {}
+    nii, nonint = read(BANK_NII), read(BANK_NONINTEREST)
+    interest, cost = read(BANK_INTEREST), read(BANK_INTEREST_COST)
+    for end in set(nii) | set(interest):
+        if end not in nonint:
+            continue
+        # (no interest expense filed: the interest income, as the bank's figure has always been read)
+        net = nii[end] if end in nii else interest[end] - cost.get(end, 0.0)
+        if net + nonint[end] > 0:
+            out[end] = net + nonint[end]
+    for end, v in read(BANK_NET_TOTAL).items():
+        if end in out and v > 0:
+            out[end] = v
+    premiums = read(INSURER_PREMIUMS)
+    if premiums:
+        total = {}
+        for c in TOP_LINE:
+            for end, v in read((c,)).items():
+                total[end] = max(total.get(end, 0.0), v)
+        invest, fees = read(INSURER_INVESTMENT), read(INSURER_FEES)
+        for end, p in premiums.items():
+            if end in out or p <= 0 or total.get(end, 0.0) >= p:
+                continue
+            out[end] = p + max(invest.get(end, 0.0), 0.0) + max(fees.get(end, 0.0), 0.0)
+    return out
+
+
+def revenue_basis(facts: dict, end: str, value: float, kind: str = "annual", unit: str = "USD") -> str:
+    """The concept a period's revenue was read from (the first that gives exactly that figure), else "a sum of lines"."""
+    read = (lambda cs: flows(facts, cs, "annual", unit)) if kind == "annual" else (lambda cs: quarterly(facts, cs, unit))   # noqa: E731
+    for c in ALL_REVENUE + BANK_NET_TOTAL + INSURER_PREMIUMS:
+        if read((c,)).get(end) == value:
+            return c
+    return "a sum of lines"
+
+
+def reconcile_financial(facts: dict, subs: dict | None, unit: str, rev_a: dict, ni_a: dict, rev_q: dict, ni_q: dict) -> list[str]:
+    """A bank's or an insurer's revenue checked against its net profit before any margin is worked out (r58): a net profit above the
+    revenue (a net margin above 100%) means the revenue was read from a part, so that period's revenue is withheld (no margin is
+    made from it) and the error names the line it came from. Returns those errors; changes rev_a and rev_q in place."""
+    fam = financial_filer(facts, subs)
+    errors: list[str] = []
+    if not fam:
+        return errors
+    for kind, rev, ni in (("annual", rev_a, ni_a), ("quarter", rev_q, ni_q)):
+        for end in sorted(e for e in rev if e in ni and rev[e] > 0 and ni[e] > rev[e]):
+            basis = revenue_basis(facts, end, rev[end], kind, unit)
+            if kind == "annual":
+                errors.append(f"{_label(end)}: a {fam}'s net profit {ni[end] / M:,.1f} is above its revenue {rev[end] / M:,.1f}, read "
+                              f"from {basis}; the {fam}'s own revenue lines are not filed for it, so its revenue is withheld")
+            del rev[end]
+    return errors
+
+
+def financial_filer(facts: dict, subs: dict | None = None) -> str | None:
+    """"bank" or "insurer" when the filing reports a bank's or an insurer's lines (or its SEC industry code says so), else None."""
+    sic = str((subs or {}).get("sic") or "")
+    names = set((facts.get("us-gaap") or {})) | set((facts.get("ifrs-full") or {}))
+    if names & set(BANK_NII) and names & set(BANK_NONINTEREST) or sic in BANK_SIC:
+        return "bank"
+    if names & set(INSURER_PREMIUMS) or sic[:3] in ("631", "632", "633", "635", "636", "641"):
+        return "insurer"
+    return None
 
 
 SCALE_SLIP = (1e3, 1e6)          # a figure tagged in thousands or millions too many (lane n2: Tigo Energy's 2025 10-K)
@@ -903,6 +989,7 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
         for e, v in pre.items():
             if e not in ni and (tax.get(e) == 0 or tax.get(e) is None and v < 0):
                 ni[e] = v
+    figure_errors = reconcile_financial(facts, subs, cur, rev_a, ni_a, rev_q, ni_q)
     op_a, op_q = flows(facts, OPERATING, "annual", cur), quarterly(facts, OPERATING, cur)
     # many companies show no operating profit line (Alcoa, HCA): then profit before tax with the interest it paid added
     # back (EBIT, as EBITDA is usually defined), else revenue less total costs
@@ -1114,7 +1201,7 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
            "interest_shown": None if lender else any(abs(_days(e, ends[-1])) <= 10 for e in read_a(INTEREST)),
            "industry_path": sic_path(sic, subs.get("sicDescription")) or KIND_PATHS.get(kind or "", []),
            "bank": kind is None and lender,
-           "kind": kind, "no_revenue": no_revenue, "sales_untagged": sales_untagged, "profit_untagged": profit_untagged,
+           "kind": kind, "no_revenue": no_revenue, "figure_errors": figure_errors, "sales_untagged": sales_untagged, "profit_untagged": profit_untagged,
            "capex_untagged": capex_untagged,
            "url": f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={facts_json.get('cik')}&type=10-K"}
     if no_margin:

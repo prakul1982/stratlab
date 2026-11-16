@@ -633,11 +633,33 @@ def _save_errors():
     t.start()
 
 
+ERRORS_KEEP_DAYS = 7          # r58 (the owner: 25 errors from 2 Oct to 12 Nov on the overview, every one fixed since): an error ages out after this
+
+
+def fresh_errors(errors: list, now: datetime | None = None) -> tuple[list, int]:
+    """(the errors of the last ERRORS_KEEP_DAYS days, how many older ones were left out). An error with no readable time is kept: never
+    hidden while it may be fresh."""
+    now = now or datetime.now(timezone.utc)
+    keep, old = [], 0
+    for e in errors:
+        try:
+            at = datetime.fromisoformat(str(e.get("at")))
+            at = at if at.tzinfo else at.replace(tzinfo=timezone.utc)
+        except (TypeError, ValueError):
+            keep.append(e)
+            continue
+        if (now - at).total_seconds() > ERRORS_KEEP_DAYS * 86400:
+            old += 1
+        else:
+            keep.append(e)
+    return keep, old
+
+
 def _load_errors():
     try:
         saved = json.loads(db.get_setting("recent_errors") or "[]")
         if isinstance(saved, list):
-            RECENT_ERRORS[:0] = [e for e in saved if isinstance(e, dict)][-25:]
+            RECENT_ERRORS[:0] = fresh_errors([e for e in saved if isinstance(e, dict)][-25:])[0]
     except Exception as x:
         print("could not load errors:", x)
 
@@ -5011,6 +5033,16 @@ def stock_page_older_facts(region: str, symbol: str, f: dict | None) -> dict | N
 stock_page_store = stock_pages.Pages(stock_page_facts, settings.STOCK_PAGE_BUILDS_PER_MINUTE, older=stock_page_older_facts)
 stock_page_store.adjust = lambda r, s, f: stock_pages.with_week52_report(f, official_close.ranges(), s) if r == "IN" else f   # R10O-007
 research_routes.public_facts = lambda r, s: stock_page_store.peek(r, s)    # the app's US P/E on the public page's EPS (R7O-004)
+
+
+def build_page(region: str, sym: str) -> dict | None:
+    """r58: a company's page built (or its stored one) for a theme's data gaps (theme_routes.fix_gaps), within the pages' per-minute
+    ration (stock_pages.Busy when it is taken); None when there is no public page for it."""
+    hit = stock_pages.find(region, sym)
+    return stock_page_store.get(region, hit[0], hit[1]) if hit else None
+
+
+research_routes.build_page = build_page
 # lane c-f2: a company's peers, statements and shareholding by quarter (company_tables.py), from the same stored readers
 from . import company_tables  # noqa: E402
 company_tables.setup(screener=lambda: research_hub.screener, sec=lambda: sec_feed, facts=lambda r, s: stock_page_store.peek(r, s),
@@ -6539,7 +6571,7 @@ def server_status() -> dict:
             "auto_login_next": next_auto_login(),
             "billing_enabled": billing.enabled(), "billing_hook": billing.hook_status(), "ai": ai_health(),
             "research": {"finnhub": bool(settings.FINNHUB_API_KEY)},
-            "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": [{**e, "error": connect_redact.redact_ids(e.get("error"))} for e in reversed(RECENT_ERRORS)], "server_started_at": SERVER_STARTED_AT,
+            "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": [{**e, "error": connect_redact.redact_ids(e.get("error"))} for e in reversed(fresh_errors(list(RECENT_ERRORS))[0])], "recent_errors_aged_out": fresh_errors(list(RECENT_ERRORS))[1], "recent_errors_keep_days": ERRORS_KEEP_DAYS, "server_started_at": SERVER_STARTED_AT,
             "calendar": calendar_status(), "invoice_seller": invoices.readiness(), "build": build_info.info(),
             "rules_watch": rules_watch_summary(), "audit_mismatches": mismatches, "audit_checked": checked,
             # whether India is shut today anyway, so a weekend's logged-out broker is OK, not Check (DJ-003)

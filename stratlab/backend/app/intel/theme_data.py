@@ -3178,6 +3178,35 @@ SCOPE_KINDS = (
 )
 
 
+# r58 (R58, the owner's review of the live R57.2 Public sector banks deck: two government-owned power-sector financiers, registered with the
+# central bank as infrastructure-finance NBFCs, counted among the banks): in a theme whose name says banks (and not finance companies), a
+# company whose official industry or own words say it is a non-bank financier (an NBFC, an infrastructure-finance company, a development
+# "financial institution") is an adjacent participant, named and counted apart from the core banks. A bank's own industry never is.
+BANK_THEME = re.compile(r"\bbank(?:s|ing)?\b", re.I)
+NONBANK_THEME = re.compile(r"\bnbfc|financ|lend|credit", re.I)
+NONBANK_INDUSTRY = re.compile(r"\bnbfc\b|non[- ]banking financ|infrastructure financ|^financial institutions?$|housing financ|micro ?financ", re.I)
+NONBANK_WORDS = re.compile(r"\bnbfc\b|non[- ]banking financ\w* compan|non[- ]deposit[- ]taking|infrastructure financ\w* compan|"
+                           r"housing financ\w* compan|micro ?financ\w* (?:compan|institution)", re.I)
+
+
+def nonbank_adjacent(c: dict, theme: str, about: str | None = None) -> dict | None:
+    """r58: {"kind", "theme", "where", "text"} when the theme's name says banks and the company is a non-bank financier by its official
+    industry or its own words (NONBANK_INDUSTRY, NONBANK_WORDS); None else, and always None for a company whose industry says bank."""
+    if not BANK_THEME.search(theme or "") or NONBANK_THEME.search(theme or ""):
+        return None
+    ind = str(c.get("industry") or "")
+    if re.search(r"\bbank", ind, re.I):
+        return None
+    said = {"kind": "non-bank financiers", "theme": f"own business ({theme})"}
+    if ind and NONBANK_INDUSTRY.search(ind.split(">")[-1].strip()):
+        return {**said, "where": "industry", "text": ind[:120]}
+    text = " ".join(str(about or "").split())[:600]
+    m = NONBANK_WORDS.search(text)
+    if m:
+        return {**said, "where": "description", "text": (_one_line(about) or text)[:120]}
+    return None
+
+
 def scope_adjacent(c: dict, theme: str, sector: str = "", about: str | None = None, segments=None, model: str = "",
                    confidence: str = "") -> dict | None:
     """c54: {"kind", "theme", "where", "text"} when a company's principal business is one of SCOPE_KINDS and the theme's own name doesn't
@@ -3185,6 +3214,9 @@ def scope_adjacent(c: dict, theme: str, sector: str = "", about: str | None = No
     (principal_business) says the kind's own work, or its way of earning, read with more than low confidence, is the kind's. None else."""
     name = f"{theme} {sector}"
     ind = str(c.get("industry") or "")
+    got = nonbank_adjacent(c, theme, about)
+    if got:
+        return got
     for kind, ind_rx, broad_rx, says_rx, core_rx, models in SCOPE_KINDS:
         if re.search(core_rx, name, re.I):
             continue
@@ -3344,10 +3376,15 @@ def theme_record(c: dict, status: str, about: str | None = None) -> dict:
             why = f"the theme's map names it, {frm}; its own words were checked to show the theme's work"
         else:
             why = f"the theme's map names it, {frm}; its own words are not confirmed to show the theme's work yet ({unchecked_why(c, about)})"
-    if c.get("kept_member"):
+    if c.get("basis") == "words" and isinstance(c.get("kept_member"), str) and c["kept_member"].startswith("kept in the theme:"):
+        # r58: a company kept in the theme on its own words against one layer's answer (theme_base.layer_answer_removals) is in it by those
+        # words, never "filed under an official industry of the theme"
+        by, why = "words", c["kept_member"][len("kept in the theme: "):]
+    elif isinstance(c.get("kept_member"), str) and c["kept_member"]:
         # p57 (R56 review: Capital One said not to be a card issuer, its words unchanged): a published member a re-check's answer alone
         # would have dropped says it was kept, its business model read from its own evidence, apart from any comparison decision
-        why += "; " + str(c["kept_member"])
+        # (r58: a flag of True is no reason: "...; True" was printed on the live R57.2 decks)
+        why += "; " + c["kept_member"]
     return {"in": status != "unverified", "status": status, "by": by, "why": why}
 
 

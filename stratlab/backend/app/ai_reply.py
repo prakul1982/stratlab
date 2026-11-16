@@ -124,16 +124,35 @@ def extract_json(raw: str) -> dict:
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
-        a, b = text.find("{"), text.rfind("}")
-        if a < 0 or b <= a:
-            raise AIError("The AI reply couldn't be read. Try rephrasing the idea.") from None
-        try:
-            data = json.loads(text[a:b + 1])
-        except json.JSONDecodeError:
+        data = first_object(text)
+        if data is None:
             raise AIError("The AI reply couldn't be read. Try rephrasing the idea.") from None
     if not isinstance(data, dict):
         raise AIError("The AI reply couldn't be read. Try rephrasing the idea.")
     return data
+
+
+_TRAILING_COMMA = re.compile(r",(\s*[}\]])")
+
+
+def first_object(text: str) -> dict | None:
+    """r58 (Admin's AI row: "reply wasn't the JSON asked for" from a model that answered with the object between sentences that hold braces
+    of their own, "{...}" in a note after it, or a trailing comma): the first whole JSON object in a text, read from each "{" in turn (a
+    note after it never spoils it), the largest whole one, read as written and with trailing commas taken out."""
+    dec = json.JSONDecoder()
+    best = None
+    for src in (text, _TRAILING_COMMA.sub(r"\1", text)):
+        i = src.find("{")
+        while 0 <= i:
+            try:
+                obj, end = dec.raw_decode(src, i)
+            except json.JSONDecodeError:
+                i = src.find("{", i + 1)
+                continue
+            if isinstance(obj, dict) and (best is None or end - i > best[0]):
+                best = (end - i, obj)
+            i = src.find("{", end)
+    return best[1] if best is not None else None
 
 
 def salvage_items(raw: str, key: str) -> list[dict]:

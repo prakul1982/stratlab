@@ -337,6 +337,7 @@ def page_figures(region: str, c: dict) -> dict:
 
 corp_sources = None      # the corporate actions job's sources (set by main), for a US company's dividends
 public_facts = None      # (region, symbol) -> the stored public page's facts or None (set by main), never building one
+build_page = None       # r58: (region, symbol) -> the company's page facts, built within the pages' per-minute ration (set by main), for a theme's data gaps
 filed_numbers = None     # symbol -> the company's numbers read from its filings (set by main; kept six hours), for a page stored before they were kept
 
 

@@ -1028,7 +1028,10 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
     # live placement, theme_routes.placed); a replay of a stored version without it places as that version's rules did
     truth, fit_rows, held_rows, fit_answer, audit_rows, audit_answer, scale_rows = [], [], [], None, [], None, []
     if published is not None:
-        out_vc, truth = truthful_layers(out_vc, published, evidence, theme)
+        # r58 (R58, the owner's review of the live R57.2 Consumer retail deck: "Single-category specialty retailers", 9 companies in R56, lost
+        # again because the published version, R57.2's, no longer had it): a layer counts as published when any earlier published version had
+        # it, read from the change log's moves out of a layer the snapshot no longer has (previous_published)
+        out_vc, truth = truthful_layers(out_vc, previous_published(published, moved_before, moved_out, theme), evidence, theme)
         out_vc, whole_out = whole_company_out(out_vc, words_of, theme)
         if whole_out:
             off = list(off or []) + [{"ticker": x["ticker"], "name": x["name"], "industry": x["industry"], "why": x["why"]} for x in whole_out]
@@ -1041,7 +1044,7 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
         out_vc, compute_rows = compute_fit(out_vc, words_of, theme)
         out_vc, unsaid_rows = unsaid_moves(out_vc, words_of, theme, published)
         compute_rows = compute_rows + unsaid_rows
-        out_vc, single_rows = single_layers(out_vc, words_of, theme)
+        out_vc, single_rows = single_layers(out_vc, words_of, theme, previous_published(published, moved_before, moved_out, theme))
         held_rows = held_rows + compute_rows + single_rows
     back = [{"ticker": s_, "name": (by_sym.get(s_) or {}).get("name") or (off_before or {})[s_][0],
              "why": "an earlier version found its own words describe another business; its own words read now show the theme's work"}
@@ -1772,6 +1775,59 @@ def layer_says(v: dict, text: str, theme_words: set) -> tuple[bool, bool]:
     return any(g[0] for g in got), any(g[1] for g in got)
 
 
+# r58 (R58, the owner's review of the live R57.2 Regional banks deck: national money-centre banks and small community banks in one layer,
+# "Large national banks and small community banks", halved by count, so a $700 bn bank and a $3 bn one were one comparison): a layer whose
+# name joins a large scale and a small one is split by scale, into bands of market value relative to its largest member, each named
+MIXED_SCALE = re.compile(r"\b(?:large|national|money[- ]cent(?:er|re)|big)\b.*\band\b.*\b(?:small|community|local)\b", re.I)
+BAND_TOP = 0.10                 # a member worth this share of the layer's largest or more is of its large scale
+BAND_LOW = 0.01                 # ...below this share, of its small scale; between them, mid-sized
+
+
+def scale_bands(vc: list[dict]) -> list[dict]:
+    """r58: each named layer whose name joins a large and a small scale (MIXED_SCALE) with 2 * SPLIT_PART companies or more split into its
+    large, mid-sized and small members by market value relative to its largest (BAND_TOP, BAND_LOW), named from its own name's two parts
+    ("Large national banks", "Mid-sized banks", "Small community banks"). A band of fewer than SPLIT_PART companies joins the next one."""
+    out = []
+    for v in vc:
+        name = _HALF_RX.sub("", v.get("layer") or "")
+        cos = v.get("companies") or []
+        if v.get("official") or v.get("scale") or not MIXED_SCALE.search(name) or len(cos) < 2 * SPLIT_PART:
+            out.append(v)
+            continue
+        big_part, _, small_part = name.partition(" and ")
+        noun = (re.findall(r"[A-Za-z]+", small_part) or ["companies"])[-1]
+        top = max((c.get("cap") or 0) for c in cos)
+        if top <= 0 or not small_part:
+            out.append(v)
+            continue
+        bands = {"large": [], "mid": [], "small": []}
+        for c in sorted(cos, key=lambda c: (-(c.get("cap") or 0), c.get("ticker") or "")):
+            r_ = (c.get("cap") or 0) / top
+            bands["large" if r_ >= BAND_TOP else "small" if r_ < BAND_LOW else "mid"].append(c)
+        if len(bands["large"]) < SPLIT_PART:
+            bands["mid"] = bands["large"] + bands["mid"]
+            bands["large"] = []
+        if len(bands["small"]) < SPLIT_PART:
+            bands["mid"] += bands["small"]
+            bands["small"] = []
+        if len(bands["mid"]) < SPLIT_PART and bands["mid"]:
+            (bands["large"] if bands["large"] else bands["small"]).extend(bands["mid"])
+            bands["mid"] = []
+        named = {"large": big_part.strip(), "mid": f"Mid-sized {noun.lower()}", "small": small_part.strip()[:1].upper() + small_part.strip()[1:]}
+        made = [(k, cs) for k, cs in bands.items() if cs]
+        if len(made) < 2:
+            out.append(v)
+            continue
+        for k, cs in made:
+            why = (f"“{name}” split by scale, as one comparison would join its largest and smallest: "
+                   + ("worth a tenth of its largest member or more" if k == "large" else "worth under a hundredth of its largest member"
+                      if k == "small" else "worth between a hundredth and a tenth of its largest member") + ", by market value")
+            cs = [c if isinstance(c.get("refit"), dict) else {**c, "refit": {"from": name, "to": named[k], "why": why}} for c in cs]
+            out.append({**v, "layer": named[k], "description": "", "companies": cs, "band": k, "band_why": why,
+                        "aka": list(dict.fromkeys(list(v.get("aka") or []) + [name]))})
+    return out
+
+
 def _model_layer(name: str, cos: list[dict], **kw) -> dict:
     return {"layer": name, "description": "", "by_model": True, "companies": cos, **kw}
 
@@ -2225,7 +2281,7 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
     for _ in range(4):
         # a half of an earlier split isn't halved again (R26: a catch-all of mostly unknown models became "… (smaller) (smaller)")
         big = next((v for v in out if not v.get("official") and not v.get("scale") and len(v["companies"]) >= SPLIT_MIN
-                    and len(v["companies"]) > SPLIT_SHARE * total), None)
+                    and len(v["companies"]) > SPLIT_SHARE * total and not MIXED_SCALE.search(v.get("layer") or "")), None)
         if big is None:
             break
         at = out.index(big)
@@ -2255,6 +2311,7 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
         out[at] = {**big, "layer": f"{name} (larger)", "companies": ranked[:half], "scale": "larger", "sibling": small["layer"]}
         out.insert(at + 1, small)
 
+    out = scale_bands(out)
     # 3. no layer of one company made by the split (R27: the live R26 IT deck had a visa and e-governance firm alone, a full page, as
     # "Hotels, travel and consumer services")
     out = _no_single_layers(out, before, main, fam, theme, fits)
@@ -4082,7 +4139,20 @@ def compute_fit(vc: list[dict], words_of, theme: str) -> tuple[list[dict], list[
     return [v for v in vc if v.get("companies") or v.get("official") or not (v.get("by_model") or v.get("scale"))], rows
 
 
-def single_layers(vc: list[dict], words_of, theme: str) -> tuple[list[dict], list[dict]]:
+_SAID_HOW = {"distr", "retai", "manuf", "maker", "suppl", "trade", "tradi", "store", "shop"}
+
+
+def words_support(name: str, text: str, theme: str) -> bool:
+    """r58: whether a company's own words say a word of a layer's name, a word of how a business earns included ("distribution" said by
+    "distributing"), the theme's own words and plain words aside: a layer an earlier published version had keeps a member whose words say it."""
+    low = re.sub(r"\s*\((?:larger|smaller)\)$", "", str(name or "")).lower()
+    ns = {_stem(w) for w in re.findall(r"[a-z0-9]+", low) if len(w) >= 4 and w not in _KIND_PLAIN} - kind_stems(theme) - _stems("other companies and")
+    ns -= _HOW_STEMS - _SAID_HOW            # a word any company says ("business", "services") says no layer
+    mine = {_stem(w) for w in re.findall(r"[a-z0-9]+", str(text or "").lower()) if len(w) >= 4}
+    return bool(ns) and bool(ns & mine)
+
+
+def single_layers(vc: list[dict], words_of, theme: str, earlier: dict | None = None) -> tuple[list[dict], list[dict]]:
     """r572 (R57.2, the release gate on the live R57.1 decks: 16 layers of one company, "Cold chain operators" holding one company whose own
     words say no word of it, "Data centres, hosting and networks" in an oil theme): a named layer holding one company stays only when the
     map named it (never a layer made by how its companies earn, by placement or by industry) and the company's own words say what its name
@@ -4099,6 +4169,14 @@ def single_layers(vc: list[dict], words_of, theme: str) -> tuple[list[dict], lis
         text = own_text((words_of(c.get("ticker")) if words_of else None) or c.get("what") or "")
         named = not (v.get("by_model") or v.get("by_place") or v.get("industry_group"))
         if named and text.strip() and layer_says(v, text, tw)[1]:
+            continue
+        # r58 (R58, the owner's review of the live R57.2 Insurance deck: PB Fintech's "Distribution and aggregation" folded into "Other"): a
+        # layer an earlier published version had with this company in it (`earlier`, previous_published) never vanishes because it is small:
+        # it stays, with its one member, when the company's own words say a word of its name
+        names_ = {_HALF_RX.sub("", n) for n in [v.get("layer") or "", v.get("was") or ""] + list(v.get("aka") or []) if n}
+        if earlier and _HALF_RX.sub("", str(earlier.get(c.get("ticker")) or "")) in names_ and text.strip() \
+                and any(words_support(n, text, theme) for n in names_):
+            v["single_kept"] = "a layer of the published version, kept with its one member: its own words say its name"
             continue
         homes = [w for w in own if w is not v and len(w.get("companies") or []) >= 2 and text.strip() and layer_says(w, text, tw)[1]]
         to = homes[0] if len(homes) == 1 else None
@@ -4158,7 +4236,9 @@ def layer_answer_removals(vc: list[dict], placements: dict, words_of, theme: str
                      "no description of its own or official industry is stored, so the answer alone moves nothing")
             # (one with neither words nor an official industry stored is not checked yet: never said to be kept on an industry)
             back.append({"ticker": s_, "name": x.get("name") or s_, "what": "", "verified": False, "base": bool(quote or ind), "basis": "words",
-                         "industry": ind, "cap": None, "placed": "words", "kept_member": True,
+                         "industry": ind, "cap": None, "placed": "words",
+                         # r58 (the live R57.2 decks printed "filed under an official industry of the theme; True" for these): why, in words
+                         "kept_member": f"kept in the theme: the map's check said no for {groups} only, one layer's answer; {said_}",
                          "theme": {"why": f"the map's check said no for {groups} only, one layer's answer; {said_}"}})
             moved.append(x)
             continue
