@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { download as saveFile } from "../lib/share";
 import { pct, pctPlain } from "../lib/format";
-import { capText, downloadPath, peText, sortPeers, type PeerKey, type PeerRow, type Peers, type Region } from "../lib/companyTables";
+import { capText, downloadPath, peText, sortPeers, wholeOnly, type PeerKey, type PeerRow, type Peers, type Region } from "../lib/companyTables";
 import { Card, CardHead, DataTable, EmptyState, ErrorState, PlanNote, Select, Signed, Skeleton, usePhone, type Column } from "./kit";
 import "./companyTables.css";
 
@@ -46,7 +46,9 @@ export function PeersCard({ region, symbol, id = "co-peers" }: { region: Region;
 
   const peers = sort ? sortPeers(v.rows, sort.key, sort.desc) : v.rows;
   const rows: PeerRow[] = v.own ? [v.own, ...peers] : peers;
-  const pctCell = (x: number | null) => pctPlain(x, 1).replace("-", "−");
+  // a column the index gives in whole numbers (an EBITDA margin of 27) is written whole, as Key numbers writes it, never "27.0%" (LIVE9B-003)
+  const whole = (k: "ebitda" | "net" | "ret") => wholeOnly(rows.map((r) => r[k]));
+  const pctCell = (x: number | null, k?: "ebitda" | "net" | "ret") => pctPlain(x, k && whole(k) && (x == null || Number.isInteger(x)) ? 0 : 1).replace("-", "−");
   const cols: Column<PeerRow>[] = [
     { key: "name", header: "Company", rowHeader: true, wrap: true, cell: (r) => (r.own
       ? <b>{r.name}<span className="sr-only"> (this company)</span></b>
@@ -55,15 +57,15 @@ export function PeersCard({ region, symbol, id = "co-peers" }: { region: Region;
     // the header says the span: the 3-year compounded rate, not the latest year's (LIVE8B-017)
     { key: "sales_growth", header: "Sales growth, 3 yrs", info: "Compounded a year over the last 3 years.", numeric: true, sortable: true,
       cell: (r) => (r.sales_growth == null ? "–" : <Signed value={r.sales_growth}>{pct(r.sales_growth, 1)}</Signed>) },
-    ...(v.lender ? [] : [{ key: "ebitda", header: "EBITDA margin", numeric: true, sortable: true, cell: (r: PeerRow) => pctCell(r.ebitda) } as Column<PeerRow>]),
-    { key: "net", header: "Net margin", numeric: true, sortable: true, cell: (r) => pctCell(r.net) },
+    ...(v.lender ? [] : [{ key: "ebitda", header: "EBITDA margin", numeric: true, sortable: true, cell: (r: PeerRow) => pctCell(r.ebitda, "ebitda") } as Column<PeerRow>]),
+    { key: "net", header: "Net margin", numeric: true, sortable: true, cell: (r) => pctCell(r.net, "net") },
     { key: "ret", header: v.return_label, info: v.lender ? "Return on equity: net profit over shareholders' equity." : "Return on capital employed: operating profit over equity and debt.",
-      numeric: true, sortable: true, cell: (r) => pctCell(r.ret) },
+      numeric: true, sortable: true, cell: (r) => pctCell(r.ret, "ret") },
     { key: "pe", header: "P/E", numeric: true, sortable: true, cell: (r) => peText(r.pe) },
   ];
   const m = v.median;
   const foot = m ? { name: `Median of ${v.rows.length} peer${v.rows.length === 1 ? "" : "s"}`, market_cap: capText(m.market_cap, region),
-    sales_growth: m.sales_growth == null ? "–" : pct(m.sales_growth, 1), ebitda: pctCell(m.ebitda), net: pctCell(m.net), ret: pctCell(m.ret), pe: peText(m.pe) } : undefined;
+    sales_growth: m.sales_growth == null ? "–" : pct(m.sales_growth, 1), ebitda: pctCell(m.ebitda, "ebitda"), net: pctCell(m.net, "net"), ret: pctCell(m.ret, "ret"), pe: peText(m.pe) } : undefined;
   const onSort = (k: string) => setSort((s) => ({ key: k as PeerKey, desc: s?.key === k ? !s.desc : true }));
   // on a phone the rows are cards with no header to press: the sort is picked here instead (Basic)
   const phoneSort = phone && v.can_sort ? <>

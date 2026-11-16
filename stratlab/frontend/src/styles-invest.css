@@ -205,6 +205,8 @@
 }
 /* business updates: the small history chart in a company's row (RES-1 follow-up) */
 .biz-spark { display: block; width: 120px; max-width: 100%; }
+/* a latest figure well behind the others (LIVE9B-007): muted, with its age under it */
+.biz-old { color: var(--muted); }
 .res-sym { display: flex; align-items: baseline; gap: 6px; flex-wrap: nowrap; white-space: nowrap; min-width: 0; }
 .res-moves { display: flex; flex-wrap: wrap; gap: 0 8px; }
 /* a results row is two lines (owner, 5 Nov): the symbol, its tags and the name, then the meeting and a small filing link; what is longer than

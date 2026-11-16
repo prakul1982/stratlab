@@ -51,7 +51,9 @@ function day(iso: string) {
 /** "1 Oct": the day a filing was filed. */
 export function filedOn(iso: string | null | undefined) {
   if (!iso) return "Filing";
-  const s = fmtDate(iso.slice(0, 10), { year: false });
+  // the year when it isn't this year's: "27 Nov" for a filing of Nov 2025 read as a date still to come (LIVE9B-007)
+  const thisYear = iso.slice(0, 4) === String(new Date().getFullYear());
+  const s = fmtDate(iso.slice(0, 10), thisYear ? { year: false } : {});
   return s === "–" ? "Filing" : s;
 }
 
