@@ -1830,6 +1830,9 @@ WORDS_SAY = {"project_services": r"contract research (?:organi[sz]ations?|servic
                     r"revenue cycle management|technology[- ]enabled healthcare solutions"}
 
 
+FOOD_SHOP = r"\b(?:coffee|sandwich|pizza|donut|doughnut|bagel|ice[- ]cream|juice|tea|bakery|burger|sub|food)\s+shops?\b"
+
+
 def words_models(evidence) -> set[str]:
     """ex49 (R48): every way of earning a company's own words name (MODEL_SAYS, OWN_SAYS, a chip designer's own words, making words without
     trading words), its official industry and the customers it names left out: what stated_model reads, before it settles on one."""
@@ -1839,5 +1842,8 @@ def words_models(evidence) -> set[str]:
         return set()
     hits = {m_ for m_, rx in list(MODEL_SAYS.items()) + list(OWN_SAYS.items()) + list(WORDS_SAY.items()) if re.search(rx, own, re.I)}
     one = stated_model(evidence)
-    shop = {"retail"} if re.search(NAME_STATES["retail"], own, re.I) else set()        # stores, shops, retailing: a retailer's own words
+    # stores, shops, retailing: a retailer's own words; r572 (the live R57.1 Restaurants deck: Restaurant Brands International, "Canadian coffee
+    # shop and fast food restaurant chain", read as naming a retailer's way of earning): a coffee, sandwich or pizza shop is a place that serves
+    # food, never a shop that resells goods
+    shop = {"retail"} if re.search(NAME_STATES["retail"], re.sub(FOOD_SHOP, " ", own, flags=re.I), re.I) else set()
     return hits | ({one} if one else set()) | shop

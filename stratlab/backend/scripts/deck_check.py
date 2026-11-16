@@ -191,6 +191,64 @@ _TWICE_JOIN = _JOINING | {"is", "are", "was", "were", "its", "their", "this", "t
 _TWICE_OK = {"had", "that", "very", "so", "no", "bye", "more", "many", "much", "far", "long"}
 
 
+# r572 (R57.2, the live R57.1 decks: "Higher-risk growth Since the previous 1 and turnaround private banks", "Identity Since the previous 7 access
+# and broad enterprise software (larger)"): a table's left-column label ("Since the previous version") and its count, printed beside a cell of
+# running text, are interleaved with that text's lines by pdftotext -layout. A page is read with each such left cell lifted out of the running
+# text it sits beside and said before it (its fragments joined by column), so the label is never read into the text
+_RUN_MIN = 40                    # a line of running text at least this long, with no columns inside, anchors a right-hand text cell
+_LEFT_MAX = 3                    # at most this many lines of left cells between two lines of the running text
+
+
+def _run_line(line: str, col: int) -> bool:
+    body = line[col:].rstrip()
+    return len(line) - len(line.lstrip()) == col and len(body) >= _RUN_MIN and not _COLUMNS.search(body)
+
+
+def reflow(page: str) -> str:
+    """The page's lines with each left-column cell beside a block of running text (starting at one column, 20 or more) said before that
+    block instead of inside it."""
+    lines = page.split("\n")
+    out, i = [], 0
+    while i < len(lines):
+        ln = lines[i]
+        col = len(ln) - len(ln.lstrip()) if ln.strip() else -1
+        if col < 20 or not _run_line(ln, col):
+            out.append(ln)
+            i += 1
+            continue
+        body, left, pend, j = [ln], {}, [], i + 1
+        while j < len(lines):
+            nx = lines[j]
+            if not nx.strip():
+                break
+            if _run_line(nx, col) or (len(nx) - len(nx.lstrip()) == col and pend):
+                for head, tail in pend:
+                    for m in re.finditer(r"\S+(?: \S+)*", head):
+                        left.setdefault(m.start(), []).append(m.group(0))
+                    if tail:
+                        body.append(" " * col + tail)
+                pend = []
+                body.append(nx)
+                j += 1
+                continue
+            head, tail = nx[:col].ljust(col), nx[col:]
+            if len(pend) < _LEFT_MAX and head.strip() and head[-1:] == " " and (not tail.strip() or (not tail[0].isspace() and not _COLUMNS.search(tail.rstrip()))):
+                pend.append((head, tail.rstrip()))
+                j += 1
+                continue
+            break
+        j -= len(pend)                                   # left cells not followed by more of the text: read as they are
+        out.extend(" ".join(left[k]) for k in sorted(left))
+        out.extend(body)
+        i = j
+    return "\n".join(out)
+
+
+def flat_text(page: str) -> str:
+    """A page as one line of text, its left-column cells lifted out of the running text beside them (reflow)."""
+    return re.sub(r"\s+", " ", reflow(page))
+
+
 def _informative_count(page: str, at) -> "re.Match | None":
     """The count of the coverage's "In informative layers" row (R44): in its own column, on the label's line or the line above or below it
     (pdftotext wraps a narrow cell: "137 of 252" above the label, "(54%)" under it), never another row's or the row's text."""
@@ -310,7 +368,7 @@ def check_pages(pages: list[str]) -> dict:
                 if _KIND.search(ln):
                     add("unread kind", n, f"{ln.strip()} (no way of earning read: p.{unread})")
     for n, page in enumerate(pages, 1):
-        flat = re.sub(r"\s+", " ", page)
+        flat = flat_text(page)
         for m in _IN_CALC.finditer(flat):
             a, b = int(m.group(1).replace(",", "")), int(m.group(2).replace(",", ""))
             if b >= LEFT_MIN and a * 2 < b:
@@ -320,7 +378,7 @@ def check_pages(pages: list[str]) -> dict:
     # rv51 (R51): a business model given as the reason a layer is not ranked is drawn from the layer's own records
     layers = set()
     for page in pages:
-        flat = re.sub(r"\s+", " ", page).replace(" Each layer ", " ")
+        flat = flat_text(page).replace(" Each layer ", " ")
         for m in _EACH.finditer(flat):
             for cell in m.group(1).split(" · "):
                 lm = _LAYER_COUNT.match(cell.strip())
@@ -329,7 +387,7 @@ def check_pages(pages: list[str]) -> dict:
     stems_of = lambda t: {w.lower()[:6] for w in _WORD.findall(t) if len(w) >= 4 and w.lower() not in _BIZ_STOP}    # noqa: E731
     seen = set()
     for n, page in enumerate(pages, 1):
-        flat = re.sub(r"\s+", " ", page)
+        flat = flat_text(page)
         for m in _BIZ.finditer(flat):
             layer, model, where = m.group(1).strip(), m.group(2).strip(), m.group(3).strip()
             if (layer, model, where) in seen:
@@ -393,7 +451,7 @@ def _num(t: str) -> float:
 
 def d53_checks(pages: list[str], layers: set, add) -> None:
     """d53 (R53): the checks of the theme's membership, roles and integrity, from the text (see the module's list)."""
-    flat_pages = [re.sub(r"\s+", " ", p) for p in pages]
+    flat_pages = [flat_text(p) for p in pages]
     names = set(layers)
     for p in pages:
         names |= {m.group(1).strip() for m in _LAYER_HEAD.finditer(p)}
@@ -475,7 +533,7 @@ LOST_MIN = 5
 def c54_checks(pages: list[str], layers: set, add) -> None:
     """c54 (R53 review): moves without a reason into a layer named by what it sells, a layer outside the theme's own business counted as
     core, and a lost layer with nothing said of it (see the module's list)."""
-    flat_pages = [re.sub(r"\s+", " ", p) for p in pages]
+    flat_pages = [flat_text(p) for p in pages]
     for n, flat in enumerate(flat_pages, 1):
         if "Since the previous version" not in flat and "against the version stored before it" not in flat:
             continue
@@ -514,7 +572,7 @@ _EACH_CELL = re.compile(r"^.+? (\d[\d,]*) of \d[\d,]*\b")      # its first count
 
 def e54_checks(pages: list[str], add) -> None:
     """e54 (R54): the evidence states and the populations a deck's counts are of, from the text (see the module's list)."""
-    flat_pages = [re.sub(r"\s+", " ", p) for p in pages]
+    flat_pages = [flat_text(p) for p in pages]
     whole = " ".join(flat_pages)
     where = lambda t: next((n for n, f in enumerate(flat_pages, 1) if t in f), 1)      # noqa: E731
     w = _WORDLESS.search(whole)
@@ -600,7 +658,7 @@ def _money(cell: str) -> tuple[str, float] | None:
 def v55_checks(pages: list[str], add) -> None:
     """v55 (R55): a company excluded on words never read, an out-of-scope business kept in "Other", a commercial company displayed in a
     development-stage layer, and membership checks said as if they added figures (see the module's list)."""
-    flat_pages = [re.sub(r"\s+", " ", p) for p in pages]
+    flat_pages = [flat_text(p) for p in pages]
     whole = " ".join(flat_pages)
     for n, flat in enumerate(flat_pages, 1):
         for m in _OTHER_WORK_LIST.finditer(flat):
@@ -661,7 +719,7 @@ EMPTY_MAX = 3                   # l55: a page's eyebrow, title and headline, and
 
 def l55_checks(pages: list[str], add) -> None:
     """l55 (R55): every count of the theme's members by evidence state, the same on every page, and no empty page (see the module's list)."""
-    flat_pages = [re.sub(r"\s+", " ", p) for p in pages]
+    flat_pages = [flat_text(p) for p in pages]
     whole: list = []                    # (page, (description-verified, industry-, list-supported, other work, not checked), checked, of)
     parts: list = []
     for n, flat in enumerate(flat_pages, 1):
@@ -742,7 +800,7 @@ def t56_checks(pages: list[str], add) -> None:
       share fall unsaid  "N points fewer" in the informative share, N of five or more, with no "Why:" said beside it
       removal unnamed    a company removed from the theme (the change log's "removed N: ...") whose reason names neither a listing nor a
                          business-membership decision ("no longer in the theme's map", or none)"""
-    flat_pages = [re.sub(r"\s+", " ", p) for p in pages]
+    flat_pages = [flat_text(p) for p in pages]
     for n, flat in enumerate(flat_pages, 1):
         for m in _REMOVED.finditer(flat):
             k = _num(m.group(2))
@@ -780,7 +838,7 @@ def h56_checks(pages: list[str], add) -> None:
     """h56 (R56): a coverage row's history ends on the share the row states (see the module's list)."""
     for n, page in enumerate(pages, 1):
         lines = page.split("\n")
-        flat = re.sub(r"\s+", " ", page)
+        flat = flat_text(page)
         for label, rx in _HIST.items():
             m = rx.search(flat)
             if not m:
@@ -924,7 +982,7 @@ def _value_of(key: tuple, values: dict) -> float | None:
 
 def y57_checks(pages: list[str], add) -> None:
     """y57 (R57, the full audit of the 24 live R56 decks): see the module's list."""
-    flat_pages = [re.sub(r"\s+", " ", p) for p in pages]
+    flat_pages = [flat_text(p) for p in pages]
     whole = " ".join(flat_pages)
     for n, page in enumerate(pages, 1):
         lines = [ln for ln in page.split("\n") if ln.strip()]
@@ -1095,7 +1153,7 @@ LAYER_PROFILE_PAGE = "Each layer on its own measures"
 
 def m57_checks(pages: list[str], add) -> None:
     """m57 (R57): every layer with a sector operating profile prints its measures or says they aren't available (see the module's list)."""
-    flats = [re.sub(r"\s+", " ", p) for p in pages]
+    flats = [flat_text(p) for p in pages]
     said, paged, nots = {}, set(), 0
     for n, (page, flat) in enumerate(zip(pages, flats), 1):
         head = "\n".join(page.split("\n")[:6])
@@ -1205,9 +1263,9 @@ def p57_checks(pages: list[str], add) -> None:
       words contradict   a removal or move whose reason says a company's words don't show a layer's work ("don't show the work of “X”",
                          "doesn't support “X”") while the deck prints that company's own words saying a word of that layer's name"""
     layers = _layer_names(pages)
-    flat_pages = [re.sub(r"\s+", " ", p) for p in pages]
+    flat_pages = [flat_text(p) for p in pages]
     for n, page in enumerate(pages, 1):
-        flat = re.sub(r"\s+", " ", page)
+        flat = flat_text(page)
         if "Since the previous version" in flat or "against the version stored before it" in flat:
             for m in _REMOVED_LIST.finditer(flat):
                 for it in _top_items(m.group(2)):

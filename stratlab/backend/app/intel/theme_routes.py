@@ -502,10 +502,10 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56}  # rules versions whose change only adds to a kept placement (r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57}  # rules versions whose change only adds to a kept placement (r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
-EARLIER_MAX = 12                # (r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
+EARLIER_MAX = 13                # (r572: 13, one more for the version R57.2 carries; r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
 
 
 def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
@@ -698,7 +698,7 @@ def describe_more(region: str, theme: str, m: dict, now: float | None = None) ->
     if len(_described_at) > VERDICT_KEEP:
         _described_at.clear()
     _described_at[k] = now
-    later(("describe-more",) + k, lambda: describe_missing(region, m), wait=0)
+    later(("describe-more",) + k, lambda: note_words(region, theme, describe_missing(region, m)), wait=0)
     return True
 
 
@@ -983,8 +983,69 @@ def checked(region: str, theme: str, m: dict, wait: bool = False) -> dict:
         later(("check",) + key, lambda: _check(region, theme, m))
         hit = A.get("sector_checked3", key) or A.get("sector_checking", key) or quick(region, theme, m)
     elif (hit.get("placements") or {}).get("checked"):
+        hit = replaced_on_words(region, theme, m, key, hit)   # r572: words read since the check placed it: placed again, no AI
         describe_more(region, theme, hit)          # e57: its companies still without words of their own, read in the background
     return with_caps(hit, _rows(region))
+
+
+# r572 (R57.2, Step 0 on the live R57.1 inputs: 70 companies in 13 themes placed on the words stored when the theme was checked, e.g. JMD
+# Ventures "no description of its own" in the Media deck while its words were stored since by the background reads, describe_more): the
+# checked map is kept a day, and words read after its check reached no placement until then. The map the placement read is kept (bounded,
+# in memory: UNPLACED_KEEP themes), and a view of a theme whose companies had words read since its check places it again from it, with no AI
+# (the kept answers only), at most once in REPLACE_EVERY a theme; the dive and the deck are keyed by it ("replaced")
+UNPLACED_KEEP = 6
+REPLACE_EVERY = 600
+_unplaced: dict = {}                      # check key -> the map the placement read (with_base's output)
+_words_since: dict = {}                   # (market, theme) -> how many of its companies had words stored since its last placement
+_replaced_at: dict = {}
+
+
+def keep_unplaced(key: tuple, out: dict) -> None:
+    try:
+        _unplaced.pop(key, None)
+        _unplaced[key] = json.loads(json.dumps(out, default=str))
+        while len(_unplaced) > UNPLACED_KEEP:
+            _unplaced.pop(next(iter(_unplaced)))
+        _words_since.pop((key[0], key[1]), None)
+    except (TypeError, ValueError) as e:
+        print("theme: map before placement not kept:", type(e).__name__, str(e)[:100])
+
+
+def note_words(region: str, theme: str, asked) -> int:
+    """r572: how many of the companies just asked for now have words of their own stored, added to the theme's count since its placement."""
+    n = sum(1 for s_ in asked or [] if _stored_evidence(region, s_).get("about"))
+    if n:
+        k = (region, theme.lower())
+        _words_since[k] = _words_since.get(k, 0) + n
+        if len(_words_since) > VERDICT_KEEP:
+            _words_since.clear()
+    return n
+
+
+def replaced_on_words(region: str, theme: str, m: dict, key: tuple, hit: dict, now: float | None = None) -> dict:
+    """r572: the checked map placed again from the map its placement read when words were stored since for its companies (note_words),
+    with no AI; the checked map as it is otherwise (nothing kept to place again, or placed again less than REPLACE_EVERY ago)."""
+    k = (region, theme.lower())
+    now = time.time() if now is None else now
+    if not _words_since.get(k) or key not in _unplaced or now - _replaced_at.get(k, 0.0) < REPLACE_EVERY:
+        return hit
+    _replaced_at[k] = now
+    if len(_replaced_at) > VERDICT_KEEP:
+        _replaced_at.clear()
+    try:
+        out = placed(region, theme, m, json.loads(json.dumps(_unplaced[key])), ask=None)
+    except Exception as e:
+        print("theme: not placed again on new words:", type(e).__name__, str(e)[:100])
+        return hit
+    _words_since.pop(k, None)
+    p = {**(hit.get("placements") or {}), **(out.get("placements") or {})}
+    for x in ("industries_by", "unclassified", "checked", "timed_out"):
+        if x in (hit.get("placements") or {}):
+            p[x] = hit["placements"][x]
+    p["replaced"] = int((hit.get("placements") or {}).get("replaced") or 0) + 1
+    new = {**hit, **out, "placements": p, "tailwinds": hit.get("tailwinds"), "risks": hit.get("risks")}
+    A.keep("sector_checked3", key, new, 24 * 3600)
+    return new
 
 
 def with_caps(m: dict, rows: list[dict]) -> dict:
@@ -1048,6 +1109,7 @@ def _check(region: str, theme: str, m: dict) -> dict:
         except Exception as e:
             print("theme: industry peers not considered:", type(e).__name__, str(e)[:100])
         out = theme_identity.one_listing(out)          # e57 (RC7): one member per company, whatever lines the index lists it under
+        keep_unplaced(key, out)                         # r572: what the placement read, so new words re-place it without the AI
         out = placed(region, theme, m, out, ask=_ask)
         claims = A.get("sector_claims", key)
         if claims is None:
@@ -1304,6 +1366,13 @@ def sources(region: str, theme: str, fresh: bool = False):
     return src
 
 
+def removal_words(region: str) -> dict:
+    """r572: a company's stored words and official industry, for the change log's reason why a company the map no longer names left
+    (theme_changes.reasoned): stored only, nothing read from a page."""
+    facts = _facts_reader(region)
+    return {"words_of": kept_about(region), "industry_of": lambda s_: str((facts(s_) or {}).get("industry") or "").split(">")[-1].strip()}
+
+
 @router.get("/theme-dive")
 def theme_dive(q: str, region: str = "IN", refresh: bool = False, profile=Depends(current_profile)):
     """The theme's figures. R19: kept for everyone in the shared store (dive_of) and served until a Refresh; a Refresh just after the
@@ -1316,9 +1385,10 @@ def theme_dive(q: str, region: str = "IN", refresh: bool = False, profile=Depend
         kept = computed.get(theme_library.DIVE, dive_key(r, theme, m), count=False)
         state = "go" if kept is None else computed.refresh_gate(profile, "theme:dive", kept.get("at"))
         if state != "go":
-            return R.ok(theme_changes.served(r, m.get("_library") or theme, {**kept["value"]["dive"], "refresh_state": state}, profile))
+            return R.ok(theme_changes.served(r, m.get("_library") or theme, {**kept["value"]["dive"], "refresh_state": state}, profile,
+                                             **removal_words(r)))
         by = computed.plan_word(profile)
-    out = theme_changes.served(r, m.get("_library") or theme, dive_of(r, theme, m, refresh, by=by), profile)
+    out = theme_changes.served(r, m.get("_library") or theme, dive_of(r, theme, m, refresh, by=by), profile, **removal_words(r))
     return R.ok({**out, "refresh_state": "done"} if refresh else out)
 
 
@@ -1336,6 +1406,11 @@ def placement_inputs(q: str, region: str = "IN", profile=Depends(current_profile
     r, theme, m, _ = R.theme_map(profile, region, q)
     hit = checked(r, theme, m)
     names = {c["ticker"]: c.get("name") for v in hit.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}
+    # r572 (the live R57.1 inputs carried no words for the companies the map's check left out, which the placement reads to decide whether
+    # a layer's "no" removes them: theme_base.layer_answer_removals): those companies' stored words and facts too
+    for x in ((hit.get("placements") or {}).get("dropped") or []) + ((hit.get("placements") or {}).get("layer_no") or []):
+        if isinstance(x, dict) and x.get("ticker"):
+            names.setdefault(x["ticker"], x.get("name"))
     about = _about_reader(r, names, 0)                    # stored descriptions only, as placed() reads them
     kept, version = kept_placement(r, theme, m)
     # R45 (lane tx2): also the previous live layers the placement reads (theme_base.place_rest `previous`) and each company's stored facts
@@ -1360,7 +1435,8 @@ def dive_key(r: str, theme: str, m: dict) -> list:
     fm = theme_base.for_figures(m)[0]
     said = sum(1 for v in fm["value_chain"] if v.get("official") for c in v["companies"] if c.get("what"))
     return [r, m.get("_library") or theme_library.normalise(theme, r), int(float(m.get("generated_at") or 0)),
-            (m.get("placements") or {}).get("placed"), said, theme_base.RULES, f"sm{sector_metrics.VERSION}", f"td{theme_data.DIVE_TEXT}"]
+            (m.get("placements") or {}).get("placed"), said, theme_base.RULES, f"sm{sector_metrics.VERSION}", f"td{theme_data.DIVE_TEXT}"] \
+        + ([f"rp{(m.get('placements') or {})['replaced']}"] if (m.get("placements") or {}).get("replaced") else [])     # r572
 
 
 def requeue(r: str, dive: dict) -> None:
@@ -1752,7 +1828,7 @@ def deck_extras(r: str, theme: str, m: dict, profile: dict) -> dict:
         if biz_updates._allowed(profile):
             out["business"] = business_of(r, m)
     # rv51 (R51, P2): the theme's change log, its latest entry the deck's cohort row since the previous version (deck.cohort_row)
-    out["changes"] = theme_changes.view(r, m.get("_library") or theme, True)
+    out["changes"] = theme_changes.view(r, m.get("_library") or theme, True, **removal_words(r))
     return out
 
 
@@ -1837,13 +1913,14 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
     today = datetime.now(R.IST).date()
     biz = r == "IN" and bool(biz_updates._allowed(profile))       # the one part of the deck that depends on the plan
     stamp = int(float(m.get("generated_at") or 0))
+    replaced_n = (m.get("placements") or {}).get("replaced")         # r572: a map placed again on new words is a new read of the theme
     seen = (NEWS_CACHE.get((r, theme.lower(), int(float(theme_base.for_figures(m)[0].get("generated_at") or 0)))) is not None,
             bool((IPO_CACHE.get((r, theme.lower(), stamp)) or {}).get("checked")))     # a part read since is in a new file
     # R29 (P0, the live R27 Banks deck: 7 of 19 banks' filed figures): the dive first, so the key says how many companies' filed figures it
     # still waits for; a deck made while they are read is kept under that count and made again from the fuller dive once they are in
     dive = dive_of(r, theme, m)
     waiting = figures_waiting(dive)
-    key = deck_key(r, theme, format, today, stamp, biz, seen, waiting)
+    key = deck_key(r, theme, format, today, f"{stamp}.{replaced_n}" if replaced_n else stamp, biz, seen, waiting)
     body = DECK_CACHE.get(key)
     if body is None:                           # R20: the file is kept in the shared store too, so a restart or a deploy doesn't rebuild it
         import base64
@@ -1888,7 +1965,7 @@ def theme_dive_workbook(q: str, region: str = "IN", profile=Depends(current_prof
                              "message": "Preparing the workbook: the AI map is being written."}, status_code=202)
     today = datetime.now(R.IST).date()
     dive = dive_of(r, theme, m)
-    body = theme_workbook.build(dive, r, m.get("sector") or theme, theme_changes.view(r, m.get("_library") or theme, True), today)
+    body = theme_workbook.build(dive, r, m.get("sector") or theme, theme_changes.view(r, m.get("_library") or theme, True, **removal_words(r)), today)
     if mark:
         db.add_usage(profile["id"], "deck")
         db.add_usage(profile["id"], mark)
