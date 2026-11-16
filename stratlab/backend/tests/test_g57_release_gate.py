@@ -51,7 +51,9 @@ def test_capital_one_removed_on_one_layers_mismatch_is_flagged():
     removed = _fails(found, "layer-only removal")
     assert "Capital One Financial Corp (COF)" in removed
     assert {"JPMorgan Chase & Co (JPM)", "Nu Holdings Ltd. (NU)", "SoFi Technologies, Inc. (SOFI)"} <= removed
-    assert "“Digital banks”" in _fails(found, "one-company layer")
+    # r58 (R58, the owner: "a category with one valid member can remain useful"): Dave's own words say "digital banking", so its one-company
+    # layer is valid and no FAIL (updated on purpose; the FAIL for a member whose words don't say its layer is kept, below)
+    assert "“Digital banks”" not in _fails(found, "one-company layer")
 
 
 def test_duolingo_in_a_hotels_and_travel_layer_is_flagged():
@@ -101,11 +103,16 @@ def test_removal_reason_its_own_words_contradict():
 
 
 def test_one_company_layer_and_a_layer_name_with_no_word():
-    d = _synthetic({"Reinsurance": [_company("A", "Alpha", "reinsures insurers")],
+    d = _synthetic({"Reinsurance": [_company("A", "Alpha", "makes widget parts")],
                     "x": [_company("B", "Beta", "makes widgets"), _company("C", "Gamma", "makes widgets")],
                     "Other widget companies": [_company("D", "Delta")]})
     found = G.checks(d, d["value_chain"], d["placements"])
+    # r58 (updated on purpose): a one-company layer fails when its member's own words don't say its name ("makes widget parts" under
+    # "Reinsurance"); one whose words say it ("reinsures insurers") is a valid layer of one, with no median
     assert _fails(found, "one-company layer") == {"“Reinsurance”"}            # "Other ..." is no named layer
+    d2 = _synthetic({"Reinsurance": [_company("A", "Alpha", "reinsures insurers")],
+                     "Other widget companies": [_company("D", "Delta")]})
+    assert _fails(G.checks(d2, d2["value_chain"], d2["placements"]), "one-company layer") == set()
     assert "“x”" in _fails(found, "layer words")
 
 

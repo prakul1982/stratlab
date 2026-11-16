@@ -278,7 +278,8 @@ def test_r2_4_a_map_layer_whose_name_its_companies_never_say_takes_the_industry_
     ev = {"BA": "The Boeing Company designs and manufactures airplanes, rotorcraft, rockets, satellites and missiles worldwide.",
           "EMBJ": "We are the leading manufacturer of jets with up to 150 seats in the world, based on the number of aircraft delivered over the last decade."}
     out, rows = B.truthful_layers(vc, {}, lambda s: ev.get(s, ""), "Aerospace and defense")
-    assert out[0]["layer"] == "Commercial airframe integration (aircraft)" and "Commercial airframe integration" in out[0]["aka"]
+    # r58 (R58, the owner's open items: "(aircraft)" bolted on): the unsaid words give way to theirs in place (updated on purpose)
+    assert out[0]["layer"] == "Commercial aircraft" and "Commercial airframe integration" in out[0]["aka"]
     assert B.says_name(out[0]["layer"], ["Industry: Aircraft. " + ev["BA"]]) and B.says_name("Commercial airframe integration", list(ev.values())) is False
 
 

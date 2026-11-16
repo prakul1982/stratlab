@@ -380,5 +380,5 @@ def test_the_rules_version_and_the_new_inputs():
     from app import deck as K
     from app.intel import theme_data as D
     from app.intel import theme_routes as TR
-    assert B.RULES == 58 and TR.PLACE_CARRY[58] == 57 and TR.PLACE_CARRY[57] == 56 and TR.PLACE_CARRY[56] == 55 and TR.PLACE_CARRY[55] == 54 and K.THEME_DECK_VERSION == 68 and D.DIVE_TEXT == 28 and TR.EARLIER_MAX == 13  # r572 (R57.2): RULES 58, PLACE_CARRY[58] = 57, EARLIER_MAX 13, deck 68, dive text 28 (updated on purpose)
+    assert B.RULES == 59 and TR.PLACE_CARRY[59] == 58 and TR.PLACE_CARRY[58] == 57 and TR.PLACE_CARRY[57] == 56 and TR.PLACE_CARRY[56] == 55 and TR.PLACE_CARRY[55] == 54 and K.THEME_DECK_VERSION == 69 and D.DIVE_TEXT == 29 and TR.EARLIER_MAX == 14  # r58 (R58): RULES 59, PLACE_CARRY[59] = 58, EARLIER_MAX 14, deck 69, dive text 29 (updated on purpose); r572 (R57.2): RULES 58, PLACE_CARRY[58] = 57, EARLIER_MAX 13, deck 68, dive text 28 (updated on purpose)
     assert "moved_out" in B.place_rest.__code__.co_varnames

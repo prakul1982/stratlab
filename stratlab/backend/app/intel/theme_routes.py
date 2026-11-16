@@ -502,10 +502,10 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57}  # rules versions whose change only adds to a kept placement (r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57, 59: 58}  # rules versions whose change only adds to a kept placement (r58, R58: the answers unchanged, the taxonomy and scale rules; r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
-EARLIER_MAX = 13                # (r572: 13, one more for the version R57.2 carries; r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
+EARLIER_MAX = 14                # (r58: 14, one more for the version R58 carries; r572: 13, one more for the version R57.2 carries; r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
 
 
 def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
@@ -1197,11 +1197,20 @@ def kept_about(region: str):
     looked up once a dive; the lines of its filings that stand in for a missing description are not its description."""
     read, seen = _about_reader(region, {}, 0), {}
 
+    raw: dict = {}
+
     def about(sym):
         if sym not in seen:
             got = read(sym) or ""
+            raw[sym] = got
             seen[sym] = None if not got or got.startswith("From its own filings:") else got
         return seen[sym]
+
+    def filed_only(sym) -> bool:
+        """r58: whether all the company has stored is its own filings' titles (a filer of its own reports, no description of its own)."""
+        about(sym)
+        return str(raw.get(sym) or "").startswith("From its own filings:")
+    about.filed_only = filed_only
     return about
 
 
@@ -1759,9 +1768,85 @@ def gap_line(x: dict) -> str | None:
     gaps = [g for g in x.get("gaps") or [] if isinstance(g, dict)]
     if not gaps:
         return None
-    named = ", ".join(f"{g.get('name') or g.get('ticker')} ({' and '.join(g.get('lacks') or [])})" for g in gaps[:3])
+    named = ", ".join(f"{g.get('name') or g.get('ticker')} ({g.get('why') or ' and '.join(g.get('lacks') or [])})" for g in gaps[:3])
     more = f" and {len(gaps) - 3} more" if len(gaps) > 3 else ""
     return f"{len(gaps)} member{'s' if len(gaps) != 1 else ''} above the theme's median market value lack{'s' if len(gaps) == 1 else ''} data: {named}{more}."
+
+
+GAP_FIX_READS = 6              # r58: members of a theme's data gaps read again at most, a try (largest first)
+GAP_FIX_BUDGET = 60.0          # ...within this many seconds of description reads
+
+
+def fix_gaps(k: str, budget: float = GAP_FIX_BUDGET, reads: int = GAP_FIX_READS) -> dict:
+    """r58 (R58, the owner: Admin's "escalated" list was mostly "N members above the theme's median market value lack data", escalated with no
+    attempt, "tries 0"): one bounded try at a theme's data gaps (flag_gaps): each member lacking its description is read again from its own
+    pages (evidence_reader, asked again whatever was looked for lately), each lacking figures has its company page built (routes.build_page,
+    within the pages' per-minute ration), at most `reads` members within `budget` seconds. The gaps left are kept with why each still failed
+    ("why"), so only what a real attempt could not fill escalates, with its reason. {"tried", "filled", "left"}."""
+    try:
+        got = db.json_value(db.get_setting(GAPS_KEY), {})
+    except Exception:
+        got = {}
+    x = (got if isinstance(got, dict) else {}).get(k)
+    if not isinstance(x, dict):
+        return {"tried": 0, "filled": 0, "left": 0}
+    region = str(x.get("region") or "")
+    gaps = [g for g in x.get("gaps") or [] if isinstance(g, dict) and g.get("ticker")]
+    R = _routes()
+    tried, left, filled = 0, [], 0
+    end = time.monotonic() + budget
+    for g in gaps:
+        if tried >= reads or time.monotonic() > end:
+            left.append(g)
+            continue
+        tried += 1
+        s_, why = g["ticker"], []
+        if "description" in (g.get("lacks") or []):
+            try:
+                evidence_reader(region, {s_: g.get("name") or s_}, budget=max(5.0, end - time.monotonic()), again=(s_,))([s_])
+            except Exception as e:
+                why.append(f"description: its pages could not be read ({type(e).__name__})")
+            else:
+                if not _stored_evidence(region, s_).get("about"):
+                    why.append("description: read again, none found on its own pages or filings")
+        if "figures" in (g.get("lacks") or []):
+            build = getattr(R, "build_page", None)
+            try:
+                page = build(region, s_) if callable(build) else None
+            except Exception as e:
+                page, err = None, type(e).__name__
+                why.append("figures: its company page could not be built now (" + ("the pages' per-minute ration was taken" if err == "Busy"
+                                                                                     else err) + ")")
+            else:
+                if page and page.get("years"):
+                    try:
+                        computed.put(theme_library.FACTS, [region, s_], page, label=s_, region=region)
+                    except Exception:
+                        pass
+                elif callable(build):
+                    why.append("figures: its company page was built, and its sources have no annual figures for it")
+                else:
+                    why.append("figures: no page builder is set up here")
+        if why:
+            left.append({**g, "why": "; ".join(why)})
+        else:
+            filled += 1
+
+    def put(cur):
+        now_ = db.json_value(cur, {})
+        now_ = now_ if isinstance(now_, dict) else {}
+        if k not in now_:
+            return None
+        if left:
+            now_[k] = {**now_[k], "gaps": left, "tried_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+        else:
+            del now_[k]
+        return json.dumps(now_, ensure_ascii=False, separators=(",", ":"))
+    try:
+        db.update_setting(GAPS_KEY, put)
+    except Exception as e:
+        print("theme: data gaps not updated:", type(e).__name__, str(e)[:100])
+    return {"tried": tried, "filled": filled, "left": len(left)}
 
 
 def data_gap_checks() -> list:
@@ -1776,9 +1861,10 @@ def data_gap_checks() -> list:
     for k, x in sorted((got if isinstance(got, dict) else {}).items()):
         if isinstance(x, dict):
             out.append(autofix.Check(id=f"theme-gaps:{k}", name=f"Theme data gaps: {x.get('name') or k} ({x.get('region') or ''})",
-                                     problem=gap_line(x), action="Open the theme: its companies above the median market value without a "
-                                     "description or figures are read in the background; a company still listed after a day needs a look.",
-                                     to="/admin", mail=False))
+                                     problem=gap_line(x), fix=lambda k=k: fix_gaps(k),
+                                     fix_text="read their descriptions again and built their company pages",
+                                     action="Open the theme: each company listed was read again and its page built; it says why it still "
+                                     "lacks data.", to="/admin", mail=False))
     return out
 
 
