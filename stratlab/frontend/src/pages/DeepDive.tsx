@@ -243,6 +243,7 @@ export function DeepDivePage() {
           timer = window.setTimeout(() => { auto.current += 1; setTries((n) => n + 1); }, wait);
           return;
         }
+        auto.current = 0;           // a "Try again" after the error starts the automatic tries afresh
         setBusy(null); setError((e as Error).message); setLimited(e instanceof ApiError && e.status === 402);
       });
     return () => { live = false; window.clearTimeout(timer); };
@@ -314,7 +315,7 @@ export function DeepDivePage() {
         {v && <Link className="btn quiet sm" to="/research/investor">Watchlist at a glance →</Link>}
       </div>
       {limited && <PlanNote>{error}</PlanNote>}
-      {!limited && error && <ErrorState title="The deep dive couldn't be opened" action={{ label: "Try again", onClick: () => { auto.current = 0; setTries((n) => n + 1); } }}>{error}</ErrorState>}
+      {!limited && error && <ErrorState title="The deep dive couldn't be opened" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState>}
       {!v && !error && <Card>{busy && <p className="k-small" role="status" data-testid="deep-busy">{busy}</p>}<Skeleton label="Reading the reported numbers" lines={5} /></Card>}
       {v?.figures_kept && <p className="k-small k-muted" data-figures-kept>These are the company's figures as read on {fmtDate(v.numbers_at ?? "")}: the latest couldn't be read just now.</p>}
       {v && u?.deepdive_limit != null && (

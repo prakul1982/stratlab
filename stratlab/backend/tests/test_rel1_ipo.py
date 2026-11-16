@@ -24,3 +24,26 @@ def test_a_lot_on_an_exchange_list_reaches_the_row():
     rows = ipo.merge_india([], nse, bse, [], [], [], date(2026, 11, 16))
     row = next(r for r in rows if r.get("symbol") == "CRYSTAL")
     assert row["lot"] == 55 and "BSE" in row["exchanges"]
+
+
+# ---------- item 6 (CX1 problem 9, LIVE9A-011/014): company names from one source of style ----------
+def test_a_filing_name_reads_as_the_company_writes_it():
+    from app.stock_pages import proper_name
+    assert proper_name("TransDigm Group INC") == "TransDigm Group Inc"
+    assert proper_name("BANK OF MONTREAL /CAN/") == "Bank of Montreal" and proper_name("Bank Of Montreal /can/") == "Bank of Montreal"
+    assert proper_name("CANADIAN IMPERIAL BANK OF COMMERCE /CAN/") == "Canadian Imperial Bank of Commerce"
+    assert proper_name("TFS Financial CORP") == "TFS Financial Corp"
+    assert proper_name("MITSUBISHI UFJ FINANCIAL GROUP INC") == "Mitsubishi UFJ Financial Group Inc"
+    assert proper_name("GSI TECHNOLOGY INC") == "GSI Technology Inc"
+    assert proper_name("Home Depot (The)") == "The Home Depot"
+    assert proper_name("ELI LILLY & Co") == "Eli Lilly & Co" and proper_name("SUN COMMUNITIES INC") == "Sun Communities Inc"
+    # XOM's listed company is the holding company SEC files it under since its July 2026 reorganisation (EDGAR CIK 2115436): kept as filed
+    assert proper_name("ExxonMobil Holdings Corp") == "ExxonMobil Holdings Corp"
+
+
+def test_the_results_calendar_shows_tidy_names():
+    from app import results as R
+    assert R.display_name("US", "WILLIAMS SONOMA INC") == "Williams Sonoma Inc"
+    assert R.display_name("US", "Home Depot (The)") == "The Home Depot"
+    assert R.display_name("IN", "MUTHOOT MICROFIN LIMITED") == "Muthoot Microfin Limited"
+    assert R.display_name("US", None) is None

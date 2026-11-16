@@ -15,9 +15,18 @@ import { Info } from "../components/ui";
 import { Earlier } from "../components/Earlier";
 import { Card, CardHead, CheckField, DataTable, ShowLess, EmptyState, ErrorState, Field, PageHeader, Seg, Select, Signed, Skeleton, StockPicker, Working, type Column } from "../components/kit";
 import { ReportScope } from "../components/kit/ReportFigure";
+import { capAt, laterDays, whenShort } from "../lib/resultsRows";
 
 /** Today in the market's calendar (ISO), the day the "Today" chip stands for. */
 const todayIn = (region: Region): string | null => dayIn(new Date(), marketTz(region));
+
+/** The market value at the price shown beside it (capAt), with what it stands on in its title (LIVE9A-014). */
+function capCell(r: ResultRow, live: number | null | undefined, fmt: (v: number) => string) {
+  const cap = capAt(r.cap, r.last, live);
+  if (cap == null) return <span className="k-muted">–</span>;
+  const basis = live != null && r.last ? "At the price beside it" : r.last_at ? `At the close of ${resultDay(r.last_at)}` : null;
+  return <span title={[r.band ? `${SIZE_NAME[r.band]} company` : null, basis].filter(Boolean).join(" · ") || undefined}>{fmt(cap)}</span>;
+}
 
 /* /research/results: the dates companies have called their board meetings to consider results (or, in the US, set for
  * their quarterly results), week by week, for your stocks or every company, narrowed by company size, sector, index, F&O and the
@@ -196,7 +205,7 @@ export function ResultsPage() {
     // two lines a row (owner, 5 Nov: "still shit ui", rows stacked company, name, purpose and filing link four lines high): the symbol and
     // its tags with the name beside it, then the meeting and a small link to the filing; a long line ends in "…" with the whole of it on hover
     { key: "co", header: "Company", rowHeader: true, cell: (r) => {
-      const purpose = `${r.purpose}${r.when ? `, ${r.when}` : ""}`;
+      const purpose = r.purpose;
       const numbers = r.out?.numbers.length ? ` · ${r.out.numbers.map((x) => `${x.label} ${x.value}`).join(" · ")} (as stated)` : "";
       const plain = !r.out && !r.when && /^financial results$/i.test(r.purpose.trim());
       return (
@@ -205,10 +214,12 @@ export function ResultsPage() {
             <Link className="link" to={`/research/${r.region}/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link>
             {scope === "all" && r.mine && <span className="k-note k-muted">Yours</span>}
             {r.fo && <span className="k-note k-muted">F&amp;O</span>}
+            {/* when it reports, in its own place: the line under it ends in "…" when long, and the timing was cut there (LIVE9A-014) */}
+            {r.when && <span className="k-note k-muted" data-testid="res-when">{whenShort(r.when)}</span>}
           </span>
           {/* LIVE5-002: the name starts the second line (beside the symbol and its tags it was cut to 1-3 letters at 1280); a plain results
               meeting leaves the line to it, any other meeting follows it */}
-          <span className="k-note k-muted res-sub" title={[r.name, r.out ? `${purpose} · Filed ${resultDay(r.out.at)}: ${r.out.title}${numbers}` : purpose].filter(Boolean).join(" · ")}>
+          <span className="k-note k-muted res-sub" title={[r.name, r.when ? whenShort(r.when) : null, r.out ? `${purpose} · Filed ${resultDay(r.out.at)}: ${r.out.title}${numbers}` : purpose].filter(Boolean).join(" · ")}>
             {r.name && <span className="res-name">{r.name}</span>}
             <span className={`res-purpose${plain ? " res-plain" : ""}`}>
               {purpose}
@@ -222,7 +233,7 @@ export function ResultsPage() {
     // LIVE4-010: short headers that stay on one line at 1440 (the (i) says the rest); on a phone each company is two short lines (the table's
     // `compact`): the symbol with the price and the day's move at its right, then the usual move and what the options imply; market value,
     // revenue and profit stay on the desktop table and the company page (a fifth figure ran the line onto a third)
-    { key: "cap", header: "Market value", numeric: true, phone: false, narrow: false, cell: (r) => (r.cap == null ? <span className="k-muted">–</span> : <span title={r.band ? `${SIZE_NAME[r.band]} company` : undefined}>{screenCap(r.cap, r.region)}</span>) },
+    { key: "cap", header: "Market value", numeric: true, phone: false, narrow: false, cell: (r) => capCell(r, quotes[r.symbol]?.price, (v) => screenCap(v, r.region)) },
     { key: "px", header: "Price", numeric: true, brief: true, csvHeader: "Price now", cell: (r) => {
       const x = quotes[r.symbol];
       if (x?.price != null) return <span title={x.at ? `Read ${fmtTime(x.at, { tz: marketTz(region), zone: true })}` : undefined}>{price(x.price, cur)}</span>;
@@ -275,7 +286,8 @@ export function ResultsPage() {
           total={data?.total ?? null} matching={data?.matching ?? null} unknownSize={data?.unknown_size ?? 0} onClear={() => set(NO_FILTERS)} testId="results-count"
           days={[{ value: "", label: "Every day" }, { value: "today", label: "Today" }, { value: "tomorrow", label: "Tomorrow" },
             // today is the "Today" chip above, not again by its date (LIVE8A-025: "Today" and "Sat 14 Nov" both)
-            ...(data?.weeks ?? []).flatMap((w) => (w.days ?? []).filter((d) => d.date !== todayIn(region)).map((d) => ({ value: d.date, label: resultDay(d.date) })))]}
+            // one chip per later day with companies on it: no day gone by, no "Tomorrow" again by its date, no empty holiday (LIVE9A-014)
+            ...laterDays((data?.weeks ?? []).flatMap((w) => w.days ?? []), todayIn(region)).map((d) => ({ value: d, label: resultDay(d) }))]}
           search={<>
             {scope === "all" && (
               <Field key={region} label="Find a company">

@@ -181,6 +181,15 @@ def us_name(name: str | None) -> str | None:
     return proper_name(name) or None
 
 
+def display_name(region: str, name: str | None) -> str | None:
+    """A company's name in one style whatever list it came from: a US filing's capitals, "/CAN/" or "INC" and an index list's
+    "Home Depot (The)" tidied (LIVE9A-014: "WILLIAMS SONOMA INC", "Home Depot (The)"); an Indian list's capitals in title case."""
+    from .stock_pages import proper_name, tidy_in_name
+    if not name:
+        return name
+    return (proper_name(name) if region == "US" else tidy_in_name(name)) or name
+
+
 def calendar_rows(raw: list, names: dict | None = None) -> list[dict]:
     """The companies reporting each day as the US market calendar lists them, with the session they announced (DE-025).
     Names: the S&P 500 list's where it has one."""
@@ -1004,6 +1013,7 @@ def view(region: str, uid: str, scope: str = "mine", q: str = "", today: date | 
         out = {**r, "mine": r["symbol"] in mine, **ctx.facts(r["symbol"]), "moves": _moves_of(region, r["symbol"], mv)}
         if not r.get("name") and (ctx.snaps.get(r["symbol"]) or {}).get("name"):
             out["name"] = ctx.snaps[r["symbol"]]["name"]
+        out["name"] = display_name(region, out.get("name"))
         return out
 
     window = [rich(r) for r in cal["rows"] if first.isoformat() <= r["date"] <= last.isoformat()

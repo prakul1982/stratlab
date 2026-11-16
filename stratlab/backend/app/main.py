@@ -3197,7 +3197,7 @@ def deep_view(sym: str, base: dict) -> dict:
     snap = {**snap, "div_yield": dy}
     return {"symbol": sym, "region": "US" if us else "IN", "currency": "USD" if us else "INR", "source_url": p.get("url"),
             "reporting_currency": p.get("currency") or ("USD" if us else "INR"),
-            "name": p.get("name") or sym, "about": (p.get("about") or "")[:1200], "numbers": nums,
+            "name": (stock_pages.proper_name(p.get("name")) if us else p.get("name")) or sym, "about": (p.get("about") or "")[:1200], "numbers": nums,
             "snapshot": {**{k: snap.get(k) for k in ("market_cap_cr", "price", "pe", "pe_why", "pb", "roce", "roe", "debt_equity", "div_yield")},
                          "cap_note": stock_pages.CAP_UNAVAILABLE if snap.get("cap_problem") else None},
             "industry_measures": industry.measures(p, sym),

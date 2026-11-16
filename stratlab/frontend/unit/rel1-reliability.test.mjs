@@ -46,3 +46,21 @@ test("rel1 item 5: a lot the exchange hasn't given is said in words, never a bar
   assert.match(page, /data-testid="ipo-lot-none">\{lotMissing\(tab\)\}/);
   assert.doesNotMatch(page, /minText\(r\)\}<\/span><\/> : "–"\)/);
 });
+
+test("LIVE9A-014: day chips, market value at the price beside it, and the timing in its own place", async () => {
+  const R = await import("../src/lib/resultsRows.ts");
+  const days = [{ date: "2026-11-16", count: 40 }, { date: "2026-11-17", count: 12 }, { date: "2026-11-18", count: 30 }, { date: "2026-11-18", count: 30 },
+    { date: "2026-11-26", count: 0 }, { date: "2026-11-27", count: 3 }];
+  assert.deepEqual(R.laterDays(days, "2026-11-16"), ["2026-11-18", "2026-11-27"]);    // no past day, no tomorrow by date, no empty holiday
+  assert.equal(R.nextDay("2026-11-30"), "2026-12-01");
+  assert.equal(Math.round(R.capAt(3.92e12, 162.85, 155.58) / 1e10) / 100, 3.75);       // NVDA's value at the live price
+  assert.equal(R.capAt(3.92e12, 162.85, null), 3.92e12);
+  assert.equal(R.capAt(3.92e12, 162.85, 16.285), 3.92e12);                              // a split-sized jump: the stored value stands
+  assert.equal(R.capAt(null, 1, 2), null);
+  assert.equal(R.whenShort("after the close"), "After the close");
+  const page = read("src/pages/ResultsPage.tsx");
+  assert.match(page, /data-testid="res-when">\{whenShort\(r\.when\)\}/);
+  assert.match(page, /const cap = capAt\(r\.cap, r\.last, live\);/);
+  assert.match(page, /cell: \(r\) => capCell\(r, quotes\[r\.symbol\]\?\.price, \(v\) => screenCap\(v, r\.region\)\) \}/);
+  assert.match(page, /laterDays\(\(data\?\.weeks \?\? \[\]\)\.flatMap/);
+});

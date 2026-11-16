@@ -1521,7 +1521,7 @@ def unique_filings(rows: list[dict]) -> list[dict]:
     return out
 
 
-_REGISTRATION = re.compile(r"\s*/\s*(?:[A-Za-z]{2}|NEW)\s*/?\s*$")
+_REGISTRATION = re.compile(r"\s*/\s*(?:[A-Za-z]{2,3}|NEW)\s*/?\s*$")      # "/DE/", "/MD/", "/CAN/" (any case), "/NEW"
 
 
 def strip_registration(name: str | None) -> str | None:
@@ -2596,6 +2596,18 @@ def _find_form(region: str | None, q: str = "") -> str:
             '<button class="btn" type="submit">Find</button></form>')
 
 
+# a filing's legal endings as a name in its own case writes them
+_ENDINGS = {"INC": "Inc", "CORP": "Corp", "CO": "Co", "LTD": "Ltd", "PLC": "plc", "HOLDINGS": "Holdings", "GROUP": "Group", "COMPANY": "Company",
+            "CORPORATION": "Corporation", "INCORPORATED": "Incorporated", "LIMITED": "Limited"}
+# three-letter words a company name spells as a word, not as letters
+_WORDS3 = {"THE", "AND", "FOR", "OIL", "GAS", "NEW", "ONE", "TWO", "SUN", "AIR", "ALL", "BIG", "BOX", "CAR", "TOP", "WEB", "NET", "ART", "BAY",
+           "SEA", "SKY", "RED", "OAK", "ICE", "HUB", "KEY", "LAB", "MAN", "MAX", "PAY", "PET", "POP", "RAY", "RUN", "SEE", "SIX", "TEN", "TEX",
+           "TIN", "WAY", "WIN", "ZOO", "AGE", "BIO", "CAN", "CAP", "DOT", "EYE", "FIT", "FOX", "FUN", "GEO", "GOLD", "HOT", "JET", "LAW", "LOW",
+           "MED", "MIX", "NOW", "OPT", "OUR", "OWN", "PRO", "SAN", "SOL", "TEA", "TOY", "USE", "VAN", "VET", "WAR", "WET", "YES", "ARM", "ACE",
+           "AMP", "ARC", "ASH", "AVE", "BEE", "BET", "BUS", "COM", "DAY", "DEN", "DIG", "DRY", "EGG", "ELF", "END", "ERA", "FAN", "FAR", "FEW",
+           "GEM", "GUY", "HAT", "HIT", "INK", "INN", "ION", "JOY", "LEE", "LEG", "LID", "LOT", "MAP", "MET", "NUT", "ODD", "OLD", "ORE", "PAN",
+           "PEN", "PIE", "PIN", "RIM", "ROW", "RUB", "SAT", "SET", "SON", "TAP", "TIE", "TIP", "TOW", "TUB", "URN", "VIA", "WAX", "ZEN", "ACT",
+           "ADD", "ANT", "ASK", "ILL", "OFF", "SPA", "TRY", "FLY", "FRY", "SHY", "STY", "DRY", "CRY", "SLY", "SPY", "PLY", "GYM", "MRS", "INT"}
 _KEEP_UPPER = {"IBM", "AMD", "AIG", "UPS", "PNC", "PPG", "ICE", "CME", "USA", "US", "UK", "LLC", "LP", "NV", "SA", "AG", "SE", "ETF",
                "REIT", "ADR", "II", "III", "IV", "NVIDIA", "ASML", "HSBC", "UBS", "BHP", "SAP", "TSMC", "KLA", "CSX", "AT&T"}
 # words title case gets wrong, as the companies write them
@@ -2615,7 +2627,20 @@ def proper_name(name: str | None) -> str | None:
     dropped. A capitals name with a mixed-case ending ("ELI LILLY & Co") counts as capitals."""
     if name:
         name = strip_registration(name) or name
+        # an index list's "Home Depot (The)" is "The Home Depot"
+        name = re.sub(r"^(.+?),?\s*\(The\)$", r"The \1", name.strip(), flags=re.I)
     core = re.sub(r"\s+(?:Co|Inc|Corp|Ltd)\.?$", "", name or "")
+    if name and core != core.upper() and re.search(r"[a-z]", core):
+        # a name in its own case with the filing's legal ending in capitals ("TransDigm Group INC", "TFS Financial CORP") or a joining
+        # word in title case ("Bank Of Montreal"): only those words change (rel1, LIVE9A-011)
+        words = name.split(" ")
+        for i, w in enumerate(words):
+            bare = re.sub(r"[^A-Za-z]", "", w)
+            if bare in _ENDINGS and (i == len(words) - 1 or i >= len(words) - 2):
+                words[i] = w.replace(bare, _ENDINGS[bare])
+            elif i and bare in ("Of", "And", "The", "For") and w == bare:
+                words[i] = w.lower()
+        return " ".join(words)
     if not name or core != core.upper() or not re.search(r"[A-Z]{2}", core):
         return name
 
@@ -2627,6 +2652,10 @@ def proper_name(name: str | None) -> str | None:
             return w[:1] + w[1:].lower()
         if core in _KEEP_UPPER or (len(core) <= 4 and not re.search(r"[AEIOUY]", core)) or re.search(r"[A-Za-z]&[A-Za-z]", w):
             return w
+        if len(core) == 3 and core.isalpha() and core not in _WORDS3 and re.search(r"[^AEIOUY]{2}", core):
+            return w                                  # three letters with two consonants together that aren't a word are letters: "UFJ", "GSI" (rel1, LIVE9A-011)
+        if core in ("OF", "AND", "THE", "FOR") and w != name.split(" ")[0]:
+            return w.lower()
         return "-".join(x[:1] + x[1:].lower() for x in w.split("-"))
     return re.sub(r"\bAmazon Com\b", "Amazon.com", " ".join(word(w) for w in name.split(" ")))
 
