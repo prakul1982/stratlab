@@ -66,11 +66,15 @@ function bidsAt(stamp: string): string {
   return m ? `${fmtDate(m[1], { year: false })}, ${m[2]}` : stamp;
 }
 
+/** A lot the exchange's pages don't give yet, in words, never a bare dash (rel1, CX1 problem 9: Crystal Crop's lot was "–"). Before
+ * bidding opens the lot comes with the price band announcement; once open, it is on the issue's page, read again each day. */
+export const lotMissing = (tab: Stage): string => (tab === "upcoming" ? "Not announced yet" : "Not on the exchange's page yet");
+
 function columns(m: Market, tab: Stage): Column<IpoRow>[] {
   const name: Column<IpoRow> = { key: "name", header: "Company", rowHeader: true, wrap: true, cell: (r) => <Company r={r} /> };
   const band: Column<IpoRow> = { key: "band", header: "Price band", numeric: true, cell: (r) => bandText(r) };
   const lot: Column<IpoRow> = { key: "lot", header: "Lot and minimum", numeric: true, info: "The lot is the fewest shares one bid can be for. The minimum is the lot at the top of the price band.",
-    cell: (r) => (r.lot ? <>{sharesText(r.lot)} shares<span className="k-sub-line">{minText(r)}</span></> : "–") };
+    cell: (r) => (r.lot ? <>{sharesText(r.lot)} shares<span className="k-sub-line">{minText(r)}</span></> : <span className="k-muted" data-testid="ipo-lot-none">{lotMissing(tab)}</span>) };
   // the size says whether it is all new shares or new shares plus a sale by existing holders, when the exchange gives the two parts (LIVE1A-030)
   const size: Column<IpoRow> = { key: "size", header: "Issue size", numeric: true,
     info: "The whole issue: the new shares the company issues plus any shares existing holders put up for sale (an offer for sale). The two parts are under the total when the exchange gives both.",

@@ -438,7 +438,7 @@ def merge_india(old_rows: list[dict], nse: dict, bse: list[dict], bse_perf: list
             row = {"id": india_id(r["symbol"], None), "market": "IN", "segment": r["segment"], "name": r["name"], "symbol": r["symbol"],
                    "series": r.get("series"), "open": r.get("open"), "close": r.get("close"), "low": r.get("low"), "high": r.get("high"),
                    "size_shares": r.get("size_shares"), "exchanges": ["NSE"], "currency": "INR", "nkey": S.name_key(r["name"]),
-                   "issue_status": r.get("issue_status"), "social": r.get("social")}
+                   "issue_status": r.get("issue_status"), "social": r.get("social"), **({"lot": r["lot"]} if r.get("lot") else {})}
             if kind == "past":
                 row.update(listing=r.get("listing"), price=r.get("price"))
                 if not r.get("listing"):
@@ -452,13 +452,15 @@ def merge_india(old_rows: list[dict], nse: dict, bse: list[dict], bse_perf: list
             row["exchanges"] = sorted(set(row.get("exchanges", []) + ["BSE"]))
             row["bse_code"] = b["code"]
             row.setdefault("face_value", b.get("face_value"))
+            if b.get("lot") and not row.get("lot"):
+                row["lot"] = b["lot"]                    # BSE's list has the lot the NSE row lacks
             row["issue_status"] = row.get("issue_status") or b.get("issue_status")       # either exchange's note stands
             row["social"] = row.get("social") or b.get("social") or None
             continue
         put({"id": india_id(None, b["code"]), "market": "IN", "segment": b["segment"], "name": b["name"].title() if b["name"].isupper() else b["name"],
              "symbol": None, "bse_code": b["code"], "open": b.get("open"), "close": b.get("close"), "low": b.get("low"), "high": b.get("high"),
              "face_value": b.get("face_value"), "size_shares": b.get("size_shares"), "exchanges": ["BSE"], "currency": "INR", "nkey": key,
-             "issue_status": b.get("issue_status"), "social": b.get("social")})
+             "issue_status": b.get("issue_status"), "social": b.get("social"), **({"lot": b["lot"]} if b.get("lot") else {})})
     # BSE's table of how its listed issues have traded: the issue price and listing day for the BSE-only ones, and a cross-check
     perf = {S.name_key(p["name"]): p for p in bse_perf}
     for r in out.values():

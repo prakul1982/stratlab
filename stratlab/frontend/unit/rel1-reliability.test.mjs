@@ -39,3 +39,10 @@ test("rel1 item 2: a sign-in that ends on its own mid-visit says 'You were signe
   await so.signOutHere({ signOut: async () => ({ error: null }) }, () => undefined).catch(() => undefined);
   assert.equal(so.signingOutOnPurpose(), true);
 });
+
+test("rel1 item 5: a lot the exchange hasn't given is said in words, never a bare dash", () => {
+  const page = read("src/pages/IposPage.tsx");
+  assert.match(page, /export const lotMissing = \(tab: Stage\): string => \(tab === "upcoming" \? "Not announced yet" : "Not on the exchange's page yet"\);/);
+  assert.match(page, /data-testid="ipo-lot-none">\{lotMissing\(tab\)\}/);
+  assert.doesNotMatch(page, /minText\(r\)\}<\/span><\/> : "–"\)/);
+});
