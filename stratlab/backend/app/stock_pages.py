@@ -1122,6 +1122,30 @@ BEHIND_RETRY = 7 * 86400       # a page still behind after a build that came aft
 SEC_DATA_LAG = 4 * 86400       # how long after a filing the SEC's data has it
 
 
+# r581 (the live R58 Regional banks deck: Fifth Third $80 m of revenue and a 3,152.5% net margin, Huntington, M&T, UMB and others, from
+# pages stored before R58's sector accounting schema (intel.sec.sector_revenue) and not opened since, so never built again): a bank's or
+# insurer's page whose newest year's net profit is above its revenue holds a revenue line that is not its total revenue; it is built again
+_FINANCIAL = re.compile(r"\bbanks?\b|savings institution|\binsur|financial institution|\bnbfc\b|non[- ]?banking", re.I)
+
+
+def financial_mismatch(f: dict | None) -> bool:
+    """Whether a stored page is a bank's, lender's or insurer's (its industry path, or its page's bank flag) whose newest reported year has a
+    net profit above its revenue (a revenue line read from the wrong source field)."""
+    if not isinstance(f, dict) or not f:
+        return False
+    if not (f.get("bank") or any(_FINANCIAL.search(str(x)) for x in f.get("industry") or [])):
+        return False
+    years = [y for y in f.get("years") or [] if isinstance(y, dict) and str(y.get("year") or "").strip().upper() != "TTM"]
+    if not years:
+        return False
+    y = years[-1]
+    try:
+        sales, profit = float(y.get("sales")), float(y.get("profit"))
+    except (TypeError, ValueError):
+        return False
+    return sales > 0 and profit > sales
+
+
 def behind_due(f: dict | None, ts: float | None, now: float | None = None) -> bool:
     """Whether the screens' sweep should build a page that is behind its newest annual report (annual_behind) ahead of
     the rest: it was built before that report's data could be out, or not for a week. A page built after it and still
@@ -1534,6 +1558,8 @@ def fresh(stored: dict | None, region: str, now: float | None = None) -> bool:
         return False
     if (stored["facts"].get("v") or 1) < FACTS_VERSION:
         return False                     # a page built before the facts a page shows now: rebuilt when next opened
+    if financial_mismatch(stored["facts"]) and now - ts >= UNREAD_FRESH:
+        return False                     # r581: a financial filer's revenue below its net profit: built again (at most hourly)
     if (stored["facts"].get("annual_unread") or stored["facts"].get("type_unread") or annual_behind(stored["facts"])) \
             and now - ts >= UNREAD_FRESH:
         return False                     # built without its latest annual report, which couldn't be read then (R8V-003, R10V-002)

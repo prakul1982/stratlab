@@ -105,6 +105,7 @@ def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None, everyon
             if c.get("symbol") and w:
                 mwhy.setdefault(c["symbol"], str(w)[:240])
     dups = {str(x["symbol"]): str(x.get("kept_name") or x.get("kept") or "") for x in dive.get("duplicates") or [] if isinstance(x, dict) and x.get("symbol")}
+    kept_layers = {str(b["layer"]): str(b["single_kept"])[:200] for b in dive.get("layers") or [] if b.get("layer") and b.get("single_kept")}
     # t56: each company the map's check (or the theme's own scope) left out, with its reason: a business-membership decision, its listing
     # line said apart (theme_check.check_placements "dropped")
     left = {str(x["ticker"]): dropped_why(x) for x in ((dive.get("placements") or {}).get("dropped") or []) if isinstance(x, dict) and x.get("ticker")}
@@ -126,7 +127,7 @@ def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None, everyon
             "rules": rules, "unit": dive.get("unit"), **({"cover": cover} if cover else {}), **({"back": back} if back else {}),
             **({"why": why} if why else {}), **({"gone": gone} if gone else {}), **({"dups": dups} if dups else {}),
             **({"mwhy": mwhy} if mwhy else {}), **({"ev": ev} if ev else {}), **({"ev_hist": hist} if hist else {}),
-            **({"left": left} if left else {})}
+            **({"left": left} if left else {}), **({"kept_layers": kept_layers} if kept_layers else {})}
 
 
 BUSINESS, LISTING = "business membership: ", "listing: "
@@ -304,7 +305,11 @@ def _layer_events(was: dict, now: dict) -> tuple[list[dict], set]:
     why = {x.get("layer"): x.get("why") for x in now.get("gone") or [] if isinstance(x, dict)}
     out += [{"kind": "removed", "from": [g], "to": [], "n": len(src[g]), "went": went(g), **({"why": why[g]} if why.get(g) else {})}
             for g in gone if g not in used_g]
-    out += [{"kind": "added", "from": [], "to": [d], "n": len(dst[d])} for d in fresh if d not in used_d and dst[d]]
+    # r581 (the live R58 Insurance deck: "“Distribution and aggregation” added (1 company)", a layer of an earlier published version kept
+    # with its one member): a layer the placement kept from the published version says so ("back")
+    kept_l = now.get("kept_layers") if isinstance(now.get("kept_layers"), dict) else {}
+    out += [{"kind": "added", "from": [], "to": [d], "n": len(dst[d]), **({"back": str(kept_l[d])} if kept_l.get(d) else {})}
+            for d in fresh if d not in used_d and dst[d]]
     return out, pairs
 
 
@@ -500,7 +505,10 @@ def first_sentence(words) -> str:
     text = re.sub(r"^\s*Industry:[^.]*\.\s*", "", str(words or "")).strip()
     if not text or text.startswith("From its own filings:"):
         return ""
-    one = re.split(r"(?<=[a-z0-9)”\"])\.\s+(?=[A-Z])", text, maxsplit=1)[0].strip().rstrip(".")
+    # r581 (the live R58 Automotive deck: SBI Cards' quote ran past "... registered with the RBI." into "The Company is engaged in issuing
+    # credit cards to", and the deck's reader took the full stop inside the quote for the end of the reason): a sentence ends after an
+    # acronym of capitals too ("RBI."), never after one letter's ("U.S.")
+    one = re.split(r"(?:(?<=[a-z0-9)”\"])|(?<=[A-Z]{2}))\.\s+(?=[A-Z])", text, maxsplit=1)[0].strip().rstrip(".")
     if len(one) > QUOTE_MAX:
         cut = max(one.rfind(", ", 0, QUOTE_MAX), one.rfind("; ", 0, QUOTE_MAX))
         one = one[:cut] if cut > 40 else one[:one.rfind(" ", 0, QUOTE_MAX)]

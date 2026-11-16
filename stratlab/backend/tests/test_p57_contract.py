@@ -125,10 +125,15 @@ def test_no_published_member_leaves_its_theme_and_each_move_carries_its_reason(k
     d = inputs(key)
     live = {c["ticker"]: ("Other" if v.get("official") else X._HALF.sub("", v["layer"])) for v in d["value_chain"] for c in v["companies"]}
     plain = where(place(key, monkeypatch, contract=False))
-    got = where(place(key, monkeypatch))
+    out = place(key, monkeypatch)
+    got = where(out)
+    # r581 (R58.1, updated on purpose): a layer truthful_layers gave back the name it had (a rename that only added words its companies
+    # don't say, "Coal, iron ore and mineral miners" back to "Mining of coal and iron ore") is a rename of its layer: its stored name is
+    # one of the names the layer had ("aka")
+    akas = {c["ticker"]: set(v.get("aka") or []) for v in out["value_chain"] for c in v["companies"]}
     assert set(live) <= set(got)
     for s_, (lay, c) in got.items():
-        if s_ in live and lay != live[s_] and plain.get(s_, (None,))[0] != lay:
+        if s_ in live and lay != live[s_] and plain.get(s_, (None,))[0] != lay and live[s_] not in akas.get(s_, set()):
             assert c.get("refit") or c.get("kept_member") or c.get("held_published") or c.get("sold_by") or lay == "Education and courses", s_
 
 

@@ -560,6 +560,10 @@ def ask_model(name: str, model: str, system: str, text: str, max_tokens: int, wa
                 room = min(PROVIDERS[name].max_out, max(16000, room * 2))
                 continue
             record_fail(name, model, e, live)
+            if e.why == "not_json" and live:
+                # r581: which call it was, and how the reply began, so the next one is found in the logs (the Admin row keeps only the model)
+                print(f"ai: reply wasn't the JSON asked for: {name} {model} ({task}); asked: {' '.join(str(system or '').split())[:80]!r}; "
+                      f"reply began: {' '.join(str(e.text or '').split())[:160]!r}")
             raise
         except CallError as e:
             record_fail(name, model, e, live)

@@ -122,7 +122,9 @@ def extract_json(raw: str) -> dict:
     """The JSON object in a reply, even if it's wrapped in ``` fences or a sentence."""
     text = re.sub(r"^```(?:json)?|```$", "", strip_thinking(raw or ""), flags=re.M).strip()
     try:
-        data = json.loads(text)
+        # r581 (Admin's AI row: "reply wasn't the JSON asked for (claude-sonnet-5-5)", 16 Nov 03:04 UTC, during a theme check): a line break
+        # or tab written as is inside a string (a long description over two lines) is read, as the model meant it
+        data = json.loads(text, strict=False)
     except json.JSONDecodeError:
         data = first_object(text)
         if data is None:
@@ -139,7 +141,7 @@ def first_object(text: str) -> dict | None:
     """r58 (Admin's AI row: "reply wasn't the JSON asked for" from a model that answered with the object between sentences that hold braces
     of their own, "{...}" in a note after it, or a trailing comma): the first whole JSON object in a text, read from each "{" in turn (a
     note after it never spoils it), the largest whole one, read as written and with trailing commas taken out."""
-    dec = json.JSONDecoder()
+    dec = json.JSONDecoder(strict=False)
     best = None
     for src in (text, _TRAILING_COMMA.sub(r"\1", text)):
         for i in _outer_starts(src):

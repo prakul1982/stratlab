@@ -37,7 +37,7 @@ FEW_BASE = 4                  # a highest or lowest median on this many companie
 COMPARE_MIN = MIN_BASE
 # R31 (the owner's review of the live R30 decks): a layer-vs-layer headline (the value chain's line, findings, questions) needs at least this
 # many companies with the figure in each layer it compares; tables still show every layer and mark (green, red) those of COMPARE_MIN or more
-DIVE_TEXT = 29         # r58 (R58, the owner's review of the live R57.2 decks): non-bank financiers and broadband operators as adjacent participants, a company kept on its own words against one layer's answer in the theme by those words, a parent and its subsidiary filer merged when the filer's titles are all it has stored; r572 (R57.2, the live R57.1 decks): a company in its layer's figures as the map placed it, its own words contradicting nothing ("by_map"); p57 (R56 review): a published member kept through a re-check says so in its place in the theme (theme_record "kept_member"); t56 (R55 review): the placements' taxonomy guard (layers restored, the informative share guarded) and each company the map's check left out with its business-membership reason; v55 (R55 review): a company the map named from another industry whose check gave no answer is in the theme when its principal business, in its own words, fits the theme (membership), else not checked yet, never "own words describe other work" (evidence_state, unchecked_why, data_checks "unchecked"); c54 (R53 review): scope boundaries apart from the core members (SCOPE_KINDS, scope_adjacent), a member with no stored figures listed (no_figures_row), one company under two symbols merged when its stored description names the other (same_company); d53 (R53): one company under two symbols merged (same_company), adjacent participants apart from the core members (BUSINESS_KINDS, adjacent_of), companies spending ahead of their revenue apart from the margin medians (DEVELOPER), an early-stage layer's commercial companies against its own stage's median (stage_check), layer names a line says as the dive shows them (same_names); gl52 (R52): "none_found" and "unfit" reasons, no "read as" for a low-confidence model, one precision in a headline gap, halves ranked as one, the stock-pay rule, theme size by a conglomerate's theme segment; rv51 (R51): a layer's business model only from its own records (named_fit); a company of the theme's industries whose principal business fits it never screened out by its words (membership); gl50 (R50): a chain with no way of earning read shown, not ranked; a parent's listed subsidiary out of totals adding both; the latest quarter most companies report; a clinical-stage layer's commercial companies out of its figures; ex49 (R49): each company left out of a layer's figures with its precise reason (a different revenue model with both models, insufficient evidence with what is missing, the part of a partial one), the capital-intensity proxy labelled and its inputs checked, layers ranked only of one business model the map's words support, which net-above-EBITDA lines are still missing; vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R47): a company listed in its layer as another way of earning is said so in the layer's line, the coverage control (theme_changes.coverage_control); vf46 (R46): each checked figure's source record and statement lines, a net margin above EBITDA reconciled line by line; c1 (R44): each company's place in the theme with its reason ("theme": theme_record) apart from its comparison decision ("comparison"), a layer named by how its companies earn says why it is never ranked; R44.1: a loss in a verification reason printed with the real minus (deck 55, dive text 15, updated on purpose); R44 (lane v1): each unusual figure verified against its own filed figures, not reconciled or invalid (verify_net, figure_states), never dropped by a cutoff alone; the dive's coverage of informative layers; R43.1: the whole-point margins counted among the margins there are ("3 of the 1" on the live Insurance deck); d1: halves of a split layer never ranked, no ranking on a gap under a point, peers named and like for like, every company in a layer or "Other", the not-checked-yet mark; LIVE7A (lane t1): every company at the index's newest close and one price date, own words without encyclopedia leads or a cut word, whole-point margins and gaps printed whole, operating figures of old periods left out and listed once, click-bait headlines left out, "Dividend: Dividend" said once; R40: a layer the split named only by how its companies earn is never ranked ("a group by how they earn, of different businesses"), a market-value half with fewer than 3 companies in its figures undone; LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
+DIVE_TEXT = 30         # r581 (R58.1): a company kept in the theme on its own words against one layer's answer quotes the sentence that says the theme's work; r58 (R58, the owner's review of the live R57.2 decks): non-bank financiers and broadband operators as adjacent participants, a company kept on its own words against one layer's answer in the theme by those words, a parent and its subsidiary filer merged when the filer's titles are all it has stored; r572 (R57.2, the live R57.1 decks): a company in its layer's figures as the map placed it, its own words contradicting nothing ("by_map"); p57 (R56 review): a published member kept through a re-check says so in its place in the theme (theme_record "kept_member"); t56 (R55 review): the placements' taxonomy guard (layers restored, the informative share guarded) and each company the map's check left out with its business-membership reason; v55 (R55 review): a company the map named from another industry whose check gave no answer is in the theme when its principal business, in its own words, fits the theme (membership), else not checked yet, never "own words describe other work" (evidence_state, unchecked_why, data_checks "unchecked"); c54 (R53 review): scope boundaries apart from the core members (SCOPE_KINDS, scope_adjacent), a member with no stored figures listed (no_figures_row), one company under two symbols merged when its stored description names the other (same_company); d53 (R53): one company under two symbols merged (same_company), adjacent participants apart from the core members (BUSINESS_KINDS, adjacent_of), companies spending ahead of their revenue apart from the margin medians (DEVELOPER), an early-stage layer's commercial companies against its own stage's median (stage_check), layer names a line says as the dive shows them (same_names); gl52 (R52): "none_found" and "unfit" reasons, no "read as" for a low-confidence model, one precision in a headline gap, halves ranked as one, the stock-pay rule, theme size by a conglomerate's theme segment; rv51 (R51): a layer's business model only from its own records (named_fit); a company of the theme's industries whose principal business fits it never screened out by its words (membership); gl50 (R50): a chain with no way of earning read shown, not ranked; a parent's listed subsidiary out of totals adding both; the latest quarter most companies report; a clinical-stage layer's commercial companies out of its figures; ex49 (R49): each company left out of a layer's figures with its precise reason (a different revenue model with both models, insufficient evidence with what is missing, the part of a partial one), the capital-intensity proxy labelled and its inputs checked, layers ranked only of one business model the map's words support, which net-above-EBITDA lines are still missing; vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R47): a company listed in its layer as another way of earning is said so in the layer's line, the coverage control (theme_changes.coverage_control); vf46 (R46): each checked figure's source record and statement lines, a net margin above EBITDA reconciled line by line; c1 (R44): each company's place in the theme with its reason ("theme": theme_record) apart from its comparison decision ("comparison"), a layer named by how its companies earn says why it is never ranked; R44.1: a loss in a verification reason printed with the real minus (deck 55, dive text 15, updated on purpose); R44 (lane v1): each unusual figure verified against its own filed figures, not reconciled or invalid (verify_net, figure_states), never dropped by a cutoff alone; the dive's coverage of informative layers; R43.1: the whole-point margins counted among the margins there are ("3 of the 1" on the live Insurance deck); d1: halves of a split layer never ranked, no ranking on a gap under a point, peers named and like for like, every company in a layer or "Other", the not-checked-yet mark; LIVE7A (lane t1): every company at the index's newest close and one price date, own words without encyclopedia leads or a cut word, whole-point margins and gaps printed whole, operating figures of old periods left out and listed once, click-bait headlines left out, "Dividend: Dividend" said once; R40: a layer the split named only by how its companies earn is never ranked ("a group by how they earn, of different businesses"), a market-value half with fewer than 3 companies in its figures undone; LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
 HEADLINE_MIN = 5
 # R27 (headline eligibility): a comparison is said as a headline only on a figure for at least this share of the companies of each group it
 # compares (a layer, a family); one with less is shown as data, never ranked (the live R26 Semis deck: "RPO growth -3.9%" of 21 of 53)
@@ -257,9 +257,23 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
         return None
     old = stock_pages.figures_stale(f)
     years = full_years(f)
-    last = years[-1] if years and not old else None
     profile = profile_of(f)
     lender = profile != "other"
+    # r581 (the live R58 Regional banks deck: Fifth Third $80 m and a 3,152.5% net margin, Huntington 141.5%, M&T 172.1%, from pages stored
+    # before R58's sector schema): a bank's, lender's or insurer's year whose net profit is above its revenue holds a revenue line that is
+    # not its total revenue; that year's revenue is withheld, so no margin, total or growth is made from it, until its page is built again
+    withheld = []
+    if lender:
+        kept_years = []
+        for y in years:
+            s_, p_ = num(y.get("sales")), num(y.get("profit"))
+            if s_ is not None and p_ is not None and s_ > 0 and p_ > s_:
+                withheld.append(f"{y['year']}: a {'bank' if profile == 'bank' else profile}'s net profit {p_:,.1f} is above its revenue "
+                                f"{s_:,.1f} ({f.get('unit') or 'its unit'}), a line that is not its total revenue; withheld")
+                y = {**y, "sales": None}
+            kept_years.append(y)
+        years = kept_years
+    last = years[-1] if years and not old else None
     # every money figure in the theme's one currency (R22): a company reporting in another is converted at the rate its page states; with no
     # rate its money figures are left out (margins, growth and returns don't depend on the currency and stay)
     cur, k, fx_at = report_fx(f, region)
@@ -318,8 +332,9 @@ def company_row(region: str, symbol: str, f: dict | None) -> dict | None:
         # both from its filed lines (no currency needed: one filing's unit); None for a lender, without both, or where EBITDA isn't positive
         "debt_ebitda": debt_ebitda(last) if not lender else None,
         "sales_1y": r1(growth_between(years, "sales", 1)) if not old else None,
-        "sales_3y": r1(num(base.get("sales_cagr_3y"))) if not old else None,
-        "sales_5y": r1(num((f.get("growth") or {}).get("sales_cagr_5y"))) if not old else None,
+        "sales_3y": r1(num(base.get("sales_cagr_3y"))) if not old and not withheld else None,
+        "sales_5y": r1(num((f.get("growth") or {}).get("sales_cagr_5y"))) if not old and not withheld else None,
+        **({"figure_errors": withheld} if withheld else {}),
         "profit_1y": r1(growth_between(years, "profit", 1)) if not old else None,
         "profit_3y": r1(num((f.get("growth") or {}).get("profit_cagr_3y"))) if not old else None,
         "profit_5y": r1(num((f.get("growth") or {}).get("profit_cagr_5y"))) if not old else None,
@@ -3395,6 +3410,10 @@ def theme_record(c: dict, status: str, about: str | None = None) -> dict:
         # r58: a company kept in the theme on its own words against one layer's answer (theme_base.layer_answer_removals) is in it by those
         # words, never "filed under an official industry of the theme"
         by, why = "words", c["kept_member"][len("kept in the theme: "):]
+    elif c.get("basis") == "words" and isinstance(c.get("theme"), dict) and str(c["theme"].get("why") or "").strip():
+        # r581 (the live R58 Regional banks deck: "added 1: Comerica Inc" with no reason, its placement's own reason, "the map's check said no
+        # for ... only, one layer's answer; its own words say the theme's work", under a kept_member flag of True): the placement's reason
+        by, why = "words", str(c["theme"]["why"])
     elif isinstance(c.get("kept_member"), str) and c["kept_member"]:
         # p57 (R56 review: Capital One said not to be a card issuer, its words unchanged): a published member a re-check's answer alone
         # would have dropped says it was kept, its business model read from its own evidence, apart from any comparison decision
@@ -3638,7 +3657,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
 
     blocks, histories = [], {}
     # R32: a split by market value one of whose halves shows no company is undone (theme_base.unsplit_unshown)
-    from .theme_base import own_words as _own, unsplit_unshown, whole_words
+    from .theme_base import layer_line, own_words as _own, unsplit_unshown, whole_words
     own_words = lambda t, n, sym=None: _own(whole_words(t, src.about(sym)) if sym and t else t, n)     # noqa: E731  (LIVE7A-004: no word cut)
     for v in unsplit_unshown(checked.get("value_chain") or [], {s for s, r in rows.items() if r.get("status") != "unverified"
                                                                 and r.get("figures") != "not_available"}):          # c54: a listed row with no figure shows none
@@ -3660,6 +3679,16 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
             for r in mine:
                 if r.get("adjacent") and not r.get("model_out"):
                     r["model_out"], r["out_why"] = "other", "adjacent"
+        # r581 (the live R58 decks' "layer words"): a line that says no word of its layer's name gives way to the sentence of the company's
+        # own words that does (theme_base.layer_line); a company with no line keeps none
+        def line_for(line, r, v=v):
+            if not line:
+                return line
+            try:
+                about = src.about(r["symbol"])
+            except Exception:
+                about = ""
+            return layer_line(line, about, r.get("name") or "", v.get("layer") or "")
         # e54: a company confirmed by its own description shows the words that confirmed it (its stored description's own sentence)
         said = lambda r: what.get(r["symbol"]) or (shown_words({"name": r.get("name")}, src.about(r["symbol"])) if r.get("evidence") == "description_verified" else "")  # noqa: E731
         for r in mine:                     # y57: a company in distress, from its own words and figures, before any median is taken
@@ -3668,7 +3697,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
             except Exception:
                 about = ""
             r["distress"] = distress_of({**r, "what": f"{what.get(r['symbol']) or ''} {about}".strip()})
-        b = layer_block(v.get("layer") or "", [{**r, "what": own_words(said(r), r.get("name") or "", r["symbol"]) or None, "company_wide": r["symbol"] in wide, "official_industry": ind.get(r["symbol"]) or "",
+        b = layer_block(v.get("layer") or "", [{**r, "what": line_for(own_words(said(r), r.get("name") or "", r["symbol"]), r, v) or None, "company_wide": r["symbol"] in wide, "official_industry": ind.get(r["symbol"]) or "",
                                                 **model_fields(v, r["symbol"]), **refit_of(v, r["symbol"])} for r in mine], wide)
         b["description"] = v.get("description") or ""
         if adj_layer:
@@ -3677,6 +3706,8 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         b["policy"] = v.get("policy")
         b["official"], b["basis"] = bool(v.get("official")), v.get("basis")     # a layer that is one official industry's companies the AI didn't place (theme_base.py)
         b["by_industry"] = bool(v.get("by_industry"))
+        if v.get("single_kept"):          # r581: a layer of the published version kept with its one member, as the change log says it
+            b["single_kept"] = v["single_kept"]
         if v.get("scale"):          # d1: a half of a layer split by market value (theme_base.by_model step 2), never ranked on its own
             b["scale"], b["sibling"] = v["scale"], v.get("sibling")
         b["model"] = named_fit(v.get("model"), v) or None   # what the layer's companies have in common: how they earn (theme_base.by_model, R25)

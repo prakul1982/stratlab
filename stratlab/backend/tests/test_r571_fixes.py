@@ -152,7 +152,7 @@ def test_8_a_layer_s_notes_page_is_not_another_layer():
 
 def test_9_rules_57_carries_56():
     from app.intel import theme_routes as TR
-    assert B.RULES == 59 and TR.PLACE_CARRY[59] == 58 and TR.PLACE_CARRY[58] == 57 and TR.PLACE_CARRY[57] == 56 and TR.EARLIER_MAX == 14  # r58 (R58): RULES 59, PLACE_CARRY[59] = 58, EARLIER_MAX 14, deck 69, dive text 29 (updated on purpose); r572 (R57.2): RULES 58, PLACE_CARRY[58] = 57, EARLIER_MAX 13, deck 68, dive text 28 (updated on purpose)
+    assert B.RULES == 60 and TR.PLACE_CARRY[60] == 59 and TR.PLACE_CARRY[59] == 58 and TR.PLACE_CARRY[58] == 57 and TR.PLACE_CARRY[57] == 56 and TR.EARLIER_MAX == 15  # r581 (R58.1): RULES 60, PLACE_CARRY[60] = 59, EARLIER_MAX 15, deck 70, dive text 30 (updated on purpose); r58 (R58): RULES 59, PLACE_CARRY[59] = 58, EARLIER_MAX 14, deck 69, dive text 29 (updated on purpose); r572 (R57.2): RULES 58, PLACE_CARRY[58] = 57, EARLIER_MAX 13, deck 68, dive text 28 (updated on purpose)
 
 
 def test_8b_deck_diff_counts_a_layer_from_its_page_and_never_its_notes_page():

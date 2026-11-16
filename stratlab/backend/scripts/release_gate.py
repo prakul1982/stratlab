@@ -33,6 +33,8 @@ FAIL (the exit code is 1 when any theme has one; each row says on which side it 
   layer words          a layer whose name shares no word with any of its members' own words, official industry or name (a hotels and
                        travel layer holding a language-learning app); a company the engine moved into a layer its own words don't name;
                        a layer whose name has no word of three letters or more
+  financial margin     r581 (the live R58 Regional banks deck: Fifth Third's 3,152.5%): a bank's, lender's or insurer's net margin above 100% in
+                       the figures the input carries (its revenue line is not its total revenue)
   one-company layer    a named layer (not "Other ...", not an official group) holding one company whose own words don't say its name
                        (r58: one valid member keeps its layer, with no median)
   largest left out     a company of a named layer left out of its figures on insufficient evidence alone (read only weakly, no words, none
@@ -204,10 +206,18 @@ def pre_map(d: dict, origin: dict | None = None) -> dict:
     after_split = {x["name"]: k for k, x in ((kept.get("model_names") or {}).get("rename") or {}).items() if isinstance(x, dict) and x.get("name")}
     placed_as = {x["name"]: k for k, x in (kept.get("rename") or {}).items() if isinstance(x, dict) and x.get("name")}
 
+    # r581 (the R58 replay of Regional banks: TFS Financial, Columbia Banking and Flagstar, placed by the kept answer in "Real estate-focused
+    # lenders" and "Commercial and business lenders", sent elsewhere offline): a map layer renamed in place after the placement (theme_base's
+    # name-word rule, "Real estate-focused lenders (bank)") is handed on under the map's name it keeps in "aka", the one the kept answer names
+    answer_names = {x.get("layer") for x in (kept.get("assign") or {}).values() if isinstance(x, dict) and x.get("layer")}
+
     def map_name(v) -> tuple[str, str]:
         name = shown(v)
         seen = after_split.get(name, name)
-        return (v["was"] if v.get("was") and seen == name else placed_as.get(seen, seen)), seen
+        own = v["was"] if v.get("was") and seen == name else placed_as.get(seen, seen)
+        if own not in answer_names:
+            own = next((a for a in v.get("aka") or [] if a in answer_names and a not in placed_as and own.startswith(a + " (")), own)
+        return own, seen
     layers: dict = {}
     for v in d["value_chain"]:
         if not _is_map_layer(v):
@@ -485,6 +495,13 @@ def checks(d: dict, vc: list, placements: dict, moved_in: set = frozenset(), why
     for o in (placements or {}).get("off_industry") or []:
         if isinstance(o, dict) and o.get("ticker") and not (o.get("why") or o.get("industry") or o.get("scope")):
             fail("removal unreasoned", f"{o.get('name') or o['ticker']} ({o['ticker']})", "off_industry with no reason")
+    # r581: a financial filer's net margin above 100% (the input's figures, theme_routes._figures_reader "net"; inputs before r581 carry none)
+    fin = re.compile(r"\bbanks?\b|savings institution|\binsur|financial institution|\bnbfc\b|non[- ]?banking", re.I)
+    for s, (name, v, c) in rows.items():
+        net = ((d.get("figures") or {}).get(s) or {}).get("net")
+        ind = " ".join([str(c.get("industry") or ""), str(((d.get("facts") or {}).get(s) or {}).get("industry") or "")])
+        if isinstance(net, (int, float)) and net > 100 and fin.search(ind):
+            fail("financial margin", f"{c.get('name') or s} ({s})", f"net margin {net:.1f}% in “{name}”: its revenue is not its total revenue")
     # layers
     by_layer: dict = {}
     for s, (name, v, c) in rows.items():

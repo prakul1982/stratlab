@@ -502,10 +502,10 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57, 59: 58}  # rules versions whose change only adds to a kept placement (r58, R58: the answers unchanged, the taxonomy and scale rules; r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57, 59: 58, 60: 59}  # rules versions whose change only adds to a kept placement (r58, R58: the answers unchanged, the taxonomy and scale rules; r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
-EARLIER_MAX = 14                # (r58: 14, one more for the version R58 carries; r572: 13, one more for the version R57.2 carries; r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
+EARLIER_MAX = 15                # (r581: 15, one more for the version R58.1 carries; r58: 14, one more for the version R58 carries; r572: 13, one more for the version R57.2 carries; r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
 
 
 def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
@@ -856,7 +856,8 @@ def _figures_reader(region: str):
         except Exception as e:
             print("theme: stored figures not read:", sym, type(e).__name__, str(e)[:100])
             r = None
-        return {"revenue": r.get("revenue"), "ebitda": r.get("ebitda")} if r and r.get("revenue") is not None else {}
+        # r581: its net margin too, which the release gate checks for a bank or insurer (above 100%: a revenue line that is not the total)
+        return {"revenue": r.get("revenue"), "ebitda": r.get("ebitda"), "net": r.get("net")} if r and r.get("revenue") is not None else {}
     return figures_of
 
 
@@ -1242,6 +1243,17 @@ def facts_piece(region: str, sym: str, fresh: bool = False) -> tuple[dict | None
             # company pages were being rebuilt to keep them, FACTS_VERSION 10): a piece kept from a page built before the current version is
             # taken again once its stored page has been rebuilt, so a theme reads the year's profit before tax, tax and other income as
             # soon as the page keeps them, with no Refresh
+            # r581 (the live R58 Regional banks deck: Fifth Third $80 m, a 3,152.5% net margin, from a piece kept before R58's sector
+            # schema, never taken again since FACTS_VERSION stayed 10): a bank's or insurer's piece whose net profit is above its revenue is
+            # taken again from its stored page once that page no longer is (rebuilt: stock_pages.financial_mismatch); until then the dive
+            # withholds that revenue (theme_data.company_row)
+            from ..stock_pages import financial_mismatch
+            if financial_mismatch(hit["value"]) and callable(R.public_facts):
+                page = R.public_facts(region, sym)
+                if page and not financial_mismatch(page) and (page.get("v") or 1) >= (hit["value"].get("v") or 1):
+                    kept = computed.put(theme_library.FACTS, [region, sym], page, label=sym, region=region)
+                    return page, (kept or {}).get("at")
+                return hit["value"], hit.get("at")
             if (hit["value"].get("v") or 1) >= _facts_version() or not callable(R.public_facts):
                 return hit["value"], hit.get("at")
             page = R.public_facts(region, sym)
