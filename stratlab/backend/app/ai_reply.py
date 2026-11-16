@@ -142,17 +142,33 @@ def first_object(text: str) -> dict | None:
     dec = json.JSONDecoder()
     best = None
     for src in (text, _TRAILING_COMMA.sub(r"\1", text)):
-        i = src.find("{")
-        while 0 <= i:
+        for i in _outer_starts(src):
             try:
                 obj, end = dec.raw_decode(src, i)
             except json.JSONDecodeError:
-                i = src.find("{", i + 1)
                 continue
             if isinstance(obj, dict) and (best is None or end - i > best[0]):
                 best = (end - i, obj)
-            i = src.find("{", end)
     return best[1] if best is not None else None
+
+
+def _outer_starts(text: str) -> list[int]:
+    """Where each "{" outside every other brace and string opens: an object inside one cut off (a reply that hit the length limit) is a part,
+    never read as the whole answer."""
+    out, depth, in_str, esc = [], 0, False, False
+    for j, ch in enumerate(text):
+        if in_str:
+            esc, in_str = (False, True) if esc else (ch == "\\", ch != '"')
+            continue
+        if ch == '"' and depth:
+            in_str = True
+        elif ch == "{":
+            if depth == 0:
+                out.append(j)
+            depth += 1
+        elif ch == "}" and depth:
+            depth -= 1
+    return out
 
 
 def salvage_items(raw: str, key: str) -> list[dict]:

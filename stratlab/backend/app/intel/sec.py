@@ -421,11 +421,11 @@ def revenue(facts: dict, kind: str, unit: str = "USD") -> dict[str, float]:
     # an income statement whose operating result is its operating costs to the dollar has no sales in it: a line named like
     # revenue for that period is a note's figure, not the top line (DATA, every company: JSPR's $9 m milestone and $8.3 m
     # lease "revenue", tagged beside a loss of exactly its $36.8 m and $76.2 m of costs)
+    for end, v in sector_revenue(read).items():
+        out[end] = v
     op_costs = read(OPERATING_COSTS)
     for end in [e for e in out if out[e] and no_sales_in_statement(op, op_costs, e)]:      # a nil stays: it is the right figure
         del out[end]
-    for end, v in sector_revenue(read).items():
-        out[end] = v
     return out
 
 
