@@ -66,13 +66,12 @@ test("My space has one name, and Look up a company differs from the Invest home 
   const errors = await open(page, "/mine");
   if (phone) await page.getByRole("button", { name: /menu/i }).first().click();
   const side = page.locator("aside.sidebar");
-  await expect(side.getByRole("group", { name: "Space" }).getByRole("button", { name: "My space" })).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });
-  await expect(side.getByRole("group", { name: "Space" }).getByRole("button", { name: "Mine", exact: true })).toHaveCount(0);
-  await expect(side.getByRole("link", { name: "My space", exact: true })).toBeVisible();
-  const labels = await side.getByRole("group", { name: "Space" }).getByRole("button").allInnerTexts();
-  expect(labels).toEqual(["My space", "Trade", "Invest", "Money"]);
-  // every label fits its tab
-  expect(await side.locator(".space-switch button").evaluateAll((bs) => bs.filter((b) => b.scrollWidth > b.clientWidth + 1).map((b) => b.textContent))).toEqual([]);
+  // (updated on purpose, NAV3: no space switch; My space is the menu's first link, lit on its page, and never called "Mine")
+  await expect(side.getByRole("link", { name: "My space", exact: true })).toHaveAttribute("aria-current", "page", { timeout: 30_000 });
+  await expect(side.getByRole("link", { name: "Mine", exact: true })).toHaveCount(0);
+  await expect(side.getByRole("group", { name: "Space" })).toHaveCount(0);
+  // every entry's name fits its row
+  expect(await side.locator(".side-entries a, .side-home a").evaluateAll((bs) => bs.filter((b) => b.scrollWidth > b.clientWidth + 1).map((b) => b.textContent))).toEqual([]);
   await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("My space");
 
   await page.goto("/invest");

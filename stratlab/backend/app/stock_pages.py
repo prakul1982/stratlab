@@ -2517,7 +2517,9 @@ def _links(region: str, rows: list[tuple[str, str]]) -> str:
     return '<div class="links">' + "".join(f'<a href="{e(path(region, s))}">{e(n if n == s else f"{tidy(n)} ({s})")}</a>' for s, n in rows) + "</div>"
 
 
-PUBLIC_MENU = (("/", "Home"), ("/library", "Library"), ("/stocks", "Companies"), ("/themes", "Themes"), ("/blog", "Blog"),
+# NAV3 (LIVE9A-019): the same list as the landing page's header and the app's public frame (PublicFrame.tsx PUBLIC_MENU) and index.html's
+# menu; the logo is the way home
+PUBLIC_MENU = (("/library", "Library"), ("/stocks", "Companies"), ("/themes", "Themes"), ("/blog", "Blog"),
                ("/pricing", "Plans"), ("/about", "About"), ("/contact", "Contact"))
 # the app's own addresses, which ask a signed-out visitor to sign in (frontend vercel.json sends them to the app): a link to one from a
 # public page says so and carries rel="nofollow", so neither a reader nor a crawler is led to a sign-in wall unawares (AS1)
@@ -2552,7 +2554,7 @@ def _top(sign_in: str | None = None) -> str:
     site = settings.PUBLIC_SITE_URL
     sign_in = sign_in or f"{site}/mine"
     # AS1: the site's public pages, the same on every page the server draws and in the app's public frame (PublicFrame.tsx
-    # PUBLIC_MENU): Home, the strategy library beside Companies (DK-008), Themes, Blog, Plans, About and Contact. Nothing in it
+    # PUBLIC_MENU): the strategy library beside Companies (DK-008), Themes, Blog, Plans, About and Contact. Nothing in it
     # leads to a page that asks for sign-in; Sign in says so itself
     menu = "".join(f'<a href="{h}">{t}</a>' for h, t in PUBLIC_MENU)
     return (f'<a class="skip" href="#main">Skip to main content</a><header class="nav"><a class="brand" href="{site}/" aria-label="StratLab home">'

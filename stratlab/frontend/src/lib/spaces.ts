@@ -1,9 +1,9 @@
 import type { Focus } from "./types";
-import { NAV, SPACE_LIST, locate, type SpaceId } from "./nav";
+import { NAV, SPACE_LIST, type SpaceId } from "./nav";
 
 /** StratLab's spaces. Trade is the strategy lab StratLab started as; Invest is company research; Money is the person's
- * own finances; Mine is the person's own home (what they pinned, their money and what is coming up). A space only
- * decides which menu shows and which home page `/` opens: every page stays one link away whatever is picked. */
+ * own finances; Mine is the person's own home (what they pinned, their money and what is coming up). NAV3: one menu lists every
+ * space's entries under the space's name, so a space only decides a page's breadcrumb and which home page `/` opens. */
 export type Space = SpaceId;
 /** What the menu shows: one space, or Mine (the person's own). */
 export type SpaceView = Space | "mine";
@@ -21,38 +21,13 @@ export function spaceOf(path: string): Space | null {
   return SPACE_IDS.find((s) => SPACES[s].paths.test(path)) ?? null;
 }
 
-/** A page in more than one space's menu (the Calendar's tabs: its menu entry is in every space): it opens inside the space it
- * was opened from, not its own address's space (owner, 4 Nov: "whenever we click on something in Calendar it redirects to
- * Invest"). Worked out from the menu map itself (lib/nav.ts `start`), so any entry shared later is covered too. */
-export function sharedPage(path: string): boolean {
-  return !!locate(path)?.group.start;
-}
-
-/** The space a shared page's address carries (?space=trade), so a shared or bookmarked link keeps the space it was opened in. */
-export function spaceParam(search: string | null | undefined): Space | null {
-  const v = new URLSearchParams(search ?? "").get("space");
-  return v === "trade" || v === "invest" || v === "money" ? v : null;
-}
-
-/** The menu an address shows: its own space's, so where you are is always in the menu. Pages that belong to no space
- * (Account, Settings, Plans, Admin, My space) show Mine's menu, as their breadcrumb says. Mine keeps its own menu on a
- * page it links to (`keepsMine`: a pinned page, Briefs) while Mine is the menu showing. A page in several spaces' menus
- * (`sharedPage`) stays in the space its address names (?space=), else in the space of the page it was reached from in
- * this visit (`from`; none on a fresh load, which opens the address's own space). Worked out from the address on every
- * render, so it never lags behind a saved choice that loads later. */
-export function menuView(path: string, showing: SpaceView, keepsMine = false, o: { search?: string; from?: SpaceView | null } = {}): SpaceView {
+/** The space a page is in, for its breadcrumb, the menu's main button and the home `/` opens next time: its own address's space.
+ * Pages that belong to no space (Account, Settings, Plans, Admin, My space) are My space's, as their breadcrumb says, and the front
+ * door goes on to the home of the space showing. NAV3 (one menu for every page): nothing else decides it any more. A page reached
+ * from another space, or an old link carrying ?space=, opens the same page in its own place (the menu no longer changes with it). */
+export function menuView(path: string, showing: SpaceView): SpaceView {
   if (path === "/") return showing;          // the front door goes on to the home of the menu showing
-  const here = spaceOf(path);
-  if (!here) return "mine";
-  // a shared page reached from a space (or naming one) stays in it before Mine's own claim: Mine lists the Calendar too, and
-  // the account's saved choice ("My space") arriving after the click must not pull Trade's Calendar into it
-  const kept = sharedPage(path) ? spaceParam(o.search) ?? (o.from && o.from !== "mine" ? o.from : null) : null;
-  if (kept) return kept;
-  // a shared page (the Calendar) opened fresh is in the address's own space on every device, not the menu saved on this one
-  // (LIVE5-011: the same Results page read "My space › Calendar › Results" on a phone and "Invest › Calendar › Results" on a laptop);
-  // reached from My space in this visit, it stays in My space
-  if (showing === "mine" && keepsMine && (!sharedPage(path) || o.from === "mine")) return "mine";
-  return here;
+  return spaceOf(path) ?? "mine";
 }
 
 /** The space someone's answer to "What brings you here?" starts them in. */

@@ -53,7 +53,8 @@ test("blog: the public header, menu and footer carry a Blog link, and it opens t
 test("blog: the landing page's header and footer, and the signed-in Account and Plans footers, link to it", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator(".lp-foot").getByRole("link", { name: "Blog" })).toHaveAttribute("href", "/blog", { timeout: 30_000 });
-  await expect(page.locator('nav[aria-label="Sections"] a[href="/blog"], nav[aria-label="Sections (menu)"] a[href="/blog"]').first()).toHaveAttribute("href", "/blog");
+  // (updated on purpose, NAV3/LIVE9A-019: the landing page's header is the public menu, "Site" as on every public page)
+  await expect(page.locator('nav[aria-label="Site"] a[href="/blog"], nav[aria-label="Site (menu)"] a[href="/blog"]').first()).toHaveAttribute("href", "/blog");
   // the hero says nothing about it: one more link in the header, not a new button over the fold
   await expect(page.locator(".lp-hero a[href='/blog'], main a[href='/blog']")).toHaveCount(0);
 });

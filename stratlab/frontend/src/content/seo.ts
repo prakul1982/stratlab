@@ -7,7 +7,8 @@ export const SITE = "https://stratlab.studio";
 /** StratLab's Instagram: linked from every footer and named in the home page's Organization data (sameAs). */
 export const INSTAGRAM = "https://www.instagram.com/stratlab.studio/";
 
-export const TAGLINE = "Test it, research it, track it.";
+// NAV3 (CX-1): one promise, not three jobs ("Test it, research it, track it." before)
+export const TAGLINE = "Is your trading idea skill or luck?";
 
 /** The company directories (SEO-1): every company page is a few links from the home page. [address, name]; the pages are the
  * API's (backend/app/stock_pages.py: A-Z letters under /stocks/in and /stocks/us, index lists), so plain links, not routes. */

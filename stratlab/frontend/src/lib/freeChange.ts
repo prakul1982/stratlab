@@ -34,8 +34,10 @@ export function changeRows(fc: FreeChange): [string, string, string][] {
 }
 
 /** The Plans page's line on the Free card for an account in its grace (LIVE8B-008: "Current plan" listed limits this account doesn't
- * have until the change): what it has now, and from when the card's limits apply. */
+ * have until the change): that it keeps its earlier limits, and from when the card's limits apply. One short line: each count is in
+ * Account's table, which the card links to (LIVE9B-009: every limit in one sentence was an 8-line run-on with "aI" for "AI", and made the
+ * Free card about 200px taller than Basic's and Pro's). */
 export function graceLine(fc: FreeChange): string {
-  const rows = fc.rows.filter((r) => r.before !== r.after);
-  return `Yours until ${changeDay(fc.on)}: ${rows.map((r) => `${r.label.charAt(0).toLowerCase()}${r.label.slice(1)} ${changeCount(r.before)}`).join(", ")}. The limits above apply from then.`;
+  const n = fc.rows.filter((r) => r.before !== r.after).length;
+  return `Until ${changeDay(fc.on)} you keep your earlier ${n === 1 ? "limit" : `limits on ${n} counts`}; the limits above apply from then.`;
 }

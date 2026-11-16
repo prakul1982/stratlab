@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { eyebrowOf } from "../../lib/eyebrow";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError, CFG } from "../../lib/api";
 import { useApp } from "../../lib/app";
@@ -343,7 +344,7 @@ export function SignalsPage() {
   );
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Trade · Practise" title="Forward test"
+      <PageHeader eyebrow={eyebrowOf("/trade/signals")} title="Forward test"
         // what it is for, in the line itself and not only in the lock note (DA-039)
         lede="A forward test tries a strategy on days that have not happened yet: connect your TradingView or Chartink alerts, and each one is filled on paper at StratLab's live price, with charges, and logged."
         infoLabel="How this works"

@@ -34,9 +34,8 @@ test("DK-005: the comparison tables share their column widths, and Free's one se
 
 test("DK-004, DK-008: /plans is one heading and one line with the public header; Library and Companies are in every public menu", async () => {
   const login = read("src/pages/Login.tsx");
-  assert.match(login, /const NAV_LINKS = \(plansOnly: boolean\)/);
-  assert.match(login, /plansOnly \? PUBLIC_MENU/);
-  assert.match(login, /\["\/library", "Library"\], \["\/stocks", "Companies"\]/);
+  // (updated on purpose, NAV3/LIVE9A-019: every page of the landing file, /plans and the landing page alike, carries the public menu)
+  assert.match(login, /const NAV_LINKS = PUBLIC_MENU;/);
   assert.match(login, /<Pricing top=\{plansOnly \? \{ heading: heading \?\? "Plans and prices", error \} : undefined\} \/>/);
   assert.doesNotMatch(login, /lp-sec-plans/);
   const { PUBLIC_MENU } = await import("../src/components/PublicFrame.tsx").catch(() => ({ PUBLIC_MENU: null }));

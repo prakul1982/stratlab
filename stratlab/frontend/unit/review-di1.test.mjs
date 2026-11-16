@@ -166,12 +166,18 @@ test("DI-017, DI-018, DI-019: two kinds of alerts named apart; My space's menu h
   assert.equal(nav.pageAt("/alerts").page.label, "Alerts");
   assert.equal(nav.pageAt("/alerts").page.was, "Stock alerts");
   assert.match(read("src/components/AlertSettings.tsx"), /title="Paper-trade alerts and the daily report"/);
-  const shell = read("src/components/Shell.tsx");
-  for (const t of ['"Watchlist"', '"Calendar"', '"Settings"']) assert.ok(shell.includes(t), t);
-  assert.match(shell, /me\?\.plan_info\?\.features\?\.assistant !== false && item\("\/assistant"/);
+  // (updated on purpose, NAV3: My space's own menu is gone, one menu for every page: Watchlist and Calendar are its entries, Today's brief is a
+  // Markets tab, and Settings, Connected accounts and the AI assistant (only on a plan that has it) are in the account menu; the trail
+  // follows the page's address)
+  const { MENU } = nav;
+  const entries = MENU.flatMap((s) => s.groups.map((g) => g.label));
+  for (const t of ["Watchlist", "Calendar"]) assert.ok(entries.includes(t), t);
+  const acct = read("src/components/SideMenus.tsx");
+  for (const t of ["Settings</Link>", "Connected accounts</Link>"]) assert.ok(acct.includes(t), t);
+  assert.match(acct, /me\?\.plan_info\?\.features\?\.assistant !== false && <Link role="menuitem" to="\/assistant"/);
   const crumb = read("src/components/PageBreadcrumb.tsx");
   assert.match(crumb, /"\/plans": "Plans", "\/help": "Help", "\/features": "All features"/);
-  assert.match(crumb, /if \(mine && \(MINE_LINKED\.includes\(page\.to\) \|\| MINE_ENTRIES\.includes\(group\.id\)\)\)/);
+  assert.doesNotMatch(crumb, /MINE_LINKED|MINE_ENTRIES/);
   assert.match(read("src/lib/title.ts"), /"\/assistant": "Connect an AI assistant"/);
   for (const f of ["src/pages/SettingsPage.tsx", "src/pages/InvitePage.tsx", "src/pages/AppPage.tsx", "src/pages/AssistantPage.tsx"]) assert.doesNotMatch(read(f), /<PageHeader eyebrow=/, f);
 });
@@ -186,7 +192,8 @@ test("DI-021, DI-023: the phone's top button and the tour follow the space; on a
   // pages themselves; menu steps still open the menu on a phone)
   const tour = read("src/lib/intro.ts");
   assert.match(read("src/components/Tour.tsx"), /const inMenu = phone && !!step\?\.menu;/);
-  assert.match(tour, /\{ id: "spaces", title: "Four spaces", at: \[".sidebar .space-switch"\], menu: true,/);
+  // (updated on purpose, NAV3: one menu, no space switch; the step rings the menu's entries)
+  assert.match(tour, /\{ id: "spaces", title: "One menu", at: \[".sidebar .side-section"\], menu: true,/);
   assert.match(tour, /Dark mode is in Settings, under Experience\./);          // LIVE1B-045: and "Take the tour" is in the account menu
   assert.doesNotMatch(tour, /your name at the bottom opens your plan, settings and dark mode/);
 });

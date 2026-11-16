@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { eyebrowOf } from "../../lib/eyebrow";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
@@ -67,7 +68,7 @@ export function RatesPage() {
 
   return (
     <div className="k-page rates-page">
-      <PageHeader eyebrow="Money · Plan" title="Rates and your yield after tax"
+      <PageHeader eyebrow={eyebrowOf("/money/rates")} title="Rates and your yield after tax"
         lede="Treasury bills, government bonds, the repo rate, small savings and your own deposits, each beside what it comes to after your tax."
         asOf={d?.as_of} info={d ? <>Published rates with their dates, and arithmetic: not a ranking of where to put money. Market rates: {d.rbi_source}.</> : undefined} infoLabel="Where the rates come from" />
 

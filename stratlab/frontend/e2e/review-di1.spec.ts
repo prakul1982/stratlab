@@ -185,9 +185,10 @@ test("DI-023: on a phone the tour opens the menu for the steps about it, and clo
   await expect(tour).toContainText("My space is yours", { timeout: 30_000 });
   await expect(page).toHaveURL(/\/mine$/);
   await tour.getByRole("button", { name: "Next" }).click();
-  await expect(tour).toContainText("Four spaces");
+  // (updated on purpose, NAV3: one menu, no space switch; the step rings the menu's first section)
+  await expect(tour).toContainText("One menu");
   await expect(page.locator("aside.sidebar.open")).toHaveCount(1);
-  await expect(page.locator("aside.sidebar .space-switch")).toBeInViewport();
+  await expect(page.locator("aside.sidebar .side-section").first()).toBeInViewport();
   await tour.getByRole("button", { name: "Next" }).click();
   await expect(tour).toContainText("Ask or do anything");
   await expect(page.locator("aside.sidebar.open")).toHaveCount(0);

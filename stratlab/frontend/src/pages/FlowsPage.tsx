@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { eyebrowOf } from "../lib/eyebrow";
 import { Link } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { arrowOf } from "../lib/format";
@@ -52,7 +53,7 @@ export function FlowsPage() {
   ];
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Invest · Market today" title="Flows"
+      <PageHeader eyebrow={eyebrowOf("/invest/flows")} title="Flows"
         lede="What foreign and domestic institutions bought and sold in India's cash market, in ₹ crore: the exchange's provisional figures, published each trading evening. Facts, not advice." />
       {error ? <ErrorState title="The flows couldn't be read" action={{ label: "Try again", onClick: () => setAgain((x) => x + 1) }}>{error}</ErrorState>
         : !s || !c ? <Card><Skeleton label="Reading the newest flows" /></Card>

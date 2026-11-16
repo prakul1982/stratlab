@@ -219,7 +219,7 @@ test("ads on: the public library shows one ad after Allow in the banner, below t
 });
 
 test("ads on: the landing page has one slot, in the lower sections and not the first screen", async ({ page }) => {
-  const { google } = await open(page, "/", "Test it, research it, track it", { ads: true });
+  const { google } = await open(page, "/", "Is your trading idea skill or luck", { ads: true }); // (updated on purpose, NAV3: the hero's one promise, CX-1)
   await expect(page.getByTestId("consent")).toHaveCount(1);
   expect(google, "nothing is asked of Google until Allow").toEqual([]);
   await page.getByTestId("consent").getByRole("button", { name: "Allow" }).click();

@@ -20,48 +20,40 @@ async function open(page: Page, path: string) {
 
 test.afterEach(async ({ page }) => { await page.unrouteAll({ behavior: "ignoreErrors" }); });
 
-// the menu map's shared entries and their pages: today the Calendar, in every space
-const SHARED = (() => {
-  const seen = new Map<string, Set<string>>();
-  for (const sp of SPACE_IDS) for (const g of NAV[sp].groups) for (const p of g.pages) seen.set(p.to, (seen.get(p.to) ?? new Set()).add(sp));
-  return SPACE_IDS.map((sp) => ({ space: sp, groups: NAV[sp].groups.filter((g) => g.pages.some((p) => (seen.get(p.to)?.size ?? 0) > 1)) }));
-})();
+// (updated on purpose, NAV3, CX-1: "a 7-link Calendar group repeats in Trade, Invest and Money"; owner OK 16 Nov to merge menu entries):
+// the Calendar is one entry of one menu. The owner's 4 Nov rule ("keep the main space there only") now holds by construction: a Calendar tab
+// opens in one place, whichever page it was clicked from, and an old link carrying ?space= (bookmarks, emails) still opens its page.
+const CALENDAR = NAV.invest.groups.find((g) => g.id === "calendar")!;
 
-for (const { space, groups } of SHARED) {
-  test(`a shared page clicked from ${space}'s menu stays in ${space}: switcher, breadcrumb, address, reload and back`, async ({ page }, info) => {
+for (const space of SPACE_IDS) {
+  test(`the Calendar clicked from a ${space} page is the one Calendar: its tabs keep their trail, through a reload, back and an old ?space= link`, async ({ page }, info) => {
     test.setTimeout(240_000);
     const phone = info.project.name === "phone";
-    const label = NAV[space].label;
     const errors = await open(page, NAV[space].home);
     const side = page.locator("aside.sidebar");
     const crumb = page.getByRole("navigation", { name: "Breadcrumb" });
-    const inSpace = async (what: string) => {
-      await expect(crumb, what).toHaveText(new RegExp(`^${label}\\s*›`), { timeout: 30_000 });
-      if (phone) await page.getByRole("button", { name: "Open menu" }).click();
-      await expect(side.getByRole("group", { name: "Space" }).getByRole("button", { name: label }), what).toHaveAttribute("aria-pressed", "true");
-      if (phone) await page.keyboard.press("Escape");
-    };
-    for (const g of groups) {
-      if (phone) await page.getByRole("button", { name: "Open menu" }).click();
-      await side.getByRole("link", { name: g.label, exact: true }).click();
-      await inSpace(`${g.label} from ${space}`);
-      for (const p of g.pages) {
-        if (phone) {
-          await crumb.locator(".k-crumb-btn").click();
-          await page.getByRole("menuitem", { name: p.label, exact: true }).click();
-        // (updated on purpose, R43: a tab may show a shorter name, NavPage.tab, so the row of tabs stays on one line at 1280)
-        } else await page.getByTestId("hub-tabs").getByRole("link", { name: p.tab ?? p.label, exact: true }).click();
-        const own = spaceOf(p.to);
-        // the address names the space when it isn't the page's own, so a bookmark or a shared link keeps it
-        await expect(page, p.to).toHaveURL(new RegExp(`${p.to.replace(/[/]/g, "\\/")}${own === space ? "(\\?(?!.*space=).*)?" : "\\?(.*&)?space=" + space}$`), { timeout: 30_000 });
-        await inSpace(`${p.to} from ${space}`);
-      }
-      // a reload keeps it, and so does going back a page
-      await page.reload();
-      await inSpace(`reload of ${page.url()}`);
-      await page.goBack();
-      await inSpace("back");
+    if (phone) await page.getByRole("button", { name: "Open menu" }).click();
+    // one Calendar link in the whole menu, and no space switch
+    await expect(side.getByRole("link", { name: "Calendar", exact: true })).toHaveCount(1);
+    await expect(side.getByRole("group", { name: "Space" })).toHaveCount(0);
+    await side.getByRole("link", { name: "Calendar", exact: true }).click();
+    await expect(page).toHaveURL(/\/calendar$/, { timeout: 30_000 });
+    for (const p of CALENDAR.pages) {
+      if (phone) {
+        await crumb.locator(".k-crumb-btn").click();
+        await page.getByRole("menuitem", { name: p.label, exact: true }).click();
+      } else await page.getByTestId("hub-tabs").getByRole("link", { name: p.tab ?? p.label, exact: true }).click();
+      await expect(page, p.to).toHaveURL(new RegExp(`${p.to.replace(/[/]/g, "\\/")}$`), { timeout: 30_000 });
+      const own = NAV[spaceOf(p.to) ?? "invest"].label;
+      await expect(crumb, p.to).toHaveText(new RegExp(`^${own}\\s*›\\s*Calendar`), { timeout: 30_000 });
     }
+    await page.reload();
+    await expect(crumb).toHaveText(/Calendar/, { timeout: 30_000 });
+    await page.goBack();
+    await expect(crumb).toHaveText(/Calendar/, { timeout: 30_000 });
+    // an old shared link with ?space= opens the page it names
+    await page.goto(`/research/results?space=${space}`);
+    await expect(crumb).toHaveText(/^Invest\s*›\s*Calendar/, { timeout: 30_000 });
     expect(errors).toEqual([]);
   });
 }

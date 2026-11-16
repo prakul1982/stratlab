@@ -36,7 +36,7 @@ test("signed out: a company's address says what's there, and Google sign-in come
   await page.route("https://demo.supabase.co/auth/v1/authorize**", (r) => { authorize = new URL(r.request().url()); return r.fulfill({ status: 200, body: "signing in", contentType: "text/plain" }); });
   await page.goto("/research/IN/RELIANCE?tab=deals");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^Sign in to see (RELIANCE|Reliance)/, { timeout: 30_000 });
-  await expect(page.getByText("Test it, research it, track it")).toHaveCount(0);           // not the landing page
+  await expect(page.getByText("Is your trading idea skill or luck")).toHaveCount(0);           // not the landing page // (updated on purpose, NAV3: the hero's one promise, CX-1)
   // StratLab's public page for the company, no sign-in needed
   await expect(page.getByRole("link", { name: /Open the public page for/ })).toHaveAttribute("href", "/stocks/in/RELIANCE");
   await noSideways(page);

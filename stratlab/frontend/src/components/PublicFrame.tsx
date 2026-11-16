@@ -7,8 +7,9 @@ import { signedInHere, signIn, warmSignIn } from "../lib/signin";
 import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 import { BROWSE_COMPANIES } from "../content/seo";
 
-/** The site's public pages, the same list as the pages the server draws (backend stock_pages.PUBLIC_MENU, AS1): none asks for sign-in. */
-export const PUBLIC_MENU: [string, string][] = [["/", "Home"], ["/library", "Library"], ["/stocks", "Companies"], ["/themes", "Themes"], ["/blog", "Blog"],
+/** The site's public pages, the same list as the pages the server draws (backend stock_pages.PUBLIC_MENU, AS1) and the landing page's
+ * header (NAV3, LIVE9A-019), and the menu index.html draws before the app starts: none asks for sign-in. The logo is the way home. */
+export const PUBLIC_MENU: [string, string][] = [["/library", "Library"], ["/stocks", "Companies"], ["/themes", "Themes"], ["/blog", "Blog"],
   ["/pricing", "Plans"], ["/about", "About"], ["/contact", "Contact"]];
 
 /** The footer's way to the public pages that show real work: the strategy library with the verdict each earned, the

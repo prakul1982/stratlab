@@ -309,7 +309,8 @@ test("the landing page: one tagline, sample labels, no old pricing variant, no v
   assert.match(login, /role="tab"/);
   assert.match(login, /tabIndex=\{k === i \? 0 : -1\}/);
   assert.doesNotMatch(login, /Start free|Sign up free/);
-  assert.equal(seo.TAGLINE, "Test it, research it, track it.");
+  // (updated on purpose, NAV3, CX-1: one promise, not three jobs; it is a question the four checks answer, no promise of a result)
+  assert.equal(seo.TAGLINE, "Is your trading idea skill or luck?");
   assert.match(read("index.html"), /<title>StratLab: backtest trading ideas, research stocks, track money<\/title>/);
 });
 
