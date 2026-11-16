@@ -1327,14 +1327,14 @@ def same_company(rows: list[dict], about=None) -> dict:
     # r572 (R57.2, the live R57.1 Oil and gas US deck: "TC Energy Corp and Transcanada Pipelines Ltd: $10.7 bn · +10.7% · 70.9% · 23.1%", a
     # parent and the subsidiary that files its own annual report on the same business, names sharing no word, neither description naming the
     # other): the same latest year, revenue within SAME_REVENUE and net profit within SAME_PROFIT of each other, where one of the two has no
-    # description of its own stored (only its filings' titles), are one business's figures filed twice: kept once, under the company with a
+    # description of its own stored, only its own filings' titles (a filer of its own reports), are one business's figures filed twice: kept once, under the company with a
     # description of its own
-    def own_words(sym) -> bool:
+    def said(sym) -> str:
         try:
-            text = str(about(sym) or "")
+            text = str(about(sym) or "").strip()
         except Exception:
             text = ""
-        return bool(text.strip()) and not text.startswith("From its own filings:")
+        return "" if not text else "filings" if text.startswith("From its own filings:") else "words"
     near = [r for r in rows if r.get("symbol") not in out and r.get("year") and num(r.get("revenue")) and num(r.get("profit"))]
     for i, a in enumerate(near):
         for b in near[i + 1:]:
@@ -1343,10 +1343,10 @@ def same_company(rows: list[dict], about=None) -> dict:
             ra, rb, pa, pb = num(a["revenue"]), num(b["revenue"]), num(a["profit"]), num(b["profit"])
             if abs(ra - rb) > SAME_REVENUE * max(abs(ra), abs(rb)) or abs(pa - pb) > SAME_PROFIT * max(abs(pa), abs(pb)):
                 continue
-            wa, wb = own_words(a["symbol"]), own_words(b["symbol"])
-            if wa == wb:
+            sa, sb = said(a["symbol"]), said(b["symbol"])
+            if {sa, sb} != {"words", "filings"}:          # one with words of its own, the other a filer of its own reports only
                 continue
-            keep, drop = (a, b) if wa else (b, a)
+            keep, drop = (a, b) if sa == "words" else (b, a)
             out[drop["symbol"]] = keep["symbol"]
     return out
 

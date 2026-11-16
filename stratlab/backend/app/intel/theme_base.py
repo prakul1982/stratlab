@@ -1836,6 +1836,7 @@ NAME_PART_MODEL = {"construction": r"\bepc\b|engineering,? procurement,? (?:and|
 # at 60% the live Capital goods "Industrial Products" (25 of its 40 read companies in "Engines and industrial machinery makers", 62.5%, the
 # other 15 over six layers) still counted
 ON_INDUSTRY_SHARE, ON_INDUSTRY_MIN = 2 / 3, 3
+TOP_SHARE = 10                  # r572: ...and never more than the theme's largest tenth
 TOP_MEMBERS = 10                # r572: the theme's largest companies by market value, never left out of their layer's figures on insufficient evidence alone
 MODEL_LINE_MIN = 3              # gl52: companies a sparse layer's way of earning must be shown for before its line names it
 
@@ -2379,8 +2380,8 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
         here_ = where_[base_of(v)]
         return here_ >= ON_INDUSTRY_MIN and here_ >= ON_INDUSTRY_SHARE * sum(where_.values())
     # r572: the theme's TOP_MEMBERS largest companies by market value (by_model `map_`)
-    top_members = {t_ for t_, cap in sorted({c.get("ticker"): c.get("cap") or 0 for w in out for c in w["companies"] if c.get("ticker")}.items(),
-                                            key=lambda kv: (-kv[1], kv[0]))[:TOP_MEMBERS] if cap}
+    caps_ = {c.get("ticker"): c.get("cap") or 0 for w in out for c in w["companies"] if c.get("ticker")}
+    top_members = {t_ for t_, cap in sorted(caps_.items(), key=lambda kv: (-kv[1], kv[0]))[:min(TOP_MEMBERS, len(caps_) // TOP_SHARE)] if cap}
     for v in out:
         v["companies"] = [{**c, "model": every.get(c.get("ticker"), ""), "model_tags": list(tags.get(c.get("ticker")) or []),
                            "model_confidence": conf.get(c.get("ticker"), "") if c.get("ticker") in every else ""} for c in v["companies"]]
@@ -2562,8 +2563,9 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
         cap_ = lambda c: c.get("cap") or 0      # noqa: E731
         in_ = {x.get("ticker") for x in known} | kin
         top_in = max((cap_(c) for c in cos if c.get("ticker") in in_), default=0)
-        map_ = {c.get("ticker") for c in cos if fam(c) == "" and c.get("ticker") not in kin and c.get("ticker") not in another
-                and c.get("ticker") not in outside and c.get("ticker") not in uf and not c.get("moved")
+        # (an AI placement or map pick held "unfit" only for want of words that fit the layer is no contradiction: definition_fit)
+        map_ = {c.get("ticker") for c in cos if (fam(c) == "" or c.get("ticker") in uf) and c.get("ticker") not in kin
+                and c.get("ticker") not in another and (c.get("ticker") not in outside or c.get("ticker") in uf) and not c.get("moved")
                 and (conf.get(c.get("ticker")) == "low" or model_family(every.get(c.get("ticker")) or "") in ("", f))
                 and all(same_kin(x) or x == "holding" for x in main_said(c))
                 and model_family(stated_model(principal_words(ev(c)))) in ("", f, "holding")
@@ -2609,7 +2611,8 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
                             **({"model": word_model[c["ticker"]], "model_confidence": "medium"} if word_model.get(c.get("ticker")) else
                                                                     {"model": top_model, "model_confidence": "low"} if c.get("ticker") in bare_ else {})}
                            if c.get("ticker") in words_ else
-                           {**c, "read_low": True, **also_of(c)} if c.get("ticker") in low_ or c.get("ticker") in named_low else
+                           {**c, "read_low": True, **also_of(c)} if c.get("ticker") in low_ or (c.get("ticker") in named_low and own_text(ev(c)).strip()) else
+                           {**c, "by_map": True, "no_words": True} if c.get("ticker") in named_low else
                            {**c, "by_map": True, **also_of(c), **read_of(c), **({} if own_text(ev(c)).strip() else {"no_words": True})}
                            if c.get("ticker") in map_ else c) if c.get("ticker") in known_ids else
                           {**c, "model_out": "other" if fam(c) or c.get("ticker") in outside or c.get("ticker") in word_other else "unknown",

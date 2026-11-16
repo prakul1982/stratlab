@@ -37,7 +37,6 @@ def test_9b_the_rule_itself_is_not_loosened_a_real_unexplained_move_in_that_layo
 
 # ---------- the placement, replayed on the fresh live inputs (tests/fixtures/themes_live/r572: the placement inputs as production served
 # them on 16 Nov under rules 57, with the stored words of the companies the map's check left out added from earlier inputs) ----------
-import json            # noqa: E402
 import pathlib         # noqa: E402
 import sys             # noqa: E402
 
@@ -193,3 +192,23 @@ def test_0b_words_read_after_the_check_place_the_theme_again_with_no_ai(monkeypa
     assert asked == [None] and new["value_chain"][0]["companies"][0]["out_why"] is None
     assert new["placements"]["replaced"] == 1 and new["placements"]["industries_by"] == "ai" and new["tailwinds"] == ["t"]
     assert TR.dive_key("US", "Restaurants", {**new, "generated_at": 1})[-1] == "rp1"
+
+
+def test_1f_a_largest_map_pick_held_unfit_only_for_want_of_fitting_words_is_in_the_figures_and_a_small_one_stays_out():
+    lay = "Ad-funded consumer platforms and games"
+    vc = [{"layer": lay, "description": "", "companies": [
+        {"ticker": "BIG", "name": "Big", "industry": "Computer Programming", "cap": 3000.0, "placed": "ai", "unfit": {"layer": lay, "why": "w"}},
+        {"ticker": "SM", "name": "Sm", "industry": "Computer Programming", "cap": 1.0, "placed": "ai", "unfit": {"layer": lay, "why": "w"}},
+        {"ticker": "P1", "name": "P1", "industry": "Computer Programming", "cap": 900.0},
+        {"ticker": "P2", "name": "P2", "industry": "Computer Programming", "cap": 800.0},
+        {"ticker": "P3", "name": "P3", "industry": "Computer Programming", "cap": 700.0}]},
+          {"layer": "Other software companies", "description": "", "official": True, "basis": "rest",
+           "companies": [{"ticker": f"O{i}", "name": f"O{i}", "industry": "Prepackaged Software", "cap": 1000.0 + i} for i in range(10)]}]
+    ev = {"BIG": "Big Inc. is a technology holding company; it is the parent of a search engine and several former subsidiaries.",
+          "SM": "Sm Inc. is a technology company.", "P1": "P1 runs an online platform funded by advertising.",
+          "P2": "P2 runs an online platform funded by advertising.", "P3": "P3 runs an online platform funded by advertising."}
+    models = {"P1": "platform", "P2": "platform", "P3": "platform"}
+    out = B.by_model(vc, models, "Software", confidence={s: "high" for s in models}, evidence_of=lambda s: ev.get(s, ""))
+    got = {c["ticker"]: c for v in out for c in v["companies"]}
+    assert got["BIG"].get("by_map") and not got["BIG"].get("out_why")
+    assert got["SM"].get("out_why") == "unfit"
