@@ -631,33 +631,33 @@ THEME_SRC = {"v": 1, "theme": "cybersecurity", "region": "US", "sector": "Cybers
 
 
 def test_a_theme_post_sets_layers_against_layers_and_draws_them(w):
+    """(updated on purpose, blog2: a theme post follows its deck's rules: a median is shown for 3 companies or more, a layer of one company has
+    no median of its own, and a post kept before its chain's own comparison was (v1) ranks no layer itself: the R59 Cybersecurity post said
+    "highest 31.4%, lowest 0.5%" where its deck ranked nothing, and printed medians of 2 companies its deck showed as "– (2)")"""
     post = blog_research.theme_post_from(THEME_SRC, datetime(2026, 11, 6, tzinfo=timezone.utc))
     assert post["slug"] == "theme-cybersecurity-margins-us" and post["published"] is False and post["src"] == THEME_SRC
     words = blog.plain_text([b for b in post["blocks"] if b["t"] in ("p", "ul", "stats")])
-    # the group no layer took is never the high end of the gap, nor a layer's move: the gap is Network security against Data security
-    assert post["summary"] == "Median EBITDA margin is highest in Network security (13.5%) and lowest in Data security (−9.1%), 22.6 points apart."
-    assert "Named in the theme's list" not in words and "10.0 points" not in words
+    assert "highest" not in words and "lowest" not in words and "points apart" not in words      # no comparison its chain didn't make
+    assert post["summary"].startswith("9 listed US companies are in the cybersecurity theme")
+    assert "Named in the theme's list" not in words and "10.0 points" not in words      # the group no layer took is in no line
+    assert "Median EBITDA margin by layer, each on 3 companies or more: Network security 13.5%; Data security −9.1%." in words
     # LIVE4-018: the move is the layer's companies added together, said as such beside the chart's median
     assert ("Data security: combined EBITDA margin (its 2 companies' figures added together, not the median in the chart) up 7.2 points, "
             "from −13.4% in Dec 2022 to −6.2% in Dec 2025") in words
     tiles = next(b for b in post["blocks"] if b["t"] == "stats")["items"]
-    assert [t["l"] for t in tiles] == ["companies", "layers", "highest layer margin", "lowest layer margin"] and all(t.get("s") for t in tiles)
-    assert "Identity has one company, so its figures are that company's own." in words
-    assert "9 listed US companies in the cybersecurity theme, sorted into 3 layers" in words and "3 of them are part of the theme but in no layer" in words
+    assert [t["l"] for t in tiles] == ["companies", "with figures", "layers"] and all(t.get("s") for t in tiles)
+    assert "5.5%" not in json.dumps(post["blocks"])                  # Identity's one company is no median
     charts = [b for b in post["blocks"] if b["t"] == "hbar"]
-    assert [r["label"] for r in charts[0]["rows"]] == ["Network security", "Identity", "Data security"]             # the chain's layers only
-    assert [r["text"] for r in charts[0]["rows"]] == ["13.5%", "5.5%", "−9.1%"] and charts[1]["rows"][0]["text"] == "21,632"
-    # each chart says which companies it leaves out (LIVE4-018: 4 of 14 were in no chart with nothing said under it)
-    for c in charts:
-        assert "Not drawn: the 3 companies in the theme's list but in no layer; their figures are in the table below." in c["note"]
-    assert "the median of each layer's companies" in charts[0]["note"]
-    table = next(b for b in post["blocks"] if b["t"] == "table" and b["head"][0] == "Layer" and len(b["head"]) == 6)
-    assert table["rows"][-1][0] == "In the theme's list, in no layer" and table["rows"][0][3:] == ["13.5%", "2.7%", "93.3%"]     # no plus sign on a margin
-    assert table["head"][2] == "Revenue ($ million)"
+    assert [r["label"] for r in charts[0]["rows"]] == ["Network security", "Data security"]             # layers on 3 companies or more
+    assert [r["text"] for r in charts[0]["rows"]] == ["13.5%", "−9.1%"] and "3 companies or more" in charts[0]["note"]
+    table = next(b for b in post["blocks"] if b["t"] == "table" and b["head"][0] == "Layer")
+    assert [r[0] for r in table["rows"]] == ["Network security", "Identity", "Data security"]
+    assert table["rows"][1] == ["Identity", "1", "$2.92 bn", "– (1)"] and table["rows"][0][3] == "13.5%"   # no plus sign on a margin
     blog.upsert_research({**post, "published": True})
     html = page(w["client"], "/blog/theme-cybersecurity-margins-us")
-    assert html.count('<figure class="hb">') == 2 and 'class="bar neg"' in html and '<div class="btbl wrap">' in html
+    assert html.count('<figure class="hb">') == 1 and 'class="bar neg"' in html
     assert "Check Point &lt;b&gt;Software&lt;/b&gt;" in html and "latest full latest" not in html
+    assert 'href="/themes/us/cybersecurity"' in html and 'href="/research/themes?q=cybersecurity&amp;region=US"' in html
     assert blog_research.advice_words(post) is None and not any(v in html.lower() for v in VENDORS)
 
 
@@ -685,12 +685,13 @@ def test_the_live_theme_post_is_written_again_in_the_new_form_after_a_deploy(w, 
     assert out["made"] == [{"post": "theme", "slug": "theme-cybersecurity-margins-us", "result": "updated"}] and out["problems"] == []
     got = blog.get("theme-cybersecurity-margins-us")
     assert got["published"] is True and got["published_at"].startswith("2026-11-05") and got["body"]["src"]["rows"][-1]["official"] is True
-    assert got["summary"].startswith("Median EBITDA margin is highest in Edge delivery and application protection (14.8%) and lowest in Vulnerability and data security (−9.1%)")
+    # (updated on purpose, blog2: no layer ranked without its chain's own comparison, and a layer with no median on 3 companies is "–" in the table)
+    assert got["summary"].startswith("14 listed US companies are in the cybersecurity theme") and "highest" not in got["summary"]
     html = page(w["client"], "/blog/theme-cybersecurity-margins-us")
     assert '<figure class="hb">' in html and "latest full latest" not in html and "gap of 42.5" not in html
     assert "Vulnerability and data security: combined EBITDA margin (its 2 companies&#x27; figures added together, not the median in the chart) up 7.2 points" in html \
         or "Vulnerability and data security: combined EBITDA margin (its 2 companies' figures added together, not the median in the chart) up 7.2 points" in html
-    assert "No figure for Endpoint and detection: none of its companies reports EBITDA" in html
+    assert "Edge delivery and application protection 14.8%" in html and "Identity and access" in html
     assert blog_research.run_if_stale(datetime(2026, 11, 6, 11, tzinfo=timezone.utc)) is None        # once per version
     assert blog_research.rewrite_theme_posts(datetime(2026, 11, 7, tzinfo=timezone.utc))[0][0]["result"] == "same"   # from its kept figures now: no change
 
@@ -744,9 +745,15 @@ def test_a_note_in_markdown_becomes_a_research_post_of_clean_blocks():
 
 
 def test_the_theme_post_compares_only_layers_of_three_companies_or_more():
-    """The same floor as the decks (R25): a layer whose median is of fewer than three companies is never the high or low end."""
+    """The same floor as the decks (R25): a layer whose median is of fewer than three companies is never the high or low end. (updated on
+    purpose, blog2: the post names a highest and a lowest only as its chain does, so the floor is the chain's: here, a post's own words never
+    rank, and a median of fewer than three is no figure at all)"""
     from app import blog_research as br
-    rows = [{"layer": "A", "ebitda": 30.0, "ebitda_n": 2}, {"layer": "B", "ebitda": 20.0, "ebitda_n": 3},
-            {"layer": "C", "ebitda": 5.0, "ebitda_n": 4}, {"layer": "D", "ebitda": -10.0, "ebitda_n": 1}]
-    assert br._theme_gap(rows) == {"high": "B", "high_value": 20.0, "low": "C", "low_value": 5.0, "gap": 15.0}
-    assert br._theme_gap([dict(r, ebitda_n=2) for r in rows]) is None
+    rows = [{"layer": "A", "n": 2, "ebitda": 30.0, "ebitda_n": 2}, {"layer": "B", "n": 3, "ebitda": 20.0, "ebitda_n": 3},
+            {"layer": "C", "n": 4, "ebitda": 5.0, "ebitda_n": 4}, {"layer": "D", "n": 1, "ebitda": -10.0, "ebitda_n": 1}]
+    src = {"v": 2, "theme": "t", "region": "IN", "rows": rows, "chain": {}}
+    post = br.theme_post_from(src)
+    chart = next(b for b in post["blocks"] if b["t"] == "hbar")
+    assert [r["label"].split(" (")[0] for r in chart["rows"]] == ["B", "C"]
+    assert "highest" not in br.blog.plain_text(post["blocks"])
+    assert br.theme_problem({**src, "rows": [dict(r, ebitda_n=2) for r in rows]}) == "0 layers with a margin"

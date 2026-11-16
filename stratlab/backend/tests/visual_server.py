@@ -505,6 +505,13 @@ def blog_posts():
                 got += 1
             day -= timedelta(days=1)
     print("blog:", blog_research.generate(builders=blog_research.source_posts()))
+    # blog2: the theme posts committed with the code (app/blog_themes), stored and published as a release stores them (e2e/blog.spec.ts)
+    from pathlib import Path
+    kept, blog_research.SEED_DIR = blog_research.SEED_DIR, Path(blog_research.__file__).with_name("blog_themes")
+    try:
+        print("blog theme posts:", blog_research.seed_theme_posts())
+    finally:
+        blog_research.SEED_DIR = kept
 
 
 def invite_rewards():

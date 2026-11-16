@@ -2,8 +2,9 @@
 Plans page and the locked deck buttons offer one fixed theme deck that is already kept in the shared store (computed.py, kind
 "deck:theme", made by theme_routes.theme_dive_deck) for anyone, signed in or not, to download and see what a deck holds.
 
-Nothing is made here: no AI call, no data source, no deck build, nothing counted. The deck is SAMPLE_THEME's newest kept PDF; when that
-theme has none kept, the newest kept PDF of any theme; when nothing is kept, 404 (the pages then show no link: GET /pricing/sample-deck/info).
+Nothing is made here: no AI call, no data source, no deck build, nothing counted. The deck is SAMPLE_THEME's newest kept PDF made under
+today's versions (blog2: never a deck an older release made); when that theme has none, the newest such PDF of any theme; when none is kept,
+404 (the pages then show no link: GET /pricing/sample-deck/info).
 """
 import base64
 
@@ -28,10 +29,19 @@ def _is_pdf(label: str) -> bool:
     return "(PDF," in (label or "")
 
 
-def pick(rows: list[dict]) -> dict | None:
-    """The kept deck to offer, from computed.entries (newest first): SAMPLE_THEME's newest PDF, else the newest PDF, else None."""
+def current(row: dict, versions: list | None = None) -> bool:
+    """Whether a kept deck was made under today's versions (its rules, deck, dive text and sector figures: computed.VERSIONS): blog2, the owner,
+    16 Nov ("fix ... old deck ... make it all updated"): the index keeps the entries of older versions too, so the newest PDF can be one
+    a deploy has since replaced; a deck kept before the versions were recorded is not current either."""
+    want = computed.versions(KIND) if versions is None else versions
+    return want is None or ((row.get("meta") or {}).get("versions") == want)
+
+
+def pick(rows: list[dict], versions: list | None = None) -> dict | None:
+    """The kept deck to offer, from computed.entries (newest first): of the PDFs made under today's versions (current), SAMPLE_THEME's
+    newest, else the newest; None when no current PDF is kept (the pages then show no link until a deck is made again)."""
     from .intel import theme_library
-    pdfs = [r for r in rows if _is_pdf(r.get("label") or "")]
+    pdfs = [r for r in rows if _is_pdf(r.get("label") or "") and current(r, versions)]
     region, theme = SAMPLE_THEME
     for r in pdfs:
         if r.get("region") == region and theme_library.normalise(_name(r.get("label") or ""), region) == theme:

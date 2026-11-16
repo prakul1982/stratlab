@@ -13,6 +13,7 @@ import json
 import re
 import threading
 from datetime import date, datetime, timezone
+from pathlib import Path
 from statistics import median
 from zoneinfo import ZoneInfo
 
@@ -21,7 +22,7 @@ from . import blog, db, email_kit as kit
 IST = ZoneInfo("Asia/Kolkata")
 STATE_KEY = "blog:research:state"
 MONTH_KEY = "blog:research:month"
-GEN = 7                             # 7: a theme post says the day of the theme's read it was worked out from (LIVE7A-017); 6: theme posts with no layers, a headline for a name or a same-day twin are hidden (LIVE6-003); the version of what the builders write; bump it with a change to a post's words or tables and every post is written again at the next check after the deploy (LIVE2-029)
+GEN = 8                             # 8: a theme post follows its deck: medians on 3 companies or more with their counts, the chain's own comparison, each company's own words, the theme page and deck linked (blog2); 7: a theme post says the day of the theme's read it was worked out from (LIVE7A-017); 6: theme posts with no layers, a headline for a name or a same-day twin are hidden (LIVE6-003); the version of what the builders write; bump it with a change to a post's words or tables and every post is written again at the next check after the deploy (LIVE2-029)
 GEN_KEY = "blog:research:gen"       # {"gen", "ok", "tries", "at"} of the last run made for a version
 SIP_AMOUNT = 10000
 SIP_HORIZONS = (3, 5)
@@ -484,7 +485,10 @@ def generate(now: datetime | None = None, builders=None) -> dict:
                 except Exception as e:
                     out["problems"].append(f"{name}: {type(e).__name__}: {str(e)[:160]}")
                     print("blog research:", name, type(e).__name__, str(e)[:160])
-            if builders is None:                    # the theme posts are written again from their kept figures, in the same run (R11)
+            if builders is None:                    # the committed theme posts first (blog2), then every theme post again from its kept figures (R11)
+                made, problems = seed_theme_posts(now)
+                out["made"] += made
+                out["problems"] += problems
                 made, problems = rewrite_theme_posts(now)
                 out["made"] += made
                 out["problems"] += problems
@@ -550,31 +554,139 @@ def stale_figures(src: dict | None) -> bool:
     return isinstance(src, dict) and src.get("stamp") != theme_stamp()
 
 
+THEME_SRC_V = 2                         # 2: the deck's own counts, coverage and comparison kept with each layer (blog2); 1: before
+# the figures a layer's row keeps, each with how many companies it is the median of (the deck's columns: theme deck "The value chain by layer")
+ROW_FIGS = ("ebitda", "net", "roce", "roe", "nii_assets", "gnpa", "pb")
+QUOTE_MAX = 180                         # a company's own words beside its name, cut on a word
+
+
+def _row_shown(dive: dict) -> tuple[list[dict], list[dict]]:
+    """(the layers the deck's value chain shows, the companies of the theme's industries no layer takes) as the theme's deck picks them
+    (deck.py, "The value chain by layer"): a layer with at least one confirmed company; an official industry's leftover group is a list in the
+    deck's appendix, not a row, when the map has two layers of its own or more."""
+    layers = dive.get("layers") or []
+    shown = [x for x in layers if any(c.get("status") != "unverified" for c in x.get("companies") or [])]
+    own = [x for x in shown if not x.get("official")]
+    unplaced = [x for x in shown if x.get("official") and not x.get("by_industry") and x.get("basis") != "rest"] if len(own) >= 2 else []
+    return [x for x in shown if x not in unplaced], unplaced
+
+
+def _period(cos: list[dict]) -> dict | None:
+    """The year most of a theme's companies' latest full year ends in, with how many: {"year": "Mar 2026", "n": 95, "of": 102}."""
+    from collections import Counter
+    years = Counter(str(c.get("year")) for c in cos if c.get("year"))
+    if not years:
+        return None
+    year, n = years.most_common(1)[0]
+    return {"year": year, "n": n, "of": sum(years.values())}
+
+
+_NEWSY = re.compile(r"^\w+\s?-\s|\b(?:collaborat\w*|announc\w*|partners? with|signs?|signed|bags?|wins?|won|order worth|press release)\b", re.I)
+_BROKEN = re.compile(r"^[^.]{0,40}:\s|\d…?$|\s-\s.*\s-\s")      # "Market Leadership: - 3rd ... - 5% ... and 5", "Business Segments Q2 FY27: a) ..."
+_HEADING = re.compile(r"\s(?:[A-Z][\w&]*\s){1,3}[\w ]{0,20}:\s")
+_FIRST = re.compile(r"^(.+?[.!?])(?:\s|$)")
+
+
+def _layer_words(b: dict) -> str:
+    """The first sentence of a layer's description (the map's, written by AI): what its companies do, without the lines on what sets their
+    margin."""
+    from .share import public_words
+    text = public_words(b.get("description"), 400)
+    m = _FIRST.match(text)
+    first = (m.group(1) if m else text).strip()
+    from .newsletter import write
+    return first if 20 <= len(first) <= 300 and not first.endswith("…") and not write.banned(first) else ""
+
+
+def _company(c: dict) -> dict:
+    """A company as a theme post keeps it: its name and symbol, its own words about its work (the advice filter applied), its place in its
+    layer's figures and what its membership rests on."""
+    from .newsletter import write
+    from .share import public_words
+    what = public_words(c.get("what"), QUOTE_MAX) if c.get("what") else ""
+    head = _HEADING.search(what)                    # "... banking services Key Ratios Q3 FY26: CRAR: 17.19% ...": the words before a heading
+    if head and head.start() >= 30:
+        what = what[:head.start()].rstrip(" ,;")
+    if len(what) < 30 or _NEWSY.search(what) or _BROKEN.search(what) or what.count("(") != what.count(")"):
+        what = ""                                   # a news line, a heading or a line cut mid-figure is no description of its work
+    calc = c.get("calc") or {}
+    return {"symbol": c.get("symbol"), "name": c.get("name") or c.get("symbol"), "what": "" if write.banned(what) else what,
+            "evidence": c.get("evidence") or (c.get("theme") or {}).get("evidence"), "unverified": c.get("status") == "unverified",
+            "out": "" if calc.get("in", True) else str(calc.get("why") or "")[:80], "year": c.get("year")}
+
+
 def theme_source(dive: dict, theme: str, region: str) -> dict:
     """The figures a theme post is written from, kept in the post's row (body.src) so a later version of the words is written again from
-    them, with no AI read and no map that may have expired: the chain's rows (with whether each is a layer or a group no layer took, and its
-    companies), the notable items, the counts and the basis."""
-    layers = dive.get("layers") or []
+    them, with no AI read and no map that may have expired. blog2 (R59 posts): what the theme's deck shows, by the deck's own rules: the
+    value chain's rows (each layer's companies in its calculations "of" those it lists, each median with how many companies it is of), the
+    chain's own comparison (its line, the layers it ranks and those it shows without ranking), the theme's counts (in the theme, core members
+    with figures, adjacent participants), the years the figures are of, each layer's companies with their own words, and the basis."""
+    from .deck import is_lender_set, population
+    from .intel import theme_data as td
+    layers, unplaced = _row_shown(dive)
+    by = {x.get("layer"): x for x in layers}
+    chain = dive.get("chain") or {}
     rows = []
-    for i, r in enumerate((dive.get("chain") or {}).get("rows") or []):
-        blk = layers[i] if i < len(layers) and layers[i].get("layer") == r.get("layer") else next((x for x in layers if x.get("layer") == r.get("layer")), {})
-        rows.append({k: r.get(k) for k in ("layer", "n", "revenue", "ebitda", "net", "roce", "ebitda_n")}
-                    | {"official": bool(r.get("official") or blk.get("official")), "basis": blk.get("basis"),
-                       "companies": [{"symbol": c.get("symbol"), "name": c.get("name") or c.get("symbol")} for c in blk.get("companies") or [] if c.get("symbol")][:40]})
-    return {"v": 1, "theme": theme, "region": region, "sector": dive.get("sector") or theme, "members": dive.get("members"), "unit": dive.get("unit"),
+    for r in chain.get("rows") or []:
+        blk = by.get(r.get("layer"))
+        if not blk or not r.get("n"):
+            continue
+        rows.append({"layer": r["layer"], "n": r["n"], "listed": r.get("listed") or len(blk.get("companies") or []), "revenue": r.get("revenue"),
+                     **{k: r.get(k) for k in ROW_FIGS}, **{f"{k}_n": r.get(f"{k}_n") or 0 for k in ROW_FIGS},
+                     "official": bool(r.get("official") or blk.get("official")), "basis": blk.get("basis"), "adjacent": bool(r.get("adjacent") or blk.get("adjacent")),
+                     "scale": r.get("scale"), "words": _layer_words(blk),
+                     "companies": [_company(c) for c in blk.get("companies") or [] if c.get("symbol")][:120]})
+    adj = {x.get("symbol") for x in dive.get("adjacent") or [] if x.get("symbol")}
+    seen: set = set()
+    cos = [c for x in layers for c in x.get("companies") or [] if c.get("status") != "unverified" and not (c.get("revenue") is None and c.get("profit") is None)
+           and c.get("symbol") not in adj and not c.get("adjacent") and not (c.get("symbol") in seen or seen.add(c.get("symbol")))]      # deck.population's core
+    lender = is_lender_set([c for x in layers for c in x.get("companies") or []])
+    checks = dive.get("checks") or {}
+    p = dive.get("placements") or {}
+    pop = population(dive)
+    listed = len({c.get("symbol") for x in layers for c in x.get("companies") or [] if c.get("symbol")})
+    figs = dive.get("figures") or {}
+    return {"v": THEME_SRC_V, "theme": theme, "region": region, "sector": dive.get("sector") or theme, "unit": dive.get("unit"),
             "basis": dive.get("basis") or "", "rows": rows, "notable": [n for n in dive.get("notable") or [] if n.get("kind") == "move"],
+            "members": dive.get("members") if dive.get("members") is not None else pop["core"], "adjacent_n": pop["adjacent"],
+            "total": p.get("total") or listed, "listed": listed, "window": {"shown": figs.get("shown"), "of": figs.get("of")} if figs.get("of") else None,
+            "unplaced": sum(1 for x in unplaced for c in x.get("companies") or [] if c.get("status") != "unverified"),
+            "chain": {k: chain.get(k) for k in ("line", "highest", "lowest", "measure", "compared", "unranked")},
+            "lender": lender, "whole": td.mostly_whole(checks.get("whole_points"), checks.get("with_ebitda")),
+            "period": _period(cos), "as_of": dive.get("as_of"), "page": theme_page_path(theme, region),
             "stamp": theme_stamp(), "read_on": datetime.now(timezone.utc).date().isoformat()}
+
+
+def theme_page_path(theme: str, region: str) -> str:
+    """The theme's public page (/themes/in/it-service): the library keeps a theme under its normalised name (theme_library.normalise)."""
+    from . import public_themes
+    from .intel import theme_library
+    try:
+        name = theme_library.normalise(theme, region) or theme
+    except Exception:
+        name = theme
+    return public_themes.path(region, public_themes.slug(name))
+
+
+def app_theme_path(theme: str, region: str) -> str:
+    """The theme in the app, where its deck is made (a sign-in; decks on Basic and Pro)."""
+    from urllib.parse import quote
+    return f"/research/themes?q={quote(str(theme or ''))}&region={region}"
 
 
 def figures_moved(old: dict | None, new: dict) -> bool:
     """Whether a theme post's kept figures differ from the theme's live read (LIVE7A-017: the public Cybersecurity post said 14 companies in 5
     layers, "Identity and access has one company", while its theme page had 16 and two in identity): another set of layers, companies or
-    layer figures. The day of the read alone is no difference."""
+    layer figures, how many companies a figure is of, or the chain's comparison; a post kept before the deck's counts were (blog2) takes them.
+    The day of the read alone is no difference."""
     if not isinstance(old, dict):
         return False
-    shape = lambda src: [(r.get("layer"), r.get("n"), r.get("ebitda"), r.get("net"), r.get("roce"), r.get("revenue"),      # noqa: E731
+    if (old.get("v") or 1) != (new.get("v") or 1):
+        return True
+    shape = lambda src: [(r.get("layer"), r.get("n"), r.get("listed"), r.get("revenue"), tuple((r.get(k), r.get(f"{k}_n")) for k in ROW_FIGS),      # noqa: E731
                           sorted(c.get("symbol") or "" for c in r.get("companies") or [])) for r in src.get("rows") or []]
-    return shape(old) != shape(new) or old.get("members") != new.get("members")
+    return (shape(old) != shape(new) or old.get("members") != new.get("members") or old.get("total") != new.get("total")
+            or (old.get("chain") or {}) != (new.get("chain") or {}))
 
 
 def _num_cell(v) -> float | None:
@@ -625,129 +737,184 @@ def theme_source_from_blocks(post: dict) -> dict | None:
             "basis": basis.replace("latest full latest fiscal year", "latest full fiscal year"), "rows": rows, "notable": moves}
 
 
-def _theme_gap(rows: list[dict]) -> dict | None:
-    """The layers with the highest and lowest median EBITDA margin among the chain's layers (never a group no layer took), from those whose
-    median is of COMPARE_MIN companies or more (the decks' floor); no comparison when fewer than two layers have that many."""
-    from .intel import theme_data as td
-    pool = [r for r in rows if not r.get("official") and r.get("ebitda") is not None and (r.get("ebitda_n") or 0) >= td.COMPARE_MIN]
-    if len(pool) < 2:
-        return None
-    hi, lo = max(pool, key=lambda r: r["ebitda"]), min(pool, key=lambda r: r["ebitda"])
-    if hi["ebitda"] == lo["ebitda"]:
-        return None
-    return {"high": hi["layer"], "high_value": hi["ebitda"], "low": lo["layer"], "low_value": lo["ebitda"], "gap": round(hi["ebitda"] - lo["ebitda"], 1)}
-
-
 def _lower_first(s: str) -> str:
     """"Cybersecurity" in a sentence is "cybersecurity"; "AI data centers" keeps its capitals."""
     return s[:1].lower() + s[1:] if len(s) > 1 and s[1:2].islower() else s
 
 
-def _apart_label(r: dict) -> str:
-    return "In the theme's list, in no layer" if r.get("basis") == "list" or r["layer"] == LIST_GROUP else f"{r['layer']} (official industry, in no layer)"
+def _day(iso) -> str:
+    try:
+        return datetime.fromisoformat(str(iso)[:10]).strftime("%-d %b %Y")
+    except ValueError:
+        return ""
+
+
+def theme_measure(src: dict) -> str:
+    """The figure a theme post compares its layers on: the one its chain compared them on, else return on equity for a theme of lenders
+    (deck: lenders' measures) and EBITDA margin for any other."""
+    chain = src.get("chain") or {}
+    if chain.get("highest") and chain.get("measure"):
+        return chain["measure"]
+    return "roe" if src.get("lender") else "ebitda"
+
+
+def _cells(src: dict):
+    """(format of each figure, the value chain table's (head, rows)) as the theme's deck writes them (deck.py "The value chain by layer"):
+    each median with its base, none under 3 companies; a layer's companies "of" those it lists; revenue its companies added together."""
+    from .deck import _medn, _pc, _pcw, _times, _whole_rows, adjacent_label, companies_cell, drop_empty
+    from .deepdive import money
+    whole, unit = bool(src.get("whole")), src.get("unit") or ("₹ crore" if (src.get("region") or "IN") == "IN" else "$ million")
+    fmt = {"ebitda": lambda x: _pcw(x, whole), "pb": _times}
+    lend = src.get("lender") or theme_measure(src) == "roe"
+    cols = [("n", "Companies"), ("revenue", "Revenue"), ("ebitda", "EBITDA margin"), ("net", "Net margin"), ("roce", "ROCE")]
+    if lend:
+        cols += [("roe", "ROE"), ("nii_assets", "NII / assets"), ("gnpa", "Gross NPA"), ("pb", "P/B")]
+
+    def cell(r, k):
+        if k == "n":
+            return companies_cell(r["n"], r.get("listed"))
+        if k == "revenue":
+            return "–" if r.get("revenue") is None else money(r["revenue"], unit)
+        return _medn(None, r["n"], fmt.get(k, _pc), n=r.get(f"{k}_n"), value=r.get(k))
+    v2 = (src.get("v") or 1) >= 2
+    rows = [[adjacent_label(r["layer"], r.get("adjacent"))] + [cell(r, k) for k, _ in cols] for r in src.get("rows") or [] if r.get("n") and (v2 or not r.get("official"))]
+    head, rows, _, _ = drop_empty(["Layer"] + [h for _, h in cols], rows, [1] * (len(cols) + 1))
+    return fmt, head, _whole_rows(rows)          # each column at one precision, as every slide is (deck.whole_deck)
 
 
 def theme_post_from(src: dict, now: datetime | None = None) -> dict:
-    """The theme post from its kept figures (theme_source): a line on what it covers, the headline figures as tiles, what the figures show in
-    a few sentences, the margin and the revenue of each layer as bar charts, every figure in one table, who is in each layer, and the
-    method. A group of companies no layer took is in the table, apart, and in no chart or sentence."""
+    """The theme post from its kept figures (theme_source), by the theme deck's own rules (blog2, the owner, 16 Nov: "keep posting blog of the
+    9+ decks"): what it covers with the day of the read and the years its figures are of; the headline counts as tiles; what the figures
+    show in the chain's own words (the layers it ranks, those it shows without ranking and why); each layer's median by the deck's floor as a
+    chart; every layer's figures in the deck's table, each median with the companies it is of; who is in each layer, each company with its
+    own words; links to the theme's page and its deck; the method."""
+    from .deck import _pc, adjacent_label, bar_marks, compare_note, decimal_units, whole_figures, ADJACENT_NOTE, COMPANIES_NOTE
     from .intel import theme_data as td
     now = now or datetime.now(timezone.utc)
     region = src.get("region") or "IN"
     sector = src.get("sector") or src.get("theme") or "Theme"
-    unit = src.get("unit") or ("₹ crore" if region == "IN" else "$ million")
-    rows = src.get("rows") or []
-    src = {**src, "members": src.get("members") or len({c["symbol"] for r in rows for c in r.get("companies") or []}) or sum(r.get("n") or 0 for r in rows)}
-    layers = [r for r in rows if not r.get("official")]
-    apart = [r for r in rows if r.get("official")]
-    gap = _theme_gap(rows)
-    pts = lambda v: "–" if v is None else td.pts(v)          # noqa: E731
+    v2 = (src.get("v") or 1) >= 2
+    rows = [r for r in src.get("rows") or [] if r.get("n") and (v2 or not r.get("official"))]      # a kept post of before: its layers only
+    chain = src.get("chain") or {}
+    key = theme_measure(src)
+    what = "return on equity" if key == "roe" else "EBITDA margin"
+    fmt, head, table = _cells(src)
+    shown = [r for r in rows if r.get(key) is not None and (r.get(f"{key}_n") or 0) >= td.MIN_BASE]
+    keep = decimal_units(*[fmt.get(key, _pc)(r[key]) for r in shown])          # the post's medians at one precision, as a deck's chart is
+    f = lambda v: whole_figures(fmt.get(key, _pc)(v), keep)          # noqa: E731
+    total = src.get("total") or src.get("members") or len({c["symbol"] for r in rows for c in r.get("companies") or []})
+    members = src.get("members") if src.get("members") is not None else total
     where = {"IN": "Indian", "US": "US"}.get(region, "")
     named = _lower_first(sector) + ("" if sector.lower().endswith("theme") else " theme")
-    intro = (f"{src.get('members')} listed {where + ' ' if where else ''}companies in the {named}, sorted into {len(layers)} "
-             f"{'layer' if len(layers) == 1 else 'layers'} of its value chain by what each company's own description says it does.")
-    if apart:
-        k = sum(r["n"] for r in apart)
-        intro += (f" {k} of {'them is' if k == 1 else 'them are'} part of the theme but in no layer; "
-                  f"{'it is' if k == 1 else 'they are'} in the table, apart, and not in the charts.")
-    intro += " Every figure is from the companies' latest full-year accounts."
+    intro = (f"{total:,} listed {where + ' ' if where else ''}compan{'y is' if total == 1 else 'ies are'} in the {named}; StratLab's map sorts them into "
+             f"{len(rows)} {'layer' if len(rows) == 1 else 'layers'} of its value chain by what each company's own description says it does. "
+             f"The figures below are of its {members:,} core member{'' if members == 1 else 's'} with figures")
+    if src.get("adjacent_n"):
+        intro += f"; {src['adjacent_n']:,} adjacent participant{' is' if src['adjacent_n'] == 1 else 's are'} shown apart, in no theme figure"
+    intro += "."
+    per = src.get("period") or {}
+    if per.get("year"):
+        intro += (f" Each company's figures are from its latest full-year accounts: the year to {per['year']} for {per['n']:,} of the {per['of']:,}."
+                  if per.get("n") != per.get("of") else f" Each company's figures are from its latest full-year accounts, the year to {per['year']}.")
+    else:
+        intro += " Every figure is from the companies' latest full-year accounts."
     if src.get("read_on"):           # LIVE7A-017: the day of the read, so a post is never taken for the theme's page of another day
-        try:
-            day = datetime.fromisoformat(str(src["read_on"])[:10]).strftime("%-d %b %Y")
-        except ValueError:
-            day = ""
+        day = _day(src["read_on"])
         if day:
-            intro += f" Worked out from StratLab's read of the theme on {day}; its companies and figures change as the theme is read again."
+            intro += (f" Worked out from StratLab's read of the theme on {day}" + (f", prices as of {_day(src['as_of'])}" if src.get("as_of") and _day(src["as_of"]) else "")
+                      + "; its companies and figures change as the theme is read again.")
+    by = {r["layer"]: r for r in rows}
+    hi, lo = by.get(chain.get("highest") or ""), by.get(chain.get("lowest") or "")
     lines = []
-    if gap:
-        lines.append(f"Median EBITDA margin is highest in {gap['high']} ({pts(gap['high_value'])}) and lowest in {gap['low']} ({pts(gap['low_value'])}), "
-                     f"{td.f1(gap['gap'])} points apart.")
-    names = {r["layer"] for r in layers}
+    if chain.get("line"):
+        lines.append(whole_figures(chain["line"]))  # the deck's own sentence on its value chain, word for word, as its slides print it
+    if not chain.get("highest"):
+        if shown and not chain.get("line"):
+            lines.append(f"Median {what} by layer, each on {td.MIN_BASE} companies or more: "
+                         + "; ".join(f"{adjacent_label(r['layer'], r.get('adjacent'))} {f(r[key])}" for r in shown) + ".")
+        if v2:
+            lines.append(compare_note(chain, key))
+    names = {r["layer"] for r in rows}
     for n in src.get("notable") or []:
         if n.get("kind") == "move" and n.get("layer") in names:
             # LIVE4-018: this is the layer's companies added together, not its median company (the chart's and the table's): said first, so
             # "−6.2%" here beside "−9.1%" in the chart reads as two different measures, not a contradiction
             lines.append(f"{n['layer']}: combined EBITDA margin (its {n['n']} companies' figures added together, not the median in the chart) "
-                         f"{'up' if n['move'] > 0 else 'down'} {td.f1(abs(n['move']))} points, from {pts(n['from'])} in {n['from_year']} to {pts(n['to'])} in {n['to_year']}.")
-    single = [r["layer"] for r in layers if r.get("n") == 1]
-    if single:
-        lines.append(f"{single[0]} has one company, so its figures are that company's own." if len(single) == 1 else
-                     f"{', '.join(single[:-1])} and {single[-1]} have one company each, so their figures are those companies' own.")
-    # LIVE4-018: four labels of one line each, the detail in the line under (the labels were 1, 1, 2 and 2 lines, sub-labels at three heights)
-    tiles = [{"v": str(src.get("members")), "l": "companies", "s": "in the theme"}, {"v": str(len(layers)), "l": "layers", "s": "of its value chain"}]
-    if gap:
-        tiles += [{"v": pts(gap["high_value"]), "l": "highest layer margin", "s": f"median EBITDA, {gap['high']}"},
-                  {"v": pts(gap["low_value"]), "l": "lowest layer margin", "s": f"median EBITDA, {gap['low']}"}]
-    k_apart = sum(r.get("n") or 0 for r in apart)
-    left_out = (f"Not drawn: the {k_apart} {'company' if k_apart == 1 else 'companies'} in the theme's list but in no layer; "
-                f"{'its' if k_apart == 1 else 'their'} figures are in the table below.") if k_apart else ""
-    no_margin = [r["layer"] for r in layers if r.get("ebitda") is None]
-    table = [[r["layer"], str(r["n"]), p1_plain(r.get("revenue"), unit), pts(r.get("ebitda")), pts(r.get("net")), pts(r.get("roce"))] for r in layers]
-    table += [[_apart_label(r), str(r["n"]), p1_plain(r.get("revenue"), unit), pts(r.get("ebitda")), pts(r.get("net")), pts(r.get("roce"))] for r in apart]
-    blocks: list[dict] = [
-        {"t": "p", "text": intro},
-        {"t": "stats", "items": tiles},
-        {"t": "h2", "text": "What the figures show"},
-        {"t": "ul", "items": lines or [f"{len(layers)} layers with a median EBITDA margin each; the table below has every figure."]},
-        {"t": "h2", "text": "Margin by layer"},
-        {"t": "hbar", "caption": "Median EBITDA margin of each layer's companies, latest full year",
-         "rows": [{"label": r["layer"], "value": r.get("ebitda"), "text": pts(r.get("ebitda")) if r.get("ebitda") is not None else "no figure"} for r in layers],
-         # LIVE4-018: the chart says which layers have no figure and why, and which companies it leaves out
-         "note": " ".join(x for x in [
-             "EBITDA margin is operating profit before depreciation as a share of revenue, the median of each layer's companies.",
-             (f"No figure for {', '.join(no_margin[:-1]) + ' and ' + no_margin[-1] if len(no_margin) > 1 else no_margin[0]}: none of "
-              f"{'their' if len(no_margin) > 1 else 'its'} companies reports EBITDA (their revenue and net margin are in the table).") if no_margin else "",
-             left_out] if x)},
-    ]
-    if sum(1 for r in layers if r.get("revenue")) >= 2:
-        blocks.append({"t": "hbar", "caption": f"Revenue of each layer, {unit}, its companies added together",
-                       "rows": [{"label": r["layer"], "value": r.get("revenue"), "text": p1_plain(r.get("revenue"), unit) if r.get("revenue") is not None else "no figure"} for r in layers],
-                       **({"note": left_out} if left_out else {})})
-    blocks += [
-        {"t": "h2", "text": "Every layer in figures"},
-        {"t": "table", "caption": f"Margins and ROCE are each layer's median company; revenue, in {unit}, is its companies added together",
-         "head": ["Layer", "Companies", f"Revenue ({unit})", "EBITDA margin", "Net margin", "ROCE"], "rows": table, "align": "lrrrrr"},
-    ]
+                         f"{'up' if n['move'] > 0 else 'down'} {td.f1(abs(n['move']))} points, from {td.pts(n['from'])} in {n['from_year']} to {td.pts(n['to'])} in {n['to_year']}.")
+    if src.get("unplaced"):
+        k = src["unplaced"]
+        lines.append(f"{k:,} more {'company' if k == 1 else 'companies'} of the theme's industries {'is' if k == 1 else 'are'} in no layer of the map; "
+                     f"{'it counts' if k == 1 else 'they count'} in the theme's counts, not in any layer's row.")
+    tiles = [{"v": f"{total:,}", "l": "companies", "s": "in the theme"}, {"v": f"{members:,}", "l": "with figures", "s": "core members, every figure is of these"},
+             {"v": str(len(rows)), "l": "layers", "s": "of its value chain"}]
+    if hi and lo:
+        tiles = tiles[:2] + [{"v": f(hi[key]), "l": f"highest median {'ROE' if key == 'roe' else 'margin'}", "s": hi["layer"]},
+                  {"v": f(lo[key]), "l": f"lowest median {'ROE' if key == 'roe' else 'margin'}", "s": lo["layer"]}]
+    notes = [f"Each bar is a layer's median company, latest full year, with the companies it is of in its label; a layer is drawn on a median of "
+             f"{td.MIN_BASE} companies or more, and every layer is in the table below."]
+    if any(r.get("adjacent") for r in rows):
+        notes.append(ADJACENT_NOTE)
+    blocks: list[dict] = [{"t": "p", "text": intro}, {"t": "stats", "items": tiles}, {"t": "h2", "text": "What the figures show"},
+                          {"t": "ul", "items": lines or [f"{len(rows)} layers; the table below has every figure."]}]
+    if len(shown) >= 2:
+        labels = bar_marks(chain, shown, key)[0] if v2 else [r["layer"] for r in shown]
+        blocks += [{"t": "h2", "text": f"Median {what} by layer"},
+                   {"t": "hbar", "caption": f"Median {what} of each layer's companies, latest full year",
+                    "rows": [{"label": lab, "value": r[key], "text": f(r[key])} for lab, r in zip(labels, shown)],
+                    "note": " ".join(notes)}]
+    caption = "Revenue: each layer's companies added together; margins and returns: its median company, with the companies it is of where fewer than the layer's"
+    blocks += [{"t": "h2", "text": "Every layer in figures"},
+               {"t": "table", "caption": caption, "head": head, "rows": table, "align": "l" + "r" * (len(head) - 1), "names": True}]
+    foot = [f"A median is shown for {td.MIN_BASE} companies or more; “– (2)” is a figure two companies have, “(3 of 5)” a median of 3 of the layer's 5."]
+    if v2 and any((r.get("listed") or 0) > r["n"] for r in rows):
+        foot.append(COMPANIES_NOTE.replace(" (who and why: the layer's page)", " (who and why: the layer's list below)"))
+    blocks.append({"t": "note", "text": " ".join(foot)})
     who = [r for r in rows if r.get("companies")]
     if who:
-        path = lambda c: blog.company_path(region, c["symbol"])          # noqa: E731
-        cell = lambda r: sum(([{"a": c["name"], "href": h} if (h := path(c)) else c["name"], ", "] for c in r["companies"]), [])[:-1]      # noqa: E731
-        blocks += [{"t": "h2", "text": "Who is in each layer"},
-                   {"t": "table", "caption": "Each company sits where its own description shows that work; one can sit in more than one layer",
-                    "head": ["Layer", "Companies"], "rows": [[r["layer"] if not r.get("official") else _apart_label(r), cell(r)] for r in who],
-                    "align": "ll", "wrap": True}]
+        blocks.append({"t": "h2", "text": "Who is in each layer, in its own words"})
+        win = src.get("window") or {}
+        blocks.append({"t": "p", "text": (f"Figures are worked out for {win['shown']:,} of the theme's {win['of']:,} companies: every one the map names, then the "
+                                          "largest of the rest. Those companies by layer, each with its own description of its work:")
+                       if win.get("shown") and win.get("of") and win["shown"] < win["of"] else "Every company by layer, each with its own description of its work:"})
+        for r in who:
+            items = []
+            for c in r["companies"]:
+                h = blog.company_path(region, c["symbol"]) if c.get("symbol") else None
+                name = {"a": c["name"], "href": h} if h else c["name"]
+                if c.get("unverified"):
+                    tail = ": membership not checked yet; listed, in no figure"
+                elif c.get("what"):
+                    tail = f": “{c['what']}”"
+                elif c.get("evidence") in ("industry_code_supported", "list_supported"):
+                    tail = ": " + ("in the theme on its official industry" if c["evidence"] == "industry_code_supported" else "in the theme on the theme's own list")
+                else:
+                    tail = ""
+                if c.get("out") and not c.get("unverified"):
+                    tail += f" (not in the layer's figures: {c['out']})"
+                items.append([name, tail] if tail else [name])
+            label = adjacent_label(r["layer"], r.get("adjacent"))
+            inner = ([{"t": "p", "text": f"The map's description (written by AI): {r['words']}"}] if r.get("words") else []) + [{"t": "ul", "items": items}]
+            blocks.append({"t": "fold", "title": label[:80], "note": f"{len(r['companies'])} {'company' if len(r['companies']) == 1 else 'companies'}",
+                           "blocks": inner})
+    page, app = src.get("page") or theme_page_path(src.get("theme") or sector, region), app_theme_path(src.get("theme") or sector, region)
     blocks += [
+        {"t": "h2", "text": "The theme and its deck"},
+        {"t": "p", "text": ["Every company in the theme by layer, with what each one's place rests on: the ", {"a": f"{sector} theme page", "href": page},
+                            ". The full theme, with every company's figures, the tailwinds and risks with their sources and the slide deck these figures "
+                            "are from, is ", {"a": "the theme in StratLab", "href": app}, " (a sign-in; decks on Basic and Pro, a sample deck on ",
+                            {"a": "the plans page", "href": "/plans"}, ")."]},
         {"t": "details", "title": "How these figures were worked out", "items": [x for x in [
             src.get("basis") or "",
-            "A layer's margin and ROCE are its median company's (the middle one), so one very large or very small company doesn't set it. A company "
-            "that runs other businesses too is left out of its layer's median, since its figures are the whole company's.",
+            "A layer's margins and returns are its median company's (the middle one), so one very large or very small company doesn't set it; "
+            "its revenue is its companies' added together. A company that runs other businesses too is left out of its layer's median, since its "
+            "figures are the whole company's.",
             "A change over three years adds the same companies' figures together in each year (their operating profit over their revenue), so it "
-            "can differ from the median in the table.",
+            "can differ from the median in the table." if any(n.get("kind") == "move" for n in src.get("notable") or []) else "",
             "Facts and arithmetic only: nothing here says what to do with a share."] if x]},
         {"t": "p", "text": ["Read about any listed company on its ", {"a": "company page", "href": "/stocks"}, "."]},
     ]
-    title = f"{sector}: where the margin sits along the chain"
-    summary = lines[0] if lines else intro
+    title = f"{sector}: where the {'return on equity' if key == 'roe' else 'margin'} sits along the chain"
+    summary = (lines[0] if lines and chain.get("line") else intro)
     return {"slug": f"{THEME_PREFIX}{td.slug(src.get('theme') or sector)}-margins-{region.lower()}", "kind": "research",
             "market": region if region in ("IN", "US") else None, "title": title, "summary": summary[:380], "blocks": blocks,
             "published_at": blog.now_iso(now), "indexable": True, "published": False, "day": blog.now_iso(now)[:10], "src": src}
@@ -763,14 +930,19 @@ THEME_MIN_LAYERS = 2                 # layers with a margin a theme post needs: 
 
 
 def headline_like(name: str) -> bool:
-    n = str(name or "").strip()
+    # blog2: a name's own description in brackets is no headline ("Utilities (Indian power, gas and water-linked infrastructure)")
+    n = re.sub(r"\s*\([^()]*\)\s*$", "", str(name or "").strip())
     return bool(n) and (len(n.split()) > THEME_WORDS or bool(_HEADLINE.search(n)))
 
 
 def theme_problem(src: dict) -> str | None:
     """Why a theme post can't stand (LIVE6-003: two posts said "sorted into 0 layers" over an empty "Margin by layer" chart), or None:
-    fewer than THEME_MIN_LAYERS layers with a median EBITDA margin, or a headline for the theme's name."""
-    layers = [r for r in src.get("rows") or [] if not r.get("official") and r.get("ebitda") is not None]
+    fewer than THEME_MIN_LAYERS layers with a median of the figure it compares on (theme_measure) of the deck's floor of companies
+    (theme_data.MIN_BASE, blog2: the decks show no median of fewer), or a headline for the theme's name."""
+    from .intel import theme_data as td
+    key, v2 = theme_measure(src), (src.get("v") or 1) >= 2
+    layers = [r for r in src.get("rows") or [] if (v2 or not r.get("official")) and r.get(key) is not None
+              and (r.get(f"{key}_n") if r.get(f"{key}_n") is not None else r.get("n") or 0) >= td.MIN_BASE]
     if len(layers) < THEME_MIN_LAYERS:
         return f"{len(layers)} {'layer' if len(layers) == 1 else 'layers'} with a margin"
     if headline_like(src.get("theme") or "") or headline_like(src.get("sector") or ""):
@@ -867,10 +1039,6 @@ def carry_to_stored(slug: str, src: dict, now: datetime | None = None) -> str | 
         return None
 
 
-def p1_plain(v, unit: str = "") -> str:
-    return "–" if v is None else f"{v:,.0f}"
-
-
 def draft_theme_post(dive: dict, theme: str, region: str, now: datetime | None = None, notable_only: bool = True) -> dict:
     """Store the theme's draft post (hidden) when its data is notable (or, with notable_only=False, has two layers with a margin):
     {"result": "new" | "updated" | "same" | "nothing notable" | "too few figures" | "left out", "slug"}."""
@@ -922,6 +1090,156 @@ def rewrite_theme_posts(now: datetime | None = None) -> tuple[list[dict], list[s
             problems.append(f"{slug}: {type(e).__name__}: {str(e)[:160]}")
             print("blog research: theme post", slug, type(e).__name__, str(e)[:160])
     return made, problems
+
+
+# ---------- theme posts that ship with a release (blog2) ----------
+# The owner, 16 Nov: "keep posting blog of the 9+ decks". A theme post is published by committing its figures, read from the theme's live
+# dive at the time, to blog_themes/<slug>.json (scripts/theme_post.py drafts and checks one); the release stores and publishes it at the
+# first check after the deploy (seed_theme_posts). Nothing is written to the live site by hand, and the post then follows the theme's later
+# reads like any theme post (carry_to_stored, refresh_theme_posts_if_due).
+SEED_DIR = Path(__file__).with_name("blog_themes")
+SEED_KEY = "blog:theme:seeded"          # {slug: read_on} of the committed theme posts already stored and published
+
+
+def committed_theme_sources() -> list[dict]:
+    """The committed theme posts' figures (blog_themes/*.json), each a theme_source of the theme's live read; a file that can't be read is
+    left out and said."""
+    out = []
+    for p in sorted(SEED_DIR.glob("*.json")):
+        try:
+            src = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            print("blog research: committed theme post not read:", p.name, type(e).__name__)
+            continue
+        if isinstance(src, dict) and src.get("rows"):
+            out.append(src)
+    return out
+
+
+def seed_mark() -> tuple:
+    """What the committed theme posts are, for the newsletter clock's "nothing new since the last look" (newsletter/job.blog_versions)."""
+    return tuple((theme_slug(s), str(s.get("read_on") or "")) for s in committed_theme_sources())
+
+
+def seed_theme_posts(now: datetime | None = None) -> tuple[list[dict], list[str]]:
+    """Each committed theme post stored and published, once for each committed read (SEED_KEY), so a post hidden in Admin afterwards stays
+    hidden: written from its committed figures, unless the store already holds this post from a later read in the same form (its figures
+    kept); a post drafted hidden before is dated the day it goes up (blog.publish_now). A post its own checks fail is left out and said."""
+    now = now or datetime.now(timezone.utc)
+    made, problems = [], []
+    try:
+        done = db.json_value(db.get_setting(SEED_KEY), {}) or {}
+    except Exception as e:
+        return made, [f"committed theme posts: not read: {type(e).__name__}"]
+    changed = False
+    for src in committed_theme_sources():
+        slug = theme_slug(src)
+        if done.get(slug) == src.get("read_on"):
+            continue
+        try:
+            old = blog.get(slug)
+            kept = _stored_src(old)
+            later = (isinstance(kept, dict) and (kept.get("v") or 1) >= THEME_SRC_V and kept.get("stamp") == src.get("stamp")
+                     and str(kept.get("read_on") or "") > str(src.get("read_on") or ""))
+            use = kept if later else src
+            bad = theme_post_problems(use)
+            if bad:
+                problems.append(f"{slug}: not published, {bad[0]}")
+                continue
+            post = {**theme_post_from(use, now), "slug": slug, "published": True}
+            res = blog.upsert_research(post, now)
+            if old and not old.get("published"):
+                blog.publish_now(slug, now)
+                res = "published" if res == "same" else f"{res}, published"
+            made.append({"post": "theme (committed)", "slug": slug, "result": res})
+            done[slug] = src.get("read_on")
+            changed = True
+        except Exception as e:
+            problems.append(f"{slug}: {type(e).__name__}: {str(e)[:160]}")
+            print("blog research: committed theme post", slug, type(e).__name__, str(e)[:160])
+    if changed:
+        db.set_setting(SEED_KEY, json.dumps(done))
+    return made, problems
+
+
+_NUM = re.compile(r"(?<![\w.])[−\-+]?\d[\d,]*(?:\.\d+)?")
+
+
+def _numbers_of(v, out: set) -> None:
+    """Every number in a theme post's figures, as the texts it can be printed as (whole, one and two decimals, with and without its sign)."""
+    if isinstance(v, bool) or v is None:
+        return
+    if isinstance(v, (int, float)):
+        for x in (v, abs(v), v / 1000, abs(v) / 1000, v / 100000, abs(v) / 100000):
+            for dp in (0, 1, 2):
+                out.add(f"{x:.{dp}f}")
+        return
+    if isinstance(v, dict):
+        for x in v.values():
+            _numbers_of(x, out)
+    elif isinstance(v, (list, tuple)):
+        for x in v:
+            _numbers_of(x, out)
+    elif isinstance(v, str):
+        for t in _NUM.findall(v):
+            t = t.replace("−", "-").replace(",", "").lstrip("+-")
+            out.update({t, t[:-2] if t.endswith(".0") else t})
+
+
+def figures_not_in_source(src: dict, post: dict) -> list[str]:
+    """blog2: every number a theme post prints (its words, tiles, charts and tables) that its kept figures (src) don't hold, once each: none
+    for a post written from its figures. The deck's own fixed numbers (the floors of a median and a ranking) and the post's dates count as
+    held. Company names and quoted words are left out (their digits are names, not figures)."""
+    from .intel import theme_data as td
+    held: set = set()
+    _numbers_of({k: v for k, v in src.items() if k != "rows"}, held)
+    for r in src.get("rows") or []:
+        _numbers_of({k: v for k, v in r.items() if k != "companies"}, held)
+        _numbers_of(r.get("layer"), held)
+        _numbers_of(len(r.get("companies") or []), held)
+    _numbers_of([td.MIN_BASE, td.HEADLINE_MIN, 3, 2, 1, 0], held)
+    _numbers_of([post.get("published_at"), post.get("day")], held)
+    texts: list[str] = [post.get("title") or "", post.get("summary") or ""]
+    for b in post.get("blocks") or []:
+        t = b.get("t")
+        if t in ("p", "note", "h2", "h3") and isinstance(b.get("text"), str):
+            texts.append(b["text"])
+        elif t == "ul":
+            texts += [i for i in b.get("items") or [] if isinstance(i, str)]
+        elif t == "stats":
+            texts += [f"{i.get('v')} {i.get('l')} {i.get('s')}" for i in b.get("items") or []]
+        elif t == "hbar":
+            texts += [f"{x.get('label')} {x.get('text')}" for x in b.get("rows") or []] + [b.get("caption") or ""]
+        elif t == "table":
+            texts += [" ".join(c for c in row if isinstance(c, str)) for row in b.get("rows") or []]
+    out = []
+    for text in texts:
+        for tok in _NUM.findall(text):
+            n = tok.replace("−", "-").replace(",", "").lstrip("+-")
+            if n not in held and n.rstrip("0").rstrip(".") not in held and tok not in out:
+                out.append(tok)
+    return out
+
+
+def theme_post_problems(src: dict, post: dict | None = None) -> list[str]:
+    """What keeps a theme post off the site (scripts/theme_post.py and seed_theme_posts): too few layers to compare or a headline for a name
+    (theme_problem), a word of advice, a data provider named, or a number its kept figures don't hold."""
+    from .branding import public_text
+    post = post or theme_post_from(src)
+    out = []
+    why = theme_problem(src)
+    if why:
+        out.append(why)
+    bad = advice_words(post)
+    if bad:
+        out.append(f"it has the word {bad!r}")
+    text = f"{post.get('title')} {post.get('summary')} {blog.plain_text(post.get('blocks') or [])}"
+    if public_text(text) != text:
+        out.append("it names a data provider")
+    stray = figures_not_in_source(src, post)
+    if stray:
+        out.append("figures its source doesn't hold: " + ", ".join(stray[:8]))
+    return out
 
 
 THEME_REFRESH_RUN = 5                   # stale theme posts worked out again in one run (each a theme dive from stored pieces: no AI)

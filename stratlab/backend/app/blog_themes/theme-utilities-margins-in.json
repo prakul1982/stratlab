@@ -1,0 +1,1197 @@
+{
+ "adjacent_n": 60,
+ "as_of": "2026-11-16",
+ "basis": "Each company's latest full financial year ended March, in ₹ crore. Revenue, EBITDA margin (operating profit before depreciation as a share of revenue) and net margin (net profit as a share of revenue) are that year's; return on capital employed (ROCE) is the latest reported. Consolidated accounts where the company files them. Banks and lenders have no EBITDA margin or ROCE.",
+ "chain": {
+  "compared": [],
+  "highest": null,
+  "line": "Median EBITDA margin by layer: Thermal and hydro generation 29.6% (11 of 12 companies); Renewable power producers 74.2%. Capital for each unit of revenue (book equity plus debt over revenue, a proxy for capital needs) differs more than threefold between these layers, so they are not ranked.",
+  "lowest": null,
+  "measure": "ebitda",
+  "unranked": null
+ },
+ "lender": false,
+ "listed": 100,
+ "members": 39,
+ "notable": [
+  {
+   "from": 66.5,
+   "from_year": "Mar 2023",
+   "kind": "move",
+   "layer": "Renewable power producers",
+   "move": 8.1,
+   "n": 8,
+   "to": 74.6,
+   "to_year": "Mar 2026"
+  }
+ ],
+ "page": "/themes/in/utility",
+ "period": {
+  "n": 39,
+  "of": 39,
+  "year": "Mar 2026"
+ },
+ "read_on": "2026-11-16",
+ "region": "IN",
+ "rows": [
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "NTPC Limited",
+     "out": "",
+     "symbol": "NTPC",
+     "unverified": false,
+     "what": "NTPC (National Thermal Power Corporation) Ltd along with its subsidiaries/ associates & JVs is primarily involved in generation and sale of bulk power to State power utilities",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "NHPC Limited",
+     "out": "",
+     "symbol": "NHPC",
+     "unverified": false,
+     "what": "The company is primarily involved in the generation and sale of bulk power to various Power Utilities",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "NLC India Limited",
+     "out": "",
+     "symbol": "NLCINDIA",
+     "unverified": false,
+     "what": "NLC India is engaged in the business of mining of lignite and generation of power by using lignite as well as Renewable Energy Sources",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "JSW Energy Limited",
+     "out": "",
+     "symbol": "JSWENERGY",
+     "unverified": false,
+     "what": "JSW Energy Ltd and its subsidiaries are primarily engaged in the business of generation of power from its power assets located at Karnataka, Maharashtra, Nandyal and Salboni",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Vedanta Power Ltd",
+     "out": "",
+     "symbol": "VEDPOWER",
+     "unverified": false,
+     "what": "Vedanta Power is the power generation business of Vedanta Group",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Jaiprakash Power Ventures Ltd",
+     "out": "",
+     "symbol": "JPPOWER",
+     "unverified": false,
+     "what": "Jaiprakash Power Venture Limited operates in coal mining, sand mining, cement grinding, and production of thermal and hydroelectric electricity",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Reliance Power Ltd",
+     "out": "",
+     "symbol": "RPOWER",
+     "unverified": false,
+     "what": "Reliance Power Ltd is the listed holding company of a power-generation group operating 5,305 MW: 5,160 MW thermal and 145 MW renewable",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "RattanIndia Power Ltd",
+     "out": "",
+     "symbol": "RTNPOWER",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Gujarat Industries Power Co Ltd",
+     "out": "no revenue figure",
+     "symbol": "GIPCL",
+     "unverified": false,
+     "what": "The company is engaged in the business of Electrical Power Generation with a present installed generation capacity of 1184.40MW. The Company has a diversified portfolio of…",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Adani Power Ltd",
+     "out": "",
+     "symbol": "ADANIPOWER",
+     "unverified": false,
+     "what": "Adani Power (APL), a part of the diversified Adani Group, is the largest private thermal power producer in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Torrent Power Limited",
+     "out": "",
+     "symbol": "TORNTPOWER",
+     "unverified": false,
+     "what": "Torrent Power Ltd is a leading integrated power utility company in India with presence across generation, transmission and distribution of power",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tata Power Company Ltd",
+     "out": "",
+     "symbol": "TATAPOWER",
+     "unverified": false,
+     "what": "Tata Power Company Ltd is primarily involved in the business of the generation, transmission and distribution of electricity",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Globus Power Generation Ltd",
+     "out": "",
+     "symbol": "GLOBUSCON",
+     "unverified": false,
+     "what": "Globus Power Generation does generation of power, distribution and supply",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 29.6,
+   "ebitda_n": 11,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Thermal and hydro generation",
+   "listed": 13,
+   "n": 12,
+   "net": 8.5,
+   "net_n": 11,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 1.7,
+   "pb_n": 11,
+   "revenue": 403171.0,
+   "roce": 8.2,
+   "roce_n": 11,
+   "roe": 9.3,
+   "roe_n": 11,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Adani Green Energy Limited",
+     "out": "",
+     "symbol": "ADANIGREEN",
+     "unverified": false,
+     "what": "Adani Green Energy Limited, incorporated in 2015, is a holding company of several subsidiaries carrying business of renewable power generation within the group and is primarily…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "NTPC Green Energy Limited",
+     "out": "",
+     "symbol": "NTPCGREEN",
+     "unverified": false,
+     "what": "Incorporated in April 2022, NTPC Green Energy is a renewable energy company that focuses on undertaking projects through organic and inorganic routes",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "SJVN Limited",
+     "out": "",
+     "symbol": "SJVN",
+     "unverified": false,
+     "what": "The company is also engaged in the business of providing consultancy for hydro-power projects",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "ACME Solar Holdings Ltd",
+     "out": "",
+     "symbol": "ACMESOLAR",
+     "unverified": false,
+     "what": "Leading Power Producer ACME Solar Holdings is one of India's largest renewable energy-independent power producers (“IPP”) and among India's top 10 renewable energy players in…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Clean Max Enviro Energy Solutions Ltd",
+     "out": "",
+     "symbol": "CLEANMAX",
+     "unverified": false,
+     "what": "The company is India’s largest Commercial & Industrial (C&I) renewable energy provider, with over 15 years of operating history",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Juniper Green Energy Ltd",
+     "out": "",
+     "symbol": "JNPR",
+     "unverified": false,
+     "what": "Juniper Green Energy Limited is one of India's leading renewable energy independent power producers (IPPs), engaged in developing, building, operating, and maintaining…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "KPI Green Energy Ltd",
+     "out": "",
+     "symbol": "KPIGREEN",
+     "unverified": false,
+     "what": "They develop, build, own, manage, and maintain renewable power facilities (solar and wind solar hybrid power project) as an Independent Power Producer (IPP) and as a service…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "K.P. Energy Ltd",
+     "out": "way of earning not shown",
+     "symbol": "KPEL",
+     "unverified": false,
+     "what": "It is involved in the development of utility scale wind power generation infrastructure",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Orient Green Power Company Ltd",
+     "out": "",
+     "symbol": "GREENPOWER",
+     "unverified": false,
+     "what": "Orient Green Power Company Limited is an Independent Producer of Renewable Power, it is engaged in developing, owning, and operating a diversified portfolio of Wind Energy Power…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Indowind Energy Ltd",
+     "out": "",
+     "symbol": "INDOWIND",
+     "unverified": false,
+     "what": "Indowind Energy Ltd is in the business of generation and distribution of power through windmills",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 74.2,
+   "ebitda_n": 9,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Renewable power producers",
+   "listed": 10,
+   "n": 9,
+   "net": 15.4,
+   "net_n": 9,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 2.8,
+   "pb_n": 9,
+   "revenue": 27998.33,
+   "roce": 6.2,
+   "roce_n": 9,
+   "roe": 4.6,
+   "roe_n": 9,
+   "scale": null,
+   "words": "They build solar and wind plants and earn from fixed-tariff contracts."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Power Grid Corporation of India Limited",
+     "out": "",
+     "symbol": "POWERGRID",
+     "unverified": false,
+     "what": "Power Grid Corporation of India Limited is a Maharatna CPSU and India’s largest electric power transmission company",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Adani Energy Solutions Limited",
+     "out": "",
+     "symbol": "ADANIENSOL",
+     "unverified": false,
+     "what": "AESL, part of the Adani portfolio, is a multidimensional organization with presence in various facets of the energy domain, namely power transmission, distribution, smart…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Anzen India Energy Yield Plus Trust",
+     "out": "",
+     "symbol": "ANZEN",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 70.3,
+   "ebitda_n": 3,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Power transmission and grid networks",
+   "listed": 3,
+   "n": 3,
+   "net": 8.7,
+   "net_n": 3,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 2.2,
+   "pb_n": 3,
+   "revenue": 74778.0,
+   "roce": 9.1,
+   "roce_n": 3,
+   "roe": 9.4,
+   "roe_n": 3,
+   "scale": null,
+   "words": "These companies own and run high-voltage transmission lines and substations, and in one case also power distribution, earning availability-based or regulated returns."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "CESC Limited",
+     "out": "",
+     "symbol": "CESC",
+     "unverified": false,
+     "what": "CESC Ltd is in the business of generation and distribution of",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Reliance Infrastructure Ltd",
+     "out": "",
+     "symbol": "RELINFRA",
+     "unverified": false,
+     "what": "Reliance Infrastructure Ltd. is one of the largest infrastructure companies engaged in developing infrastructure projects through various Special Purpose Vehicles (SPVs) in…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "India Power Corporation Ltd",
+     "out": "",
+     "symbol": "DPSCLTD",
+     "unverified": false,
+     "what": "India Power Corporation Ltd is engaged in business of Power Distribution, Renewable Power Generation and Smart Grid",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 4.9,
+   "ebitda_n": 3,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Integrated power distribution",
+   "listed": 3,
+   "n": 3,
+   "net": 8.7,
+   "net_n": 3,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 0.8,
+   "pb_n": 3,
+   "revenue": 40404.0,
+   "roce": 10.9,
+   "roce_n": 3,
+   "roe": 12.0,
+   "roe_n": 3,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Indraprastha Gas Limited",
+     "out": "",
+     "symbol": "IGL",
+     "unverified": false,
+     "what": "Incorporated in the year 1998, Indraprastha Gas Limited (IGL) is in the business of city gas distribution in the National Capital Territory of Delhi",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Mahanagar Gas Limited",
+     "out": "",
+     "symbol": "MGL",
+     "unverified": false,
+     "what": "Mahanagar Gas Ltd is engaged in the business of City gas distribution (CGD), presently supplying natural gas in the city of Mumbai including adjoining areas and the Raigad…",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 14.6,
+   "ebitda_n": 2,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "City gas distribution",
+   "listed": 2,
+   "n": 2,
+   "net": 9.9,
+   "net_n": 2,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 1.7,
+   "pb_n": 2,
+   "revenue": 24408.0,
+   "roce": 17.3,
+   "roce_n": 2,
+   "roe": 13.25,
+   "roe_n": 2,
+   "scale": null,
+   "words": "These companies distribute natural gas as CNG and piped gas to vehicles, homes and businesses under exclusive local licences."
+  },
+  {
+   "adjacent": true,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Bharat Heavy Electricals Ltd",
+     "out": "",
+     "symbol": "BHEL",
+     "unverified": false,
+     "what": "Bharat Heavy Electricals Ltd is an integrated power plant equipment manufacturer engaged in design, engineering, manufacture, erection, testing, commissioning and servicing of a…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "ABB India Ltd",
+     "out": "",
+     "symbol": "ABB",
+     "unverified": false,
+     "what": "ABB India Limited is an integrated power equipment manufacturer supplying the complete range of engineering, products, solutions and services in areas of Automation and Power…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Siemens Ltd",
+     "out": "",
+     "symbol": "SIEMENS",
+     "unverified": false,
+     "what": "Siemens Limited offers products, integrated solutions for industrial applications for manufacturing industries, drives for process industries, intelligent infrastructure and…",
+     "year": "Sep 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Hitachi Energy India Ltd",
+     "out": "",
+     "symbol": "POWERINDIA",
+     "unverified": false,
+     "what": "Hitachi Energy India Ltd (formerly known as ABB Power Products and Systems India Ltd.) was created in 2019 as a Joint Venture between Hitachi and ABB's Power Grids",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "CG Power & Industrial Solutions Ltd",
+     "out": "",
+     "symbol": "CGPOWER",
+     "unverified": false,
+     "what": "CG Power & Industrial Solutions is a global enterprise providing end-to-end solutions to utilities, industries and consumers for the management and application of efficient and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "GE Vernova T&D India Ltd",
+     "out": "",
+     "symbol": "GVT&D",
+     "unverified": false,
+     "what": "It has been in the power transmission and distribution business for more than 100 years and provides a versatile range of solutions for connecting and evacuating power from…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Siemens Energy India Ltd",
+     "out": "",
+     "symbol": "ENRIN",
+     "unverified": false,
+     "what": "Siemens Energy India Ltd is a leading energy technology Provider, delivering integrated solutions across power generation and transmission systems Siemens Energy India Limited…",
+     "year": "Sep 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Suzlon Energy Ltd",
+     "out": "",
+     "symbol": "SUZLON",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Thermax Ltd",
+     "out": "",
+     "symbol": "THERMAX",
+     "unverified": false,
+     "what": "The Company’s portfolio includes boilers and heaters, absorption chillers/ heat pumps, power plants",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Schneider Electric Infrastructure Ltd",
+     "out": "",
+     "symbol": "SCHNEIDER",
+     "unverified": false,
+     "what": "Schneider Electric Infrastructure Limited, incorporated in 2011, is engaged in the business of manufacturing, designing, building and servicing technologically advanced products…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "TD Power Systems Ltd",
+     "out": "",
+     "symbol": "TDPOWERSYS",
+     "unverified": false,
+     "what": "TD Power Systems Ltd is engaged in manufacturing AC generators and Electric motors for various applications which are specifically designed to suit the needs of the customers…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Triveni Turbine Ltd",
+     "out": "",
+     "symbol": "TRITURBINE",
+     "unverified": false,
+     "what": "Triveni Turbine Ltd is primarily engaged in business of manufacture and supply of power generating equipment and solutions",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Inox Wind Ltd",
+     "out": "",
+     "symbol": "INOXWIND",
+     "unverified": false,
+     "what": "The company is engaged in the business of manufacturing Wind Turbine Generators (WTGs) and is a wind energy solutions provider servicing IPPs, Utilities, PSUs, Corporates and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Atlanta Electricals Ltd",
+     "out": "",
+     "symbol": "ATLANTAELE",
+     "unverified": false,
+     "what": "Atlanta Electricals Ltd is in the business of supplying a wide range of power transformers",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Voltamp Transformers Ltd",
+     "out": "",
+     "symbol": "VOLTAMP",
+     "unverified": false,
+     "what": "Voltamp Transformers Ltd is a Baroda based company and is mainly into manufacturing of various types of Oil filled Power & Distribution Transformers of various classes",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Transformers & Rectifiers India Ltd",
+     "out": "",
+     "symbol": "TARIL",
+     "unverified": false,
+     "what": "Transformers and Rectifiers (India) Ltd. is a manufacturer of Power, Furnace and Rectifier Transformers",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kanohar Electricals Ltd",
+     "out": "",
+     "symbol": "KANOHAR",
+     "unverified": false,
+     "what": "Kanohar Electricals Limited is engaged in the manufacturing of transformers in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "GE Power India Ltd",
+     "out": "",
+     "symbol": "GVPIL",
+     "unverified": false,
+     "what": "GE Power India Ltd is engaged in business of engineering, procurement & construction (EPC) of key equipment for thermal and hydro power plants",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bharat Bijlee Ltd",
+     "out": "",
+     "symbol": "BBL",
+     "unverified": false,
+     "what": "Bharat Bijlee is a leading electrical engineering company in India engaged in manufacturing of transformers, electric motors, elevator systems, drives and automation",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Indo Tech Transformers Ltd",
+     "out": "",
+     "symbol": "INDOTECH",
+     "unverified": false,
+     "what": "Indo Tech Transformers Ltd. is engaged in the business of manufacturing power and distribution transformers and various special application transformers, mobile substation…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Marsons Ltd",
+     "out": "",
+     "symbol": "MARSONS",
+     "unverified": false,
+     "what": "Marsons Ltd is engaged in manufacturing of transformers in the capacity range of 100 MVA 132KV class",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Raksan Transformers Ltd",
+     "out": "",
+     "symbol": "RAKSAN",
+     "unverified": false,
+     "what": "It entered transformer manufacturing in FY06 and subsequently established a second manufacturing facility to cater to rising demand",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Accord Transformer & Switchgear Ltd",
+     "out": "",
+     "symbol": "ACCORDTS",
+     "unverified": false,
+     "what": "Accord Transformer & Switchgear Ltd is a manufacturer of power and distribution equipment",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Star Delta Transformers Ltd",
+     "out": "",
+     "symbol": "STARDELTA",
+     "unverified": false,
+     "what": "Star Delta Transformers Ltd is a manufacturer and distributor of power transformers",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Quality Power Electrical Equipments Ltd",
+     "out": "",
+     "symbol": "QPOWER",
+     "unverified": false,
+     "what": "Quality Power Electrical Equipments Limited is engaged in the business of energy transition equipment and power technologies",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Powerica Ltd",
+     "out": "",
+     "symbol": "POWERICA",
+     "unverified": false,
+     "what": "Powerica Ltd is a power solutions company specializing in diesel generator sets (DG sets) for main and backup use",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Karamtara Engineering Ltd",
+     "out": "",
+     "symbol": "KARAMTARA",
+     "unverified": false,
+     "what": "Karamtara Engineering Limited manufactures products for renewable energy and transmission lines",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Elecon Engineering Company Ltd",
+     "out": "",
+     "symbol": "ELECON",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Aartech Solonics Ltd",
+     "out": "",
+     "symbol": "AARTECH",
+     "unverified": false,
+     "what": "Aartech Solonics Ltd manufactures specialised energy applications-related products and services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Vans Electroengineerings Ltd",
+     "out": "",
+     "symbol": "VANS",
+     "unverified": false,
+     "what": "The FY26 additions included over head-equipment components and braided flexible connectors",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Jyoti Ltd",
+     "out": "",
+     "symbol": "JYOTI",
+     "unverified": false,
+     "what": "Jyoti Limited, incorporated in 1943, is a Vadodara-based manufacturer of engineered pumps /pumping systems, motors and generators, hydel equipment, medium-voltage switchgear and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Exicom Tele-Systems Ltd",
+     "out": "",
+     "symbol": "EXICOM",
+     "unverified": false,
+     "what": "Exicom Tele-Systems Ltd manufactures EV chargers and Critical Power components",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Surana Telecom and Power Ltd",
+     "out": "",
+     "symbol": "SURANAT&P",
+     "unverified": false,
+     "what": "Incorporatd in 1984, Surana Telecom and Power Ltd does manufacturing and trading of Solar related Products, Generation of Solar Power and",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Nava Ltd",
+     "out": "",
+     "symbol": "NAVA",
+     "unverified": false,
+     "what": "Nava Bharat Ventures Ltd was established in 1972 as an Indian ferro alloys manufacturer, Nava Bharat is now a multinational company, operating in India, South East Asia and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Skipper Ltd",
+     "out": "",
+     "symbol": "SKIPPER",
+     "unverified": false,
+     "what": "Skipper Ltd manufactures power transmission and distribution structures",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Triveni Power Transmission Ltd",
+     "out": "",
+     "symbol": "TRIVENIPT",
+     "unverified": false,
+     "what": "TPTL is a part of the Triveni Group and is in the business of building high-speed gearboxes",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Insolation Energy Ltd",
+     "out": "",
+     "symbol": "INA",
+     "unverified": false,
+     "what": "Insolation Energy Ltd is engaged in the business of manufacturing solar panels and modules of high efficiency of various sizes",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Swelect Energy Systems Ltd",
+     "out": "",
+     "symbol": "SWELECTES",
+     "unverified": false,
+     "what": "The company is a part of the Swelect Group and was formerly known as Numeric Power Systems Ltd. It has evolved from a leading UPS and power electronics solutions provider into an…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Indosolar Ltd",
+     "out": "",
+     "symbol": "WAAREEINDO",
+     "unverified": false,
+     "what": "Indosolar Ltd manufactures PV solar modules",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Neueon Corporation Ltd",
+     "out": "",
+     "symbol": "NEUEON",
+     "unverified": false,
+     "what": "Company is engaged in manufacturing of galvanized steel towers used in the power transmission and telecom tower sector",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Surana Solar Ltd",
+     "out": "",
+     "symbol": "SURANASOL",
+     "unverified": false,
+     "what": "Surana Solar Ltd is in the business of manufacturing Solar Photovoltic Modules, generation of Wind and Solar Power energy and trading of other solar related products",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 15.95,
+   "ebitda_n": 38,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Power equipment and transformer makers",
+   "listed": 41,
+   "n": 41,
+   "net": 10.8,
+   "net_n": 37,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 5.7,
+   "pb_n": 37,
+   "revenue": 172947.61,
+   "roce": 23.45,
+   "roce_n": 40,
+   "roe": 19.1,
+   "roe_n": 39,
+   "scale": null,
+   "words": "Companies that manufacture transformers, turbines, generators, switchgear and grid equipment sold to utilities and industry."
+  },
+  {
+   "adjacent": true,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Polycab India Ltd",
+     "out": "",
+     "symbol": "POLYCAB",
+     "unverified": false,
+     "what": "Polycab is India’s leading manufacturers of cables and wires and allied products such as uPVC conduits and lugs and glands",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "KEI Industries Ltd",
+     "out": "",
+     "symbol": "KEI",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "R R Kabel Ltd",
+     "out": "",
+     "symbol": "RRKABEL",
+     "unverified": false,
+     "what": "RR Kabel provides consumer electrical products used for residential, commercial, industrial, and infrastructure purposes in two major segments, namely wires and cables including…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Finolex Cables Ltd",
+     "out": "",
+     "symbol": "FINCABLES",
+     "unverified": false,
+     "what": "Besides manufacturing a wide variety of wires and cables",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "KSH International Ltd",
+     "out": "",
+     "symbol": "KSHINTL",
+     "unverified": false,
+     "what": "KSH International Limited is the third-largest manufacturer and the largest exporter of magnet winding wires in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Universal Cables Ltd",
+     "out": "",
+     "symbol": "UNIVCABLES",
+     "unverified": false,
+     "what": "Universal Cables Ltd is predominantly engaged in the business of manufacturing a large range of power cables from 1.1kV to 400kV & capacitors, Turnkey Projects relating thereto…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Laser Power & Infra Ltd",
+     "out": "",
+     "symbol": "LASERPOWER",
+     "unverified": false,
+     "what": "Laser Power & Infra Ltd. is a Kolkata-based integrated manufacturer of power cables, conductors and other specialised products and components",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Lumino Industries Ltd",
+     "out": "",
+     "symbol": "LUMINO",
+     "unverified": false,
+     "what": "It is a leading manufacturer of a wide range of products, including Cables",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Paramount Communications Ltd",
+     "out": "",
+     "symbol": "PARACABLES",
+     "unverified": false,
+     "what": "Paramount Communications Ltd is engaged in manufacturing of Wires and Cables comprising of power cables, telecom cables, railway cables and specialised cables",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Dynamic Cables Ltd",
+     "out": "",
+     "symbol": "DYCL",
+     "unverified": false,
+     "what": "Dynamic Cables Ltd. manufactures a wide range of conductors and cables",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Quadrant Future Tek Ltd",
+     "out": "",
+     "symbol": "QUADFUTURE",
+     "unverified": false,
+     "what": "Quadrant Future- Tek Ltd manufactures specialty cables and develops train control & signalling systems",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Systematic Industries Ltd",
+     "out": "",
+     "symbol": "SYSTEMATIC",
+     "unverified": false,
+     "what": "Incorporated in March 2000, Systematic Industries Limited operates in the steel wire industry, manufacturing and supplying steel wires and cables for power transmission…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Susan Electricals India Ltd",
+     "out": "",
+     "symbol": "SUSAN",
+     "unverified": false,
+     "what": "Susan Electricals India Ltd. is engaged in the manufacturing of aluminium and copper-based electrical winding wires, conductors, and power cables",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Cords Cable Industries Ltd",
+     "out": "",
+     "symbol": "CORDSCABLE",
+     "unverified": false,
+     "what": "Cords Cable Industries Ltd is engaged in manufacturing Power Cables (upto 3.3 kV), Control Cables, and Instrumentation Cables",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "JD Cables Ltd",
+     "out": "",
+     "symbol": "JDCABLES",
+     "unverified": false,
+     "what": "JD Cables Limited is engaged in the manufacturing of cables and conductors that cater to the power transmission and distribution sector",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Johnsoncab Electricals Ltd",
+     "out": "",
+     "symbol": "JOHNSONCAB",
+     "unverified": false,
+     "what": "Incorporated in November 2020, Johnsoncab Electricals is engaged in the manufacturing of low voltage wires and cables",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Plaza Wires Ltd",
+     "out": "",
+     "symbol": "PLAZACABLE",
+     "unverified": false,
+     "what": "Plaza Wires Ltd manufactures and trades electrical wire and allied product",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 9.8,
+   "ebitda_n": 17,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Cable and wire makers",
+   "listed": 17,
+   "n": 17,
+   "net": 5.4,
+   "net_n": 17,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 2.8,
+   "pb_n": 16,
+   "revenue": 73101.0,
+   "roce": 21.5,
+   "roce_n": 17,
+   "roe": 17.8,
+   "roe_n": 17,
+   "scale": null,
+   "words": "Manufacturers of power, telecom and specialty cables and wires sold to utilities, builders and industry."
+  },
+  {
+   "adjacent": true,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Transrail Lighting Ltd",
+     "out": "",
+     "symbol": "TRANSRAILL",
+     "unverified": false,
+     "what": "Transrail Lighting Ltd is an integrated transmission & distribution, and pole manufacturing company",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bajel Projects Ltd",
+     "out": "",
+     "symbol": "BAJEL",
+     "unverified": false,
+     "what": "Bajel Projects Ltd is in the business of Engineering, Procurement and Construction Bajel Projects Limited (BPL) is a carved out legal entity from Bajaj Electricals Ltd. It's EPC…",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 8.85,
+   "ebitda_n": 2,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Engineering and construction contracts",
+   "listed": 2,
+   "n": 2,
+   "net": 3.3,
+   "net_n": 2,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 2.55,
+   "pb_n": 2,
+   "revenue": 9672.0,
+   "roce": 22.3,
+   "roce_n": 2,
+   "roe": 12.05,
+   "roe_n": 2,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": "rest",
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Jyoti Structures Ltd",
+     "out": "",
+     "symbol": "JYOTISTRUC",
+     "unverified": false,
+     "what": "The company is engaged in Electricity, transmission, distribution and substation",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Waaree Technologies Ltd",
+     "out": "",
+     "symbol": "WAAREE",
+     "unverified": false,
+     "what": "Waaree Technologies Ltd trades e-vehicles, batteries, lithium batteries and artificial intelligence based products & services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "KP Green Engineering Ltd",
+     "out": "",
+     "symbol": "KPGEL",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "GMR Power & Urban Infra Ltd",
+     "out": "",
+     "symbol": "GMRP&UI",
+     "unverified": false,
+     "what": "GMR Power and Urban Infra Limited (GPUIL), a subsidiary of GEPL holds expertise in the sectors of Energy, Urban Infrastructure, and Transportation",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "PTC India Ltd",
+     "out": "",
+     "symbol": "PTC",
+     "unverified": false,
+     "what": "PTC India Limited was established in 1999 by the Government of India as a Public-Private Initiative and is in the power trading business",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "GVK Power & Infrastructure Ltd",
+     "out": "",
+     "symbol": "GVKPIL",
+     "unverified": false,
+     "what": "GVK Power & Infrastructure Limited is primarily engaged in the business of providing operation and maintenance services, manpower & consultancy services, and incidental services…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Azad Engineering Ltd",
+     "out": "",
+     "symbol": "AZAD",
+     "unverified": false,
+     "what": "Azad Engineering Limited is a manufacturer of aerospace components and turbines and supplies its products to original equipment manufacturers (OEMs) in the aerospace, defense…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "United Van Der Horst Ltd",
+     "out": "",
+     "symbol": "UVDRHOR",
+     "unverified": false,
+     "what": "It manufactures and reconditions critical marine, oil & gas and process-industry components using machining, welding, grinding /honing and specialised hard-chrome-plating…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "GAIL (India) Limited",
+     "out": "",
+     "symbol": "GAIL",
+     "unverified": false,
+     "what": "It owns over 11,500 km of natural gas pipelines, over 2300 km of LPG pipelines, six LPG gas-processing units and a petrochemicals facility",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 13.9,
+   "ebitda_n": 8,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Other utility companies",
+   "listed": 9,
+   "n": 9,
+   "net": 7.95,
+   "net_n": 8,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": true,
+   "pb": 3.6,
+   "pb_n": 7,
+   "revenue": 168420.6,
+   "roce": 11.95,
+   "roce_n": 8,
+   "roe": 10.1,
+   "roe_n": 7,
+   "scale": null,
+   "words": ""
+  }
+ ],
+ "sector": "Utilities (Indian power, gas and water-linked infrastructure)",
+ "stamp": [
+  62,
+  32,
+  3
+ ],
+ "theme": "Utilities",
+ "total": 115,
+ "unit": "₹ crore",
+ "unplaced": 0,
+ "v": 2,
+ "whole": false,
+ "window": {
+  "of": 115,
+  "shown": 100
+ }
+}
