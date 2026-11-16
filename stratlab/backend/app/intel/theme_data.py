@@ -3287,7 +3287,9 @@ def same_names(blocks: list[dict], vc: list[dict]) -> None:
     royalty-funded drug developers”", a name the layer had before the split renamed it, in no list of the deck): the layers a line says earn
     the same way are named as the dive shows them, a former name ("was") by the layer's name now, one the dive shows under no name left out;
     with none left, the sentence is dropped."""
-    names = {b["layer"] for b in blocks}
+    # r572 round 2 (the live R57.1 Biotech deck: "earn the same way as those of ... “Medicinal chemicals and botanical products”", a layer the
+    # deck shows no company of): only a layer the dive shows a company of is named
+    names = {b["layer"] for b in blocks if b.get("companies", True)}
     alias = {a: v.get("layer") for v in vc if v.get("layer") in names for a in [v.get("was")] + list(v.get("aka") or []) if a}
     for b in blocks:
         m = b.get("model")

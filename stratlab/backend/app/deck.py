@@ -6526,6 +6526,23 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         if fnote:
             s.add("text", (M, BOT - fh + 0.08, CW, fh - 0.08), paras=fnote, size=BODY_MIN, floor=BODY_MIN, color=MUTED)
         slides.append(s)
+        # r572 round 2 (the live R57.1 decks: "Fabless chip design: The largest 4 of 38", "eVTOL and drone aircraft developers: The largest 4
+        # of 20", five layer pages under min(5, N) rows after every step above, their long names wrapping over three lines): the next of its
+        # companies go on a page of their own right after it, "<layer> (continued)", until min(5, N) of them are shown
+        if k_fit < want:
+            more = body[k_fit:]
+            room_c = BOT - TOP - REST_H
+            k_c = len(more)
+            while k_c > 1 and table_height(head, more[:k_c], widths, CW) > room_c:
+                k_c -= 1
+            k_c = max(k_c, min(len(more), want - k_fit))
+            s3 = Slide(f"{title} (continued)", f"Its companies {k_fit + 1} to {k_fit + k_c} of {len(cos)}", eyebrow=eb("The value chain"))
+            th3 = min(room_c, table_height(head, more[:k_c], widths, CW))
+            s3.add("table", (M, TOP, CW, th3), head=head, rows=more[:k_c], widths=widths, tight=True)
+            s3.add("text", (M, TOP + th3 + 0.04, CW, REST_H - 0.04),
+                   paras=[f"Companies {k_fit + 1} to {k_fit + k_c} of {len(cos)}, in the order of the table before; every one: appendix, "
+                          f"⟦Every company's figures⟧."], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
+            slides.append(s3)
         if cont:
             s2 = Slide(f"{title} (notes)", "Who is in the layer's calculations, and what its table's marks mean", eyebrow=eb("The value chain"))
             ch2 = sum(note_h(x) for x in cont) + 0.06 * (len(cont) - 1) + 0.12
@@ -7486,7 +7503,7 @@ def _layer_profile_slides(slides: list, v: dict, amt, eyebrow: str) -> None:
             f"from {sector_ops.NOTE_CHECKED.get(region, sector_ops.NOTE_CHECKED['US'])}, as each company states them; a layer figure only "
             "where at least half of the companies the profile fits state the measure, else the count; an amount or a count (capacity, rooms, "
             "beds, orders) as its range, never a median" + (f"; each company's figure, period and source: ⟦{SECTOR_TITLE}⟧" if paged else "")
-            + "." + (" " + profile_summary(with_ops) if with_ops else "")
+            + "." + (" " + profile_summary(with_ops, profile_short(got)) if with_ops or profile_short(got) else "")
             # R57 audit RC12: how far the measures reach among the largest companies they fit
             + (f" The {_n(of_big, 'largest company', 'largest companies')} a profile fits: {big} state one of its measures." if of_big else "")
             + (" Its last column: the layer's own companies with the top and the bottom value of its first figure with a median, inside the "
@@ -7518,7 +7535,25 @@ def _layer_profile_slides(slides: list, v: dict, amt, eyebrow: str) -> None:
 PROFILES_SAID = "Operating profiles"
 
 
-def profile_summary(rows_: list) -> str:
+def profile_short(rows_: list) -> list:
+    """r572 round 2 (the live R57.1 Restaurants deck: "Restaurants and food service and hotels and resorts", a layer whose name says hotels, with
+    no operating measures and no line saying why): each layer whose name says a sector operating profile and whose way of earning fits it, but
+    fewer than half of whose companies are of it, so no measures of it are shown: [(layer, the profile's plural name)]."""
+    from .intel import sector_ops
+    from .intel.theme_check import model_family
+    out = []
+    for r in rows_:
+        if r.get("ops"):
+            continue
+        fam = model_family((r.get("model") or {}).get("id")) or (r.get("model") or {}).get("family") or ""
+        for p_ in sector_ops.PROFILES:
+            if re.search(p_.words, str(r.get("layer") or ""), re.I) and fam in p_.models:
+                out.append((r["layer"], p_.many))
+                break
+    return out
+
+
+def profile_summary(rows_: list, short: list | None = None) -> str:
     """m57: each layer with a sector operating profile and how many of its measures its companies' documents state, in one sentence a reader
     (and deck_check) reads whole: "Operating profiles: Airlines, airlines: none of its 4 measures stated; Hotels, hotel operators: 2 of 4
     stated, 1 by half or more of its companies."."""
@@ -7533,6 +7568,7 @@ def profile_summary(rows_: list) -> str:
         else:
             ok = sum(1 for m in o["measures"] if m["ok"])
             items.append(f"{r['layer']}, {many}: {len(o['measures'])} of {k} stated, {ok} by half or more of its companies")
+    items += [f"{layer}, {many}: fewer than half of its companies are {many}, so no measures of theirs are shown" for layer, many in short or []]
     return f"{PROFILES_SAID}: " + "; ".join(items) + "."
 
 

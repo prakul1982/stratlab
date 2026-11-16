@@ -176,6 +176,7 @@ _BIZ = re.compile(r"(?:(?<=: )|(?<=; ))([^;:]{3,120}?)(?: \([^()]*\))?, a differ
 # the coverage's "Each layer" row: "companies with figures: A 10 of 10 · B 22 of 22 · ..." (the deck's layer names)
 _EACH = re.compile(r"companies with figures: (.+?)(?= Partly read\b| EBITDA margin read\b|$)")
 _LAYER_COUNT = re.compile(r"^(.+?) \d[\d,]* of \d[\d,]*$")
+_LAYER_COUNT_LEAD = re.compile(r"^([A-Z][^·]{2,120}?) \d[\d,]* of \d[\d,]*\b")
 _MAKING_MODEL = re.compile(r"\b(?:parts?|components?|ingredients?|makers?|manufactur\w*|fabricat\w*|foundr\w*)\b", re.I)
 _SELLER_NAME = re.compile(r"\b(?:retail\w*|stores?|shops?|chains?|merchants?|clubs?|marketplaces?|platforms?|online|e-?commerce|distribut\w*|"
                           r"wholesal\w*|dealers?|resellers?|services?|outsourc\w*|consult\w*|banks?|lenders?|insurers?|brokers?)\b", re.I)
@@ -381,7 +382,9 @@ def check_pages(pages: list[str]) -> dict:
         flat = flat_text(page).replace(" Each layer ", " ")
         for m in _EACH.finditer(flat):
             for cell in m.group(1).split(" · "):
-                lm = _LAYER_COUNT.match(cell.strip())
+                # r572 round 2 (the live R57.1 Public sector banks deck: the row's last cell, "Government-owned infrastructure financiers 2 of
+                # 2", runs on into the page's next row): a cell's layer is the words before its first "N of M"
+                lm = _LAYER_COUNT.match(cell.strip()) or _LAYER_COUNT_LEAD.match(cell.strip())
                 if lm:
                     layers.add(lm.group(1).strip())
     stems_of = lambda t: {w.lower()[:6] for w in _WORD.findall(t) if len(w) >= 4 and w.lower() not in _BIZ_STOP}    # noqa: E731
@@ -498,7 +501,9 @@ def d53_checks(pages: list[str], layers: set, add) -> None:
             if "(" not in m.group(2) and "Since the previous version" in flat:
                 add("added unexplained", n, m.group(0)[:140])
         h = _SOURCES_HEAD.search(flat)
-        if h and h.group(1) == h.group(2) and "arithmetic reproduced" in flat:
+        # r572 round 2 (the live R57.1 Restaurants deck: "3 checked figures, 3 verified" over three rows "verified", the page's legend naming
+        # the state "arithmetic reproduced: net profit over revenue worked out again"): a row's state, never the legend's
+        if h and h.group(1) == h.group(2) and re.search(r"arithmetic reproduced(?!:)", flat):
             add("verified count", n, h.group(0))
     adj = {m.group(1).strip() for f in flat_pages for m in _ADJ.finditer(f)}
     for n, flat in enumerate(flat_pages, 1):

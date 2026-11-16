@@ -139,10 +139,11 @@ def test_3b_a_removal_on_one_layer_s_answer_is_decided_by_the_company_s_own_word
              "BNK": "A Bank is a lender that takes deposits and makes loans to households across the region."}
     vc2, pl2 = B.layer_answer_removals(vc, pl, lambda s: words.get(s), "Medical devices", lambda s: {})
     other = next(v for v in vc2 if v.get("basis") == "rest")
-    assert [c["ticker"] for c in other["companies"]] == ["ABT"] and [x["ticker"] for x in pl2["layer_no"]] == ["ABT"]
+    # round 2 (updated on purpose): one with no words and no official industry stays too, its answer alone moving nothing (test_r2_6)
+    assert [c["ticker"] for c in other["companies"]] == ["ABT", "NW"] and [x["ticker"] for x in pl2["layer_no"]] == ["ABT", "NW"]
     left = {x["ticker"]: x for x in pl2["dropped"]}
     assert left["BNK"]["said"] == "scope" and left["BNK"]["scope"].startswith("another business: its own words say “A Bank is a lender")
-    assert left["NW"]["said"] == "no"
+    assert "NW" not in left
     assert "another business" in TC.dropped_why(left["BNK"])
 
 
@@ -212,3 +213,124 @@ def test_1f_a_largest_map_pick_held_unfit_only_for_want_of_fitting_words_is_in_t
     got = {c["ticker"]: c for v in out for c in v["companies"]}
     assert got["BIG"].get("by_map") and not got["BIG"].get("out_why")
     assert got["SM"].get("out_why") == "unfit"
+
+
+# ---------- round 2 ----------
+# the stored words of the live R57.1 Software input (lanes19/r572/in/software.json), their first 400 characters
+SW_WORDS = {
+    'SHOP': 'Shopify Inc. is a Canadian multinational e-commerce company headquartered in Ottawa, Ontario, that operates a cloud e-commerce management platform (CEMP) for retail point-of-sale systems. The company has over five million customers and processed US$292.3 billion in transactions in 2024, of which 57% was in the United States. Major customers include Tesla, LVMH, Nestlé, PepsiCo, AB InBev, Kraft Hei',
+    'TWLO': 'Twilio Inc. is an American cloud communications company based in San Francisco, California, which provides programmable communication tools for making and receiving phone calls, sending and receiving text messages, and performing other communication functions using its web service APIs. Founded in 2008, the company received multiple rounds of funding prior to its 2016 initial public offering. Twil',
+    'MSFT': 'Microsoft Corporation is an American multinational technology conglomerate headquartered in Redmond, Washington. The company became influential in the rise of personal computers through software like Windows and has since expanded into areas such as Internet services, cloud computing, artificial intelligence and video gaming among others. A Big Tech company, Microsoft is the largest software compa',
+    'ORCL': 'Oracle Corporation is an American multinational technology company headquartered in Austin, Texas. Co-founded in Santa Clara, California, in 1977 by Bob Miner, Ed Oates, and current chairman of the board and chief technology officer Larry Ellison, Oracle is among the 50 largest companies in the world by market cap, and ranked 52nd on the Forbes Global 2000 as of 2026. Through our worldwide sales f',
+    'CRWV': 'CoreWeave, Inc. is an American cloud-computing company based in Livingston, New Jersey. As of 2026, the company operates 51 AI data centers, specialized data centers designed for higher parallel computing performance via heavy use of graphics processing units (GPUs). Such data centers are vital to the training and running of generative AI models, such as large language models and text-to-video mod',
+    'NBIS': 'Nebius Group N.V., headquartered in Amsterdam, is a technology company that provides artificial intelligence infrastructure. It is headquartered in Amsterdam, Netherlands with offices in Israel and the United States. Nebius, a global AI cloud platform, delivers a unified full-stack AI cloud that spans the complete AI journey – from compute capacity to software and services that enable fast and eff',
+}
+
+
+def test_r2_1_a_compute_layer_keeps_only_companies_whose_words_say_computing_and_re_places_the_rest_in_the_theme():
+    lay = "Cloud and AI compute providers (larger)"
+    vc = [{"layer": lay, "description": "", "companies": [
+              {"ticker": "MSFT", "name": "Microsoft", "cap": 3e6},                                    # the map's own pick
+              {"ticker": "ORCL", "name": "Oracle", "cap": 6e5},                                       # the map's own pick, words say no computing
+              {"ticker": "SHOP", "name": "Shopify", "cap": 2e5, "moved": True, "placed": "ai", "model": "software"},
+              {"ticker": "TWLO", "name": "Twilio", "cap": 3e4, "moved": True, "placed": "ai", "model": "software"},
+              {"ticker": "CRWV", "name": "CoreWeave", "cap": 3e4, "moved": True, "placed": "ai"},
+              {"ticker": "NBIS", "name": "Nebius", "cap": 2e4, "placed": "ai"}]},
+          {"layer": "Data and developer infrastructure software", "description": "APIs, developer tools and communication platforms for "
+           "programmable communication", "companies": [{"ticker": "D1", "name": "D1"}, {"ticker": "D2", "name": "D2"}]},
+          {"layer": "Enterprise application subscriptions", "description": "", "companies": [{"ticker": "E1", "name": "E1"}, {"ticker": "E2", "name": "E2"}],
+           "model": {"id": "software"}},
+          {"layer": "Other software companies", "description": "", "official": True, "basis": "rest", "companies": []}]
+    assert B.says_compute(SW_WORDS["CRWV"]) and B.says_compute(SW_WORDS["NBIS"]) and B.says_compute(SW_WORDS["MSFT"])
+    assert not B.says_compute(SW_WORDS["SHOP"]) and not B.says_compute(SW_WORDS["TWLO"])
+    out, rows = B.compute_fit(vc, lambda s: SW_WORDS.get(s), "Software")
+    where = {c["ticker"]: v["layer"] for v in out for c in v["companies"]}
+    assert {where[s] for s in ("MSFT", "ORCL", "CRWV", "NBIS")} == {lay}
+    assert where["TWLO"] == "Data and developer infrastructure software" and where["SHOP"] == "Other software companies"
+    assert {r["ticker"] for r in rows} == {"SHOP", "TWLO"} and all("“cloud” said of another product" in r["why"] for r in rows)
+
+
+def test_r2_2_a_move_with_no_reason_says_what_its_own_words_say_and_a_move_between_halves_is_a_split():
+    entries = [{"moved": [{"symbol": "GD", "name": "General Dynamics", "from": "Naval and defense shipbuilding", "to": "Defense prime contracting"},
+                          {"symbol": "H", "name": "H", "from": "Content production (larger)", "to": "Content production (smaller)"},
+                          {"symbol": "K", "name": "K", "from": "A", "to": "B", "why": "its own words say what “B” is"}]}]
+    got = TC.reasoned(entries, lambda s: "General Dynamics is a developer and producer of advanced military equipment. It also builds jets."
+                      if s == "GD" else None, lambda s: "")[0]["moved"]
+    assert got[0]["why"] == "its own words say “General Dynamics is a developer and producer of advanced military equipment”"
+    assert got[1]["why"] == "the same layer, split into halves by market value" and got[2]["why"] == "its own words say what “B” is"
+
+
+def test_r2_3_a_layer_split_into_its_halves_is_said_as_a_split_never_as_gone():
+    snap = {"layers": ["Content production", "Radio"], "cos": {f"C{i}": [f"C{i}", 0] for i in range(6)} | {"R": ["R", 1]}}
+    dive = {"layers": [{"layer": "Content production (larger)", "companies": [{"symbol": f"C{i}", "name": f"C{i}"} for i in range(3)]},
+                       {"layer": "Content production (smaller)", "companies": [{"symbol": f"C{i}", "name": f"C{i}"} for i in range(3, 6)]},
+                       {"layer": "Radio", "companies": [{"symbol": "R", "name": "R"}]}]}
+    lost = TC.lost_layers(snap, dive)
+    assert lost == [{"layer": "Content production", "n": 6, "halves": ["Content production (larger)", "Content production (smaller)"]}]
+    line = TC.control_line({"informative": 1, "placed": 9, "control": {"low": True, "split": lost}})
+    assert "“Content production” (6 companies) split into “Content production (larger)” and “Content production (smaller)”" in line
+    assert "gone" not in line
+
+
+def test_r2_4_a_map_layer_whose_name_its_companies_never_say_takes_the_industry_their_filings_say():
+    vc = [{"layer": "Commercial airframe integration", "description": "", "companies": [
+        {"ticker": "BA", "name": "Boeing Co", "industry": "Aircraft", "cap": 2e5}, {"ticker": "EMBJ", "name": "Embraer S.A.", "industry": "Aircraft", "cap": 3e4}]}]
+    ev = {"BA": "The Boeing Company designs and manufactures airplanes, rotorcraft, rockets, satellites and missiles worldwide.",
+          "EMBJ": "We are the leading manufacturer of jets with up to 150 seats in the world, based on the number of aircraft delivered over the last decade."}
+    out, rows = B.truthful_layers(vc, {}, lambda s: ev.get(s, ""), "Aerospace and defense")
+    assert out[0]["layer"] == "Commercial airframe integration (aircraft)" and "Commercial airframe integration" in out[0]["aka"]
+    assert B.says_name(out[0]["layer"], ["Industry: Aircraft. " + ev["BA"]]) and B.says_name("Commercial airframe integration", list(ev.values())) is False
+
+
+def test_r2_4b_the_design_of_processor_cores_is_no_fabless_chip_maker_s_words():
+    arm = ("Arm Holdings plc is a British semiconductor and software design company, whose primary business is the design of central processing "
+           "unit (CPU) cores that implement the ARM architecture family of instruction sets.")
+    assert C.stated_model("Industry: Semiconductors. " + arm) != "fabless"
+    assert C.stated_model("Industry: Semiconductors. Q Inc. designs and sells chips that foundries make for it.") == "fabless"
+
+
+def test_r2_5_a_layer_page_under_min_5_rows_goes_on_to_a_continued_page_and_a_hotel_named_layer_says_why_it_has_no_measures():
+    from app import deck
+    rows_ = [{"layer": "Restaurants and food service and hotels and resorts", "ops": None, "model": {"id": "consumer_services"}},
+             {"layer": "Quick-service chains", "ops": None, "model": {"id": "consumer_services"}}]
+    assert deck.profile_short(rows_) == [("Restaurants and food service and hotels and resorts", "hotel operators")]
+    said = deck.profile_summary([], deck.profile_short(rows_))
+    assert said == ("Operating profiles: Restaurants and food service and hotels and resorts, hotel operators: fewer than half of its companies "
+                    "are hotel operators, so no measures of theirs are shown.")
+
+
+def test_r2_5b_deck_check_reads_a_coverage_row_s_last_layer_and_a_state_only_in_its_rows():
+    page = ("THEME · COVERAGE\nCoverage\n companies with figures: Large national banks 4 of 4 · Government-owned infrastructure financiers 2 of 2 "
+            "Each figure EBITDA margin 12\n In common: they earn mainly from interest. Its companies earn the same way as those of “Large national "
+            "banks”, “Government-owned infrastructure financiers”; the map keeps them as separate layers.\n\f"
+            "THEME · APPENDIX\nFigure sources\n3 checked figures, 3 verified: where each comes from\n A Corp   Net margin 1.0%, verified\n"
+            " Verified: the lines checked; arithmetic reproduced: net profit over revenue worked out again.\n\f")
+    r = DC.check_text(page)
+    assert not r["counts"].get("stale layer") and not r["counts"].get("verified count")
+    bad = page.replace("Net margin 1.0%, verified", "Net margin 1.0%, arithmetic reproduced")
+    assert DC.check_text(bad)["counts"].get("verified count") == 1
+
+
+def test_r2_6_a_removal_with_no_words_is_decided_by_its_industry_and_with_neither_the_member_stays():
+    vc = [{"layer": "Card issuers", "description": "", "companies": [{"ticker": "M", "name": "M"}]},
+          {"layer": "Other payments companies", "description": "", "official": True, "basis": "rest", "companies": []}]
+    pl = {"dropped": [{"ticker": "NONE", "name": "None Co", "groups": ["Card issuers"], "said": "no"},
+                      {"ticker": "STEEL", "name": "Steel Co", "groups": ["Card issuers"], "said": "no"},
+                      {"ticker": "PAY", "name": "Pay Co", "groups": ["Card issuers"], "said": "no"}]}
+    facts = {"STEEL": {"industry": "Basic Materials > Steel Works"}, "PAY": {"industry": "Services > Payment Processing"}}
+    vc2, pl2 = B.layer_answer_removals(vc, pl, lambda s: None, "Payments and fintech", lambda s: facts.get(s) or {})
+    other = {c["ticker"]: c for v in vc2 if v.get("basis") == "rest" for c in v["companies"]}
+    assert set(other) == {"NONE", "PAY"} and "moves nothing" in other["NONE"]["theme"]["why"]
+    assert [(x["ticker"], x["said"]) for x in pl2["dropped"]] == [("STEEL", "scope")] and "filed under Steel Works" in pl2["dropped"][0]["scope"]
+
+
+def test_r2_6b_a_split_move_into_a_layer_its_words_never_say_goes_to_other_unless_it_was_published_there():
+    vc = [{"layer": "Engineering R&D services", "description": "", "companies": [
+              {"ticker": "E1", "name": "E1"}, {"ticker": "RID", "name": "Riddhi Corporate Services Ltd", "moved": True, "industry": "IT Enabled Services"},
+              {"ticker": "PUB", "name": "Pub Ltd", "moved": True, "industry": "IT Enabled Services"}]},
+          {"layer": "Other IT service companies", "description": "", "official": True, "basis": "rest", "companies": []}]
+    words = {"RID": "Riddhi offers document management, inbound and outbound contact centre, data entry and verification services.",
+             "PUB": "Pub offers data entry and verification services."}
+    out, rows = B.unsaid_moves(vc, lambda s: words.get(s), "IT services", {"PUB": "Engineering R&D services"})
+    where = {c["ticker"]: v["layer"] for v in out for c in v["companies"]}
+    assert where["RID"] == "Other IT service companies" and where["PUB"] == "Engineering R&D services" and [r["ticker"] for r in rows] == ["RID"]

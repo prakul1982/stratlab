@@ -1038,8 +1038,11 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
                                                        kept.get("audit") if isinstance(kept.get("audit"), dict) else None)
         out_vc, scale_rows = scale_moves(out_vc, words_of, theme, figures_for if figures_of is not None else None)
         out_vc, held_rows = hold_published(out_vc, published, evidence, theme)
+        out_vc, compute_rows = compute_fit(out_vc, words_of, theme)
+        out_vc, unsaid_rows = unsaid_moves(out_vc, words_of, theme, published)
+        compute_rows = compute_rows + unsaid_rows
         out_vc, single_rows = single_layers(out_vc, words_of, theme)
-        held_rows = held_rows + single_rows
+        held_rows = held_rows + compute_rows + single_rows
     back = [{"ticker": s_, "name": (by_sym.get(s_) or {}).get("name") or (off_before or {})[s_][0],
              "why": "an earlier version found its own words describe another business; its own words read now show the theme's work"}
             for s_ in sorted(off_before or {}) if s_ in {c.get("ticker") for v in out_vc for c in v.get("companies") or []}
@@ -3982,6 +3985,103 @@ def scale_moves(vc: list[dict], words_of, theme: str, figures_of) -> tuple[list[
 _WHOLE_PLAIN = {"care", "consumer", "health", "safety", "industrial", "services", "service", "solution", "solutions", "goods", "material"}
 
 
+# r572 round 2 (the live R57.1 Software deck: Shopify, "a cloud e-commerce management platform", and Twilio, "a cloud communications
+# company ... programmable communication tools", in "Cloud and AI compute providers"): a layer whose name says its companies sell computing
+# or infrastructure (never one named by software), and the words that say a company sells it. "Cloud" or "cloud-based" said of another
+# product ("cloud e-commerce platform", "cloud-based restaurant software", "cloud communications") is a word about that product
+COMPUTE_LAYER = r"\bcomput(?:e|ing)\b|\bhosting\b|data cent(?:er|re)s?|\bcapacity\b|cloud infrastructure|infrastructure providers?"
+COMPUTE_SAYS = (r"\bcomput(?:e|ing)\b|\bcapacity\b|\bhosting\b|data cent(?:er|re)s?|\bgpus?\b|infrastructure[- ]as[- ]a[- ]service|\biaas\b|"
+                r"\bservers?\b|colocation|\b(?:ai|cloud|it|computing|digital) infrastructure\b|hyperscale")
+CLOUD_ADJECTIVE = r"\bcloud(?:[- ]based|[- ]native)?\s+(?!comput\w*|infrastructure|hosting|servers?|capacity|data cent\w*)"
+
+
+def says_compute(text: str) -> bool:
+    """r572: whether a company's own words say it sells computing, capacity, hosting or data centres ("cloud" said of another product aside)."""
+    return bool(re.search(COMPUTE_SAYS, re.sub(CLOUD_ADJECTIVE, " ", str(text or ""), flags=re.I), re.I))
+
+
+def unsaid_moves(vc: list[dict], words_of, theme: str, published: dict | None = None) -> tuple[list[dict], list[dict]]:
+    """r572 round 2 (the release gate on the live R57.1 IT services input: Riddhi Corporate Services, "document management, inbound and
+    outbound contact centre, data entry", moved by how it earns into "Engineering R&D services"): a company the split moved into a named layer
+    by how it earns, new to it against the published version, whose own words, official industry and name say no word of that layer's names
+    (says_name), goes to the theme's "Other"
+    group with the reason printed: a way of earning shared is no evidence of what a layer is. (the layers, a row for each company moved)."""
+    rows = []
+    rest = next((v for v in vc if v.get("official") and v.get("basis") == "rest"), None)
+    for v in vc:
+        if v.get("official") or not v.get("layer") or v.get("by_model") or v.get("by_place") or v.get("industry_group"):
+            continue
+        names = [n for n in dict.fromkeys([_HALF_RX.sub("", v["layer"]), v.get("was") or ""] + list(v.get("aka") or [])) if n]
+        keep = []
+        for c in v.get("companies") or []:
+            text = " ".join(str(x or "") for x in ((words_of(c.get("ticker")) if words_of else None), c.get("what"), c.get("industry"), c.get("name")))
+            was_ = _HALF_RX.sub("", str((published or {}).get(c.get("ticker")) or ""))
+            if not c.get("moved") or isinstance(c.get("refit"), dict) or not own_text(text).strip() or was_ in names \
+                    or any(says_name(n, [text]) is not False for n in names):
+                keep.append(c)
+                continue
+            if rest is None:
+                rest = {"layer": other_label(theme), "description": "", "official": True, "basis": "rest", "companies": []}
+                vc = vc + [rest]
+            shown = _HALF_RX.sub("", v["layer"])
+            why = f"moved by how it earns into “{shown}”, whose name its own words, official industry and name say no word of"
+            rest["companies"] = list(rest.get("companies") or []) + [{**c, "refit": {"from": shown, "to": _HALF_RX.sub("", rest["layer"]), "why": why}}]
+            rows.append({"ticker": c.get("ticker"), "name": c.get("name"), "from": shown, "to": rest["layer"], "why": why})
+        v["companies"] = keep
+    if not rows:
+        return vc, []
+    return [v for v in vc if v.get("companies") or v.get("official") or not (v.get("by_model") or v.get("scale"))], rows
+
+
+def compute_fit(vc: list[dict], words_of, theme: str) -> tuple[list[dict], list[dict]]:
+    """r572 round 2: in a layer whose name says its companies sell computing or infrastructure (COMPUTE_LAYER, a name that says software
+    aside), a company a rule or the AI's placement put there (moved there by the split, or placed by the AI; never the map's own pick nor one
+    placed by its own words) whose own words don't say it sells computing, capacity, hosting or data centres (says_compute) is placed again:
+    in the one layer whose name its own words say, else the layer whose name and definition share most of its words (two or more), else the
+    theme's "Other" group; never out of the theme. (the layers, a row for
+    each company moved)."""
+    tw = kind_stems(theme)
+    own = [v for v in vc if not v.get("official") and v.get("layer")]
+    rows = []
+    for v in own:
+        name = _HALF_RX.sub("", v.get("layer") or "")
+        if not re.search(COMPUTE_LAYER, name, re.I) or re.search(r"\bsoftware\b", name, re.I):
+            continue
+        keep, gone = [], []
+        for c in v.get("companies") or []:
+            text = own_text((words_of(c.get("ticker")) if words_of else None) or c.get("what") or "")
+            if not (c.get("moved") or c.get("placed") == "ai") or not text.strip() or says_compute(text):
+                keep.append(c)
+                continue
+            gone.append((c, text))
+        if not gone:
+            continue
+        v["companies"] = keep
+        others = [w for w in own if _HALF_RX.sub("", w.get("layer") or "") != name and len(w.get("companies") or []) >= 2
+                  and not re.search(COMPUTE_LAYER, _HALF_RX.sub("", w.get("layer") or ""), re.I)]
+        for c, text in gone:
+            plain = re.sub(CLOUD_ADJECTIVE, " ", text, flags=re.I)
+            said = [w for w in others if layer_says(w, plain, tw)[1]]
+            to, how = (said[0], "its own words say what “{}” is") if len(said) == 1 else (None, "")
+            if to is None:
+                mine = kind_stems(plain) - tw
+                best = max(others, key=lambda w: len(mine & (kind_stems(f"{w.get('layer')} {w.get('description') or ''}") - tw)), default=None)
+                if best is not None and len(mine & (kind_stems(f"{best.get('layer')} {best.get('description') or ''}") - tw)) >= 2:
+                    to, how = best, "its own words share most with what “{}” is"
+            if to is None:
+                to = next((w for w in vc if w.get("official") and w.get("basis") == "rest"), None)
+                if to is None:
+                    to = {"layer": other_label(theme), "description": "", "official": True, "basis": "rest", "companies": []}
+                    vc = vc + [to]
+                how = "no other layer's name is said by its own words"
+            shown = _HALF_RX.sub("", to["layer"])
+            why = (f"its own words don't say it sells computing, capacity, hosting or data centres, what “{name}” is (“cloud” said of another "
+                   f"product is a word about that product); " + how.format(shown))
+            to["companies"] = list(to.get("companies") or []) + [{**c, "moved": True, "refit": {"from": name, "to": shown, "why": why}}]
+            rows.append({"ticker": c.get("ticker"), "name": c.get("name"), "from": name, "to": shown, "why": why})
+    return [v for v in vc if v.get("companies") or v.get("official") or not (v.get("by_model") or v.get("scale"))], rows
+
+
 def single_layers(vc: list[dict], words_of, theme: str) -> tuple[list[dict], list[dict]]:
     """r572 (R57.2, the release gate on the live R57.1 decks: 16 layers of one company, "Cold chain operators" holding one company whose own
     words say no word of it, "Data centres, hosting and networks" in an oil theme): a named layer holding one company stays only when the
@@ -4026,7 +4126,8 @@ def layer_answer_removals(vc: list[dict], placements: dict, words_of, theme: str
     check left out on one layer's answer alone ("no", "unbacked"), and so out of the theme, is decided by its own stored words. Words that
     say the theme's own business (a word of the theme's name or of a layer's name) keep it in the theme, in its "Other" group: a mismatch
     with one layer is a reason to place it elsewhere, never to remove it (its answer is listed as a layer decision, "layer_no"). Words that
-    say none of it leave it out as another business, their first sentence said ("scope"). With no words of its own, the removal stands.
+    say none of it leave it out as another business, their first sentence said ("scope"). With no words of its own, its official industry
+    decides the same way (r572 round 2); with neither, it stays: an empty answer moves nothing.
     (the layers, the placements)."""
     from .theme_changes import first_sentence
     inside = {c.get("ticker") for v in vc for c in v.get("companies") or []}
@@ -4042,18 +4143,23 @@ def layer_answer_removals(vc: list[dict], placements: dict, words_of, theme: str
         except Exception:
             w = ""
         quote = first_sentence(w)
-        if not quote:
-            keep.append(x)
+        try:
+            ind = str(((facts_for(s_) if facts_for else None) or {}).get("industry") or "").split(">")[-1].strip()
+        except Exception:
+            ind = ""
+        # round 2: with no words of its own, its official industry decides; with neither, the answer alone moves nothing: it stays
+        says_theme = bool(kind_stems(own_text(w)) & tw) if quote else (not ind or bool(kind_stems(ind) & tw))
+        if not quote and ind and not says_theme:
+            keep.append({**x, "said": "scope", "scope": f"another business: filed under {ind}, and no description of its own is stored"})
             continue
-        if kind_stems(own_text(w)) & tw:
-            try:
-                ind = str(((facts_for(s_) if facts_for else None) or {}).get("industry") or "").split(">")[-1].strip()
-            except Exception:
-                ind = ""
+        if says_theme:
             groups = " or ".join(f"“{g}”" for g in (x.get("groups") or [])[:2]) or "its group"
-            back.append({"ticker": s_, "name": x.get("name") or s_, "what": "", "verified": False, "base": True, "basis": "words",
+            said_ = ("its own words say the theme's work" if quote else f"its official industry ({ind}) is of the theme's work" if ind else
+                     "no description of its own or official industry is stored, so the answer alone moves nothing")
+            # (one with neither words nor an official industry stored is not checked yet: never said to be kept on an industry)
+            back.append({"ticker": s_, "name": x.get("name") or s_, "what": "", "verified": False, "base": bool(quote or ind), "basis": "words",
                          "industry": ind, "cap": None, "placed": "words", "kept_member": True,
-                         "theme": {"why": f"the map's check said no for {groups} only, one layer's answer; its own words say the theme's work"}})
+                         "theme": {"why": f"the map's check said no for {groups} only, one layer's answer; {said_}"}})
             moved.append(x)
             continue
         keep.append({**x, "said": "scope", "scope": f"another business: its own words say “{quote}”"})
@@ -4068,6 +4174,9 @@ def layer_answer_removals(vc: list[dict], placements: dict, words_of, theme: str
     placements = {**placements, "dropped": keep}
     if moved:
         placements["layer_no"] = list(placements.get("layer_no") or []) + moved
+    for k_ in ("placed", "total"):          # (round 2: the members it keeps are counted, "Considered 81 · membership checked 86 of 81")
+        if back and isinstance(placements.get(k_), int):
+            placements[k_] += len(back)
     if not keep:
         placements = {k: v for k, v in placements.items() if k != "dropped"}
     return vc, placements
@@ -4133,6 +4242,37 @@ def kinds_name(model: str, texts: list[str]) -> str:
     return said[0] if len(said) == 1 else f"{said[0]} and {said[1][:1].lower()}{said[1][1:]}"
 
 
+# r572 round 2: the words of a layer's name that say a business (the release gate's test: no joining word, no word any company is or does)
+NAME_GENERIC = {"and", "or", "of", "the", "for", "in", "to", "with", "by", "on", "from", "other", "others", "own", "their", "they", "them",
+                "company", "companies", "firms", "players", "business", "businesses", "group", "groups", "service", "services", "product",
+                "products", "goods", "consumer", "consumers", "customer", "customers", "client", "clients", "makers", "maker", "producers",
+                "producer", "suppliers", "supplier", "providers", "provider", "sellers", "seller", "owners", "owner", "operators",
+                "partners", "specialty", "speciality", "diversified", "integrated", "sized", "small", "smaller", "large", "larger", "mid",
+                "scale", "wide", "broad", "general", "focused", "led", "based", "commercial", "listed", "segment", "segments", "related",
+                "allied", "plus", "global", "domestic", "new", "solutions", "systems"}
+_NAME_SUFFIXES = ("ations", "ation", "ings", "ing", "ers", "er", "ies", "es", "s", "ed", "al")
+
+
+def _name_stem(w: str) -> str:
+    for suf in _NAME_SUFFIXES:
+        if w.endswith(suf) and len(w) - len(suf) >= 4:
+            return w[:-len(suf)][:5]
+    return w[:5]
+
+
+def says_name(name: str, texts) -> bool | None:
+    """r572 round 2: whether any of the texts says a word of a layer's name that says a business; None when the name has none."""
+    nw = {_name_stem(w) for w in re.findall(r"[a-z0-9]+", str(name or "").lower().replace("&", " and ")) if len(w) > 2 and not w.isdigit()
+          and w not in NAME_GENERIC}
+    if not nw:
+        return None
+    for t in texts:
+        tw = {_name_stem(w) for w in re.findall(r"[a-z0-9]+", str(t or "").lower().replace("&", " and ")) if len(w) > 2}
+        if any(a == b or (len(a) >= 4 and len(b) >= 4 and (a.startswith(b) or b.startswith(a))) for a in nw for b in tw):
+            return True
+    return False
+
+
 def truthful_layers(vc: list[dict], published: dict, evidence, theme: str) -> tuple[list[dict], list[dict]]:
     """p57 (contract 3): (the layers, what was done) with each layer a rule made (by how its companies earn, "by_model"; proposed for the
     companies that fit none, "by_place"; of one official industry, "industry_group"; a half by market value aside) checked against its
@@ -4140,6 +4280,8 @@ def truthful_layers(vc: list[dict], published: dict, evidence, theme: str) -> tu
     a contradicted name: it takes the name of the kinds its members' words say (kinds_name) when its label names kinds, else the layer is
     not made when it is new to the published version (its companies go to their published layer, else "Other", with why). A layer a rule
     made new to the published version with CONTRACT_SINGLE company or fewer is not made either."""
+    from collections import Counter
+
     from .theme_check import MODELS
     labels = {x[1]: k for k, x in MODELS.items()}
     pub = {_HALF_RX.sub("", str(x or "")) for x in (published or {}).values()}
@@ -4179,6 +4321,37 @@ def truthful_layers(vc: list[dict], published: dict, evidence, theme: str) -> tu
                                                                           f"“{shown_name}” ({old_n} of {len(top)} against {new_n}): the name it had stays"})
                 v["layer"], v["description"] = was + half, ""
                 v["aka"] = list(dict.fromkeys((v.get("aka") or []) + [shown_name]))
+        # r572 round 2 (the release gate on the live R57.1 inputs: "Commercial airframe integration" over Boeing and Embraer, makers of
+        # aircraft, and "Commercial and business lenders" over twelve banks, names none of their companies' own words, industries or names say):
+        # a layer of the map whose name says no word its companies say keeps its name and adds the noun of the official industry most of its
+        # largest companies share, where most of their own words say it too ("Commercial airframe integration (aircraft)")
+        if not v.get("official") and len(v.get("companies") or []) >= 2 and not (v.get("by_model") or v.get("by_place") or v.get("industry_group")):
+            shown_ = _HALF_RX.sub("", v["layer"])
+            texts_ = [" ".join(str(x or "") for x in (evidence(c.get("ticker")) if evidence else "", c.get("what"), c.get("industry"), c.get("name")))
+                      for c in v["companies"]]
+            if says_name(shown_, texts_) is False:
+                big = [c for c in sorted(v["companies"], key=lambda c: -(c.get("cap") or 0)) if c.get("industry")][:RENAME_TOP]
+                top_ind = Counter(plain_industry(c["industry"]) for c in big).most_common(1)
+                head_ = (re.findall(r"[A-Za-z][A-Za-z-]{2,}", top_ind[0][0]) or [""])[-1].lower() if top_ind else ""
+                from .theme_changes import first_sentence
+                # the lines a deck prints of them: the map's line of their own words, else their description's first sentence
+                lines_ = [own_words(one_line(c.get("what") or first_sentence(evidence(c.get("ticker")) if evidence else "")), c.get("name") or "")
+                          for c in big]
+                word_ = ""
+                if top_ind and top_ind[0][1] * 2 > len(big) and head_ and sum(1 for t in lines_ if says_name(head_, [t])) * 2 >= len(big):
+                    word_ = head_                 # the industry's own noun, which most of their lines say ("bank")
+                elif lines_ and lines_[0]:
+                    # else the word of the largest company's line that the theme's own name says ("Boeing is among the largest global
+                    # aerospace manufacturers"), so the name keeps the map's meaning and says what they say
+                    tw_ = {_name_stem(w) for w in re.findall(r"[a-z]{4,}", str(theme).lower())}
+                    word_ = next((w for w in re.findall(r"[a-z]{4,}", lines_[0].lower()) if _name_stem(w) in tw_ and w not in NAME_GENERIC), "")
+                if word_:
+                    new_ = f"{shown_} ({word_})"
+                    if says_name(new_, texts_):
+                        rows.append({"layer": shown_, "renamed": new_, "why": f"none of its companies' own words, industries or names say a word of "
+                                                                             f"“{shown_}”; most of its largest companies are filed under {top_ind[0][0]}"})
+                        v["layer"] = new_ + v["layer"][len(shown_):]
+                        v["aka"] = list(dict.fromkeys((v.get("aka") or []) + [shown_]))
         if v.get("official") or v.get("scale") or not (v.get("by_model") or v.get("by_place") or v.get("industry_group")) or not v.get("companies"):
             continue
         name = _HALF_RX.sub("", v.get("layer") or "")

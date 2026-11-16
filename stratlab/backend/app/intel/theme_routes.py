@@ -595,6 +595,7 @@ def _has_description(region: str, sym: str) -> bool:
         return False
 
 
+DROPPED_READS = 20           # r572 round 2: companies the check left out on one layer's answer read at most, a check
 TOP_DESCRIBE = 30            # r571e: the theme's largest companies whose own words are read before its evidence check
 TOP_BUDGET = 60.0            # ...within this many seconds (the check runs in the background: no page waits on it)
 TOP_AGAIN_HOURS = 6          # ...and one of them kept as "none found" is read once more after this long
@@ -1098,6 +1099,16 @@ def _check(region: str, theme: str, m: dict) -> dict:
         except Exception as e:
             print("theme: largest companies' descriptions not read:", type(e).__name__, str(e)[:100])
         out = theme_check.check_placements(mi, evidence_reader(region, _map_names(mi)), _ask, theme, VERDICTS, held=held_groups(mi, pub, kept_ans))
+        # r572 round 2: a company the check leaves out on one layer's answer has its own description read (stored, else its page) before the
+        # placement decides whether that answer removes it (theme_base.layer_answer_removals): bounded, the one evidence read of the check
+        try:
+            gone_ = [x["ticker"] for x in (out.get("placements") or {}).get("dropped") or []
+                     if isinstance(x, dict) and x.get("ticker") and x.get("said") in ("no", "unbacked") and not _has_description(region, x["ticker"])]
+            if gone_:
+                evidence_reader(region, {x["ticker"]: x.get("name") for x in (out.get("placements") or {}).get("dropped") or []
+                                         if isinstance(x, dict) and x.get("ticker")})(gone_[:DROPPED_READS])
+        except Exception as e:
+            print("theme: left-out companies' descriptions not read:", type(e).__name__, str(e)[:100])
         # t56: a member of the previous version stays when this check's "yes" only lacked backing words (no evidence against it)
         out = theme_base.keep_confirmed(out, mi, previous_confirmed(region, theme, m))
         about_ = _about_reader(region, _map_names(mi), 0)

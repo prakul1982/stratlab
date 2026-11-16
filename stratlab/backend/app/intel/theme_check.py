@@ -1216,7 +1216,11 @@ DESIGN_VERB = r"\b(?:designs?|develops?|designing|developing|designers?|develope
 DESIGN_CHIP = DESIGN_VERB + r"[^.;]{0,60}?(?:" + CHIP_NOUNS + ")"
 CHIP_ONLY = r"\bgpus?\b|\bsocs?\b|\basics?\b|\bfpgas?\b|microcontrollers?|microprocessors?"
 NOT_DESIGNER = (r"electronic design automation|\beda\b|(?:software|tools)\b[^.]{0,30}\b(?:to|for) (?:the )?design|"
-                r"licens\w*\b[^.]{0,30}(?:\bip\b|intellectual property|architectures?|\bcores?\b)|(?:semiconductor|wafer fab\w*|capital) equipment")
+                r"licens\w*\b[^.]{0,30}(?:\bip\b|intellectual property|architectures?|\bcores?\b)|(?:semiconductor|wafer fab\w*|capital) equipment|"
+                # r572 round 2 (the release gate on the live R57.1 Semiconductors input: Arm, "the design of central processing unit (CPU) cores
+                # that implement the ARM architecture family of instruction sets", read as a fabless chip maker): the design of processor cores
+                # and instruction sets is a design licensor's work, never chips of its own made by foundries
+                r"design of (?:[\w()-]+ ){0,6}cores?\b|\binstruction sets?\b")
 MAKES_OWN = r"manufactur|\bproduc(?:es|tion)\b|\bmakes\b"
 MODEL_NEEDS["fabless"] += "|" + DESIGN_CHIP
 

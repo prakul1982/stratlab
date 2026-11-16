@@ -534,7 +534,26 @@ def reasoned(entries: list, words_of=None, industry_of=None, theme_words: set | 
         except Exception:
             w, ind = None, ""
         return {**r, "why": unnamed_why(r["why"], w, ind, theme_words)}
-    return [{**e, "removed": [why(r) for r in e.get("removed") or []]} if e.get("removed") else e for e in entries]
+
+    def move_why(r):
+        # round 2 (the live R57.1 decks: General Dynamics, Bilibili, Sphere and Creative Eye moved between layers with no reason printed):
+        # a move with no reason of the placement's says what its own words or filings say; a move between two halves of one layer is that
+        # layer's split by market value
+        if not isinstance(r, dict) or r.get("why") or not r.get("symbol"):
+            return r
+        a, b = _HALF_NAME.sub("", str(r.get("from") or "")), _HALF_NAME.sub("", str(r.get("to") or ""))
+        if a == b:
+            return {**r, "why": "the same layer, split into halves by market value"}
+        try:
+            w = words_of(r["symbol"]) if words_of is not None else None
+            ind = (industry_of(r["symbol"]) if industry_of is not None else "") or ""
+        except Exception:
+            w, ind = None, ""
+        q = first_sentence(w)
+        said = f"its own words say “{q}”" if q else f"filed under {ind}" if ind else ""
+        return {**r, "why": said} if said else r
+    return [{**e, **({"removed": [why(r) for r in e.get("removed") or []]} if e.get("removed") else {}),
+             **({"moved": [move_why(r) for r in e.get("moved") or []]} if e.get("moved") else {})} for e in entries]
 
 
 def view(region: str, name: str, full: bool, words_of=None, industry_of=None) -> dict:
@@ -572,6 +591,7 @@ def _share(n: int, of: int) -> int:
     return int(n * 100 / of + 0.5) if of else 0
 
 
+_HALF_NAME = re.compile(r" \((?:larger|smaller)\)$")
 LOST_MIN = 3                 # d53: a layer of the previous live read with this many companies or more gone, its companies taken by no new layer
 ESTABLISHED = 5              # t56: a layer of the previous live read with this many companies or more is an established category: its removal is
                              # said wherever its companies went (theme_base.LOST_MIN, the taxonomy guard's own count)
@@ -605,6 +625,14 @@ def lost_layers(snap: dict | None, dive: dict | None) -> list[dict]:
         went = [now["layers"][now["cos"][s_][1]] for s_ in cos if s_ in now["cos"]]
         new = Counter(x for x in went if x not in old and not _no_business(x))
         renamed = any(n >= max(1, SHARE * len(cos)) for n in new.values())
+        # r572 round 2 (the live R57.1 Media deck: "Content production and music rights" (30 companies: 14 to its "(smaller)" half, 13 to its
+        # "(larger)" half) printed as gone, taken by no new layer): a layer most of whose companies went to the two halves of one layer split by
+        # market value was split, never lost: said as a split
+        halves = Counter(_HALF_NAME.sub("", x) for x in went if _HALF_NAME.search(x))
+        base, k = (halves.most_common(1) or [("", 0)])[0]
+        if base and k * 2 > len(cos) and (base == _HALF_NAME.sub("", g) or not {base, f"{base} (larger)", f"{base} (smaller)"} & old):
+            out.append({"layer": g, "n": len(cos), "halves": [f"{base} (larger)", f"{base} (smaller)"]})
+            continue
         lost = len(cos) >= LOST_MIN and went and sum(1 for x in went if _no_business(x)) * 2 >= len(went)
         if lost or (len(cos) >= ESTABLISHED and not renamed):
             where = dict(Counter(went))
@@ -671,7 +699,9 @@ def coverage_control(cov: dict | None, snap: dict | None, dive: dict | None = No
         why = fall_why(snap, dive)
         if why:
             out["fell"]["why"] = why
-    lost = lost_layers(snap, dive)
+    found = lost_layers(snap, dive)
+    lost = [x for x in found if not x.get("halves")]
+    split = [x for x in found if x.get("halves")]          # r572 round 2: split into halves by market value, said as a split
     # c54 (R53 review): each lost layer with why the re-check didn't keep it, and each one it restored (theme_base.restore_vanished)
     pl = ((dive or {}).get("placements") or {}) if isinstance(dive, dict) else {}
     gone = [x for x in (pl.get("layers_gone") or []) if isinstance(x, dict) and x.get("layer")]
@@ -683,6 +713,8 @@ def coverage_control(cov: dict | None, snap: dict | None, dive: dict | None = No
         out["restored"] = back
     if isinstance(pl.get("share_guard"), dict) and pl["share_guard"].get("returned"):      # t56: what the taxonomy guard sent back
         out["guard"] = {k: pl["share_guard"][k] for k in ("before", "now", "returned") if k in pl["share_guard"]}
+    if out and split:              # (a split alone flags nothing: it is said beside a flag)
+        out["split"] = [{"layer": x["layer"], "n": x["n"], "halves": x["halves"]} for x in split]
     return out or None
 
 
@@ -713,6 +745,9 @@ def control_line(cov: dict | None) -> str:
         out.append("Layers of the previous live placement gone, their companies taken by no new layer: "
                    + ", ".join(f"“{x['layer']}” ({x['n']:,} companies" + (f": {_went_said(x['went'])}" if x.get("went") else "")
                                + (f"; {x['why']}" if x.get("why") else "") + ")" for x in ctl["lost"]) + ".")
+    if ctl.get("split"):
+        out.append("Layers of the previous live placement split by market value: " + ", ".join(
+            f"“{x['layer']}” ({x['n']:,} companies) split into “{x['halves'][0]}” and “{x['halves'][1]}”" for x in ctl["split"]) + ".")
     if ctl.get("restored"):
         out.append("Layers of the previous live placement a re-check would have lost, kept with their companies whose own words or official "
                    "industry still say what they sell: " + ", ".join(f"“{x['layer']}” ({x['now']:,} of its {x['before']:,})" for x in ctl["restored"]) + ".")

@@ -320,9 +320,10 @@ def test_the_maps_own_picks_whose_words_say_their_layer_are_in_its_figures_and_a
         assert c.get("by_words") and "model_out" not in c, s_
         assert "only the AI's read gave it another" in D.comparison_said({"in": True, "why": "", "by_words": True}, {"model": v.get("model")})
     v, arm = got["ARM"]
-    assert arm["model_out"] == "other" and arm["out_why"] == "model" and not arm.get("by_words")
-    r = D.out_reason({**D.model_fields(v, "ARM"), "status": "core"})
-    assert r["label"] == "different revenue model (project and consulting services, the layer's software products and subscriptions)"
+    # r572 round 2 (updated on purpose): Arm's "design of central processing unit (CPU) cores" is no longer read as a fabless chip maker's
+    # words (theme_check.NOT_DESIGNER), so its own words name no other way of earning than its layer's; the map's own pick, they say the
+    # layer's name ("software ... design"): in "Design software and IP licensing"'s figures on its words, the AI's other read said
+    assert arm.get("by_words") and "model_out" not in arm and v["layer"] == "Design software and IP licensing"
     # placed after the map with words that state no way of earning: the answer's other read stands, with both models said
     for s_ in ("HIKAL", "BROOKS"):
         v, c = got[s_]
