@@ -8,7 +8,7 @@ IST = timezone(timedelta(hours=5, minutes=30))
 ET = timezone(timedelta(hours=-5))
 
 
-def _job(monkeypatch, answers):
+def _job(monkeypatch, answers, mood=None):
     from app.data import calendar
     from app import stock_pages
     monkeypatch.setattr(calendar, "is_trading_day", lambda region, d: d.weekday() < 5)
@@ -21,7 +21,8 @@ def _job(monkeypatch, answers):
     def read(region):
         calls.append(region)
         return answers.pop(0) if answers else {"mood": "x"}
-    return mood_job.Job(read), calls
+    # (updated on purpose, LIVE9A-001: the job reads the Mood card's payload too; here it is always of the day asked for)
+    return mood_job.Job(read, mood or (lambda region, day: day)), calls
 
 
 def test_the_read_is_written_after_the_close_once_a_day(monkeypatch):
@@ -141,3 +142,68 @@ def test_an_issues_closes_past_its_last_candle_come_from_the_exchange(monkeypatc
     # a US issue is untouched
     assert ipo.later_closes({"market": "US", "symbol": "X"}, "2026-11-11", sat) == []
     assert date(2026, 11, 13).weekday() == 4
+
+
+# ---------- LIVE9A-001: the clock reads the Mood card's own payload, not only the AI's headlines read ----------
+def test_the_card_payload_is_read_after_the_close_and_a_day_waits_for_its_session(monkeypatch):
+    sessions = {"IN": ["2026-11-13", "2026-11-16"]}          # the first pass after the close still had Friday's tables
+    asked = []
+
+    def mood(region, day):
+        asked.append((region, day))
+        return sessions[region].pop(0) if sessions.get(region) else day
+    job, calls = _job(monkeypatch, [], mood=mood)
+    t = datetime(2026, 11, 16, 16, 15, tzinfo=IST)
+    got = job.tick(t.astimezone(timezone.utc))
+    assert got["IN"] == "tables of 2026-11-13" and calls == []                 # no AI read on an earlier session's tables
+    assert job.tick((t + timedelta(minutes=5)).astimezone(timezone.utc))["IN"] == "written" and calls == ["IN"]
+    assert asked == [("IN", "2026-11-16"), ("IN", "2026-11-16")]
+
+
+def test_the_default_job_reads_the_mood_hub_payload(monkeypatch):
+    from app.intel import routes
+    built = []
+
+    class Hub:
+        class payloads:
+            @staticmethod
+            def kept(region):
+                return (0.0, {"session": "2026-11-13", "is_open": False})
+
+        def refresh_now(self, region):
+            built.append(region)
+            return {"session": "2026-11-16"}
+    monkeypatch.setattr(routes, "mood_hub", lambda: Hub())
+    assert mood_job._mood_payload("IN", "2026-11-16") == "2026-11-16" and built == ["IN"]
+    # a payload already of the session that closed is not read again
+    Hub.payloads.kept = staticmethod(lambda region: (0.0, {"session": "2026-11-16", "is_open": False}))
+    assert mood_job._mood_payload("IN", "2026-11-16") == "2026-11-16" and built == ["IN"]
+
+
+def test_refresh_now_keeps_the_payload_in_the_database_at_once(monkeypatch):
+    import time
+    from app.intel import mood
+    m = mood.Mood(hub=None)
+    monkeypatch.setattr(m, "build", lambda region: {"session": "2026-11-16", "headline": "x"})
+    kept = {}
+    from app import db
+    monkeypatch.setattr(db, "set_setting", lambda k, v: kept.__setitem__(k, v))
+    m._kept_at["IN"] = time.time()                       # written a minute ago: KEEP_EVERY would hold a plain read back
+    assert m.refresh_now("IN")["session"] == "2026-11-16"
+    assert any(k.endswith("IN") for k in kept)
+    assert m.payloads.kept("IN")[1]["session"] == "2026-11-16"
+
+
+# ---------- LIVE9A-002: one headline never mixes two sessions ----------
+def test_the_headline_never_sets_today_against_an_earlier_sessions_breadth():
+    from app.intel import mood
+    levels = [{"name": "S&P 500", "change_pct": -1.87}, {"name": "NASDAQ", "change_pct": -2.36}, {"name": "DOW JONES", "change_pct": -1.40}]
+    friday = {"group": "S&P 500", "live": False, "day": "2026-11-13", "adv": 313, "dec": 183, "stocks": 499}
+    assert mood.same_session(friday, "2026-11-16") is None
+    assert mood.same_session(friday, "2026-11-13") is friday
+    assert mood.same_session({**friday, "live": True}, "2026-11-16")["live"]
+    text = mood.headline_of(levels, None, None, mood.same_session(friday, "2026-11-16"))
+    assert "313" not in text and text.startswith("Negative: all three indices down")
+    # the build passes the breadth through that check
+    import inspect
+    assert "same_session(b, p[\"session\"])" in inspect.getsource(mood.Mood.build)

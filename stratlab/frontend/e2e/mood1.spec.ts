@@ -47,7 +47,7 @@ for (const region of ["IN", "US"] as const) {
     const first = (await page.locator('table[aria-label="Index levels"] tbody tr').first().locator("td").first().innerText()).replace(/\..*$/, "");
     expect(headline + lines.join(" ")).not.toContain(first);
     // breadth, volatility, other markets and the headlines are tables with a header row
-    for (const [id, heads] of [["pulse-breadth", ["Measure", "Change"]], ["pulse-risk", ["Measure", "Level", "Change"]], ["pulse-global", ["Market", "Move", "Session"]]] as const) {
+    for (const [id, heads] of [["pulse-breadth", ["Measure", "Change"]], ["pulse-risk", ["Measure", "Level", "Change", "As of"]], ["pulse-global", ["Market", "Move", "Session"]]] as const) {
       const card = page.getByTestId(id);
       await expect(card).toBeVisible();
       for (const h of heads) await expect(card.getByRole("columnheader", { name: h })).toBeVisible();

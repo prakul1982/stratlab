@@ -44,4 +44,4 @@ export function useUsage(): { usage: Usage | null; error: string | null } {
   return { usage, error };
 }
 
-export { refreshesLeft, refreshNotOnPlan, REFRESH_ON_BASIC, resetsWord, usedWord } from "./usageText";
+export { decksWord, leftWord, refreshesLeft, refreshNotOnPlan, REFRESH_ON_BASIC, resetsWord, usedWord } from "./usageText";

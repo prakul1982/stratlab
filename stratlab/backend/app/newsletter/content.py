@@ -179,6 +179,15 @@ MARKET_WORDS = {
                      r"fed(?!\s+up)|federal reserve|powell|treasur\w*|yields?|inflation|cpi|pce|jobs report|payrolls|unemployment|gdp|"
                      r"economy|economic|earnings|ipo|ipos|dollar|oil prices?|crude|tariffs?|recession|rate cuts?|rate hikes?)\b", re.I),
 }
+# LIVE9A-008: a financial wire's own story is kept without naming the market, but it must still be about business: "Robert Pattinson cast as
+# next James Bond", "Scores of Bahraini Shi'ite clerics get life in jail" and "Bulgaria rescues crew from capsized wheat ship" came from the
+# wire's general feed under Mood's US headlines
+BUSINESS_WORDS = re.compile(r"\b(compan(y|ies)|ceo|cfo|chairman|board|deal|deals|merger|mergers|acqui\w+|buyout|takeover|stake|revenue|profits?|"
+                            r"losses?|sales|billion|million|bn|mln|banks?|banking|lenders?|funds?|bitcoin|crypto\w*|chips?|semiconductor\w*|"
+                            r"prices?|rates?|percent|forecasts?|outlook|guidance|quarter\w*|results|bond (?:market|yields?|prices?|sales?)|debt|layoffs?|jobs|trade|exports?|"
+                            r"imports?|retail\w*|inc|corp|plc|ltd|shareholders?|dividends?|buybacks?|valuation|startups?|venture|antitrust|"
+                            r"regulators?|sec|ftc|opec|commodit\w*|gold|copper|oil|gas|energy|tariffs?|sanctions|automakers?|airlines?|"
+                            r"spending|consumers?|housing|mortgages?|wages?|growth)\b|%|\$\d", re.I)
 # a title the source cut off in the middle of a word ("... 7 key factors behind Rs 10 l")
 _SHORT_OK = {"a", "an", "in", "on", "of", "to", "up", "by", "at", "is", "it", "as", "or", "and", "the", "for", "not", "off",
              "out", "yet", "now", "day", "pts", "bn", "cr", "mn", "us", "uk", "eu", "rbi", "fed", "ipo", "gdp", "cpi", "pm", "ai", "new"}
@@ -270,7 +279,7 @@ def other_region(region: str, title: str) -> bool:
 # not a market story whatever market word it carries (R7O-005: "'I'm getting fed up': voters line up before dawn as
 # early voting begins in Ohio")
 OFF_TOPIC = re.compile(r"\b(voters?|early voting|ballots?|polling (station|booth)s?|campaign trail|spy chief|arrested|murder|"
-                       r"jailed|sentenced|nba|nfl|flotilla|besieged|"
+                       r"jailed|in jail|sentenced|nba|nfl|flotilla|besieged|capsized|"
                        r"kids|teens?|hollywood|celebrit\w*|weddings?|recipes?|horoscope|cricket|football|"
                        r"cramer|things to watch|what to watch|endowments?|"
                        # R47-007: human-interest and political jabs ("'Everyone laughed' when he started a pumpkin farm", "Trump

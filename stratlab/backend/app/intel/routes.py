@@ -173,7 +173,7 @@ def _drop_finished_builds() -> None:
 
 
 def ai_call(profile, kind: str, key: tuple, ttl: float, refresh: bool, build, counted: bool = True, min_age: float = 0,
-            kind_used: str = "research_ai", cap: int | None = None, gated: bool = False):
+            kind_used: str = "research_ai", cap: int | None = None, gated: bool = False, wait_for_other: bool = True):
     """Serve an AI read from the shared cache (every user's, one read per company or market per key), or build it.
     `counted`: a fresh build counts against the person's daily cap and is refused past it; False for reads shared by
     everyone (the market mood) and a company read written as its page opens on a paid plan, which neither count nor are
@@ -184,7 +184,9 @@ def ai_call(profile, kind: str, key: tuple, ttl: float, refresh: bool, build, co
     R19: a read is kept in the shared store and served to everyone until someone presses Refresh. A Refresh of a read written within the
     guard window (min_age, else computed.DEFAULT_GUARD) or past the person's refreshes for the day gives the stored read with
     "refresh_state" "fresh" or "capped"; one that fails gives the stored read with "failed" (never an error while there is a read);
-    one that is written replaces the read for everyone ("done"). `gated`: the caller already passed computed.refresh_gate."""
+    one that is written replaces the read for everyone ("done"). `gated`: the caller already passed computed.refresh_gate.
+    `wait_for_other` False: while someone else's request is writing the same read, answer at once with ai_busy ("being written") instead of
+    holding this request until it is done (LIVE9A-008: Mood's headlines card said "Still loading…" for 20 minutes behind another read)."""
     from .. import computed
     if not refresh and A.peek(kind, key):
         return A.cached(kind, key, ttl, False, build)[0]
@@ -202,6 +204,8 @@ def ai_call(profile, kind: str, key: tuple, ttl: float, refresh: bool, build, co
     try:
         with read_slot(profile, (cap if kind_used != "research_ai" else ai_cap(profile)) if counted else None, kind_used):
             try:
+                if not wait_for_other and one.locked() and not A.peek(kind, key):
+                    raise AIBusy("The read is being written now. It fills in here in a moment.")
                 with one:                     # two people opening the same company at once: one read, written once
                     if not refresh and A.peek(kind, key):
                         return A.cached(kind, key, ttl, False, build)[0]
@@ -868,7 +872,7 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
         # "mood": reads kept from before the mood line and main story were added are written again (DD-001)
         return ok(ai_call(profile, "pulse", (r, f.lower(), hour, mood_key(indices, is_open), cash_day, "mood2"),
                           3600 if is_open else settle_ttl or CLOSED_MOOD_TTL, refresh, build, counted=False,
-                          min_age=300 if is_open else settle_ttl or CLOSED_MOOD_TTL))
+                          min_age=300 if is_open else settle_ttl or CLOSED_MOOD_TTL, wait_for_other=False))
     except HTTPException as e:
         # like a company's AI read: no read right now is an answer ("unavailable", and why), not a failed request on
         # every opening of the page; the levels and headlines don't depend on it

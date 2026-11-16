@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { writtenAt } from "../lib/format";
-import { refreshesLeft, refreshNotOnPlan, REFRESH_ON_BASIC, resetsWord, usageChanged, usedWord, useUsage, type RefreshState, type UsageRow } from "../lib/usage";
+import { leftWord, refreshesLeft, refreshNotOnPlan, REFRESH_ON_BASIC, resetsWord, usageChanged, usedWord, useUsage, type RefreshState, type UsageRow } from "../lib/usage";
 import { DataTable, Skeleton, Working } from "./kit";
 
 /* One way every stored shared read says how old it is and lets a person read it again (R19, owner 7 Nov: "tell the user exactly like
@@ -26,7 +26,7 @@ export function StoredStamp({ at, tz, busy, onRefresh, counted = true }: { at: n
       <button type="button" className="btn quiet sm" disabled={busy || none} title={off ? REFRESH_ON_BASIC : none ? NO_REFRESH_LEFT : undefined} onClick={onRefresh}>
         {busy ? "Refreshing…" : "Refresh"}
       </button>
-      {(left != null || off) && <span className="k-note" data-testid="refresh-left">{off ? "On Basic" : none ? "None left today" : `${left} left today`}</span>}
+      {(left != null || off) && <span className="k-note" data-testid="refresh-left">{off ? "On Basic" : leftWord(left ?? 0, usage)}</span>}
     </span>
   );
 }

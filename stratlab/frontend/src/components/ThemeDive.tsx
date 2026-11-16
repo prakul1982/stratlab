@@ -10,6 +10,7 @@ import { ThemeCsvButton, WorkbookButton } from "./ThemeChanges";
 import { useApp } from "../lib/app";
 import { download } from "../lib/share";
 import { deckLock } from "../lib/account";
+import { decksWord, useUsage } from "../lib/usage";
 import { SampleDeckLink } from "./SampleDeck";
 import { LineChart } from "./Charts";
 import { bizChange, bizValue, periodName } from "../lib/biz";
@@ -171,6 +172,9 @@ export function memberRows(r: SectorAI, dive: Dive | null): MemberRow[] {
 export function ThemeDownloads({ r, dive, region, theme }: { r: SectorAI; dive: Dive | null; region: Region; theme: string }) {
   const { fail, refreshMe, me } = useApp();
   const locked = me?.usage?.deck_limit === 0;      // FREE-TIER: no decks on Free: a locked button and the sample deck
+  // LIVE9A-003: the month's decks used and left beside the buttons (Basic showed no count), with a Free account's earlier count said as one
+  const { usage } = useUsage();
+  const decksNote = decksWord(me?.usage?.deck_used, me?.usage?.deck_limit, usage);
   const [making, setMaking] = useState<"pptx" | "pdf" | null>(null);
   const [preparing, setPreparing] = useState<string | null>(null);
   const rows = useMemo(() => memberRows(r, dive), [r, dive]);
@@ -191,6 +195,7 @@ export function ThemeDownloads({ r, dive, region, theme }: { r: SectorAI; dive: 
       <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pdf")} title="The whole theme as slides in a PDF: the chain and each layer, every company with its figures, the tailwinds and risks with their sources, the news and the theme in numbers"><Download size={16} />{making === "pdf" ? "Making the PDF…" : "Slides (PDF)"}</button>
       <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pptx")} title="The same slides as PowerPoint"><Download size={16} />{making === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button></>}
       <WorkbookButton region={region} theme={theme} dive={dive} />
+      {decksNote && <span className="k-note" data-testid="decks-left">{decksNote}</span>}
       {preparing && <Working small label={preparing} />}
       {rows.length > 0 && <ThemeCsvButton region={region} theme={theme} dive={dive} />}
     </div>

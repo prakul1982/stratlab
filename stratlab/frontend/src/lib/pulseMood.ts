@@ -95,3 +95,9 @@ export const quoteMove = (r: Pick<MoodQuoteRow, "change_pct" | "change_bp">): { 
 /* LIVE8A-015: every row names its session's date ("on 13 Nov"), never "today": an overseas market's day is not the reader's (at 21:45 ET
  * on Friday the Nikkei's "today" was a session that ended in Tokyo on what was by then Saturday morning there) */
 export const sessionWord = (day: string | null | undefined, _today: string, dayText: (iso: string) => string): string => (day ? `on ${dayText(day)}` : "–");
+
+/** LIVE9A-008: the server's answer while another visit is writing the market's headlines read (intel/routes.ai_call, wait_for_other): the
+ * page asks again every PULSE_AI_RETRY_MS, PULSE_AI_TRIES times, instead of a request held open behind it ("Still loading…" for 20 min). */
+export const pulseBeingWritten = (message: string | null | undefined): boolean => /being written now/i.test(message ?? "");
+export const PULSE_AI_RETRY_MS = 15_000;
+export const PULSE_AI_TRIES = 8;

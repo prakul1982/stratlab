@@ -1322,7 +1322,7 @@ class Research:
     def headlines(self, region: str, focus: str = "") -> list[dict]:
         """The market's headlines for Pulse and the briefs: stories only, never a site's own title or a third party's
         buying worded as advice ("We're buying the dip in a stock…", R7O-005)."""
-        from ..newsletter.content import MARKET_WORDS, OFF_TOPIC
+        from ..newsletter.content import BUSINESS_WORDS, MARKET_WORDS, OFF_TOPIC
 
         def ok(title, market_words: bool) -> bool:
             # stories about markets and business only (R43A-006: "NBA tightens betting rules", "Norwegian teen jailed"
@@ -1331,7 +1331,11 @@ class Research:
             # search keeps what its own words found
             if not title or not plain_headline(title) or (not focus and OFF_TOPIC.search(title)):
                 return False
-            return bool(focus) or not market_words or bool(MARKET_WORDS.get(region, MARKET_WORDS["US"]).search(title))
+            if focus:
+                return True
+            if bool(MARKET_WORDS.get(region, MARKET_WORDS["US"]).search(title)):
+                return True
+            return not market_words and bool(BUSINESS_WORDS.search(title))      # LIVE9A-008: a wire story is still about business
         if region == "US" and self.finnhub.ready() and not focus:
             try:
                 return grouped([{"headline": n.get("headline"), "url": n.get("url"), "source": news_source(n.get("source")),

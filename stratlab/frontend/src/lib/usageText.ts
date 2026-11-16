@@ -1,13 +1,35 @@
 /* The words for a person's limits (lib/usage.ts reads them; no imports, so the unit tests read this file on its own). */
 
 export type UsageRow = { key: string; label: string; used: number | null; limit: number | null; left: number | null; resets: "day" | "month" | null };
-export type Usage = { plan: string; rows: UsageRow[]; refresh_off?: boolean };
+export type Usage = { plan: string; rows: UsageRow[]; refresh_off?: boolean;
+  /** LIVE9A-003: a Free account still on the counts it had before the smaller Free plan: until when, and Free's own counts after */
+  grace?: { until: string; reads_after: number; decks_after: number } | null };
 
 /** Refreshes left today: the fresh AI reads left, the one daily count Plans and Account state (LIVE7B-002: a separate "30 left today"
  * on Pro, whose Plans row says Unlimited), or null when there's no limit (or it isn't known yet). */
 export function refreshesLeft(u: Usage | null): number | null {
   const r = u?.rows.find((x) => x.key === "research_ai");
   return r ? r.left : null;
+}
+
+const graceDay = (iso: string): string => {
+  const d = new Date(new Date(iso).getTime() + 5.5 * 3600_000);
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+};
+
+/** The note beside Refresh: "4 left today", and on a Free account still on its earlier counts, until when and what Free has after
+ * (LIVE9A-003: "60 left today" on Free beside a Plans page saying Free has 5 read as a broken limit). */
+export function leftWord(left: number, u: Usage | null): string {
+  const base = left === 0 ? "None left today" : `${left} left today`;
+  return u?.grace ? `${base} (${u.grace.reads_after} a day from ${graceDay(u.grace.until)})` : base;
+}
+
+/** LIVE9A-003: the decks note beside a theme's or a company's download buttons: "Decks this month: 1 of 5", and on a Free account still on its
+ * earlier counts, "(the sample deck only from 27 Nov)"; null with no monthly limit (Pro) or none on the plan (the locked button says it). */
+export function decksWord(used: number | null | undefined, limit: number | null | undefined, u: Usage | null): string | null {
+  if (limit == null || limit === 0) return null;
+  const base = `Decks this month: ${used ?? 0} of ${limit}`;
+  return u?.grace && u.grace.decks_after === 0 ? `${base} (the sample deck only from ${graceDay(u.grace.until)})` : base;
 }
 
 /** FREE-TIER: the plan has no Refresh at all (Free: the server's refresh_off): the button says where it is, never "back at midnight". */
