@@ -51,11 +51,15 @@ test("the theme page is a deep dive made of tables, with each company only where
   // beside the map's
   await expect(members.getByRole("heading", { name: /official industry/ })).toHaveCount(0);
   await expect(members.getByRole("table", { name: /Coal and metal mining: companies in the theme/ })).toContainText("Vedanta");
-  await expect(members.getByRole("table", { name: /Power generation: companies in the theme/ })).toContainText("Added");
+  // r582 (R58.2, updated on purpose): a layer of one company is not kept, so NTPC (the map's only power generator) moves to the layer its
+  // words fit, or Other, with the reason; it is still in the theme and still marked as added
+  await expect(members.getByRole("row").filter({ hasText: "NTPC" }).first()).toContainText("Added");
   // the whole chain in one table, with the basis said
   const chain = page.getByRole("table", { name: /value chain by layer/i });
   await expect(chain.locator("thead th")).toHaveText([/^Layer$/, /^i?Companies$/, /^i?Revenue$/, /^i?EBITDA margin$/, /^Net margin$/, /^i?ROCE$/]);
-  await expect(chain.locator("tbody tr")).toHaveCount(3);          // the map's three layers (R21: Vedanta placed in one of them)
+  // r582 (R58.2, updated on purpose): the map's two layers of more than one company (R21: Vedanta placed in one of them); NTPC's
+  // one-company layer is not kept, so it sits in Other, outside the chain
+  await expect(chain.locator("tbody tr")).toHaveCount(2);
   await expect(main).toContainText("Consolidated accounts where the company files them");
   // a layer: its companies in their own words, the median and the range as rows; the wrong placement (ONGC under steel) isn't there
   const steel = page.locator("#layer-1");
