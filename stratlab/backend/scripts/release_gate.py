@@ -35,7 +35,8 @@ FAIL (the exit code is 1 when any theme has one; each row says on which side it 
                        a layer whose name has no word of three letters or more
   one-company layer    a named layer (not "Other ...", not an official group) holding one company
   largest left out     a company of a named layer left out of its figures on insufficient evidence alone (read only weakly, no words, none
-                       found, no way of earning stated) that is one of the theme's 10 largest by market value or larger than every company
+                       found, no way of earning stated) that is one of the theme's 10 largest by market value (never more than its
+                       largest quarter: theme_base.TOP_MEMBERS, TOP_SHARE) or larger than every company
                        in the layer's figures (r572: the live R57.1 decks left McDonald's, Yum, SLB and Disney out while every fixture passed)
   model contradicted   a company's printed way of earning that its own words contradict: they state another way of earning in so many
                        words (theme_check.model_from_words), of a family not kin to it (the families of making are one kin), and
@@ -498,7 +499,7 @@ def checks(d: dict, vc: list, placements: dict, moved_in: set = frozenset(), why
     # named layer left out of its figures on insufficient evidence alone, that is one of the theme's TOP_MEMBERS largest by market value or
     # larger than every company in the layer's figures
     caps = {s: c.get("cap") or 0 for s, (_, _, c) in rows.items()}
-    top = {s for s, cap in sorted(caps.items(), key=lambda kv: (-kv[1], kv[0]))[:B.TOP_MEMBERS] if cap}
+    top = {s for s, cap in sorted(caps.items(), key=lambda kv: (-kv[1], kv[0]))[:min(B.TOP_MEMBERS, len(caps) // B.TOP_SHARE)] if cap}
     for name, (v, cos) in by_layer.items():
         if v.get("official") or name.startswith("Other "):
             continue

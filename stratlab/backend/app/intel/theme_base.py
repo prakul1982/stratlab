@@ -1836,7 +1836,7 @@ NAME_PART_MODEL = {"construction": r"\bepc\b|engineering,? procurement,? (?:and|
 # at 60% the live Capital goods "Industrial Products" (25 of its 40 read companies in "Engines and industrial machinery makers", 62.5%, the
 # other 15 over six layers) still counted
 ON_INDUSTRY_SHARE, ON_INDUSTRY_MIN = 2 / 3, 3
-TOP_SHARE = 10                  # r572: ...and never more than the theme's largest tenth
+TOP_SHARE = 4                   # r572: ...and never more than the theme's largest quarter
 TOP_MEMBERS = 10                # r572: the theme's largest companies by market value, never left out of their layer's figures on insufficient evidence alone
 MODEL_LINE_MIN = 3              # gl52: companies a sparse layer's way of earning must be shown for before its line names it
 
