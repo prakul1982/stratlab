@@ -34,6 +34,10 @@ FAIL (the exit code is 1 when any theme has one; each row says on which side it 
                        travel layer holding a language-learning app); a company the engine moved into a layer its own words don't name;
                        a layer whose name has no word of three letters or more
   one-company layer    a named layer (not "Other ...", not an official group) holding one company
+  largest left out     a company of a named layer left out of its figures on insufficient evidence alone (read only weakly, no words, none
+                       found, no way of earning stated) that is one of the theme's 10 largest by market value (never more than its
+                       largest quarter: theme_base.TOP_MEMBERS, TOP_SHARE) or larger than every company
+                       in the layer's figures (r572: the live R57.1 decks left McDonald's, Yum, SLB and Disney out while every fixture passed)
   model contradicted   a company's printed way of earning that its own words contradict: they state another way of earning in so many
                        words (theme_check.model_from_words), of a family not kin to it (the families of making are one kin), and
                        show no word of its own
@@ -70,6 +74,7 @@ _KIN = ({"making", "components", "contract_making", "mining", "metal_processing"
 _SUFFIXES = ("ations", "ation", "ings", "ing", "ers", "er", "ies", "es", "s", "ed", "al")
 OWN_REASON = re.compile(r"another business|outside the theme's|scope|definition doesn't include|isn't one of the theme's|not one of the theme's", re.I)
 LAYER_ONLY = ("no", "unbacked")
+INSUFFICIENT = ("weak", "no_words", "none_found", "no_model")       # r572: the figures verdicts of insufficient evidence (theme_base.by_model out_why)
 
 
 # ---------- words ----------
@@ -131,6 +136,8 @@ def load(path: pathlib.Path) -> dict:
     d = d.get("data", d) if isinstance(d, dict) else d
     if not isinstance(d, dict) or not isinstance(d.get("value_chain"), list) or "kept" not in d:
         raise ValueError("not a placement-inputs answer")
+    # r572: each company's figures verdict as the stored placement printed it (the stale marks are worked out again by the engine)
+    d["stored_out"] = {c["ticker"]: c.get("out_why") or "" for v in d["value_chain"] for c in v.get("companies") or [] if c.get("ticker")}
     for v in d["value_chain"]:
         v["companies"] = [{k: x for k, x in c.items() if k not in _STALE} for c in v.get("companies") or []]
     return d
@@ -264,9 +271,28 @@ def _kwargs(d: dict) -> dict:
     return kw
 
 
+STORED_ANSWERS = True      # r572: the model's stored answers to the questions asked once a rules version stand for its answer under new rules
+
+
+def as_current(kept: dict) -> dict:
+    """r572 (the RULES bump of R57.2: offline, the stub's empty answer to the misfit and audit questions, asked again once a rules version,
+    undid every move the stored answers made, 109 changes in 34 themes that production, asking the model again, would not show): the kept
+    answers to those questions, and the mark of the models asked again, as if given under the engine's rules (the model's last answer is the
+    best offline stand-in for the one it gives again; --ask-again replays with the stub's empty answer instead)."""
+    kept = dict(kept or {})
+    for k in ("fit", "audit"):
+        if isinstance(kept.get(k), dict) and kept[k].get("rules") is not None:
+            kept[k] = {**kept[k], "rules": B.RULES}
+    if kept.get("reasked_rules") is not None:
+        kept["reasked_rules"] = B.RULES
+    return kept
+
+
 def run(d: dict, origin: dict, ask) -> tuple[dict, dict]:
     """place_rest on the map as live handed it. The split's renames the kept answer holds are keyed by a signature of the members the
     live split saw; the replay applies them as live did (the signature pinned to the kept one, as lane t56's exact replays do)."""
+    if STORED_ANSWERS and d.get("kept"):
+        d = {**d, "kept": as_current(d["kept"])}
     m = pre_map(json.loads(json.dumps(d)), origin)
     m["placements"] = json.loads(json.dumps(d.get("placements") or {}))      # p57: as with_base hands the checked map's placements on
     ev, facts = d.get("evidence") or {}, d.get("facts") or {}
@@ -405,10 +431,12 @@ def diff(d: dict, new_vc: list, new_pl: dict) -> list[dict]:
     return rows
 
 
-def checks(d: dict, vc: list, placements: dict, moved_in: set = frozenset()) -> list[dict]:
-    """What must never ship, in one placement (the stored one, or the engine's with its own placements)."""
+def checks(d: dict, vc: list, placements: dict, moved_in: set = frozenset(), why_of=None) -> list[dict]:
+    """What must never ship, in one placement (the stored one, or the engine's with its own placements). `why_of(symbol, company)`: why a
+    company is left out of its layer's figures ("" when it is in them)."""
     out = []
     rows = rows_of(vc)
+    why_of = why_of or (lambda s, c: c.get("out_why") or "")
 
     def fail(kind, subject, detail):
         out.append({"fail": kind, "subject": subject, "detail": detail})
@@ -466,6 +494,21 @@ def checks(d: dict, vc: list, placements: dict, moved_in: set = frozenset()) -> 
         for s, c in cos:
             if s in moved_in and shares(name, words_of(d, s, c)) is False:
                 fail("layer words", f"“{name}”", f"{c.get('name') or s} ({s}) moved in; its own words, industry and name say no word of it")
+    # r572 (R57.2, the live R57.1 decks: McDonald's, the Restaurants theme's largest company, Yum, SLB, Baker Hughes, Enbridge and Disney
+    # left out of their layers' figures as "insufficient evidence", while every replay of the fixes' own fixtures passed): a company of a
+    # named layer left out of its figures on insufficient evidence alone, that is one of the theme's TOP_MEMBERS largest by market value or
+    # larger than every company in the layer's figures
+    caps = {s: c.get("cap") or 0 for s, (_, _, c) in rows.items()}
+    top = {s for s, cap in sorted(caps.items(), key=lambda kv: (-kv[1], kv[0]))[:min(B.TOP_MEMBERS, len(caps) // B.TOP_SHARE)] if cap}
+    for name, (v, cos) in by_layer.items():
+        if v.get("official") or name.startswith("Other "):
+            continue
+        top_in = max((caps[s] for s, c in cos if not why_of(s, c)), default=0)
+        for s, c in cos:
+            w = why_of(s, c)
+            if w in INSUFFICIENT and (s in top or caps[s] > top_in > 0):
+                fail("largest left out", f"{c.get('name') or s} ({s})", f"left out of “{name}”'s figures: insufficient evidence ({w}), "
+                     + ("one of the theme's largest companies" if s in top else "larger than every company in its figures"))
     # printed ways of earning
     for s, (name, v, c) in rows.items():
         md = c.get("model")
@@ -490,7 +533,7 @@ def gate(d: dict, model: str = "stub") -> dict:
         eng_pl["dropped"] = new_pl.get("dropped") or []          # p57: the engine moved the rest (a layer decision, "layer_no")
     elif "dropped" not in new_pl:
         eng_pl["dropped"] = stored_pl.get("dropped") or []       # the membership check is not re-run offline: its removals stand
-    fs = checks(d, d["value_chain"], stored_pl)
+    fs = checks(d, d["value_chain"], stored_pl, why_of=lambda s, c: (d.get("stored_out") or {}).get(s) or "")
     fe = checks(d, new_vc, eng_pl, moved_in)
     key = lambda f: (f["fail"], f["subject"])       # noqa: E731
     ks, ke = {key(f) for f in fs}, {key(f) for f in fe}
@@ -573,7 +616,13 @@ def main(argv=None) -> int:
     ap.add_argument("--model", choices=("stub", "none", "vocab"), default="stub",
                     help="the engine's model offline: a stub that answers nothing (default), none at all, or the vocabulary stand-in for the "
                          "misfit question (p57)")
+    ap.add_argument("--new-only", action="store_true", help="r572: the exit code from what the engine would ship (FAIL rows found on the engine's "
+                                                            "side, or on both); a row found only in the stored placement is one the engine fixes")
+    ap.add_argument("--ask-again", action="store_true", help="r572: the questions asked once a rules version answered by the stub (nothing) "
+                                                             "under new rules, instead of by the model's stored answers")
     a = ap.parse_args(argv)
+    global STORED_ANSWERS
+    STORED_ANSWERS = not a.ask_again
     if not a.folder.is_dir():
         print(f"not a folder: {a.folder}", file=sys.stderr)
         return 2
@@ -593,7 +642,7 @@ def main(argv=None) -> int:
             results[p.stem] = gate(d, a.model)
             if not a.json:
                 print(report(p.stem, results[p.stem], a.show), flush=True)
-    failing = [k for k, g in results.items() if g["fails"]]
+    failing = [k for k, g in results.items() if [f for f in g["fails"] if not a.new_only or f.get("side") != "stored"]]
     if a.json:
         print(json.dumps(results, ensure_ascii=False, indent=1))
     else:

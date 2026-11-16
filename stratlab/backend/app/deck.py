@@ -2272,8 +2272,12 @@ def roll_said(n_in: int, total: int, n_out: int, in_: str, out_: str, cut: bool)
 # said as what it also earns from, and "no other way of earning" only where one reportable segment is stored (theme_data.also_said)
 ON_WORDS_NOTE = "(on its words): the map placed it here and its own words say the layer's name, so it is in the layer's figures."
 LOW_TAG = "read at low confidence"
+MAP_TAG = "as the map placed it"          # r572: in its layer's figures as the map placed it, its own words contradicting nothing
 LOW_NOTE = (f"({LOW_TAG}): how it earns is read at low confidence as the layer's way, its own words or official industry are of the layer's "
             "kind, and the sentences of its own words on its principal business name no other way of earning, so it is in the layer's figures.")
+MAP_NOTE = (f"({MAP_TAG}): the map placed it in this layer and nothing in its own words contradicts that: the sentences on its principal "
+            "business name no other way of earning, or, for one of the theme's largest companies, no description of its own is stored; so it is "
+            "in the layer's figures.")
 
 
 def also_notes(cos: list) -> str:
@@ -4372,7 +4376,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 67                  # p57 (R56, the owner's review of the live R56 decks): a published member kept through a re-check said so, a company leaving the figures never said to leave the theme, a layer named by what its companies say; t56 (R55, the owner's review of the live R55 decks): a removal for a listing reason under its own heading in the change log, every removal with its business-membership or listing reason, a fall in the informative share said with why and a lost layer with where its companies went; v55 (R55, the owner's review of the live R54 decks): a company not checked yet (no words of its own stored, or a listing line whose issuer was not looked up) said apart from one whose own words describe other work, with what is missing; companies outside the theme's definition screened out with their principal business; the membership check's progress said apart from the companies with figures; c54 (R53 review): scope boundaries (lenders, contractors, laboratories and primary producers as adjacent participants outside a theme whose name states them; a layer of such a business an adjacent layer), a member with no stored figures listed as "figures not available", one company under two symbols merged when its stored description names the other, the change log saying a merged symbol and a restored layer, moves judged on what a layer sells (updated on purpose); d53 (R53): the honest membership row, a partial map said in the headline and on the data-confidence page, the same company twice, core and adjacent, spending ahead of revenue, an adjacent layer said on its page, the figure-sources head counting arithmetic-only figures apart, every addition with its reason, moves between layers and layer changes in the cohort row, exclusions held from an earlier version (updated on purpose); gl52 (R52): exclusion reasons say what happened ("no description found in any source"), no low-confidence model printed, a layer line names a way of earning only for 3 or more, acronyms keep their case, a conglomerate's theme segment or "(whole company)" in Size and shape, halves of a split layer ranked as one, stock pay apart not ranked, the cohort row against the versions stored since (updated on purpose); rv51 (R51): business-model reasons from the layer's own records; principal business keeps a company in the theme; financial companies' other income; gl50 (R50): no layer ranked with no way of earning read, the gate failing a deck that does, "N not checked yet", the coverage's "Moved by what its layer is" row, a parent and listed subsidiary (updated on purpose); ex49 (R49): dive text 19, every exclusion's precise reason on layer pages and rolls, the capital-intensity proxy labelled, the business-model rule in each comparison, one condensed comparison per page (updated on purpose); vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R47): dive text 18, the coverage page's "Coverage flag" row (under 60% in informative layers, or 8 points or more fewer than the previous live placement), layers' lines say who earns another way (updated on purpose); vf46 (R46): dive text 17, each checked figure's source record, net above EBITDA reconciled line by line (updated on purpose); tx2 (R46, the outside review of the live R45 decks): the coverage's "Screening" row (considered = screened out as another business + members, confirmed, with figures, in informative layers, eligible for each metric), the screened-out companies said to be candidates, never members, "Considered" counting them apart from the members, a coverage table taller than a page continued on the next; c1 (R44, the outside review of the live R43 decks): the coverage's "From other industries" row (each company the map names from another industry, why it is in the theme and, apart from that, whether it is in its layer's figures), a layer named by how its companies earn says on its page why it is never ranked, layers of one official industry made from "Other"; R44 (lane v1, the outside review of the live R43 decks): each unusual figure verified against its own filed figures, not reconciled or invalid, one record each, and the data-confidence page's "Verified figures" with the count; the coverage's "In informative layers: N of M (P%)" said once; d1 (the outside review of the live Release 41 decks): the "Other" count split into fit none and not checked yet, one count on every page; every company in a layer or "Other"; no half of a split layer ranked, no comparison on a gap under a point, the peer P/E gap only against named like-for-like peers; layers of two companies or fewer on the "Smaller layers" page, a layer page of at least 5 companies; the coverage on a page of its own when the checks need the room; a company in its layer's figures on its industry said so; LIVE7A (lane t1): the real minus in every range and median, one precision a column, text or chart, layer parts that add up to the change shown, a row's mark its kept reason and a mark's note only with a row that carries it, the tailwinds' contents line in the page's own counts, medians of whole-point margins printed whole; R41: a coloured table cell (the highest and lowest layer, drawn bold) measured bold, so its row holds it whole; a cut paragraph never ends on a joining word; R40: the peer set said as "this theme" (no "the the" on a wrap), a repeated word said once on the finished pages and counted, a layer named only by how its companies earn shown and never ranked, a market-value half with fewer than 3 companies in its figures undone, the coverage table's "In no layer" and "Another business" rows; R38: foreign legal endings left off a label before any of it is cut, no word of a table cell broken inside; LIVE6: calendar price periods, own words only, one market value per company, short charts and empty tables dropped; q1: the appendix counts "with figures" by the dive's rule, a layer's cohort that fell against the run before on the data-confidence page; n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 68                  # r572 (R57.2, the live R57.1 decks): a company in its layer's figures as the map placed it marked so, a removal the map no longer names said with its own words; p57 (R56, the owner's review of the live R56 decks): a published member kept through a re-check said so, a company leaving the figures never said to leave the theme, a layer named by what its companies say; t56 (R55, the owner's review of the live R55 decks): a removal for a listing reason under its own heading in the change log, every removal with its business-membership or listing reason, a fall in the informative share said with why and a lost layer with where its companies went; v55 (R55, the owner's review of the live R54 decks): a company not checked yet (no words of its own stored, or a listing line whose issuer was not looked up) said apart from one whose own words describe other work, with what is missing; companies outside the theme's definition screened out with their principal business; the membership check's progress said apart from the companies with figures; c54 (R53 review): scope boundaries (lenders, contractors, laboratories and primary producers as adjacent participants outside a theme whose name states them; a layer of such a business an adjacent layer), a member with no stored figures listed as "figures not available", one company under two symbols merged when its stored description names the other, the change log saying a merged symbol and a restored layer, moves judged on what a layer sells (updated on purpose); d53 (R53): the honest membership row, a partial map said in the headline and on the data-confidence page, the same company twice, core and adjacent, spending ahead of revenue, an adjacent layer said on its page, the figure-sources head counting arithmetic-only figures apart, every addition with its reason, moves between layers and layer changes in the cohort row, exclusions held from an earlier version (updated on purpose); gl52 (R52): exclusion reasons say what happened ("no description found in any source"), no low-confidence model printed, a layer line names a way of earning only for 3 or more, acronyms keep their case, a conglomerate's theme segment or "(whole company)" in Size and shape, halves of a split layer ranked as one, stock pay apart not ranked, the cohort row against the versions stored since (updated on purpose); rv51 (R51): business-model reasons from the layer's own records; principal business keeps a company in the theme; financial companies' other income; gl50 (R50): no layer ranked with no way of earning read, the gate failing a deck that does, "N not checked yet", the coverage's "Moved by what its layer is" row, a parent and listed subsidiary (updated on purpose); ex49 (R49): dive text 19, every exclusion's precise reason on layer pages and rolls, the capital-intensity proxy labelled, the business-model rule in each comparison, one condensed comparison per page (updated on purpose); vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R47): dive text 18, the coverage page's "Coverage flag" row (under 60% in informative layers, or 8 points or more fewer than the previous live placement), layers' lines say who earns another way (updated on purpose); vf46 (R46): dive text 17, each checked figure's source record, net above EBITDA reconciled line by line (updated on purpose); tx2 (R46, the outside review of the live R45 decks): the coverage's "Screening" row (considered = screened out as another business + members, confirmed, with figures, in informative layers, eligible for each metric), the screened-out companies said to be candidates, never members, "Considered" counting them apart from the members, a coverage table taller than a page continued on the next; c1 (R44, the outside review of the live R43 decks): the coverage's "From other industries" row (each company the map names from another industry, why it is in the theme and, apart from that, whether it is in its layer's figures), a layer named by how its companies earn says on its page why it is never ranked, layers of one official industry made from "Other"; R44 (lane v1, the outside review of the live R43 decks): each unusual figure verified against its own filed figures, not reconciled or invalid, one record each, and the data-confidence page's "Verified figures" with the count; the coverage's "In informative layers: N of M (P%)" said once; d1 (the outside review of the live Release 41 decks): the "Other" count split into fit none and not checked yet, one count on every page; every company in a layer or "Other"; no half of a split layer ranked, no comparison on a gap under a point, the peer P/E gap only against named like-for-like peers; layers of two companies or fewer on the "Smaller layers" page, a layer page of at least 5 companies; the coverage on a page of its own when the checks need the room; a company in its layer's figures on its industry said so; LIVE7A (lane t1): the real minus in every range and median, one precision a column, text or chart, layer parts that add up to the change shown, a row's mark its kept reason and a mark's note only with a row that carries it, the tailwinds' contents line in the page's own counts, medians of whole-point margins printed whole; R41: a coloured table cell (the highest and lowest layer, drawn bold) measured bold, so its row holds it whole; a cut paragraph never ends on a joining word; R40: the peer set said as "this theme" (no "the the" on a wrap), a repeated word said once on the finished pages and counted, a layer named only by how its companies earn shown and never ranked, a market-value half with fewer than 3 companies in its figures undone, the coverage table's "In no layer" and "Another business" rows; R38: foreign legal endings left off a label before any of it is cut, no word of a table cell broken inside; LIVE6: calendar price periods, own words only, one market value per company, short charts and empty tables dropped; q1: the appendix counts "with figures" by the dive's rule, a layer's cohort that fell against the run before on the data-confidence page; n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -6241,7 +6245,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             if c.get("distress"):          # y57 (R57, TEL-5): its margins on its row, out of every median and range
                 return "in distress"
             return "whole company" if c["symbol"] in lwide else "on its industry" if c.get("on_industry") else "own design" if c.get("own_goods") else \
-                "on its words" if c.get("by_words") else LOW_TAG if c.get("read_low") else ""
+                "on its words" if c.get("by_words") else LOW_TAG if c.get("read_low") else MAP_TAG if c.get("by_map") else ""
         tags = {c["symbol"]: tag(c) for c in cos}
         # e54 (R54): a company whose whole-company figures, of another way of earning too, stand in the layer's figures says so on its row
         cons = consolidated_of(layer, cos)
@@ -6352,6 +6356,8 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             fparts.append(ON_WORDS_NOTE + also_notes([c_ for c_ in cos if tags.get(c_["symbol"]) == "on its words"]))
         if LOW_TAG in shown_tags:           # x57 (RC4): the read at low confidence agrees with the layer it was placed in
             fparts.append(LOW_NOTE + also_notes([c_ for c_ in cos if tags.get(c_["symbol"]) == LOW_TAG]))
+        if MAP_TAG in shown_tags:           # r572: the map placed it here, its own words contradicting nothing
+            fparts.append(MAP_NOTE + also_notes([c_ for c_ in cos if tags.get(c_["symbol"]) == MAP_TAG]))
         if "not confirmed" in shown_tags:
             fparts.append("(not confirmed): its own words don't show this work, so it is left out of the medians and the revenue total.")
         for c_ in cos:          # v55: an adjacent kind of business too few for a layer of its own, said where it is
@@ -6452,7 +6458,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         on_page = {c["symbol"] for c in cos[:k_fit]}
         on_tags = {tags[x] for x in on_page}
         # ex49: a left-out mark's note (each kind's, kind_notes) and the own-design note only with a row on the page that carries it
-        drop = [p for p in fparts for t_ in ("different model", "another business", "insufficient evidence", "own design", "on its words", LOW_TAG, "in distress")
+        drop = [p for p in fparts for t_ in ("different model", "another business", "insufficient evidence", "own design", "on its words", LOW_TAG, MAP_TAG, "in distress")
                 if p.startswith(f"({t_})") and t_ not in on_tags]
         drop += [p for p in fparts if p.startswith("(whole company)") and "whole company" not in on_tags]
         drop += [p for p in fparts if p.startswith("(on its industry)") and "on its industry" not in on_tags]
@@ -6462,7 +6468,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         drop += [nf_note] if not nofig & on_page else []
         if rline and not unsure & on_page:          # R35: the roll's line says who isn't confirmed, so the mark's own note goes with its rows
             drop += [p for p in fparts if p.startswith("(not confirmed)")]
-        if (unmodelled or rline or nofig or lwide or {"on its industry", "own design", "on its words", LOW_TAG, "consolidated", "in distress"} & shown_tags) and any(p in fparts for p in drop):       # no marked row shown: its note isn't either
+        if (unmodelled or rline or nofig or lwide or {"on its industry", "own design", "on its words", LOW_TAG, MAP_TAG, "consolidated", "in distress"} & shown_tags) and any(p in fparts for p in drop):       # no marked row shown: its note isn't either
             fparts = [p for p in fparts if p not in drop]
             fnote, fh2 = foot(fparts)
             if rline and fh2 < fh:          # R35: the roll's line took room from the table: the room the dropped notes leave goes back to its rows,
@@ -6520,6 +6526,23 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         if fnote:
             s.add("text", (M, BOT - fh + 0.08, CW, fh - 0.08), paras=fnote, size=BODY_MIN, floor=BODY_MIN, color=MUTED)
         slides.append(s)
+        # r572 round 2 (the live R57.1 decks: "Fabless chip design: The largest 4 of 38", "eVTOL and drone aircraft developers: The largest 4
+        # of 20", five layer pages under min(5, N) rows after every step above, their long names wrapping over three lines): the next of its
+        # companies go on a page of their own right after it, "<layer> (continued)", until min(5, N) of them are shown
+        if k_fit < want:
+            more = body[k_fit:]
+            room_c = BOT - TOP - REST_H
+            k_c = len(more)
+            while k_c > 1 and table_height(head, more[:k_c], widths, CW) > room_c:
+                k_c -= 1
+            k_c = max(k_c, min(len(more), want - k_fit))
+            s3 = Slide(f"{title} (continued)", f"Its companies {k_fit + 1} to {k_fit + k_c} of {len(cos)}", eyebrow=eb("The value chain"))
+            th3 = min(room_c, table_height(head, more[:k_c], widths, CW))
+            s3.add("table", (M, TOP, CW, th3), head=head, rows=more[:k_c], widths=widths, tight=True)
+            s3.add("text", (M, TOP + th3 + 0.04, CW, REST_H - 0.04),
+                   paras=[f"Companies {k_fit + 1} to {k_fit + k_c} of {len(cos)}, in the order of the table before; every one: appendix, "
+                          f"⟦Every company's figures⟧."], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
+            slides.append(s3)
         if cont:
             s2 = Slide(f"{title} (notes)", "Who is in the layer's calculations, and what its table's marks mean", eyebrow=eb("The value chain"))
             ch2 = sum(note_h(x) for x in cont) + 0.06 * (len(cont) - 1) + 0.12
@@ -6872,7 +6895,8 @@ def _smaller_layers(slides: list, small: list, amt, eyebrow: str) -> None:
             why = why_kind(calc_of(c))        # LIVE7A-005: a row's mark is its kept reason first, the whole company's figures after (ex49: its kind)
             mark = ROLL_TAG.get(why) if why else ("whole company" if c.get("company_wide") or c["symbol"] in (x.get("company_wide") or []) else
                                                   "on its industry" if c.get("on_industry") else "own design" if c.get("own_goods") else
-                                                  "on its words" if c.get("by_words") else LOW_TAG if c.get("read_low") else "")
+                                                  "on its words" if c.get("by_words") else LOW_TAG if c.get("read_low") else
+                                                  MAP_TAG if c.get("by_map") else "")
             name = (f"{c['name']} ({mark})" if mark else c["name"]) \
                 + (f"; also listed, not confirmed: {', '.join(others)}" if others and i == len(sure) - 1 else "")
             rows_.append(({**x, "layer": x["layer"] if i == 0 else ""}, c, name))
@@ -6894,6 +6918,7 @@ def _smaller_layers(slides: list, small: list, amt, eyebrow: str) -> None:
              "on its words": "(on its words): the map placed it here and its own words say the layer's name; in its figures.",
              LOW_TAG: f"({LOW_TAG}): how it earns is read at low confidence as its layer's way, and its own words on its principal business name no "
                       "other; in its figures.",
+             MAP_TAG: f"({MAP_TAG}): the map placed it here and nothing in its own words contradicts that; in its figures.",
              ROLL_TAG["no figure stored"]: f"({ROLL_TAG['no figure stored']}): no revenue figure is stored for it.",
              "whole company": "(whole company): it runs other businesses too, so its figures are the whole company's.",
              "on its industry": "(on its industry): no description of its own; in its layer by its official industry, that of most of the "
@@ -7478,7 +7503,7 @@ def _layer_profile_slides(slides: list, v: dict, amt, eyebrow: str) -> None:
             f"from {sector_ops.NOTE_CHECKED.get(region, sector_ops.NOTE_CHECKED['US'])}, as each company states them; a layer figure only "
             "where at least half of the companies the profile fits state the measure, else the count; an amount or a count (capacity, rooms, "
             "beds, orders) as its range, never a median" + (f"; each company's figure, period and source: ⟦{SECTOR_TITLE}⟧" if paged else "")
-            + "." + (" " + profile_summary(with_ops) if with_ops else "")
+            + "." + (" " + profile_summary(with_ops, profile_short(got)) if with_ops or profile_short(got) else "")
             # R57 audit RC12: how far the measures reach among the largest companies they fit
             + (f" The {_n(of_big, 'largest company', 'largest companies')} a profile fits: {big} state one of its measures." if of_big else "")
             + (" Its last column: the layer's own companies with the top and the bottom value of its first figure with a median, inside the "
@@ -7510,7 +7535,25 @@ def _layer_profile_slides(slides: list, v: dict, amt, eyebrow: str) -> None:
 PROFILES_SAID = "Operating profiles"
 
 
-def profile_summary(rows_: list) -> str:
+def profile_short(rows_: list) -> list:
+    """r572 round 2 (the live R57.1 Restaurants deck: "Restaurants and food service and hotels and resorts", a layer whose name says hotels, with
+    no operating measures and no line saying why): each layer whose name says a sector operating profile and whose way of earning fits it, but
+    fewer than half of whose companies are of it, so no measures of it are shown: [(layer, the profile's plural name)]."""
+    from .intel import sector_ops
+    from .intel.theme_check import model_family
+    out = []
+    for r in rows_:
+        if r.get("ops"):
+            continue
+        fam = model_family((r.get("model") or {}).get("id")) or (r.get("model") or {}).get("family") or ""
+        for p_ in sector_ops.PROFILES:
+            if re.search(p_.words, str(r.get("layer") or ""), re.I) and fam in p_.models:
+                out.append((r["layer"], p_.many))
+                break
+    return out
+
+
+def profile_summary(rows_: list, short: list | None = None) -> str:
     """m57: each layer with a sector operating profile and how many of its measures its companies' documents state, in one sentence a reader
     (and deck_check) reads whole: "Operating profiles: Airlines, airlines: none of its 4 measures stated; Hotels, hotel operators: 2 of 4
     stated, 1 by half or more of its companies."."""
@@ -7525,6 +7568,7 @@ def profile_summary(rows_: list) -> str:
         else:
             ok = sum(1 for m in o["measures"] if m["ok"])
             items.append(f"{r['layer']}, {many}: {len(o['measures'])} of {k} stated, {ok} by half or more of its companies")
+    items += [f"{layer}, {many}: fewer than half of its companies are {many}, so no measures of theirs are shown" for layer, many in short or []]
     return f"{PROFILES_SAID}: " + "; ".join(items) + "."
 
 

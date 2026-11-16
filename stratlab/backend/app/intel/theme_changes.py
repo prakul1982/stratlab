@@ -18,6 +18,7 @@ read is stored (theme_routes.dive_of).
 
 Who sees what (plans.py "theme_changes"): Basic and Pro the whole log; Free the latest entry's counts and its first FREE_ROWS rows."""
 import json
+import re
 from collections import Counter
 from datetime import datetime, timezone
 
@@ -483,11 +484,89 @@ def _short(e: dict, n: int) -> dict:
     return out
 
 
-def view(region: str, name: str, full: bool) -> dict:
+# r572 (R57.2, the live R57.1 decks: "ADOBE INC., INTUIT INC., Salesforce, Inc. (no longer in the theme's map)" in Semiconductors, Citi and
+# UBS in Payments, SBI Cards in Automotive, 20 companies in Capital goods): a company that left the theme with no reason but the map's not
+# naming it any more has that said as a business-membership decision, with what its own stored words say it does (their first sentence) or,
+# with none stored, the official industry its filings give; "another business" when those words say nothing of the theme's own business
+UNNAMED = ("no longer in the theme's map", BUSINESS + "the theme's new map doesn't name it")
+QUOTE_MAX = 200
+
+
+def first_sentence(words) -> str:
+    """The first sentence of a company's own words (its industry line left out), at most QUOTE_MAX characters, cut at a clause."""
+    text = re.sub(r"^\s*Industry:[^.]*\.\s*", "", str(words or "")).strip()
+    if not text or text.startswith("From its own filings:"):
+        return ""
+    one = re.split(r"(?<=[a-z0-9)”\"])\.\s+(?=[A-Z])", text, maxsplit=1)[0].strip().rstrip(".")
+    if len(one) > QUOTE_MAX:
+        cut = max(one.rfind(", ", 0, QUOTE_MAX), one.rfind("; ", 0, QUOTE_MAX))
+        one = one[:cut] if cut > 40 else one[:one.rfind(" ", 0, QUOTE_MAX)]
+    return one.strip(" ,;:").replace("“", "‘").replace("”", "’")
+
+
+def unnamed_why(why: str, words=None, industry: str = "", theme_words: set | None = None) -> str:
+    """r572: a removal's reason with what its own words or filings say, when its reason was only that the map no longer names it."""
+    if why not in UNNAMED:
+        return why
+    base = BUSINESS + ("the theme's new map doesn't name it" if why.startswith(BUSINESS) else "the theme's map no longer names it")
+    quote = first_sentence(words)
+    if quote:
+        from .theme_base import kind_stems
+        if theme_words and not (kind_stems(quote) & theme_words):
+            return f"another business: its own words say “{quote}”"
+        return f"{base}; its own words say “{quote}”"
+    if industry:
+        return f"{base}; filed under {industry}"
+    return base
+
+
+def reasoned(entries: list, words_of=None, industry_of=None, theme_words: set | None = None) -> list:
+    """r572: the log's entries with each removal whose only reason is the map's no longer naming it said with its own words (unnamed_why)."""
+    if words_of is None and industry_of is None:
+        return entries
+
+    def why(r):
+        if not isinstance(r, dict) or r.get("why") not in UNNAMED or not r.get("symbol"):
+            return r
+        try:
+            w = words_of(r["symbol"]) if words_of is not None else None
+            ind = (industry_of(r["symbol"]) if industry_of is not None else "") or ""
+        except Exception:
+            w, ind = None, ""
+        return {**r, "why": unnamed_why(r["why"], w, ind, theme_words)}
+
+    def move_why(r):
+        # round 2 (the live R57.1 decks: General Dynamics, Bilibili, Sphere and Creative Eye moved between layers with no reason printed):
+        # a move with no reason of the placement's says what its own words or filings say; a move between two halves of one layer is that
+        # layer's split by market value
+        if not isinstance(r, dict) or r.get("why") or not r.get("symbol"):
+            return r
+        a, b = _HALF_NAME.sub("", str(r.get("from") or "")), _HALF_NAME.sub("", str(r.get("to") or ""))
+        if a == b:
+            return {**r, "why": "the same layer, split into halves by market value"}
+        try:
+            w = words_of(r["symbol"]) if words_of is not None else None
+            ind = (industry_of(r["symbol"]) if industry_of is not None else "") or ""
+        except Exception:
+            w, ind = None, ""
+        q = first_sentence(w)
+        said = f"its own words say “{q}”" if q else f"filed under {ind}" if ind else ""
+        return {**r, "why": said} if said else r
+    return [{**e, **({"removed": [why(r) for r in e.get("removed") or []]} if e.get("removed") else {}),
+             **({"moved": [move_why(r) for r in e.get("moved") or []]} if e.get("moved") else {})} for e in entries]
+
+
+def view(region: str, name: str, full: bool, words_of=None, industry_of=None) -> dict:
     """The log as the page shows it, newest first: every entry (`full`), else the latest entry's counts and first FREE_ROWS rows, with
-    how many older entries there are. "since": the day the theme's first read was kept."""
+    how many older entries there are. "since": the day the theme's first read was kept. r572: `words_of` / `industry_of`, a company's stored
+    words and official industry, say why a company the map no longer names left (reasoned)."""
     got = stored(region, name)
     log = [e for e in got.get("log") or [] if isinstance(e, dict)][::-1]
+    if words_of is not None or industry_of is not None:
+        from .theme_base import kind_stems
+        snap = got.get("snap") if isinstance(got.get("snap"), dict) else {}
+        tw = kind_stems(" ".join([str(name)] + [str(x) for x in snap.get("layers") or [] if not str(x).startswith("Other ")]))
+        log = reasoned(log, words_of, industry_of, tw)
     if full:
         return {"full": True, "since": got.get("since"), "entries": log, "older": 0}
     return {"full": False, "since": got.get("since"), "entries": [_short(log[0], FREE_ROWS)] if log else [], "older": max(0, len(log) - 1)}
@@ -502,16 +581,17 @@ def full_for(profile: dict | None) -> bool:
         return False
 
 
-def served(region: str, name: str, dive: dict, profile: dict | None) -> dict:
+def served(region: str, name: str, dive: dict, profile: dict | None, words_of=None, industry_of=None) -> dict:
     """The dive as one account gets it: with its theme's change log as that account's plan shows it ("changes"). The kept dive itself,
     the same for everyone, never holds it."""
-    return {**dive, "changes": view(region, name, full_for(profile))}
+    return {**dive, "changes": view(region, name, full_for(profile), words_of=words_of, industry_of=industry_of)}
 
 
 def _share(n: int, of: int) -> int:
     return int(n * 100 / of + 0.5) if of else 0
 
 
+_HALF_NAME = re.compile(r" \((?:larger|smaller)\)$")
 LOST_MIN = 3                 # d53: a layer of the previous live read with this many companies or more gone, its companies taken by no new layer
 ESTABLISHED = 5              # t56: a layer of the previous live read with this many companies or more is an established category: its removal is
                              # said wherever its companies went (theme_base.LOST_MIN, the taxonomy guard's own count)
@@ -545,6 +625,14 @@ def lost_layers(snap: dict | None, dive: dict | None) -> list[dict]:
         went = [now["layers"][now["cos"][s_][1]] for s_ in cos if s_ in now["cos"]]
         new = Counter(x for x in went if x not in old and not _no_business(x))
         renamed = any(n >= max(1, SHARE * len(cos)) for n in new.values())
+        # r572 round 2 (the live R57.1 Media deck: "Content production and music rights" (30 companies: 14 to its "(smaller)" half, 13 to its
+        # "(larger)" half) printed as gone, taken by no new layer): a layer most of whose companies went to the two halves of one layer split by
+        # market value was split, never lost: said as a split
+        halves = Counter(_HALF_NAME.sub("", x) for x in went if _HALF_NAME.search(x))
+        base, k = (halves.most_common(1) or [("", 0)])[0]
+        if base and k * 2 > len(cos) and (base == _HALF_NAME.sub("", g) or not {base, f"{base} (larger)", f"{base} (smaller)"} & old):
+            out.append({"layer": g, "n": len(cos), "halves": [f"{base} (larger)", f"{base} (smaller)"]})
+            continue
         lost = len(cos) >= LOST_MIN and went and sum(1 for x in went if _no_business(x)) * 2 >= len(went)
         if lost or (len(cos) >= ESTABLISHED and not renamed):
             where = dict(Counter(went))
@@ -611,7 +699,9 @@ def coverage_control(cov: dict | None, snap: dict | None, dive: dict | None = No
         why = fall_why(snap, dive)
         if why:
             out["fell"]["why"] = why
-    lost = lost_layers(snap, dive)
+    found = lost_layers(snap, dive)
+    lost = [x for x in found if not x.get("halves")]
+    split = [x for x in found if x.get("halves")]          # r572 round 2: split into halves by market value, said as a split
     # c54 (R53 review): each lost layer with why the re-check didn't keep it, and each one it restored (theme_base.restore_vanished)
     pl = ((dive or {}).get("placements") or {}) if isinstance(dive, dict) else {}
     gone = [x for x in (pl.get("layers_gone") or []) if isinstance(x, dict) and x.get("layer")]
@@ -623,6 +713,8 @@ def coverage_control(cov: dict | None, snap: dict | None, dive: dict | None = No
         out["restored"] = back
     if isinstance(pl.get("share_guard"), dict) and pl["share_guard"].get("returned"):      # t56: what the taxonomy guard sent back
         out["guard"] = {k: pl["share_guard"][k] for k in ("before", "now", "returned") if k in pl["share_guard"]}
+    if out and split:              # (a split alone flags nothing: it is said beside a flag)
+        out["split"] = [{"layer": x["layer"], "n": x["n"], "halves": x["halves"]} for x in split]
     return out or None
 
 
@@ -653,6 +745,9 @@ def control_line(cov: dict | None) -> str:
         out.append("Layers of the previous live placement gone, their companies taken by no new layer: "
                    + ", ".join(f"“{x['layer']}” ({x['n']:,} companies" + (f": {_went_said(x['went'])}" if x.get("went") else "")
                                + (f"; {x['why']}" if x.get("why") else "") + ")" for x in ctl["lost"]) + ".")
+    if ctl.get("split"):
+        out.append("Layers of the previous live placement split by market value: " + ", ".join(
+            f"“{x['layer']}” ({x['n']:,} companies) split into “{x['halves'][0]}” and “{x['halves'][1]}”" for x in ctl["split"]) + ".")
     if ctl.get("restored"):
         out.append("Layers of the previous live placement a re-check would have lost, kept with their companies whose own words or official "
                    "industry still say what they sell: " + ", ".join(f"“{x['layer']}” ({x['now']:,} of its {x['before']:,})" for x in ctl["restored"]) + ".")

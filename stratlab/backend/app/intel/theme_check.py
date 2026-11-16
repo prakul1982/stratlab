@@ -1216,7 +1216,11 @@ DESIGN_VERB = r"\b(?:designs?|develops?|designing|developing|designers?|develope
 DESIGN_CHIP = DESIGN_VERB + r"[^.;]{0,60}?(?:" + CHIP_NOUNS + ")"
 CHIP_ONLY = r"\bgpus?\b|\bsocs?\b|\basics?\b|\bfpgas?\b|microcontrollers?|microprocessors?"
 NOT_DESIGNER = (r"electronic design automation|\beda\b|(?:software|tools)\b[^.]{0,30}\b(?:to|for) (?:the )?design|"
-                r"licens\w*\b[^.]{0,30}(?:\bip\b|intellectual property|architectures?|\bcores?\b)|(?:semiconductor|wafer fab\w*|capital) equipment")
+                r"licens\w*\b[^.]{0,30}(?:\bip\b|intellectual property|architectures?|\bcores?\b)|(?:semiconductor|wafer fab\w*|capital) equipment|"
+                # r572 round 2 (the release gate on the live R57.1 Semiconductors input: Arm, "the design of central processing unit (CPU) cores
+                # that implement the ARM architecture family of instruction sets", read as a fabless chip maker): the design of processor cores
+                # and instruction sets is a design licensor's work, never chips of its own made by foundries
+                r"design of (?:[\w()-]+ ){0,6}cores?\b|\binstruction sets?\b")
 MAKES_OWN = r"manufactur|\bproduc(?:es|tion)\b|\bmakes\b"
 MODEL_NEEDS["fabless"] += "|" + DESIGN_CHIP
 
@@ -1830,6 +1834,9 @@ WORDS_SAY = {"project_services": r"contract research (?:organi[sz]ations?|servic
                     r"revenue cycle management|technology[- ]enabled healthcare solutions"}
 
 
+FOOD_SHOP = r"\b(?:coffee|sandwich|pizza|donut|doughnut|bagel|ice[- ]cream|juice|tea|bakery|burger|sub|food)\s+shops?\b"
+
+
 def words_models(evidence) -> set[str]:
     """ex49 (R48): every way of earning a company's own words name (MODEL_SAYS, OWN_SAYS, a chip designer's own words, making words without
     trading words), its official industry and the customers it names left out: what stated_model reads, before it settles on one."""
@@ -1839,5 +1846,8 @@ def words_models(evidence) -> set[str]:
         return set()
     hits = {m_ for m_, rx in list(MODEL_SAYS.items()) + list(OWN_SAYS.items()) + list(WORDS_SAY.items()) if re.search(rx, own, re.I)}
     one = stated_model(evidence)
-    shop = {"retail"} if re.search(NAME_STATES["retail"], own, re.I) else set()        # stores, shops, retailing: a retailer's own words
+    # stores, shops, retailing: a retailer's own words; r572 (the live R57.1 Restaurants deck: Restaurant Brands International, "Canadian coffee
+    # shop and fast food restaurant chain", read as naming a retailer's way of earning): a coffee, sandwich or pizza shop is a place that serves
+    # food, never a shop that resells goods
+    shop = {"retail"} if re.search(NAME_STATES["retail"], re.sub(FOOD_SHOP, " ", own, flags=re.I), re.I) else set()
     return hits | ({one} if one else set()) | shop

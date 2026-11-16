@@ -97,7 +97,10 @@ def test_4_the_live_audit_answer_moves_twilio_once_its_old_quote_is_read_like_a_
     of their new layer: still refused (the model's answer, not the check's)."""
     got = where(place("software", monkeypatch))
     assert got["TWLO"][0] == "Data and developer infrastructure software"
-    assert got["SHOP"][0].startswith("Cloud and AI compute") and got["TOST"][0].startswith("Cloud and AI compute")
+    # r572 round 2 (updated on purpose): the audit still refuses Shopify's and Toast's moves, and the compute layer's fit then re-places them:
+    # their own words ("a cloud e-commerce management platform", "cloud-based restaurant management software") say no computing, capacity,
+    # hosting or data centres, and no other layer's name, so they go to the theme's "Other" group (theme_base.compute_fit)
+    assert got["SHOP"][0] == "Other" and got["TOST"][0] == "Other"
 
 
 def test_5_a_published_member_outside_the_map_s_groups_stays_in_the_theme():
@@ -149,7 +152,7 @@ def test_8_a_layer_s_notes_page_is_not_another_layer():
 
 def test_9_rules_57_carries_56():
     from app.intel import theme_routes as TR
-    assert B.RULES == 57 and TR.PLACE_CARRY[57] == 56 and TR.EARLIER_MAX == 12
+    assert B.RULES == 58 and TR.PLACE_CARRY[58] == 57 and TR.PLACE_CARRY[57] == 56 and TR.EARLIER_MAX == 13  # r572 (R57.2): RULES 58, PLACE_CARRY[58] = 57, EARLIER_MAX 13, deck 68, dive text 28 (updated on purpose)
 
 
 def test_8b_deck_diff_counts_a_layer_from_its_page_and_never_its_notes_page():
