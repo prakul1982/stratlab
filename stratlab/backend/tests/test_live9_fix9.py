@@ -157,3 +157,24 @@ def test_a_placeholder_symbol_is_not_counted_as_a_member(monkeypatch):
     monkeypatch.setattr(heatmap, "_facts", lambda region: ({}, {}))
     v = heatmap.view("IN", "nifty500")
     assert v["members"] == 1 and v["with_prices"] == 1
+
+
+# ---------- LIVE9A-015: a US offering past its expected day, and a size with the underwriters' option ----------
+def test_a_us_offering_past_its_expected_day_is_not_upcoming():
+    from datetime import datetime, timezone
+    from app import ipo
+    now = datetime(2026, 11, 16, 19, 30, tzinfo=timezone.utc)                    # Mon 16 Nov, 14:30 ET
+    row = lambda **k: {"market": "US", "name": "X", **k}                          # noqa: E731
+    assert ipo.stage_of(row(expected="2026-11-12"), now) == "filed"
+    assert ipo.stage_of(row(expected="2026-11-13"), now) == "filed"
+    assert ipo.stage_of(row(expected="2026-11-15"), now) == "upcoming"            # a day's grace for the calendar
+    assert ipo.stage_of(row(expected="2026-11-18"), now) == "upcoming"
+    assert ipo.stage_of(row(expected="2026-11-12", priced="2026-11-12"), now) == "listed"
+
+
+def test_a_us_size_with_the_underwriters_option_says_so():
+    from app import ipo
+    s = ipo.sizes({"market": "US", "shares": 825_000_000, "price": 78.0, "amount": 74_002_500_000})
+    assert s["basis"] == ipo.OPTION_BASIS and s["base"] == 64_350_000_000
+    plain = ipo.sizes({"market": "US", "shares": 10_000_000, "high": 13.0, "amount": 130_000_000})
+    assert plain["basis"] == "stated" and "base" not in plain

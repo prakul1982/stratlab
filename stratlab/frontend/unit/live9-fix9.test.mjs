@@ -88,3 +88,10 @@ test("heatmap: the facts line says the last close while the market is open", asy
   assert.match(closesTail(true), /^, the last close · the market is open; the map is redrawn after today's close$/);
   assert.match(src("pages/HeatmapPage.tsx"), /Closes of <b>\{asOf\}<\/b>\{closesTail\(open\)\}/);
 });
+
+// ---------- LIVE9A-015: US IPO sizes with the underwriters' option, and a missed pricing day ----------
+test("US IPOs: the size without the option and the day a filed offering missed are shown", () => {
+  const page = src("pages/IposPage.tsx");
+  assert.match(page, /sizeText\(\{ \.\.\.r, size: r\.size_base \}\)\} without the underwriters' 15% option/);
+  assert.match(page, /Was expected to price \{fmtDate\(r\.expected\)\}/);
+});
