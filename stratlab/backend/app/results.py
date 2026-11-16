@@ -269,6 +269,64 @@ def merge(old: list[dict], new: list[dict], frm: date, today: date) -> list[dict
     return list(out.values())
 
 
+def quarter_end_before(day: date) -> date:
+    """The last calendar quarter's end (31 Mar, 30 Jun, 30 Sep, 31 Dec) before a day."""
+    for y in (day.year, day.year - 1):
+        for m, d in ((12, 31), (9, 30), (6, 30), (3, 31)):
+            q = date(y, m, d)
+            if q < day:
+                return q
+    return date(day.year - 1, 12, 31)
+
+
+MAX_CONFIRM = 20                     # companies whose results filing one refresh looks up, to drop a date already reported
+
+
+def filed_since(feed):
+    """(symbol, ISO day) -> whether the company filed financial results on or after that day (its exchange notices); False when they
+    can't be read. Asked at most MAX_CONFIRM times a refresh."""
+    asked = {"n": 0}
+
+    def check(symbol: str, day: str) -> bool:
+        if feed is None or asked["n"] >= MAX_CONFIRM:
+            return False
+        asked["n"] += 1
+        try:
+            return india_out(feed, {"symbol": symbol, "date": day}) is not None
+        except (SourceError, AttributeError) as e:
+            print("results check:", symbol, str(e)[:120])
+            return False
+    return check
+
+
+def without_reported(rows: list[dict], past: dict[str, list[str]], today: date, filed=None) -> list[dict]:
+    """The calendar without an upcoming results meeting for a quarter the company has already reported: an Indian company that held
+    its results meeting after the quarter ended (its row before today, or a day on its list of earlier results days) has filed that
+    quarter's results, so a later date for the same quarter on the exchange's list is not a results day to show (rel1, CX1 problem 9:
+    Muthoot Microfin listed for Thu 19 Nov after it filed its September-quarter results on 5 Nov). Filed results supersede an announced
+    date; a meeting that was put off (no results filed since) and the next quarter's meeting (after that quarter ends) stay.
+    `filed(symbol, day)`: whether the company filed results on or after `day`; without it nothing is dropped."""
+    held: dict[str, set[str]] = {}
+    for r in rows:
+        if r.get("date") and r["date"] < today.isoformat():
+            held.setdefault(r["symbol"], set()).add(r["date"])
+    for sym, days in (past or {}).items():
+        held.setdefault(sym, set()).update(d for d in days or [] if isinstance(d, str) and d < today.isoformat())
+    out = []
+    for r in rows:
+        if r.get("date") and r["date"] >= today.isoformat():
+            try:
+                q = quarter_end_before(date.fromisoformat(r["date"])).isoformat()
+            except ValueError:
+                q = None
+            after = sorted(d for d in held.get(r["symbol"], ()) if q and q < d < today.isoformat())
+            # a meeting held after the quarter ended, and its results filed since (not a meeting that was put off): reported
+            if after and filed is not None and filed(r["symbol"], after[0]):
+                continue
+        out.append(r)
+    return out
+
+
 def lookup(region: str, symbol: str, today: date | None = None) -> dict:
     """One company's next results date, and its latest past one in the window (with the filing, once it's out)."""
     today = today or local_today(region)
@@ -385,6 +443,8 @@ def refresh(region: str, sources: dict, tracked: set[str] | None = None, today: 
             have = {r["symbol"] for r in rows}
             rows += [r for r in old if r["date"] in unread and r["symbol"] not in have]
         merged = merge(old, rows, frm, today)
+        if region == "IN":
+            merged = without_reported(merged, load_past(region)["rows"], today, filed_since(feed))
         save(region, merged)
     add_past(region, merged, today)          # the days gone by stay on a company's list of earlier results days (the table's usual move)
     return {"rows": len(merged), "problems": problems}

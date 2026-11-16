@@ -1,0 +1,41 @@
+// rel1: reliability and honest labels (CX1 problems 3 and 9, LIVE9).
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { register } from "node:module";
+
+register("data:text/javascript," + encodeURIComponent(`export async function resolve(s, c, next) {
+  try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
+globalThis.window ??= { STRATLAB_CONFIG: { API_BASE: "", SUPABASE_URL: "", SUPABASE_ANON_KEY: "" } };
+const mem = new Map();
+globalThis.localStorage ??= { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
+const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
+
+test("rel1 item 1: a busy source is asked again on its own, a little later each time, then the error", async () => {
+  const { busyRetryIn, busyLine, BUSY_RETRY_MS } = await import("../src/lib/busyRetry.ts");
+  const busy = { status: 503 };
+  assert.deepEqual([0, 1, 2, 3].map((n) => busyRetryIn(busy, n)), [...BUSY_RETRY_MS, null]);
+  assert.equal(busyRetryIn({ status: 404 }, 0), null);
+  assert.equal(busyRetryIn({ status: 402 }, 0), null);
+  assert.equal(busyRetryIn(new Error("x"), 0), null);
+  assert.equal(busyLine("The source is slow. Try again in a minute.", 10000), "The source is slow. Asking again in 10 s.");
+  const page = read("src/pages/DeepDive.tsx");
+  assert.match(page, /busyRetryIn\(e, auto\.current\)/);
+  assert.match(page, /data-testid="deep-busy"/);
+  assert.match(page, /v\?\.figures_kept && /);
+});
+
+test("rel1 item 2: a sign-in that ends on its own mid-visit says 'You were signed out', not the first-visit wall", async () => {
+  const so = await import("../src/lib/signout.ts");
+  assert.equal(so.signingOutOnPurpose(), false);
+  const app = read("src/lib/app.tsx");
+  assert.match(app, /if \(e === "SIGNED_OUT" && !signingOutOnPurpose\(\)\) noteSignInEnded\(\);/);
+  // every sign-out a person asks for is marked before the sign-in library hears of it
+  assert.match(read("src/lib/signout.ts"), /markSignOutOnPurpose\(\);\s*await leavePush\(\);/);
+  assert.match(read("src/pages/AccountPage.tsx"), /markSignOutOnPurpose\(\); await leavePush\(\); const \{ error \} = await supabase\.auth\.signOut\(\{ scope: "global" \}\)/);
+  // the sign-in page reads that mark: "You were signed out" before "Sign in to see …"
+  assert.match(read("src/pages/Gate.tsx"), /ended \? "You were signed out"/);
+  globalThis.sessionStorage ??= { _m: new Map(), getItem(k) { return this._m.get(k) ?? null; }, setItem(k, v) { this._m.set(k, String(v)); }, removeItem(k) { this._m.delete(k); } };
+  await so.signOutHere({ signOut: async () => ({ error: null }) }, () => undefined).catch(() => undefined);
+  assert.equal(so.signingOutOnPurpose(), true);
+});

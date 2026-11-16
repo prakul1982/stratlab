@@ -80,7 +80,7 @@ from .data import DataError, Registry, split_id
 from .data import calendar as trading_calendar
 from .intel import routes as research_routes
 from .intel.company import Research, at_live_price
-from .intel.net import RequestWaits, TTLCache
+from .intel.net import RequestWaits, TTLCache, with_rate_wait
 from .intel import filings, sec, theme_routes
 from .intel.sec import SEC
 from .intel.us_calendar import USCalendar
@@ -2918,6 +2918,10 @@ def deep_base_us(sym: str, years: int = 2) -> dict:
     """A US company from its SEC filings: numbers, industry and filings, with ratios from today's share price."""
     p = sec.with_fx(dict(research_routes.source_call(lambda: sec_feed.company(sym))), usd_per)
     m = us_price_ratios(p, sym)
+    # the market trading: the quote is a live price; the valuation stands on the last close, as on the public page (rel1)
+    in_session = bool(m.get("price") and m.get("prev_close") and not sec.non_common(sym) and research_hub_market_open("US"))
+    if in_session:
+        p["ratios"] = sec.ratios(p, m["prev_close"], m.get("high52"), m.get("low52"))
     try:
         wiki = research_hub.wiki.company(p.get("name") or sym) or {}
         p["about"] = wiki.get("extract") or ""
@@ -2931,8 +2935,17 @@ def deep_base_us(sym: str, years: int = 2) -> dict:
     cut = (datetime.now(IST).date() - timedelta(days=366 * years)).isoformat()
     docs = [d for d in p.get("documents") or [] if d["at"][:10] >= cut]
     trend, why = price_status(sym, "US")
-    return {"p": p, "docs": docs, "doc_note": None, "filings": None, "trend": trend, "trend_why": why,
+    return {"p": p, "docs": docs, "doc_note": None, "filings": None, "trend": trend, "trend_why": why, "in_session": in_session,
             "quote": {k: m.get(k) for k in ("price", "prev_close", "high", "low", "at")} if m.get("price") else None}
+
+
+def research_hub_market_open(region: str) -> bool:
+    """Whether the market is trading now (its hours, on a trading day)."""
+    from .intel.company import market_open
+    try:
+        return market_open(region)
+    except Exception:
+        return False
 
 
 def usd_per(cur: str) -> float | None:
@@ -2953,6 +2966,10 @@ def deep_years(years: int) -> int:
 BSE_WAIT = "Documents are not available from BSE right now (it is turning requests away). Try again later."
 
 
+DEEP_WAIT = 6.0
+DEEP_BUSY = ("The company's figures are being read: the source is taking requests slowly just now. This page asks again on its own "
+             "in a few seconds, and this deep dive isn't counted until it opens.")
+
 _deep_pool = ThreadPoolExecutor(max_workers=12, thread_name_prefix="deep-dive")   # the deep dive's sources, read side by side
 
 
@@ -2968,7 +2985,17 @@ def deep_base(sym: str, region: str = "IN", years: int = 2, trades: bool = True)
              "trend": _deep_pool.submit(price_status, sym)}
     if trades:
         ahead["insider"] = _deep_pool.submit(lambda: _quiet(lambda: filings_feed.insider_trades(sym)))
-    p = with_industry(sym, research_routes.source_call(lambda: research_hub.screener.company(code or sym)))
+    # a person's deep dive waits its turn at the fundamentals source a little longer than a page does (DEEP_WAIT), ahead of the
+    # background jobs (net.RateLimit.reserve); still busy, the company's last whole read stands in (Screener.kept), and with none
+    # the answer says the page asks again on its own, never a bare error (rel1, CX1 problem 3)
+    def read():
+        try:
+            return with_rate_wait(DEEP_WAIT, lambda: research_hub.screener.company(code or sym))()
+        except SourceError as e:
+            if getattr(e, "busy", False):
+                err(503, "source_busy", DEEP_BUSY)
+            raise
+    p = with_industry(sym, research_routes.source_call(read))
     try:
         p = research_hub.screener.with_cash(p)           # cash on hand, for enterprise value
     except Exception:
@@ -3038,7 +3065,7 @@ def price_status(sym: str, market: str = "IN") -> tuple[dict | None, str | None]
     except Exception:
         return None, "error"
     if got:
-        return got, None
+        return with_session(got, bars, market), None
     if len(bars) >= 30:
         return None, None
     # under 30 candles: a new listing, or an old share that trades on a handful of days a year (the broker's candles
@@ -3048,6 +3075,23 @@ def price_status(sym: str, market: str = "IN") -> tuple[dict | None, str | None]
         return None, "new" if (datetime.now(IST).date() - first).days <= 60 else "sparse"
     except (TypeError, ValueError):
         return None, "new"
+
+
+def with_session(trend: dict, bars: list[dict], market: str, now: datetime | None = None) -> dict:
+    """The trend, and when its last daily candle is a session still trading (the market open, the candle dated after the latest
+    completed session), that candle's price as `live` and the session before it as the close (`close`, `close_t`): a live price is
+    never labelled "last close" (rel1, CX1 problem 9: the AAPL deep dive said "Last close as of 16 Nov" at an intraday price, P/E 39.2,
+    while the public page said 13 Nov close, P/E 39.7)."""
+    from . import last_session
+    try:
+        done = last_session.latest_day(market, now)
+    except Exception:
+        return trend
+    day = str((bars[-1] if bars else {}).get("t") or "")[:10]
+    if not day or day <= done or len(bars) < 2:
+        return trend
+    prev = bars[-2]
+    return {**trend, "live": {"price": bars[-1].get("c"), "day": day}, "close": prev.get("c"), "close_t": prev.get("t")}
 
 
 def price_trend(sym: str, market: str = "IN") -> dict | None:
@@ -3095,6 +3139,30 @@ def pre_issue_cap(snap: dict, p: dict, listed_on: str | None) -> dict:
     return {**snap, "market_cap_cr": cap} if cap and balance_before(p, listed_on) else snap
 
 
+def close_price(trend: dict | None):
+    """The last close a page's valuation stands on: the session before one still trading, else the last candle's."""
+    t = trend or {}
+    return t.get("close") if t.get("live") else t.get("price")
+
+
+def close_day(trend: dict | None) -> str | None:
+    """The day of that close, for "Last close as of …"."""
+    t = trend or {}
+    return candle_day(t.get("close_t") if t.get("live") else t.get("t"))
+
+
+def deep_live_price(base: dict) -> dict | None:
+    """{"price", "at"} while the company's market is trading: the quote's own price and time when there is one (a US
+    company's), else the live candle's price and when it was read."""
+    t = base.get("trend") or {}
+    q = base.get("quote") or {}
+    if base.get("in_session") and q.get("price"):
+        return {"price": q["price"], "at": q.get("at")}
+    if t.get("live") and t["live"].get("price"):
+        return {"price": t["live"]["price"], "at": datetime.now(timezone.utc).isoformat(timespec="minutes")}
+    return None
+
+
 def deep_view(sym: str, base: dict) -> dict:
     p = base["p"]
     us = p.get("region") == "US"
@@ -3114,7 +3182,7 @@ def deep_view(sym: str, base: dict) -> dict:
     if not us:      # at the last close, as on the company page (the source's own ratios are at its once-a-day price)
         # a share listed in the last weeks (its candles are too few to scan): the source's value on the shares in issue now, not the old balance sheet's
         snap = pre_issue_cap(snap, p, (datetime.now(IST).date() - timedelta(days=60)).isoformat() if base.get("trend_why") == "new" else None)
-        snap = at_live_price(snap, (base.get("trend") or {}).get("price"), sym, p.get("fetched_at"))
+        snap = at_live_price(snap, close_price(base.get("trend")), sym, p.get("fetched_at"))
         # the public page's market value check: a failed value is blank here too, with the P/E, the deck's tile, the
         # valuation and the P/E worked out from it (R10C-001)
         snap = stock_pages.india_snap_checked(snap, p)
@@ -3138,7 +3206,11 @@ def deep_view(sym: str, base: dict) -> dict:
             "card": card_view, "card_stale": not deepdive.fresh(card), "trend": base["trend"], "filings": base["filings"],
             "checklist": checklist.evaluate(p, nums, base["filings"], base["trend"], card_view, None if us else sym, base.get("trades")),
             "ai": True, "report_card": True, "as_of": datetime.now(timezone.utc).isoformat(timespec="minutes"),
-            "numbers_at": p.get("fetched_at"), "price_at": candle_day((base["trend"] or {}).get("t")),
+            "numbers_at": p.get("fetched_at"), "price_at": close_day(base["trend"]),
+            # a session still trading: its price, labelled live with the time it was read; the figures above stay on the close
+            "live": deep_live_price(base),
+            # the latest read couldn't be had (the source busy): these are the company's last whole read, from numbers_at
+            "figures_kept": bool(p.get("kept_busy")),
             "calls": sum(d["kind"] == ("earnings_release" if us else "transcript") for d in base["docs"])}
 
 

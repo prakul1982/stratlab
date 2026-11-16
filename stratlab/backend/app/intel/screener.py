@@ -11,7 +11,7 @@ import re
 import httpx
 from bs4 import BeautifulSoup
 
-from .net import BROWSER_UA, Source, SourceError, num, rate_wait, with_rate_wait
+from .net import BROWSER_UA, Source, SourceError, TTLCache, num, in_job, rate_wait, with_rate_wait
 
 
 _CITE = re.compile(r"\s*\[\d{1,3}\]")
@@ -544,6 +544,10 @@ class Screener(Source):
     def __init__(self, transport: httpx.BaseTransport | None = None):
         super().__init__("https://www.screener.in", per_minute=20, burst=6, transport=transport,
                          headers={"User-Agent": BROWSER_UA, "Accept": "text/html,application/xhtml+xml"})
+        # the last company read that came whole, per symbol: what someone's page shows while the source is busy (rel1, CX1
+        # problem 3: a Pro user's TCS deep dive answered "the fundamentals source is busy"). Read time stays the read's own
+        # (`fetched_at`), so the page's "Reported numbers as of" is honest; bounded, and never handed to a background job
+        self.kept = TTLCache(max_items=150, max_bytes=12 * 1024 * 1024)
 
     def _page(self, path: str) -> dict | None:
         html = self.fetch(path, ttl=6 * 3600, kind="text")
@@ -573,7 +577,7 @@ class Screener(Source):
         key = ("schedule", p["company_id"], p.get("basis"), parent, line)
         got = self.cache.get(key)
         if got is None:
-            if not self.limit.take():
+            if not self.limit.take(max_wait=rate_wait()):
                 return None
             got = {}
             try:
@@ -637,7 +641,25 @@ class Screener(Source):
 
     RENAMED = {"TATAMOTORS": "TMPV"}   # known symbol changes only: a fuzzy site search can land on another company
 
+    KEEP_FOR = 3 * 86400
+
     def company(self, symbol: str) -> dict:
+        """The company's figures. Busy under a person's request: the last read of the company that came whole, marked
+        `kept_busy`, when there is one; a background job is told the source is busy and asks again later."""
+        sym = re.sub(r"[^A-Z0-9&\-]", "", symbol.upper())
+        try:
+            got = self._company(symbol)
+        except SourceError as e:
+            old = self.kept.get(sym) if e.busy and not in_job() else None
+            if old is None:
+                raise
+            return {**copy.deepcopy(old), "kept_busy": True}
+        old = self.kept.get(sym)
+        if (got.get("pl") or {}).get("cols") and (old is None or old.get("fetched_at") != got.get("fetched_at")):
+            self.kept.set(sym, copy.deepcopy(got), self.KEEP_FOR, size=len(repr(got)) * 3 + 200)
+        return got
+
+    def _company(self, symbol: str) -> dict:
         sym = re.sub(r"[^A-Z0-9&\-]", "", symbol.upper())
         if not sym:
             raise SourceError(self.name, "That isn't a company symbol.")

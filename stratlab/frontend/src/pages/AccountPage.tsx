@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, supabase } from "../lib/api";
 import { leavePush } from "../lib/pwa";
-import { signOutHere } from "../lib/signout";
+import { markSignOutOnPurpose, signOutHere } from "../lib/signout";
 import { useApp } from "../lib/app";
 import { download } from "../lib/share";
 import { dateOnly } from "../lib/format";
@@ -72,7 +72,7 @@ export function AccountPage() {
   };
   const everywhere = async () => {
     setBusy(true);
-    try { await leavePush(); const { error } = await supabase.auth.signOut({ scope: "global" }); if (error) throw error; } catch (e) { fail(e); setBusy(false); }
+    try { markSignOutOnPurpose(); await leavePush(); const { error } = await supabase.auth.signOut({ scope: "global" }); if (error) throw error; } catch (e) { fail(e); setBusy(false); }
   };
 
   const usage: [string, string][] = [
