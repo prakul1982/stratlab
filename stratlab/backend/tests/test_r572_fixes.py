@@ -163,12 +163,17 @@ def test_5_a_one_company_layer_stays_only_when_the_map_named_it_and_its_words_sa
           {"layer": "Freight forwarders", "description": "", "companies": [{"ticker": "F1", "name": "F1"}, {"ticker": "F2", "name": "F2"}]},
           {"layer": "Other logistic companies", "description": "", "official": True, "basis": "rest", "companies": []}]
     words = {"RE": "Re is the country's largest reinsurance company, writing reinsurance for other insurers.",
-             "CC": "Cc runs warehouses and trucks for goods that need temperature control; it is a freight forwarder too.",
+             # r582 (updated on purpose: a company joins a layer by a rule only on words its line can show, theme_base.prints_layer; the
+             # clause "it is a freight forwarder too" is no line a deck prints)
+             "CC": "Cc provides freight forwarding and runs warehouses and trucks for goods that need temperature control.",
              "DC": "Dc rents out computing capacity in its data centres."}
     out, rows = B.single_layers(vc, lambda s: words.get(s), "Logistics")
     where = {c["ticker"]: v["layer"] for v in out for c in v["companies"]}
-    assert where["RE"] == "Reinsurance" and where["CC"] == "Freight forwarders" and where["DC"] == "Other logistic companies"
-    assert {r["ticker"] for r in rows} == {"CC", "DC"} and all(r["why"].startswith("a layer of one company") for r in rows)
+    # r582 (R58.2, updated on purpose: no layer is kept with one company; the reinsurer, whose words say its layer's name but no other
+    # company's do, goes to "Other" with why)
+    assert where["RE"] == "Other logistic companies" and where["CC"] == "Freight forwarders" and where["DC"] == "Other logistic companies"
+    assert {r["ticker"] for r in rows} == {"RE", "CC", "DC"} and all(r["why"].startswith("a layer of one company") for r in rows)
+    assert "whose name no other company's own words say" in next(r["why"] for r in rows if r["ticker"] == "RE")
 
 
 def test_0b_words_read_after_the_check_place_the_theme_again_with_no_ai(monkeypatch):

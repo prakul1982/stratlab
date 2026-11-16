@@ -717,7 +717,12 @@ def stated_model(evidence) -> str:
 # R40 (the owner's review of the live Release 39 Consumer retail deck: "Online retailers and marketplaces" took no online seller, its map name
 # "Online marketplaces" stating a platform's way of earning): the ways of earning a layer's own name states in so many words, a retailer's
 # and a platform's beside the words of stated_model
-NAME_STATES = {"retail": r"\bretail(?:ers?|ing)?\b|\bstores?\b|\bshops?\b", "platform": r"\bmarketplaces?\b|\bplatforms?\b"}
+# r582 (R58.2, the live R58.1 Hospitals deck: "Contract research and life-science services" read as makers of their own products, two
+# makers read at medium against its contract research firms read at low, so 8 of its 13 left out): a name that says contract research, or
+# research or consulting services, states the fees of projects and time worked (a name that says contract research and manufacturing
+# states both, so neither alone)
+NAME_STATES = {"retail": r"\bretail(?:ers?|ing)?\b|\bstores?\b|\bshops?\b", "platform": r"\bmarketplaces?\b|\bplatforms?\b",
+               "project_services": r"\bcontract research\b(?! (?:and|&) manufactur)|\b(?:research|consulting) services\b"}
 
 
 def name_models(name) -> set[str]:

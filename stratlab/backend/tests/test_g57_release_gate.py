@@ -53,7 +53,8 @@ def test_capital_one_removed_on_one_layers_mismatch_is_flagged():
     assert {"JPMorgan Chase & Co (JPM)", "Nu Holdings Ltd. (NU)", "SoFi Technologies, Inc. (SOFI)"} <= removed
     # r58 (R58, the owner: "a category with one valid member can remain useful"): Dave's own words say "digital banking", so its one-company
     # layer is valid and no FAIL (updated on purpose; the FAIL for a member whose words don't say its layer is kept, below)
-    assert "“Digital banks”" not in _fails(found, "one-company layer")
+    # r582 (R58.2, updated on purpose: the brief on the live R58.1 decks, no layer of one company ships): the stored R56 layer of one is a FAIL
+    assert "“Digital banks”" in _fails(found, "one-company layer")
 
 
 def test_duolingo_in_a_hotels_and_travel_layer_is_flagged():
@@ -112,7 +113,8 @@ def test_one_company_layer_and_a_layer_name_with_no_word():
     assert _fails(found, "one-company layer") == {"“Reinsurance”"}            # "Other ..." is no named layer
     d2 = _synthetic({"Reinsurance": [_company("A", "Alpha", "reinsures insurers")],
                      "Other widget companies": [_company("D", "Delta")]})
-    assert _fails(G.checks(d2, d2["value_chain"], d2["placements"]), "one-company layer") == set()
+    # r582 (R58.2, updated on purpose: no layer of one company ships, its member's words saying its name or not)
+    assert _fails(G.checks(d2, d2["value_chain"], d2["placements"]), "one-company layer") == {"“Reinsurance”"}
     assert "“x”" in _fails(found, "layer words")
 
 
