@@ -4308,8 +4308,9 @@ def truthful_layers(vc: list[dict], published: dict, evidence, theme: str) -> tu
             # r572 (R57.2, the live R57.1 Software deck: "Cloud infrastructure and platform providers" renamed "Cloud and AI compute
             # providers" over Microsoft, Oracle, Shopify and Twilio, software and platform houses; both names say "cloud", so the test above
             # saw no difference): the words each name says that the other doesn't, counted in its largest companies' own words
-            nd = _name_words(_HALF_RX.sub("", v["layer"]).lower()) - _name_words(was.lower()) - _TARGET_FILLER
-            od = _name_words(was.lower()) - _name_words(_HALF_RX.sub("", v["layer"]).lower()) - _TARGET_FILLER
+            tn_ = _name_words(str(theme).lower())          # (a word of the theme's own name says nothing of which layer)
+            nd = _name_words(_HALF_RX.sub("", v["layer"]).lower()) - _name_words(was.lower()) - _TARGET_FILLER - tn_
+            od = _name_words(was.lower()) - _name_words(_HALF_RX.sub("", v["layer"]).lower()) - _TARGET_FILLER - tn_
             says_ = lambda c, ws: any(_word_near(a, w) for a in _name_words(text(c).lower()) for w in ws)      # noqa: E731
             new_d, old_d = sum(1 for c in top if says_(c, nd)), sum(1 for c in top if says_(c, od))
             if nd and od and old_d >= 2 and old_d > new_d * 2 and not (dw and worded_all and says_old < CONTRADICTED_SHARE * len(worded_all)):
