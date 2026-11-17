@@ -133,7 +133,8 @@ test("view as: nobody else gets it, even with the choice saved on their device",
   // the menu has no View as for them, and the server refuses to set it
   if (phone && !(await page.locator("aside.sidebar.open").count())) await page.getByRole("button", { name: "Open menu" }).click();
   await page.locator("aside.sidebar").getByRole("button", { name: /account menu$/ }).click();
-  await expect(page.getByRole("menuitem", { name: "Account" })).toBeVisible();
+  // (updated on purpose (nav3): the account menu also holds "Connected accounts", so the Account entry is matched exactly)
+  await expect(page.getByRole("menuitem", { name: "Account", exact: true })).toBeVisible();
   await expect(page.getByRole("group", { name: "View as plan" })).toHaveCount(0);
   const r = await page.request.put(`${API}/admin/view-as`, { headers: { Authorization: "Bearer load-60" }, data: { plan: "pro" } });
   expect(r.status()).toBe(403);

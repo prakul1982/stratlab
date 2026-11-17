@@ -118,7 +118,9 @@ test("MO-4b: Positioning's cash and put-call cards are one under the other, with
 
 test("MO-4b: two cards in a row end level (Market events: the week and the reminders)", async ({ page }) => {
   await open(page, "/trade/events");
-  const week = page.getByRole("region", { name: "The next seven days" });
+  // (updated on purpose (fix9b, LIVE9B-032): the week is a table now, whose scroll region is "The next seven days, scrolls sideways": the card
+  // is matched by its exact name)
+  const week = page.getByRole("region", { name: "The next seven days", exact: true });
   await expect(week).toBeVisible({ timeout: 30_000 });
   const rem = page.getByRole("region", { name: /Reminders/ });
   const a = (await week.boundingBox())!, c = (await rem.boundingBox())!;
