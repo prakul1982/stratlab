@@ -90,3 +90,13 @@ test("LIVE10B-034: the tax report's sources line names the fund sales it counts 
   assert.match(page, /return mf\?\.allowed && mf\.count > 0 \? ` · and \$\{mf\.count\.toLocaleString\("en-IN"\)\} mutual fund sale\$\{mf\.count === 1 \? "" : "s"\} from your CAS on Mutual funds` : "";/);
   assert.match(page, /\{fundSalesLine\(rep\.mf\)\}/);
 });
+
+test("LIVE10B-029: Open value says a sold position is a minus and keeps a decimal under 1% of the capital", () => {
+  const src = read("src/components/RiskOverview.tsx");
+  const body = src.slice(src.indexOf("function openNote("), src.indexOf("/** Every running paper session together"));
+  const openNote = new Function(`return ${body.replace("function openNote(open: number, capital: number, fmt: (v: number) => string): string", "function (open, capital, fmt)")}`)();
+  const fmt = (v) => `₹${v.toLocaleString("en-IN")}`;
+  assert.equal(openNote(-4420, 1000000, fmt), "0.4% of ₹10,00,000: sold positions, what buying them back would cost now");
+  assert.equal(openNote(250000, 1000000, fmt), "25% of ₹10,00,000");
+  assert.equal(openNote(0, 1000000, fmt), "No open positions");
+});

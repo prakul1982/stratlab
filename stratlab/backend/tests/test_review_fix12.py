@@ -134,3 +134,16 @@ def test_each_holding_keeps_where_and_when_it_was_imported():
     src = inspect.getsource(m)
     assert 'rows = holdings.tag(found, src, datetime.now(timezone.utc).isoformat(timespec="seconds"))' in src
     assert '"sources": holdings.sources(h),' in src
+
+
+# ---------- LIVE10B-029: a short straddle's "Open value ₹4,420 · 0% of ₹10,00,000" read as something owned ----------
+def test_a_sold_options_open_value_is_a_minus_what_buying_it_back_costs():
+    from app import risk
+    straddle = {"id": "s", "kind": "options", "instrument": {"currency": "INR", "market": "IN"}, "account": {"capital": 1_000_000, "equity": 999_623},
+                "legs": [{"side": "sell", "qty": 65, "mark": 40.0, "open": True}, {"side": "sell", "qty": 65, "mark": 28.0, "open": True},
+                         {"side": "buy", "qty": 65, "mark": 1.0, "open": False}]}
+    assert risk.open_value(straddle) == -(65 * 40.0 + 65 * 28.0)
+    assert risk.open_value({**straddle, "legs": [{"side": "buy", "qty": 65, "mark": 10.0, "open": True}]}) == 650.0
+    assert risk.open_value({"account": {"qty": -10}, "last_price": 100.0}) == -1000.0
+    out = risk.summary([straddle], today="2026-11-17")
+    assert out["currencies"][0]["open_value"] == -4420.0
