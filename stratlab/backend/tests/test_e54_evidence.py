@@ -85,9 +85,14 @@ def test_on_the_live_r52_medical_devices_inputs_no_company_without_words_is_coun
     wordless = deck.without_words(v)
     assert len(wordless) <= ev["industry_code_supported"] + ev["list_supported"]
     every = {c["symbol"]: c for b in v["layers"] for c in b["companies"]}
-    for c in every.values():           # a company confirmed by its own description shows those words
-        if c.get("evidence") == "description_verified":
-            assert c.get("what"), c["name"]
+    # r62 (updated on purpose, LIVE10A-004: an encyclopedia's ranking or a cut sentence is never printed as a company's own words; HCA's stored
+    # text is an encyclopedia's, "As of 2024, HCA Healthcare is ranked #61 on the Fortune 500"): a company confirmed by its own description
+    # shows those words, or, with no sentence of its own work a table can show, is said so on the deck (r60a), never quoted with another text
+    short = sum(1 for c in every.values() if c.get("evidence") == "description_verified" and not c.get("what"))
+    assert short <= 1
+    for c in every.values():
+        if c.get("evidence") == "description_verified" and c.get("what"):
+            assert "Fortune 500" not in c["what"], c["name"]
     from tests.test_export import texts
     t = "\f".join(texts([s]) for s in slides)
     assert DC.check_text(t)["counts"]["evidence state"] == 0 and DC.check_text(t)["counts"]["population mismatch"] == 0

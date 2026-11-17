@@ -1713,6 +1713,10 @@ def members_of(m: dict, dive: dict) -> list[dict]:
                         # LIVE6-006: the dive's market value, on its one price date
                         "cap": f.get("cap") if f.get("cap") is not None else c.get("cap"), "revenue": f.get("revenue"), "ebitda": f.get("ebitda"),
                         "net": f.get("net"), "roce": f.get("roce"), "year": f.get("year"), "by": by_of(c),
+                        # r62 (LIVE10A-018): a margin beyond ±100% of revenue is not meaningful as a margin (theme_data.beyond_margin): named,
+                        # so every surface prints it n.m. as the deck does
+                        **({"nm": [k for k in ("ebitda", "net") if theme_data.beyond_margin(f.get(k))]}
+                           if any(theme_data.beyond_margin(f.get(k)) for k in ("ebitda", "net")) else {}),
                         # r62: a company the placement kept or placed on its own words alone, outside the exchange's list and the AI's additions
                         **({"source": "words"} if c.get("base") and c.get("basis") == "words" else {})})
     return out
@@ -2116,7 +2120,9 @@ def companies_csv(m: dict, dive: dict, r: str) -> bytes:
     w = csv.writer(buf)
     w.writerow(head)
     for x in members_of(m, dive):
-        row = [x["name"], x["symbol"], x["layer"], x.get("industry"), x.get("cap"), x.get("revenue"), x.get("ebitda"), x.get("net"),
+        nm = x.get("nm") or []                # r62 (LIVE10A-018): n.m. as on the deck, never "−32423.1"
+        row = [x["name"], x["symbol"], x["layer"], x.get("industry"), x.get("cap"), x.get("revenue"),
+               "n.m." if "ebitda" in nm else x.get("ebitda"), "n.m." if "net" in nm else x.get("net"),
                x.get("roce"), x.get("year"), x.get("by"), x.get("what")]
         w.writerow(["" if v is None else (f"'{v}" if isinstance(v, str) and v[:1] in "=+-@" else v) for v in row])
     return ("\ufeff" + buf.getvalue()).encode("utf-8")

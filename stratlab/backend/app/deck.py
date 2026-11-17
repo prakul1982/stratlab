@@ -2703,7 +2703,7 @@ def membership_words(v: dict, total: int, key: bool = False) -> str:
             src.append(f"{rest_n:,} kept on their own words from other industries ("
                        + ", ".join(clean_name(m_.get("name") or m_.get("symbol") or "") for m_ in kept[:4]) + (f" and {rest_n - 4} more" if rest_n > 4 else "") + ")")
         else:
-            src.append(f"{rest_n:,} from other sources (kept on their own words or held from an earlier version)")
+            src.append(f"{rest_n:,} more, their source not kept with this read")
     head = f"{total:,} companies" + (f" ({', '.join(src)})" if src and (len(src) > 1 or base_n != total) else "")
     if src and len(src) == 1 and base_n == total:
         head = f"{total:,} in the exchange's industry list"
@@ -5012,7 +5012,9 @@ def basis_line(cos: list) -> str:
     seen: set = set()
     for c in cos or []:
         b = c.get("revenue_basis")
-        if not isinstance(b, dict) or not b.get("words") or c.get("revenue") is None or c.get("symbol") in seen:
+        # (a filer's own lines only: an Indian company's basis is its family's, said once on the notes page)
+        if not isinstance(b, dict) or not b.get("words") or str(b.get("key") or "").startswith("in_") or c.get("revenue") is None \
+                or c.get("symbol") in seen:
             continue
         seen.add(c.get("symbol"))
         words = b["words"] + (f" ({b['standard']})" if b.get("standard") and b.get("key") != "not_stored" else "")
@@ -7051,7 +7053,9 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     who = [f"{_n(total, 'company', 'companies')} in all, each in one layer: {base_n:,} from the exchange's official industries"
            + (f", {named:,} named in the theme's own list" if named else "") + (f", {added:,} added by the AI from other industries" if added else "")
            # r62: the rest by where they came from, so the sources add up to the companies
-           + (f", {total - base_n - named - added:,} kept on their own words from other industries or held from an earlier version"
+           + ((f", {total - base_n - named - added:,} kept on their own words from other industries"
+               if sum(1 for m_ in members if m_.get("source") == "words") == total - base_n - named - added else
+               f", {total - base_n - named - added:,} more, their source not kept with this read")
               if total - base_n - named - added > 0 else "") + "."]
     if added:
         who.append(f"{confirmed:,} of the {added:,} added are description-verified" + (f"; {added - confirmed:,} not yet." if added > confirmed else "."))

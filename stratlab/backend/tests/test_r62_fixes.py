@@ -308,3 +308,64 @@ def test_the_universe_line_names_every_source_so_the_counts_add_up():
     got = deck.membership_words(v, 38)
     assert got.startswith("38 companies (29 in the exchange's industry list, 6 added by the AI, 3 kept on their own words from other industries (Tri Pointe")
     assert "Mohawk Industries" in got and "Builders FirstSource" in got
+
+
+# ---------- LIVE10A (the live review of R61), the theme engine's part ----------
+def test_cut_markup_ranked_or_another_companys_text_is_never_printed_as_own_words():
+    """LIVE10A-004: Ambuja "is among the leading cement companies in India", Shree "…is ** one of the lowest cost producers", ASML "…industry
+    and", Arteris "particularl”", Intel's Fortune 500 ranking, TOYO Co. quoted with Toyo Tire's words."""
+    from app.intel.theme_base import own_words, other_subject
+    bad = [("is among the leading cement companies in India", "Ambuja Cements Ltd"),
+           ("…is ** one of the lowest cost producers of cement", "Shree Cement Ltd"),
+           ("ASML makes lithography systems for the semiconductor industry and", "ASML Holding NV"),
+           ("Arteris provides interconnect IP, particularl”", "Arteris Inc"),
+           ("Intel is the third-largest semiconductor company by revenue in 2024 and ranks in the Fortune 500", "Intel Corp"),
+           ("Toyo Tire Corporation is a Japanese company that manufactures tires", "TOYO Co., Ltd."),
+           ("Created by the divestiture of AMD's manufacturing arm, it makes chips", "GlobalFoundries Inc"),
+           ("From our inception through the third quarter of 1994, we developed products", "Metalink Ltd")]
+    assert [own_words(t, n) for t, n in bad] == [""] * len(bad)
+    good = [("Bajaj Auto Limited is a manufacturer of motorcycles", "Bajaj Auto Ltd"),
+            ("Mahindra & Mahindra manufactures tractors and utility vehicles", "Mahindra & Mahindra Ltd"),
+            ("HDFC Bank Limited is a bank providing loans", "HDFC Bank Ltd"),
+            ("Shree Cement is one of the lowest cost producers of cement in India.", "Shree Cement Ltd"),
+            ("“Arteris provides interconnect IP to chip makers”", "Arteris Inc")]
+    assert all(own_words(t, n) for t, n in good)
+    assert other_subject("Tata Steel Limited is a steel maker", "Tata Motors Ltd") and not other_subject("Tata Motors Limited makes cars", "Tata Motors Ltd")
+
+
+def test_a_sub_theme_with_no_company_takes_the_layer_its_name_maps_to():
+    """LIVE10A-009: the live Automotive page "No listed company is shown for these sub-themes: Vehicle assembly, Two-wheelers and
+    three-wheelers, Components and systems" beside Maruti, Bajaj and Bosch."""
+    from app.intel.theme_data import sub_picked
+    lay = [{"layer": "Passenger and commercial vehicle makers (larger)", "companies": [{"ticker": "MARUTI"}]},
+           {"layer": "Passenger and commercial vehicle makers (smaller)", "companies": [{"ticker": "FORCE"}]},
+           {"layer": "Two-wheeler and three-wheeler makers", "companies": [{"ticker": "BAJAJ"}]},
+           {"layer": "Component and systems suppliers", "companies": [{"ticker": "BOSCH"}]}]
+    got = {n: [c["ticker"] for c in sub_picked({"name": n, "companies": []}, lay, lambda s: "its own words")]
+           for n in ("Vehicle assembly", "Two-wheelers and three-wheelers", "Components and systems", "Electric buses")}
+    assert got == {"Vehicle assembly": ["MARUTI", "FORCE"], "Two-wheelers and three-wheelers": ["BAJAJ"], "Components and systems": ["BOSCH"],
+                   "Electric buses": []}
+
+
+def test_the_companies_csv_prints_a_margin_beyond_revenue_as_nm():
+    """LIVE10A-018: Atomera "−32423.1%" printed as a margin outside the deck."""
+    from app.intel import theme_routes as TR
+    m = {"sector": "Semiconductors", "value_chain": [{"layer": "Makers", "companies": [{"ticker": "ATOM", "name": "Atomera Inc"},
+                                                                                        {"ticker": "TXN", "name": "Texas Instruments"}]}]}
+    dive = {"layers": [{"layer": "Makers", "companies": [{"symbol": "ATOM", "name": "Atomera Inc", "revenue": 0.07, "ebitda": -32423.1, "net": -30000.0},
+                                                         {"symbol": "TXN", "name": "Texas Instruments", "revenue": 17000.0, "ebitda": 45.0, "net": 30.0}]}]}
+    body = TR.companies_csv(m, dive, "US").decode("utf-8")
+    atom = next(ln for ln in body.splitlines() if ln.startswith("Atomera"))
+    txn = next(ln for ln in body.splitlines() if ln.startswith("Texas"))
+    assert "n.m.,n.m." in atom and "-32423" not in atom and ",45.0,30.0," in txn
+
+
+def test_two_listings_of_one_company_are_kept_once_under_the_one_with_words():
+    """The R62 replay of the live R60 Electric utilities input: "Brookfield Renewable Partners L.P" in a layer's calculations and "Brookfield
+    Renewable" (Brookfield Renewable Corp, no description of its own) left out of it in one sentence."""
+    from app.intel.theme_data import same_company
+    rows = [{"symbol": "BEP", "name": "Brookfield Renewable Partners L.P.", "year": "2025", "revenue": 6407.0, "profit": -70.0},
+            {"symbol": "BEPC", "name": "Brookfield Renewable Corp", "year": "2025", "revenue": 3728.0, "profit": -2300.0},
+            {"symbol": "BAM", "name": "Brookfield Asset Management", "year": "2025", "revenue": 10.0, "profit": 1.0}]
+    words = {"BEP": "Brookfield Renewable operates hydro, wind and solar plants.", "BAM": "Brookfield Asset Management manages funds for clients."}
+    assert same_company(rows, about=lambda s: words.get(s, "")) == {"BEPC": "BEP"}

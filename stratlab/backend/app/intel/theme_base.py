@@ -1020,7 +1020,10 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
     gone_layers: list = []
     share_row = None
     if previous or moved_before or moved_out:
-        out_vc, gone_layers = restore_vanished(out_vc, previous or {}, evidence, theme, theme_words=kind_stems(theme), moved_before=moved_before,
+        # r62 (the R62 replay of the live R60 Fertilizers and agrochemicals input: "Industrial gases", 5 companies published, 3 of them in the
+        # map's previous names, lost unsaid): a layer's companies are counted from the published memory too, every member of it
+        lost_from = {**(published or {}), **(previous or {})} if published else (previous or {})
+        out_vc, gone_layers = restore_vanished(out_vc, lost_from, evidence, theme, theme_words=kind_stems(theme), moved_before=moved_before,
                                                moved_out=moved_out)
         out_vc, share_row = share_guard(out_vc, previous or {}, evidence, theme, theme_words=kind_stems(theme), moved_before=moved_before,
                                         moved_out=moved_out)
@@ -2528,12 +2531,6 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
             k_ = key(c.get("industry"))         # most of the companies shown to earn the layer's way are of its industry
             if top_ind and k_ == top_ind[0][0] and top_ind[0][1] * 2 > len(known) and k_ not in elsewhere_:
                 return True
-            # r62 (the live R60 Electric utilities deck: Southern, "the traditional electric operating companies ... are each vertically
-            # integrated utilities", and 14 more left out of "Regulated vertically integrated utilities" as insufficient evidence, the
-            # layer's industry being most of other layers' too): an industry most of the layer's companies shown to earn its way share decides
-            # for a company whose own words also say a word of the layer's own name (apart from the theme's): words and industry agree
-            if top_ind and k_ == top_ind[0][0] and top_ind[0][1] * 2 > len(known) and layer_says(v, own_text(ev(c)), theme_words)[1]:
-                return True
             # the layer's own name (shown or the map's) names it; never its description alone ("product design, embedded software" names
             # no "Software Products" layer)
             return industry_named_by({"layer": v.get("layer"), "was": v.get("was")}, c.get("industry"), theme_words)
@@ -2653,11 +2650,11 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
         # name, is in its figures on its words ("by_words"); the other ways its words name are what it also earns from, said on its row
         ind_words_ = {c.get("ticker") for c in cos if fam(c) == "" and c.get("ticker") not in kin and c.get("ticker") not in another
                       and c.get("ticker") not in outside and c.get("ticker") not in uf and c.get("industry")
-                      and f in said_(c) and model_family(every.get(c.get("ticker")) or "") in ("", f)
-                      and (ind_decides(c) and layer_says(v, own_text(ev(c)), theme_words)[1]
-                           # (or its words state the layer's way of earning and no other, of the industry most of the layer's read
-                           # companies share: "fully regulated natural gas and electric utility companies")
-                           or (said_(c) == {f} and bool(top_ind) and key(c.get("industry")) == top_ind[0][0] and top_ind[0][1] * 2 > len(known)))}
+                      and model_family(every.get(c.get("ticker")) or "") in ("", f)
+                      and bool(top_ind) and key(c.get("industry")) == top_ind[0][0] and top_ind[0][1] * 2 > len(known)
+                      # (its words say the layer's own name, naming no way of earning or the layer's among others; or they state the
+                      # layer's way of earning and no other: "fully regulated natural gas and electric utility companies")
+                      and ((layer_says(v, own_text(ev(c)), theme_words)[1] and (not said_(c) or f in said_(c))) or said_(c) == {f})}
         kin |= ind_words_
         words_ |= ind_words_
         bare_ |= ind_words_
@@ -5276,7 +5273,7 @@ def domicile_moves(vc: list[dict], facts_for) -> tuple[list[dict], list[dict]]:
             why = (f"its own filings are a domestic filer's ({', '.join(sorted({x.strip('()') for x in home.findall(filed)}))}), so it is not one of “{frm}”"
                    + (f"; in the layer of its official industry whose companies' market values are nearest its own" if to else ""))
             dest["companies"] = list(dest["companies"]) + [{**{k: x for k, x in c.items() if k not in ("model_out", "out_why", "unfit", "line_says")},
-                                                            "moved": True, "refit": {"from": frm, "to": to, "why": why}}]
+                                                            "moved": True, "refit": {"from": frm, "to": to, "why": why, "domicile": True}}]
             rows.append({"ticker": c.get("ticker"), "name": c.get("name"), "from": frm, "to": to, "why": why})
         v["companies"] = keep
     return [v for v in vc if v.get("companies") or v.get("official")], rows
@@ -5438,7 +5435,11 @@ def listed_out(vc: list[dict], words_of, theme: str, moved_before: dict | None =
         for c in v.get("companies") or []:
             was = _HALF_RX.sub("", str(pub.get(c.get("ticker")) or ""))
             t = " ".join(str(x or "") for x in (text_of(c), c.get("what"), c.get("industry"), c.get("name")))
-            if not was or was in names or gate_says(shown, t) is not False:          # (the name it is shown under, as the gate reads it)
+            rf_ = c.get("refit") if isinstance(c.get("refit"), dict) else {}
+            # (the name it is shown under, as the gate reads it; never a move on the rule's own evidence: its revenue against the layer's
+            # median, its stage, its filing forms, a quote of its own words the audit checked for the layer)
+            if not was or was in names or gate_says(shown, t) is not False or rf_.get("scale") or rf_.get("stage") or rf_.get("domicile") \
+                    or (rf_.get("quotes") or [""])[0]:
                 stay.append(c)
                 continue
             dest = rest_v if was.startswith("Other ") else by_name.get(was)
@@ -5597,6 +5598,34 @@ _ENCYCLOPEDIA = re.compile(r"^[^.]{0,160}?\b(?:is|was)\s+(?:an?|the)\s+(?:[\w&'-
                            r"multinational|publicly[\s-]traded)\b|^[^.]{0,80}?,\s+(?:commonly|also|formerly|better)\s+known\s+as\b", re.I)
 _ABBR_DOT = re.compile(r"\b(inc|corp|co|ltd|plc|l\.p|n\.v|s\.a|bhd|pty|ltda|st)\.", re.I)      # "Inc." doesn't end the opening clause
 _ADDS = re.compile(r"^(?:in\s+addition\b|additionally\b|also\b|(?:we|it|they|the\s+company)\s+also\b)", re.I)
+# r62 (LIVE10A-004, the live review of R61: quotes printed as a company's own words on the app, the CSV and the public blog: Ambuja "is among the
+# leading cement companies in India", Shree "…is ** one of the lowest cost producers", Intel's "third-largest ... Fortune 500", ASML's "…industry
+# and", Arteris "particularl”", TOYO Co. quoted with Toyo Tire's words): a line whose subject was cut off (it starts with an ellipsis or a bare
+# verb), that carries markup, that ends on a joining word or with an unclosed quote, that ranks the company in a list as an encyclopedia does,
+# or whose subject is another company that shares only its first word, is no line of its own words
+_CUT_LEAD = re.compile(r"^(?:…|\.\.\.|(?:is|was|are|were|has|have|had|which|and|but|or)\b|in the (?:19|20)\d0s\b|from (?:our|its) inception\b|"
+                       r"created by\b|founded (?:in|by)\b)", re.I)
+_CUT_END = re.compile(r"\b(?:and|or|of|the|a|an|to|in|with|for|by|on|at|from|as|its|their)\W*$", re.I)
+_RANKED = re.compile(r"\b(?:fortune|forbes|global)\s+(?:500|1000|2000|global 500)\b|\b(?:(?:second|third|fourth|fifth|sixth|\d+(?:st|nd|rd|th))[- ]largest|largest)\b"
+                     r"[^.]{0,60}\bby (?:revenue|sales|market cap\w*)\b[^.]{0,40}\b(?:19|20)\d\d\b", re.I)
+_LEGAL_NAME = {"inc", "incorporated", "corp", "corporation", "co", "company", "ltd", "limited", "plc", "llc", "lp", "holdings", "holding", "group",
+               "the", "and", "of", "sa", "ag", "nv", "se", "ab", "asa", "spa", "bhd", "pty", "industries", "international", "intl"}
+
+
+def other_subject(text: str, name: str) -> bool:
+    """r62 (LIVE10A-004): whether a description's subject, the capitalised name that opens it, is another company than `name` that shares only
+    its first word ("Toyo Tire Corporation is ..." for "TOYO Co., Ltd."): its second word is a distinctive word the company's name lacks."""
+    m = re.match(r"\s*((?:[A-Z][\w&'.-]*\s+){1,5}?)(?:is|was|are|has|operates|manufactures|makes|provides|\()", str(text or ""))
+    if not m or not name:
+        return False
+    subj = re.findall(r"[A-Za-z][\w'-]*", m.group(1))
+    own = [w.lower() for w in re.findall(r"[A-Za-z][\w'-]*", str(name))]
+    if len(subj) < 2 or not own or subj[0].lower() != own[0]:
+        return False
+    second = subj[1].lower().strip(".")
+    if second in _LEGAL_NAME or len(second) < 3:
+        return False
+    return not any(w.startswith(second[:4]) or second.startswith(w[:4]) for w in own[1:] if len(w) >= 3)
 _WHERE = re.compile(r"^(?:it|we|the\s+company)\s+(?:is|are)\s+(?:headquartered|based|located|domiciled|incorporated)\b", re.I)
 
 
@@ -5614,6 +5643,10 @@ def own_words(text, name: str = "") -> str:
     t = _DEFINES.sub("", t).strip()
     t = t[:1].upper() + t[1:] if t[:1].islower() and str(text or "").lstrip(" “”\"'").startswith("(") else t
     if not t or t.startswith("From its own filings:") or _FILING_TITLE.match(t) or _ENCYCLOPEDIA.search(_ABBR_DOT.sub(r"\1", t)) or _ADDS.match(t) or _WHERE.match(t):
+        return ""
+    # r62 (LIVE10A-004): markup taken off; a cut subject or end, an unclosed quote, a ranked list or another company's subject is no line
+    t = " ".join(t.replace("**", " ").split())
+    if _CUT_LEAD.match(t) or _CUT_END.search(t) or str(text).count("“") != str(text).count("”") or _RANKED.search(t) or other_subject(t, name):
         return ""
     words = lambda x: [w for w in re.findall(r"[a-z0-9]+", _LEGAL_WORDS.sub(" ", x.lower()))]        # noqa: E731
     if name and not [w for w in words(t) if w not in set(words(name))]:

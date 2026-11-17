@@ -1412,6 +1412,26 @@ def same_company(rows: list[dict], about=None) -> dict:
                 return m.start() if m else len(key_t) + 1
             keep = min(alike, key=lambda r: (first_at(r), -(r.get("cap") or 0), r.get("symbol") or ""))
             out.update({r["symbol"]: keep["symbol"] for r in alike if r is not keep})
+    # r62 (the R62 replay of the live R60 Electric utilities input: "Brookfield Renewable Partners L.P" in a layer's calculations and
+    # "Brookfield Renewable" (Brookfield Renewable Corp, no description of its own) left out of it in one sentence): a member with no
+    # description of its own whose name is another member's but for an entity word (partners, holdings, group) is another listing of that
+    # company: kept once, under the one with words of its own
+    def words_of_(sym) -> str:
+        try:
+            return str(about(sym) or "").strip()
+        except Exception:
+            return ""
+    keyed = [(r, entity_key(r.get("name")).split()) for r in rows if r.get("symbol") not in out and entity_key(r.get("name"))]
+    for a, ka in keyed:
+        if a["symbol"] in out or words_of_(a["symbol"]):
+            continue
+        for b, kb in keyed:
+            if b is a or b["symbol"] in out or len(ka) < 2 or not words_of_(b["symbol"]):
+                continue
+            short, long_ = (ka, kb) if len(ka) <= len(kb) else (kb, ka)
+            if long_[:len(short)] == short and set(long_[len(short):]) <= ENTITY_WORDS:
+                out[a["symbol"]] = b["symbol"]
+                break
     # r572 (R57.2, the live R57.1 Oil and gas US deck: "TC Energy Corp and Transcanada Pipelines Ltd: $10.7 bn · +10.7% · 70.9% · 23.1%", a
     # parent and the subsidiary that files its own annual report on the same business, names sharing no word, neither description naming the
     # other): the same latest year, revenue within SAME_REVENUE and net profit within SAME_PROFIT of each other, where one of the two has no
@@ -1446,6 +1466,8 @@ def same_company(rows: list[dict], about=None) -> dict:
     return out
 
 
+ENTITY_WORDS = {"partners", "partnership", "holdings", "holding", "group", "corp", "corporation", "inc", "lp", "l", "p", "co", "company", "ltd",
+                "limited", "plc", "units", "unit"}          # r62: the entity words one company's two listings differ by
 SAME_REVENUE = 0.002            # r572: two members' latest revenue this close (a share of the larger) is one business's, beside SAME_PROFIT
 SAME_PROFIT = 0.01
 
@@ -2141,7 +2163,7 @@ OPERATING = (("branded", "branded consumer products", re.compile(r"\bbrand(?:ed|
              ("regulated", "regulated utility networks",
               re.compile(r"\bregulated\b|\btransmission and distribution\b|\bvertically integrated\b", re.I)),
              ("merchant", "competitive and merchant power generation",
-              re.compile(r"\bcompetitive (?:power|generation|generators?)\b|\bmerchant\b|\bindependent power\b", re.I)),
+              re.compile(r"\bcompetitive (?:power|generation|generators?)\b|\bmerchant (?:power|generat\w*|energy|plants?)\b|\bindependent power\b", re.I)),
              ("equipment", "equipment making", re.compile(r"\bequipment\b", re.I)),
              ("contracting", "construction and contracting", re.compile(r"\bcontractors?\b|\bconstruction (?:and engineering|services|companies|firms)\b|\bepc\b", re.I)))
 OPERATING_WORDS = {k: w for k, w, _ in OPERATING}
@@ -4451,15 +4473,24 @@ def sub_picked(sub: dict, layers: list, about_of=None) -> list:
     names; only companies with a description of their own stored are listed, so the page's footnote holds."""
     got = list(sub_members(sub, layers, about_of))
     have = {c.get("ticker") for c in got}
-    words = {w for w in re.findall(r"[a-z]+", str(sub.get("name") or "").lower()) if w not in SUB_GENERIC and len(w) > 2}
+    # r62 (LIVE10A-009, the live Automotive page: "No listed company is shown for these sub-themes: Vehicle assembly, Two-wheelers and
+    # three-wheelers, Components and systems" beside Maruti, Bajaj and Bosch): a word read as its singular ("wheelers" of "wheeler"), the two
+    # halves of a layer by market value one layer, and a sub-theme with no company of its own takes the one layer its name maps to best
+    stem = lambda w: w[:-1] if len(w) > 4 and w.endswith("s") and not w.endswith("ss") else w      # noqa: E731
+    words = {stem(w) for w in re.findall(r"[a-z]+", str(sub.get("name") or "").lower()) if w not in SUB_GENERIC and len(w) > 2}
     if words:
-        scored = sorted(((len(words & {w for w in re.findall(r"[a-z]+", str(v.get("layer") or "").lower())}), i) for i, v in enumerate(layers)
-                         if not v.get("official")), reverse=True)
-        if scored and scored[0][0] >= min(2, len(words)) and (len(scored) == 1 or scored[1][0] < scored[0][0]):
-            for c in layers[scored[0][1]].get("companies") or []:
-                if c.get("ticker") not in have:
-                    got.append(c)
-                    have.add(c.get("ticker"))
+        groups: dict = {}
+        for v in layers:
+            if not v.get("official"):
+                groups.setdefault(_HALF_NAME.sub("", str(v.get("layer") or "")), []).append(v)
+        scored = sorted(((len(words & {stem(w) for w in re.findall(r"[a-z]+", nm.lower())}), nm) for nm in groups), reverse=True)
+        need = min(2, len(words)) if got else 1
+        if scored and scored[0][0] >= need and (len(scored) == 1 or scored[1][0] < scored[0][0]):
+            for v in groups[scored[0][1]]:
+                for c in v.get("companies") or []:
+                    if c.get("ticker") not in have:
+                        got.append(c)
+                        have.add(c.get("ticker"))
     text = str(sub.get("detail") or "")
     if text:
         for v in layers:
