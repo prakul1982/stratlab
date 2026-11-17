@@ -3949,7 +3949,9 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         # r581 (the live R58 decks' "layer words"): a line that says no word of its layer's name gives way to the sentence of the company's
         # own words that does (theme_base.layer_line); a company with no line keeps none
         def line_for(line, r, v=v):
-            if not line:
+            # r62 (LIVE10A-004: "Description-verified" beside "No description in its own words yet"): a company whose first sentence is no
+            # line of its own words still prints the sentence of its own words that says its layer, when one does
+            if not line and r.get("evidence") != "description_verified":
                 return line
             try:
                 about = src.about(r["symbol"])
