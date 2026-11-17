@@ -51,3 +51,9 @@ test("LIVE10B-016/030: under a day to expiry theta is said per hour, in the summ
   assert.match(src, /header: hourly \? "Theta \/ hour" : "Theta \/ day"/);
   assert.match(src, /hourly=\{hourly\} \/>/);
 });
+
+test("LIVE10B-011: the journal offers the tax report's newer trades only while bringing them in would add some", () => {
+  const page = read("src/pages/trade/JournalPage.tsx");
+  assert.match(page, /taxLast\.slice\(0, 10\) > newestReal && \(j\.tax_new \?\? 1\) > 0 && \(/);
+  assert.match(page, /tax_new\?: number;/);
+});

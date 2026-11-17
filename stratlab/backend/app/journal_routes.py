@@ -144,6 +144,14 @@ def sync_tax_charges(uid: str, data: dict) -> dict:
     return J.save(uid, data) if changed else data
 
 
+def tax_new(uid: str, data: dict) -> int:
+    """How many of the tax report's trade lines "Bring them in" would add: the page offers the newer ones only while there
+    are some (LIVE10B-011: the offer stayed after the press, as the report's newest line was a buy or F&O, which the journal
+    doesn't take line by line)."""
+    got = J.from_tax(tax_lots.load(uid)["trades"])
+    return J._merge(data["fills"], got["fills"], J._fill_key)[1] + J._merge(data["lines"], got["lines"], J._line_key)[1]
+
+
 def view(profile, data: dict | None = None, segment: str = "all", market: str = "") -> dict:
     """The journal page: the trades (newest first), open positions, the stats, and on Basic and up the checks, the
     breakdowns, R-multiples and the paper sessions to compare with."""
@@ -177,6 +185,7 @@ def view(profile, data: dict | None = None, segment: str = "all", market: str = 
             "market": market, "markets": [{"id": m, **J.MARKETS[m], "n": n} for m, n in held.items()],
             "currency": J.MARKETS[market]["currency"], "segment": segment, "segment_counts": {k: n for k, n in seg_count.items() if n},
             "tax_totals": tax_totals(uid, segment) if market == "in" else [],
+            "tax_new": tax_new(uid, data) if market == "in" else 0,
             "emotions": J.EMOTIONS, "mistakes": J.MISTAKES, "segments": J.SEGMENTS, "assumptions": J.ASSUMPTIONS,
             "plan_name": PLANS[FEATURE_PLAN["journal"]]["name"]}
 

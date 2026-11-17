@@ -94,3 +94,34 @@ def test_live10b_028_stopping_an_options_session_squares_off_its_open_legs():
     assert st["equity_curve"][-1]["eq"] == round(s.engine.cash, 2)            # the account is its cash once flat
     # nothing open: the state as it was
     assert OptionSession(None, opt_row(straddle()), StubData()).final_state(at("10:05"))["equity_curve"] == []
+
+
+def test_live10b_011_a_partial_exit_is_a_closed_round_trip():
+    """INFY, SBIN, ITC and RELIANCE were "Still open … +₹18,000 on the part closed": their realised sales were left out."""
+    from datetime import date
+    from app import journal as J
+    S = J.clean_settings({})
+    fill = lambda d, side, q, px: {"d": d, "t": "", "side": side, "qty": q, "price": px, "symbol": "INFY", "exchange": "NSE", "seg": "EQ"}
+    fs = [fill("2026-01-02", "B", 50, 1000.0), fill("2026-01-05", "B", 50, 1100.0), fill("2026-03-02", "S", 60, 1300.0)]
+    got, open_, unmatched = J.pair_fills(fs, S, date(2026, 11, 17))
+    assert len(got) == 1 and not unmatched
+    t = got[0]
+    # first in, first out: the 60 sold are the 50 at 1,000 and 10 of the 50 at 1,100
+    assert t["qty"] == 60 and t["entry"] == pytest.approx((50 * 1000 + 10 * 1100) / 60) and t["gross"] == pytest.approx(60 * 1300 - 61000)
+    assert open_[0]["qty"] == 40 and open_[0]["avg"] == pytest.approx(1100.0) and open_[0]["realised"] == 0
+    # a short partly bought back is the same, and stays out of "sold with no purchase before it"
+    fs = [{**fill("2026-01-02", "S", 10, 500.0), "seg": "FUT", "symbol": "INFY26JANFUT"}, {**fill("2026-01-03", "B", 4, 450.0), "seg": "FUT", "symbol": "INFY26JANFUT"}]
+    got, open_, unmatched = J.pair_fills(fs, S, date(2026, 1, 10))
+    assert len(got) == 1 and got[0]["qty"] == 4 and open_[0]["qty"] == 6 and not unmatched
+
+
+def test_live10b_011_the_journal_says_how_many_tax_trades_are_not_brought_in_yet(w):
+    """After "Bring them in" the page still offered "the newer ones" (the report's newest line was a buy), and the press did nothing."""
+    from app import tax_lots
+    c = w["client"]
+    tax_lots.save("u-pro", [{"d": "2025-01-02", "side": "B", "qty": 5, "price": 100, "symbol": "ITC", "src": "trades"},
+                            {"d": "2025-02-02", "side": "S", "qty": 5, "price": 110, "symbol": "ITC", "src": "trades"},
+                            {"d": "2025-03-02", "side": "B", "qty": 5, "price": 120, "symbol": "ITC", "src": "trades"}], [])
+    assert c.get("/trade/journal", headers=PRO).json()["tax_new"] == 3
+    r = c.post("/trade/journal/import-tax", headers=PRO).json()
+    assert r["added"] == 3 and r["journal"]["tax_new"] == 0                     # nothing newer to offer once brought in

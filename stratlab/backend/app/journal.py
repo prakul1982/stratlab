@@ -608,6 +608,24 @@ class _Episode:
         self.exits = [(one(f), round(q * k, 6)) for f, q in self.exits]
         self.pos = round(self.pos * k, 6)
 
+    def split_closed(self) -> "_Episode | None":
+        """A position still open after part of it was closed: the closed part as its own episode, its entries the earliest
+        (first in, first out) up to the quantity closed; this one keeps the rest. None when nothing was closed."""
+        done = sum(q for _, q in self.exits)
+        if done <= EPS:
+            return None
+        part = _Episode(self.key, self.sign, self.entries[0][0], self.info)
+        left, keep = done, []
+        for f, q in self.entries:
+            take = min(q, left)
+            if take > EPS:
+                part.entries.append((f, round(take, 6)))
+                left -= take
+            if q - take > EPS:
+                keep.append((f, round(q - take, 6)))
+        part.exits, self.entries, self.exits = self.exits, keep, []
+        return part
+
     def trade(self, s: dict) -> dict:
         first, last = self.entries[0][0], self.exits[-1][0]
         intraday = first["d"] == last["d"]
@@ -732,12 +750,19 @@ def pair_fills(fills: list[dict], s: dict, today: date, actions: dict[str, list[
             ep.expired = True
             trades.append(ep.trade(s))
             continue
+        had_exits = bool(ep.exits)
+        if ep.exits and ep.entries:
+            # LIVE10B-011: the part already sold is a closed round trip of its own (the tax report counts that sale), so the
+            # journal no longer leaves ₹2,20,500 of realised partial exits out of its trades and checks
+            part = ep.split_closed()
+            if part is not None:
+                trades.append(part.trade(s))
         avg = sum(f["price"] * q for f, q in ep.entries) / max(sum(q for _, q in ep.entries), EPS)
         row = {"symbol": ep.symbol, "side": "long" if ep.sign > 0 else "short", "qty": round(ep.pos, 6),
                "since": _at(ep.entries[0][0]["d"], ep.entries[0][0].get("t") or ""), "avg": round(avg, 4),
                # what the part already closed made before charges (the trade counts once it's flat)
                "realised": round(sum(ep.sign * (f["price"] - avg) * q for f, q in ep.exits), 2)}
-        if info["group"] == "eq" and ep.sign < 0 and not ep.exits:
+        if info["group"] == "eq" and ep.sign < 0 and not had_exits:
             unmatched.append(row)              # shares sold that were bought before the earliest file
         else:
             open_.append(row)

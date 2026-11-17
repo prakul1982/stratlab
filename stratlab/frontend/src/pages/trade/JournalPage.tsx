@@ -51,6 +51,8 @@ type Journal = {
   practice_count: number; real_count: number; show: Show;
   market: string; markets: { id: string; label: string; currency: string; symbol: string; n: number }[]; currency: string; segment: string;
   segment_counts: Record<string, number>; tax_totals: TaxTotal[];
+  /** tax report trade lines not in the journal yet (LIVE10B-011): the newer ones are offered only while there are some */
+  tax_new?: number;
   links: Record<string, string>; paper: { id: string; name: string; status: string; symbol?: string }[]; tags: string[];
   emotions: string[]; mistakes: string[]; segments: Record<string, string>; assumptions: string; plan_name: string;
 };
@@ -272,7 +274,9 @@ export function JournalPage() {
         )}
         {/* the tax report has trades past the journal's newest (R81-020: "Trades up to 27 Jun 2025" here, "trades up to
             16 Mar 2026" on Money, and nothing said why): the newer ones are one press away; ones already here are skipped */}
-        {has && (!market || market === "in") && taxLast && newestReal && taxLast.slice(0, 10) > newestReal && (
+        {/* LIVE10B-011: only while bringing them in would add something (a report whose newest line is a buy, or F&O the journal
+            doesn't take line by line, kept the offer up after the press, and the press changed nothing) */}
+        {has && (!market || market === "in") && taxLast && newestReal && taxLast.slice(0, 10) > newestReal && (j.tax_new ?? 1) > 0 && (
           <p className="banner" data-testid="j-tax-newer">
             Your tax report has trades up to {fmtDate(taxLast, { tz: "Asia/Kolkata" })}; this journal's go up to {fmtDate(newestReal, { tz: "Asia/Kolkata" })}.{" "}
             <button type="button" className="btn sm" disabled={busy} onClick={() => { if (!busy) void fromTax(); }}>{busy ? "Bringing them in…" : "Bring in the newer ones"}</button>
