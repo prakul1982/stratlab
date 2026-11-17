@@ -190,3 +190,13 @@ def test_results_days_say_whether_they_are_sessions(monkeypatch):
     monkeypatch.setattr(calendar, "is_trading_day", lambda region, d: d.weekday() < 5 and d.isoformat() != "2026-11-26")
     assert results._session_day("US", "2026-11-19") is True
     assert results._session_day("US", "2026-11-22") is False and results._session_day("US", "2026-11-26") is False
+
+
+# ---------- LIVE10A-038: heatmap and movers names in the one style ----------
+def test_heatmap_and_movers_names_are_in_one_style():
+    from app import heatmap, movers
+    row = [100.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 1000.0, 900.0]
+    assert heatmap.tile("TSN", row, {"name": "TYSON FOODS, INC."}, None, "US")["n"] == "Tyson Foods, Inc."
+    assert heatmap.tile("MSFT", row, {"name": "MICROSOFT CORP"}, None, "US")["n"] == "Microsoft Corp"
+    assert heatmap.tile("TSN", row, {"name": "TYSON FOODS, INC."}, None)["n"] == "TYSON FOODS, INC."      # no market given: as stored
+    assert movers.row_of("CNC", row, {"name": "CENTENE CORP"}, None, "US")["n"] == "Centene Corp"
