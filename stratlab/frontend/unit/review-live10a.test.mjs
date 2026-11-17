@@ -29,8 +29,9 @@ test("LIVE10A-002: on a desktop the Lab notes sit left of a docked Markets panel
 
 test("LIVE10A-003: a deck press over the month's count shows the plan line beside the buttons; /plans states a Free account's grace", () => {
   const dive = read("src/components/ThemeDive.tsx");
-  assert.match(dive, /if \(\(e as \{ status\?: number \}\)\?\.status === 402\) setSpent\(/);
-  assert.match(dive, /\{spent && <div className="theme-wb-lock" role="status" data-testid="deck-spent"><PlanNote plan="basic">\{spent\}<\/PlanNote>/);
+  assert.match(dive, /if \(\(e as \{ status\?: number \}\)\?\.status === 402\) \{ setSpent\(/);
+  // (updated on purpose, fix13 LIVE11A-014: the row's one plan line shows the deck's message while it is the latest press's)
+  assert.match(dive, /\{spent && lock === "deck" && <div className="theme-wb-lock" role="status" data-testid="deck-spent"><PlanNote plan="basic">\{spent\}<\/PlanNote>/);
   const cmp = read("src/components/PlanCompare.tsx");
   assert.match(cmp, /\$\{changeCount\(kept\.before\)\} for you until \$\{graceDay\}/);
   const plans = read("src/pages/PlansPage.tsx");

@@ -48,14 +48,17 @@ export function ChangesCard({ dive }: { dive: Dive & { changes?: ChangeLog } }) 
 }
 
 /** "Workbook (XLSX)" beside the deck downloads: Basic and up, counted as the theme's deck of the month (its PDF, PowerPoint and workbook are one deck). */
-export function WorkbookButton({ region, theme, dive }: { region: Region; theme: string; dive: Dive | null }) {
+export function WorkbookButton({ region, theme, dive, locked: shown, onLock }: { region: Region; theme: string; dive: Dive | null;
+  /** LIVE11A-014: the download row's one plan line: set, this button's lock shows only while the row says it is the one shown */
+  locked?: boolean; onLock?: () => void }) {
   const { me, fail, refreshMe } = useApp();
   const [making, setMaking] = useState(false);
   const [preparing, setPreparing] = useState<string | null>(null);
-  const [locked, setLocked] = useState(false);
+  const [own, setOwn] = useState(false);
+  const locked = shown ?? own;
   const off = (me?.plan_info.features as Record<string, boolean> | undefined)?.theme_workbook === false;
   const go = async () => {
-    if (off) { setLocked(true); return; }
+    if (off) { (onLock ?? (() => setOwn(true)))(); return; }
     setMaking(true);
     try {
       const url = `/research/theme-dive/workbook?region=${region}&q=${encodeURIComponent(theme)}`;
@@ -78,13 +81,16 @@ export function WorkbookButton({ region, theme, dive }: { region: Region; theme:
 
 /** Release 43: every company in the theme as a CSV, made by the server (GET /research/theme-dive/companies.csv): a download, so Basic and
  * up with the theme's workbook; Free sees the same companies on the page, and the plan note here. Not counted as a deck. */
-export function ThemeCsvButton({ region, theme, dive }: { region: Region; theme: string; dive: Dive | null }) {
+export function ThemeCsvButton({ region, theme, dive, locked: shown, onLock }: { region: Region; theme: string; dive: Dive | null;
+  /** LIVE11A-014: the download row's one plan line: set, this button's lock shows only while the row says it is the one shown */
+  locked?: boolean; onLock?: () => void }) {
   const { me, fail } = useApp();
   const [making, setMaking] = useState(false);
-  const [locked, setLocked] = useState(false);
+  const [own, setOwn] = useState(false);
+  const locked = shown ?? own;
   const off = (me?.plan_info.features as Record<string, boolean> | undefined)?.theme_workbook === false;
   const go = async () => {
-    if (off) { setLocked(true); return; }
+    if (off) { (onLock ?? (() => setOwn(true)))(); return; }
     setMaking(true);
     try {
       const url = `/research/theme-dive/companies.csv?region=${region}&q=${encodeURIComponent(theme)}`;

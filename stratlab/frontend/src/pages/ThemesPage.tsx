@@ -264,6 +264,8 @@ export function ThemesPage() {
 /** The shared library: themes StratLab has mapped and kept once for everyone that match what's typed, so a search for one of them opens
  *  at once (R19). Not this account's reading history, so it is headed "Ready to open" with the date the map was updated (LIVE6-012).
  *  Signed-in only, as the page is; nothing shows until there is one. */
+const LIBRARY_FIRST = 12;            // stored themes shown before "All N themes"
+
 function AlreadyRead({ region, typed, current, onPick }: { region: "IN" | "US"; typed: string; current: string; onPick: (t: string) => void }) {
   const [items, setItems] = useState<LibraryTheme[]>([]);
   useEffect(() => {
@@ -273,16 +275,22 @@ function AlreadyRead({ region, typed, current, onPick }: { region: "IN" | "US"; 
     }, 250);
     return () => { live = false; clearTimeout(t); };
   }, [region, typed]);
-  const shown = items.filter((i) => i.name.toLowerCase() !== current.trim().toLowerCase()).slice(0, 4);
+  const [all, setAll] = useState(false);
+  // LIVE11A-013: every theme StratLab keeps for this market (4 were listed beside 29 public India theme pages); the first LIBRARY_FIRST
+  // with the rest one press away, each without the market the tab already names
+  const matching = items.filter((i) => i.name.toLowerCase() !== current.trim().toLowerCase());
+  const shown = all ? matching : matching.slice(0, LIBRARY_FIRST);
   if (!shown.length) return null;
   return (
     <div className="k-row theme-already" data-testid="theme-already">
       <span className="k-small k-muted" title="Themes already mapped on StratLab, kept for everyone">{LIBRARY_HEAD}</span>
       {shown.map((i) => (
         <button key={i.q} type="button" className="btn quiet sm" onClick={() => onPick(i.name)}>
-          {libraryLabel(i, (d) => fmtDate(d, { year: false }))}
+          {libraryLabel(i, (d) => fmtDate(d, { year: false }), false)}
         </button>
       ))}
+      {matching.length > shown.length && <button type="button" className="btn quiet sm" data-testid="theme-already-all" onClick={() => setAll(true)}>
+        All {matching.length} themes</button>}
     </div>
   );
 }

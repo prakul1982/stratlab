@@ -20,3 +20,40 @@ test("LIVE11A-001: a closed session's final read is not 'Reading the market agai
   assert.equal(moodStale({ ...m, final: true }, now), false);              // the session's final read: shown as it is
   assert.equal(moodStale({ ...m, final: true, refreshing: true }, now), true);
 });
+
+test("LIVE11A-019: the Usual move column goes when no answered row has one; zero-count index and F&O choices are not offered", async () => {
+  const { movesEmpty } = await import("../src/lib/resultsRows.ts");
+  const rows = Array.from({ length: 40 }, (_, i) => ({ symbol: `S${i}` }));
+  const back = Object.fromEntries(rows.slice(0, 30).map((r) => [r.symbol, null]));          // 10 rows never answered in time
+  assert.equal(movesEmpty(rows, back), true);
+  assert.equal(movesEmpty(rows, { ...back, S3: { moves: { avg: 4 } } }), false);
+  assert.equal(movesEmpty(rows, Object.fromEntries(rows.slice(0, 5).map((r) => [r.symbol, null]))), false);   // too few back yet
+  assert.equal(movesEmpty([{ symbol: "A", moves: { avg: 1 } }], {}), false);
+  const f = read("src/components/CalendarFilters.tsx");
+  assert.match(f, /export const indexChoices = \(indices: Facets\["indices"\], picked: string\) => indices\.filter\(\(i\) => i\.count > 0 \|\| i\.id === picked\);/);
+  assert.match(f, /facets\.fo != null && \(facets\.fo > 0 \|\| filters\.fo\)/);
+  assert.match(read("src/pages/ResultsPage.tsx"), /const mvEmpty = movesEmpty\(shown, moves\);/);
+});
+
+test("LIVE11A-013: every stored theme is listed, without the market the tab names", async () => {
+  const { libraryLabel } = await import("../src/lib/themeFormat.ts");
+  assert.equal(libraryLabel({ name: "Cement", region: "IN", at: null, day: "2026-11-13" }, (d) => d, false), "Cement · updated 2026-11-13");
+  assert.equal(libraryLabel({ name: "Cement", region: "IN", at: null, day: "2026-11-13" }, (d) => d), "Cement · India, updated 2026-11-13");
+  const page = read("src/pages/ThemesPage.tsx");
+  assert.doesNotMatch(page, /\.slice\(0, 4\);\n  if \(!shown\.length\) return null;/);
+  assert.match(page, /All \{matching\.length\} themes/);
+});
+
+test("LIVE11A-014: one plan line for the download row, no toast with it, the decks count after the buttons", () => {
+  const dive = read("src/components/ThemeDive.tsx");
+  assert.match(dive, /setSpent\(\(e as Error\)\.message \|\| "This month's decks are used\."\); setLock\("deck"\); \}\n      else fail\(e\);/);
+  assert.match(dive, /locked=\{lock === "workbook"\} onLock=\{\(\) => setLock\("workbook"\)\}/);
+  assert.match(dive, /locked=\{lock === "csv"\} onLock=\{\(\) => setLock\("csv"\)\}/);
+  assert.ok(dive.indexOf('data-testid="decks-left"') > dive.indexOf("<ThemeCsvButton"));
+});
+
+test("LIVE11A-018/024: Breadth's CSV sits beside Alert me in the card head; the index card's column is 'When'", () => {
+  const b = read("src/pages/BreadthPage.tsx");
+  assert.match(b, /data-testid="breadth-today-tools">\n        \{!locked && <BreadthAlertButton group=\{group\} \/>\}\n        \{rows\.length > 0 && <CsvButton/);
+  assert.match(read("src/pages/PulseMood.tsx"), /\{ key: "w", header: "When", cell: \(i\) => <span data-testid="index-when"/);
+});

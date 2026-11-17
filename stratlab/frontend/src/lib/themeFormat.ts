@@ -92,10 +92,12 @@ export function ownWords(text: string | null | undefined, name = ""): string {
  *  everyone, not this person's reading history: it never says "Already read" or "read <date>" (an account that never opened a theme was
  *  shown "Already read: Cybersecurity · US, read 11 Nov"); the date is when the stored map was last updated. */
 export const LIBRARY_HEAD = "Ready to open:";
-export function libraryLabel(i: { name: string; region: string; at: string | null; day?: string | null }, fmtDay: (iso: string) => string): string {
+export function libraryLabel(i: { name: string; region: string; at: string | null; day?: string | null }, fmtDay: (iso: string) => string, withMarket = true): string {
   const where = ({ IN: "India", US: "US" } as Record<string, string>)[i.region] ?? i.region;
   // LIVE7A-008: the map's own day in the market's time zone, the date its page says "Last updated" (theme_library.updated_at)
   const day = i.day ?? (i.at ? i.at.slice(0, 10) : null);
+  // LIVE11A-013: under a market's tab the market isn't said again on every chip
+  if (!withMarket) return `${i.name}${day ? ` · updated ${fmtDay(day)}` : ""}`;
   return `${i.name} · ${where}${day ? `, updated ${fmtDay(day)}` : ""}`;
 }
 

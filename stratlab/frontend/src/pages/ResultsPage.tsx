@@ -15,7 +15,7 @@ import { Info } from "../components/ui";
 import { Earlier } from "../components/Earlier";
 import { Card, CardHead, CheckField, DataTable, ShowLess, EmptyState, ErrorState, Field, PageHeader, Seg, Select, Signed, Skeleton, StockPicker, Working, type Column } from "../components/kit";
 import { ReportScope } from "../components/kit/ReportFigure";
-import { capAt, laterDays, whenShort } from "../lib/resultsRows";
+import { capAt, laterDays, movesEmpty, whenShort } from "../lib/resultsRows";
 
 /** Today in the market's calendar (ISO), the day the "Today" chip stands for. */
 const todayIn = (region: Region): string | null => dayIn(new Date(), marketTz(region));
@@ -201,7 +201,7 @@ export function ResultsPage() {
   const pricesLine = pricesNote({ live: isLive, asOf: quoteAt ? fmtTime(quoteAt, { tz, zone: true }) : null, rows: symbols.length, cap: LIVE_ROWS, closeDay,
     older: olderRows.length, olderDay: olderRows.map((r) => r.last_at!.slice(0, 10)).sort()[0] ?? null, reading: quotesReading }, resultDay);
 
-  const mvEmpty = shown.length > 0 && shown.every((r) => { const a = moves[r.symbol]; return a !== undefined && !(a?.moves ?? r.moves) && !a?.since; });
+  const mvEmpty = movesEmpty(shown, moves);
   const columns: Column<ResultRow>[] = [
     // two lines a row (owner, 5 Nov: "still shit ui", rows stacked company, name, purpose and filing link four lines high): the symbol and
     // its tags with the name beside it, then the meeting and a small link to the filing; a long line ends in "…" with the whole of it on hover

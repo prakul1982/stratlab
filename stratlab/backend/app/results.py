@@ -253,9 +253,19 @@ def reported(r: dict) -> list[dict]:
 
 
 # ---------- storage ----------
+_BARE_Q = re.compile(r"^Quarterly results \(Q(\d) (\d{4})\)$")
+
+
+def fiscal_purpose(row: dict) -> dict:
+    """LIVE11A-019: a US row stored before LIVE10A-020 says "(Q3 2027)", the company's own fiscal quarter, without saying fiscal (All dates
+    kept "Williams Sonoma Inc … (Q3 2027)" while Results said "fiscal Q3 2027"): said as one wherever it is shown."""
+    m = _BARE_Q.match(str(row.get("purpose") or "")) if row.get("region") == "US" else None
+    return {**row, "purpose": f"Quarterly results (fiscal Q{m.group(1)} {m.group(2)})"} if m else row
+
+
 def load(region: str) -> dict:
     cal = db.json_value(db.get_setting(KEY + region), {})
-    return {"at": cal.get("at"), "v": cal.get("v") or 1, "rows": [r for r in cal.get("rows") or [] if isinstance(r, dict) and r.get("date")]}
+    return {"at": cal.get("at"), "v": cal.get("v") or 1, "rows": [fiscal_purpose(r) for r in cal.get("rows") or [] if isinstance(r, dict) and r.get("date")]}
 
 
 def save(region: str, rows: list[dict]):

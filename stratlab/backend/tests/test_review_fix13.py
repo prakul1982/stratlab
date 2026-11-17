@@ -99,3 +99,76 @@ def test_a_price_both_markets_show_is_at_its_newest_close_on_both():
     got = mood.newest_rows(india, us)
     assert got["risk"]["rows"][1]["price"] == 5.10 and got["risk"]["rows"][1]["day"] == "2026-11-17" and got["risk"]["rows"][0] == vix
     assert mood.newest_rows(india, {"risk": {"rows": [{**ten, "day": "2026-11-13"}]}})["risk"]["rows"][1]["price"] == 5.12
+
+
+# ---------- LIVE11A-006: listing prices from the listing day's bhavcopy; every latest close the newest official one, dated ----------
+def test_a_stored_listing_price_from_a_later_candle_is_not_shown(monkeypatch):
+    from datetime import datetime, timezone
+    from app import ipo
+    monkeypatch.setattr(ipo, "_official", lambda sym, d, now, fetch: None)
+    row = {"market": "IN", "symbol": "VPFL", "listing": "2026-11-09", "price": 94.0,
+           "perf": {"issue_price": 94.0, "listing_price": 76.65, "listing_change_pct": -18.46, "day_close": 76.65, "day_change_pct": -18.46,
+                    "latest": 69.25, "latest_date": "2026-11-17", "change_pct": -26.33, "listed": "2026-11-13", "basis": "prices"}}
+    out = ipo.list_row(row, datetime(2026, 11, 17, 22, 0, tzinfo=timezone.utc))
+    assert "listing_price" not in out["perf"] and out["perf"]["latest"] == 69.25
+
+
+def test_the_listing_days_bhavcopy_gives_the_listing_price(monkeypatch):
+    from datetime import datetime, timezone
+    from app import exchange_days, ipo, official_close
+    text = ("TradDt,TckrSymb,SctySrs,OpnPric,HghPric,LwPric,ClsPric,LastPric,PrvsClsgPric\n"
+            "2026-11-09,VPFL,ST,94.00,95.00,88.00,89.30,89.30,94.00\n")
+    assert exchange_days.cash_rows(text)["VPFL"]["open"] == 94.0
+    reads = []
+    monkeypatch.setattr(official_close, "_src", {**official_close._src, "files": lambda: "files"})
+    monkeypatch.setattr(exchange_days, "cash_closes", lambda files, day: reads.append(day) or exchange_days.cash_rows(text))
+    monkeypatch.setattr(ipo, "_official", lambda sym, d, now, fetch: None)
+    now = datetime(2026, 11, 17, 14, 40, tzinfo=timezone.utc)
+    row = {"market": "IN", "symbol": "VPFL", "listing": "2026-11-09", "price": 94.0}
+    assert ipo.listing_day_prices(row, now) == {"day": "2026-11-09", "open": 94.0, "close": 89.3}
+    assert ipo.listing_day_prices(row, now)["open"] == 94.0 and len(reads) == 1           # kept on the row: read once
+    got = ipo.with_listing_day(row, {"issue_price": 94.0, "listing_price": 76.65, "latest": 69.25, "latest_date": "2026-11-17",
+                                     "change_pct": -26.33, "listed": "2026-11-09", "basis": "prices"})
+    assert got["listing_price"] == 94.0 and got["listing_change_pct"] == 0.0 and got["day_close"] == 89.3 and got["latest"] == 69.25
+    # a pass reads at most its budget of listing days
+    budget = [0]
+    assert ipo.listing_day_prices({"market": "IN", "symbol": "X", "listing": "2026-11-05"}, now, budget) is None and len(reads) == 1
+
+
+def test_a_main_board_rows_latest_close_is_the_newest_official_close_with_its_date(monkeypatch):
+    from datetime import datetime, timezone
+    from app import ipo
+    closes = {("BCSSL", "2026-11-17"): 83.41}
+    monkeypatch.setattr(ipo, "_official", lambda sym, d, now, fetch: closes.get((sym, d)))
+    row = {"market": "IN", "symbol": "BCSSL", "listing": "2026-11-05", "price": 82.0,
+           "perf": {"issue_price": 82.0, "listing_price": None, "day_close": None, "latest": 89.88, "latest_date": None, "change_pct": 9.61,
+                    "listed": "2026-11-05", "basis": "exchange"}}
+    out = ipo.list_row(row, datetime(2026, 11, 17, 22, 0, tzinfo=timezone.utc))
+    assert out["perf"]["latest"] == 83.41 and out["perf"]["latest_date"] == "2026-11-17" and out["perf"]["change_pct"] == 1.72
+
+
+# ---------- LIVE11A-013: the app's "Ready to open" lists every stored theme the public pages list ----------
+def test_the_theme_library_lists_every_stored_theme_with_nothing_typed(monkeypatch):
+    from app import computed
+    from app.intel import theme_base, theme_library
+    R = theme_base.RULES
+    entries = {f"h{i}": {"region": "IN", "label": f"Theme {i}", "hits": i, "meta": {"q": f"theme {i}", "rules": R if i % 2 else R - 1, "generated_at": 1.7e9}}
+               for i in range(9)}
+    entries["old"] = {"region": "IN", "label": "Theme 3", "hits": 0, "meta": {"q": "theme 3", "rules": R - 2, "generated_at": 1.6e9}}
+    entries["us"] = {"region": "US", "label": "Chips", "hits": 0, "meta": {"q": "chips", "rules": R, "generated_at": 1.7e9}}
+    entries["new"] = {"region": "IN", "label": "Later", "hits": 0, "meta": {"q": "later", "rules": R + 1, "generated_at": 1.7e9}}
+    monkeypatch.setattr(computed, "index", lambda kind: {"entries": entries})
+    got = theme_library.suggest("IN", "")
+    assert sorted(r["name"] for r in got) == [f"Theme {i}" for i in range(9)]           # old-rules maps too, one each; none newer than the rules
+    assert len(theme_library.suggest("IN", "theme")) == 8                                # typed: the first few
+
+
+# ---------- LIVE11A-019: a stored US row's fiscal quarter is said as one ----------
+def test_a_stored_us_results_row_says_its_quarter_is_fiscal(monkeypatch):
+    import json
+    from app import results
+    rows = [{"region": "US", "symbol": "WSM", "date": "2026-11-19", "purpose": "Quarterly results (Q3 2027)"},
+            {"region": "IN", "symbol": "TCS", "date": "2026-11-19", "purpose": "Quarterly results (Q3 2027)"}]
+    monkeypatch.setattr(results.db, "get_setting", lambda k: json.dumps({"rows": rows}))
+    got = results.load("US")["rows"]
+    assert got[0]["purpose"] == "Quarterly results (fiscal Q3 2027)" and got[1]["purpose"] == "Quarterly results (Q3 2027)"

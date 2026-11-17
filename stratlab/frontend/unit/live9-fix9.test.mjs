@@ -67,7 +67,8 @@ test("breadth: the alert is in the card head, shares are plain, the (i) keeps to
   assert.equal(partTone({ tone: "share" }, 33.2), undefined);
   assert.equal(partTone({ tone: "up" }, 10), "k-up");
   const page = src("pages/BreadthPage.tsx");
-  assert.match(page, /actions=\{!locked \? <BreadthAlertButton group=\{group\} \/> : undefined\}/);
+  // (updated on purpose, fix13 LIVE11A-024: the card head carries the alert and the CSV button together)
+  assert.match(page, /\{!locked && <BreadthAlertButton group=\{group\} \/>\}/);
   assert.doesNotMatch(page, /extra=\{r\.key === "p50"/);
   assert.match(page, /<span className="k-keep">/);
   assert.match(page, /<Box title="Share above averages"/);

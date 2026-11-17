@@ -17,6 +17,9 @@ export interface CalFilters { size: string[]; sector: string; index: string; fo:
 export const NO_CAL: CalFilters = { size: [], sector: "", index: "", fo: false, on: "", sort: "" };
 export const SIZE_NAME: Record<string, string> = { large: "Large", mid: "Mid", small: "Small", micro: "Micro" };
 
+/** The index choices worth offering: those with a company in these days, and the one already picked (LIVE11A-019). */
+export const indexChoices = (indices: Facets["indices"], picked: string) => indices.filter((i) => i.count > 0 || i.id === picked);
+
 /** How many of the shared choices are set (`sort` counts when it is not the page's first). */
 export const calCount = (f: CalFilters, firstSort: string) => f.size.length + (f.sector ? 1 : 0) + (f.index ? 1 : 0) + (f.fo ? 1 : 0) + (f.on ? 1 : 0) + (f.sort && f.sort !== firstSort ? 1 : 0);
 
@@ -62,9 +65,10 @@ export function CalendarFilters({ region, facets, filters, set, firstSort, sorts
               options={[{ value: "", label: "All" }, ...facets.sectors.map((s) => ({ value: s.name, label: `${s.name} (${s.count})` })),
                 ...(filters.sector && !facets.sectors.some((s) => s.name === filters.sector) ? [{ value: filters.sector, label: filters.sector }] : [])]} />}
           </Field>
-          <Field label="Index">
-            {(id) => <Select id={id} value={filters.index} onChange={(v) => set({ index: v })} options={[{ value: "", label: "Any" }, ...facets.indices.map((i) => ({ value: i.id, label: `${i.name} (${i.count})` }))]} />}
-          </Field>
+          {/* LIVE11A-019: an index no company of these days is in is no choice ("NIFTY 50 (0)" six times over); the one picked stays */}
+          {indexChoices(facets.indices, filters.index).length > 0 && <Field label="Index">
+            {(id) => <Select id={id} value={filters.index} onChange={(v) => set({ index: v })} options={[{ value: "", label: "Any" }, ...indexChoices(facets.indices, filters.index).map((i) => ({ value: i.id, label: `${i.name} (${i.count})` }))]} />}
+          </Field>}
           <Field label="Day">
             {(id) => <Select id={id} value={filters.on} onChange={(v) => set({ on: v })} options={days} />}
           </Field>
@@ -72,7 +76,7 @@ export function CalendarFilters({ region, facets, filters, set, firstSort, sorts
           <Field label="Sort by">
             {(id) => <Select id={id} value={filters.sort || firstSort} onChange={(v) => set({ sort: v })} options={Object.entries(sorts).map(([value, label]) => ({ value, label }))} />}
           </Field>
-          {region === "IN" && facets.fo != null && (
+          {region === "IN" && facets.fo != null && (facets.fo > 0 || filters.fo) && (
             <CheckField checked={filters.fo} onChange={(on) => set({ fo: on })} label={<>F&amp;O stocks only ({facets.fo})
               <Info label="About F&O stocks">The stocks the exchange trades futures and options in, from its lot-size file.</Info></>} />
           )}

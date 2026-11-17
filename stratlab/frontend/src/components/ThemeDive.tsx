@@ -185,18 +185,21 @@ export function ThemeDownloads({ r, dive, region, theme }: { r: SectorAI; dive: 
   const [preparing, setPreparing] = useState<string | null>(null);
   // LIVE10A-003: the month's decks used up, a press says so beside the buttons (a Free press after its one deck got a 402 and nothing showed)
   const [spent, setSpent] = useState<string | null>(null);
+  // LIVE11A-014: one plan line for the whole row (a deck press, the workbook and the CSV each added their own box, and a toast repeated
+  // the first): the latest press's, and no toast while it shows
+  const [lock, setLock] = useState<"deck" | "workbook" | "csv" | null>(null);
   const rows = useMemo(() => memberRows(r, dive), [r, dive]);
   const deck = async (format: "pptx" | "pdf") => {
     setMaking(format);
-    setSpent(null);
+    setSpent(null); setLock(null);
     try {
       // R21: while the theme's AI map is being written the server answers "preparing"; the kit's bar shows and the page asks again
       const blob = await deckWhenReady(() => themeApi.deck(region, theme, format), { onWait: setPreparing });
       download(blob, deckFileName(`${theme} theme (${REGION_NAME[region]})`, format, new Date(), region === "US" ? "America/New_York" : undefined));
       void refreshMe();                               // the deck count in Account
     } catch (e) {
-      if ((e as { status?: number })?.status === 402) setSpent((e as Error).message || "This month's decks are used.");
-      fail(e);
+      if ((e as { status?: number })?.status === 402) { setSpent((e as Error).message || "This month's decks are used."); setLock("deck"); }
+      else fail(e);
     } finally { setMaking(null); setPreparing(null); }
   };
   return (
@@ -206,11 +209,12 @@ export function ThemeDownloads({ r, dive, region, theme }: { r: SectorAI; dive: 
         <SampleDeckLink className="btn quiet sm" label="Sample deck" /></> : <>
       <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pdf")} title="The whole theme as slides in a PDF: the chain and each layer, every company with its figures, the tailwinds and risks with their sources, the news and the theme in numbers"><Download size={16} />{making === "pdf" ? "Making the PDF…" : "Slides (PDF)"}</button>
       <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pptx")} title="The same slides as PowerPoint"><Download size={16} />{making === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button></>}
-      <WorkbookButton region={region} theme={theme} dive={dive} />
+      <WorkbookButton region={region} theme={theme} dive={dive} locked={lock === "workbook"} onLock={() => setLock("workbook")} />
+      {rows.length > 0 && <ThemeCsvButton region={region} theme={theme} dive={dive} locked={lock === "csv"} onLock={() => setLock("csv")} />}
+      {/* the month's count after the buttons, not between two of them (LIVE11A-014) */}
       {decksNote && <span className="k-note" data-testid="decks-left">{decksNote}</span>}
       {preparing && <Working small label={preparing} />}
-      {rows.length > 0 && <ThemeCsvButton region={region} theme={theme} dive={dive} />}
-      {spent && <div className="theme-wb-lock" role="status" data-testid="deck-spent"><PlanNote plan="basic">{spent}</PlanNote> <SampleDeckLink className="link" label="Sample deck" /></div>}
+      {spent && lock === "deck" && <div className="theme-wb-lock" role="status" data-testid="deck-spent"><PlanNote plan="basic">{spent}</PlanNote> <SampleDeckLink className="link" label="Sample deck" /></div>}
     </div>
   );
 }
