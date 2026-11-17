@@ -56,7 +56,10 @@ def test_every_count_of_the_members_says_its_evidence_states_and_none_says_confi
     assert split in find and split in conf
     rows = {r[0]: r for s in slides for b in s.blocks if b["kind"] == "table" for r in b.get("rows") or [] if not isinstance(r, dict)}
     # h56 (R56, updated on purpose): the description-verified share first, then the membership check's count
-    assert rows["Universe"][1].startswith("30 companies (20 in the exchange's industry list); description-verified 4 of 30 (13%); "
+    # r62 (updated on purpose: the owner's review of the live R60 decks, P1, the sources of the companies add up to them; the fixture's 10
+    # members beyond its view carry no source)
+    assert rows["Universe"][1].startswith("30 companies (20 in the exchange's industry list, 10 more, their source not kept with this read); "
+                                          "description-verified 4 of 30 (13%); "
                                           "membership checked 22 of 30 (the map's own picks")
     assert rows["Universe"][1].endswith(": " + split.split(": ", 1)[1] + ".") and split in rows["Screening"][2]
     assert rows["Membership checked"][1] == "22 of 30 (73%)" and (      # h56 (R56): led by the description-verified share (updated on purpose)

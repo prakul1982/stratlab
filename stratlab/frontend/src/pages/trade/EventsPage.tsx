@@ -100,14 +100,15 @@ function IndexChanges({ rows, failed }: { rows: IndexChange[]; failed: string | 
       {failed && <p className="k-callout k-small" role="status" data-testid="ev-failed">{failed}</p>}
       {unread.length > 0 && (
         <div className="ev-idx-item" data-testid="ev-index-unread" role="group" aria-label="Index notices not read into stocks">
-          <CardHead level={3} title={`Notices not read into stocks here (${unread.length})`} />
+          <CardHead level={3} title={`Index changes in the press release (${unread.length})`} />
           <ul className="k-list plain">
             {unread.slice(0, 8).map((c) => (
               <li key={c.id} className="k-small">{c.effective ? `From ${evDay(c.effective, true)}: ` : ""}{c.title} · announced {asOf(c.announced)} ·{" "}
                 <a className="link" href={safeHref(c.url)} target="_blank" rel="noopener noreferrer">Press release ↗</a></li>
             ))}
           </ul>
-          <p className="k-note">The press release has the stocks going in and out; they couldn't be read from it here.</p>
+          {/* LIVE10A-039: what the link holds, without an excuse */}
+          <p className="k-note">Each press release lists the stocks going in and out of the index.</p>
         </div>
       )}
       {shown.slice(0, 1).map((c) => card(c, 0))}

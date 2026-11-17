@@ -210,13 +210,18 @@ def _facts(region: str) -> tuple[dict[str, dict], dict[str, str]]:
     return rows, sectors
 
 
-def tile(symbol: str, row: list, f: dict | None, sector: str | None) -> dict:
+def tile(symbol: str, row: list, f: dict | None, sector: str | None, region: str | None = None) -> dict:
     """One company's tile: s symbol, n name, sec sector, ind industry, cap market value (the market's unit), px last close, r the six
     changes, vx the last day's volume as a multiple of its 20-day average, tv the value traded that day (price times volume)."""
     f = f or {}
     close, vol, avg = _num(row[0]), _num(row[-2]), _num(row[-1])
     sec = str(sector or f.get("sector") or "")[:60] or None
-    return {"s": symbol, "n": str(f.get("name") or symbol)[:80], "sec": sec, "ind": str(f.get("industry") or "")[:80] or sec,
+    name = str(f.get("name") or symbol)
+    if region:
+        # LIVE10A-038: one name style in every list ("MICROSOFT CORP", "TYSON FOODS, INC." beside "Apple Inc."), as Results and Mood have it
+        from .results import display_name
+        name = display_name(region, name) or name
+    return {"s": symbol, "n": name[:80], "sec": sec, "ind": str(f.get("industry") or "")[:80] or sec,
             "cap": _num(f.get("market_cap")), "px": close, "r": [_num(x) for x in row[1:1 + len(PERIODS)]],
             "vx": round(vol / avg, 2) if vol is not None and avg else None,
             "tv": round(close * vol) if close and vol else None}
@@ -244,15 +249,15 @@ def view(region: str, universe: str | None = None, min_cap: float | None = None,
         # LIVE9A-023: an exchange's placeholder symbol (NSE's DUMMY...) in a group's list is not a company ("1 of the 501 companies has no closes")
         want = [s for s in breadth.members(group) if not str(s).upper().startswith("DUMMY")]
     rows, sectors = _facts(region)
-    tiles = [tile(s, stocks[s], rows.get(s), sectors.get(s)) for s in want if s in stocks]
+    tiles = [tile(s, stocks[s], rows.get(s), sectors.get(s), region) for s in want if s in stocks]
     if symbols is not None:
         missing = sorted((s for s in want if s not in stocks), key=lambda s: -(_num((rows.get(s) or {}).get("market_cap")) or 0))
         extra = read_missing(region, missing, doc.get("day")) if missing else {}
-        tiles += [tile(s, extra[s], rows.get(s), sectors.get(s)) for s in missing if s in extra]
+        tiles += [tile(s, extra[s], rows.get(s), sectors.get(s), region) for s in missing if s in extra]
         out["with_prices"] = len(tiles)
         blank = [None] * len(PERIODS)
         last = [(s, _num((rows.get(s) or {}).get("price"))) for s in missing if s not in extra]
-        tiles += [tile(s, [px, *blank, None, None], rows.get(s), sectors.get(s)) for s, px in last if px and px > 0]
+        tiles += [tile(s, [px, *blank, None, None], rows.get(s), sectors.get(s), region) for s, px in last if px and px > 0]
         out["price_only"] = len(tiles) - out["with_prices"]
     else:
         out["with_prices"] = len(tiles)

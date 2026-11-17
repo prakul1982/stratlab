@@ -85,9 +85,14 @@ def test_on_the_live_r52_medical_devices_inputs_no_company_without_words_is_coun
     wordless = deck.without_words(v)
     assert len(wordless) <= ev["industry_code_supported"] + ev["list_supported"]
     every = {c["symbol"]: c for b in v["layers"] for c in b["companies"]}
-    for c in every.values():           # a company confirmed by its own description shows those words
-        if c.get("evidence") == "description_verified":
-            assert c.get("what"), c["name"]
+    # r62 (updated on purpose, LIVE10A-004: an encyclopedia's ranking or a cut sentence is never printed as a company's own words; HCA's stored
+    # text is an encyclopedia's, "As of 2024, HCA Healthcare is ranked #61 on the Fortune 500"): a company confirmed by its own description
+    # shows those words, or, with no sentence of its own work a table can show, is said so on the deck (r60a), never quoted with another text
+    short = sum(1 for c in every.values() if c.get("evidence") == "description_verified" and not c.get("what"))
+    assert short <= 1
+    for c in every.values():
+        if c.get("evidence") == "description_verified" and c.get("what"):
+            assert "Fortune 500" not in c["what"], c["name"]
     from tests.test_export import texts
     t = "\f".join(texts([s]) for s in slides)
     assert DC.check_text(t)["counts"]["evidence state"] == 0 and DC.check_text(t)["counts"]["population mismatch"] == 0
@@ -209,8 +214,9 @@ def test_the_public_page_says_each_companys_evidence_state_from_the_stored_dive(
     # l55 (R55, the owner's review of the live R54 decks, updated on purpose): the deck's state names, never "confirmed"
     assert "Membership: 1 description-verified, 1 industry-supported, 1 not checked." in page
     # (updated on purpose, LIVE9A-011: each company's state is its row's Membership cell in the layer's table)
-    assert re.search(r'<td class="l">B</td>.*?<td class="l">industry-supported \(official industry only\)</td>', page, re.S)
-    assert re.search(r'<td class="l">D</td>.*?<td class="l">not checked</td>', page, re.S) and "3 companies in 1 layer" in page
+    # (updated on purpose, LIVE10A-007: each cell carries its column's name for the phone's stacked rows)
+    assert re.search(r'<td class="l" data-label="Ticker">B</td>.*?<td class="l" data-label="Membership">industry-supported \(official industry only\)</td>', page, re.S)
+    assert re.search(r'<td class="l" data-label="Ticker">D</td>.*?<td class="l" data-label="Membership">not checked</td>', page, re.S) and "3 companies in 1 layer" in page
 
 
 def test_a_coverage_table_continued_on_the_next_page_is_checked_as_one_table():

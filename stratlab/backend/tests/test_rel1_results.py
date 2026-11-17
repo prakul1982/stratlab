@@ -81,8 +81,14 @@ def test_the_sector_chart_is_served_from_the_copy_kept_at_the_close(monkeypatch)
         assert v["rows"] == [{"kept": 1}] and ran == []                       # no member's prices read again
         main._results.clear()
         _db.set_setting("rotation:last:IN:sectors:weekly:5", _json.dumps({"rows": [{"kept": 1}], "as_of": "2026-11-13", "v": main.rotation.VERSION}))
+        # (updated on purpose, LIVE10A-011: a copy a session behind is served at once, marked "updating", and worked out again behind it)
+        monkeypatch.setattr(main, "ROTATION_BEHIND", True)
+        monkeypatch.setattr(main, "_rotation_pool", type("P", (), {"submit": staticmethod(lambda fn: fn())})())
         v = TestClient(main.app).get("/research/rotation?region=IN").json()
-        assert len(ran) == 1 and v["as_of"] == "2026-11-16"                   # a copy a session behind is worked out again
+        assert len(ran) == 1 and v["as_of"] == "2026-11-13" and v["updating"] is True
+        main._results.clear()
+        v = TestClient(main.app).get("/research/rotation?region=IN").json()
+        assert v["as_of"] == "2026-11-16" and len(ran) == 1                   # the next visit gets the chart worked out behind the page
     finally:
         main.app.dependency_overrides.clear()
         main._results.clear()

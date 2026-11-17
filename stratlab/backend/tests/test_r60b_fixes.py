@@ -136,8 +136,11 @@ def test_2_operating_models_are_read_from_the_layer_s_own_name():
     assert D.operating_model("Branded packaged foods manufacturing (larger)") == "branded"
     assert D.operating_model("Farming and plantations") == "farming" and D.operating_model("Distribution and trading") == "trading"
     for name in ("Store retailers of home, auto and beauty goods", "City gas distribution", "Merchant acquiring and processing",
-                 "Cable and satellite distribution", "Power transmission and distribution networks", "Pan-India integrated producers"):
+                 "Cable and satellite distribution", "Pan-India integrated producers"):
         assert D.operating_model(name) == "", name
+    # r62 (updated on purpose: the owner's review of the live R60 Electric utilities deck, P1, the utilities' operating models): a power
+    # transmission and distribution network is a regulated utility network
+    assert D.operating_model("Power transmission and distribution networks") == "regulated"
 
 
 def test_2_the_capital_figure_alone_never_ranks_branded_makers_against_commodity_processing():

@@ -263,9 +263,12 @@ function PaperCard() {
   const names = [...new Set(running.map((r) => r.instrument?.symbol).filter(Boolean))].slice(0, 3).join(", ");
   return (
     <Card testId="mine-paper">
-      <CardHead title="Paper sessions" actions={<Link className="btn quiet sm" to="/paper" aria-label="Open paper sessions">Open</Link>} />
+      {/* the title alone on its line, as in the no-sessions card, with Open under the figure: "Paper sessions" wrapped beside Open at 1440
+          (LIVE10A-026) and, kept on one line, ran 20px into it at 1280 (CI UI checker, Release 63) */}
+      <CardHead title="Paper sessions" />
       <Stat label="Running now" value={running.length ? `${running.length} running` : "None running"}
         note={[names, ...notRunning(rows)].filter(Boolean).join(" · ") || undefined} />
+      <div><Link className="btn quiet sm" to="/paper">Open paper sessions</Link></div>
     </Card>
   );
 }

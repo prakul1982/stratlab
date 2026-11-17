@@ -71,7 +71,8 @@ test("the deck lock reads well for a limit of 0, as the server's words", () => {
     assert.match(src, /data-testid="deck-locked">🔒 Slides: on Basic<\/Link>/);
     assert.match(src, /<SampleDeckLink className="btn quiet sm" label="Sample deck" \/>/);
   }
-  assert.match(read("src/pages/PlansPage.tsx"), /Slide decks are on Basic and Pro\. <SampleDeckLink label="Download a sample deck" \/>/);
+  // (updated on purpose, LIVE10A-003: a Free account in its grace is told it keeps its earlier decks, inside the same sentence)
+  assert.match(read("src/pages/PlansPage.tsx"), /Slide decks are on Basic and Pro\{deckGrace \? .*: ""\}\. <SampleDeckLink label="Download a sample deck" \/>/);
   assert.match(read("src/components/SampleDeck.tsx"), /\/pricing\/sample-deck\/info/);
 });
 

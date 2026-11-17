@@ -10,6 +10,7 @@
 No job of its own: everything is read when a page asks, through the caches the app already keeps. Memory: see DIVE_CACHE, PRICE_CACHE,
 EVIDENCE_CACHE and VERDICTS below."""
 import json
+import os
 import re
 import threading
 import time
@@ -502,10 +503,10 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57, 59: 58, 60: 59, 61: 60, 62: 61, 63: 62}  # rules versions whose change only adds to a kept placement (r582, R58.2: the answers unchanged, layers of one company, the figures' window, names its companies' lines say; r58, R58: the answers unchanged, the taxonomy and scale rules; r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57, 59: 58, 60: 59, 61: 60, 62: 61, 63: 62, 64: 63}  # rules versions whose change only adds to a kept placement (r582, R58.2: the answers unchanged, layers of one company, the figures' window, names its companies' lines say; r58, R58: the answers unchanged, the taxonomy and scale rules; r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
-EARLIER_MAX = 18                # (r60: 18, one more for the version R60 carries; r59: 17, one more for the version R59 carries; r582: 16, one more for the version R58.2 carries; r581: 15, one more for the version R58.1 carries; r58: 14, one more for the version R58 carries; r572: 13, one more for the version R57.2 carries; r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
+EARLIER_MAX = 19                # (r62: 19, one more for the version R62 carries; r60: 18, one more for the version R60 carries; r59: 17, one more for the version R59 carries; r582: 16, one more for the version R58.2 carries; r581: 15, one more for the version R58.1 carries; r58: 14, one more for the version R58 carries; r572: 13, one more for the version R57.2 carries; r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
 
 
 def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
@@ -1429,7 +1430,7 @@ def theme_dive(q: str, region: str = "IN", refresh: bool = False, profile=Depend
             return R.ok(theme_changes.served(r, m.get("_library") or theme, {**kept["value"]["dive"], "refresh_state": state}, profile,
                                              **removal_words(r)))
         by = computed.plan_word(profile)
-    out = theme_changes.served(r, m.get("_library") or theme, dive_of(r, theme, m, refresh, by=by), profile, **removal_words(r))
+    out = theme_changes.served(r, m.get("_library") or theme, dive_of(r, theme, m, refresh, by=by, behind=not refresh), profile, **removal_words(r))
     return R.ok({**out, "refresh_state": "done"} if refresh else out)
 
 
@@ -1568,19 +1569,59 @@ def membership_check(theme: str, m: dict, fm: dict, dive: dict, before: dict | N
             "rechecked": sum(1 for s_, x in again.items() if x != kept.get(s_))}
 
 
-def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None = None) -> dict:
+# LIVE10A-008: a kept dive behind a newer close or a rebuilt page was worked out again inside the page's request (Semiconductors 44 s,
+# Automotive 65 s, Private banks 67 s: the first visit after each close paid for the whole theme); the page now gets the kept dive at once,
+# marked "updating", and one worker reads the new one behind it, one theme at a time in the memory guard's turn
+_BEHIND = ThreadPoolExecutor(max_workers=1, thread_name_prefix="theme-dive-behind")
+_behind_keys: set = set()
+_behind_lock = threading.Lock()
+BEHIND_MAX = 8                    # themes waiting for the worker at once; past it the page works the dive out itself, as before
+# the test suite turns it off (a worker thread outliving its test would write into the next one's world); tests that want it set it
+BEHIND_ON = os.environ.get("READ_BEHIND", "1").strip().lower() not in ("0", "false", "no", "off")
+
+
+def _rebuild_behind(r: str, theme: str, m: dict, key: list) -> bool:
+    """LIVE10A-008: the dive worked out again on the worker (once per key at a time); False when the queue is full."""
+    k = json.dumps(key, default=str)
+    with _behind_lock:
+        if k in _behind_keys:
+            return True
+        if len(_behind_keys) >= BEHIND_MAX:
+            return False
+        _behind_keys.add(k)
+
+    def run():
+        try:
+            from .. import memguard
+            with memguard.heavy("theme dive"):
+                dive_of(r, theme, m, rebuild=True)
+        except Exception as e:
+            print("theme dive: not read again behind the page:", theme, type(e).__name__, str(e)[:120])
+        finally:
+            with _behind_lock:
+                _behind_keys.discard(k)
+    _BEHIND.submit(run)
+    return True
+
+
+def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None = None, behind: bool = False, rebuild: bool = False) -> dict:
     """The dive for a checked map with its descriptions (the page's tables and sections): kept once for everyone in the shared store
     (kind "theme:dive") and served from there, however old, until a Refresh (owner, 7 Nov); worked out again from the stored company
-    pieces (no AI) when one of them was refreshed by another theme (pieces_moved)."""
+    pieces (no AI) when one of them was refreshed by another theme (pieces_moved). `behind` (the page's own request, LIVE10A-008): a kept
+    dive that is behind is served at once ("updating") and worked out again on the worker; `rebuild`: that worker's read."""
     fm, figures = theme_base.for_figures(m)
     key = dive_key(r, theme, m)
-    if not refresh:
+    if not refresh and not rebuild:
         kept = computed.get(theme_library.DIVE, key)
-        if kept is not None and isinstance((kept.get("value") or {}).get("dive"), dict) and not pieces_moved(r, kept["value"].get("pieces") or {}) \
-                and not sector_metrics.any_stored(r, kept["value"]["dive"].get("metrics_pending") or []) and not prices_moved(r, kept) \
-                and not pages_rebuilt(r, kept["value"]["dive"]):          # ex49: a page rebuilt with the lines a checked figure waits for
-            requeue(r, kept["value"]["dive"])
-            return kept["value"]["dive"]
+        if kept is not None and isinstance((kept.get("value") or {}).get("dive"), dict):
+            stale = pieces_moved(r, kept["value"].get("pieces") or {}) \
+                or sector_metrics.any_stored(r, kept["value"]["dive"].get("metrics_pending") or []) or prices_moved(r, kept) \
+                or bool(pages_rebuilt(r, kept["value"]["dive"]))          # ex49: a page rebuilt with the lines a checked figure waits for
+            if not stale:
+                requeue(r, kept["value"]["dive"])
+                return kept["value"]["dive"]
+            if behind and BEHIND_ON and _rebuild_behind(r, theme, m, key):
+                return {**kept["value"]["dive"], "updating": True}
     src = sources(r, theme, fresh=True) if refresh else sources(r, theme)
     hit = theme_data.build(r, theme, fm, src)
     hit["placements"], hit["figures"] = m.get("placements"), figures
@@ -1610,7 +1651,8 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
         for v in m.get("value_chain") or []:
             for c in v.get("companies") or []:
                 if c.get("ticker"):
-                    everyone.setdefault(c["ticker"], [c.get("name") or c["ticker"], v.get("layer") or ""])
+                    everyone.setdefault(c["ticker"], [c.get("name") or c["ticker"], v.get("layer") or "",
+                                                      theme_changes.member_why(c, v.get("layer") or "")])     # r62: its reason
         theme_changes.record(r, m.get("_library") or theme, hit, _map_names(fm), m.get("generated_at"), theme_base.RULES, refresh,
                              everyone=everyone)   # f4: "What changed"
         theme_changes.flag(r, m.get("_library") or theme, hit.get("coverage"))          # cl48: the admins' alert (coverage_checks)
@@ -1711,7 +1753,13 @@ def members_of(m: dict, dive: dict) -> list[dict]:
                         "industry": c.get("industry") or None, "what": theme_base.own_words(f.get("what") if f.get("what") else c.get("what"), c.get("name") or f.get("name") or "") or None,
                         # LIVE6-006: the dive's market value, on its one price date
                         "cap": f.get("cap") if f.get("cap") is not None else c.get("cap"), "revenue": f.get("revenue"), "ebitda": f.get("ebitda"),
-                        "net": f.get("net"), "roce": f.get("roce"), "year": f.get("year"), "by": by_of(c)})
+                        "net": f.get("net"), "roce": f.get("roce"), "year": f.get("year"), "by": by_of(c),
+                        # r62 (LIVE10A-018): a margin beyond ±100% of revenue is not meaningful as a margin (theme_data.beyond_margin): named,
+                        # so every surface prints it n.m. as the deck does
+                        **({"nm": [k for k in ("ebitda", "net") if theme_data.beyond_margin(f.get(k))]}
+                           if any(theme_data.beyond_margin(f.get(k)) for k in ("ebitda", "net")) else {}),
+                        # r62: a company the placement kept or placed on its own words alone, outside the exchange's list and the AI's additions
+                        **({"source": "words"} if c.get("base") and c.get("basis") == "words" else {})})
     return out
 
 
@@ -2113,7 +2161,9 @@ def companies_csv(m: dict, dive: dict, r: str) -> bytes:
     w = csv.writer(buf)
     w.writerow(head)
     for x in members_of(m, dive):
-        row = [x["name"], x["symbol"], x["layer"], x.get("industry"), x.get("cap"), x.get("revenue"), x.get("ebitda"), x.get("net"),
+        nm = x.get("nm") or []                # r62 (LIVE10A-018): n.m. as on the deck, never "−32423.1"
+        row = [x["name"], x["symbol"], x["layer"], x.get("industry"), x.get("cap"), x.get("revenue"),
+               "n.m." if "ebitda" in nm else x.get("ebitda"), "n.m." if "net" in nm else x.get("net"),
                x.get("roce"), x.get("year"), x.get("by"), x.get("what")]
         w.writerow(["" if v is None else (f"'{v}" if isinstance(v, str) and v[:1] in "=+-@" else v) for v in row])
     return ("\ufeff" + buf.getvalue()).encode("utf-8")

@@ -50,6 +50,29 @@ test("the notebook's Lab notes tab never lies over a card on a desktop window (L
   expect(errors).toEqual([]);
 });
 
+test("the open Lab notes lie over no card, the Markets button or a docked Markets panel (LIVE10A-002)", async ({ page, request }, info) => {
+  test.skip(info.project.name === "phone", "on a phone the notes are a bottom sheet");
+  const nb = await made(request, "Fix10a notes");
+  await page.addInitScript(() => localStorage.setItem("stratlab.labnotes.open", "1"));
+  const errors = await open(page, `/n/${nb.id}`);
+  const panel = page.locator(".ln-panel");
+  await expect(panel).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(500);
+  const over = async () => page.evaluate(() => {
+    const p = document.querySelector(".ln-panel")!.getBoundingClientRect();
+    const hit = (r: DOMRect) => r.width > 0 && r.height > 0 && p.left < r.right - 1 && p.right > r.left + 1 && p.top < r.bottom - 1 && p.bottom > r.top + 1;
+    return [...Array.from(document.querySelectorAll("main .k-card")).filter((c) => !c.closest(".ln-panel")), ...Array.from(document.querySelectorAll(".mw-launch, .mw-dock"))]
+      .filter((c) => hit(c.getBoundingClientRect())).map((c) => c.className.toString().slice(0, 40));
+  });
+  expect(await over(), "what the open notes lie over").toEqual([]);
+  // a docked Markets panel: the notes move left of it
+  await page.evaluate(() => { document.body.classList.add("mw-docked"); document.documentElement.style.setProperty("--mw-dock", "360px");
+    const d = document.createElement("div"); d.className = "mw-dock"; d.style.cssText = "position:fixed;top:0;right:0;bottom:0;width:360px"; document.body.appendChild(d); });
+  await page.waitForTimeout(300);
+  expect(await over(), "what the open notes lie over with the panel docked").toEqual([]);
+  expect(errors).toEqual([]);
+});
+
 test("the verdict page: the loudest line is the verdict, the numbers and costs are full-width cards, the header and menus fit (LIVE1A-005/006/007/008/036)", async ({ page, request }, info) => {
   const nb = await made(request, `Fix1a verdict ${info.project.name}`);
   const e = (await (await request.get(`${API}/notebooks/${nb.id}`, { headers: admin })).json()).experiments[0];

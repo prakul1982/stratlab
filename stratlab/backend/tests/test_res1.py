@@ -124,7 +124,8 @@ def test_a_day_shows_its_first_rows_only_with_the_count(w):
     many = [meeting(f"CO{i}", TODAY) for i in range(1, 60)]
     R.save("IN", many)
     v = view(on="today", limit=25)
-    assert len(symbols(v)) == 25 and v["weeks"][0]["days"][0] == {"date": TODAY.isoformat(), "count": 59, "shown": 25}
+    # (updated on purpose, LIVE10A-020: each day also says whether it is a session of the market)
+    assert len(symbols(v)) == 25 and v["weeks"][0]["days"][0] == {"date": TODAY.isoformat(), "count": 59, "shown": 25, "session": True}
     assert v["matching"] == 59 and v["more"] == 34
     assert len(symbols(view(on="today", limit=25, day=TODAY.isoformat()))) == 59
 

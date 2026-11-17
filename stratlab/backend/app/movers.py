@@ -89,11 +89,11 @@ def clear() -> None:
 
 
 # ---------- the lists ----------
-def row_of(symbol: str, heat: list, f: dict | None, mark: list | None) -> dict:
+def row_of(symbol: str, heat: list, f: dict | None, mark: list | None, region: str | None = None) -> dict:
     """One stock in a list: s symbol, n name, cap market value (the market's unit), px last close, chg the day's change in percent, vol the
     day's volume, avg its 20-session average, vx the one over the other, tv the value traded (close times volume), hi and lo the 52-week
     high and low (None until the run has kept them)."""
-    t = heatmap.tile(symbol, heat, f, None)
+    t = heatmap.tile(symbol, heat, f, None, region)        # LIVE10A-038: the name in the one style
     vol, avg = _num(heat[-2]), _num(heat[-1])
     return {"s": t["s"], "n": t["n"], "cap": t["cap"], "px": t["px"], "chg": t["r"][0], "vol": vol, "avg": avg, "vx": t["vx"], "tv": t["tv"],
             "hi": _num(mark[1]) if mark else None, "lo": _num(mark[2]) if mark else None}
@@ -144,7 +144,7 @@ def view(region: str, universe: str | None = None, min_cap: float | None = None,
         mark = marks.get(s)
         if mark and day and mark[0] != day:          # no candle on the close's day (suspended, or no trade): not one of that day's movers
             continue
-        rows.append(row_of(s, heat, facts.get(s), mark))
+        rows.append(row_of(s, heat, facts.get(s), mark, region))
     out["members"], out["with_prices"] = len(want), len(rows)
     if min_cap:
         rows = [r for r in rows if r["cap"] is not None and r["cap"] >= min_cap]

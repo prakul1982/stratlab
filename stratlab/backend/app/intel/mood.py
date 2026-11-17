@@ -835,7 +835,10 @@ class Mood:
             # now) and marked as being read again; the page shows its read time with the small bar and asks again for the fresh
             # read, started here (LIVE6-015: India's Mood waited six seconds for it and showed "Reading the tape…" for 10.6 s)
             self.payloads._start(region, lambda: self._build_kept(region))
-            return {**hit[1], "is_open": open_now, "refreshing": True}, hit[0]
+            # LIVE10A-001: a market-hours copy served after the close says so ("Read 14:47 IST, during the session"): its lines'
+            # "so far today" are of that moment, never the closed session's figures
+            during = bool((hit[1] or {}).get("is_open")) and not open_now
+            return {**hit[1], "is_open": open_now, "refreshing": True, **({"during": True} if during else {})}, hit[0]
         return self.payloads.get(region, lambda: self._build_kept(region), wait)
 
 

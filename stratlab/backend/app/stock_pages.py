@@ -2419,6 +2419,7 @@ th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:
 /* LIVE9A-011: a public theme layer's companies as a table: names and tickers left, figures right, the name wrapping, sideways scroll on a phone */
 .cotbl{overflow-x:auto}.cotbl th.l,.cotbl td.l{text-align:left}.cotbl td:first-child{white-space:normal;min-width:150px;position:static}
 .cotbl th:first-child{position:static}
+@media (max-width:640px){.cotbl[data-stack]{overflow:visible}.cotbl[data-stack] table,.cotbl[data-stack] tbody{display:block;min-width:0;width:100%}.cotbl[data-stack] thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}.cotbl[data-stack] tr{display:block;padding:10px 0;border-bottom:1px solid var(--line)}.cotbl[data-stack] td{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:2px 0;border:0;white-space:normal;text-align:right}.cotbl[data-stack] td:first-child{display:block;min-width:0;font-weight:600;padding:0 0 4px;text-align:left}.cotbl[data-stack] td[data-label]::before{content:attr(data-label);flex:none;color:var(--muted);font-size:13px;font-weight:400;text-align:left}}
 ul.plain{list-style:none;padding:0;margin:0}ul.plain li{padding:10px 0;border-bottom:1px solid var(--line)}ul.plain li:last-child{border-bottom:0}
 .ctas{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
 ul.dir{list-style:none;padding:0;margin:16px 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));gap:8px}
@@ -2426,6 +2427,7 @@ ul.dir li{display:flex;align-items:center;justify-content:space-between;gap:12px
 ul.dir li:has(a+.muted){flex-wrap:wrap;row-gap:0}
 ul.dir li:hover{border-color:var(--line-2)}ul.dir a{display:flex;align-items:center;flex:1;min-width:0;min-height:48px;line-height:1.3;color:var(--ink);text-decoration:none}
 ul.dir a:hover{color:var(--blue)}ul.dir .muted{flex:none;font-size:13px}nav.links{margin:12px 0 6px}
+ul.dir[data-cards] li{padding:0;align-items:stretch}ul.dir[data-cards] a{flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;padding:10px 14px;min-height:64px;overflow-wrap:anywhere}ul.dir[data-cards] .nm{font-weight:600}ul.dir[data-cards] .muted{color:var(--muted)}
 .links{display:flex;flex-wrap:wrap;gap:8px}.links a{display:inline-flex;align-items:center;min-height:40px;padding:4px 14px;border:1px solid var(--line);border-radius:999px;text-decoration:none;background:var(--card);color:var(--ink-2)}
 .links a:hover{border-color:var(--line-2);color:var(--ink)}nav.links[data-az] a{min-width:44px;min-height:44px;justify-content:center;padding:4px 10px}
 /* VR6-022: A to Z in two rows of thirteen on a wide screen, not nineteen and an orphan row of seven (44 px taps, A11Y-2) */

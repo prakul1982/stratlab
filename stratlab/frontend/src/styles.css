@@ -458,7 +458,12 @@ a.link { margin-inline: -2px; }
   .ln-btn { position: fixed; right: 0; top: 50%; transform: translateY(-50%); writing-mode: vertical-rl; min-height: 0; min-width: 40px; padding: 16px 0; gap: 8px;
     border-radius: 12px 0 0 12px; border: 1px solid var(--line-2); border-right: 0; box-shadow: -4px 0 14px rgba(0, 0, 0, .14); }
   .ln-btn[aria-expanded="true"] { border-color: var(--ink); }
-  .ln-panel { position: fixed; right: 52px; bottom: 16px; }
+  /* LIVE10A-002: the tab and the open notes sit left of a docked Markets panel (they were under it: only "Lal" showed), the notes clear of the
+     round Markets button below them, and the page column makes room for the open notes so they never lie over a card (they covered the rules'
+     "Edit in words"); closed, the page is centred as before */
+  .ln-btn { right: var(--mw-dock, 0px); }
+  .ln-panel { position: fixed; right: calc(var(--mw-dock, 0px) + 52px); bottom: 76px; max-height: calc(100vh - 96px); }
+  body:has(.ln-panel:not([hidden])) .shell > .main { padding-right: 448px; }
 }
 
 /* ---------- verdict ---------- */
@@ -2005,6 +2010,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 @media (max-width: 640px) { .stored-stamp { justify-content: flex-start; } }
 .stored-note { margin: 0 0 var(--s2); }
 .theme-already { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
+.theme-ideas { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }   /* LIVE10A-021 */
 .k-note.k-down, .k-small.k-down { color: var(--down); }
 .k-sub { font-size: var(--t-body); font-weight: 600; }
 .k-list { margin: 0; padding-left: var(--s5); display: flex; flex-direction: column; gap: var(--s1); font-size: var(--t-label); }
@@ -2399,7 +2405,12 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 /* the six markets in rows that divide evenly (6, 3 or 2 across): auto-fit left five in a row and Gold alone and squeezed
    below it on an iPad in landscape (R57-010) */
 .mine-markets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s3); }
-@media (min-width: 1360px) { .mine-markets { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+/* LIVE10A-026: six across only when the card itself is wide enough for each name on one line ("NIFTY BANK" wrapped and its value sat ~20px
+   below the other five's): the card's own width decides, not the window's; a name never wraps, and the paper card's title stays on one line */
+[data-testid="mine-markets"] { container-type: inline-size; }
+@container (min-width: 720px) { .mine-markets { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.mine-mkt > .k-stat-k { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+[data-testid="mine-paper"] .k-card-title { white-space: nowrap; }
 @media (max-width: 520px) { .mine-markets { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .mine-mkt { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: var(--s3); border: 1px solid var(--line); border-radius: 12px; }
 .mine-mkt-v { font-size: 20px; font-weight: 600; letter-spacing: -.01em; }

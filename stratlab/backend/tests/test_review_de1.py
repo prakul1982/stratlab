@@ -152,10 +152,12 @@ def test_every_day_is_listed_with_its_count_and_a_long_day_opens_in_full(w, monk
     R.refresh("IN", {"in": Feed()}, set(), today)
     v = R.view("IN", "u-pro", "all", today=today, limit=40)
     nxt = v["weeks"][1]
-    assert nxt["days"] == [{"date": "2026-10-27", "count": 5, "shown": 5}, {"date": "2026-10-31", "count": 66, "shown": 40}]
+    # (updated on purpose, LIVE10A-020: each day also says whether it is a session; India's Saturday keeps its place and its chip)
+    trim = lambda ds: [{k: d[k] for k in ("date", "count", "shown")} for d in ds]          # noqa: E731
+    assert trim(nxt["days"]) == [{"date": "2026-10-27", "count": 5, "shown": 5}, {"date": "2026-10-31", "count": 66, "shown": 40}]
     assert v["more"] == 26 and len(nxt["rows"]) == 45                 # Saturday is there, with its first 40 and its count
     full = R.view("IN", "u-pro", "all", today=today, limit=40, day="2026-10-31")
-    assert full["weeks"][1]["days"][1] == {"date": "2026-10-31", "count": 66, "shown": 66} and full["more"] == 0
+    assert trim(full["weeks"][1]["days"])[1] == {"date": "2026-10-31", "count": 66, "shown": 66} and full["more"] == 0
 
 
 def test_a_bare_board_meeting_intimation_is_named_for_the_results_it_is_for():

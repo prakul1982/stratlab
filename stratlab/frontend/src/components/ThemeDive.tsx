@@ -4,7 +4,7 @@ import { deckFileName } from "../lib/deckName";
 import { deckWhenReady } from "../lib/deckReady";
 import { REGION_NAME } from "../lib/research";
 import { Link } from "react-router-dom";
-import { Badge, Card, CardHead, DataTable, ShowLess, Select, Spark, Signed, Meter, usePhone, Working, type Column } from "./kit";
+import { Badge, Card, CardHead, DataTable, ShowLess, Select, Spark, Signed, Meter, PlanNote, usePhone, Working, type Column } from "./kit";
 import { Download } from "./Icons";
 import { ThemeCsvButton, WorkbookButton } from "./ThemeChanges";
 import { useApp } from "../lib/app";
@@ -105,9 +105,13 @@ export function MembersCard({ r, region, dive }: { r: SectorAI; region: Region; 
   const total = p?.total ?? new Set(groups.flatMap((g) => g.rows.map((c) => c.ticker))).size;
   const ev = evidenceOf(dive);
   const named = p?.named ?? 0, base = (p?.base ?? 0) - named, added = p?.added ?? 0, inds = p?.industries ?? [];
+  // LIVE10A-040: an Industry column that says the same industry on every row (Cement's 41 cards each "Industry: Cement & Cement Products")
+  // is left out; the theme's industries are said once in the counts line
+  const indOf = (c: Co) => (region === "US" ? plainIndustry(c.industry) : c.industry) || "";
+  const oneIndustry = new Set(groups.flatMap((g) => g.rows.map(indOf))).size <= 1;
   const cols: Column<Co>[] = [
     { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (c) => <><Name r={region} sym={c.ticker} name={c.name} /><span className="k-sub-line k-muted">{c.ticker}</span></> },
-    { key: "i", header: "Industry", wrap: true, cell: (c) => (region === "US" ? plainIndustry(c.industry) : c.industry) || dash },
+    ...(oneIndustry ? [] : [{ key: "i", header: "Industry", wrap: true, cell: (c: Co) => indOf(c) || dash } as Column<Co>]),
     { key: "m", header: "Market value", numeric: true, cell: (c) => amount(caps.get(c.ticker) ?? c.cap ?? null, region) },
     { key: "w", header: "What it does, in its own words", wrap: true, cell: (c) => { const w = ownWords(c.what, c.name); return w ? <>“{w}”</> : <span className="k-muted">{NO_WORDS}</span>; } },
     { key: "f", header: "In the theme by", cell: (c) => (c.base ? <>{c.basis === "list" ? "Named in the theme's list" : "Official industry"}
@@ -178,15 +182,21 @@ export function ThemeDownloads({ r, dive, region, theme }: { r: SectorAI; dive: 
   const decksNote = decksWord(me?.usage?.deck_used, me?.usage?.deck_limit, usage);
   const [making, setMaking] = useState<"pptx" | "pdf" | null>(null);
   const [preparing, setPreparing] = useState<string | null>(null);
+  // LIVE10A-003: the month's decks used up, a press says so beside the buttons (a Free press after its one deck got a 402 and nothing showed)
+  const [spent, setSpent] = useState<string | null>(null);
   const rows = useMemo(() => memberRows(r, dive), [r, dive]);
   const deck = async (format: "pptx" | "pdf") => {
     setMaking(format);
+    setSpent(null);
     try {
       // R21: while the theme's AI map is being written the server answers "preparing"; the kit's bar shows and the page asks again
       const blob = await deckWhenReady(() => themeApi.deck(region, theme, format), { onWait: setPreparing });
       download(blob, deckFileName(`${theme} theme (${REGION_NAME[region]})`, format, new Date(), region === "US" ? "America/New_York" : undefined));
       void refreshMe();                               // the deck count in Account
-    } catch (e) { fail(e); } finally { setMaking(null); setPreparing(null); }
+    } catch (e) {
+      if ((e as { status?: number })?.status === 402) setSpent((e as Error).message || "This month's decks are used.");
+      fail(e);
+    } finally { setMaking(null); setPreparing(null); }
   };
   return (
     <div className="k-row" role="group" aria-label="Download this theme" data-testid="theme-downloads">
@@ -199,6 +209,7 @@ export function ThemeDownloads({ r, dive, region, theme }: { r: SectorAI; dive: 
       {decksNote && <span className="k-note" data-testid="decks-left">{decksNote}</span>}
       {preparing && <Working small label={preparing} />}
       {rows.length > 0 && <ThemeCsvButton region={region} theme={theme} dive={dive} />}
+      {spent && <div className="theme-wb-lock" role="status" data-testid="deck-spent"><PlanNote plan="basic">{spent}</PlanNote> <SampleDeckLink className="link" label="Sample deck" /></div>}
     </div>
   );
 }

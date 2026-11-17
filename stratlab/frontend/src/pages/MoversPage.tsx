@@ -6,6 +6,8 @@ import { eyebrowOf } from "../lib/eyebrow";
 import { useRegion, type Region } from "../lib/research";
 import { LISTS, LIST_META, countLine, figureOf, isList, times, type ListId, type MoverRow, type MoversView } from "../lib/movers";
 import "./movers.css";
+import { useApp } from "../lib/app";
+import { marketState } from "../lib/marketHours";
 import { Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, Field, FieldGroup, PageHeader, PlanNote, Seg, Select, Signed, Working, type Column } from "../components/kit";
 
 /* /invest/movers: a group's biggest gainers and losers at the last close, the most traded by value, the volume spikes and the 52-week
@@ -54,7 +56,11 @@ export function MoversPage() {
   }, [region, universe, minCap, again]);
 
   const ccy = CCY[region];
-  const locked = !!view?.locked;
+  const { markets, me } = useApp();
+  // LIVE10A-030: during the session the lists are the last close's, said as the Heatmap says it
+  const open = (() => { const m = markets.find((x) => x.id === region); return m ? marketState(m).open : false; })();
+  // LIVE10A-041: a Free account's plan line is drawn while the first read is out, so the lists don't jump down when it arrives (CLS 0.186)
+  const locked = !!view?.locked || (!view && (me?.paid_plan ?? me?.plan) === "free");
   const meta = LIST_META[list];
   const lst = view?.lists[list];
   const rows = lst?.rows ?? [];
@@ -97,7 +103,7 @@ export function MoversPage() {
             <ChipBar label="List" wrap value={list} onChange={(v) => set({ list: v === "gainers" ? null : v })}
               options={LISTS.map((k) => ({ value: k, label: LIST_META[k].label }))} />
             <p className="mv-facts" data-testid="mv-facts">
-              {asOf && <span>Closes of <b>{asOf}</b></span>}
+              {asOf && <span data-testid="mv-day">Closes of <b>{asOf}</b>{open ? ", the last close · the market is open; the lists are redrawn after today's close" : ""}</span>}
               {counted && <span>{counted}</span>}
               <span><b>{view.matching.toLocaleString("en-IN")}</b> {view.matching === 1 ? "company" : "companies"} with a close that day</span>
             </p>

@@ -455,6 +455,7 @@ _RANGE_LINE = re.compile(r"(?:^|\s)(?:Range|range|median|Median)\b|[−-]?\d[\d,
 _ADDED = re.compile(r"added (\d[\d,]*): ([^;.]*(?:\.[^;.\s][^;.]*)*)(?=;|\.(?:\s|$))")
 _SOURCES_HEAD = re.compile(r"(\d[\d,]*) checked figures?, (\d[\d,]*) verified(?!, \d)")
 _ADJ = re.compile(r"([A-Z][^.;:]{3,90}?) \(\d[^)]*\), adjacent participants")
+_WITH_BASE = re.compile(r",?\s*from [−-]?[$₹]?\s?[\d,.]+ ?(?:m|bn|cr|k|lakh(?: cr)?)? to [−-]?[$₹]?\s?[\d,.]")     # r62: "+1177.3%, from $6 m to $76 m"
 OUTLIER = 1000.0                # d53: a margin's range or median end beyond this many per cent either way
 
 
@@ -498,11 +499,18 @@ def d53_checks(pages: list[str], layers: set, add) -> None:
         if a * 2 < a + gone:
             add("partial unsaid", next(n for n, f in enumerate(flat_pages, 1) if m.group(0)[:30] in f), m.group(0)[:140])
     for n, page in enumerate(pages, 1):
-        for ln in page.split("\n"):
+        lns = page.split("\n")
+        for i, ln in enumerate(lns):
             if not _RANGE_LINE.search(ln):
                 continue
+            after = ln + " " + (lns[i + 1].strip() if i + 1 < len(lns) else "")
             for x in _BIG.finditer(ln):
                 v = _num(x.group(1) or x.group(2))
+                # r62 (the live R60 Hotels and casinos deck's note "Revenue growth above 100% either way, or from a base under 5% of the
+                # median company's, with its base: Hotel101 ... +1177.3%, from $6 m to $76 m", read as a range for its word "median"): a
+                # growth figure printed with its base beside it is that company's own, said apart from every range; a range's end still counts
+                if v >= OUTLIER and _WITH_BASE.match(after[x.end():]):
+                    continue
                 if v >= OUTLIER:
                     add("outlier range", n, ln.strip()[:140])
                     break
@@ -973,6 +981,16 @@ def says_layer(name: str, text: str) -> bool:
     return bool(concept_said(name, text))
 
 
+def _concept_said(name: str, text: str) -> bool:
+    """r62: whether printed words say a layer's concept (theme_base.concept_said), False when the app is not importable."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from app.intel.theme_base import concept_said
+    except Exception:
+        return False
+    return bool(concept_said(name, text))
+
+
 def thin_stat(pages: list[str], name: str) -> str:
     """r60: a row of a value-chain table for a layer of one or two companies ("Reinsurance   1   ₹52,986 cr   –   – (1)") that prints a
     statistic (a margin, multiple or points), its company's revenue aside; "" when none does."""
@@ -1416,7 +1434,10 @@ def p57_checks(pages: list[str], add) -> None:
                 if name.startswith("Other ") or name in EARNING_LABELS:
                     continue                 # "Other", and a label of how its companies earn (their models show it), name no kind
                 words = _kind_words(name)
-                if words and body.strip() and not any(_says_word(body, w) for w in words):
+                # r62 (the live R60 Insurance deck: "Distribution and aggregation" over PB Fintech's printed "India's largest online platform
+                # for insurance", the placement's own reading of the layer's concept, r60 rule 2): a line that says the layer's concept says
+                # the layer, as says_layer reads it; the line must still be printed on the page
+                if words and body.strip() and not any(_says_word(body, w) for w in words) and not _concept_said(name, " ".join(body.split())):
                     add("layer words", n, f"“{name}”: none of its companies' lines says {', '.join(sorted(words))}")
 
 

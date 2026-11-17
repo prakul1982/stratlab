@@ -758,13 +758,25 @@ def theme_measure(src: dict) -> str:
     return "roe" if src.get("lender") else "ebitda"
 
 
+def half_up_pc(v, whole: bool = False) -> str:
+    """LIVE10A-019: a margin in the post's table and chart rounded as its sentences are (theme_data.f1: a half up), so 18.25 is 18.3% in
+    both (the text said "Semiconductor equipment 18.3%" over a chart and table of 18.2%); a figure that rounds to zero has no sign."""
+    from .intel.theme_data import f1
+    if v is None:
+        return "–"
+    text = f1(abs(float(v)))
+    neg = float(v) < 0 and float(text) != 0
+    out = f"{'−' if neg else ''}{text}%"
+    return out.replace(".0%", "%") if whole else out
+
+
 def _cells(src: dict):
     """(format of each figure, the value chain table's (head, rows)) as the theme's deck writes them (deck.py "The value chain by layer"):
     each median with its base, none under 3 companies; a layer's companies "of" those it lists; revenue its companies added together."""
-    from .deck import _medn, _pc, _pcw, _times, _whole_rows, adjacent_label, companies_cell, drop_empty
+    from .deck import _medn, _times, _whole_rows, adjacent_label, companies_cell, drop_empty
     from .deepdive import money
     whole, unit = bool(src.get("whole")), src.get("unit") or ("₹ crore" if (src.get("region") or "IN") == "IN" else "$ million")
-    fmt = {"ebitda": lambda x: _pcw(x, whole), "pb": _times}
+    fmt = {"ebitda": lambda x: half_up_pc(x, whole), "pb": _times}
     lend = src.get("lender") or theme_measure(src) == "roe"
     cols = [("n", "Companies"), ("revenue", "Revenue"), ("ebitda", "EBITDA margin"), ("net", "Net margin"), ("roce", "ROCE")]
     if lend:
@@ -775,7 +787,7 @@ def _cells(src: dict):
             return companies_cell(r["n"], r.get("listed"))
         if k == "revenue":
             return "–" if r.get("revenue") is None else money(r["revenue"], unit)
-        return _medn(None, r["n"], fmt.get(k, _pc), n=r.get(f"{k}_n"), value=r.get(k))
+        return _medn(None, r["n"], fmt.get(k, half_up_pc), n=r.get(f"{k}_n"), value=r.get(k))
     v2 = (src.get("v") or 1) >= 2
     rows = [[adjacent_label(r["layer"], r.get("adjacent"))] + [cell(r, k) for k, _ in cols] for r in src.get("rows") or [] if r.get("n") and (v2 or not r.get("official"))]
     head, rows, _, _ = drop_empty(["Layer"] + [h for _, h in cols], rows, [1] * (len(cols) + 1))
@@ -788,7 +800,7 @@ def theme_post_from(src: dict, now: datetime | None = None) -> dict:
     show in the chain's own words (the layers it ranks, those it shows without ranking and why); each layer's median by the deck's floor as a
     chart; every layer's figures in the deck's table, each median with the companies it is of; who is in each layer, each company with its
     own words; links to the theme's page and its deck; the method."""
-    from .deck import _pc, adjacent_label, bar_marks, compare_note, decimal_units, whole_figures, ADJACENT_NOTE, COMPANIES_NOTE
+    from .deck import adjacent_label, bar_marks, compare_note, decimal_units, whole_figures, ADJACENT_NOTE, COMPANIES_NOTE
     from .intel import theme_data as td
     now = now or datetime.now(timezone.utc)
     region = src.get("region") or "IN"
@@ -800,8 +812,8 @@ def theme_post_from(src: dict, now: datetime | None = None) -> dict:
     what = "return on equity" if key == "roe" else "EBITDA margin"
     fmt, head, table = _cells(src)
     shown = [r for r in rows if r.get(key) is not None and (r.get(f"{key}_n") or 0) >= td.MIN_BASE]
-    keep = decimal_units(*[fmt.get(key, _pc)(r[key]) for r in shown])          # the post's medians at one precision, as a deck's chart is
-    f = lambda v: whole_figures(fmt.get(key, _pc)(v), keep)          # noqa: E731
+    keep = decimal_units(*[fmt.get(key, half_up_pc)(r[key]) for r in shown])          # the post's medians at one precision, as a deck's chart is
+    f = lambda v: whole_figures(fmt.get(key, half_up_pc)(v), keep)          # noqa: E731
     total = src.get("total") or src.get("members") or len({c["symbol"] for r in rows for c in r.get("companies") or []})
     members = src.get("members") if src.get("members") is not None else total
     where = {"IN": "Indian", "US": "US"}.get(region, "")
@@ -1165,6 +1177,14 @@ def seed_theme_posts(now: datetime | None = None) -> tuple[list[dict], list[str]
 _NUM = re.compile(r"(?<![\w.])[−\-+]?\d[\d,]*(?:\.\d+)?")
 
 
+def _td_f1(v: float) -> str:
+    from .intel.theme_data import f1
+    try:
+        return f1(v)
+    except Exception:
+        return ""
+
+
 def _numbers_of(v, out: set) -> None:
     """Every number in a theme post's figures, as the texts it can be printed as (whole, one and two decimals, with and without its sign)."""
     if isinstance(v, bool) or v is None:
@@ -1173,6 +1193,7 @@ def _numbers_of(v, out: set) -> None:
         for x in (v, abs(v), v / 1000, abs(v) / 1000, v / 100000, abs(v) / 100000):
             for dp in (0, 1, 2):
                 out.add(f"{x:.{dp}f}")
+        out.add(_td_f1(abs(v)))           # LIVE10A-019: the half-up rounding the post's sentences and tables print (18.25 → 18.3)
         return
     if isinstance(v, dict):
         for x in v.values():
