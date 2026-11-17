@@ -98,7 +98,8 @@ test("US IPOs: the size without the option and the day a filed offering missed a
 
 // ---------- LIVE9A-025 / 028: one highlighted Themes entry; results prices and moves ----------
 test("the Themes shortcut is plain text on its own page, and results rows are written cleanly", () => {
-  assert.match(src("styles.css"), /\.side-list a\.side-feature\.here \{ border-color: transparent; background: none;/);
+  // updated on purpose (NAV3 merged): the one menu has no separate Themes pill at all, so no second highlighted item can exist
+  assert.doesNotMatch(src("styles.css"), /side-feature/);
   const page = src("pages/ResultsPage.tsx");
   assert.match(page, /price\(x\.price, cur, region === "IN" \? 2 : undefined\)/);
   assert.match(page, /\{i > 0 \? " " : ""\}<Move v=\{v\} bare \/>/);
