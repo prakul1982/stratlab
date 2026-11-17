@@ -108,3 +108,13 @@ test("LIVE10B-029/047, LIVE10A-013: a tiny deepest fall keeps its digits; the VI
   assert.match(read("src/pages/SpaceHomes.tsx"), /\{vixDay \? <> · <span className="nowrap">\{vixDay\}<\/span><\/> : ""\}/);
   assert.match(read("src/styles.css"), /\.surv-badge\.fo-badge \{ white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-family: var\(--sans\); \}/);
 });
+
+test("LIVE10B-010: My space's net worth line is coloured by its own direction, first point to last", () => {
+  assert.match(read("src/pages/MineHome.tsx"), /tone=\{whole\[whole\.length - 1\]\.net < whole\[0\]\.net \? "down" : "up"\} area height=\{64\} label="Net worth over time"/);
+});
+
+test("LIVE10B-043: Settings says a holdings import's day once, in India's time", () => {
+  const page = read("src/pages/SettingsPage.tsx");
+  assert.match(page, /note=\{h\?\.source && h\.updated_at \? noun\(h\.count, "stock", "stocks"\) : note\(h, noun\(h\?\.count, "stock", "stocks"\)\)\}/);
+  assert.match(page, /on \$\{fmtDate\(h\.updated_at, \{ year: false, tz: "Asia\/Kolkata" \}\)\}/);
+});

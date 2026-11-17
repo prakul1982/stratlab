@@ -144,9 +144,10 @@ function ConnectedAccounts() {
       <CardHead title="Connected accounts" info="Your holdings, funds and trades come from files you upload, numbers you type, or the connections below that update them by themselves. Each one shows when it last changed." />
       {/* the three files share the card's width: in four 240px columns they left the right quarter empty (VR3-009) */}
       <TileGrid className="k-linkcards" fill>
-        <LinkCard to="/holdings" title="My Holdings" note={note(h, noun(h?.count, "stock", "stocks"))}>
+        {/* LIVE10B-043: the import's day said once, in India's time ("on 24 Oct" over "updated 25 Oct 2026" were one import) */}
+        <LinkCard to="/holdings" title="My Holdings" note={h?.source && h.updated_at ? noun(h.count, "stock", "stocks") : note(h, noun(h?.count, "stock", "stocks"))}>
           {/* imported once, with the day: never "From your Zerodha login" beside "Zerodha · Not connected" as if it still came from there (LIVE9B-021) */}
-          {h?.source ? `Imported from ${sourceWords(h.source)}${h.updated_at ? ` on ${fmtDate(h.updated_at, { year: false })}` : ""}${(daysOld(h.updated_at) ?? 0) >= HOLDINGS_OLD_DAYS ? `, ${daysOld(h.updated_at)} days ago` : ""}. Import a broker file or type them in.` : "Import a broker file or type your shares in."}
+          {h?.source ? `Imported from ${sourceWords(h.source)}${h.updated_at ? ` on ${fmtDate(h.updated_at, { year: false, tz: "Asia/Kolkata" })}` : ""}${(daysOld(h.updated_at) ?? 0) >= HOLDINGS_OLD_DAYS ? `, ${daysOld(h.updated_at)} days ago` : ""}. Import a broker file or type them in.` : "Import a broker file or type your shares in."}
         </LinkCard>
         <LinkCard to="/money/mutual-funds" title="Mutual funds statement" note={note(mf, noun(mf?.count, "scheme", "schemes"))}>Upload your Consolidated Account Statement (PDF or CSV).</LinkCard>
         <LinkCard to="/tax-report" title="Broker tradebooks" note={note(tax, noun(tax?.count, "file", "files"))}>Upload tradebooks and tax P&amp;L files from any broker for your capital gains.</LinkCard>

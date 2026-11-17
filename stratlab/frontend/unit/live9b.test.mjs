@@ -95,8 +95,9 @@ test("LIVE9B-013: late answers hold their place: plan notes' price line, the cor
 });
 
 test("LIVE9B-014: the Trade home's VIX tile has its change in colour with ▲/▼ and its day", () => {
+  // (updated on purpose, fix11 LIVE10B-047: the day is in a nowrap span, so "17 Nov" never splits over two lines)
   const src = read("src/pages/SpaceHomes.tsx");
-  assert.match(src, /<span className=\{signCls\(vq\.change\)\}>\{vq\.change > 0 \? "▲ " : vq\.change < 0 \? "▼ " : ""\}\{vixChange\(vq\)\}<\/span>\{vixDay \? ` · \$\{vixDay\}` : ""\}/);
+  assert.match(src, /<span className=\{signCls\(vq\.change\)\}>\{vq\.change > 0 \? "▲ " : vq\.change < 0 \? "▼ " : ""\}\{vixChange\(vq\)\}<\/span>\{vixDay \? <> · <span className="nowrap">\{vixDay\}<\/span><\/> : ""\}/);
 });
 
 test("LIVE9B-015: a period grid's column half under the sticky row names fades beside them", () => {
