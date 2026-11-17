@@ -37,3 +37,10 @@ test("LIVE10A-003: a deck press over the month's count shows the plan line besid
   assert.match(plans, /grace=\{me\?\.free_change\}/);
   assert.match(plans, /Slide decks are on Basic and Pro\{deckGrace \? ` \(your Free account keeps \$\{deckGrace\}\)` : ""\}/);
 });
+
+test("LIVE10A-008: a dive being read again behind the page is asked for quietly, and the price bar shows for the first read only", () => {
+  const page = read("src/pages/ThemesPage.tsx");
+  assert.match(page, /if \(d\.updating && \+\+diveTries <= DIVE_TRIES\) diveTimer = setTimeout\(\(\) => getDive\(false\), DIVE_EVERY_MS\);/);
+  assert.match(page, /if \(!tries\) setPricesBusy\(true\);/);
+  assert.match(page, /setPrices\(p\);\n\s+setPricesBusy\(false\);\n\s+if \(p\.pending > 0 && \+\+tries < PRICE_TRIES\)/);
+});

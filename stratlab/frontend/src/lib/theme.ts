@@ -32,6 +32,8 @@ export interface Layer {
   official?: boolean; basis?: "industry" | "list";
   /** the layer's EBITDA margins are mostly filed in whole points: its median and range print whole (LIVE7A-009) */
   ebitda_whole?: boolean;
+  /** a kept dive served while the newer one is read behind the page (LIVE10A-008) */
+  updating?: boolean;
 }
 export interface ChainRow { layer: string; n: number; listed?: number; revenue: number | null; ebitda: number | null; net: number | null; roce: number | null; ebitda_n: number; net_n?: number; roce_n?: number }
 export interface SubCompany { symbol: string; name: string; what: string | null; cap: number | null; sales_1y: number | null; ebitda: number | null; ebitda_dp?: number; company_wide: boolean; year: string | null }

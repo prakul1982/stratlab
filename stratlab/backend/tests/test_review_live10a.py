@@ -108,3 +108,76 @@ def test_the_screens_index_row_carries_the_newest_full_years_revenue():
          "years": [{"year": "Mar 2025", "sales": 10_000.0}, {"year": "Mar 2026", "sales": 12_345.0}, {"year": "TTM", "sales": 13_000.0}]}
     r = screens.row("IN", "BIG", f)
     assert (r["sales"], r["sales_year"], r["sales_unit"]) == (12_345.0, "Mar 2026", "₹ crore")
+
+
+# ---------- LIVE10A-022: the public theme page's title keeps the market's capital ----------
+def test_public_theme_title_says_in_india(monkeypatch):
+    _, page = _theme_view(monkeypatch, {})
+    assert "<title>Ships: listed companies in India by layer · StratLab</title>" in page
+
+
+# ---------- LIVE10A-008: a kept dive behind a newer close is served at once and read again behind the page ----------
+def test_a_stale_kept_dive_is_served_at_once_and_rebuilt_behind_the_page(monkeypatch):
+    from app.intel import theme_routes as T, theme_base, sector_metrics
+    from app import computed
+    kept = {"value": {"dive": {"sector": "Ships", "metrics_pending": []}, "pieces": {}}, "at": "2026-11-16T00:00:00Z"}
+    monkeypatch.setattr(theme_base, "for_figures", lambda m: (m, {}))
+    monkeypatch.setattr(T, "dive_key", lambda r, t, m: ["IN", "ships", 1])
+    monkeypatch.setattr(computed, "get", lambda kind, key, count=True: kept)
+    monkeypatch.setattr(T, "pieces_moved", lambda r, p: False)
+    monkeypatch.setattr(sector_metrics, "any_stored", lambda r, s: False)
+    monkeypatch.setattr(T, "prices_moved", lambda r, k: True)          # a newer close since it was kept
+    monkeypatch.setattr(T, "pages_rebuilt", lambda r, d: [])
+    monkeypatch.setattr(T, "requeue", lambda r, d: None)
+    queued = []
+    monkeypatch.setattr(T, "_rebuild_behind", lambda r, t, m, key: queued.append(key) or True)
+    monkeypatch.setattr(T, "BEHIND_ON", True)
+    got = T.dive_of("IN", "Ships", {}, behind=True)
+    assert got["updating"] is True and got["sector"] == "Ships" and queued == [["IN", "ships", 1]]
+    # the worker's own read never takes the kept copy
+    built = []
+    monkeypatch.setattr(T, "sources", lambda r, t, fresh=False: built.append(t) or (_ for _ in ()).throw(RuntimeError("stop")))
+    try:
+        T.dive_of("IN", "Ships", {}, rebuild=True)
+    except RuntimeError:
+        pass
+    assert built == ["Ships"]
+
+
+def test_the_behind_queue_takes_a_theme_once_and_is_bounded(monkeypatch):
+    from app.intel import theme_routes as T
+    ran = []
+    monkeypatch.setattr(T, "_BEHIND", type("P", (), {"submit": staticmethod(lambda fn: ran.append(fn))})())
+    monkeypatch.setattr(T, "_behind_keys", set())
+    assert T._rebuild_behind("IN", "Ships", {}, ["IN", "ships", 1]) is True
+    assert T._rebuild_behind("IN", "Ships", {}, ["IN", "ships", 1]) is True and len(ran) == 1      # one read per theme at a time
+    for i in range(T.BEHIND_MAX - 1):
+        T._rebuild_behind("IN", f"T{i}", {}, ["IN", f"t{i}", 1])
+    assert T._rebuild_behind("IN", "More", {}, ["IN", "more", 1]) is False                         # full: the page reads it itself
+
+
+# ---------- LIVE10A-011: a kept rotation chart a close behind is served at once and worked out behind the page ----------
+def test_a_rotation_copy_a_close_behind_is_served_at_once(monkeypatch):
+    import json as _json
+    from datetime import date as _date
+    from fastapi.testclient import TestClient
+    from app import db as _db
+    from tests.fake_db import FakeSupabase
+    monkeypatch.setattr(_db, "_client", FakeSupabase())
+    monkeypatch.setattr(main.markets, "provider", lambda r: type("P", (), {"ready": lambda self: True})())
+    monkeypatch.setattr(main.stock_pages, "last_close", lambda r, now=None: (_date(2026, 11, 16), None))
+    monkeypatch.setattr(main, "heavy_read_throttle", lambda p: None)
+    monkeypatch.setattr(main, "ROTATION_BEHIND", True)
+    queued = []
+    monkeypatch.setattr(main, "_rotation_pool", type("P", (), {"submit": staticmethod(lambda fn: queued.append(fn))})())
+    monkeypatch.setattr(main, "_rotation_busy", set())
+    monkeypatch.setattr(main.rotation, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read inside the request")))
+    main._results.clear()
+    _db.set_setting("rotation:last:US:sectors:weekly:5", _json.dumps({"rows": [{"kept": 1}], "skipped": [], "as_of": "2026-11-13", "v": main.rotation.VERSION}))
+    main.app.dependency_overrides[main.current_profile] = lambda: {"id": "u1", "plan": "pro", "_plan": "pro"}
+    try:
+        v = TestClient(main.app).get("/research/rotation?region=US").json()
+        assert v["rows"] == [{"kept": 1}] and v["updating"] is True and len(queued) == 1
+    finally:
+        main.app.dependency_overrides.clear()
+        main._results.clear()
