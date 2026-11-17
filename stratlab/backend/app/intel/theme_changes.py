@@ -59,6 +59,20 @@ def _num(v):
     return x if x == x and abs(x) != float("inf") else None
 
 
+def clip_words(text, n: int) -> str:
+    """r64e (the live R63 decks' change logs: "and “Additionally, Ferroglobe currently has (i) quart)", "nothing of “Makers of thei)",
+    "Policybazaar and Paisab"): a stored reason kept to `n` characters ends on a whole word, with an ellipsis, and closes a quote it opened."""
+    s = str(text or "")
+    if len(s) <= n:
+        return s
+    cut = s[:n - 2]
+    sp = cut.rfind(" ")
+    if sp > n // 2:
+        cut = cut[:sp]
+    cut = cut.rstrip(" ,;:(“‘—-")
+    return cut + ("…”" if cut.count("“") > cut.count("”") else "…")
+
+
 def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None, everyone: dict | None = None) -> dict:
     """A stored read, as compared: {"layers": [names in order], "cos": {symbol: [name, layer index, year, revenue, margin, "e"|"n"]},
     "off": {symbol: [name, industry]} (dropped as another business), "map": the map's symbols, "stamp": the map's time, "rules"}.
@@ -92,7 +106,7 @@ def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None, everyon
         for c in b.get("companies") or []:
             t = (c.get("theme") or {}) if isinstance(c.get("theme"), dict) else {}
             if c.get("symbol") and t.get("why"):
-                why.setdefault(c["symbol"], str(t["why"])[:200])
+                why.setdefault(c["symbol"], clip_words(t["why"], 200))
     # c54: the named layers of the version before that a re-check would have lost, restored or with why not (theme_base.restore_vanished),
     # and the companies kept once as another symbol of the same company (theme_data.same_company), for the log
     gone = [x for x in ((dive.get("placements") or {}).get("layers_gone") or []) if isinstance(x, dict) and x.get("layer")]
@@ -103,9 +117,9 @@ def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None, everyon
             r = c.get("refit") if isinstance(c.get("refit"), dict) else {}
             w = r.get("why") or c.get("sold_by")
             if c.get("symbol") and w:
-                mwhy.setdefault(c["symbol"], str(w)[:240])
+                mwhy.setdefault(c["symbol"], clip_words(w, 240))
     dups = {str(x["symbol"]): str(x.get("kept_name") or x.get("kept") or "") for x in dive.get("duplicates") or [] if isinstance(x, dict) and x.get("symbol")}
-    kept_layers = {str(b["layer"]): str(b["single_kept"])[:200] for b in dive.get("layers") or [] if b.get("layer") and b.get("single_kept")}
+    kept_layers = {str(b["layer"]): clip_words(b["single_kept"], 200) for b in dive.get("layers") or [] if b.get("layer") and b.get("single_kept")}
     # t56: each company the map's check (or the theme's own scope) left out, with its reason: a business-membership decision, its listing
     # line said apart (theme_check.check_placements "dropped")
     left = {str(x["ticker"]): dropped_why(x) for x in ((dive.get("placements") or {}).get("dropped") or []) if isinstance(x, dict) and x.get("ticker")}
@@ -123,7 +137,7 @@ def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None, everyon
             rest_layers.append(lay)
         rest[s_] = [str(x[0] or s_), rest_layers.index(lay)]
         if len(x) > 2 and x[2]:
-            rest_why[s_] = str(x[2])[:200]
+            rest_why[s_] = clip_words(x[2], 200)
     return {"layers": layers, "cos": cos, "off": off, "map": sorted({s_ for s_ in members if s_}), "stamp": int(_num(stamp) or 0),
             **({"rest": rest, "rest_layers": rest_layers} if everyone is not None else {}), **({"rest_why": rest_why} if rest_why else {}),
             "rules": rules, "unit": dive.get("unit"), **({"cover": cover} if cover else {}), **({"back": back} if back else {}),
