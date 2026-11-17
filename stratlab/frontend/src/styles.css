@@ -3168,3 +3168,5 @@ th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
 .h-sum { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s4); align-items: start; }
 .h-sum-notes { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
 @media (min-width: 900px) { .h-sum { grid-template-columns: minmax(0, 560px) minmax(0, 1fr); } }
+/* LIVE9B-013: the deep dive's tools row holds a small button's height before the dive arrives */
+.dd-tools { min-height: 32px; }

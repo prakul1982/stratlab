@@ -77,3 +77,19 @@ test("LIVE9B-012: owner patterns: centred sign-in, net worth said once, even hom
   assert.match(sc, /<CsvButton name="screen results" label="Companies that match"/);
   assert.doesNotMatch(sc, /<DataTable csv="screen results"/);
 });
+
+test("LIVE9B-013: late answers hold their place: plan notes' price line, the corporate actions header and alerts line, the deep dive's tools, the forward test's lock", () => {
+  const note = read("src/components/kit/Notice.tsx");
+  assert.match(note, /const waiting = !!\(plan \?\? named\) && price === null && canBuy\(me\?\.offer\);/);
+  assert.match(note, /\{waiting && <span className="k-meta-wait" aria-hidden="true" data-price-wait>/);
+  const ca = read("src/pages/CorpActionsPage.tsx");
+  assert.match(ca, /asOfPending=\{!data && !error\}/);
+  assert.match(ca, /\{!data && !error && <span className="k-meta-wait" aria-hidden="true"><CheckField/);
+  const dd = read("src/pages/DeepDive.tsx");
+  assert.match(dd, /asOfPending=\{!v\}/);
+  assert.match(dd, /className="k-row dd-tools"/);
+  assert.match(read("src/styles.css"), /\.dd-tools \{ min-height: 32px; \}/);
+  const sg = read("src/pages/trade/SignalsPage.tsx");
+  assert.match(sg, /const lockedNow = me\?\.plan_info\.features\?\.signal_webhooks === false;/);
+  assert.match(sg, /: lockedNow \|\| !ov\?\.allowed \? \(/);
+});

@@ -263,7 +263,7 @@ export function DeepDivePage() {
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research")} title={`${v?.name ?? sym}: business, capex and growth`}
-        asOf={v?.numbers_at} asOfLabel="Reported numbers as of" asOfTz={marketTz(region)}
+        asOf={v?.numbers_at} asOfPending={!v} asOfLabel="Reported numbers as of" asOfTz={marketTz(region)}
         lede={us
           ? <>The numbers the company reports to the SEC in its annual and quarterly filings (10-K and 10-Q), in {cur === "$" ? "dollars" : `the currency it reports in (${cur})`}, each table and chart labelled with its unit{v?.source_url ? <> (<a className="link" href={safeHref(v.source_url)} target="_blank" rel="noopener noreferrer">its filings ↗</a>)</> : null}. Facts, not advice.</>
           : "The reported numbers, and what the company itself says in its latest investor presentation and earnings calls. Facts and the company's own words, not advice."}
@@ -272,7 +272,8 @@ export function DeepDivePage() {
           <Link className="btn quiet sm" to={`/research/${region}/${encodeURIComponent(sym)}`}>← {v?.name ?? sym}</Link>
           {v && <SaveButton kind="deep_dive" label="Save deep dive" name={`${v.name ?? sym} deep dive`} params={{ region, symbol: sym }} />}
         </>} />
-      <div className="k-row">
+      {/* the tools' row keeps a button's height while the dive loads, so the page doesn't drop when they arrive (LIVE9B-013: 0.196) */}
+      <div className="k-row dd-tools">
         {v && <>
           {/* FREE-TIER: no decks on Free: a locked button that says where they are, and the sample deck beside it */}
           {u?.deck_limit === 0 ? <>
