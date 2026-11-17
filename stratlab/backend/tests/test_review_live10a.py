@@ -214,3 +214,25 @@ def test_breadth_members_leave_out_exchange_placeholders(monkeypatch):
     assert "DUMMYSAN" not in got and len(got) == breadth.MIN_MEMBERS
     store[breadth.MEMBERS_KEY + "nifty500"] = _json.dumps(names)
     assert "DUMMYSAN" not in breadth.members("nifty500", index_members=lambda n: [])
+
+
+# ---------- LIVE10A-016: a listing price only from the listing day's own candle ----------
+def test_listing_price_is_the_listing_days_open_never_a_later_candle(monkeypatch):
+    from datetime import date as _date
+    from app import ipo
+    monkeypatch.setattr(ipo, "_settle", lambda row, bars, first, now: (bars, first))
+    row = {"market": "IN", "symbol": "VPFL", "listing": "2026-11-09", "price": 94.0}
+
+    class Y:
+        def __init__(self, bars):
+            self.bars = bars
+
+        def chart(self, sym, iv, n):
+            return {"candles": self.bars}
+    monkeypatch.setattr(ipo, "yahoo_symbol", lambda r: "VPFL.NS")
+    later = [{"t": "2026-11-13", "o": 76.65, "h": 76.65, "l": 76.65, "c": 76.65}, {"t": "2026-11-16", "o": 77.0, "h": 78.0, "l": 76.0, "c": 77.5}]
+    p = ipo.performance(row, Y(later), today=_date(2026, 11, 17))
+    assert p["listing_price"] is None and p["day_close"] is None and p["latest"] == 77.5 and p["listed"] == "2026-11-09"
+    on_day = [{"t": "2026-11-09", "o": 94.0, "h": 95.0, "l": 88.0, "c": 89.3}] + later
+    p = ipo.performance(row, Y(on_day), today=_date(2026, 11, 17))
+    assert p["listing_price"] == 94.0 and p["day_close"] == 89.3
