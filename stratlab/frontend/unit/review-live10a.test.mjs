@@ -62,6 +62,10 @@ test("LIVE10A-026: My space's market tiles go six across by the card's width and
   assert.doesNotMatch(css, /@media \(min-width: 1360px\) \{ \.mine-markets/);
   assert.match(css, /\.mine-mkt > \.k-stat-k \{ white-space: nowrap;/);
   assert.match(css, /\[data-testid="mine-paper"\] \.k-card-title \{ white-space: nowrap; \}/);
+  // the one-line title never shares its line with a button it could run into (CI UI checker, Release 63: 20px into "Open" at 1280)
+  const mine = read("src/pages/MineHome.tsx");
+  assert.doesNotMatch(mine, /<CardHead title="Paper sessions" actions=/);
+  assert.match(mine, /<Link className="btn quiet sm" to="\/paper">Open paper sessions<\/Link>/);
 });
 
 test("LIVE10A-030/041: Movers says the market is open beside the last close, and a Free plan line is drawn before the first read", () => {
