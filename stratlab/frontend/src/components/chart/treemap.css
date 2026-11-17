@@ -102,3 +102,7 @@
   font-size: 11.5px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; border-radius: 2px; }
 .hm-legend-step.hm-na { margin-left: var(--s2); }
 @media (max-width: 640px) { .hm-legend-step { min-width: 44px; padding: 0 5px; font-size: 11px; } }
+
+/* LIVE10A-012: a tall, narrow tile names its symbol down its length */
+.hm-tile.vert { justify-content: center; align-items: center; }
+.hm-tile.vert .hm-sym { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; }

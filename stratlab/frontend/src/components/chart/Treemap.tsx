@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { watchSize } from "../../lib/resize";
 import { groupWords, layout, legend, matches, step, stepClass, tileWords, type ColorBy, type GroupBy, type Period, type Placed, type SizeBy, type Tile } from "../../lib/heatmap";
@@ -59,7 +59,9 @@ export function Treemap({ tiles, size, color, period, group, index, query = "", 
     document.fonts?.ready.then(() => { if (live) { measured.clear(); setFonts((n) => n + 1); } }).catch(() => undefined);
     return () => { live = false; };
   }, []);
-  useEffect(() => {
+  // the width read before the first paint (LIVE10A-012: drawn first at its 360px floor, the map then grew to its real height, 833px for 500
+  // tiles at 1280, and moved the legend and the page under it: CLS 0.154)
+  useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
     const read = () => setWidth(Math.floor(el.clientWidth));
@@ -92,8 +94,8 @@ export function Treemap({ tiles, size, color, period, group, index, query = "", 
             if (w < 1 || h < 1) return null;
             const cls = stepClass(step(p.value, color, period), color);
             const text = figure(p.value);
-            const { px, fig } = tileWords(p.tile.s, text, w, h, textWidth);
-            const scale = px === 15 ? " lg" : px === 10 ? " sm" : "";
+            const { px, fig, vert } = tileWords(p.tile.s, text, w, h, textWidth);
+            const scale = (px === 15 ? " lg" : px === 10 ? " sm" : "") + (vert ? " vert" : "");
             const off = searching && !matches(p.tile, query);
             return (
               <Link key={p.tile.s} to={href(p.tile)} tabIndex={-1} className={`hm-tile ${cls}${scale}${off ? " off" : searching ? " hit" : ""}`}

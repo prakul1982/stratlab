@@ -169,8 +169,11 @@ export function HeatmapPage() {
         </div>
         <div id="hm-controls" className={`hm-controls${opts ? "" : " folded"}`} data-testid="hm-controls">
           <FieldGroup label="Market"><Seg label="Market" value={region} onChange={(v) => { setRegion(v as Region); set({ region: v, u: null, min: null }); }} options={[{ value: "IN", label: "₹ India" }, { value: "US", label: "$ United States" }]} /></FieldGroup>
-          {!theme && view && view.universes.length > 0 && (
-            <Field label="Stocks">{(id) => <Select id={id} value={view.universe ?? ""} onChange={(v) => set({ u: v })} options={view.universes.map((u) => ({ value: u.id, label: u.name }))} />}</Field>
+          {/* LIVE10A-012: the Stocks box holds its place while the first read is out (it arrived with it and pushed Period, Colour and Size onto a
+              new line at 1280, moving the map and the page: CLS 0.154) */}
+          {!theme && (!view || view.universes.length > 0) && (
+            <Field label="Stocks">{(id) => view ? <Select id={id} value={view.universe ?? ""} onChange={(v) => set({ u: v })} options={view.universes.map((u) => ({ value: u.id, label: u.name }))} />
+              : <Select id={id} value="" disabled onChange={() => undefined} options={[{ value: "", label: "Reading the groups…" }]} />}</Field>
           )}
           {!theme && <Field label="Smallest market value">{(id) => <Select id={id} value={minCap} onChange={(v) => set({ min: v || null })} options={MIN_CAPS[region]} />}</Field>}
           <FieldGroup label="Period"><ChipBar label="Period" wrap value={period} onChange={(v) => set({ p: v === "1d" ? null : v })} options={PERIODS.map((p) => ({ value: p, label: PERIOD_SHORT[p] }))} /></FieldGroup>

@@ -38,17 +38,19 @@ async function shiftOf(page: Page, path: string): Promise<{ cls: number; moved: 
   return page.evaluate(() => { const w = window as unknown as { __cls: number; __moved: string[] }; return { cls: w.__cls, moved: w.__moved }; });
 }
 
-// LIVE10A-028 / LIVE10B-004 / LIVE10B-041: late cards moved the page (/new 0.175, a notebook 0.432, corporate actions 0.17, the money
+// LIVE10A-012 / LIVE10A-028 / LIVE10B-004 / LIVE10B-041: late cards moved the page (/new 0.175, a notebook 0.432, corporate actions 0.17, the money
 // calendar 0.121, holdings 0.102)
-test("pages with late cards hold still: layout shift under 0.1 (LIVE10A-028, LIVE10B-004/041)", async ({ browser, request }, info) => {
+test("pages with late cards hold still: layout shift under 0.1 (LIVE10A-012/028, LIVE10B-004/041)", async ({ browser, request }, info) => {
   test.skip(info.project.name === "phone", "measured at the reviewer's 1440 desktop");
   test.setTimeout(300_000);
   const nb = await (await request.post(`${API}/notebooks`, { headers: admin, data: { name: "Fix11 shift", strategy: EMA, instrument: "FX:EURUSD=X" } })).json();
   const run = await request.post(`${API}/notebooks/${nb.id}/experiments`, { headers: admin, data: { days: 730 } });
   expect(run.ok(), await run.text()).toBeTruthy();
   const over: string[] = [];
-  for (const path of ["/new", `/n/${nb.id}`, "/research/corporate-actions", "/money/calendar", "/holdings"]) {
-    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  // LIVE10A-012: the heatmap at 1280 (CLS 0.154 there)
+  for (const [path, width] of [["/new", 1440], [`/n/${nb.id}`, 1440], ["/research/corporate-actions", 1440], ["/money/calendar", 1440], ["/holdings", 1440],
+    ["/invest/heatmap", 1280]] as const) {
+    const ctx = await browser.newContext({ viewport: { width, height: 900 } });
     const p = await ctx.newPage();
     const { cls, moved } = await shiftOf(p, path);
     console.log(`CLS ${path}: ${cls.toFixed(3)}\n  ${moved.slice(0, 6).join("\n  ")}`);

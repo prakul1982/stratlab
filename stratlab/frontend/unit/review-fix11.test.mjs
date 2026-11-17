@@ -82,3 +82,23 @@ test("LIVE10A-004: a company checked against its own description whose passage i
   assert.doesNotMatch(NOT_QUOTED, /No description/);
   assert.match(read("src/components/ThemeDive.tsx"), /noWords\(c\.base \? ev\?\.\(c\.ticker\) === "description_verified" : !!c\.verified\)/);
 });
+
+test("LIVE10A-012: a tall, narrow heatmap tile too thin for its symbol across names it down its length", async () => {
+  const { tileWords } = await import("../src/lib/heatmap.ts");
+  const width = (t) => t.length * 6.2;                         // roughly the 600-weight width of a 10px letter
+  assert.deepEqual(tileWords("HINDALCO", "+1.2%", 40, 220, width), { px: 12, fig: false, vert: true });
+  assert.equal(tileWords("HINDALCO", "+1.2%", 160, 100, width).vert, undefined);       // a wide tile names it across
+  assert.deepEqual(tileWords("HINDALCO", "+1.2%", 10, 220, width), { px: 0, fig: false });   // too thin for a letter
+  assert.match(read("src/components/chart/treemap.css"), /\.hm-tile\.vert \.hm-sym \{ writing-mode: vertical-rl;/);
+});
+
+test("LIVE10A-012: the heatmap reads its width before its first paint, so it is drawn at its own height, not its floor", () => {
+  const t = read("src/components/chart/Treemap.tsx");
+  assert.match(t, /useLayoutEffect\(\(\) => \{\n\s+const el = box\.current;\n\s+if \(!el\) return;\n\s+const read = \(\) => setWidth\(Math\.floor\(el\.clientWidth\)\);/);
+});
+
+test("LIVE10A-012: the heatmap's Stocks box holds its place while the first read is out", () => {
+  const page = read("src/pages/HeatmapPage.tsx");
+  assert.match(page, /\{!theme && \(!view \|\| view\.universes\.length > 0\) && \(/);
+  assert.match(page, /<Select id=\{id\} value="" disabled onChange=\{\(\) => undefined\} options=\{\[\{ value: "", label: "Reading the groups…" \}\]\} \/>/);
+});
