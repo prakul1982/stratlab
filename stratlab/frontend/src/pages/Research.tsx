@@ -393,7 +393,7 @@ function CompanyView() {
             {!c.delisted && (lead === "deep" ? (c.testable && <button className="btn quiet sm" onClick={() => test(c)}>Test a strategy</button>) : deep("quiet"))}
             {!c.delisted && <Link className="btn quiet sm" to={`/research/compare?region=${region}&a=${encodeURIComponent(c.symbol)}`}>Compare</Link>}
             {!c.delisted && <StarButton region={region} symbol={c.symbol} name={c.name} />}
-            {!c.delisted && <AlertButton region={region} symbol={c.symbol} />}
+            {!c.delisted && <AlertButton region={region} symbol={c.symbol} showOn />}
             <MoreMenu items={[
               { label: share.busy ? "Making the card…" : "Share", run: () => { void share.run(); } },
               ...(region === "IN" ? [{ label: "Test a SIP", run: () => nav(`/money/sip-test?symbol=${encodeURIComponent(c.symbol)}`) }] : []),

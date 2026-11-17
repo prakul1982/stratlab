@@ -42,3 +42,11 @@ test("LIVE10A-014: the Watchlist page names the lists made in the Markets panel,
   assert.match(page, /onClick=\{\(\) => openMarkets\(\{ open: true, list: l\.id \}\)\}>Open in the Markets panel<\/button>/);
   assert.match(read("src/components/watch/Launcher.tsx"), /d\.list \? \{ list: d\.list, chart: null \} : \{\}/);
 });
+
+test("LIVE10A-032 / LIVE10B-023: a company page says how many of your alerts watch the stock, beside Set alert, read again after a save", () => {
+  const form = read("src/components/AlertForm.tsx");
+  assert.match(form, /setOn\(r\.active\.filter\(\(a\) => a\.region === region && a\.symbol === symbol\)\.length\)/);
+  assert.match(form, /\{showOn && on > 0 && <Link className="k-chip" to="\/alerts" data-testid="alerts-on">\{on\} alert\{on === 1 \? "" : "s"\} on<\/Link>\}/);
+  assert.match(form, /onClose=\{\(\) => \{ setOpen\(false\); setSeen\(\(n\) => n \+ 1\); \}\}/);
+  assert.match(read("src/pages/Research.tsx"), /<AlertButton region=\{region\} symbol=\{c\.symbol\} showOn \/>/);
+});

@@ -1694,6 +1694,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-chipbar::-webkit-scrollbar { display: none; }
 .k-chip { flex: none; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--card); color: var(--ink-2); font-size: var(--t-label); font-weight: 500; cursor: pointer; white-space: nowrap; }
 .k-chip:hover { border-color: var(--ink); }
+a.k-chip { display: inline-flex; align-items: center; text-decoration: none; }
 .k-chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
 .k-chip.add { border-style: dashed; color: var(--blue-ink); }
 /* a remembered custom choice: its chip and a small × that forgets it (the pair is one rounded shape) */
