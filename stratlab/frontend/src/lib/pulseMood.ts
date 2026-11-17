@@ -105,3 +105,6 @@ export const PULSE_AI_TRIES = 8;
 /** LIVE9A-031: one page title for both markets and every hour ("How the market feels today" on the US beside "…felt at the last close" on
  * India); whether the levels are live or the last close is said once, in the line under it (pulseLede) and the "Prices as of" stamp. */
 export const PULSE_TITLE = "Market mood";
+
+/** LIVE9A-027: how far an index is under its 52-week high, as the briefs write it (newsletter/tables._from_high): "0.3% below", "At the high". */
+export const fromHighText = (v: number): string => (v < -0.05 ? `${Math.abs(v).toFixed(1)}% below` : "At the high");

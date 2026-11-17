@@ -1018,7 +1018,7 @@ def _settle(row: dict, bars: list[dict], first: dict | None, now: datetime) -> t
 LATER_DAYS = 7                         # how far past the last candle the exchange's own closes are looked for
 
 
-def later_closes(row: dict, after: str, now: datetime) -> list[dict]:
+def later_closes(row: dict, after: str, now: datetime, fetch_today: bool = True) -> list[dict]:
     """The exchange's official closes of an NSE issue for the trading days after its last daily candle, as candles (LIVE8A-016: an SME
     issue's candles ran two sessions behind, "₹304.35 · Close 11 Nov" where the exchange's 13 Nov close was ₹274.70; the cash
     bhavcopy has the SME series too). Days whose file isn't stored yet are left out; nothing past today's settled close."""
@@ -1044,7 +1044,7 @@ def later_closes(row: dict, after: str, now: datetime) -> list[dict]:
                     break                      # today's session isn't settled: no close yet
             except ValueError:
                 break
-        c = _official(sym, d.isoformat(), now, d == today)
+        c = _official(sym, d.isoformat(), now, fetch_today and d == today)
         if c is None:
             continue
         out.append({"t": d.isoformat(), "o": c, "h": c, "l": c, "c": c, "v": None, "official": True})
@@ -1130,6 +1130,12 @@ def official_perf(row: dict, perf: dict | None, now: datetime | None = None) -> 
         c = _official(row["symbol"], out.get(day_key) or "", now, False)
         if c is not None and out.get(px_key) and official_close.same_basis(c, out[px_key]):
             out[px_key], out[pct_key] = c, round((c / out["issue_price"] - 1) * 100, 2)
+    # LIVE9A-007: a stored figure whose latest close is days old (SME issues read "₹304.35 · Close 11 Nov" on 16 Nov) takes the newest
+    # official close the stored bhavcopies hold for the trading days after it (the SME series are in the file)
+    for c in reversed(later_closes(row, out.get("latest_date") or "", now, fetch_today=False)):      # stored files only: nothing is read
+        if official_close.same_basis(c["c"], out.get("latest") or c["c"]):
+            out["latest"], out["latest_date"], out["change_pct"] = c["c"], c["t"], round((c["c"] / out["issue_price"] - 1) * 100, 2)
+            break
     return out
 
 

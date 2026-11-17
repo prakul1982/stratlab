@@ -67,7 +67,8 @@ test("DE-017: index cards show the level to two decimals and keep the 52-week ph
   const s = read("src/pages/Research.tsx"), t = read("src/pages/PulseMood.tsx");
   assert.match(s, /minimumFractionDigits: 2, maximumFractionDigits: 2/);
   assert.match(t, /minimumFractionDigits: 2, maximumFractionDigits: 2/);
-  assert.match(t, /header: "Against 52-week high"[\s\S]*i\.from_high_pct > -0\.5 \? "near its high"/);
+  // (updated on purpose, LIVE9A-027: the briefs' rule, "0.3% below" / "At the high", so Mood and the brief never differ)
+  assert.match(t, /header: "Against 52-week high"[\s\S]*fromHighText\(i\.from_high_pct\)/);
   assert.match(read("src/components/Research.tsx"), /n\.similar \? `\$\{n\.similar\} similar/);
 });
 

@@ -248,3 +248,31 @@ def test_the_directory_cards_say_market_count_and_date(monkeypatch):
                                                                                               {"ticker": "Y", "name": "Y", "verified": True, "what": "w"}]}]})
     line = pt.card_line({"region": "IN", "at": 1763251200})
     assert line.startswith("India · 2 companies · ") and "Nov" in line
+
+
+# ---------- LIVE9A-007: a stored SME figure days old takes the newest stored official close ----------
+def test_a_stale_stored_close_is_brought_up_to_the_newest_stored_bhavcopy(monkeypatch):
+    from datetime import datetime, timezone
+    from app import ipo, official_close
+    from app.data import calendar as tc
+    monkeypatch.setattr(tc, "is_trading_day", lambda m, d: d.weekday() < 5)
+    files = {"2026-11-13": {"MAXENGS": 274.70}, "2026-11-16": {"MAXENGS": 282.20}}
+    monkeypatch.setattr(official_close, "stored", lambda d: files.get(str(d)[:10]))
+    monkeypatch.setattr(official_close, "before_ex_date", lambda s, d, now=None: False)
+    monkeypatch.setattr(official_close, "out_at", lambda d, kind="cas": datetime(2026, 11, 16, 12, 30, tzinfo=timezone.utc))
+    row = {"market": "IN", "symbol": "MAXENGS", "id": "x"}
+    perf = {"basis": "prices", "issue_price": 250.0, "latest": 304.35, "latest_date": "2026-11-11", "change_pct": 21.74, "listed": "2026-11-05"}
+    now = datetime(2026, 11, 16, 19, 30, tzinfo=timezone.utc)                    # 01:00 IST Tue 17 Nov
+    got = ipo.official_perf(row, perf, now)
+    assert got["latest"] == 282.20 and got["latest_date"] == "2026-11-16" and got["change_pct"] == 12.88
+
+
+# ---------- LIVE9A-029: a theme's address is its shown name, the singular key an alias ----------
+def test_a_theme_address_follows_its_shown_name(monkeypatch):
+    from app import computed, public_themes as pt
+    from app.intel import theme_base
+    monkeypatch.setattr(computed, "index", lambda kind: {"entries": {"h1": {"region": "IN", "label": "Logistics", "at": 1,
+                                                                            "meta": {"rules": theme_base.RULES, "q": "logistic", "aliases": []}}}})
+    e = pt.entries("IN")[0]
+    assert e["slug"] == "logistics" and "logistic" in e["aliases"]
+    assert pt.find("IN", "logistic") == (None, "logistics") and pt.find("IN", "logistics")[0]["slug"] == "logistics"

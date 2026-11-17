@@ -5,7 +5,7 @@ import { fmtDate, fmtTime, marketTz, pct, safeHref } from "../lib/format";
 import { newsWhen } from "../lib/researchFormat";
 import { researchApi, type MoodBreadthRow, type NewsItem, type PulseAI, type PulseMood, type Region } from "../lib/research";
 import { keepMood, keptMood, moodStale } from "../lib/moodCache";
-import { companyRows, crore, moverRows, movedBy, pairable, quoteMove, riskLevel, sectorCount, sessionHeader, sessionWord, signedPoints, signedPts, signedWhole, storyOf, whole } from "../lib/pulseMood";
+import { companyRows, crore, fromHighText, moverRows, movedBy, pairable, quoteMove, riskLevel, sectorCount, sessionHeader, sessionWord, signedPoints, signedPts, signedWhole, storyOf, whole } from "../lib/pulseMood";
 import { Card, CardHead, DataTable, Delta, EmptyState, Signed, Skeleton, Working, type Column } from "../components/kit";
 import { sparseNotes } from "../components/kit/DataTable";
 
@@ -227,7 +227,8 @@ export function IndexTable({ indices, missing, dayText, whenOf }: { indices: { n
     { key: "n", header: "Index", rowHeader: true, cell: (i) => i.name },
     { key: "l", header: "Level", numeric: true, brief: true, cell: level },
     { key: "c", header: "Change", numeric: true, brief: true, cell: (i) => (i.change_pct == null ? "–" : <Delta value={i.change_pct}>{pct(i.change_pct, 2)}</Delta>) },
-    { key: "h", header: "Against 52-week high", numeric: true, cell: (i) => (i.from_high_pct == null ? "–" : i.from_high_pct > -0.5 ? "near its high" : `${Math.abs(i.from_high_pct).toFixed(1)}% below`) },
+    // LIVE9A-027: the brief's own rule, so the two never differ ("near its high" here, "0.3% below" in the brief, for one level)
+    { key: "h", header: "Against 52-week high", numeric: true, cell: (i) => (i.from_high_pct == null ? "–" : fromHighText(i.from_high_pct)) },
     { key: "w", header: "As of", cell: (i) => <span data-testid="index-when" data-stale={i.stale ? "1" : undefined}>{whenOf(i)}</span> },
   ];
   void dayText;

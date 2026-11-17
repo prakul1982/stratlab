@@ -126,3 +126,11 @@ test("theme tables: fund names out of capitals, quarters as a month", async () =
   assert.match(src("components/ThemeDive.tsx"), /cell: \(x\) => quarterText\(x\.quarter\)/);
   assert.match(src("pages/ThemesPage.tsx"), /cell: \(e\) => fundName\(e\.name\)/);
 });
+
+// ---------- LIVE9A-027: one wording for an index under its high ----------
+test("Mood writes the distance from the 52-week high as the brief does", async () => {
+  const { fromHighText } = await import("../src/lib/pulseMood.ts");
+  assert.equal(fromHighText(-0.3), "0.3% below");
+  assert.equal(fromHighText(-0.01), "At the high");
+  assert.match(src("pages/PulseMood.tsx"), /fromHighText\(i\.from_high_pct\)/);
+});

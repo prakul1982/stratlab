@@ -77,8 +77,12 @@ def entries(region: str | None = None) -> list[dict]:
         name = str(m.get("q") or "")
         if not slug(name):
             continue
-        row = {"region": e["region"], "name": name, "label": public_words(e.get("label") or name, 80) or name, "slug": slug(name),
-               "aliases": [slug(a) for a in m.get("aliases") or [] if slug(a)], "at": e.get("at"), "hk": hk}
+        label = public_words(e.get("label") or name, 80) or name
+        # LIVE9A-029: the address is the theme's name as shown ("/themes/in/logistics", "/us/aerospace-and-defense"), not the library's
+        # singular key ("/logistic", "/capital-good"); the old address is an alias that answers 301 to it
+        own = slug(short_label(label)) or slug(name)
+        row = {"region": e["region"], "name": name, "label": label, "slug": own,
+               "aliases": [x for x in dict.fromkeys([slug(name)] + [slug(a) for a in m.get("aliases") or []]) if x and x != own], "at": e.get("at"), "hk": hk}
         key, rank = (e["region"], slug(name)), (m["rules"], str(e.get("at") or ""))
         if key not in best or rank > best[key][0]:
             best[key] = (rank, row)
