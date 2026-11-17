@@ -110,7 +110,8 @@ export function Shell({ children, ask }: { children: ReactNode; ask?: ReactNode 
     ? <NavLink key={to} to={to} title={title} end>{icon}{label}</NavLink>
     : <Link key={to} to={to} title={title} className={active ? "active" : undefined} aria-current={active ? "page" : undefined}>{icon}{label}</Link>);
   // `bare`: a page listed under its section's heading, without an icon (the heading has it), so the list reads as one section's pages
-  const pageLink = (p: NavPage, name: string = p.label, bare = false) => {
+  // `mark` false: a shortcut to a page that is in the menu too (Pinned, NAV3), never a second highlighted item (ui-lint R7)
+  const pageLink = (p: NavPage, name: string = p.label, bare = false, mark = true) => {
     const Icon = ICONS[p.icon] ?? Compass;
     // a page that is a paid feature this plan lacks carries its plan, with a lock (lib/gates.ts)
     const gate = gateFor(p.to);
@@ -123,7 +124,7 @@ export function Shell({ children, ask }: { children: ReactNode; ask?: ReactNode 
     const label = locked ? <>{name}<span className="side-lock" data-plan={PLAN_NAME[gatePlan(gate!)]} aria-hidden="true" /></> : name;
     // inside a notebook the notebook under Notebooks is the one selected entry: Notebooks itself isn't highlighted too
     // (owner, 26 Oct: both had the selected background)
-    const here = at?.page.to === p.to && !(p.to === "/notebooks" && path.startsWith("/n/"));
+    const here = mark && at?.page.to === p.to && !(p.to === "/notebooks" && path.startsWith("/n/"));
     return item(p.to, bare ? null : <Icon />, label, here, off ? `${p.line} (${gate!.whole ? "" : "part of it "}on the ${PLAN_NAME[gatePlan(gate!)]} plan)` : p.line);
   };
   const allNotebooks = "/notebooks";
@@ -236,7 +237,7 @@ export function Shell({ children, ask }: { children: ReactNode; ask?: ReactNode 
       <div className="side-head"><span className="side-title plain">Pinned</span></div>
       <div className="side-list side-nav" id="side-pinned">
         {/* a tab renamed by IA-1 is pinned with its entry's name ("Screener: Figures"): "Figures" alone says nothing in this menu */}
-        {pins.pins.map((l) => pageLink(l.page, l.page.was ? `${l.group.label}: ${l.page.label}` : l.page.label))}
+        {pins.pins.map((l) => pageLink(l.page, l.page.was ? `${l.group.label}: ${l.page.label}` : l.page.label, false, false))}
       </div>
     </section>
   );
