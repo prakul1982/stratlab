@@ -200,3 +200,17 @@ def test_heatmap_and_movers_names_are_in_one_style():
     assert heatmap.tile("MSFT", row, {"name": "MICROSOFT CORP"}, None, "US")["n"] == "Microsoft Corp"
     assert heatmap.tile("TSN", row, {"name": "TYSON FOODS, INC."}, None)["n"] == "TYSON FOODS, INC."      # no market given: as stored
     assert movers.row_of("CNC", row, {"name": "CENTENE CORP"}, None, "US")["n"] == "Centene Corp"
+
+
+# ---------- LIVE10A-029: a placeholder symbol is no member of a breadth group ----------
+def test_breadth_members_leave_out_exchange_placeholders(monkeypatch):
+    import json as _json
+    from app import breadth
+    store = {}
+    monkeypatch.setattr(breadth, "db", type("D", (), {"get_setting": staticmethod(store.get), "set_setting": staticmethod(lambda k, v: store.__setitem__(k, v)),
+                                                      "json_value": staticmethod(lambda v, d: _json.loads(v) if v else d)}))
+    names = [f"S{i}" for i in range(breadth.MIN_MEMBERS)] + ["DUMMYSAN"]
+    got = breadth.members("nifty500", index_members=lambda n: names)
+    assert "DUMMYSAN" not in got and len(got) == breadth.MIN_MEMBERS
+    store[breadth.MEMBERS_KEY + "nifty500"] = _json.dumps(names)
+    assert "DUMMYSAN" not in breadth.members("nifty500", index_members=lambda n: [])

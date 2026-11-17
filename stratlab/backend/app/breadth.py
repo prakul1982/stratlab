@@ -404,12 +404,13 @@ def members(group: str, index_members=None, all_equities=None) -> list[str]:
             fresh = [str(r.get("symbol") or "").upper() for r in all_equities()]
     except Exception as e:              # the exchange turning us away: the last good list
         print("breadth members:", group, str(e)[:120])
-    fresh = [s for s in dict.fromkeys(fresh or []) if s and len(s) <= 20]
+    # LIVE10A-029: an exchange's placeholder symbol (NSE's DUMMY...) is no company: "500 of 501 stocks read · 1 without a price yet"
+    fresh = [s for s in dict.fromkeys(fresh or []) if s and len(s) <= 20 and not str(s).upper().startswith("DUMMY")]
     if len(fresh) >= MIN_MEMBERS:
         db.set_setting(MEMBERS_KEY + group, json.dumps(fresh))
         return fresh
     try:
-        kept = [s for s in db.json_value(db.get_setting(MEMBERS_KEY + group), []) if isinstance(s, str)]
+        kept = [s for s in db.json_value(db.get_setting(MEMBERS_KEY + group), []) if isinstance(s, str) and not s.upper().startswith("DUMMY")]
     except Exception:
         kept = []
     if kept:

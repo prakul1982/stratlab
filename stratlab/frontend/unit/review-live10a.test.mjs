@@ -54,3 +54,18 @@ test("LIVE10A-020: a US day that is no session gets no chip; India keeps Saturda
   assert.match(page, /laterDays\(\(data\?\.weeks \?\? \[\]\)\.flatMap\(\(w\) => w\.days \?\? \[\]\), todayIn\(region\), region\)/);
   assert.match(page, /\.\.\.\(mvEmpty \? \[\] : \[\{ key: "mv", header: "Usual move"/);
 });
+
+test("LIVE10A-026: My space's market tiles go six across by the card's width and a name never wraps", () => {
+  const css = read("src/styles.css");
+  assert.match(css, /\[data-testid="mine-markets"\] \{ container-type: inline-size; \}/);
+  assert.match(css, /@container \(min-width: 720px\) \{ \.mine-markets \{ grid-template-columns: repeat\(6, minmax\(0, 1fr\)\); \} \}/);
+  assert.doesNotMatch(css, /@media \(min-width: 1360px\) \{ \.mine-markets/);
+  assert.match(css, /\.mine-mkt > \.k-stat-k \{ white-space: nowrap;/);
+  assert.match(css, /\[data-testid="mine-paper"\] \.k-card-title \{ white-space: nowrap; \}/);
+});
+
+test("LIVE10A-030/041: Movers says the market is open beside the last close, and a Free plan line is drawn before the first read", () => {
+  const page = read("src/pages/MoversPage.tsx");
+  assert.match(page, /\{open \? ", the last close · the market is open; the lists are redrawn after today's close" : ""\}/);
+  assert.match(page, /const locked = !!view\?\.locked \|\| \(!view && \(me\?\.paid_plan \?\? me\?\.plan\) === "free"\);/);
+});
