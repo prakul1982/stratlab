@@ -232,7 +232,9 @@ export function ScreensPage() {
         </Card>
       )}
 
-      <div className="k-split2 screens-split">
+      {/* with nothing to list (no figures yet, or none match) the filters and the empty answer stack: side by side, the empty answer stood
+          beside a long filter column with most of the row blank (ui-lint R1) */}
+      <div className={out && rows.length === 0 ? "k-stack screens-split-empty" : "k-split2 screens-split"}>
         <div className="inv-sticky">
           <Card label="Filters" className="screens-filters">
             <CardHead title={n ? `Filters (${n})` : "Filters"} actions={<>
