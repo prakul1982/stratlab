@@ -350,7 +350,7 @@ test("market breadth: today's numbers, small charts, sectors, groups and ranges;
 
   // a neighbouring tab of Market today (IA-1) and the Invest home lead here
   await page.goto("/research/rotation");
-  await tab(page, info.project.name === "phone", "Market today", "Breadth");
+  await tab(page, info.project.name === "phone", "Markets", "Breadth");          // (updated on purpose, NAV3: Market today is called Markets)
   await expect(page).toHaveURL(/\/invest\/breadth/);
   await page.goto("/invest");
   await expect(page.getByTestId("breadth-card")).toContainText("Above 50-day average");
