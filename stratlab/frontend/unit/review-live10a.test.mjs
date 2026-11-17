@@ -77,3 +77,9 @@ test("LIVE10A-023: a Settings change says Saved or that it couldn't save, and an
   assert.match(page, /data-testid="prefs-saved">\{saved === "saving" \? "Saving…" : saved === "saved" \? "Saved" : "Couldn't save the change\. Pick it again to retry\."\}/);
   assert.equal((page.match(/"Not set yet: pick one\."/g) || []).length, 2);
 });
+
+test("LIVE10A-024: a rise in stocks that fell, 52-week lows or down 4% moves is shown in the plain chip, not green", () => {
+  assert.match(read("src/components/kit/Stat.tsx"), /<span className=\{`k-delta \$\{neutral \? "flat" : dir\}`\}>/);
+  assert.match(read("src/pages/BreadthPage.tsx"), /<Delta neutral=\{p\.tone === "down"\}/);
+  assert.match(read("src/pages/PulseMood.tsx"), /<Delta neutral=\{r\.key === "dec" \|\| r\.key === "lows"\}/);
+});
