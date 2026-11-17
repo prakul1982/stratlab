@@ -69,3 +69,11 @@ test("LIVE10A-030/041: Movers says the market is open beside the last close, and
   assert.match(page, /\{open \? ", the last close · the market is open; the lists are redrawn after today's close" : ""\}/);
   assert.match(page, /const locked = !!view\?\.locked \|\| \(!view && \(me\?\.paid_plan \?\? me\?\.plan\) === "free"\);/);
 });
+
+test("LIVE10A-023: a Settings change says Saved or that it couldn't save, and an unset choice says so", () => {
+  const app = read("src/lib/app.tsx");
+  assert.match(app, /try \{ await sent; return true; \} catch \(e\) \{ if \(!quiet\) fail\(e\); return false; \}/);
+  const page = read("src/pages/SettingsPage.tsx");
+  assert.match(page, /data-testid="prefs-saved">\{saved === "saving" \? "Saving…" : saved === "saved" \? "Saved" : "Couldn't save the change\. Pick it again to retry\."\}/);
+  assert.equal((page.match(/"Not set yet: pick one\."/g) || []).length, 2);
+});

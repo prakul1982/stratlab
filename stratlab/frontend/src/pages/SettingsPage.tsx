@@ -79,23 +79,29 @@ export function SettingsPage() {
 }
 
 function ExperienceCards() {
-  const { me, focus, level, savePrefs, setLevel, theme, setTheme } = useApp();
+  const { me, focus, level, savePrefs: savePrefsApp, setLevel: setLevelApp, theme, setTheme } = useApp();
   const companies = companiesPref(me);
+  // LIVE10A-023: each change says it was kept, or that it wasn't (a failed save showed nothing on the page)
+  const [saved, setSaved] = useState<"saving" | "saved" | "failed" | null>(null);
+  const track = (p: Promise<boolean>) => { setSaved("saving"); return p.then((ok) => setSaved(ok ? "saved" : "failed")); };
+  const savePrefs = (p: Parameters<typeof savePrefsApp>[0]) => track(savePrefsApp(p));
+  const setLevel = (l: Level) => track(setLevelApp(l));
   return (
     <>
       <Card id="experience" label="What you see first">
-        <CardHead title="What you see first" info="Changes only which space the menu and home page open in, which settings start open, and which companies the calendars and Invest home open on. Every tool stays available." />
+        <CardHead title="What you see first" info="Changes only which space the menu and home page open in, which settings start open, and which companies the calendars and Invest home open on. Every tool stays available."
+          actions={saved && <span className={`k-note${saved === "failed" ? " k-warn-text" : ""}`} role="status" data-testid="prefs-saved">{saved === "saving" ? "Saving…" : saved === "saved" ? "Saved" : "Couldn't save the change. Pick it again to retry."}</span>} />
         {/* the choices two by two: one under the other left a wide card holding small switches in its left third (UI-FIX-1, R2) */}
         <div className="k-two">
         <FieldGroup label="What you're here for">
           <Seg label="What you're here for" options={FOCUSES.map(([f, title]) => ({ value: f, label: title }))} value={focus ?? ""}
             onChange={(f) => void savePrefs({ focus: f as Focus, space: viewForFocus(f as Focus)! })} />
-          {focus && <p className="k-small k-muted k-hint-line">{FOCUSES.find(([f]) => f === focus)?.[2]}</p>}
+          <p className="k-small k-muted k-hint-line">{focus ? FOCUSES.find(([f]) => f === focus)?.[2] : "Not set yet: pick one."}</p>
         </FieldGroup>
         {/* LIVE1B-041: named for what it asks, not for the tab it is in */}
         <FieldGroup label="How experienced you are">
           <Seg label="How experienced you are" options={LEVELS.map(([l, title]) => ({ value: l, label: title }))} value={level ?? ""} onChange={(l) => void setLevel(l as Level)} />
-          {level && <p className="k-small k-muted k-hint-line">{LEVELS.find(([l]) => l === level)?.[2]}</p>}
+          <p className="k-small k-muted k-hint-line">{level ? LEVELS.find(([l]) => l === level)?.[2] : "Not set yet: pick one."}</p>
         </FieldGroup>
         {/* owner, 5 Nov: "give a global option": which companies the results, corporate actions, all-dates and filings pages and Invest home open
             on. Each page's own switch still changes that page only */}
