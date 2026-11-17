@@ -82,6 +82,13 @@ export function legRule(l: OptLeg, unit: "strikes" | "points"): string {
   }
 }
 
+/** A leg's rule and its option as the summary writes them: "2 strikes OTM CE", or "CE (distance to fix)" for a distance its box doesn't
+ *  take, never "Buy distance to fix CE" (LIVE9B-022). */
+export function legWords(l: OptLeg, unit: "strikes" | "points"): string {
+  const rule = legRule(l, unit);
+  return rule === "distance to fix" ? `${l.opt} (distance to fix)` : `${rule} ${l.opt}`;
+}
+
 export const STRUCTURES: { id: string; name: string; hint: string; unit: "strikes" | "points"; legs: OptLeg[] }[] = [
   { id: "short_straddle", name: "Short straddle", hint: "Sell the at-the-money call and put", unit: "strikes",
     legs: [{ side: "sell", opt: "CE", offset: 0, lots: 1 }, { side: "sell", opt: "PE", offset: 0, lots: 1 }] },
@@ -309,9 +316,12 @@ export function timingIssues(t: { entry: string; lastEntry: string; squareoff: s
   if (open && close) {
     // said as it is: after the close or before the open, not only "outside the hours" (DB-004 remainder: an entry at 16:00 after a
     // 15:40 close)
+    // the hours said once, in the first such line, not in three of five (LIVE9B-022)
+    let said = false;
+    const hours = () => (said ? "" : ((said = true), ` (the market's hours are ${open} to ${close})`));
     for (const [v, what] of [[t.entry, "The entry time"], [t.lastEntry, "The last entry"], [t.squareoff, "The square-off"]] as const) {
-      if (v > close) out.push(`${what}, ${v}, is after the market closes at ${close}, so it could never happen (the market's hours are ${open} to ${close}).`);
-      else if (v < open) out.push(`${what}, ${v}, is before the market opens at ${open}, so it could never happen (the market's hours are ${open} to ${close}).`);
+      if (v > close) out.push(`${what}, ${v}, is after the market closes at ${close}, so it could never happen${hours()}.`);
+      else if (v < open) out.push(`${what}, ${v}, is before the market opens at ${open}, so it could never happen${hours()}.`);
     }
   }
   if (t.lastEntry < t.entry) out.push(`The last entry (${t.lastEntry}) is before the first (${t.entry}), so it would never enter.`);

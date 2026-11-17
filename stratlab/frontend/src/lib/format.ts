@@ -550,6 +550,15 @@ export function sourceWords(source: string): string {
   return `your ${source} file`;
 }
 
+/** How long ago a saved list was imported, in whole days (0 for today; null with no time). */
+export function daysOld(iso: string | null | undefined, now: Date = new Date()): number | null {
+  const t = iso ? Date.parse(iso) : NaN;
+  return Number.isFinite(t) ? Math.max(0, Math.floor((now.getTime() - t) / 86_400_000)) : null;
+}
+
+/** A list of holdings this many days old or more is said to be old beside it (LIVE9B-021: holdings of 25 Oct shown on 17 Nov with no word). */
+export const HOLDINGS_OLD_DAYS = 7;
+
 /** "a Zerodha Kite file", "an Angel One file": a name with its article (LIVE1B-004: "a Angel One", "a HDFC Securities", "a
  * ICICI Direct"). Letters said as vowels (HDFC, ICICI, IDBI, IIFL, SBI) and names that start with a vowel take "an". */
 export function aFile(name: string, what = "file"): string {

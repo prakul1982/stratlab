@@ -122,3 +122,31 @@ test("LIVE9B-018: the Act's renumbering said once, and the year's sections named
 test("LIVE9B-019: a T-bill cut-off is the last weekly auction's, read on a day, not 'as on' the read day", () => {
   assert.match(read("src/pages/money/RatesPage.tsx"), /r\.key\.startsWith\("tbill"\) \? `cut-off at the last weekly auction, read \$\{dateOnly\(r\.as_of\)\}`/);
 });
+
+test("LIVE9B-020: net worth shares rounded on their own, the snapshots link on the chart's line, the share beside its bar", () => {
+  const n = read("src/pages/money/NetWorthPage.tsx");
+  assert.match(n, /pct: view\.totals\.assets > 0 \? \(a\.value \/ view\.totals\.assets\) \* 100 : a\.pct/);
+  assert.match(n, /footer=\{<div className="nw-hist-foot">/);
+  assert.doesNotMatch(n, /History: \{hist\.length\}/);
+  assert.match(read("src/styles.css"), /\.dd-share \{ display: flex; flex-direction: row-reverse;/);
+});
+
+test("LIVE9B-021: holdings say when they were imported, and that they are old after a week", async () => {
+  const { daysOld, HOLDINGS_OLD_DAYS } = await import("../src/lib/format.ts");
+  assert.equal(daysOld("2026-10-25T10:00:00Z", new Date("2026-11-17T10:00:00Z")), 23);
+  assert.equal(daysOld(null), null);
+  assert.equal(HOLDINGS_OLD_DAYS, 7);
+  const h = read("src/pages/HoldingsPage.tsx");
+  assert.match(h, /` · imported from \$\{sourceWords\(view\.source\)\}`/);
+  assert.match(h, /data-testid="holdings-old">These holdings are \{daysOld\(view\.updated_at\)\} days old/);
+  assert.match(read("src/pages/SettingsPage.tsx"), /`Imported from \$\{sourceWords\(h\.source\)\}/);
+});
+
+test("LIVE9B-022: a leg to fix reads 'Buy CE (distance to fix)', and the market's hours are said once", async () => {
+  const { legWords, timingIssues } = await import("../src/lib/options.ts");
+  assert.equal(legWords({ side: "buy", opt: "CE", offset: 5000, lots: 1 }, "strikes"), "CE (distance to fix)");
+  assert.equal(legWords({ side: "buy", opt: "CE", offset: 2, lots: 1 }, "strikes"), "2 strikes OTM CE");
+  const bad = timingIssues({ entry: "16:00", lastEntry: "16:10", squareoff: "16:20" }, "09:15", "15:40");
+  assert.equal(bad.filter((x) => x.includes("the market's hours are")).length, 1);
+  assert.match(read("src/pages/OptionsPage.tsx"), /\$\{legWords\(l, s\.offsetUnit\)\}/);
+});

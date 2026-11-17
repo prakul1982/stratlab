@@ -497,8 +497,9 @@ export function NetWorthPage() {
   // under the chart, once there is one (DP2-006); in the totals card before that, opened from its History button (R15 #3)
   const snapsList = (cls: string) => (
     <details className={cls} data-testid="nw-snapshots" open={empty || undefined}>
-      {/* VR1-142: a plain "History: 3 snapshots", not "The history's snapshots (3): remove one" */}
-      <summary className="k-small">History: {hist.length} snapshot{hist.length === 1 ? "" : "s"}</summary>
+      {/* VR1-142: plain words, not "The history's snapshots (3): remove one". LIVE9B-020: the chart's own line names them, so this is the
+          list's link at the end of that line ("All 4 snapshots"), not a caption of its own repeating "History" under the chart */}
+      <summary className="k-small">All {hist.length} snapshot{hist.length === 1 ? "" : "s"}</summary>
       {snapsTable}
     </details>
   );
@@ -567,14 +568,15 @@ export function NetWorthPage() {
               <CardHead title="By asset class" />
               {/* TABLE-SWEEP: a table of the classes, their amount and their share, with the total under them (it was a list of bars) */}
               <ShareTable label="Assets by class" head="Asset class" footnote="Share of total assets, before loans."
-                rows={view.allocation.map((a) => ({ key: a.class, name: a.label, value: inr(a.value), pct: a.pct }))}
+                // each share rounded on its own (LIVE9B-020: ₹21,000 of ₹22,23,546 is 0.94%, shown "1.0%" when the shares were forced to add to 100)
+                rows={view.allocation.map((a) => ({ key: a.class, name: a.label, value: inr(a.value), pct: view.totals.assets > 0 ? (a.value / view.totals.assets) * 100 : a.pct }))}
                 total={{ name: "All assets", value: inr(view.totals.assets), pct: 100 }} />
             </Card>
           )}
 
           {view.history_allowed && whole.length >= 3 && (
             <ChartFrame id="nw-history" title="History" info="Net worth at each snapshot: the 1st of each month and the days you changed an entry." ranges={rng.options} range={rng.value} onRange={rng.pick} rangeFor={{ chart: "networth", times: days }}
-              footer={<><p className="k-note">Last snapshot {day(last.d)}{nowPt ? "; the line ends today at the total above" : ""}.{marked.length > 0 && " Marked points are partial: something wasn't counted that day (named in the snapshots below)."}</p>{snapsList("nw-snaps")}</>}
+              footer={<div className="nw-hist-foot"><p className="k-note">Last snapshot {day(last.d)}{nowPt ? "; the line ends today at the total above" : ""}.{marked.length > 0 && " Marked points are partial: something wasn't counted that day (named in the snapshots below)."}</p>{snapsList("nw-snaps")}</div>}
               table={{ label: "Net worth at each snapshot", rows: [...shown].reverse(), rowKey: (h) => h.d,
                 columns: [{ key: "d", header: "Day", rowHeader: true, cell: (h) => dateOnly(h.d) }, { key: "net", header: "Net worth", numeric: true, cell: (h) => <>{inr(h.net)}{h.partial?.length ? <span className="k-sub-line">partial</span> : null}</> },
                   { key: "a", header: "Assets", numeric: true, cell: (h) => inr(h.assets) }, { key: "l", header: "Loans", numeric: true, cell: (h) => inr(h.liabilities) }] }}>
