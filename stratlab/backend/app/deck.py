@@ -398,11 +398,11 @@ def market_tz(region: str | None):
 
 def price_dates_note(v: dict) -> str:
     """r60b (LIVE9A-005, the live R59 Semiconductors deck: cover "Prices as of 16 Nov 2026", p.3 "P/E ... prices at the 13 Nov 2026 close"):
-    the cover's price date with the close the deck's multiples are on, when that is another day: "P/E and peers at the 13 Nov 2026 close";
+    the cover's price date with the close the deck's multiples are on, when that is another day: "P/E at the 13 Nov 2026 close";
     "" when they are the same day."""
     val = (v.get("sections") or {}).get("valuation") or {}
     day, asof = str(val.get("price_at") or "")[:10], str(v.get("as_of") or "")[:10]
-    return f"the latest company price; P/E and peers at the {_day(day)} close" if day and asof and day != asof else ""
+    return f"P/E at the {_day(day)} close" if day and asof and day != asof else ""
 
 
 def plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
@@ -4677,7 +4677,8 @@ def not_meaningful(c: dict, key: str) -> bool:
     net margin of 151.3% printed as a margin): an EBITDA or net margin beyond ±100% of revenue is printed n.m. (theme_data.in_median keeps it
     out of every median and range)."""
     from .intel.theme_data import beyond_margin
-    return key in ("ebitda", "net") and beyond_margin(c.get(key))
+    # (a net margin above revenue that the year's filed lines cover is a gain outside the business: printed with its ‡, out of the median)
+    return key in ("ebitda", "net") and beyond_margin(c.get(key)) and not (key == "net" and c.get("gain") and not c.get("one_off"))
 
 
 def co_cell(c: dict, key: str, amt) -> str:

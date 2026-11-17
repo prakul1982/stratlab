@@ -273,7 +273,8 @@ def test_5_a_company_spending_ahead_of_its_revenue_is_not_charted_beside_the_lay
 # ---------- LIVE9A-012 (the live review of R59): absurd margins never printed as margins ----------
 def test_live9a_012_a_margin_beyond_100_percent_of_revenue_is_printed_nm_and_out_of_every_median():
     assert deck.co_cell({"ebitda": -32423.1}, "ebitda", str) == "n.m."           # Atomera: $70,000 of revenue
-    assert deck.co_cell({"net": 151.3, "gain": True}, "net", str) == "n.m.‡"     # a net profit above revenue: a gain, marked
+    assert deck.co_cell({"net": 151.3, "one_off": True}, "net", str) == "n.m.†"  # a net profit above revenue the lines don't give
+    assert deck.co_cell({"net": 151.3, "gain": True}, "net", str) == "151.3%‡"   # one the filed lines cover: a gain, marked, out of the median
     assert deck.co_cell({"net": 99.0}, "net", str) == "99.0%"                    # within ±100%: as before (guard)
     assert D.in_median({"net": 151.3}, "net") is None and D.in_median({"ebitda": -1811.0}, "ebitda") is None
     assert D.in_median({"net": 24.0}, "net") == 24.0                              # guard
@@ -302,8 +303,8 @@ def test_live9a_005_a_us_deck_is_dated_in_new_york_and_its_cover_says_the_close_
     assert deck.theme_plan({**v, "region": "IN"}, now=late)[1].endswith("17 Nov 2026")      # an Indian theme: India's date (guard)
     sec_ = v.get("sections") or {}
     v2 = {**v, "as_of": "2026-11-16", "sections": {**sec_, "valuation": {**(sec_.get("valuation") or {}), "price_at": "2026-11-13"}}}
-    assert deck.price_dates_note(v2) == "the latest company price; P/E and peers at the 13 Nov 2026 close"
+    assert deck.price_dates_note(v2) == "P/E at the 13 Nov 2026 close"
     cover = deck.theme_plan(v2, now=late)[0][0]
     tile = next(it for b in cover.blocks if b["kind"] == "stats" for it in b["items"] if it[0] == "Prices as of")
-    assert tile[1] == "16 Nov 2026" and "13 Nov 2026 close" in tile[2]
+    assert tile[1] == "16 Nov 2026" and tile[2] == "P/E at the 13 Nov 2026 close"
     assert deck.price_dates_note({**v2, "as_of": "2026-11-13"}) == ""       # one day: nothing more said (guard)

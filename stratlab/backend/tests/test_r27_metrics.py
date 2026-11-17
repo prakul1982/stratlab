@@ -222,7 +222,9 @@ def test_the_notes_page_rows_are_the_registrys_own(name):
         if r[0] == deck.PEERS_ROW[0]:          # the peer rule is the deck's own method row (lane r27-quality), not a figure of the registry
             assert r == deck.PEERS_ROW, (name, r)
             continue
-        assert any([m.label, m.definition, m.source] == r[:3] for m in by_label[r[0]]), (name, r)
+        # r60b (R60, updated on purpose): the Revenue row adds a bank's, lender's or insurer's revenue basis after the registry's own words
+        assert any([m.label, m.source] == [r[0], r[2]] and (r[1] == m.definition or r[0] == "Revenue" and r[1].startswith(m.definition + ". "))
+                   for m in by_label[r[0]]), (name, r)
 
 
 # ---------- every rule on every new theme ----------
