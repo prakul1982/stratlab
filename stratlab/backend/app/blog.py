@@ -520,10 +520,12 @@ def official_changes(region: str, day: date, indices: list) -> tuple[list, bool]
         return indices, False
     try:
         from . import official_close
-        from .data.calendar import is_trading_day, special_days
+        from .data.calendar import had_session, special_days
+        # the session before, a special one on a shut day included (LIVE10A-017: is_trading_day keeps the usual hours' meaning, so
+        # the Sunday 8 Nov Muhurat session was stepped over and 9 Nov was still measured against 6 Nov)
         prev = day - timedelta(days=1)
         for _ in range(10):
-            if is_trading_day("IN", prev):
+            if had_session("IN", prev):
                 break
             prev -= timedelta(days=1)
         now_c, prev_c = official_close.index_closes(day.isoformat()), official_close.index_closes(prev.isoformat())

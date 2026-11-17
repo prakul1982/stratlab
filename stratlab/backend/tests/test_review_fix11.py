@@ -65,3 +65,31 @@ def test_the_mood_card_is_read_once_after_each_open(monkeypatch):
     assert store["moodjob-open:IN"] == "2026-11-17"
     assert mood_job.job.opening is mood_job._mood_open                      # the clock's own job reads it
     assert mood_job.Job().opening is None                                   # a job made without it (tests) reads nothing
+
+
+# ---------- LIVE10A-017: the stored 9 Nov brief is measured against the 8 Nov Muhurat session, in the app's list too ----------
+def test_the_stored_9_nov_brief_is_measured_against_the_muhurat_session(monkeypatch):
+    import json
+    from datetime import date
+    from app import blog, db, official_close
+    from app.data import calendar as tc
+    from app.newsletter import job
+    files = {"2026-11-09": {"NIFTY 50": 25043.85}, "2026-11-08": {"NIFTY 50": 24986.40}, "2026-11-06": {"NIFTY 50": 25028.0}}
+    monkeypatch.setattr(official_close, "index_closes", lambda d, fetch=False, now=None: files.get(d))
+    # as production has it: the Sunday session is no trading day (usual hours), only a special session
+    monkeypatch.setattr(tc, "is_trading_day", lambda m, d: d.weekday() < 5)
+    monkeypatch.setattr(tc, "special_days", lambda m: {"2026-11-08"})
+    fixed, changed = blog.official_changes("IN", date(2026, 11, 9), [{"name": "NIFTY 50", "price": 25043.85, "change_pct": 0.06}])
+    assert changed and fixed[0]["change_pct"] == 0.23
+    issue = {"id": "market.IN.2026-11-09", "kind": "market", "region": "IN", "day": "2026-11-09", "weekly": False,
+             "subject": "India market brief, 9 Nov 2026: NIFTY 50 +0.06%", "summary": "NIFTY 50 +0.06%.",
+             "indices": [{"name": "NIFTY 50", "price": 25043.85, "change_pct": 0.06}],
+             "sections": [{"title": "Indices", "items": [{"text": "NIFTY 50: 25,043.85, +0.06% on the day"}]}]}
+    store = {"news-index:market:IN": json.dumps([issue["id"]]), "news:market:IN:2026-11-09": json.dumps(issue)}
+    monkeypatch.setattr(db, "get_setting", store.get)
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    assert job.repair_official_changes("IN", days=3650) == 1
+    kept = json.loads(store["news:market:IN:2026-11-09"])
+    assert kept["indices"][0]["change_pct"] == 0.23
+    assert "+0.23%" in kept["subject"] and "+0.06%" not in kept["subject"] + kept["summary"] + kept["text"]
+    assert job.repair_official_changes("IN", days=3650) == 0                 # done once
