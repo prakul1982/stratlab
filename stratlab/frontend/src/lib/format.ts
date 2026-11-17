@@ -379,6 +379,14 @@ export function inrCompact(v: number | null | undefined): string {
   return `${Math.round(a) === 0 ? "" : sign}₹${nf(Math.round(a), 0)}`;   // ₹0.4 is ₹0, with no sign
 }
 
+/** inrCompact with its decimals kept whatever the figure ("−₹8.30 lakh", never "−₹8.3 lakh" one minute and "−₹8.29 lakh" the next): for a
+ *  headline figure that is read again and again (LIVE9B-027: My space's net worth changed its precision between reads). */
+export function inrCompactSteady(v: number | null | undefined): string {
+  const s = inrCompact(v);
+  const m = /^(−?₹)(\d)(?:\.(\d{1,2}))?( lakh| cr| lakh cr)$/.exec(s);      // a figure under 10 of its unit carries two decimals
+  return m ? `${m[1]}${m[2]}.${(m[3] ?? "").padEnd(2, "0")}${m[4]}` : s;
+}
+
 /** A rupee amount of ₹100 crore or more (ten digits or more) in crore, "₹6,85,30,01,63,680" → "₹68,530 cr", for a tile too narrow
  * for its digits (LIVE1B-019); null for a shorter amount or any other text. */
 export function longRupees(text: string): string | null {

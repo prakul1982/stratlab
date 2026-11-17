@@ -215,7 +215,9 @@ test("the cards that hold a Free account's place state facts: no advice wording,
   const all = H.HOUSE.map((c) => `${c.title} ${c.text} ${c.cta}`).join(" ");
   assert.doesNotMatch(all, /\b(buy|sell|hold|target|recommend)\b|yahoo|screener|finnhub|kite|zerodha/i);
   const plans = H.HOUSE.find((c) => c.id === "plans");
-  for (const n of [P.LIMITS.free.ai_builds_per_month, P.LIMITS.free.deepdives_per_month, P.LIMITS.basic.ai_builds_per_month, P.LIMITS.basic.deepdives_per_month]) assert.ok(plans.text.includes(String(n)), String(n));
+  // (updated on purpose, LIVE9B-026: Basic's real numbers only; Free's differ for an account in its grace, so the card points to its own counts)
+  for (const n of [P.LIMITS.basic.ai_builds_per_month, P.LIMITS.basic.deepdives_per_month]) assert.ok(plans.text.includes(String(n)), String(n));
+  assert.doesNotMatch(plans.text, /\b1 company deep dives\b|^Free includes/);
   assert.deepEqual(H.HOUSE.map((c) => c.title), ["Basic has more AI builds and deep dives", "Test your idea with the four luck checks", "Read today's market brief"]);
   // the same company always gets the same card, and the cards are spread over companies
   assert.equal(H.houseCard("RELIANCE"), H.houseCard("RELIANCE"));

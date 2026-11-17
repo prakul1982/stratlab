@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { IST, asOf, dayIn, firstName, fmtTime, inr, inrCompact, pct, price, signedInrCompact } from "../lib/format";
+import { IST, asOf, dayIn, firstName, fmtTime, inr, inrCompact, inrCompactSteady, pct, price, signedInrCompact } from "../lib/format";
 import { mergeLiveNetWorth, netWorthDelta, pricedMarkets, restatedNote, sinceNote } from "../lib/networth";
 import { inWords, marketState, usSettling, usTodayNote } from "../lib/marketHours";
 import { useMinute } from "../lib/clock";
@@ -187,7 +187,7 @@ function NetWorthCard() {
   return (
     <Card testId="mine-networth">
       <CardHead title="Net worth" actions={<Link className="btn quiet sm" to="/money/net-worth" aria-label="Open net worth">Open</Link>} />
-      <Stat label="What you own minus what you owe" value={inrCompact(v.totals.net)}
+      <Stat label="What you own minus what you owe" value={inrCompactSteady(v.totals.net)}
         delta={diff !== null ? <Delta value={diff}>{signedInrCompact(diff)}</Delta> : undefined}
         note={move ? sinceNote(move, (d) => asOf(d) ?? d, inrCompact) : restated ?? `As of ${asOf(v.as_of) ?? "today"}`} />
       {/* two snapshots joined by a line read as a trend: the chart waits for a third (DI-012); until then the card shows the number alone, not a

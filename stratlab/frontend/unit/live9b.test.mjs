@@ -159,3 +159,23 @@ test("LIVE9B-023, 024: dividends totals right-aligned with every row's payments;
   assert.match(j, /\$\{t\.hold_days\.toLocaleString\("en-IN"\)\} day/);
   assert.match(j, /data-testid="j-no-side"/);
 });
+
+test("LIVE9B-026: the upsell card quotes Basic's numbers in good grammar, and /alerts says what the Free change does to alerts", async () => {
+  const H = await import("../src/lib/houseAds.ts");
+  const plans = H.HOUSE.find((c) => c.id === "plans");
+  assert.doesNotMatch(plans.text, /1 company deep dives/);
+  assert.match(plans.text, /^Basic includes \d+ AI strategy builds and \d+ company deep dives? a month/);
+  const a = read("src/pages/AlertsPage.tsx");
+  assert.match(a, /data-testid="alerts-grace">From \{changeDay\(fc\.on\)\} your Free plan has \{row\.after\} alerts on at a time/);
+});
+
+test("LIVE9B-027: My space's net worth keeps its two decimals; the company header's actions are two rows of three on a phone", async () => {
+  const { inrCompactSteady } = await import("../src/lib/format.ts");
+  assert.equal(inrCompactSteady(-830000), "−₹8.30 lakh");
+  assert.equal(inrCompactSteady(-829000), "−₹8.29 lakh");
+  assert.equal(inrCompactSteady(800000), "₹8.00 lakh");
+  assert.equal(inrCompactSteady(1850000), "₹18.5 lakh");
+  assert.equal(inrCompactSteady(925), "₹925");
+  assert.match(read("src/pages/MineHome.tsx"), /value=\{inrCompactSteady\(v\.totals\.net\)\}/);
+  assert.match(read("src/styles-invest.css"), /\.inv-actions \{ display: grid; grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); gap: var\(--s2\); \}/);
+});

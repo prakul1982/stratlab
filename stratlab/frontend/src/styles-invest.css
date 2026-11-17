@@ -33,6 +33,12 @@
 .inv-head > .inv-head-more:not(:has(*)) { display: none; }
 @media (max-width: 900px) { .inv-head { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .inv-head > .inv-head-price { grid-column: 1 / -1; } }
 @media (max-width: 560px) { .inv-head { grid-template-columns: minmax(0, 1fr); } }
+/* LIVE9B-027: on a phone the header's six actions are two even rows of three, not three ragged rows with "More" alone on the last */
+@media (max-width: 560px) {
+  .inv-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s2); }
+  .inv-actions > *, .inv-actions > * > .btn { width: 100%; justify-content: center; min-width: 0; }
+  .inv-actions .btn { white-space: normal; text-align: center; line-height: 1.2; }
+}
 .inv-badges { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
 .inv-badges:empty { display: none; }
 .inv-head-price { gap: var(--s2); }

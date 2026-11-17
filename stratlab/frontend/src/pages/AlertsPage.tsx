@@ -9,6 +9,7 @@ import { Modal } from "../components/ui";
 import { Earlier, LOCAL_TZ, splitToday } from "../components/Earlier";
 import { Badge, Card, CardHead, ConfirmDialog, EmptyState, ErrorState, Notice, PageHeader, PlanNote, Select, Skeleton } from "../components/kit";
 import { limitLine, planIdOf } from "../lib/lockText";
+import { changeDay } from "../lib/freeChange";
 
 /** Above this many alerts on, the list gets a search box and a sort (DP2-023: 25 alerts in one unsorted list). */
 const FIND_FROM = 8;
@@ -69,6 +70,14 @@ export function AlertsPage() {
             : page.email && !page.email_confirmed ? "Your email isn't confirmed, and no phone or Telegram is set up, so a fired alert is listed here and nowhere else. Confirm the address in Settings (Notifications) and alerts go to it."
             : "No phone, Telegram or confirmed email is set up, so a fired alert is listed here and nowhere else."}</p>
           {full && limit && (limit.next ? <PlanNote plan={limit.next}>{limit.text}</PlanNote> : <Notice>{limit.text}</Notice>)}
+          {/* an account in its grace hears here, where it bites, what becomes of its alerts on the day its Free counts change (LIVE9B-026:
+              said on Account only) */}
+          {(() => {
+            const fc = me?.free_change, row = fc?.rows.find((r) => r.key === "stock_alerts");
+            const over = fc?.over?.find((x) => /alert/i.test(x));
+            return fc && row && row.before !== row.after && page.count > (row.after ?? Infinity)
+              ? <p className="k-note" data-testid="alerts-grace">From {changeDay(fc.on)} your Free plan has {row.after} alerts on at a time: {over ? `${over.charAt(0).toLowerCase()}${over.slice(1)}.` : `you have ${page.count} on now.`}</p> : null;
+          })()}
           {/* the address itself stays in Settings, not printed on this page (DP1-023) */}
           {page.channels.length > 0 && page.email && !page.email_confirmed && <p className="k-note">Alerts go to your email too once you've confirmed the address in Settings (Notifications).</p>}
         </Card>
