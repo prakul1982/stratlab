@@ -85,6 +85,8 @@ Failures (the exit code is 1 when any deck has one):
                don't add up (the states to those checked, checked + not checked to the companies); a part of the members (the informative
                layers, "by membership evidence: ...", a layer's "Membership of its 24 companies: ...") with more of a state than the deck's own count of it
   empty page   l55 (the owner's publication preflight: no empty pages): a page that prints its heading and nothing under it
+  sparse page  r60b (the owner's review of the live R59 decks: a page of one membership note and the footer): a continuation page
+               ("(notes)", "(continued)", ", continued") with SPARSE_MAX lines or fewer under its heading
   history end  h56 (R56, the owner's review of the live R55 Payments deck: "Membership checked 19 of 20 (95%)" beside "Checked share after
                each stored version: 100% (14 Nov 2026) → 100% (14 Nov 2026)"): the "Membership checked" row's checked share after each
                stored version whose last point is not the share of the row's count ("N of M"), or its description-verified share after each
@@ -148,7 +150,7 @@ FAIL = ("headline", "mid-word", "placeholder", "joining word", "count", "repeate
         "evidence unsplit", "evidence counts", "empty page", "layer vanished", "share fall unsaid", "removal unnamed", "history end",
         "layer counts", "layer header", "pe partition", "loss-maker profit", "checked counts", "figures count", "none screened", "empty table",
         "few rows", "same name", "carried log", "reason layer", "thin layer", "largest left out", "duplicate member", "profile unsaid",
-        "removal unbacked", "layer words", "words contradict", "financial margin")
+        "removal unbacked", "layer words", "words contradict", "financial margin", "sparse page")
 WARN = ("cut text", "other>40%", "mixed range")
 # LIVE7A-014: a minus sign as a hyphen before a figure with its unit (never a date's or a range's dash: it follows a space or a bracket)
 _HYPHEN_MINUS = re.compile(r"(?:(?<=\s)|(?<=[(\[])|^)-\d[\d,]*(?:\.\d+)?(?:%|x\b| ?pts\b| ?points\b)")
@@ -728,6 +730,10 @@ _EV_HEAD = re.compile(r"membership checked (\d[\d,]*) of (\d[\d,]*)(?: \((?:[^()
 _PART_HEAD = re.compile(r"(?:by membership evidence|[Mm]embership (?:evidence )?of [^:]{0,90}): $")
 _FOOTER = re.compile(r"Not investment advice|Theme deep dive · \d")
 EMPTY_MAX = 3                   # l55: a page's eyebrow, title and headline, and nothing else
+# r60b (R60, the owner's review of the live R59 decks: Medical devices p.27 and Restaurants p.22 held one membership note and the footer):
+# a continuation page ("(notes)", "(continued)", ", continued") with this many lines or fewer under its heading is a sparse page
+SPARSE_MAX = 2
+_CONT_TITLE = re.compile(r"\((?:notes|continued)\)|, continued\b")
 
 
 def l55_checks(pages: list[str], add) -> None:
@@ -764,6 +770,9 @@ def l55_checks(pages: list[str], add) -> None:
         lines = [ln for ln in page.split("\n") if ln.strip() and not _FOOTER.search(ln)]
         if page.strip() and _FOOTER.search(page) and len(lines) <= EMPTY_MAX:
             add("empty page", n, " / ".join(ln.strip() for ln in lines)[:140] or "(nothing but the footer)")
+        elif page.strip() and _FOOTER.search(page) and len(lines) <= EMPTY_MAX + SPARSE_MAX and \
+                any(_CONT_TITLE.search(ln) for ln in lines[:EMPTY_MAX]):
+            add("sparse page", n, " / ".join(ln.strip() for ln in lines)[:140])
 
 
 # t56 (R55): an established layer gone with no restore or reason; a fall in the informative share said with no reason; a removal from the

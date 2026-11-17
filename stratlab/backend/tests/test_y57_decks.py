@@ -230,7 +230,11 @@ def test_a_crowded_layer_page_shows_five_rows_and_sends_its_notes_to_a_notes_pag
         i = next(k for k, s in enumerate(slides) if s.title == "Layer 2 · Converters")
         page, nxt = slides[i], slides[i + 1]
         assert _drawn(page) >= 5, (heavy, _drawn(page))
-        assert nxt.title == "Layer 2 · Converters (notes)"
+        # r60b (R60, updated on purpose: the owner's review of the live R59 decks, no page of one note and the footer): notes of
+        # deck.SPARSE_LINES lines or fewer go with the layer's next companies on its "(continued)" page, longer ones keep a notes page
+        assert nxt.title in ("Layer 2 · Converters (notes)", "Layer 2 · Converters (continued)")
+        if nxt.title.endswith("(continued)"):
+            assert nxt.blocks[0]["kind"] == "table" and "who is in the layer's calculations" in nxt.subtitle
         said = " ".join(p for b in nxt.blocks if b["kind"] == "text" for p in b["paras"])
         assert "Membership of its 14 companies" in said
         assert ("In the layer's calculations (0 of 14)" in said) == heavy

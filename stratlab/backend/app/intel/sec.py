@@ -469,6 +469,61 @@ def revenue_basis(facts: dict, end: str, value: float, kind: str = "annual", uni
     return "a sum of lines"
 
 
+# r60b (R60, the owner's review of the live R59 decks: a regional bank's revenue $8.17 bn against $8.231 bn in its annual report, the
+# basis of neither said; the annual report's figure is its non-GAAP "total revenue, FTE", net interest income on a fully taxable-equivalent
+# basis plus noninterest income): the lines a year's revenue is read from, named, with the accounting standard, so a deck says each
+# financial filer's basis. A bank's revenue here is as filed: its net interest income is never put on a taxable-equivalent basis.
+BASIS_WORDS = {
+    "bank_net_total": "total revenue net of interest expense, as filed",
+    "bank_nii": "net interest income plus noninterest income, as filed",
+    "bank_interest_net": "interest income less interest expense, plus noninterest income, as filed",
+    "bank_interest": "interest income plus noninterest income, as filed (no interest expense filed)",
+    "insurer_parts": "premiums earned plus net investment income and fees, as filed",
+    "line": "the filing's revenue line",
+}
+BANK_BASES = ("bank_net_total", "bank_nii", "bank_interest_net", "bank_interest")
+
+
+def revenue_parts(facts: dict, end: str, value: float, unit: str = "USD") -> dict:
+    """r60b: how a year's revenue (`value`, as revenue() read it for the period ending `end`) is made: {"key" (BASIS_WORDS), "words", "lines":
+    [{"line", "value"} in millions], "standard" ("US GAAP" or "IFRS"), "concept" (the one line it was read from, "line" only), "fte": False for a
+    US GAAP bank (as filed, not on a fully taxable-equivalent basis)}. The first reading whose lines give the figure exactly."""
+    def read(cs):
+        return flows(facts, cs, "annual", unit)
+
+    def at(cs):
+        return read(cs).get(end)
+    ifrs = any(c in (facts.get("ifrs-full") or {}) for c in BANK_NII + BANK_NONINTEREST + INSURER_PREMIUMS + TOP_LINE)
+    std = "IFRS" if ifrs and not any(c in (facts.get("us-gaap") or {}) for c in ("NetIncomeLoss", "Revenues")) else "US GAAP"
+    same = lambda a: a is not None and abs(a - value) <= 0.5          # noqa: E731  (to the unit filed)
+    nii, nonint, interest, cost = at(BANK_NII), at(BANK_NONINTEREST), at(BANK_INTEREST), at(BANK_INTEREST_COST)
+    net_total = at(BANK_NET_TOTAL)
+
+    nonint_word = "net fee and commission income" if at(("FeeAndCommissionIncomeExpense",)) == nonint and at(("NoninterestIncome",)) is None \
+        else "noninterest income"
+
+    def out(key, lines, **kw):
+        return {"key": key, "words": BASIS_WORDS[key].replace("noninterest income", nonint_word),
+                "lines": [{"line": n, "value": _mn(v)} for n, v in lines], "standard": std,
+                **({"fte": False} if key in BANK_BASES and std == "US GAAP" else {}), **kw}
+    if nonint is not None and (nii is not None or interest is not None):
+        if same(net_total):
+            return out("bank_net_total", [("total revenue net of interest expense", net_total)])
+        if nii is not None and same(nii + nonint):
+            return out("bank_nii", [("net interest income", nii), (nonint_word, nonint)])
+        if interest is not None and cost is not None and same(interest - cost + nonint):
+            return out("bank_interest_net", [("interest income", interest), ("interest expense", -cost), (nonint_word, nonint)])
+        if interest is not None and same(interest + nonint):
+            return out("bank_interest", [("interest income", interest), (nonint_word, nonint)])
+    prem = at(INSURER_PREMIUMS)
+    if prem is not None:
+        inv, fees = max(at(INSURER_INVESTMENT) or 0.0, 0.0), max(at(INSURER_FEES) or 0.0, 0.0)
+        if same(prem + inv + fees):
+            return out("insurer_parts", [("premiums earned", prem)] + ([("net investment income", inv)] if inv else [])
+                       + ([("fees and commissions", fees)] if fees else []))
+    return out("line", [("revenue", value)], concept=revenue_basis(facts, end, value, "annual", unit))
+
+
 def reconcile_financial(facts: dict, subs: dict | None, unit: str, rev_a: dict, ni_a: dict, rev_q: dict, ni_q: dict) -> list[str]:
     """A bank's or an insurer's revenue checked against its net profit before any margin is worked out (r58): a net profit above the
     revenue (a net margin above 100%) means the revenue was read from a part, so that period's revenue is withheld (no margin is
@@ -1203,7 +1258,11 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
            "bank": kind is None and lender,
            "kind": kind, "no_revenue": no_revenue, "figure_errors": figure_errors, "sales_untagged": sales_untagged, "profit_untagged": profit_untagged,
            "capex_untagged": capex_untagged,
-           "url": f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={facts_json.get('cik')}&type=10-K"}
+           # r60b: the lines the latest year's revenue is read from, named, with its standard (revenue_parts)
+           # (None when the year has no revenue read: the key itself says the page was built with this rule, stock_pages.basis_missing)
+           "revenue_basis": {**revenue_parts(facts, ends[-1], rev_a[ends[-1]], cur), "year": _label(ends[-1]),
+                             "filer": financial_filer(facts, subs) or ""} if rev_a.get(ends[-1]) else None,
+           "url":f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={facts_json.get('cik')}&type=10-K"}
     if no_margin:
         out["margin_note"] = MORTGAGE_REIT if kind == "reit" and not any(ppe.get(e) for e in ends) else NO_MARGIN[kind]
     if left_out and not no_margin:

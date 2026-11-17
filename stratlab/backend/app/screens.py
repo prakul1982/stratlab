@@ -312,6 +312,8 @@ def build_index(region: str, store: bool = True) -> dict:
         # r581: a bank's or insurer's page with its net profit above its revenue (built before the sector schema) is built again first,
         # at most once in a FRESH period (a source that still gives the same line is not asked again and again)
         due = due or (stock_pages.financial_mismatch(facts) and started - (ages[sym] or 0) >= stock_pages.FRESH)
+        # r60b: a US financial filer's page built before its revenue's lines were kept is built again (once: the build keeps the key)
+        due = due or (stock_pages.basis_missing(facts) and started - (ages[sym] or 0) >= stock_pages.FRESH)
         if not facts or (facts.get("v") or 1) < stock_pages.FACTS_VERSION or due:
             empty.add(sym)
             if stock_pages.has_content(facts):
