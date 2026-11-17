@@ -40,3 +40,7 @@ test("LIVE10A-027: Breadth on a phone folds its later measures, the sectors and 
   assert.equal((more.match(/<Box title=/g) || []).length, 6);
   assert.equal((page.slice(0, page.indexOf('title="More breadth measures"')).match(/<Box title=/g) || []).length, 4);
 });
+
+test("CX2: a filing the exchange listed more than once is one row on the company page that says so", () => {
+  assert.match(read("src/components/Filings.tsx"), /\(i\.copies \?\? 1\) > 1 && <span className="k-note" data-testid="filing-copies"> · listed \{i\.copies\} times by the exchange<\/span>/);
+});

@@ -6,7 +6,9 @@ import { bodyAfter } from "../lib/filingText";
 import { Badge, CheckField, EmptyState, ErrorState, ShowLess, Skeleton } from "./kit";
 
 export type Severity = "red" | "amber" | "info";
-export interface FilingItem { id: string; at: string; category: string; label: string; severity: Severity; subject: string; text: string; url: string | null }
+export interface FilingItem { id: string; at: string; category: string; label: string; severity: Severity; subject: string; text: string; url: string | null;
+  /** fix12 (CX2): the same filing listed this many times by the exchange (shown once) */
+  copies?: number }
 export interface FilingSummary {
   /** null: counted from the stored read of flagged filings alone, so the number of filings in all isn't known (DE-032) */
   days: number; total: number | null; red: number; amber: number; fund_raise: boolean; fund_raise_last: string | null;
@@ -52,7 +54,7 @@ export function FilingRow({ i }: { i: FilingItem }) {
     <div className="inv-filing">
       <span className="k-note">{day(i.at)}</span>
       <div className="k-stack">
-        <div className="k-row"><SevBadge s={i.severity} label={i.label} /><span className="k-small">{i.subject}</span></div>
+        <div className="k-row"><SevBadge s={i.severity} label={i.label} /><span className="k-small">{i.subject}{(i.copies ?? 1) > 1 && <span className="k-note" data-testid="filing-copies"> · listed {i.copies} times by the exchange</span>}</span></div>
         {text && <span className="k-note inv-clamp" title={i.text}>{text}</span>}
       </div>
       {i.url ? <a className="link k-small" href={safeHref(i.url)} target="_blank" rel="noopener noreferrer">Filing ↗</a> : <span />}

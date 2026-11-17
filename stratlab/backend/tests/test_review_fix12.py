@@ -64,3 +64,15 @@ def test_a_read_of_an_earlier_session_is_never_shown_as_this_sessions(monkeypatc
     monkeypatch.setattr(research_routes, "ai_call", call)
     got = json.loads(research_routes.pulse_ai("US", "", False, {"id": "u1"}).body)
     assert got["tone"] == "today" and not got.get("updating") and calls
+
+
+# ---------- CX2: a company's 30 Oct filing listed twice on its page ----------
+def test_a_filing_sent_again_with_a_new_link_is_one_row_that_says_it_was_listed_twice():
+    from app.intel import filings as fl
+    a = {"id": "2", "symbol": "ACME", "at": "2026-10-30T19:10", "category": "results", "severity": "info", "label": "Financial results", "subject": "Financial Results",
+         "text": "Acme Limited has informed the Exchange about the results for the quarter ended September 30, 2026", "url": "https://x.example/b.pdf"}
+    b = {**a, "id": "1", "at": "2026-10-30T18:40", "url": "https://x.example/a.pdf"}
+    other = {**a, "id": "3", "text": "Acme Limited has informed the Exchange about a press release", "url": "https://x.example/c.pdf"}
+    got = fl.without_repeats([a, b, other])
+    assert [i["id"] for i in got] == ["2", "3"] and got[0]["copies"] == 2 and "copies" not in got[1]
+    assert fl.report(type("F", (), {"announcements": lambda self, s: [a, b, other]})(), "ACME")["items"][0]["copies"] == 2
