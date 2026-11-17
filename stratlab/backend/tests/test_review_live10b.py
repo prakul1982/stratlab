@@ -138,3 +138,21 @@ def test_live10b_039_a_delivery_trade_whose_file_charges_leave_stt_out_is_marked
     assert J.line_trades([{**line, "charges": 120.0}], S)[0]["no_stt"] is False   # a total that holds STT
     assert J.line_trades([{**line, "charges": None}], S)[0]["no_stt"] is False    # worked out at the rates: STT in
     assert J.line_trades([{**line, "xd": "2024-01-02", "charges": 2.0}], S)[0]["no_stt"] is False   # intraday: no delivery STT
+
+
+def test_live10b_040_a_monthly_filers_figure_left_out_of_some_months_has_no_previous_quarter():
+    """VST's power weeder, read in Jun and Sep among monthly filings, showed "+0.3% vs Jun 2026"; and its Sep row sat among Oct rows unmarked."""
+    from app import biz_updates as B
+
+    def r(at, period, figs):
+        return {"at": at, "title": "update", "url": f"https://nsearchives.nseindia.com/corporate/{at}.pdf", "period": period, "span": "month",
+                "reader": B.READER, "figures": [{"metric": m, "segment": None, "value": v, "unit": "units", "basis": "month", "prior": None,
+                                                 "headline": False, "quote": "q", "page": 1, "own": True} for m, v in figs]}
+    reads = {"a": r("2026-07-01", "2026-06", [("Power weeder", 990), ("Tractor", 500)]),
+             "b": r("2026-10-01", "2026-09", [("Power weeder", 1004), ("Tractor", 450)]),
+             "c": r("2026-11-01", "2026-10", [("Tractor", 405)])}
+    rows = {x["metric"]: x for x in B.series(reads)}
+    weeder = rows["Power weeder"]
+    assert weeder["prev"] is None and weeder["change_prev"] is None and weeder["step"] == "month"
+    assert weeder.get("older") is True and not rows["Tractor"].get("older")
+    assert rows["Tractor"]["prev"]["period"] == "2026-09"

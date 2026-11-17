@@ -64,3 +64,8 @@ test("LIVE10B-039: a delivery trade whose file's charges leave STT out is marked
   assert.match(page, /data-testid="j-no-stt"/);
   assert.match(page, /the file leaves STT out, so/);
 });
+
+test("LIVE10B-040: a business-update figure the newest filing doesn't hold says its month is an earlier filing's", () => {
+  const src = read("src/components/BizUpdates.tsx");
+  assert.match(src, /\{periodName\(m\.latest\.period, m\.span\)\}\{m\.older \? ", an earlier filing" : ""\}/);
+});
