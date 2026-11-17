@@ -158,7 +158,9 @@ def us_rows(raw: list) -> list[dict]:
             continue
         q, y = r.get("quarter"), r.get("year")
         period = f"Q{q} {y}" if q and y else None
-        x = row("US", sym, day, "Quarterly results" + (f" ({period})" if period else ""), when=WHEN.get(str(r.get("hour") or "")),
+        # the company's own fiscal quarter, said as one (LIVE10A-020: "(Q3 2027)" beside the calendar's "(quarter ended Sep 2026)" for the same
+        # season read as a typo)
+        x = row("US", sym, day, "Quarterly results" + (f" (fiscal {period})" if period else ""), when=WHEN.get(str(r.get("hour") or "")),
                 src="company data", period=period)
         rep = reported(r)
         if rep:
