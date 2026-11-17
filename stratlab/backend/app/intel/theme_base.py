@@ -5071,7 +5071,9 @@ def by_how_back(vc: list[dict], words_of, theme: str, published: dict | None = N
     from .theme_check import MODELS
     holding_ = {x[1] for k, x in MODELS.items() if k == "holding"}      # a group of several businesses is by what its companies are, never by one
     for v in [x for x in vc if x.get("by_model") and not x.get("official") and not _HALF_RX.search(str(x.get("layer") or ""))
-              and len(x.get("companies") or []) <= LISTED_MIN and _HALF_RX.sub("", x.get("layer") or "") not in holding_]:
+              and len(x.get("companies") or []) <= LISTED_MIN and _HALF_RX.sub("", x.get("layer") or "") not in holding_
+              # (never a group named by the kinds its companies' own words say, MODEL_KINDS: "Hotels and resorts", "Restaurants and ...")
+              and not any(k_[0].lower() in _HALF_RX.sub("", x.get("layer") or "").lower() for ks_ in MODEL_KINDS.values() for k_ in ks_)]:
         for c in list(v.get("companies") or []):
             t, nm = own_text((words_of(c.get("ticker")) if words_of else None) or ""), c.get("name") or ""
             if not t.strip() or no_words(t) or prints_layer(v, t, nm) or layer_says(v, without_name(t, nm), tw)[1]:
@@ -5162,8 +5164,10 @@ def kind_apart(vc: list[dict], words_of, theme: str) -> tuple[list[dict], list[d
     for theme_rx, kind_rx, own_rx, name, desc in SIBLING_KINDS:
         if not re.search(theme_rx, str(theme or ""), re.I):
             continue
+        # (never a layer whose own name already names the kind beside the theme's: "Large pharma and biotech portfolios")
         for v in [x for x in vc if not x.get("official") and layer_stage(x) == "commercial"
-                  and re.search(theme_rx, f"{shown(x)} {x.get('was') or ''}", re.I)]:
+                  and re.search(theme_rx, f"{shown(x)} {x.get('was') or ''}", re.I)
+                  and not re.search(r"\bpharma", f"{shown(x)} {x.get('was') or ''}", re.I)]:
             picks = []
             for c in v.get("companies") or []:
                 t = without_name(own_text((words_of(c.get("ticker")) if words_of else None) or ""), c.get("name") or "")
@@ -5249,8 +5253,13 @@ def listed_out(vc: list[dict], words_of, theme: str, moved_before: dict | None =
         cos = list(v["companies"])
         # r60: also a layer holding a company the last re-check moved out of it (its change log's [this layer, elsewhere])
         # (never one of the theme's largest, TOP_MEMBERS: a re-check's move of one of them out of every layer is no evidence: Reliance)
-        left_of = lambda c: c.get("ticker") not in top_ and (lambda mb: isinstance(mb, (list, tuple)) and len(mb) == 2 and mb[0] in names  # noqa: E731
-                                                              and mb[1] not in names)(before.get(c.get("ticker")))
+        # (and only out of a layer the published version had: a move out of a layer that re-check lost, restored since, is no finding on words)
+        had_ = any(_HALF_RX.sub("", str(x or "")) in names for x in (published or {}).values())
+        # (and only a move the published version holds: the company is published where that re-check put it)
+        left_of = lambda c: had_ and c.get("ticker") not in top_ and (lambda mb: isinstance(mb, (list, tuple)) and len(mb) == 2  # noqa: E731
+                                                                      and mb[0] in names and mb[1] not in names
+                                                                      and _HALF_RX.sub("", str((published or {}).get(c.get("ticker")) or "")) == _HALF_RX.sub("", str(mb[1] or ""))
+                                                                      )(before.get(c.get("ticker")))
         if not any(out_of(c) or left_of(c) for c in cos):
             continue                       # (stored figures read only for a layer with a company left out)
         mostly = len(cos) >= LISTED_MIN and sum(1 for c in cos if out_of(c) or no_fig(c)) * 2 > len(cos)
@@ -5692,8 +5701,6 @@ LAYER_CONCEPTS = (
      r"\bcontract manufactur\w*|\belectronics? manufacturing services\b|\b(?:electronics? )?system design and manufacturing\b|\besdm\b|"
      r"\bems\b|\bbox[- ]build\b|\bbuild[- ]to[- ]print\b|\boutsourced (?:manufactur|assembl)\w*|\bmanufacturing services\b|\bosat\b|"
      r"\bassembly,? (?:and )?test(?:ing)?\b"),
-    # makers of their own products (a group by how its companies earn): a company that makes or manufactures what it sells
-    (r"\bmakers of their own products\b", r"(?!)", r"\bmanufactur(?:es|e|ing)\b|\bmakes\b|\bdesigns and (?:builds|makes|produces)\b"),
     # value retail formats: variety, dollar, discount and off-price stores
     (r"\bvalue (?:retail|stores?|formats?|chains?)\w*|\bdollar\b|\bdiscount\w*|\boff-price\b", r"\bvariety (?:items|stores?|goods)\b|\bdiscount (?:stores?|chains?)\b|\boff-price\b",
      r"\bvariety (?:store chains?|stores?|retail\w*|chains?)\b|\bdollar stores?\b|\bdiscount (?:stores?|retail\w*|chains?|variety)\b|\bvalue retail\w*|\boff-price\b"),

@@ -6609,7 +6609,8 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             s2.add("text", (M, TOP, CW, min(BOT - TOP, ch2)), paras=cont, size=BODY_MIN, floor=BODY_MIN, color=MUTED)
             slides.append(s2)
 
-    if sum(confirmed_n(x) for x in small) >= 2:      # LIVE6-008: no page for a table of one row: one such layer is a row of the value chain's
+    # r60: a layer kept with one company on its own words (single_kept) shows those words, on the page, even as its one row
+    if sum(confirmed_n(x) for x in small) >= 2 or any(x.get("single_kept") for x in small):      # LIVE6-008: no page for a table of one row: one such layer is a row of the value chain's
         _smaller_layers(slides, small, amt, eb("The value chain"))         # table and its company a row of the appendix
 
     # the operating figures of every layer and sub-theme on one or two pages, each company once, grouped by layer (R18: a page for each layer,

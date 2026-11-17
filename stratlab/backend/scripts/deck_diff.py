@@ -328,6 +328,8 @@ def diff_theme(old_pages: list[str], new_pages: list[str]) -> dict:
         if m:
             ren[canon(m.group(1))] = canon(m.group(2))
     descr = {**descriptions(old_pages), **descriptions(new_pages)}
+    # r60: the "Smaller layers" rows as deck_check reads them (a cell ends at a two-space gap, so a right-aligned figure never joins its words)
+    descr.update({comp: what for _, comp, what in DC.small_rows(new_pages) if comp and what})
     layers_all = sorted(set(la) | set(lb) | set(a.values()) | set(b.values()), key=len, reverse=True)
     flat_all = " ".join(re.sub(r"\s+", " ", p) for p in old_pages + new_pages)
     rows, fails = [], []

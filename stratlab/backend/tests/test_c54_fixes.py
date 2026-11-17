@@ -88,7 +88,9 @@ def test_intel_and_the_other_makers_are_back_with_the_makers_on_the_live_r53_sem
         assert got[s_] == MAKERS, s_
         r = row(out, s_)["refit"]
         assert r["from"] == EQUIP and r["to"] == MAKERS and "don't say it sells what “Chip equipment and subsystem suppliers” is" in r["why"]
-    assert {s for s in want if got.get(s) != want[s]} == {"INTC", "AAOI", "NLST", "LASR", "LEDS"}
+    # (updated on purpose, r60: SunHydrogen, "hydrogen panels" filed under semiconductors, is screened out of the theme as another business,
+    # so it is in no layer)
+    assert {s for s in want if got.get(s) != want[s]} == {"INTC", "AAOI", "NLST", "LASR", "LEDS", "HYSR"} and "HYSR" not in got
     # the equipment makers whose words say it stay: KLA "makes wafer fab equipment"
     assert got["KLAC"] == EQUIP and got["AMAT"] == EQUIP
 
@@ -124,7 +126,8 @@ def test_without_a_move_to_judge_the_live_placement_stands():
     """The check reads only companies new to a layer: without the stored log's moves (and with the previous version that already holds
     them), the live R53 Semiconductors and Medical devices placements are replayed exactly, every company in its live layer."""
     for key in ("semis", "meddev"):
-        assert layers(replay(key, moved=False)["value_chain"]) == live(key), key
+        # (updated on purpose, r60: SunHydrogen screened out of Semiconductors as another business, in no layer)
+        assert layers(replay(key, moved=False)["value_chain"]) == {s: x for s, x in live(key).items() if s != "HYSR"}, key
 
 
 def test_what_a_layer_sells_is_read_in_a_company_s_own_words_of_what_it_sells():
@@ -348,4 +351,5 @@ def test_the_live_r53_inputs_replay_exactly_with_the_check_off(key, monkeypatch)
     """The inputs replay the live placement exactly (every company in its live layer) once the check is off: the replays above differ from
     live by the check alone."""
     monkeypatch.setattr(B, "sold_what", lambda out, *a, **k: out)
-    assert layers(replay(key)["value_chain"]) == live(key)
+    # (updated on purpose, r60: SunHydrogen screened out of Semiconductors as another business, in no layer)
+    assert layers(replay(key)["value_chain"]) == {s: x for s, x in live(key).items() if s != "HYSR"}

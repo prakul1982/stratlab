@@ -182,7 +182,10 @@ def test_10_a_large_commercial_company_joins_the_theme_s_scale_layer_by_its_reve
     assert all(r["revenue"] >= r["median"] for r in rows)
     full = where(place("biotech", monkeypatch))          # the whole placement, with the published memory: the same four, reasons printed
     for s_ in ("NVO", "ABBV", "AMGN", "BMY"):
-        assert full[s_][0] == "Large pharma and biotech portfolios" and full[s_][1]["refit"]["why"].startswith("revenue of $"), s_
+        # (updated on purpose, r60: a published member is no newcomer to its layer (sold_what), so a commercial company may reach the layer by
+        # the stage rule on its own words before the scale rule on its revenue: either reason is its evidence)
+        assert full[s_][0] == "Large pharma and biotech portfolios" and (full[s_][1]["refit"]["why"].startswith("revenue of $")
+                                                                         or "commercial-stage company" in full[s_][1]["refit"]["why"]), s_
     assert full["SRPT"][0] == "Specialty and clinical-stage biotechs"
     assert not any(got[c["ticker"]][0] != "Clinical-stage gene editing and drug developers"
                    for v in d["value_chain"] if v["layer"] == "Clinical-stage gene editing and drug developers" for c in v["companies"])
