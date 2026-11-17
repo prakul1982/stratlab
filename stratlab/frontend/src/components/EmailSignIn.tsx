@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { emailSignInOn, sendEmailCode, verifyEmailCode } from "../lib/signin";
 import { codeDigits, emailLooksRight, emailSignInProblem } from "../lib/signinError";
 
@@ -17,6 +17,13 @@ export function EmailSignIn({ next }: { next?: string | null }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [wait, setWait] = useState(0);
+  // R61: opened from an "or sign in with email" link (/login#email), the address box is ready to type in
+  const box = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (location.hash !== "#email" || !box.current) return;
+    box.current.focus({ preventScroll: true });
+    box.current.scrollIntoView({ block: "center" });
+  }, []);
   useEffect(() => {
     if (wait <= 0) return;
     const t = window.setTimeout(() => setWait((w) => w - 1), 1000);
@@ -57,7 +64,7 @@ export function EmailSignIn({ next }: { next?: string | null }) {
         <form className="email-signin-form" onSubmit={onSend} noValidate>
           <label htmlFor={`${id}-email`} className="email-signin-label">Sign in with email</label>
           <div className="email-signin-row">
-            <input id={`${id}-email`} className="k-input" type="email" name="email" autoComplete="email" inputMode="email" placeholder="you@example.com"
+            <input ref={box} id={`${id}-email`} className="k-input" type="email" name="email" autoComplete="email" inputMode="email" placeholder="you@example.com"
               value={email} onChange={(e) => setEmail(e.target.value)} aria-describedby={`${id}-help`} aria-invalid={!!error || undefined} />
             <button type="submit" className="btn outline" disabled={busy || wait > 0}>{busy ? "Sending…" : wait > 0 ? `Email me a code (${wait}s)` : "Email me a code"}</button>
           </div>

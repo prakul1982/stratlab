@@ -65,8 +65,7 @@ test("VR4-008: the welcome question does not say the four spaces, which the tour
   const tour = page.getByRole("dialog", { name: "Tour: Getting around" });
   await expect(tour).toContainText("My space is yours", { timeout: 15_000 });
   await tour.getByRole("button", { name: "Next" }).click();
-  // (updated on purpose (nav3): one menu replaced the switcher of four spaces, and the step that names them is "One menu")
-  await expect(tour.getByRole("heading", { name: "One menu" })).toBeVisible({ timeout: 15_000 });
+  await expect(tour.getByRole("heading", { name: "Four spaces" })).toBeVisible({ timeout: 15_000 });
 });
 
 test("VR4-owner-1 and VR4-014: My space's six market tiles are all green or red, and the watchlist title stays on one line", async ({ page }, info) => {

@@ -7,23 +7,18 @@ import { register } from "node:module";
 // the app's files import each other without an extension (the bundler adds it); Node needs a hint to find the .ts
 register("data:text/javascript," + encodeURIComponent(`export async function resolve(s, c, next) {
   try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
-const { ALL_PAGES, MENU, NAV, groupPath, locate, locateGroup } = await import("../src/lib/nav.ts");
+const { ALL_PAGES, NAV, groupPath, locate, locateGroup } = await import("../src/lib/nav.ts");
 const { match } = await import("../src/lib/features.ts");
 const { cleanLayout } = await import("../src/lib/mineLayout.ts");
 
 test("the map has the owner's menu entries, in order (IA-1: 42 entries became 14, each a page of tabs)", () => {
   // the Trade journal first, right under Trade home (owner, 5 Nov)
-  // (updated on purpose, NAV3, CX-1: one menu of 14 entries: My space, Trade's four, Invest's six, Money's two, then More tools; the Calendar
-  // once, "Find stocks" named Screener, "Market today" named Markets, Market data and Plan folded into More tools)
-  assert.deepEqual(NAV.trade.groups.map((g) => g.label), ["Trade journal", "Strategies", "Practise", "F&O desk"]);
-  assert.deepEqual(NAV.invest.groups.map((g) => g.label), ["Companies", "Screener", "Themes", "Markets", "Calendar", "Watchlist", "More tools"]);
-  assert.deepEqual(NAV.money.groups.map((g) => g.label), ["Portfolio", "Tax"]);
-  assert.deepEqual(MENU.map((s) => [s.label, s.groups.map((g) => g.label)]), [["Trade", ["Trade journal", "Strategies", "Practise", "F&O desk"]],
-    ["Invest", ["Companies", "Screener", "Themes", "Markets", "Calendar", "Watchlist"]], ["Money", ["Portfolio", "Tax"]], [null, ["More tools"]]]);
+  assert.deepEqual(NAV.trade.groups.map((g) => g.label), ["Trade journal", "Strategies", "Practise", "F&O desk", "Calendar"]);
+  assert.deepEqual(NAV.invest.groups.map((g) => g.label), ["Companies", "Find stocks", "Themes", "Market today", "Market data", "Calendar", "Watchlist"]);
+  assert.deepEqual(NAV.money.groups.map((g) => g.label), ["Portfolio", "Tax", "Plan", "Calendar"]);
   assert.deepEqual(NAV.invest.groups.find((g) => g.id === "find-stocks").pages.map((p) => p.label), ["Figures", "Chart rules", "Filings"]);
   assert.deepEqual(NAV.invest.groups.find((g) => g.id === "market-today").pages.map((p) => p.label), ["Mood", "Breadth", "Heatmap", "Movers", "Sectors", "Flows", "Today's brief"]);
-  assert.deepEqual(NAV.invest.groups.find((g) => g.id === "more").pages.map((p) => p.label), ["Closing auction", "Chart replay", "Forward test", "ETF vs NAV",
-    "Margin funding", "Stock lending fees", "Business updates", "Business groups", "Named holders", "Test a SIP", "Rates"]);
+  assert.deepEqual(NAV.invest.groups.find((g) => g.id === "market-data").pages.map((p) => p.label), ["ETF vs NAV", "Margin funding", "Stock lending fees"]);
   // nothing removed: the 42 pages the menu had, plus Flows, the Calendar's All dates, the Heatmap (L4) and Movers beside it
   // (updated on purpose: Movers is a new page), and (updated on purpose, f5) the Calendar's Earnings calls and Companies' Business groups
   // (updated on purpose, lane b1: plus Search filings, a new page under Companies)
@@ -47,7 +42,7 @@ test("addresses find their page, including the ones that were tabs", () => {
   assert.equal(locate("/trade/positioning/stocks").page.label, "Positioning");
   assert.equal(locate("/n/abc/e/3").page.label, "Notebooks");
   assert.equal(locate("/trade/signals/xyz").page.label, "Forward test");
-  assert.equal(locate("/invest/margin-funding?x=1").group.label, "More tools");          // (updated on purpose, NAV3: Market data's pages are More tools)
+  assert.equal(locate("/invest/margin-funding?x=1").group.label, "Market data");
   assert.equal(locate("/account"), null);
   // the old groups' own pages open the entry that took each over
   assert.equal(locateGroup("/trade/g/build-and-test").group.id, "strategies");

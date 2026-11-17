@@ -83,8 +83,14 @@ test("R15 #12: the breadth table is in the kit's colours on the Invest home and 
   await sane(page, errors);
   errors = await open(page, "/invest/breadth", "Above 50-day average");
   const row = page.getByRole("row").filter({ hasText: "Above 50-day average" }).first();
-  // (updated on purpose (fix9, LIVE9A-016): on the Breadth page a share is a level drawn plain and its change carries the kit's ▲/▼ pill)
-  await expect(row.locator(".k-up, .k-down, .k-delta.up, .k-delta.down").first()).toBeVisible({ timeout: 30_000 });
+  // (updated on purpose (R61, owner: "share above the 50-day average coloured on both pages"): the share itself is green above half and red
+  // below on the Breadth page too, by the home card's rule; fix9 had drawn it plain)
+  const pageShare = row.locator("td .k-up, td .k-down").first();
+  await expect(pageShare).toBeVisible({ timeout: 30_000 });
+  const pv = parseFloat((await pageShare.innerText()).replace(/[^\d.]/g, ""));
+  await expect(pageShare).toHaveClass(pv > 50 ? /k-up/ : /k-down/);
+  // the 20- and 200-day shares stay plain levels (fix9, LIVE9A-016)
+  await expect(page.getByRole("row").filter({ hasText: "Above 200-day average" }).first().locator("td > span > span.k-up, td > span > span.k-down")).toHaveCount(0);
   await expect(page.getByRole("row").filter({ hasText: "Rose / fell" }).first().locator(".k-up").first()).toBeVisible();
   await sane(page, errors);
 });

@@ -5,7 +5,8 @@ import { applySeo, seoFor } from "../lib/seo";
 import { absolute } from "../content/seo";
 import { groupLabel, plainTerms } from "../lib/plainTerms";
 import { pct, TF_NAME } from "../lib/format";
-import { signedInHere, signIn } from "../lib/signin";
+import { emailSignInOn, signedInHere, signIn, startSignIn } from "../lib/signin";
+import { EmailWay } from "../components/EmailWay";
 import { Search } from "../components/Icons";
 import { OpenApp, PublicFrame } from "../components/PublicFrame";
 import { adsLive } from "../lib/ads";
@@ -54,9 +55,14 @@ const figure = (n: number | null, t?: "up" | "down") => (n == null ? "–" : <sp
 // VR5-003: in the header a small phone (360px) has no room for "Continue with Google" beside the logo and the Menu, so it shows "Sign in"
 // there (the name a screen reader hears stays the long one)
 /** Signed in already (a saved sign-in in this browser): "Open StratLab" instead of a sign-in that is not needed. */
+/** R61: with email sign-in on, the header's button is "Sign in" to the sign-in page with both ways in, and the wide one has "or sign in
+ * with email" beside it. */
 const GoogleCopy = ({ label = "Continue with Google to copy and re-test", small = false }: { label?: string; small?: boolean }) => (
-  signedInHere() ? <OpenApp className={small ? "btn sm" : "btn"} /> : <button type="button" className={small ? "btn sm" : "btn"} onClick={() => void signIn("/library")}
+  signedInHere() ? <OpenApp className={small ? "btn sm" : "btn"} />
+    : small && emailSignInOn() ? <button type="button" className="btn sm" onClick={() => void startSignIn("/library")}>Sign in</button>
+    : <><button type="button" className={small ? "btn sm" : "btn"} onClick={() => void signIn("/library")}
     {...(small ? { "aria-label": label } : {})}>{small ? <><span className="pub-long">{label}</span><span className="pub-short" aria-hidden="true">Sign in</span></> : label}</button>
+    {!small && <EmailWay next="/library" />}</>
 );
 
 /** /library, signed out: StratLab's own strategies with their verdicts. */

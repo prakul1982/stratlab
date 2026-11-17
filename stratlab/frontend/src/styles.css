@@ -218,6 +218,11 @@ a.link { margin-inline: -2px; }
   border-radius: 8px; background: var(--card); color: var(--muted); font: inherit; font-size: 13.5px; cursor: pointer; text-align: left; }
 .search-btn:hover { color: var(--ink); border-color: var(--dash); }
 .search-btn span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.space-switch { display: grid; grid-template-columns: minmax(0, 1.5fr) repeat(3, minmax(0, 1fr)); gap: 2px; padding: 2px; border-radius: 8px; background: var(--chip); }
+.space-switch button { height: 28px; padding: 0 4px; border: 0; border-radius: 6px; background: transparent; cursor: pointer; font: 500 13px var(--sans); color: var(--ink-2); }
+.space-switch button:hover { color: var(--ink); }
+.space-switch button[aria-pressed="true"] { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .1); }
+.space-switch button:focus-visible { outline-offset: 0; }
 
 .side-groups { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 10px; padding: 4px 12px 14px;
   scrollbar-width: thin; scrollbar-color: transparent transparent; }
@@ -270,17 +275,19 @@ a.link { margin-inline: -2px; }
 .side-list a.active { background: var(--side-on); box-shadow: var(--side-on-ring); color: var(--ink); font-weight: 600; }
 .side-list a.active > svg { color: var(--ink); }
 .side-list a:focus-visible, .side-toggle:focus-visible { outline-offset: -2px; }
-/* NAV3: My space, the menu's first row (the one home in the menu) */
+/* R16: Themes, highlighted beside the space's home on the menu's first row: an accent edge and tint, the icon in the accent */
 .side-home { flex-direction: row; align-items: center; gap: 6px; }
+/* the home link stays on one line beside Themes (owner, 7 Nov: "Invest home" broke onto two lines in its 32px row) */
 .side-home > a:first-child { flex: 1; gap: 8px; white-space: nowrap; }
 .side-home-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-/* NAV3: one menu, each space's entries under its name (a small caption, not a link), then More tools apart; entries 30px tall so the
-   14 entries and one open section sit in a laptop's menu with as little scrolling as can be */
-.side-entries { gap: 8px; }
-.side-section { display: flex; flex-direction: column; gap: 1px; }
-.side-section-title { display: block; padding: 4px 8px 2px; font: 600 11px/1.2 var(--sans); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
-.side-apart { padding-top: 6px; border-top: 1px solid var(--line); }
-@media (pointer: fine) { .side-entries .side-entry > .side-head > a { height: 30px; } }
+.side-list a.side-feature { flex: none; gap: 6px; padding: 0 9px 0 7px; white-space: nowrap; border: 1px solid var(--line-2); border-left: 3px solid var(--orange);
+  background: var(--orange-soft); color: var(--ink); font-weight: 600; }
+.side-list a.side-feature > svg { color: var(--orange-ink); }
+.side-list a.side-feature:hover { border-color: var(--orange); background: var(--orange-soft); }
+/* LIVE6-016: on the Themes page the menu's own Themes entry is the one selected item; the pill is a plain outlined link there */
+/* LIVE9A-025: an outlined pill still read as a second selected item beside the menu's entry: on its page it is plain text, no box */
+.side-list a.side-feature.here { border-color: transparent; background: none; font-weight: 500; color: var(--ink-2); }
+.side-list a.side-feature.here > svg { color: var(--ink-2); }
 .nb-dot { width: 16px; display: grid; place-items: center; flex: none; }
 .nb-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; position: relative; }   /* its hidden verdict words stay inside it (a long name put them 84px past the menu's edge) */
 .nb-pin { flex: none; display: inline-flex; color: var(--muted); }
@@ -335,6 +342,7 @@ a.link { margin-inline: -2px; }
 /* touch: rows a finger can hit */
 @media (pointer: coarse) {
   .side-new, .search-btn { height: 40px; }
+  .space-switch button { height: 36px; }
   .side-list a, .side-list.side-sub a { height: 40px; }
   .side-toggle { height: 32px; width: 32px; }
   .side-title { height: 32px; }
@@ -2875,7 +2883,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .chip { height: 44px; }
   .btn.sm, .k-card-head .btn.sm, .k-card-head a, .inv-head-price a { min-height: 44px; }
   .side-toggle { width: 44px; height: 44px; }
-  .side-title, .side-list a, .side-note, .acct-btn, .cond-x, .fs-go { height: auto; min-height: 44px; }   /* the markets line stays 36 px: the drawer footer keeps to 100 px */
+  .side-title, .side-list a, .side-note, .space-switch button, .acct-btn, .cond-x, .fs-go { height: auto; min-height: 44px; }   /* the markets line stays 36 px: the drawer footer keeps to 100 px */
   .acct-pop [role="menuitem"], .acct-pop [role="menuitemradio"] { height: auto; min-height: 44px; }
   .earlier > summary, .opt-charge-lines > summary { min-height: 44px; }
   .k-form > .k-field > .k-seg button { min-height: 44px; }
@@ -3195,3 +3203,7 @@ th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
 @media (min-width: 900px) { .h-sum { grid-template-columns: minmax(0, 560px) minmax(0, 1fr); } }
 /* LIVE9B-013: the deep dive's tools row holds a small button's height before the dive arrives */
 .dd-tools { min-height: 32px; }
+/* R61: "or sign in with email" beside a visitor's Continue with Google button (components/EmailWay.tsx), only while email sign-in is on */
+.email-way { color: var(--muted); }
+.email-way .link { color: var(--ink); font-weight: 600; }
+.lp-plan-email { text-align: center; }

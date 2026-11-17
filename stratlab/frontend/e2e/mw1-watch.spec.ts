@@ -150,9 +150,8 @@ test("LIVE5-006: a panel floating over the page shuts on another page; a docked 
   await page.setViewportSize({ width: 1280, height: 800 });
   await open(page, "/");
   await openPanel(page);
-  // (updated on purpose, NAV3: Settings moved to the account menu; another page of the side menu, Themes, is opened the same way)
-  await page.locator("aside.sidebar").getByRole("link", { name: "Themes", exact: true }).click();
-  await expect(page).toHaveURL(/\/research\/themes/);
+  await page.getByRole("link", { name: "Settings", exact: true }).first().click().catch(() => page.goto("/settings"));
+  await expect(page).toHaveURL(/\/settings/);
   await expect(panel(page)).toHaveCount(0);
   await expect(launch(page)).toBeVisible();
   // LIVE6-013: the same when the next page is reached by its address (a full load): a floating panel stays on the page it was opened on
@@ -160,7 +159,7 @@ test("LIVE5-006: a panel floating over the page shuts on another page; a docked 
   await page.goto("/alerts");
   await expect(launch(page)).toBeVisible();
   await expect(panel(page)).toHaveCount(0);
-  await page.goto("/research/themes");                        // back on the page it was opened on, it is still there
+  await page.goto("/settings");                               // back on the page it was opened on, it is still there
   await expect(panel(page)).toBeVisible();
   await panel(page).getByRole("button", { name: "Close Market Watch" }).click();
   // 1440 (LIVE6-013; was 1700): docked beside the page, it takes its width from the page and stays, the same element
@@ -168,9 +167,8 @@ test("LIVE5-006: a panel floating over the page shuts on another page; a docked 
   await page.goto("/");
   await openPanel(page);
   await page.evaluate(() => { (window as unknown as { __mw: Element }).__mw = document.querySelector("[data-testid=market-watch]")!; });
-  // (updated on purpose, NAV3: Settings moved to the account menu; another page of the side menu, Themes, is opened the same way)
-  await page.locator("aside.sidebar").getByRole("link", { name: "Themes", exact: true }).click();
-  await expect(page).toHaveURL(/\/research\/themes/);
+  await page.getByRole("link", { name: "Settings", exact: true }).first().click().catch(() => page.goto("/settings"));
+  await expect(page).toHaveURL(/\/settings/);
   await expect(panel(page)).toBeVisible();
   expect(await page.evaluate(() => (window as unknown as { __mw: Element }).__mw.isConnected)).toBe(true);        // the same element: not drawn again
   await page.goBack();

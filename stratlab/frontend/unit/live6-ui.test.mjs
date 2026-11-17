@@ -85,13 +85,13 @@ test("LIVE6-014: signed in, the analytics question is an overlay along the foot 
   assert.match(css, /\.shell > \.main \{ grid-column: -2 \/ -1; grid-row: 1; \}/);
 });
 
-// (updated on purpose, NAV3 and LIVE9A-025: "Themes pill and Themes menu item both highlighted": the pill is gone, Themes is one entry of
-// the one menu, in view on every page, so there is only one thing to highlight on the Themes page)
-test("LIVE6-016: on the Themes page only the menu's Themes entry is highlighted; there is no second Themes link", () => {
+test("LIVE6-016: on the Themes page only the menu's Themes entry is highlighted; the pill is a plain link there", () => {
   const shell = src("components/Shell.tsx"), css = src("styles.css");
-  assert.doesNotMatch(shell, /side-feature|THEMES/);
-  assert.doesNotMatch(css, /side-feature/);
-  assert.equal((src("lib/nav.ts").match(/page\("\/research\/themes"/g) ?? []).length, 1);
+  assert.match(shell, /className=\{`side-feature\$\{path\.startsWith\(THEMES\) \? " here" : ""\}`\}/);
+  const here = css.match(/\.side-list a\.side-feature\.here \{([^}]*)\}/)?.[1] ?? "";
+  assert.match(here, /background: none/);
+  assert.match(here, /border-color: transparent/);                     // (updated on purpose, LIVE9A-025: no box at all, not an outline)
+  assert.doesNotMatch(here, /orange/);
 });
 
 test("LIVE6-019: on a phone the heatmap's settings fold into one row with Options; the period stays out", () => {

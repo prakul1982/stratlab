@@ -124,9 +124,7 @@ test("money calendar: tax dates, an own date added, the month view and the priva
   await sane(page, errors);
 });
 
-// (updated on purpose, NAV3, CX-1: the Calendar is one entry of the one menu, opening on every date; the person's own dates are its My dates
-// tab, at the same address as before)
-test("money calendar: reachable from the menu (the one Calendar entry, then its My dates tab)", async ({ page }, info) => {
+test("money calendar: reachable from the menu (IA-1: Money's Calendar entry opens it on the person's own dates)", async ({ page }, info) => {
   const n = info.project.name === "phone" ? 158 : 155;
   const errors = await open(page, "/money", "Your money", n);          // Money's own menu, with its Calendar entry
   if (info.project.name === "phone") await page.getByRole("button", { name: "Open menu" }).click();
@@ -134,19 +132,7 @@ test("money calendar: reachable from the menu (the one Calendar entry, then its 
       if (!(await page.locator("aside.sidebar.open").count())) await page.getByRole("button", { name: "Open menu" }).click();
       await expect(page.locator("aside.sidebar.open")).toBeInViewport({ timeout: 1500 });
     }).toPass({ timeout: 15_000 });
-  const side = page.locator("aside.sidebar");
-  // on a phone the one menu is longer than the drawer: the link is scrolled to, and the tap tried again until it lands
-  await expect(async () => {
-    if (info.project.name === "phone" && !(await page.locator("aside.sidebar.open").count())) await page.getByRole("button", { name: "Open menu" }).click();
-    await side.getByRole("link", { name: "Calendar", exact: true }).scrollIntoViewIfNeeded();
-    await page.waitForTimeout(300);
-    await side.getByRole("link", { name: "Calendar", exact: true }).click({ timeout: 3000 });
-    await expect(page).toHaveURL(/\/calendar$/, { timeout: 3000 });
-  }).toPass({ timeout: 30_000 });
-  if (info.project.name === "phone") {
-    await page.getByRole("navigation", { name: "Breadcrumb" }).locator(".k-crumb-btn").click();
-    await page.getByRole("menuitem", { name: "My money dates", exact: true }).click();
-  } else await page.getByTestId("hub-tabs").getByRole("link", { name: "My dates", exact: true }).click();
+  await page.locator("aside.sidebar").getByRole("link", { name: "Calendar", exact: true }).click();
   await expect(page).toHaveURL(/\/money\/calendar$/);
   await expect(page.getByRole("heading", { name: "Money calendar" })).toBeVisible();
   // (updated on purpose, R43: the Calendar's seventh tab put its row on two lines at 1280; this tab's short name is "My dates", the

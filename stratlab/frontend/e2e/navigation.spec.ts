@@ -39,15 +39,13 @@ async function closeMenu(page: Page, phone: boolean) {
 test("an entry's page has one card for each of its tabs, and an old group's address opens the entry that took it over", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   // IA-1: Market view's tools are now Market today's and Market data's tabs; its old address opens Market today
-  // (updated on purpose, NAV3: Market data's pages are tabs of More tools, which has no row of tabs; Market today is Markets, Find stocks is Screener)
   const errors = await open(page, "/invest/g/market-view");
   await expect(page).toHaveURL(/\/invest\/g\/market-today$/, { timeout: 30_000 });
   await page.goto("/invest/g/market-data");
-  await expect(page).toHaveURL(/\/invest\/g\/more$/, { timeout: 30_000 });
-  const g = NAV.invest.groups.find((x) => x.id === "more")!;
+  const g = NAV.invest.groups.find((x) => x.id === "market-data")!;
   const cards = page.getByTestId("group-card");
   await expect(cards).toHaveCount(g.pages.length, { timeout: 30_000 });
-  await expect(page.getByRole("heading", { name: "More tools", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Market data", level: 1 })).toBeVisible();
   for (const p of g.pages) {
     const card = cards.filter({ has: page.getByRole("link", { name: p.label, exact: true }) });
     await expect(card, p.label).toHaveCount(1);
@@ -57,14 +55,14 @@ test("an entry's page has one card for each of its tabs, and an old group's addr
   }
   // the breadcrumb ends at the entry, its menu entry is lit, and a card opens its page
   const crumb = page.getByRole("navigation", { name: "Breadcrumb" });
-  await expect(crumb).toHaveText(/Invest\s*›\s*More tools/);
+  await expect(crumb).toHaveText(/Invest\s*›\s*Market data/);
   await expect(crumb.getByRole("link", { name: "Invest", exact: true })).toHaveAttribute("href", "/invest");
   const side = await sideMenu(page, phone);
   // IA-2 (item 36): on the section's own page its heading is the selected item, its pages are listed open under it, the other sections fold
-  await expect(side.locator('[data-group="more"] > .side-head > a')).toHaveClass(/active/);
-  await expect(side.locator('[data-group="more"] > .side-head > a')).toHaveAttribute("aria-current", "page");
-  await expect(side.locator('[data-group="more"] .side-toggle')).toHaveAttribute("aria-expanded", "true");
-  await expect(side.locator("#side-sub-more a")).toHaveText(g.pages.map((p) => p.label));
+  await expect(side.locator('[data-group="market-data"] > .side-head > a')).toHaveClass(/active/);
+  await expect(side.locator('[data-group="market-data"] > .side-head > a')).toHaveAttribute("aria-current", "page");
+  await expect(side.locator('[data-group="market-data"] .side-toggle')).toHaveAttribute("aria-expanded", "true");
+  await expect(side.locator("#side-sub-market-data a")).toHaveText(g.pages.map((p) => p.label));
   await expect(side.locator('.side-toggle[aria-expanded="true"]')).toHaveCount(1);
   if (SHOTS) {
     await closeMenu(page, phone);
@@ -84,10 +82,9 @@ test("an entry's page has one card for each of its tabs, and an old group's addr
 
 test("every page has a breadcrumb: space, entry and tab; the entry's tabs are the row under it", async ({ page }, info) => {
   const phone = info.project.name === "phone";
-  // (updated on purpose, NAV3: Market data's pages are tabs of More tools, which has no row of tabs; Market today is Markets, Find stocks is Screener)
   const errors = await open(page, "/invest/margin-funding");
   const crumb = page.getByRole("navigation", { name: "Breadcrumb" });
-  await expect(crumb).toHaveText(/Invest\s*›\s*More tools\s*›\s*Margin funding/, { timeout: 30_000 });
+  await expect(crumb).toHaveText(/Invest\s*›\s*Market data\s*›\s*Margin funding/, { timeout: 30_000 });
   if (SHOTS) {
     await closeMenu(page, phone);
     for (const scheme of ["dark", "light"] as const) {
@@ -103,45 +100,32 @@ test("every page has a breadcrumb: space, entry and tab; the entry's tabs are th
   await button.click();
   await expect(button).toHaveAttribute("aria-expanded", "true");
   const menu = page.getByRole("menu", { name: /Pages near Margin funding/ });
-  // More tools has no row of tabs (eleven would be two rows above every title), so its breadcrumb menu lists its tools on a laptop too
-  const more = NAV.invest.groups.find((x) => x.id === "more")!;
-  await expect(menu.getByRole("menuitem")).toHaveText([...more.pages.map((p) => p.label), "Pin to sidebar"]);
+  // IA-1: on a laptop the neighbours are the row of tabs beside the trail, so the menu holds the pin alone (said once, not twice);
+  // on a phone, where that row is folded away, the menu lists the entry's tabs, as it listed a group's pages before
+  await expect(menu.getByRole("menuitem")).toHaveText(phone ? ["ETF vs NAV", "Margin funding", "Stock lending fees", "Pin to sidebar"] : ["Pin to sidebar"]);
   await expect(menu.getByRole("menuitem").first()).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);
   await expect(button).toBeFocused();
-  await expect(page.getByTestId("hub-tabs")).toHaveCount(0);
-  await button.click();
-  await menu.getByRole("menuitem", { name: "Stock lending fees" }).click();
-  await expect(page).toHaveURL(/\/invest\/stock-lending$/);
-  await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toHaveText(/More tools\s*›\s*Stock lending fees/);
-  // an entry with a few tabs: on a laptop they are the row beside the trail, so the breadcrumb menu holds the pin alone; on a phone,
-  // where that row is folded away, the menu lists the entry's tabs
-  await page.goto("/invest/breadth");
-  const mk = NAV.invest.groups.find((x) => x.id === "market-today")!;
-  await expect(crumb).toHaveText(/Invest\s*›\s*Markets\s*›\s*Breadth/, { timeout: 30_000 });
-  const bb = crumb.getByRole("button", { name: /Breadth/ });
-  await bb.click();
-  const bmenu = page.getByRole("menu", { name: /Pages near Breadth/ });
-  await expect(bmenu.getByRole("menuitem")).toHaveText(phone ? [...mk.pages.map((p) => p.label), "Pin to sidebar"] : ["Pin to sidebar"]);
-  await page.keyboard.press("Escape");
+  // a neighbour is one tab away, and the current tab is the one marked
   const tabs = page.getByTestId("hub-tabs");
-  await expect(tabs.locator("a")).toHaveText(mk.pages.map((p) => p.tab ?? p.label));
-  await expect(tabs.locator("a", { hasText: "Breadth" })).toHaveAttribute("aria-current", "page");
+  await expect(tabs.locator("a")).toHaveText(["ETF vs NAV", "Margin funding", "Stock lending fees"]);
+  await expect(tabs.locator("a", { hasText: "Margin funding" })).toHaveAttribute("aria-current", "page");
   if (phone) {
     await expect(tabs).toBeHidden();
-    await bb.click();
-    await bmenu.getByRole("menuitem", { name: "Movers" }).click();
-  } else await tabs.getByRole("link", { name: "Movers" }).click();
-  await expect(page).toHaveURL(/\/invest\/movers$/);
-  await expect(page.getByTestId("hub-tabs").locator("a", { hasText: "Movers" })).toHaveAttribute("aria-current", "page");
+    await button.click();
+    await menu.getByRole("menuitem", { name: "Stock lending fees" }).click();
+  } else await tabs.getByRole("link", { name: "Stock lending fees" }).click();
+  await expect(page).toHaveURL(/\/invest\/stock-lending$/);
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toHaveText(/Market data\s*›\s*Stock lending fees/);
+  await expect(page.getByTestId("hub-tabs").locator("a", { hasText: "Stock lending fees" })).toHaveAttribute("aria-current", "page");
   // the entry's name in the trail goes to its page of cards
-  await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Markets" }).click();
-  await expect(page).toHaveURL(/\/invest\/g\/market-today$/);
+  await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Market data" }).click();
+  await expect(page).toHaveURL(/\/invest\/g\/market-data$/);
 
   // a few pages from other spaces and ones that were tabs or deeper
   for (const [path, trail] of [
-    ["/trade/signals", /Trade\s*›\s*More tools\s*›\s*Forward test/], ["/trade/positioning/stocks", /Trade\s*›\s*F&O desk\s*›\s*Positioning/],
+    ["/trade/signals", /Trade\s*›\s*Practise\s*›\s*Forward test/], ["/trade/positioning/stocks", /Trade\s*›\s*F&O desk\s*›\s*Positioning/],
     ["/research/IN/TCS", /Invest\s*›\s*Companies\s*›\s*Look up a company/], ["/research/investor", /Invest\s*›\s*Watchlist\s*›\s*Stocks/],
     ["/money/calendar", /Money\s*›\s*Calendar\s*›\s*My money dates/], ["/holdings", /Money\s*›\s*Portfolio\s*›\s*Holdings/], ["/notebooks", /Trade\s*›\s*Strategies\s*›\s*Notebooks/],
     ["/trade/journal", /^Trade\s*›\s*Trade journal\s*▾/], ["/research/themes", /^Invest\s*›\s*Themes\s*▾/],
@@ -157,9 +141,8 @@ test("one row of tabs, the entry's (IA-1): the old rows are gone, and Watchlist 
   const phone = info.project.name === "phone";
   const errors = await open(page, "/research/pulse");
   await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toBeVisible({ timeout: 30_000 });
-  // (updated on purpose, NAV3: Market today is Markets, Find stocks is Screener)
-  for (const [path, entry] of [["/research", "Companies"], ["/research/pulse", "Markets"], ["/research/scan", "Screener"], ["/research/screens", "Screener"], ["/research/rotation", "Markets"],
-    ["/research/results", "Calendar"], ["/invest/breadth", "Markets"], ["/research/watchlist", "Watchlist"], ["/trade/positioning", "F&O desk"]] as const) {
+  for (const [path, entry] of [["/research", "Companies"], ["/research/pulse", "Market today"], ["/research/scan", "Find stocks"], ["/research/screens", "Find stocks"], ["/research/rotation", "Market today"],
+    ["/research/results", "Calendar"], ["/invest/breadth", "Market today"], ["/research/watchlist", "Watchlist"], ["/trade/positioning", "F&O desk"]] as const) {
     await page.goto(path);
     await expect(page.getByRole("navigation", { name: "Breadcrumb" }), path).toBeVisible({ timeout: 30_000 });
     await expect(page.locator(".research-nav, .sub-seg, .pos-tabs, nav.seg"), `${path} has no old row of tabs`).toHaveCount(0);
@@ -211,10 +194,9 @@ test("All features lists every page by space and group, is linked from the accou
     await expect(row.getByRole("link", { name: p.label, exact: true })).toHaveAttribute("href", p.to);
     await expect(row.locator(".feat-line")).toHaveText(p.line);
   }
-  // (updated on purpose, NAV3: Market data's pages are More tools)
-  await expect(features.getByRole("link", { name: "More tools", exact: true })).toHaveAttribute("href", groupPath("invest", "more"));
+  await expect(features.getByRole("link", { name: "Market data", exact: true })).toHaveAttribute("href", groupPath("invest", "market-data"));
   // no "New" tags: everything is new at launch (owner, 25 Oct)
-  await expect(features.getByRole("region", { name: "Invest: More tools" }).locator("li").filter({ hasText: "Margin funding" })).not.toContainText(/\bNew\b/);
+  await expect(features.getByRole("region", { name: "Invest: Market data" }).locator("li").filter({ hasText: "Margin funding" })).not.toContainText(/\bNew\b/);
   // a renamed tab says its old name, and the list narrows by it
   await features.getByLabel("Narrow the list of features").fill("screener");
   await expect(features.getByRole("link", { name: "Figures", exact: true })).toBeVisible();
@@ -266,7 +248,7 @@ test("⌘K finds every page, including by everyday words: MTF and 'borrowed mone
   }
   // choosing a page by its everyday word opens it
   const box = await ask("MTF");
-  await box.getByRole("option", { name: /^More tools › Margin funding/ }).first().click();          // (updated on purpose, NAV3)
+  await box.getByRole("option", { name: /^Market data › Margin funding/ }).first().click();
   await expect(page).toHaveURL(/\/invest\/margin-funding$/);
   expect(errors).toEqual([]);
 });

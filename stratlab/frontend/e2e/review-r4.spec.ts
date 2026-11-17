@@ -38,17 +38,14 @@ test("R4-006: the menu locks only a page that is locked whole; a part-paid page 
   await expect(tabs.getByRole("link", { name: /^Net worth/ })).toBeVisible({ timeout: 30_000 });
   await expect(tabs.getByRole("link", { name: /^Net worth/ }).locator(".side-lock"), "Net worth is free in the main").toHaveCount(0);
   await expect(tabs.getByRole("link", { name: /^Mutual funds/ }).locator(".side-lock")).toHaveCount(0);
-  // (updated on purpose (nav3): the one menu holds every space's pages, the folded sections' locked pages (Screener's Chart rules...) in
-  // it too, hidden: none shows in the menu as drawn)
-  await expect(side.locator(".side-entries .side-lock").filter({ visible: true })).toHaveCount(0);
+  await expect(side.locator(".side-entries .side-lock")).toHaveCount(0);
   await expect(page.locator("main")).toContainText(/\d+ of 5 free entries used/, { timeout: 30_000 });
   await page.goto("/money/mutual-funds");
   await expect(page.locator("main").getByRole("heading", { level: 1 })).toBeVisible({ timeout: 30_000 });
   // a whole-locked page still has its lock
   await page.goto("/research/scan");
-  // (updated on purpose, NAV3: Find stocks is called Screener)
-  await expect(page.getByRole("navigation", { name: "Screener" }).getByRole("link", { name: /Chart rules/ }).locator(".side-lock")).toHaveAttribute("data-plan", "Basic", { timeout: 30_000 });
-  // IA-2 (item 36): the menu lists the page under Screener with the same lock as its tab
+  await expect(page.getByRole("navigation", { name: "Find stocks" }).getByRole("link", { name: /Chart rules/ }).locator(".side-lock")).toHaveAttribute("data-plan", "Basic", { timeout: 30_000 });
+  // IA-2 (item 36): the menu lists the page under Find stocks with the same lock as its tab
   await expect(side.locator('#side-sub-find-stocks a[href="/research/scan"] .side-lock')).toHaveAttribute("data-plan", "Basic");
   expect(errors).toEqual([]);
 });
@@ -96,11 +93,11 @@ test("R4-007, RC2B-002: a year asked for is that page's own; the other Money pag
 test("R4-016: the menu fades where more is behind it, and its last row scrolls fully into view", async ({ page }, info) => {
   test.skip(info.project.name === "phone", "the menu is a drawer on a phone");
   await page.setViewportSize({ width: 1280, height: 800 });
-  // (updated on purpose, NAV3: the one menu's 14 entries, on a one-page entry's page (no section open), fit a 1280x800 laptop whole, so
-  // nothing fades; on a shorter window the rule still holds)
-  const errors = await open(page, "/research/themes");
+  const errors = await open(page, "/invest/business-updates");
   const nav = page.locator("aside.sidebar nav.side-groups");
   await expect(nav).toBeVisible({ timeout: 30_000 });
+  // IA-2 (item 36): Invest's seven headings with Companies' four pages open fit a 1280x800 laptop whole, so nothing fades; on a shorter
+  // window the rule still holds
   await expect(nav).toHaveAttribute("data-fade", "none");
   await page.setViewportSize({ width: 1280, height: 430 });
   await expect(nav).toHaveAttribute("data-fade", "bottom");

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { eyebrowOf } from "../../lib/eyebrow";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
@@ -155,7 +154,7 @@ export function SipTestPage() {
 
   return (
     <div className="k-page sip-test">
-      <PageHeader eyebrow={eyebrowOf("/money/sip-test")} title="Test a SIP"
+      <PageHeader eyebrow="Money · Plan" title="Test a SIP"
         lede="What a stock or ETF SIP of your own would have done on past prices, with the charges on every purchase, beside the same money put in on day one. Mutual fund SIPs, priced at each day's NAV, aren't tested here yet."
         info="History of the rule you set, not a forecast or a suggestion." infoLabel="About the SIP test" />
 

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { MENU, NAV, startOf } from "../src/lib/nav";
+import { NAV, startOf } from "../src/lib/nav";
 
 // IA-2 (owner, 30 Oct). Items 37 and 43: on a laptop Market Watch's round button sits in a real margin clear of the cards (the owner picked
 // this of the two ways shown; the menu-button way is gone).
@@ -89,9 +89,7 @@ test("item 36: each heading lists its pages; the section you are in is open, the
   test.skip(info.project.name === "phone", "the phone's sheet has its own test below");
   const errors = await open(page, "/research/screens", who(false), 1280);
   const nav = mainNav(page);
-  // (updated on purpose, NAV3, CX-1: one menu of every entry, under each space's name; Find stocks is Screener, Market today is Markets, Market data is More tools)
-  const ENTRIES = MENU.flatMap((s) => s.groups);
-  await expect(nav.locator(".side-entries .side-entry > .side-head > a")).toHaveText(ENTRIES.map((g) => g.label), { timeout: 30_000 });
+  await expect(nav.locator(".side-entries > .side-entry > .side-head > a")).toHaveText(NAV.invest.groups.map((g) => g.label), { timeout: 30_000 });
   // Find stocks is open with its pages, as its tabs name them; Figures is the page marked
   const find = NAV.invest.groups.find((g) => g.id === "find-stocks")!;
   const sub = nav.locator("#side-sub-find-stocks");
@@ -100,76 +98,62 @@ test("item 36: each heading lists its pages; the section you are in is open, the
   for (const p of find.pages) await expect(sub.getByRole("link", { name: p.label, exact: true })).toHaveAttribute("href", p.to);
   await expect(sub.getByRole("link", { name: "Figures", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(nav.locator("[aria-current=page]")).toHaveCount(1);
-  await expect(nav.getByRole("link", { name: "Screener", exact: true })).not.toHaveClass(/active/);      // never two selected at once
+  await expect(nav.getByRole("link", { name: "Find stocks", exact: true })).not.toHaveClass(/active/);      // never two selected at once
   // the others are folded behind their buttons; a heading with one page has none
-  for (const g of ENTRIES) {
+  for (const g of NAV.invest.groups) {
     const btn = nav.getByRole("button", { name: `${g.label} pages`, exact: true });
     if (g.pages.length === 1) { await expect(btn).toHaveCount(0); await expect(nav.locator(`#side-sub-${g.id}`)).toHaveCount(0); continue; }
     await expect(btn).toHaveAttribute("aria-expanded", g.id === "find-stocks" ? "true" : "false");
     await expect(btn).toHaveAttribute("aria-controls", `side-sub-${g.id}`);
   }
   // the keyboard opens a folded section; it stays open after a reload (kept for this person)
-  const today = nav.getByRole("button", { name: "Markets pages", exact: true });
+  const today = nav.getByRole("button", { name: "Market today pages", exact: true });
   await today.focus();
   await page.keyboard.press("Enter");
   await expect(today).toHaveAttribute("aria-expanded", "true");
   await expect(nav.locator("#side-sub-market-today").getByRole("link")).toHaveText(NAV.invest.groups.find((g) => g.id === "market-today")!.pages.map((p) => p.label));
   await page.reload();
-  await expect(mainNav(page).getByRole("button", { name: "Markets pages", exact: true })).toHaveAttribute("aria-expanded", "true", { timeout: 30_000 });
-  await mainNav(page).getByRole("button", { name: "Markets pages", exact: true }).click();
-  await expect(mainNav(page).getByRole("button", { name: "Markets pages", exact: true })).toHaveAttribute("aria-expanded", "false");
+  await expect(mainNav(page).getByRole("button", { name: "Market today pages", exact: true })).toHaveAttribute("aria-expanded", "true", { timeout: 30_000 });
+  await mainNav(page).getByRole("button", { name: "Market today pages", exact: true }).click();
+  await expect(mainNav(page).getByRole("button", { name: "Market today pages", exact: true })).toHaveAttribute("aria-expanded", "false");
   // the section you are in can be folded too; coming back into it opens it again
-  await mainNav(page).getByRole("button", { name: "Screener pages", exact: true }).click();
+  await mainNav(page).getByRole("button", { name: "Find stocks pages", exact: true }).click();
   await expect(mainNav(page).locator("#side-sub-find-stocks")).toBeHidden();
   // a heading still opens its first page, and its section opens
-  await mainNav(page).getByRole("link", { name: "More tools", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`${startOf(NAV.invest.groups.find((g) => g.id === "more")!)}$`));
-  await expect(mainNav(page).getByRole("button", { name: "More tools pages", exact: true })).toHaveAttribute("aria-expanded", "true");
-  await mainNav(page).getByRole("link", { name: "Screener", exact: true }).click();
-  await expect(mainNav(page).getByRole("button", { name: "Screener pages", exact: true })).toHaveAttribute("aria-expanded", "true");
+  await mainNav(page).getByRole("link", { name: "Market data", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${startOf(NAV.invest.groups.find((g) => g.id === "market-data")!, "invest")}$`));
+  await expect(mainNav(page).getByRole("button", { name: "Market data pages", exact: true })).toHaveAttribute("aria-expanded", "true");
+  await mainNav(page).getByRole("link", { name: "Find stocks", exact: true }).click();
+  await expect(mainNav(page).getByRole("button", { name: "Find stocks pages", exact: true })).toHaveAttribute("aria-expanded", "true");
   expect(errors).toEqual([]);
 });
 
-// (updated on purpose, NAV3, CX-1: the one menu lists 14 entries on every page, where a space's menu listed 4 to 7, so with a section open it
-// can be taller than a 1280x800 laptop's menu: there the page you are on is scrolled into the menu's view, the faded edge and "More below" say
-// there is more, and nothing runs past the menu's edge. On a 1440x900 screen the menu doesn't scroll with a short section open.)
-test("item 36: on a laptop the page you are on is always in the menu's view; on 1440x900 a short section open needs no scroll", async ({ page }, info) => {
+test("item 36: on a 1280x800 laptop the menu does not scroll with the section you are in open, in every space", async ({ page }, info) => {
   test.skip(info.project.name === "phone", "a laptop's size");
   await open(page, "/invest", who(false), 1280, 800);
   // a person with many notebooks: the menu lists six of them and "All 8 notebooks" under Notebooks, the longest a section gets
   await page.route(`${process.env.E2E_API ?? "http://127.0.0.1:8765"}/notebooks`, (r) => r.request().method() !== "GET" ? r.fallback() : r.fulfill({ json: Array.from({ length: 8 }, (_, i) => ({
     id: `nb-${i}`, name: `Opening range breakout with a long name ${i}`, pinned: i < 2, instrument: { market: "IN", symbol: "RELIANCE" }, summary: { experiments: 2, last_verdict: "robust" } })) }));
   await expect(mainNav(page)).toBeVisible({ timeout: 30_000 });
-  const inView = async (to: string) => {
-    const nav = side(page).locator("nav.side-groups");
-    await expect(nav.locator(".side-entries")).toBeVisible({ timeout: 30_000 });
-    const lit = nav.locator("[aria-current=page], a.in-section").first();
-    await expect(lit, to).toBeVisible();
-    await expect.poll(async () => {
-      const [b, n] = await Promise.all([lit.boundingBox(), nav.boundingBox()]);
-      return !!b && !!n && b.y >= n.y - 1 && b.y + b.height <= n.y + n.height + 1;
-    }, { message: `${to}: the page's own link is in the menu's view` }).toBe(true);
-    expect(await nav.evaluate((el) => el.scrollWidth - el.clientWidth), `${to}: nothing in the menu runs past its edge`).toBeLessThanOrEqual(0);
-  };
-  await page.goto("/notebooks");
-  await expect(side(page).locator(".nb-more")).toHaveText("All 8 notebooks", { timeout: 30_000 });
-  await inView("/notebooks");
-  for (const g of MENU.flatMap((s) => s.groups)) {
-    const to = startOf(g);
+  const seen = new Set<string>(["/notebooks"]);
+  for (const to of ["/notebooks"]) {
     await page.goto(to);
-    await inView(to);
-    // the deepest tab too
-    const last = g.pages[g.pages.length - 1].to;
-    if (last !== to) { await page.goto(last); await inView(last); }
+    const nav = side(page).locator("nav.side-groups");
+    await expect(nav.locator(".nb-more")).toHaveText("All 8 notebooks", { timeout: 30_000 });
+    const over = await nav.evaluate((el) => el.scrollHeight - el.clientHeight);
+    expect(over, `${to} with 8 notebooks: the menu scrolls by ${over}px`).toBeLessThanOrEqual(0);
+    expect(await nav.evaluate((el) => el.scrollWidth - el.clientWidth), `${to}: nothing in the menu runs past its edge`).toBeLessThanOrEqual(0);
   }
-  // on a 1440x900 screen, a section of up to four pages open: no scroll
-  await page.setViewportSize({ width: 1440, height: 900 });
-  for (const g of MENU.flatMap((s) => s.groups).filter((x) => x.pages.length <= 4 && x.id !== "strategies")) {
-    await page.goto(startOf(g));
+  for (const space of ["trade", "invest", "money"] as const) for (const g of NAV[space].groups) {
+    const to = startOf(g, space);
+    if (seen.has(to)) continue;
+    seen.add(to);
+    await page.goto(to);
     const nav = side(page).locator("nav.side-groups");
     await expect(nav.locator(".side-entries")).toBeVisible({ timeout: 30_000 });
     const over = await nav.evaluate((el) => el.scrollHeight - el.clientHeight);
-    expect(over, `${startOf(g)} at 1440x900: the menu scrolls by ${over}px`).toBeLessThanOrEqual(0);
+    expect(over, `${to}: the menu scrolls by ${over}px`).toBeLessThanOrEqual(0);
+    await expect(side(page).locator(".side-more")).toHaveCount(0);
   }
 });
 
@@ -178,8 +162,7 @@ test("item 36: the phone's menu sheet shows the same headings and pages", async 
   await open(page, "/invest/breadth", who(true), 390, 844);
   await page.getByRole("button", { name: "Open menu" }).click();
   const nav = mainNav(page);
-  // (updated on purpose, NAV3: the same one menu on a phone)
-  await expect(nav.locator(".side-entries .side-entry > .side-head > a")).toHaveText(MENU.flatMap((s) => s.groups).map((g) => g.label), { timeout: 30_000 });
+  await expect(nav.locator(".side-entries > .side-entry > .side-head > a")).toHaveText(NAV.invest.groups.map((g) => g.label), { timeout: 30_000 });
   await expect(nav.locator("#side-sub-market-today").getByRole("link", { name: "Breadth", exact: true })).toHaveAttribute("aria-current", "page");
   const btn = nav.getByRole("button", { name: "Companies pages", exact: true });
   expect((await btn.boundingBox())!.height).toBeGreaterThanOrEqual(44);

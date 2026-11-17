@@ -7,13 +7,7 @@ import { NAV_GROUPS, type NavEntry } from "./navGroups";
  * IA-1 (owner, 29 Oct: "43 menu entries → about 15, nothing removed"): a menu entry (a NavGroup) is one page of tabs, and
  * each of its tabs (a NavPage) is a page that was an entry of its own before. Every tab keeps the address it always had,
  * so links in emails, briefs, the blog and bookmarks open the right tab; `was` keeps the old menu name for search, Help
- * and the "(Screener)" in a search result.
- *
- * NAV3 (CX-1 review, 16 Nov: about 55 menu links, the Calendar in three spaces, Themes twice; owner OK the same day: "may
- * reorganize: merge/hide menu entries and pages, nothing deleted, every feature still reachable"): one menu for every page, the
- * same on a laptop and a phone, of 14 entries: My space, then Trade's four, Invest's six and Money's two under their space's
- * name, then More tools. Each entry is listed once (the Calendar is one entry, under Invest), the niche tools are the tabs of
- * More tools, and every page keeps its address, so no link anywhere breaks. */
+ * and the "(Screener)" in a search result. */
 export type SpaceId = "trade" | "invest" | "money";
 
 export interface NavPage {
@@ -41,8 +35,7 @@ export interface NavPage {
   part?: boolean;
   /** The name it had in the menu before IA-1, when that was another ("Screener" for Find stocks' Figures). */
   was?: string;
-  /** The space its address belongs to, when that is not its entry's (a Calendar or More tools tab at /trade/… or /money/…):
-   * the breadcrumb starts there. */
+  /** A tab of an entry every space shares (Calendar): the space it belongs to, which its address already says. */
   space?: SpaceId;
 }
 export interface NavGroup {
@@ -51,10 +44,10 @@ export interface NavGroup {
   icon: string;
   /** Its tabs, in order (one page: no tabs). */
   pages: NavPage[];
-  /** The ids of the menu groups it took over (IA-1, NAV3), so an old group page (/trade/g/build-and-test) opens this one. */
+  /** The ids of the menu groups it took over (IA-1), so an old group page (/trade/g/build-and-test) opens this one. */
   was?: string[];
-  /** Drawn after the three spaces' entries in the menu, not under its space's name (More tools, NAV3). */
-  apart?: boolean;
+  /** In every space's menu (Calendar): where each space's entry opens it, pre-filtered for that space. */
+  start?: Partial<Record<SpaceId, string>>;
 }
 
 const fromData = (to: string): NavEntry | undefined =>
@@ -69,12 +62,13 @@ function page(to: string, label: string, icon: string, words: string, o: { line?
     also: o.also, flag: o.flag, part: o.part, was: o.was, space: o.space, tab: o.tab };
 }
 
-/** One Calendar (IA-1 item 3): results, corporate actions, IPO dates, market events and the person's own money dates. NAV3: one
- * entry, under Invest, opening on every date (it was in all three spaces' menus, seven links each time). An IPO's own page stays
- * (part of the IPOs tab). */
+/** One Calendar (IA-1 item 3): results, corporate actions, IPO dates, market events and the person's own money dates, in
+ * every space's menu. Each space opens it pre-filtered: Trade on the market events, Invest on every date, Money on the
+ * person's own. An IPO's own page stays (part of the IPOs tab). */
 const CALENDAR: NavGroup = {
   id: "calendar", label: "Calendar", icon: "calendar", was: ["company-news"],
   blurb: "Every date that matters in one place: results days, dividends and other corporate actions, IPO dates, the RBI, the Fed and data releases, F&O expiries, and your own tax and money dates.",
+  start: { trade: "/trade/events", invest: "/calendar", money: "/money/calendar" },
   pages: [
     page("/calendar", "All dates", "calendar", "calendar all dates upcoming week ahead what is coming dates results dividends ex date ipo open close listing rbi fed expiry holiday tax due my stocks",
       { line: "Results, corporate actions, IPO dates and market events, day by day, for your stocks or every company.",
@@ -94,29 +88,6 @@ const CALENDAR: NavGroup = {
     page("/trade/events", "Market events", "calendar", "market events calendar rbi policy fed data releases budget index changes expiry expiries weekly monthly f&o expiry holidays results dates", { space: "trade", tab: "Events" }),
     page("/money/calendar", "My money dates", "calendar", "money calendar tax due dates advance tax itr results dividends maturities premiums emi expiries own dates feed reminders",
       { was: "Money calendar", space: "money", tab: "My dates" }),
-  ],
-};
-
-/** More tools (NAV3, CX-1 "Cut or hide under More / Labs"): the narrower tools, one entry drawn after the three spaces in the menu.
- * Each keeps its address, its plan lock and its card; the old Market data and Plan entries' pages open it (`was`). */
-const MORE: NavGroup = {
-  id: "more", label: "More tools", icon: "layers", was: ["market-data", "plan"], apart: true,
-  blurb: "The narrower tools: the closing auction, chart replay and forward tests; ETFs against their NAV, margin funding and stock lending fees; business updates, business groups and named holders; a SIP test and today's interest rates.",
-  pages: [
-    page("/trade/closing-auction", "Closing auction", "pulse", "closing auction 15:15 15:35 reference price indicative price settlement expiry day", { space: "trade" }),
-    page("/trade/replay", "Chart replay", "lens", "chart replay practise past candles bar replay manual trading practice journal", { flag: "chart_replay", space: "trade" }),
-    page("/trade/signals", "Forward test", "pulse", "forward test signal signals webhook tradingview chartink alert alerts paper live out of sample go forward",
-      { line: "Run your strategy forward on paper: each TradingView or Chartink alert is filled at StratLab's own price.", also: /^\/trade\/signals\/.*$/, flag: "signal_webhooks", space: "trade" }),
-    page("/invest/etf-gaps", "ETF vs NAV", "lens", "market data etf nav premium discount gap price iopv nifty bees goldbees fund unit value"),
-    page("/invest/margin-funding", "Margin funding", "wallet", "margin funding mtf margin trading facility borrowed money broker funding leverage loan to buy shares interest pledge exposure", { flag: "mtf" }),
-    page("/invest/stock-lending", "Stock lending fees", "receipt", "stock lending fees slb securities lending borrowing borrowed shares lend my shares earn on holdings"),
-    page("/invest/business-updates", "Business updates", "calendar", "business updates monthly sales automakers vehicle sales lenders quarterly figures advances deposits", { flag: "biz_updates", tab: "Updates" }),
-    page("/invest/groups", "Business groups", "layers", "business group groups conglomerate family promoter group group companies listed companies of a group combined market value",
-      { flag: "group_figures", part: true, tab: "Groups", also: /^\/invest\/groups\/[^/]+$/, line: "India's business groups from the promoters companies name: members, combined value and moves.",
-        blurb: "Each business group the companies' own shareholding filings make out: its listed companies, their combined market value, how each moved and its promoter holding." }),
-    page("/invest/holders", "Named holders", "layers", "named holders shareholders promoter fund fii dii mutual fund shareholding pattern above 1% who owns", { flag: "holders" }),
-    page("/money/sip-test", "Test a SIP", "pulse", "sip stock sip etf sip systematic investment plan monthly weekly daily step up dip rule lump sum xirr niftybees goldbees test", { flag: "sip_luck", space: "money" }),
-    page("/money/rates", "Rates", "receipt", "rates fixed income fd fixed deposit t-bill treasury bill g-sec government bond repo ppf scss ssy nsc kvp post office small savings after tax yield slab tds interest", { flag: "rates_slab", space: "money" }),
   ],
 };
 
@@ -141,34 +112,43 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
           { was: "Import a strategy", line: "Bring a strategy from Pine Script, Python, MetaTrader or AmiBroker, or a config file.", blurb: "Pine Script, Python, MetaTrader, AmiBroker, a config file or plain words: StratLab turns it into rules you can read, edit and test." }),
       ] },
       { id: "practise", label: "Practise", icon: "pulse",
-        blurb: "Trade with fake money: rules live on real prices, and option structures at the live bid and ask. Nothing here sends a real order.", pages: [
+        blurb: "Trade with fake money: rules live on real prices, option structures at the live bid and ask, your own alerts, or past candles. Nothing here sends a real order.", pages: [
         page("/paper", "Paper trading", "pulse", "paper trading live forward test sessions running fake money simulate practice demo risk exposure all sessions",
           { line: "Run a notebook's rules live on real prices with fake money, until you stop them.", blurb: "Run rules live on real prices with fake money. Every session keeps its orders, its open position and its running result.", also: /^\/(paper|options\/s)\/.*$/ }),
         page("/options", "Options builder", "layers", "options straddle strangle iron fly condor spread ce pe nifty banknifty sensex fno f&o greeks delta gamma theta vega iv payoff what if expiry expiries",
           { line: "Build straddles, strangles, condors or any legs and paper trade them at the live bid and ask.", blurb: "Straddles, strangles, iron flies, condors or any structure, filled at the live bid and ask, with Greeks and a what-if payoff." }),
+        page("/trade/signals", "Forward test", "pulse", "forward test signal signals webhook tradingview chartink alert alerts paper live out of sample go forward",
+          { line: "Run your strategy forward on paper: each TradingView or Chartink alert is filled at StratLab's own price.", also: /^\/trade\/signals\/.*$/, flag: "signal_webhooks" }),
+        page("/trade/replay", "Chart replay", "lens", "chart replay practise past candles bar replay manual trading practice journal", { flag: "chart_replay" }),
       ] },
-      { id: "fo-desk", label: "F&O desk", icon: "layers", blurb: "What the futures and options market is doing: who holds what, and what is changing in the contracts.", pages: [
+      { id: "fo-desk", label: "F&O desk", icon: "layers", blurb: "What the futures and options market is doing: who holds what, what is changing, how the closing auction prices.", pages: [
         page("/trade/positioning", "Positioning", "layers", "positioning fii dii pro client participant open interest oi pcr put call ratio max pain iv implied volatility flows cash fno f&o derivatives vix stock futures buildup rollover basis mwpl",
           { also: /^\/trade\/positioning\/stocks$/ }),
         page("/trade/fo-changes", "F&O changes", "calendar", "f&o changes lot size lot revisions entering leaving fno list ban expiry day contract exchange circular"),
+        page("/trade/closing-auction", "Closing auction", "pulse", "closing auction 15:15 15:35 reference price indicative price settlement expiry day"),
       ] },
+      CALENDAR,
     ],
   },
   invest: {
     label: "Invest", home: "/invest", groups: [
       { id: "companies", label: "Companies", icon: "lens",
-        blurb: "Look up any Indian or US company, put two side by side, or search inside what companies filed.", pages: [
+        blurb: "Look up any Indian or US company, put two side by side, read the monthly and quarterly updates companies file, or find where a holder is named.", pages: [
         page("/research", "Look up a company", "lens", "company stock fundamentals analysis ai read valuation news research search ticker deep dive business model capex growth margins cash flow management report card concall presentation",
           { line: "Any Indian or US company: price, key numbers, results, news, and a deep dive.", blurb: "Price, valuation, growth, news and an AI read for any Indian or US company, and a deep dive into 10 years of its numbers and its business.", tab: "Look up", also: /^\/research\/(IN|US)\/.*$/ }),
         page("/research/compare", "Compare", "layers", "compare companies versus vs side by side two stocks", { line: "Two companies side by side, with an AI read of the differences." }),
-        // IA-1 item 4: each company's own updates and holders are on its page and in Themes; the lists across companies are in More tools (NAV3)
+        // IA-1 item 4: each company's own updates and holders are on its page and in Themes; the lists across companies stay here
+        page("/invest/business-updates", "Business updates", "calendar", "business updates monthly sales automakers vehicle sales lenders quarterly figures advances deposits", { flag: "biz_updates", tab: "Updates" }),
+        page("/invest/groups", "Business groups", "layers", "business group groups conglomerate family promoter group group companies listed companies of a group combined market value",
+          { flag: "group_figures", part: true, tab: "Groups", also: /^\/invest\/groups\/[^/]+$/, line: "India's business groups from the promoters companies name: members, combined value and moves.",
+            blurb: "Each business group the companies' own shareholding filings make out: its listed companies, their combined market value, how each moved and its promoter holding." }),
+        page("/invest/holders", "Named holders", "layers", "named holders shareholders promoter fund fii dii mutual fund shareholding pattern above 1% who owns", { flag: "holders" }),
         // kept short: this map is in the visitor's first download (e2e/review-r5.spec.ts's budget)
         // its card said only its name, a 90px hole in it on the Companies page (ui-lint R13)
         page("/research/search", "Search filings", "search", "transcripts concall", { blurb: "Words and phrases inside call transcripts, investor presentations, annual reports and earnings releases, each linked to the filed copy.", flag: "doc_search" }),
       ] },
-      // NAV3: "Screener", the name people look for (it was "Find stocks"); the id stays, so its old addresses and pins keep working
-      { id: "find-stocks", label: "Screener", icon: "search", blurb: "Find companies by their figures, by what their charts do, or by what they filed.", pages: [
-        page("/research/screens", "Figures", "search", "find stocks screen filter companies growth debt returns roe pe fundamentals ratios",
+      { id: "find-stocks", label: "Find stocks", icon: "search", blurb: "Find companies by their figures, by what their charts do, or by what they filed.", pages: [
+        page("/research/screens", "Figures", "search", "screener screen filter companies growth debt returns roe pe fundamentals ratios",
           { was: "Screener", line: "Filter companies by plain facts: growth, debt, returns." }),
         page("/research/scan", "Chart rules", "pulse", "trend scan scanner stage 2 stage two supertrend st s2 weinstein signals nifty 50 daily alert build your own custom scanner chart rules",
           { was: "Trend scan", line: "Which stocks are in a rising trend (Stage 2) with the Supertrend line also pointing up, or your own chart rules run over a group." }),
@@ -178,10 +158,9 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
       { id: "themes", label: "Themes", icon: "compass", blurb: THEMES_LINE, pages: [
         page("/research/themes", "Themes", "compass", "themes sector industry shortlist ev defence banks trend map listed companies value chain", { line: THEMES_LINE }),
       ] },
-      // NAV3: "Markets", one page of tabs for the market as a whole (it was "Market today")
-      { id: "market-today", label: "Markets", icon: "pulse", was: ["market-view"],
+      { id: "market-today", label: "Market today", icon: "pulse", was: ["market-view"],
         blurb: "The market as a whole today: its mood, how many stocks rise and fall, which sectors lead, where the institutions' money went, and today's brief.", pages: [
-        page("/research/pulse", "Mood", "pulse", "market today markets pulse today news mood indices nifty sensex headlines index levels", { was: "Market pulse", line: "Index levels, headlines and today's mood." }),
+        page("/research/pulse", "Mood", "pulse", "market pulse today news mood indices nifty sensex headlines index levels", { was: "Market pulse", line: "Index levels, headlines and today's mood." }),
         page("/invest/breadth", "Breadth", "pulse", "market breadth advance decline advances declines a/d line ad ratio mcclellan oscillator summation index new highs lows 52 week dma moving average trin arms thrust sector breadth nifty 500 midcap smallcap",
           { was: "Market breadth" }),
         page("/invest/heatmap", "Heatmap", "layers", "heatmap heat map treemap tiles sector map market cap",
@@ -195,6 +174,11 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
             blurb: "The FIIs' and DIIs' net buying in the cash market: the latest day's bought, sold and net, and every recorded day as a table and a chart." }),
         page("/news", "Today's brief", "news", "news briefs brief newsletter digest email daily weekly market close my stocks watchlist headlines subscribe", { was: "Briefs", line: "A short brief after each market close, for India, the US and the companies you follow." }),
       ] },
+      { id: "market-data", label: "Market data", icon: "wallet", blurb: "The exchange's own data on prices and borrowing: ETFs against their NAV, margin-funded positions and stock lending fees.", pages: [
+        page("/invest/etf-gaps", "ETF vs NAV", "lens", "etf nav premium discount gap price iopv nifty bees goldbees fund unit value"),
+        page("/invest/margin-funding", "Margin funding", "wallet", "margin funding mtf margin trading facility borrowed money broker funding leverage loan to buy shares interest pledge exposure", { flag: "mtf" }),
+        page("/invest/stock-lending", "Stock lending fees", "receipt", "stock lending fees slb securities lending borrowing borrowed shares lend my shares earn on holdings"),
+      ] },
       CALENDAR,
       { id: "watch", label: "Watchlist", icon: "pin", blurb: "The companies you follow, and a message when something happens to them.", pages: [
         // "Stocks", not "Watchlist" again under Watchlist (the trail read "Watchlist › Watchlist")
@@ -202,7 +186,6 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
           { was: "Watchlist", line: "The companies you follow, as a list or each one at a glance.", also: /^\/research\/investor$/ }),
         page("/alerts", "Alerts", "bell", "alerts stock alerts price alert notify notification telegram email push trigger", { was: "Stock alerts", line: "Messages when a stock or the market does something you asked about." }),
       ] },
-      MORE,
     ],
   },
   money: {
@@ -221,6 +204,11 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
         page("/money/us-tax", "US stocks tax", "compass", "us stocks tax foreign tax credit schedule fa form 67 tt buying rate sbi 24 month rule indian investors us shares"),
         page("/money/itr", "ITR export", "receipt", "itr export itr-ready schedule 112a cg ca pdf pack income tax return filing f&o turnover audit", { was: "ITR-ready export" }),
       ] },
+      { id: "plan", label: "Plan", icon: "compass", blurb: "Look ahead: what a SIP would have done, and what your savings earn after tax.", pages: [
+        page("/money/sip-test", "Test a SIP", "pulse", "sip stock sip etf sip systematic investment plan monthly weekly daily step up dip rule lump sum xirr niftybees goldbees test", { flag: "sip_luck" }),
+        page("/money/rates", "Rates", "receipt", "rates fixed income fd fixed deposit t-bill treasury bill g-sec government bond repo ppf scss ssy nsc kvp post office small savings after tax yield slab tds interest", { flag: "rates_slab" }),
+      ] },
+      CALENDAR,
     ],
   },
 };
@@ -229,8 +217,8 @@ export const SPACE_LIST: SpaceId[] = ["trade", "invest", "money"];
 
 export interface Located { space: SpaceId; group: NavGroup; page: NavPage }
 
-/** Every page with where it lives, in menu order, each once: a tab whose address is another space's (a Calendar or More tools
- * tab at /trade/… or /money/…) is placed in that space. */
+/** Every page with where it lives, in menu order, each once: a tab of the Calendar every space shares is placed in the space
+ * its own address belongs to. */
 export const ALL_PAGES: Located[] = (() => {
   const out: Located[] = [];
   for (const space of SPACE_LIST) for (const group of NAV[space].groups) for (const p of group.pages) {
@@ -240,23 +228,12 @@ export const ALL_PAGES: Located[] = (() => {
   return out;
 })();
 
-/** Every menu entry once, with its space. */
-export const ALL_GROUPS: { space: SpaceId; group: NavGroup }[] = SPACE_LIST.flatMap((space) => NAV[space].groups.map((group) => ({ space, group })));
+/** Every menu entry once, with its space (the Calendar under Invest, where its own page is). */
+export const ALL_GROUPS: { space: SpaceId; group: NavGroup }[] = SPACE_LIST.flatMap((space) => NAV[space].groups
+  .filter((g) => !g.start || g.pages[0].space === space).map((group) => ({ space, group })));
 
-/** The one menu (NAV3), in its order: each space's entries under the space's name, then the entries drawn apart (More tools). */
-export const MENU: { space: SpaceId | null; label: string | null; groups: NavGroup[] }[] = [
-  ...SPACE_LIST.map((space) => ({ space, label: NAV[space].label, groups: NAV[space].groups.filter((g) => !g.apart) })),
-  { space: null, label: null, groups: ALL_GROUPS.filter((x) => x.group.apart).map((x) => x.group) },
-];
-
-/** The space whose menu section holds an entry (its page of cards lives at /<space>/g/<id>). */
-export const groupSpace = (group: NavGroup): SpaceId => ALL_GROUPS.find((x) => x.group.id === group.id)?.space ?? "invest";
-
-/** An entry whose tabs live at more than one space's addresses (the Calendar, More tools). */
-export const mixedGroup = (group: NavGroup): boolean => group.pages.some((p) => p.space && p.space !== groupSpace(group));
-
-/** Where a menu entry opens: its first tab. */
-export const startOf = (group: NavGroup, _space?: SpaceId) => group.pages[0].to;
+/** Where a space's menu entry opens: its first tab, or the tab that space starts the shared Calendar on. */
+export const startOf = (group: NavGroup, space: SpaceId) => group.start?.[space] ?? group.pages[0].to;
 
 /** An entry's own address: the page of cards for everything in it. */
 export const groupPath = (space: SpaceId, group: NavGroup | string) => `/${space}/g/${typeof group === "string" ? group : group.id}`;
@@ -267,17 +244,21 @@ export function locate(path: string): Located | null {
   return ALL_PAGES.find((l) => l.page.to === p) ?? ALL_PAGES.find((l) => l.page.also?.test(p)) ?? null;
 }
 
-/** The entry page `/trade/g/practise` names (an old group's id names the entry that took it over), or null. An entry that moved
- * to another space (NAV3: /trade/g/calendar, /money/g/plan) is found there; its page then opens at its own address. */
+/** The entry page `/trade/g/practise` names (an old group's id names the entry that took it over), or null. */
 export function locateGroup(path: string): { space: SpaceId; group: NavGroup } | null {
   const m = path.split(/[?#]/)[0].match(/^\/(trade|invest|money)\/g\/([a-z-]+)\/?$/);
   if (!m) return null;
   const space = m[1] as SpaceId;
   const group = NAV[space].groups.find((g) => g.id === m[2]) ?? NAV[space].groups.find((g) => g.was?.includes(m[2]));
   if (group) return { space, group };
-  const moved = ALL_GROUPS.find((x) => x.group.id === m[2]) ?? ALL_GROUPS.find((x) => x.group.was?.includes(m[2]));
-  return moved ?? null;
+  // R61: an entry page only Release 60's one menu had (its More tools, at /trade|invest|money/g/more) still opens: the first entry it gathered
+  const moved = MOVED[m[2]];
+  const there = moved && NAV[moved[0]].groups.find((g) => g.id === moved[1]);
+  return there ? { space: moved[0], group: there } : null;
 }
+
+/** Entry pages that existed only in Release 60's one menu, with the entry each opens now (R61: the owner had the R59 menu restored). */
+const MOVED: Record<string, [SpaceId, string]> = { more: ["invest", "market-data"] };
 
 /** The page with this exact address, wherever it lives. */
 export const pageAt = (to: string): Located | null => ALL_PAGES.find((l) => l.page.to === to) ?? null;
@@ -286,6 +267,5 @@ export const pageAt = (to: string): Located | null => ALL_PAGES.find((l) => l.pa
  * is that one page ("Themes"). `was` adds the old name: "Find stocks › Figures (Screener)". */
 export function placeName(l: Located, was = false): string {
   const own = l.group.pages.length === 1 ? l.page.label : `${l.group.label} › ${l.page.label}`;
-  // the old name only when the entry doesn't carry it now (NAV3: "Screener › Figures", not "Screener › Figures (Screener)")
-  return was && l.page.was && l.page.was !== l.group.label ? `${own} (${l.page.was})` : own;
+  return was && l.page.was ? `${own} (${l.page.was})` : own;
 }

@@ -133,7 +133,7 @@ test("the US market, the menu entry and the wait before the first daily run", as
   await expect(page.getByTestId("heatmap").getByRole("heading", { name: "NIFTY 500: 1 day" })).toBeVisible();
   await expect(tiles(page).first()).toHaveAttribute("href", /^\/research\/IN\//);
   if (info.project.name === "desktop") {
-    await expect(page.locator("nav, aside").getByRole("link", { name: /^Markets$/ }).first()).toBeVisible();          // (updated on purpose, NAV3: Market today is called Markets)
+    await expect(page.locator("nav, aside").getByRole("link", { name: /Market today/ }).first()).toBeVisible();
   }
   // before the first daily run has stored a market's rows: one plain sentence, no error and no empty box
   await page.route("**/invest/heatmap?*", async (r) => {
