@@ -76,7 +76,7 @@ from .guard import UPLOADS, Guard, HeavyGate, Window, address as caller_address
 from . import research
 from .engine import walkforward
 from . import rule_check
-from .engine.verdict import restate_empty, restated as verdict_restated, with_notes
+from .engine.verdict import restate_empty, restated as verdict_restated, with_notes, with_yearly
 from .data import DataError, Registry, split_id
 from .data import calendar as trading_calendar
 from .intel import routes as research_routes
@@ -2014,7 +2014,10 @@ def read_notebook(nid: str, profile=Depends(current_profile)):
     nb = get_notebook(profile, nid)
     # an experiment stored with a claim for a headline ("Likely a real edge.") shows its facts instead (R11C-009)
     # ...and one saved before an account stopped at zero shows its account held to what it had (R18-008: -352.6%)
-    nb["experiments"] = [{**e, "verdict": verdict_restated(e.get("verdict"), e.get("stats"))} for e in map(restate_empty, nb.get("experiments") or [])]
+    # ...and one saved before the yearly rates were said gets its "A year at a time" line (LIVE10B-031)
+    nb["experiments"] = [{**e, "verdict": with_yearly(verdict_restated(e.get("verdict"), e.get("stats")), e.get("stats"),
+                                                    [(e.get("range") or {}).get("from"), (e.get("range") or {}).get("to")])}
+                         for e in map(restate_empty, nb.get("experiments") or [])]
     nb["summary"] = research.summary(nb["experiments"])      # a summary stored before R38-001 is read afresh
     return ok(with_rule_problems(nb))
 

@@ -655,7 +655,7 @@ def decide(checks: list[dict], n: int, ret: float, strategy, days: int, max_days
         if y is not None and (weak or verdict in ("edge", "mixed", "luck")):
             # the yearly rate beside buy and hold's, so +4.1% over five years is not read as a good result (DA-021)
             yh = yearly(hold, span) if hold is not None else None
-            summary += f" A year at a time, that is about {_pc(y)}" + (f" (buying and holding: {_pc(yh)})" if yh is not None else "") + "."
+            summary += f" {YEARLY_SAID} {_pc(y)}" + (f" (buying and holding: {_pc(yh)})" if yh is not None else "") + "."
             if y < LOW_YEARLY:
                 summary += f" A return under {LOW_YEARLY:g}% a year is below what a savings account or fixed deposit usually pays."
     return {"verdict": verdict, "headline": fact_headline(verdict, checks, n, ret, hold, none, open_n), "summary": summary,
@@ -700,6 +700,31 @@ def evaluate_portfolio(run, base: dict, strategy, days: int, max_days: int) -> d
     checks.append(check_sample(len(base["trades"])))
     return decide(checks, len(base["trades"]), base["stats"]["ret"], strategy, days, max_days, base["stats"].get("buy_hold_ret"),
                   open_n=len(base.get("open_trades") or []), years=_span_years(times))
+
+
+YEARLY_SAID = "A year at a time, that is about"
+
+
+def with_yearly(v: dict | None, stats: dict | None, times: list | None) -> dict | None:
+    """A stored verdict whose summary has no yearly rate (saved before DA-021) with it, worded as `decide` words it now, from
+    the run's own return, buy and hold's and the span of its series (LIVE10B-031: v2 said "193.9 points behind buy and hold"
+    and nothing a year at a time, where v1 said "about +2.5% a year (buying and holding: +7.8%)"). Any other as it is."""
+    if not isinstance(v, dict) or not isinstance(v.get("summary"), str) or YEARLY_SAID in v["summary"]:
+        return v
+    st = stats or {}
+    ret, hold = st.get("ret"), st.get("buy_hold_ret")
+    if not isinstance(ret, (int, float)) or ret <= 0:
+        return v
+    hold = float(hold) if isinstance(hold, (int, float)) else None
+    span = _span_years(list(times or []))
+    y = yearly(float(ret), span)
+    if y is None or not (weak_result(float(ret), hold, span) or v.get("verdict") in ("edge", "mixed", "luck")):
+        return v
+    yh = yearly(hold, span) if hold is not None else None
+    add = f" {YEARLY_SAID} {_pc(y)}" + (f" (buying and holding: {_pc(yh)})" if yh is not None else "") + "."
+    if y < LOW_YEARLY:
+        add += f" A return under {LOW_YEARLY:g}% a year is below what a savings account or fixed deposit usually pays."
+    return {**v, "summary": v["summary"].rstrip() + add}
 
 
 def _span_years(times: list[str]) -> float | None:

@@ -147,3 +147,21 @@ def test_a_sold_options_open_value_is_a_minus_what_buying_it_back_costs():
     assert risk.open_value({"account": {"qty": -10}, "last_price": 100.0}) == -1000.0
     out = risk.summary([straddle], today="2026-11-17")
     assert out["currencies"][0]["open_value"] == -4420.0
+
+
+# ---------- LIVE10B-031: an older run's verdict said nothing a year at a time ----------
+def test_a_stored_verdict_without_the_yearly_rate_gets_it_from_its_own_figures():
+    from app.engine import verdict as V
+    old = {"verdict": "mixed", "headline": "193.9 points behind buy and hold after costs.",
+           "summary": "It made money after costs, but some checks pass and some don't. The strategy returned +20.0% after costs, "
+                      "less than buying and holding over the same period (+213.9%)."}
+    st = {"ret": 20.0, "buy_hold_ret": 213.9, "n": 16}
+    got = V.with_yearly(old, st, ["2017-01-02T00:00:00", "2026-01-02T00:00:00"])
+    assert got["summary"].endswith("A year at a time, that is about +2.0% (buying and holding: +13.6%). A return under 5% a year is "
+                                   "below what a savings account or fixed deposit usually pays.")
+    assert V.with_yearly(got, st, ["2017-01-02T00:00:00", "2026-01-02T00:00:00"]) == got          # said once
+    assert V.with_yearly({**old, "verdict": "no_edge"}, {**st, "ret": -4.0}, ["2017-01-02", "2026-01-02"])["summary"] == old["summary"]
+    assert V.with_yearly(old, st, ["2026-01-02", "2026-06-02"]) == old                              # under a year: no yearly rate
+    import inspect
+    from app import main as m
+    assert "with_yearly(verdict_restated(" in inspect.getsource(m.read_notebook)
