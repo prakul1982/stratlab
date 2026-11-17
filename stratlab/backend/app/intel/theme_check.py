@@ -1872,10 +1872,19 @@ def words_models(evidence) -> set[str]:
     own = _SOLD_TO.sub(" ", not_customers(own))
     if not own.strip():
         return set()
+    own = re.sub(RETAIL_BUYERS, " ", own, flags=re.I)        # r62: "retail customers" names whom it sells to (below)
     hits = {m_ for m_, rx in list(MODEL_SAYS.items()) + list(OWN_SAYS.items()) + list(WORDS_SAY.items()) if re.search(rx, own, re.I)}
     one = stated_model(evidence)
     # stores, shops, retailing: a retailer's own words; r572 (the live R57.1 Restaurants deck: Restaurant Brands International, "Canadian coffee
     # shop and fast food restaurant chain", read as naming a retailer's way of earning): a coffee, sandwich or pizza shop is a place that serves
     # food, never a shop that resells goods
-    shop = {"retail"} if re.search(NAME_STATES["retail"], re.sub(FOOD_SHOP, " ", own, flags=re.I), re.I) else set()
+    # r62 (the live R60 Electric utilities deck: Southern's "providing electric service to retail customers in three Southeastern states",
+    # read as naming a retailer's way of earning): "retail" said of the customers a company serves, or of the electricity, gas or energy it
+    # sells them, names whom it sells to, never stores of its own
+    own_ = re.sub(FOOD_SHOP, " ", own, flags=re.I)
+    shop = {"retail"} if re.search(NAME_STATES["retail"], own_, re.I) else set()
     return hits | ({one} if one else set()) | shop
+
+
+RETAIL_BUYERS = r"\bretail(?:,| and| or)? (?:(?:and |or )?(?:wholesale|commercial|industrial|business|institutional) )*(?:customers?|clients?|consumers|" \
+                r"electric(?:ity)?(?: service)?|energy|power|gas|banking|deposits?|investors?)\b"

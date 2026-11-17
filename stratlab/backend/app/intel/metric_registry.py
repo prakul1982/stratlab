@@ -120,8 +120,15 @@ METRICS = (
        "As filed; life and general differ", INSURERS, ("IN",), group="insurer"),
     _m("claims_ratio", "Claims ratio", "Incurred claims over net premium earned, as filed for the year to date (general and health insurers)", "pct",
        "quarter", _IQ, "General and health insurers only", NON_LIFE, ("IN",), group="insurer"),
-    _m("combined_ratio", "Combined ratio", "Claims, commission and expenses over premium, as filed for the year to date (general and health insurers)",
-       "pct", "quarter", _IQ, "General insurers and health insurers; no investment income", NON_LIFE, ("IN",), group="insurer"),
+    _m("combined_ratio", "Combined ratio", "Claims, commission and expenses over premium, as filed for the year to date (general and health insurers); "
+       "a US insurer's: its loss ratio plus its expense ratio, the latest fiscal year (r62)",
+       "pct", "quarter", _IQ + "; US: annual report (10-K) facts filed with the SEC", "General insurers and health insurers; no investment income",
+       NON_LIFE + ("us",), ("IN", "US"), group="insurer"),
+    # r62 (the owner's review of the live R60 Property and casualty insurance deck, P0: no loss or combined ratios): a US P&C insurer's own
+    _m("loss_ratio", "Loss ratio", "Claims and claim expenses incurred over premiums earned, the latest fiscal year", "pct", "year", _US,
+       "As filed; reserve releases of earlier years in it", NON_LIFE + ("us",), ("US",), group="insurer"),
+    _m("expense_ratio", "Expense ratio", "Policy acquisition costs and other underwriting expenses over premiums earned, the latest fiscal year",
+       "pct", "year", _US, "Only the underwriting expense lines the company files", NON_LIFE + ("us",), ("US",), group="insurer"),
     _m("persistency_13", "13th-month persistency", "Policies still paying premium in their 13th month, as filed for the year to date (life insurers)",
        "pct", "quarter", _IQ, "Life insurers only", ("life",), ("IN",), group="insurer"),
     _m("premium_growth", "Premium growth", "Gross premium against the same quarter a year before", "chg", "quarter", _IQ, "As filed; one quarter",
@@ -145,6 +152,18 @@ METRICS = (
        "Software and licensing models only", CONTRACTED, ("US",), group="us"),
     _m("deferred_growth", "Deferred revenue growth", "Deferred revenue (contract liabilities) at the fiscal year's end against a year before", "chg",
        "year", _US, "Software and licensing models only", CONTRACTED, ("US",), group="us"),
+    # r62 (the owner's review of the live R60 REITs deck, P0: no FFO or AFFO): a property owner's funds from operations from its own lines
+    _m("ffo_share", "FFO / revenue", "Funds from operations (net income + real-estate depreciation and amortisation − gains on property sales, "
+       "from the filed lines) over revenue, the latest fiscal year", "pct", "year", _US, "Property owners only; depreciation as filed, "
+       "impairments not added back", ("us",), ("US",), group="us"),
+    _m("affo_share", "AFFO / revenue", "FFO less recurring capital spending (capital improvements, as filed) over revenue, the latest fiscal year",
+       "pct", "year", _US, "Only where recurring capital spending is filed; not filed otherwise", ("us",), ("US",), group="us"),
+    _m("p_ffo", "P/FFO", "Market value over funds from operations, the latest fiscal year's FFO (in place of P/E for a property owner)", "x",
+       "year", _US, "Property owners with a positive FFO only", ("us",), ("US",), group="us"),
+    _m("ffo", "FFO", "Funds from operations (net income + real-estate depreciation and amortisation − gains on property sales), the latest "
+       "fiscal year", "amt", "year", _US, "Filings in US dollars only", ("us",), ("US",), headline=False, group="us"),
+    _m("affo", "AFFO", "FFO less recurring capital spending, the latest fiscal year", "amt", "year", _US, "Only where recurring capital "
+       "spending is filed", ("us",), ("US",), headline=False, group="us"),
     _m("fcf_margin", "FCF margin", "Free cash flow (cash from operations less capital spending) over revenue, the latest fiscal year", "pct", "year",
        _US, "One fiscal year", ("us",), ("US",), group="us"),
     # India defence and capital goods: only where a business update the app reads states it, with its period

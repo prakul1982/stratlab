@@ -114,7 +114,7 @@ def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None, everyon
     # h56 (R56): only the points with the evidence tally's counts ([day, checked, total, description-verified]) are kept
     from .theme_data import tally_points
     hist = tally_points(mc.get("history"))
-    rest, rest_layers = {}, []
+    rest, rest_layers, rest_why = {}, [], {}
     for s_, x in (everyone or {}).items():
         if not s_ or s_ in cos or not isinstance(x, (list, tuple)) or len(x) < 2:
             continue
@@ -122,8 +122,10 @@ def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None, everyon
         if lay not in rest_layers:
             rest_layers.append(lay)
         rest[s_] = [str(x[0] or s_), rest_layers.index(lay)]
+        if len(x) > 2 and x[2]:
+            rest_why[s_] = str(x[2])[:200]
     return {"layers": layers, "cos": cos, "off": off, "map": sorted({s_ for s_ in members if s_}), "stamp": int(_num(stamp) or 0),
-            **({"rest": rest, "rest_layers": rest_layers} if everyone is not None else {}),
+            **({"rest": rest, "rest_layers": rest_layers} if everyone is not None else {}), **({"rest_why": rest_why} if rest_why else {}),
             "rules": rules, "unit": dive.get("unit"), **({"cover": cover} if cover else {}), **({"back": back} if back else {}),
             **({"why": why} if why else {}), **({"gone": gone} if gone else {}), **({"dups": dups} if dups else {}),
             **({"mwhy": mwhy} if mwhy else {}), **({"ev": ev} if ev else {}), **({"ev_hist": hist} if hist else {}),
@@ -403,7 +405,10 @@ def diff(was: dict, now: dict) -> dict:
         for s_, r in now["rest"].items():
             if s_ in was["cos"] or s_ in was["rest"] or not isinstance(r, list) or not r:
                 continue
-            why = (now.get("why") or {}).get(s_) or ""
+            # r62 (the live R60 Biotech deck: "added 3: Genenta Science S.p.A., Vicore Pharma Holding AB, Windward Bio Group AG" with no
+            # reason, three members outside the figures): a member outside the figures says why it is in the theme too, as its map's
+            # record gives it (member_why)
+            why = (now.get("why") or {}).get(s_) or (now.get("rest_why") or {}).get(s_) or ""
             added.append({"symbol": s_, "name": str(r[0]), "layer": rest_layer(now, s_) or "", **({"why": why} if why else {})})
     by_name = lambda r: str(r.get("name") or "").lower()          # noqa: E731
     out = {"removed": sorted(removed, key=by_name), "added": sorted(added, key=by_name), "moved": sorted(moved, key=by_name),
@@ -455,7 +460,19 @@ def apply(cur: dict | None, now: dict, refresh: bool = False, at: datetime | Non
             now = {**now, "cover_was": list(was["cover"])}
         elif was.get("cover_was"):
             now = {**now, "cover_was": list(was["cover_was"])}
+    now = {k: v for k, v in now.items() if k != "rest_why"}           # r62: read for this entry's reasons, never stored
     return {"snap": now, "log": log, "since": since or at.date().isoformat()}
+
+
+def member_why(c: dict, layer: str) -> str:
+    """r62: why a member of the checked map is in the theme, from its map record: brought in by its official industry (basis "industry"), else
+    named by the map in its layer; with whether its own words are checked yet."""
+    ind = str(c.get("industry") or "").strip()
+    why = (f"filed under its official industry, {ind}, one of the theme's" if c.get("basis") == "industry" and ind else
+           f"the theme's map places it in “{layer}”" if layer else "")
+    if why and c.get("verified") is not True and not c.get("what"):
+        why += "; its own words are not checked yet"
+    return why
 
 
 def record(region: str, name: str, dive: dict, members=(), stamp=0, rules=None, refresh: bool = False, at: datetime | None = None,
