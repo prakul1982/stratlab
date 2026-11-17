@@ -58,3 +58,53 @@ def test_a_market_hours_copy_served_after_the_close_says_it_was_read_during_the_
     monkeypatch.setattr(company, "market_open", lambda region, now=None: False)
     got, _ = m.get("IN", wait=0)
     assert got["during"] is True and got["is_open"] is False and got["refreshing"] is True
+
+
+# ---------- LIVE10A-006: /themes cards: the name on its own line, the count line under it, one link per card ----------
+def test_theme_directory_cards_put_the_name_above_its_count_line(monkeypatch):
+    from app import public_themes as pt, stock_pages
+    rows = [{"region": "IN", "slug": "fertilizers-and-agrochemicals", "label": "Fertilizers and agrochemicals", "name": "x", "at": 1763251200}]
+    monkeypatch.setattr(pt, "entries", lambda region=None: rows)
+    monkeypatch.setattr(pt, "card_line", lambda x: "India · 281 companies · 16 Nov")
+    page = pt.directory(None)
+    assert ('<ul class="dir" data-cards><li><a href="/themes/in/fertilizers-and-agrochemicals"><span class="nm">Fertilizers and agrochemicals</span>'
+            '<span class="muted">India · 281 companies · 16 Nov</span></a></li></ul>') in page
+    css = stock_pages.CSS if hasattr(stock_pages, "CSS") else page
+    assert "ul.dir[data-cards] a{flex-direction:column" in css
+
+
+# ---------- LIVE10A-007: public theme pages: revenue from the company pages when the dive isn't kept; no empty column; phone stacks ----------
+def _theme_view(monkeypatch, sales):
+    from app import public_themes as pt
+    payload = {"value_chain": [{"layer": "Makers", "official": True, "companies": [
+        {"ticker": "BIG", "name": "Big Ships Ltd", "verified": True, "what": "builds ships"},
+        {"ticker": "SMALL", "name": "Small Ships Ltd", "verified": True, "what": "builds ships"}]}]}
+    monkeypatch.setattr(pt, "_dive", lambda r, n, p: {})
+    monkeypatch.setattr(pt, "_index_caps", lambda r: {"BIG": 90_000.0, "SMALL": 500.0})
+    monkeypatch.setattr(pt, "_index_sales", lambda r: sales)
+    monkeypatch.setattr(pt, "_price_day", lambda r, syms: "2026-11-16")
+    monkeypatch.setattr(pt.stock_pages, "companies", lambda r: set())
+    v = pt.view({"region": "IN", "name": "Ships", "label": "Ships", "slug": "ships", "at": None}, payload)
+    return v, pt.render(v)
+
+
+def test_revenue_comes_from_the_company_pages_when_the_theme_dive_is_not_kept(monkeypatch):
+    v, page = _theme_view(monkeypatch, {"BIG": (12_345.0, "Mar 2026", "₹ crore")})
+    big = next(c for c in v["layers"][0]["companies"] if c["symbol"] == "BIG")
+    assert big["revenue"] and big["year"] == "Mar 2026"
+    assert '<th scope="col">Revenue</th>' in page and 'data-label="Revenue"' in page
+
+
+def test_a_page_with_no_revenue_has_no_revenue_column_and_stacks_on_a_phone(monkeypatch):
+    _, page = _theme_view(monkeypatch, {})
+    assert "Revenue</th>" not in page and 'data-label="Revenue"' not in page
+    assert '<div class="cotbl" data-stack>' in page and 'data-label="Market value"' in page
+    assert ".cotbl[data-stack] td[data-label]::before{content:attr(data-label)" in page
+
+
+def test_the_screens_index_row_carries_the_newest_full_years_revenue():
+    from app import screens
+    f = {"name": "Big Ships", "price": 100.0, "unit": "₹ crore", "price_at": "2026-11-16",
+         "years": [{"year": "Mar 2025", "sales": 10_000.0}, {"year": "Mar 2026", "sales": 12_345.0}, {"year": "TTM", "sales": 13_000.0}]}
+    r = screens.row("IN", "BIG", f)
+    assert (r["sales"], r["sales_year"], r["sales_unit"]) == (12_345.0, "Mar 2026", "₹ crore")

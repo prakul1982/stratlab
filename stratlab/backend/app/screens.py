@@ -194,6 +194,12 @@ def row(region: str, symbol: str, f: dict) -> dict | None:
            # a foreign company's page (a 20-F filer, depositary shares): a US company's peers aren't foreign filers (R10V-007)
            "foreign": bool(f["foreign"]) if region == "US" and f.get("foreign") is not None else None,
            "price_at": str(f.get("price_at") or "")[:10] or None, "built_at": f.get("built_at")}
+    # LIVE10A-007: the newest full year's revenue as the page files it, for the public theme pages' Revenue column (29 of 49 pages had it
+    # empty: their theme's stored dive is kept only under the current rules, so a page waited for someone to open the theme in the app)
+    unit = str(f.get("unit") or ("$ million" if region == "US" else "₹ crore"))
+    yrs = [y for y in f.get("years") or [] if isinstance(y, dict) and str(y.get("year") or "").strip().upper() != "TTM" and (_num(y.get("sales")) or 0) > 0]
+    if yrs and not old and unit in ("₹ crore", "$ million"):
+        out["sales"], out["sales_year"], out["sales_unit"] = _num(yrs[-1]["sales"]), str(yrs[-1].get("year") or "")[:20] or None, unit
     q = f.get("q") if isinstance(f.get("q"), dict) else None       # the latest quarter against its year-ago quarter, for the results calendar
     if q:
         out["q_sales"], out["q_profit"], out["q_of"] = _num(q.get("sales")), _num(q.get("profit")), str(q.get("of") or "")[:40] or None

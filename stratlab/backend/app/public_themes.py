@@ -135,6 +135,17 @@ def _index_caps(region: str) -> dict:
         return {}
 
 
+def _index_sales(region: str) -> dict:
+    """LIVE10A-007: {symbol: (revenue, year, unit)} from the screens' index (each company page's newest full year), for a theme whose stored
+    dive isn't kept under the current rules."""
+    try:
+        from . import screens
+        return {r["symbol"]: (r["sales"], r.get("sales_year"), r.get("sales_unit")) for r in screens.load_index(region).get("rows") or []
+                if r.get("symbol") and isinstance(r.get("sales"), (int, float)) and r["sales"] > 0 and r.get("sales_unit") in ("₹ crore", "$ million")}
+    except Exception:
+        return {}
+
+
 def _price_day(region: str, symbols) -> str | None:
     """LIVE9A-011: the close the page's market values are at (the newest price day among its companies in the screens' index), or None."""
     try:
@@ -209,7 +220,7 @@ def view(entry: dict, p: dict) -> dict:
     """What a theme page shows: checked companies only, reported figures only."""
     region = entry["region"]
     dive = _dive(region, entry["name"], p)
-    caps, revs, ev = _index_caps(region), _revenues(region, entry["name"], p, dive), _evidence(dive)
+    caps, revs, ev = _index_caps(region), {**_index_sales(region), **_revenues(region, entry["name"], p, dive)}, _evidence(dive)
     known = stock_pages.companies(region)
     layers = []
     for v in theme_layers(p):
@@ -303,6 +314,9 @@ def render(v: dict) -> str:
         body += '<p class="muted small" data-evidence>Membership: ' + e(evidence_said(v["evidence"])) + ".</p>"
     # LIVE9A-011 (owner, 29 Oct: "wherever you can, just make a table"): each layer is a table, largest company first; the theme's
     # description comes after the companies, so a phone's first screen holds companies, not a paragraph
+    # LIVE10A-007: no company on the page with a revenue: no Revenue column (it was "–" on every row of 29 pages); on a phone each row is a
+    # stacked card (name, then ticker, market value, revenue), never a table wider than the screen
+    has_rev = any(c.get("revenue") for x in v["layers"] for c in x["companies"])
     for x in v["layers"]:
         state = any(c.get("evidence") and c["evidence"] != "description_verified" for c in x["companies"])
         rows = ""
@@ -312,12 +326,15 @@ def render(v: dict) -> str:
             ev = ""
             if state:                  # e54: never said confirmed by its own words when it isn't
                 ev = f'<td class="l">{e(EVIDENCE_PUBLIC[c["evidence"]]) if c.get("evidence") and c["evidence"] != "description_verified" else "description-verified" if c.get("evidence") else "–"}</td>'
-            rows += f'<tr><td>{name}</td><td class="l">{e(c["symbol"])}</td><td>{e(c["cap"]) if c["cap"] else "–"}</td><td>{rev}</td>{ev}</tr>'
-        thead = ('<tr><th scope="col">Company</th><th scope="col" class="l">Ticker</th><th scope="col">Market value</th><th scope="col">Revenue</th>'
-                + ('<th scope="col" class="l">Membership</th>' if state else "") + "</tr>")
+            if ev:
+                ev = ev.replace('<td class="l">', '<td class="l" data-label="Membership">', 1)
+            rows += (f'<tr><td>{name}</td><td class="l" data-label="Ticker">{e(c["symbol"])}</td><td data-label="Market value">{e(c["cap"]) if c["cap"] else "–"}</td>'
+                     + (f'<td data-label="Revenue">{rev}</td>' if has_rev else "") + f"{ev}</tr>")
+        thead = ('<tr><th scope="col">Company</th><th scope="col" class="l">Ticker</th><th scope="col">Market value</th>'
+                + ('<th scope="col">Revenue</th>' if has_rev else "") + ('<th scope="col" class="l">Membership</th>' if state else "") + "</tr>")
         # the layer's own mix of states only where it isn't every company description-verified (the page's line above says the whole)
         lev = (f'<p class="muted small" data-layer-evidence>{e(evidence_said(x["evidence"]))}</p>' if x.get("evidence") and state else "")
-        body += (f'<section class="card" data-layer><h2>{e(x["name"])}</h2>{lev}<div class="cotbl"><table aria-label="{e(x["name"])}">'
+        body += (f'<section class="card" data-layer><h2>{e(x["name"])}</h2>{lev}<div class="cotbl" data-stack><table aria-label="{e(x["name"])}">'
                  f"<thead>{thead}</thead><tbody>{rows}</tbody></table></div></section>")
     if not v["layers"]:
         body += '<p class="note">No company in this theme has been checked yet.</p>'
@@ -349,8 +366,10 @@ def directory(region: str | None) -> str:
     body = (crumbs_html + f"<h1>Themes{e(where)}</h1><p class=\"muted\">{e(desc)}</p><nav class=\"links\" aria-label=\"Markets\">{tabs}</nav>")
     if rows:
         # LIVE9A-020: each card its short name (never "Capital goods (India) · India"), how many companies and the map's date
-        body += ('<ul class="dir">' + "".join(f'<li><a href="{e(path(x["region"], x["slug"]))}">{e(short_label(x["label"]))}</a>'
-                                               f'<span class="muted">{e(card_line(x))}</span></li>' for x in rows) + "</ul>")
+        # LIVE10A-006: the name on its own line and the count line under it, both inside the card's one link, so a long name never runs
+        # into "India · 281 companies" and every card in a row is as tall as the tallest (they collided and differed in height)
+        body += ('<ul class="dir" data-cards>' + "".join(f'<li><a href="{e(path(x["region"], x["slug"]))}"><span class="nm">{e(short_label(x["label"]))}</span>'
+                                                         f'<span class="muted">{e(card_line(x))}</span></a></li>' for x in rows) + "</ul>")
     else:
         body += '<p class="note">No theme has been mapped and checked yet. Open the themes in the app to map one.</p>'
     body += (f'<div class="ctas"><a class="btn" href="{e(_app(region or "IN"))}">Map any theme on StratLab</a></div>'

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { graceLine } from "../lib/freeChange";
+import { changeDay, graceLine } from "../lib/freeChange";
 import { AccountWait } from "../components/AccountWait";
 import { Card, ConfirmDialog, FieldGroup, FormGrid, Notice, PageHeader, Seg } from "../components/kit";
 import { Link } from "react-router-dom";
@@ -41,6 +41,9 @@ export function PlansPage() {
   const [yearly, setYearly] = useState(false);
   const period = yearly && yearlyOk ? "year" : "month";
   const paid = me?.paid_plan ?? me?.plan;   // me.plan is Pro for everyone during the launch offer
+  // LIVE10A-003: a Free account in its grace still has its earlier decks: the line under the cards says so ("1 a month until 27 Nov")
+  const deckRow = me?.free_change?.rows.find((r) => r.key === "decks_per_month" && (r.before ?? 0) > 0 && r.before !== r.after);
+  const deckGrace = deckRow && me?.free_change ? `${deckRow.before} a month until ${changeDay(me.free_change.on).replace(/ \d{4}$/, "")}` : null;
   // GST is spoken of only while the invoices carry it (the seller's GSTIN is set in Admin → Money): an invoice with no GSTIN
   // says the supplier isn't registered and charges none, so "incl. GST" and "a GST invoice" would contradict it (R7M-001)
   const gst = pricing?.invoice?.gst === true;
@@ -180,11 +183,11 @@ export function PlansPage() {
         })}
       </div>
       {/* FREE-TIER: Free has no slide decks of its own: one real theme deck to download, so a Free reader or a visitor sees what one holds */}
-      <p className="k-small k-muted" data-testid="sample-deck-line">Slide decks are on Basic and Pro. <SampleDeckLink label="Download a sample deck" /></p>
+      <p className="k-small k-muted" data-testid="sample-deck-line">Slide decks are on Basic and Pro{deckGrace ? ` (your Free account keeps ${deckGrace})` : ""}. <SampleDeckLink label="Download a sample deck" /></p>
       {me && paid !== "free" && me.billing.renews_or_ends && (
         <p className="k-small k-muted">{me.billing.cancel_at_period_end ? "Ends" : "Renews"} on {dateOnly(me.billing.renews_or_ends)}.</p>
       )}
-      <PlanCompare plans={me?.plans as Record<string, Partial<Limits>> | undefined} />
+      <PlanCompare plans={me?.plans as Record<string, Partial<Limits>> | undefined} grace={me?.free_change} />
       {/* the small print, short and in one place (R11, owner 5 Nov: a wall of small print under the table) */}
       <ul className="k-fineprint" aria-label="The small print">
         {billing ? (

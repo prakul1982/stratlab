@@ -19,3 +19,21 @@ test("LIVE10A-010: while the newer session trades, the note says its figures so 
   assert.equal(moodBehindNote({ session: "2026-11-16", behind: "2026-11-17", is_open: false }, "2026-11-17", dayText),
     "These figures are of the 16 Nov session; the 17 Nov session's are being read.");
 });
+
+test("LIVE10A-002: on a desktop the Lab notes sit left of a docked Markets panel, above the Markets button, and the page makes room", () => {
+  const css = read("src/styles.css");
+  assert.match(css, /\.ln-btn \{ right: var\(--mw-dock, 0px\); \}/);
+  assert.match(css, /\.ln-panel \{ position: fixed; right: calc\(var\(--mw-dock, 0px\) \+ 52px\); bottom: 76px;/);
+  assert.match(css, /body:has\(\.ln-panel:not\(\[hidden\]\)\) \.shell > \.main \{ padding-right: 448px; \}/);
+});
+
+test("LIVE10A-003: a deck press over the month's count shows the plan line beside the buttons; /plans states a Free account's grace", () => {
+  const dive = read("src/components/ThemeDive.tsx");
+  assert.match(dive, /if \(\(e as \{ status\?: number \}\)\?\.status === 402\) setSpent\(/);
+  assert.match(dive, /\{spent && <div className="theme-wb-lock" role="status" data-testid="deck-spent"><PlanNote plan="basic">\{spent\}<\/PlanNote>/);
+  const cmp = read("src/components/PlanCompare.tsx");
+  assert.match(cmp, /\$\{changeCount\(kept\.before\)\} for you until \$\{graceDay\}/);
+  const plans = read("src/pages/PlansPage.tsx");
+  assert.match(plans, /grace=\{me\?\.free_change\}/);
+  assert.match(plans, /Slide decks are on Basic and Pro\{deckGrace \? ` \(your Free account keeps \$\{deckGrace\}\)` : ""\}/);
+});

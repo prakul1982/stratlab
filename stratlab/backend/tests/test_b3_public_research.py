@@ -183,7 +183,8 @@ def test_public_theme_page_lists_checked_members_with_reported_figures_only(w, m
     assert "Unchecked Ltd" not in t and "Only unchecked" not in t
     assert '<a href="/stocks/in/RELIANCE">Reliance Industries Ltd</a>' in t                 # members link to their public pages
     # (updated on purpose, LIVE9A-011, owner 29 Oct "wherever you can, just make a table": each layer is a table with a Market value column)
-    assert '<th scope="col">Market value</th>' in t and "<td>₹19.00 lakh crore</td>" in t and "<td>₹12,345 crore</td>" in t
+    # (updated on purpose, LIVE10A-007: each cell carries its column's name for the phone's stacked rows)
+    assert '<th scope="col">Market value</th>' in t and '<td data-label="Market value">₹19.00 lakh crore</td>' in t and '<td data-label="Market value">₹12,345 crore</td>' in t
     layers = "".join(re.findall(r"<section class=\"card\" data-layer>.*?</section>", t, re.S))
     assert layers and not DERIVED.search(layers)                                             # no figure StratLab works out
     assert "median" not in t.lower()
@@ -223,7 +224,8 @@ def test_thin_themes_are_noindex_and_only_rich_ones_are_in_the_sitemap(w):
     assert re.search(r"<loc>https://stratlab.studio/themes/in/defence</loc><lastmod>\d{4}-\d\d-\d\d</lastmod>", xml)
     assert "/themes/in/rail" not in xml and "<loc>https://stratlab.studio/themes</loc>" in xml
     directory = c.get("/themes/in").text
-    assert '<a href="/themes/in/defence">Defence</a>' in directory and '<a href="/themes/in/rail">Rail</a>' in directory
+    # (updated on purpose, LIVE10A-006: the card's name has its own line inside the link)
+    assert '<a href="/themes/in/defence"><span class="nm">Defence</span>' in directory and '<a href="/themes/in/rail"><span class="nm">Rail</span>' in directory
 
 
 def test_one_page_per_theme_an_alias_answers_301_and_unknowns_404(w):
