@@ -301,7 +301,9 @@ def test_the_smaller_layers_page_never_ends_a_description_in_an_ellipsis():
         cells = [r[2] for r in table_of(slides, deck.SMALL_TITLE)["rows"]]
         assert cells and not any(str(c).endswith("…") for c in cells)
     src = open(deck.__file__).read()
-    assert 'whole_clause(_what(c.get("what") or "", c.get("name") or "")' in src and 'whole_clause(sub.get("detail") or "", 160)' in src   # LIVE6-007 passes the name (updated on purpose)
+    # r63e (updated on purpose): the smaller layers' cell is layer_cell (whole_clause, and the item of its words that says its layer)
+    assert 'layer_cell(_what(c.get("what") or "", c.get("name") or "")' in src and 'whole_clause(sub.get("detail") or "", 160)' in src   # LIVE6-007 passes the name (updated on purpose)
+    assert "got = whole_clause(text, limit)" in src[src.index("def layer_cell"):src.index("def _what")]
 
 
 SECTOR_HEAD = ["Company", "SBC / revenue", "Capex / revenue", "Capex", "Inventory days", "R&D / revenue", "RPO / revenue", "RPO growth",

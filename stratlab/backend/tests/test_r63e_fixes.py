@@ -21,7 +21,8 @@ def _halves():
     big = [{"ticker": f"B{i}", "name": f"Big Cement {i} Ltd", "industry": "Cement & Cement Products", "cap": 90000 - i * 5000} for i in range(4)]
     small = [{"ticker": f"S{i}", "name": f"Small Cement {i} Ltd", "industry": "Cement & Cement Products", "cap": 3000 - i * 200} for i in range(4)]
     vc = [{"layer": "Regional integrated producers (larger)", "description": "", "companies": big, "scale": "larger",
-           "sibling": "Regional integrated producers (smaller)"},
+           "sibling": "Regional integrated producers (smaller)", "model": {"line": "They earn from making cement. The larger half of one group "
+                                                                                    "by market value; the other half is “Regional integrated producers (smaller)”."}},
           {"layer": "Regional integrated producers (smaller)", "description": "", "companies": small, "scale": "smaller", "by_model": True,
            "sibling": "Regional integrated producers (larger)"}]
     words = {c["ticker"]: f"{c['name']} manufactures and sells cements and clinker from its integrated plants." for c in big + small}
@@ -37,6 +38,7 @@ def test_1_a_half_by_market_value_is_renamed_with_its_other_half_never_alone():
     assert names[0].endswith("(larger)") and names[1].endswith("(smaller)")
     assert out[0]["sibling"] == names[1] and out[1]["sibling"] == names[0]
     assert "Regional" not in names[0]                              # the word none of them say gives way, in both
+    assert f"the other half is “{names[1]}”" in out[0]["model"]["line"]          # its page's line names the other half by its name
 
 
 def test_1b_a_word_put_before_its_noun_is_singular():
@@ -128,3 +130,98 @@ def test_5_a_us_bank_whose_page_keeps_no_revenue_lines_still_says_its_revenue_is
     # an insurer's or lender's page with no lines: no word of FTE, a bank's adjustment (guard)
     ins = D.revenue_basis_of("US", {"region": "US"}, "insurer")
     assert "fte" not in ins and "FTE" not in deck.basis_line([{"symbol": "I", "revenue": 1.0, "revenue_basis": ins}])
+
+
+# ---------- the live R62 decks' flags ----------
+def test_6_a_listing_whose_own_words_name_the_other_member_by_its_symbol_is_kept_once():
+    """The live R62 Electric utilities deck (deck_check "duplicate member", p.19): Brookfield Renewable Corp, whose own words say its holders
+    "have exposure to all regions BEP operates in", left out of its layer beside Brookfield Renewable Partners L.P in the calculations."""
+    from app.intel.theme_data import same_company
+    rows = [{"symbol": "BEP", "name": "Brookfield Renewable Partners L.P.", "year": "2025", "revenue": 6407.0, "profit": -70.0},
+            {"symbol": "BEPC", "name": "Brookfield Renewable Corp", "year": "2025", "revenue": 3728.0, "profit": -2300.0},
+            {"symbol": "BAM", "name": "Brookfield Asset Management", "year": "2025", "revenue": 10.0, "profit": 1.0}]
+    words = {"BEP": "Brookfield Renewable owns one of the world's largest renewable power platforms.",
+             "BEPC": "BEPC is a Canadian corporation. Shareholders will, on economic terms, have exposure to all regions BEP operates in as a "
+                     "result of the exchange feature.",
+             "BAM": "Brookfield Asset Management manages funds for clients."}
+    assert same_company(rows, about=lambda s: words.get(s, "")) == {"BEPC": "BEP"}
+    # two listings that each have words of their own, neither naming the other: two companies (guard)
+    words2 = {**words, "BEPC": "Brookfield Renewable Corp owns hydro plants in Brazil and Colombia."}
+    assert same_company(rows, about=lambda s: words2.get(s, "")) == {}
+
+
+def test_7_deck_check_reads_a_combined_ratio_past_100_as_a_ratio_never_a_margin():
+    """The live R62 P&C deck (deck_check "financial margin", p.10 and p.12): Loews' combined ratio 105.9% and the column's range read as a
+    net margin above 100%."""
+    import deck_check as DC
+    page = ("PROPERTY AND CASUALTY INSURANCE · THE VALUE CHAIN\n"
+            " Company                                                  Revenue               Net margin          Loss ratio          Expense ratio          Combined ratio      Year\n"
+            " Loews Corp                                               $18.5 bn                   9.0%               76.1%                  29.8%                   105.9%      Dec 2025\n"
+            " Range                                                                       8.1% to 18.9%   50.4% to 76.1%          10.5% to 33.8%          69.0% to 105.9%\n")
+    got = []
+    DC.financial_checks(["THEME DEEP DIVE\nProperty and casualty insurance\n", page], lambda k, n, t: got.append((k, n)))
+    assert got == []
+    bad = page.replace("                   9.0%               76.1%", "                 141.5%               76.1%")
+    DC.financial_checks(["THEME DEEP DIVE\nProperty and casualty insurance\n", bad], lambda k, n, t: got.append((k, n)))
+    assert got == [("financial margin", 2)]                         # a net margin past 100% still fails (guard)
+
+
+def test_8_a_member_beyond_the_figures_window_whose_words_say_its_layer_stays_in_it():
+    """The live R62 Biotech deck (deck_check "other>40%"): 127 of 821 in informative layers against 549 on R60, the description-verified
+    members of a large layer beyond the figures' window (no figure read for them) sent to "Other" as "listed with no figure stored"."""
+    rest = {"layer": "Other biotech companies", "official": True, "basis": "rest", "companies": []}
+    co = lambda t, cap: {"ticker": t, "name": f"{t} Therapeutics Inc", "industry": "Biological Products", "cap": cap, "placed": "industry"}     # noqa: E731
+    big = {"layer": "Large commercial biotechs", "companies": [co(f"L{i}", 1e5 - i) for i in range(B.FIGURES_MAX)]}
+    lay = {"layer": "Specialty and clinical-stage biotechs",
+           "companies": [co("W", 2e5)] + [co(f"S{i}", 50 - i) for i in range(6)] + [{**co("N", 10), "model_out": "unknown"}]}
+    say = "Therapeutics is a clinical-stage biotechnology company developing antibody medicines for cancer."
+    words = {**{f"S{i}": f"S{i} {say}" for i in range(6)}, "W": f"W {say}", **{f"L{i}": f"L{i} sells approved medicines." for i in range(B.FIGURES_MAX)}}
+    figs = {f"L{i}": {"revenue": 900.0} for i in range(B.FIGURES_MAX)}       # the window read; the layer's members beyond it never read
+    vc, rows = B.listed_out([big, lay, rest], words.get, "Biotech", {}, figs.get, {})
+    assert sorted(c["ticker"] for c in lay["companies"]) == ["S0", "S1", "S2", "S3", "S4", "S5"]
+    # in the window with no figure stored (r62's case, kept), and beyond it with no words: listed in "Other" until read
+    assert sorted(c["ticker"] for c in rest["companies"]) == ["N", "W"]
+    assert all("no figure stored" in r["why"] for r in rows)
+
+def test_9_one_company_added_and_removed_under_two_symbols_in_one_change_is_neither():
+    """The live R62 Biotech deck (deck_check "added unexplained", p.11): "added 1: InMed Pharmaceuticals Inc. ...; removed 1: InMed
+    Pharmaceuticals Inc." in one change."""
+    from app.intel import theme_changes as TC
+    base = {"off": {}, "off_ever": {}, "why": {}, "map": []}
+    row = lambda n, i=0: [n, i, None, None, None, ""]      # noqa: E731
+    was = {**base, "layers": ["Drug developers", "Platforms"], "cos": {"MTRI": row("InMed Pharmaceuticals Inc."), "A": row("Alpha Bio Inc.")}}
+    now = {**base, "layers": ["Drug developers", "Platforms"], "cos": {"INM": row("InMed Pharmaceuticals Inc."), "A": row("Alpha Bio Inc."),
+                                                                       "B": row("Beta Bio Inc.")}}
+    d = TC.diff(was, now)
+    assert [r["symbol"] for r in d["added"]] == ["B"] and d["removed"] == [] and d["moved"] == []
+    now["cos"]["INM"] = row("InMed Pharmaceuticals Inc.", 1)        # its layer changed too: said as a move, with both symbols
+    d = TC.diff(was, now)
+    assert d["removed"] == [] and d["moved"][0]["why"] == "listed under INM now, MTRI before"
+
+
+def test_10_deck_check_reads_the_other_group_s_share_with_figures_as_no_layer_s_left_out():
+    """The live R62 Telecom deck (deck_check "left out>50%", p.33): "Other telecom companies" 7 of 15 in its calculations."""
+    import deck_check as DC
+    page = ("TELECOM · THE VALUE CHAIN\n\n\nLayer 10 · Other telecom companies (notes)\nWho is in the layer's calculations\n\n\n"
+            "In the layer's calculations (7 of 15): Fabrinet, NextPlat and 1 more. Left out (8): no figure stored: uCloudlink Group and 7 more.\n")
+    assert DC.check_text(page)["counts"]["left out>50%"] == 0
+    named = page.replace("Other telecom companies", "Network equipment makers")
+    assert DC.check_text(named)["counts"]["left out>50%"] == 1                     # a named layer still fails (guard)
+
+
+def test_11_a_table_cell_s_sentence_never_ends_at_a_legal_form():
+    """The live R62 Railroads deck (deck_diff "layer words"): C.H. Robinson's line printed as "C.H. Robinson Worldwide, Inc."."""
+    t = ("C.H. Robinson Worldwide, Inc. is one of the largest global logistics providers in the world, with consolidated total revenues of "
+         "$16.2 billion in 2025")
+    assert deck.whole_clause(t, 110) == "C.H. Robinson Worldwide, Inc. is one of the largest global logistics providers in the world"
+    assert deck.sentences("Acme makes bolts. It sells them in the U.S. and Europe. " + "More words here. " * 4, 60) == \
+        "Acme makes bolts. It sells them in the U.S. and Europe."
+
+
+def test_13_a_line_that_opens_on_a_decade_is_a_history_never_a_company_s_work():
+    """The live R62 Homebuilders deck (deck_diff "layer words"): Installed Building Products printed as "In the late 1990s, we began our
+    acquisition strategy ..." in "Building materials distribution"."""
+    assert B.own_words("In the late 1990s, we began our acquisition strategy with the goal of creating a national platform and have grown to "
+                       "become one of the nation's largest installers of insulation", "Installed Building Products, Inc.") == ""
+    assert B.own_words("Installed Building Products is an installer of insulation and building products in the United States",
+                       "Installed Building Products, Inc.")                                      # its work stays (guard)
