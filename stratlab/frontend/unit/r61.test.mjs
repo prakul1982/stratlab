@@ -29,12 +29,14 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 test("R61: every visitor's Continue with Google has the email way beside it, drawn only while email sign-in is on", () => {
   const way = read("src/components/EmailWay.tsx");
   assert.match(way, /if \(!emailSignInOn\(\)\) return null;/);
-  assert.match(way, /sign in with email/);
+  assert.match(way, /<a className=\{`btn outline\$\{small \? " sm" : ""\} email-way/);    // R64: a real button, never a text line
+  assert.match(way, /<Mail \/>Sign in with email/);
   assert.match(read("src/lib/signin.ts"), /export const EMAIL_SIGNIN_PATH = "\/login#email";/);
   const login = read("src/pages/Login.tsx");
   assert.ok((login.match(/<EmailWay\b/g) ?? []).length >= 4, "hero, closing call, plan cards and the rule template");
-  assert.match(login, /\{!login && <EmailWay \/>\}/);
-  assert.match(read("src/pages/AdLanding.tsx"), /<EmailWay next=\{null\} \/>/);
+  // (updated on purpose, R64 owner: "make it proper": the hero's email way is a full-size button in the row beside Google)
+  assert.match(login, /\{cta\(\)\}\n\s*\{\/\*[^\n]*\*\/\}\n\s*\{!login && <EmailWay className="lp-cta-2" \/>\}/);
+  assert.match(read("src/pages/AdLanding.tsx"), /<EmailWay next=\{null\} className="lp-cta-2" \/>/);
   assert.match(read("src/pages/PublicLibrary.tsx"), /small && emailSignInOn\(\) \? <button type="button" className="btn sm" onClick=\{\(\) => void startSignIn\("\/library"\)\}>Sign in<\/button>/);
   // the sign-in page opened at #email puts the cursor in the address box
   assert.match(read("src/components/EmailSignIn.tsx"), /if \(location\.hash !== "#email" \|\| !box\.current\) return;/);

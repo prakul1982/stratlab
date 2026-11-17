@@ -345,11 +345,11 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
             <p className="serif lp-lede">{login && emailSignInOn() ? `${signup ? "Sign up" : "Sign in"} with your Google account or your email address: no password to set up.` : heading && intro ? intro : "Write it in plain words. StratLab tests it on years of real prices after every charge, then checks four ways whether the result could be luck. Company research, your holdings and your tax sit beside it."}</p>
             <div className="row wrap g12">
               {cta()}
+              {/* R61/R64: beside Continue with Google, the email way in as a button of its own, while email sign-in is on (the sign-in page has the form itself) */}
+              {!login && <EmailWay className="lp-cta-2" />}
               {/* NAV3: a real result anyone can open without signing in (the public library: rules, verdict and checks) */}
               {full && <Link className="btn quiet lp-cta-2" to="/library">See real results, no sign-in</Link>}
             </div>
-            {/* R61: beside Continue with Google, the email way in, while email sign-in is on (the sign-in page has the form itself) */}
-            {!login && <EmailWay />}
             {login && emailSignInOn() && <Suspense fallback={null}><EmailSignIn signup={signup} /></Suspense>}
             {error && <p className="banner" role="alert">{error}</p>}
             {login ? <p className="small muted">Signing in only reads your name and email from Google{emailSignInOn() ? ", or only your email address by email" : ""}. By continuing you agree to the <Link className="link" to="/terms">Terms</Link> and <Link className="link" to="/privacy">Privacy policy</Link>.</p> : <p className="small muted">Free to start · No card · No code</p>}
@@ -512,8 +512,10 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
         <div className="lp-wrap stack g20 lp-center">
           <p className="serif lp-h2 lp-final-h">Is your trading idea skill or luck?</p>
           <p className="lp-p">Sign in with Google{emailSignInOn() ? " or your email" : ""}, no card needed. Your home page shows the first steps.</p>
-          {cta("Continue with Google")}
-          <EmailWay />
+          <div className="row wrap g12 lp-final-ways">
+            {cta("Continue with Google")}
+            <EmailWay className="lp-cta-2" />
+          </div>
         </div>
       </section>}
       </>}
@@ -746,7 +748,7 @@ function ResearchMock() {
         <p className="small">"Enter when the 20-day EMA crosses above the 50-day EMA; exit when it crosses back below; 7% stop loss."</p>
         <span className="small muted">A template for a test, not a suggestion. The test shows how it would have done on past prices.</span>
         <button type="button" className="btn sm lp-idea-btn" onClick={() => void signIn("/new")}>Continue with Google to test it →</button>
-        <EmailWay next="/new" />
+        <EmailWay next="/new" small />
       </div>
     </div>
   );

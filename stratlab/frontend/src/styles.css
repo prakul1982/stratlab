@@ -3216,6 +3216,9 @@ th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
 /* LIVE9B-013: the deep dive's tools row holds a small button's height before the dive arrives */
 .dd-tools { min-height: 32px; }
 /* R61: "or sign in with email" beside a visitor's Continue with Google button (components/EmailWay.tsx), only while email sign-in is on */
-.email-way { color: var(--muted); }
-.email-way .link { color: var(--ink); font-weight: 600; }
-.lp-plan-email { text-align: center; }
+/* R64 (owner: "make it proper"): a real outlined button, the Google button's height, its mail mark the Google mark's size */
+.email-way { display: inline-flex; align-items: center; justify-content: center; gap: 10px; text-decoration: none; white-space: nowrap; }
+.email-way > svg { flex: none; }
+.email-way.sm { gap: 8px; }
+.lp-plan-email { width: 100%; }
+.lp-final-ways { justify-content: center; }
