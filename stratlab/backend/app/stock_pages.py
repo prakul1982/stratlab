@@ -2935,7 +2935,7 @@ def _stats(f: dict) -> list[tuple[str, str]]:
     if owners is not None:
         # the table's profit includes minority shareholders' share of subsidiaries, which P/E leaves out: both are shown,
         # each named, so the profit line and the P/E agree (DK-021: RELIANCE's 88,167 beside a P/E on 74,727)
-        out += [(f"Profit to shareholders, last 12 months ({unit})", _amount(f, owners, digits)),
+        out += [(f"Profit to shareholders, last 12 months ({unit})", "about " + _amount(f, about(owners), digits)),
                 (f"Net profit incl. minority interests, last 12 months ({unit})", _amount(f, ttm, digits))]
     else:
         out.append((f"Net profit, last 12 months ({unit})", _amount(f, ttm, digits)))
@@ -3004,7 +3004,7 @@ def _tiles(f: dict) -> list[dict]:
             if f.get("basis") == "consolidated":
                 line += ", consolidated"           # LIVE2-016: the basis is on the tile, as the sites people compare with differ on it
         elif label.startswith("Profit to shareholders"):
-            short, line, val = "Profit, last 12 months", "to shareholders", _short_amount(unit, val)
+            short, line, val = "Profit, last 12 months", "to shareholders", ("about " if val.startswith("about ") else "") + _short_amount(unit, val.removeprefix("about "))
         elif label.startswith("Net profit incl."):
             short, line, val = "Profit incl. minorities", "last 12 months", _short_amount(unit, val)
         elif label.startswith("Net profit"):
@@ -3073,6 +3073,16 @@ def pe_profit_gap(f: dict):
         return None
     implied = cap / profit
     return (pe, implied, profit) if abs(implied - pe) > 0.1 * pe else None
+
+
+def about(v: float | None) -> float | None:
+    """A figure worked out from a ratio given to one decimal, to three significant figures: market cap over a P/E of 22.2
+    can be a quarter of a percent off the profit itself (CX2: a company's ₹82,011 cr here beside ₹82,228 cr in its deep dive)."""
+    if v is None or v == 0:
+        return v
+    from math import floor, log10
+    step = 10 ** (floor(log10(abs(v))) - 2)
+    return round(v / step) * step
 
 
 def owners_profit(f: dict):
@@ -3156,7 +3166,8 @@ def _notes(f: dict) -> list[str]:
     if gap:
         pe, implied, profit = gap
         out.append(f'<p class="note" data-pe-basis>P/E {pe:,.1f} is the close over earnings per share, the profit that belongs to the '
-                   f'company\'s shareholders (market cap divided by P/E: {_amount(f, owners_profit(f))} crore for the last 12 months, shown above). '
+                   f'company\'s shareholders (market cap divided by P/E: about {_amount(f, about(owners_profit(f)))} crore for the last 12 months, shown above; '
+                   'about, as the P/E it is worked out from is given to one decimal). '
                    f'The net profit including the share owned by minority shareholders of subsidiaries is {_amount(f, profit)} crore; '
                    f'market cap divided by that gives {implied:,.1f}. '
                    "The last 12 months are the four latest reported quarters, so their profit can differ from the newest year's in "

@@ -81,11 +81,12 @@ def test_a_p_e_on_the_shareholders_profit_sits_beside_that_profit_and_the_one_wi
     f = facts(**RELIANCE)
     assert stock_pages.owners_profit(f) == pytest.approx(74736, abs=1)
     page = stock_pages.render(f, "IN", "RELIANCE", None)
-    assert stat(page, "Profit to shareholders, last 12 months (₹ crore)") == "74,736"
+    # (updated on purpose, fix12/CX2: worked out from a one-decimal P/E, the profit is said to three figures, "about")
+    assert stat(page, "Profit to shareholders, last 12 months (₹ crore)") == "about ₹74,700"
     assert stat(page, "Net profit incl. minority interests, last 12 months (₹ crore)") == "88,167"
     assert stat(page, "Net profit, last 12 months (₹ crore)") is None
     note = re.search(r'<p class="note" data-pe-basis>(.*?)</p>', page).group(1)
-    assert "74,736 crore" in note and "88,167 crore" in note and "gives 20.9" in note
+    assert "about 74,700 crore" in note and "88,167 crore" in note and "gives 20.9" in note
     # where they agree there is one line, as before
     agree = stock_pages.render(facts(**{**RELIANCE, "market_cap": 1_000_000.0, "pe": 20.0, "profit_ttm": 50000.0}), "IN", "ACME", None)
     assert stat(agree, "Net profit, last 12 months (₹ crore)") == "50,000" and "Profit to shareholders" not in agree

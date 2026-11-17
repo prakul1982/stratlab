@@ -101,3 +101,15 @@ def test_a_us_pages_line_under_its_name_uses_the_sector_its_same_sector_list_nam
     # a company outside the S&P 500 keeps the SEC's division; India's are left as listed
     assert stock_pages.sector_first("US", "ZZZZ", ["Manufacturing", "Electronic computers"]) == ["Manufacturing", "Electronic computers"]
     assert stock_pages.sector_first("IN", "AAPL", ["Industrials"]) == ["Industrials"]
+
+
+# ---------- CX2: "Profit, last 12 months ₹82,011 cr" on the public page against ₹82,228 cr in the deep dive ----------
+def test_the_profit_worked_out_from_a_one_decimal_p_e_is_said_to_three_figures():
+    from app import stock_pages
+    from tests.test_stock_pages_r5v import _facts
+    # 18,20,000 / 22.2 = 81,982: a P/E given to one decimal can't give the profit to the crore
+    f = _facts(price=1344.8, market_cap=1_820_000.0, pe=22.2, profit_ttm=95625.0)
+    assert stock_pages.about(stock_pages.owners_profit(f)) == 82000
+    page = stock_pages.render(f, "IN", "ACME", None)
+    assert "about ₹82,000 cr" in page and "81,982" not in page
+    assert stock_pages.about(3.4712) == __import__("pytest").approx(3.47) and stock_pages.about(None) is None
