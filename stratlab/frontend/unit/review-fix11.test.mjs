@@ -102,3 +102,9 @@ test("LIVE10A-012: the heatmap's Stocks box holds its place while the first read
   assert.match(page, /\{!theme && \(!view \|\| view\.universes\.length > 0\) && \(/);
   assert.match(page, /<Select id=\{id\} value="" disabled onChange=\{\(\) => undefined\} options=\{\[\{ value: "", label: "Reading the groups…" \}\]\} \/>/);
 });
+
+test("LIVE10B-029/047, LIVE10A-013: a tiny deepest fall keeps its digits; the VIX tile's day never splits; an F&O change chip is in the page's letters", () => {
+  assert.match(read("src/components/RiskOverview.tsx"), /num\(c\.max_drawdown_pct, c\.max_drawdown_pct && Math\.abs\(c\.max_drawdown_pct\) < 0\.1 \? 2 : 1\)/);
+  assert.match(read("src/pages/SpaceHomes.tsx"), /\{vixDay \? <> · <span className="nowrap">\{vixDay\}<\/span><\/> : ""\}/);
+  assert.match(read("src/styles.css"), /\.surv-badge\.fo-badge \{ white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-family: var\(--sans\); \}/);
+});

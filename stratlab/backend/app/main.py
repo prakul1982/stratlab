@@ -3795,6 +3795,15 @@ def _full_names(items: list[dict]) -> list[dict]:
     return out
 
 
+def _named_now(items: list[dict]) -> list[dict]:
+    """Each holding's name in the one style the rest of the app writes (LIVE10B-027: holdings imported before R60 kept the broker's capitals,
+    "STATE BANK OF INDIA", beside title case after a re-import): stored names are left as they are, only the view is tidied."""
+    from .results import display_name
+    stock = lambda i: not str(i.get("kind") or "").startswith("etf") and not re.search(r"\b(ETF|BEES|ETN)\b", str(i.get("name") or ""))  # noqa: E731
+    return [{**i, "name": display_name(holdings.market_of(i), i["name"]) or i["name"]} if i.get("name") and i.get("name") != i.get("symbol") and stock(i) else i
+            for i in items]
+
+
 def _screen_sectors(items: list[dict]) -> list[dict]:
     """Each Indian stock in the sector the stock screens give it (one list for every page: the screens' index classifies every listed
     company), in place of the label saved when it was imported (LIVE9B-005: 60 of 100 holdings "Not classified", others under a sector
@@ -3830,7 +3839,7 @@ def holdings_view(profile) -> dict:
                     _PRICED.pop(k, None)
             _PRICED[key] = (time.monotonic(), got)
     live, us_quotes = got["live"], got["us_quotes"]
-    return {**holdings.view(_screen_sectors(_full_names(_etf_named(h["items"]))), got["quotes"], us_quotes, got["rate"]), "source": h["source"], "updated_at": h["updated_at"],
+    return {**holdings.view(_screen_sectors(_named_now(_full_names(_etf_named(h["items"])))), got["quotes"], us_quotes, got["rate"]), "source": h["source"], "updated_at": h["updated_at"],
             "prices": live or (not ind and bool(us_quotes)), "prices_at": got["prices_at"], "us_prices_at": got.get("us_prices_at"), "closes": got.get("closes"),
             "us_prices": bool(us_quotes) if us else None, "usd_inr_at": got.get("rate_at") if us and got["rate"] else None,
             "limit": holdings_limit(profile["_plan"]), "facts_max": HOLDINGS_FACTS}

@@ -154,3 +154,13 @@ def test_the_public_theme_day_is_the_maps_written_day_in_the_markets_time(monkey
     monkeypatch.setattr(public_themes, "payload", lambda x: payload)
     assert public_themes.card_line(entry).endswith("· 8 Nov")
     assert public_themes.view({**entry}, {k: v for k, v in payload.items() if k != "generated_at"})["day"] == "2026-11-16"   # no map time: the entry's
+
+
+# ---------- LIVE10B-027: holdings imported before R60 are shown in the one name style ----------
+def test_holdings_names_kept_in_capitals_are_shown_in_the_one_style():
+    from app import main as M
+    items = [{"symbol": "SBIN", "name": "STATE BANK OF INDIA", "exchange": "NSE"}, {"symbol": "ICICIBANK", "name": "ICICI BANK", "exchange": "NSE"},
+             {"symbol": "GOLDBEES", "name": "NIPPON INDIA GOLD BEES ETF", "exchange": "NSE", "kind": "etf"}, {"symbol": "TCS", "name": "TCS"}]
+    got = [i["name"] for i in M._named_now(items)]
+    assert got == ["State Bank of India", "ICICI Bank", "NIPPON INDIA GOLD BEES ETF", "TCS"]
+    assert items[0]["name"] == "STATE BANK OF INDIA"                      # what is stored is left as it is
