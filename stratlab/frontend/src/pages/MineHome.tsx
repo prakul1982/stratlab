@@ -274,7 +274,9 @@ function MarketsCard({ later }: { later: boolean }) {
   // the six levels (and gold in rupees) are read again each minute while India, the US, the dollar or gold trades (LIVE-1)
   const live = useMarketsLive(STRIP_MARKETS);
   const series = useMarketStrip(later, live);
-  const [gold, setGold] = useState<IndiaGold | null>(null);
+  // undefined while India's price is read: the line waits for it rather than say the world price first and change its definition a moment
+  // later (LIVE9B-031: one account read "at the world price … before import duty", another "in India, the price Net worth uses")
+  const [gold, setGold] = useState<IndiaGold | null | undefined>(undefined);
   useEffect(() => { if (later) api<IndiaGold>("/money/gold").then(setGold).catch(() => setGold(null)); }, [later]);
   useLiveRefresh(later && live, () => { api<IndiaGold>("/money/gold").then(setGold).catch(() => undefined); });
   const { markets } = useApp();
@@ -283,7 +285,7 @@ function MarketsCard({ later }: { later: boolean }) {
   const closed = (id: string | null) => { const m = id ? markets.find((x) => x.id === id) : null; return !!m && !marketState(m).open; };
   // the US closing prints settle about 50 minutes after the bell (the server's SETTLE_MIN): until then a tile's last value is the last trade
   const settling = (id: string | null) => usSettling(id === "US" ? markets.find((x) => x.id === id) : null);
-  const gline = series.gold ? goldLineParts(gold, series.usdinr ? goldInr10g(series.gold.last, series.usdinr.last) : null, inr) : null;
+  const gline = series.gold && gold !== undefined ? goldLineParts(gold, series.usdinr ? goldInr10g(series.gold.last, series.usdinr.last) : null, inr) : null;
   const goldShort = gline?.short ?? null, goldMore = gline?.more ?? null;
   return (
     <Card testId="mine-markets" label="Markets">
@@ -314,7 +316,8 @@ function MarketsCard({ later }: { later: boolean }) {
       </div>
       {/* gold's rupee price as one short line under the tiles (inside its tile it ran to ten lines and made every tile as tall, UI-FIX-1); the world
           price and the duty between them, and what the line colours mean, are behind the (i) (VR1-002: two paragraphs of small print on a home card) */}
-      {goldShort && <p className="k-note k-muted" data-testid="mine-gold-inr">Gold: {goldShort}</p>}
+      {goldShort ? <p className="k-note k-muted" data-testid="mine-gold-inr">Gold: {goldShort}</p>
+        : series.gold && gold === undefined && <p className="k-note k-muted k-meta-wait" aria-hidden="true">Gold: ₹0,00,000 per 10 g in India, the price Net worth uses.</p>}
       {/* when the levels were read: the time moves with them as they are read again (LIVE-1); the same words whether a market is open or not, so the card does not change height at the open */}
       {readAt > 0 && <p className="k-note k-muted" data-testid="mine-mkt-at">Levels read at {fmtTime(readAt, { tz: IST, zone: true })}, and again each minute while a market is open.</p>}
     </Card>

@@ -179,3 +179,28 @@ test("LIVE9B-027: My space's net worth keeps its two decimals; the company heade
   assert.match(read("src/pages/MineHome.tsx"), /value=\{inrCompactSteady\(v\.totals\.net\)\}/);
   assert.match(read("src/styles-invest.css"), /\.inv-actions \{ display: grid; grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); gap: var\(--s2\); \}/);
 });
+
+test("LIVE9B-028, 029: the plan named once on Account; a visitor's /tour shows how StratLab works; Feedback in its neighbours' colour", async () => {
+  assert.doesNotMatch(read("src/pages/AccountPage.tsx"), /<div><dt>Plan<\/dt><dd>\{planName\}<\/dd><\/div>/);
+  const { visitorView } = await import("../src/lib/deepLinks.ts");
+  assert.deepEqual(visitorView("/tour"), { kind: "landing", section: "about", panel: undefined });
+  assert.match(read("src/lib/title.ts"), /if \(p === "\/tour"\) return withBrand\("How StratLab works"\);/);
+  assert.match(read("src/styles.css"), /\.legal-links \.legal-feedback \{ color: var\(--muted\); \}/);
+});
+
+test("LIVE9B-030, 031: a fold card's count is in its button's name, not hidden text; My space's gold line waits for India's price", () => {
+  const f = read("src/components/kit/FoldCard.tsx");
+  assert.match(f, /aria-label=\{said \? `\$\{title\}, \$\{said\}` : undefined\}/);
+  assert.doesNotMatch(f, /<span className="sr-only">, \{said\}<\/span>/);
+  const m = read("src/pages/MineHome.tsx");
+  assert.match(m, /useState<IndiaGold \| null \| undefined>\(undefined\)/);
+  assert.match(m, /series\.gold && gold !== undefined \? goldLineParts/);
+});
+
+test("LIVE9B-033: an industry's name inside a sentence keeps its acronyms", async () => {
+  const { lowerKeepAcronyms } = await import("../src/lib/format.ts");
+  assert.equal(lowerKeepAcronyms("IT services"), "IT services");
+  assert.equal(lowerKeepAcronyms("Banks and NBFCs"), "banks and NBFCs");
+  assert.equal(lowerKeepAcronyms("Auto Components"), "auto components");
+  assert.match(read("src/pages/DeepDive.tsx"), /the \$\{lowerKeepAcronyms\(v\.industry_measures\.label\)\} measures/);
+});

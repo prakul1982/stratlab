@@ -558,6 +558,12 @@ export function sourceWords(source: string): string {
   return `your ${source} file`;
 }
 
+/** A name lower-cased to sit inside a sentence, its acronyms kept: "IT services" → "IT services", "Banks and NBFCs" → "banks and NBFCs"
+ *  (LIVE9B-033: "the it services measures"). A word with two or more capitals stays as written. */
+export function lowerKeepAcronyms(text: string): string {
+  return text.split(/(\s+)/).map((w) => (/[A-Z].*[A-Z]/.test(w) ? w : w.toLowerCase())).join("");
+}
+
 /** How long ago a saved list was imported, in whole days (0 for today; null with no time). */
 export function daysOld(iso: string | null | undefined, now: Date = new Date()): number | null {
   const t = iso ? Date.parse(iso) : NaN;

@@ -7,7 +7,7 @@ import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { deckLock, deepDiveLimitLine } from "../lib/account";
 import { SampleDeckLink } from "../components/SampleDeck";
-import { asOf, CRORE, inrCompact, marketTz, pct, safeHref, fmtDate } from "../lib/format";
+import { asOf, CRORE, inrCompact, lowerKeepAcronyms, marketTz, pct, safeHref, fmtDate } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { marginText, millionsOf, scaleFor, usdAmount } from "../lib/research";
 import { Panel, TrendBars } from "../components/Research";
@@ -391,7 +391,7 @@ export function DeepDivePage() {
               empty="Only the company profile was read: no document was found." />}
             {v.doc_note && <p className="k-note">Filings: {v.doc_note}</p>}
             {reading && <Skeleton label={us ? "Reading the annual report (10-K) and earnings releases" : "Reading the latest investor presentation and earnings calls"} lines={3} />}
-            {!v.reads && !reading && <p className="k-small k-muted">The business model, {v.industry_measures?.label ? `the ${v.industry_measures.label.toLowerCase()} measures (${v.industry_measures.measures.slice(0, 3).join(", ")}…), ` : ""}capex plans and management's outlook come from these documents. Reading them takes about a minute and counts as one of your daily AI reads; a read is kept for a week and shared, so someone may already have done it.</p>}
+            {!v.reads && !reading && <p className="k-small k-muted">The business model, {v.industry_measures?.label ? `the ${lowerKeepAcronyms(v.industry_measures.label)} measures (${v.industry_measures.measures.slice(0, 3).join(", ")}…), ` : ""}capex plans and management's outlook come from these documents. Reading them takes about a minute and counts as one of your daily AI reads; a read is kept for a week and shared, so someone may already have done it.</p>}
             {v.reads?.problems?.length ? <p className="k-note">Couldn't read: {v.reads.problems.join(" · ")}</p> : null}
           </Card>
 

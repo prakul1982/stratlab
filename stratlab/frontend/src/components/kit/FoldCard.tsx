@@ -32,8 +32,10 @@ export function FoldCard({ title, meta, info, infoLabel, open: initial = false, 
       <div className="k-foldcard-head">
         <div className="k-card-titlerow">
           <H className="k-card-title" id={hid}>
-            <button type="button" className="k-foldcard-btn" aria-expanded={open} aria-controls={body} onClick={() => setOpen(!open)}>
-              {title}{said && <span className="sr-only">, {said}</span>}
+            {/* the count and value in the button's name, not a hidden ", 1 held" in its text (LIVE9B-030: page text read "Your schemes , 1 held") */}
+            <button type="button" className="k-foldcard-btn" aria-expanded={open} aria-controls={body} onClick={() => setOpen(!open)}
+              aria-label={said ? `${title}, ${said}` : undefined}>
+              {title}
             </button>
           </H>
           {info && <Info label={infoLabel ?? `About ${title}`}>{info}</Info>}
