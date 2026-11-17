@@ -10,7 +10,11 @@ declare global {
       BUSINESS_NAME?: string; CONTACT_EMAIL?: string; PRIVACY_EMAIL?: string; BILLING_EMAIL?: string; BUSINESS_ADDRESS?: string;
       BUSINESS_GSTIN?: string; POSTHOG_KEY?: string; POSTHOG_HOST?: string;
       /** Ads (lib/ads.ts, ADS-1): optional here, over the build's VITE_ADSENSE_* settings; ADS_ENABLED "false" turns ads off without a rebuild */
-      ADS_ENABLED?: string; ADSENSE_CLIENT?: string; ADSENSE_SLOT_PUBLIC?: string; ADSENSE_SLOT_AI?: string };
+      ADS_ENABLED?: string; ADSENSE_CLIENT?: string; ADSENSE_SLOT_PUBLIC?: string; ADSENSE_SLOT_AI?: string;
+      /** "on": sign-in by email (a one-time code and link from the sign-in service) beside Google; off until the email provider is set up */
+      EMAIL_SIGNIN?: string | boolean;
+      /** "on": a dollar price is charged in dollars when the server has the USD Razorpay plans; off, dollars are shown and rupees charged */
+      USD_CHECKOUT?: string | boolean };
     Razorpay?: any;
   }
 }

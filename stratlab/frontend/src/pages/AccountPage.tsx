@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, supabase } from "../lib/api";
 import { leavePush } from "../lib/pwa";
 import { signOutHere } from "../lib/signout";
+import { emailSignInOn } from "../lib/signin";
 import { useApp } from "../lib/app";
 import { download } from "../lib/share";
 import { dateOnly } from "../lib/format";
@@ -109,7 +110,7 @@ export function AccountPage() {
         <dl className="k-dl spread">
           {name && <div><dt>Name</dt><dd>{name}</dd></div>}
           <div><dt>Email</dt><dd>{me.email ?? session?.user.email ?? "–"}</dd></div>
-          {method && <div><dt>Signed in with</dt><dd>{method}{method === "Email link" && <span className="k-sub-line" data-testid="email-link-note">{EMAIL_LINK_NOTE}</span>}</dd></div>}
+          {method && <div><dt>Signed in with</dt><dd>{method}{method === "Email link" && !emailSignInOn() && <span className="k-sub-line" data-testid="email-link-note">{EMAIL_LINK_NOTE}</span>}</dd></div>}
           <div><dt>Plan</dt><dd>{planName}</dd></div>
         </dl>
       </Card>
