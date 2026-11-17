@@ -367,6 +367,10 @@ def blocks_html(blocks: list) -> str:
             wide = (" wide" + (" w4" if len(b["head"]) == 5 else "")) if len(b["head"]) >= 5 else ""
             wide += " wrap" if b.get("wrap") else ""
             wide += " nw" if b.get("names") else ""
+            # LIVE10A-042: column names that each fit one line on a phone card: label and figure both start at the cell's top, so a figure
+            # that wraps ("Stage 2 (advancing), 1 day") starts level with the others instead of 40px above them (VR6-019's foot-alignment
+            # is for names that wrap)
+            wide += " top" if wide.startswith(" wide") and all(len(str(h)) <= 12 for h in b["head"][1:]) else ""
             box = btn = ""
             if pg:
                 key = "pg" + hashlib.sha1((b.get("caption") or b["head"][0]).encode(), usedforsecurity=False).hexdigest()[:8]

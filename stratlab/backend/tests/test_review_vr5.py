@@ -9,7 +9,8 @@ def test_a_table_of_five_columns_or_more_is_drawn_as_cards_on_a_phone_and_a_narr
     wide = [{"t": "table", "caption": "India", "head": ["Rule set", "Return", "Passive", "Difference", "Trades", "Checks"],
              "rows": [["20/50 EMA cross", "-30.4%", "+14.1%", "-44.5 pts", "41", "Lost money after costs"]]}]
     html = blog.blocks_html(wide)
-    assert '<div class="btbl wide">' in html and '<td data-l="Return">-30.4%</td>' in html and '<td data-l="Checks">Lost money after costs</td>' in html
+    # (updated on purpose, fix11 LIVE10A-042: column names that each fit one line add " top" to the phone card's class)
+    assert '<div class="btbl wide top">' in html and '<td data-l="Return">-30.4%</td>' in html and '<td data-l="Checks">Lost money after costs</td>' in html
     assert '<th scope="row" class="l">20/50 EMA cross</th>' in html                         # the row's name stays its header
     narrow = [{"t": "table", "caption": "x", "head": ["Index", "Close", "Change"], "rows": [["NIFTY 50", "25,000", "+0.5%"]]}]
     assert '<div class="btbl">' in blog.blocks_html(narrow) and "wide" not in blog.blocks_html(narrow)

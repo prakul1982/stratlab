@@ -98,7 +98,7 @@ article details.how{margin:22px 0 8px}article details.how ul{margin:4px 0 8px}
 @media (max-width:640px){.btbl:not(.wide) thead th,.btbl:not(.wide) tbody th,.btbl caption{white-space:normal}.btbl:not(.wide) thead th{vertical-align:bottom}
 .btbl.wide.w4 tr{grid-template-columns:repeat(4,minmax(0,1fr))}
 /* VR6-019: in a card, a figure sits at the foot of its cell, so a label that wraps to three lines does not leave the figure beside it higher than the others */
-.btbl.wide td{display:flex;flex-direction:column;justify-content:flex-end}.kpis li:last-child:nth-child(odd){grid-column:1/-1}}
+.btbl.wide td{display:flex;flex-direction:column;justify-content:flex-end}.btbl.wide.top td{justify-content:flex-start}.kpis li:last-child:nth-child(odd){grid-column:1/-1}}
 /* VR7-002: a market's section is a fold. A window over 640px draws it open, as the plain heading and table it was (a browser without ::details-content
    draws it closed and a tap opens it); a phone shows the ten markets as ten lines, one opens at a time, and every figure stays in the page */
 @media (min-width:641px){details.mk::details-content{content-visibility:visible}details.mk>summary{display:block;pointer-events:none;cursor:default;list-style:none}details.mk>summary::-webkit-details-marker{display:none}details.mk>summary .n{display:none}}

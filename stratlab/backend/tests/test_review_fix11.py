@@ -111,3 +111,15 @@ def test_an_investor_meet_filing_about_results_is_an_investor_meeting():
                           "Schedule of the analysts meet on 3 Nov 2026 to discuss the unaudited financial results for the quarter.")
     assert cid in ("investor_meet", "concall") and sev == "info"
     assert F.classify("Outcome of Board Meeting", "Approved the unaudited financial results for the quarter ended 30 Sep 2026.")[0] == "results"
+
+
+# ---------- LIVE10A-042: a brief's Stage 2 card on a phone starts each figure at its cell's top when every column name fits one line ----------
+def test_a_phone_card_with_short_column_names_starts_each_figure_level():
+    from app import blog, blog_pages
+    t = {"t": "table", "head": ["Stock", "Close", "Day %", "Stage", "Supertrend", "Since"], "align": "lrrlll",
+         "rows": [["TCS", "2,405.00", "▲ +1.2%", "Stage 2 (advancing), 1 day", "Up", "12 Nov"]]}
+    html = blog.blocks_html([t])
+    assert 'class="btbl wide top"' in html
+    long = {**t, "head": ["Rules", "Return after costs", "Buy and hold return", "Difference in points", "Trades", "Checks passed"]}
+    assert " top" not in blog.blocks_html([long]).split("<table>")[0]          # names that wrap keep the figure at the cell's foot (VR6-019)
+    assert ".btbl.wide.top td{justify-content:flex-start}" in blog_pages.STYLE
