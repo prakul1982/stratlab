@@ -55,7 +55,8 @@ test("Free: three peers and the company's own row, three years of profit and los
   await expect(table.locator("tbody tr").first()).toHaveClass(/ct-own/);
   await expect(table.locator("tbody tr").first()).toContainText("Tata Steel");
   await expect(table.locator("tfoot")).toContainText("Median of 3 peers");
-  await expect(peers.getByText(/The other 3 peers and sorting the table are on the Basic plan/)).toBeVisible();
+  // (updated on purpose, rel1 item 7: peers are within 1/20 to 20 times the company's market value, so the made-up Orion Polymers, ₹8,400 cr beside Tata Steel's ₹2.06 lakh cr, is no longer its peer: five peers, not six)
+  await expect(peers.getByText(/The other 2 peers and sorting the table are on the Basic plan/)).toBeVisible();
   await expect(table.getByRole("button", { name: /P\/E/ })).toHaveCount(0);      // no sorting on Free
   await expect(peers.getByLabel("Sort by")).toHaveCount(0);
   await expect(peers.getByRole("button", { name: "Download CSV" })).toHaveCount(0);
@@ -91,11 +92,9 @@ test("Basic: every peer and sorting, every statement and the quarters, twelve qu
   await peers.scrollIntoViewIfNeeded();
   const table = peers.getByRole("table", { name: "TATASTEEL and its peers" });
   // (updated on purpose, LIVE8B-012: on a phone the company and its five nearest come first, then "Show more")
-  if (phone) {
-    await expect(table.locator("tbody tr")).toHaveCount(6, { timeout: 20_000 });
-    await peers.getByRole("button", { name: "Show 1 more" }).click();
-  }
-  await expect(table.locator("tbody tr")).toHaveCount(7, { timeout: 20_000 });
+  // (updated on purpose, rel1 item 7: peers are within 1/20 to 20 times the company's market value, so the made-up Orion Polymers, ₹8,400 cr beside Tata Steel's ₹2.06 lakh cr, is no longer its peer: five peers, not six): the company and its five fit a phone's first view, with no "Show more"
+  await expect(table.locator("tbody tr")).toHaveCount(6, { timeout: 20_000 });
+  await expect(peers.getByRole("button", { name: /^Show \d+ more/ })).toHaveCount(0);
   await expect(peers.getByText(/on the Basic plan/)).toHaveCount(0);
   await expect(peers.getByText("Downloading the peers as CSV is on the Pro plan.")).toBeVisible();
   // sort by P/E, highest first, then lowest (a header on a desktop, the card's "Sort by" on a phone): the company's own row stays on top
@@ -152,7 +151,7 @@ test("Pro: the peers download as CSV and the statements as Excel", async ({ page
   const peers = page.locator("#co-peers");
   await peers.scrollIntoViewIfNeeded();
   // (updated on purpose, LIVE8B-012: a phone shows the company and its five nearest first)
-  await expect(peers.getByRole("table", { name: "TATASTEEL and its peers" }).locator("tbody tr")).toHaveCount(phone ? 6 : 7, { timeout: 20_000 });
+  await expect(peers.getByRole("table", { name: "TATASTEEL and its peers" }).locator("tbody tr")).toHaveCount(6, { timeout: 20_000 });      // (updated on purpose, rel1 item 7: peers are within 1/20 to 20 times the company's market value, so the made-up Orion Polymers, ₹8,400 cr beside Tata Steel's ₹2.06 lakh cr, is no longer its peer: five peers, not six)
   const csv = page.waitForEvent("download");
   await peers.getByRole("button", { name: "Download CSV" }).click();
   expect((await csv).suggestedFilename()).toBe("stratlab-TATASTEEL-peers.csv");
