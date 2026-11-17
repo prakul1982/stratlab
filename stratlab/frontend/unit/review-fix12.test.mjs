@@ -61,3 +61,26 @@ test("CX2 #7 (jargon): a strategy's trading terms and the library's columns are 
   assert.match(lib, /termMeanings\(strategyName\(e\)\)\.length > 0 && <> <Info label=\{`What \$\{strategyName\(e\)\} means`\}>/);
   for (const k of ["ret", "bh", "mdd", "unseen", "checks"]) assert.match(lib, new RegExp(`key: "${k}", header: "[^"]+", (?:numeric|wrap): true, sortable: true, info: LIBRARY_COLUMNS\\.${k},`));
 });
+
+test("LIVE10B-026: holdings say each source once with its own one date, and the age note stays for the old part", async () => {
+  const { importedLine, oldPart } = await import("../src/lib/holdingsEdit.ts");
+  const day = (iso) => ({ "2026-10-28T20:57:00Z": "29 Oct", "2026-11-17T06:00:00Z": "17 Nov" })[iso];
+  const words = (s) => `your ${s} file`;
+  const age = (iso) => ({ "2026-10-28T20:57:00Z": 19, "2026-11-17T06:00:00Z": 0 })[iso] ?? null;
+  const recent = (iso) => (age(iso) < 7 ? "just now" : null);
+  // one source: one date, no second date in brackets
+  assert.equal(importedLine([{ source: "Zerodha Kite", at: "2026-10-28T20:57:00Z", count: 6 }], { source: null, at: null }, day, words, recent),
+    " · imported from your Zerodha Kite file on 29 Oct");
+  // two sources: each with its count and day
+  const two = [{ source: "Zerodha Kite", at: "2026-10-28T20:57:00Z", count: 4 }, { source: "ICICI Direct", at: "2026-11-17T06:00:00Z", count: 2 }];
+  assert.equal(importedLine(two, { source: "ICICI Direct", at: "2026-11-17T06:00:00Z" }, day, words, recent),
+    " · 4 imported from your Zerodha Kite file on 29 Oct · 2 from your ICICI Direct file on 17 Nov (just now)");
+  assert.deepEqual(oldPart(two, null, 6, age, 7), { days: 19, words: "4 of these 6 holdings are" });
+  assert.deepEqual(oldPart(two.slice(0, 1), null, 4, age, 7), { days: 19, words: "These holdings are" });
+  assert.equal(oldPart(two.slice(1), null, 2, age, 7), null);
+  // a list saved before sources were kept: the list's own source and day
+  assert.equal(importedLine([], { source: "Groww", at: "2026-10-28T20:57:00Z" }, day, words, recent), " · imported from your Groww file on 29 Oct");
+  const page = read("src/pages/HoldingsPage.tsx");
+  assert.doesNotMatch(page, /\(\$\{ago\(view\.updated_at\)\}\)/);
+  assert.match(page, /oldPart\(view\.sources, view\.updated_at, t\.count/);
+});

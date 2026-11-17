@@ -5,7 +5,7 @@ import { numberProblem, problems, qtyProblem, type Limits } from "../lib/validat
 import { useApp } from "../lib/app";
 import { useMarketRefresh } from "../lib/marketLive";
 import { usTodayNote } from "../lib/marketHours";
-import { aFile, ago, asOf as asOfText, dateOnly, daysOld, fmtDate, HOLDINGS_OLD_DAYS, inr, istToday, marketTz, money, pct, price, qty as qtyText, safeHref, signTone, sourceWords } from "../lib/format";
+import { aFile, ago, asOf as asOfText, dateOnly, daysOld, fmtDate, HOLDINGS_OLD_DAYS, inr, IST, istToday, marketTz, money, pct, price, qty as qtyText, safeHref, signTone, sourceWords } from "../lib/format";
 import { Modal } from "../components/ui";
 import { NoBreak } from "../components/NoBreak";
 import { Trash } from "../components/Icons";
@@ -20,7 +20,7 @@ import { zerodhaEmpty, type ZerodhaRead } from "../lib/zerodha";
 import { orList } from "../lib/brokers";
 import { BrokerGuide } from "../components/BrokerGuide";
 import { SourceChip } from "../components/kit/SourceChip";
-import { dayLabel, dollarRate, editChange, pnlLabel, priceNote, syncedNote, type Change, type Closes, type Mkt } from "../lib/holdingsEdit";
+import { dayLabel, dollarRate, editChange, importedLine, oldPart, pnlLabel, priceNote, syncedNote, type Change, type Closes, type HoldingSource, type Mkt } from "../lib/holdingsEdit";
 
 /* /holdings: the stocks you hold, valued at today's prices: each one's value, gain or loss, trend and filings, the sector
  * mix, dividends and corporate actions, from a broker file or typed in. Facts, not advice. Built from the kit
@@ -40,7 +40,7 @@ type View = {
   totals: { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number; priced: number;
     pnl_partial?: { priced: number; lines: number } | null;
     no_cost?: { count: number; symbols: string[]; value: number } | null; session?: string | null; other_session?: string[] };
-  source: string | null; updated_at: string | null; prices: boolean; prices_at?: string | null; us_prices_at?: string | null; closes?: Closes; limit: number; facts_max: number;
+  source: string | null; updated_at: string | null; sources?: HoldingSource[]; prices: boolean; prices_at?: string | null; us_prices_at?: string | null; closes?: Closes; limit: number; facts_max: number;
   us?: UsTotals | null; usd_inr?: number | null; usd_inr_at?: string | null; us_prices?: boolean | null;
   /** the connected Zerodha account's last read (R7M-009); absent when it isn't connected */
   zerodha?: ZerodhaRead | null;
@@ -420,12 +420,15 @@ export function HoldingsPage() {
             <div className="h-sum-notes">
             <p className="k-note">
               {/* "imported from … on 25 Oct": a login's holdings are as of when they were read, not a live connection (LIVE9B-021) */}
-              {t.count} stock{t.count === 1 ? "" : "s"}{view.source ? ` · imported from ${sourceWords(view.source)}` : ""}{view.updated_at ? `${view.source ? " on" : " · imported"} ${fmtDate(view.updated_at, { year: false })} (${ago(view.updated_at)})` : ""}
+              {/* LIVE10B-026: each source once, with one date of its own (the day in India's time; "(3 h ago)" only while it is recent) */}
+              {t.count} stock{t.count === 1 ? "" : "s"}{importedLine(view.sources, { source: view.source, at: view.updated_at }, (d) => fmtDate(d, { year: false, tz: IST }), sourceWords,
+                (d) => ((daysOld(d) ?? 99) < 7 ? ago(d) : null))}
               {(() => { const n = priceNote(view.prices, view.closes, rows, (d) => fmtDate(d, { weekday: true, year: false })); return n && ` · ${n}`; })()}
             </p>
-            {(daysOld(view.updated_at) ?? 0) >= HOLDINGS_OLD_DAYS && (
-              <p className="k-note" data-testid="holdings-old">These holdings are {daysOld(view.updated_at)} days old: the prices are today's, the shares and quantities as imported. Import again to bring in any trades since.</p>
-            )}
+            {(() => {
+              const old = oldPart(view.sources, view.updated_at, t.count, (d) => daysOld(d), HOLDINGS_OLD_DAYS);
+              return old && <p className="k-note" data-testid="holdings-old">{old.words} {old.days} days old: the prices are today's, the shares and quantities as imported. Import again to bring in any trades since.</p>;
+            })()}
             {t.no_cost && (
               <p className="k-note">
                 Not in these totals: {t.no_cost.symbols.join(", ")} ({t.no_cost.count === 1 ? "no buy price" : "no buy prices"}), worth {inr(t.no_cost.value)} now{view.usd_inr && rows.some((r) => isUS(r) && t.no_cost!.symbols.includes(r.symbol)) ? ` (at ${dollarRate(view.usd_inr, view.usd_inr_at)})` : ""}, except Today, which includes {t.no_cost.count === 1 ? "its" : "their"} change.

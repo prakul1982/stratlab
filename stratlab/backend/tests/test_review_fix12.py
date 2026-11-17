@@ -113,3 +113,24 @@ def test_the_profit_worked_out_from_a_one_decimal_p_e_is_said_to_three_figures()
     page = stock_pages.render(f, "IN", "ACME", None)
     assert "about ₹82,000 cr" in page and "81,982" not in page
     assert stock_pages.about(3.4712) == __import__("pytest").approx(3.47) and stock_pages.about(None) is None
+
+
+# ---------- LIVE10B-026: holdings "imported from your Zerodha Kite file on 28 Oct (29 Oct 2026)", re-dated by a second file ----------
+def test_each_holding_keeps_where_and_when_it_was_imported():
+    from app import holdings
+    before = {"items": [{"symbol": "TCS", "exchange": "NSE", "qty": 1}, {"symbol": "INFY", "exchange": "NSE", "qty": 2}],
+              "source": "Zerodha Kite file", "updated_at": "2026-10-28T20:57:00+00:00"}
+    kept = holdings.tag(before["items"], before["source"], before["updated_at"])
+    new = holdings.tag([{"symbol": "HDFCBANK", "exchange": "NSE", "qty": 3}], "ICICI Direct", "2026-11-17T06:00:00+00:00")
+    h = {"items": kept + new, "source": "ICICI Direct", "updated_at": "2026-11-17T06:00:01+00:00"}
+    assert holdings.sources(h) == [{"source": "Zerodha Kite file", "at": "2026-10-28T20:57:00+00:00", "count": 2},
+                                   {"source": "ICICI Direct", "at": "2026-11-17T06:00:00+00:00", "count": 1}]
+    # tags already there are kept (a third file doesn't re-date the first two)
+    assert holdings.tag(kept, "Groww", "2026-11-18T00:00:00+00:00") == kept
+    # a list saved before: its own source and day
+    assert holdings.sources(before) == [{"source": "Zerodha Kite file", "at": "2026-10-28T20:57:00+00:00", "count": 2}]
+    import inspect
+    from app import main as m
+    src = inspect.getsource(m)
+    assert 'rows = holdings.tag(found, src, datetime.now(timezone.utc).isoformat(timespec="seconds"))' in src
+    assert '"sources": holdings.sources(h),' in src
