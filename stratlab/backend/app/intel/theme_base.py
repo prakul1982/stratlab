@@ -2652,6 +2652,9 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
                       and c.get("ticker") not in outside and c.get("ticker") not in uf and c.get("industry")
                       and model_family(every.get(c.get("ticker")) or "") in ("", f)
                       and bool(top_ind) and key(c.get("industry")) == top_ind[0][0] and top_ind[0][1] * 2 > len(known)
+                      # (an industry "most" of the read companies share is two or more of them: one read company of four is no majority
+                      # the others' industry can rest on, and the layer says it rests on under half its companies, Release 63 CI)
+                      and top_ind[0][1] >= 2
                       # (its words say the layer's own name, naming no way of earning or the layer's among others; or they state the
                       # layer's way of earning and no other: "fully regulated natural gas and electric utility companies")
                       and ((layer_says(v, own_text(ev(c)), theme_words)[1] and (not said_(c) or f in said_(c))) or said_(c) == {f})}
@@ -5521,7 +5524,10 @@ _NOT_END = r"(?<![A-Z]\.)(?<!\bInc\.)(?<!\bINC\.)(?<!\bCorp\.)(?<!\bLtd\.)(?<!\b
 _FIRST = re.compile(r"^(.{20,240}?[.;])" + _NOT_END + r"(?:\s|$)")
 # what a company's description says before its business (the owner, 7 Nov: "**Company Overview **", "Incorporatedin1994", "Business Overview:")
 _MARKUP = re.compile(r"\*+|#+")
-_HEADING = re.compile(r"\s*\b(?:company|business|corporate)\s+(?:overview|profile|description)\s*:?|\s*\babout\s+(?:us|the\s+company)\s*:", re.I)
+# (Release 63 CI: SPEL Semiconductor's profile glues "Holding Company: Natronix ..." onto its first sentence with no full stop, so its line ran
+# on and was cut at "has its", no own words left; a holding-company or registered-office label a profile glues on ends the sentence before it)
+_HEADING = re.compile(r"\s*\b(?:company|business|corporate)\s+(?:overview|profile|description)\s*:?|\s*\babout\s+(?:us|the\s+company)\s*:"
+                      r"|\s+\b(?:(?:ultimate\s+)?holding|parent)\s+company\s*:|\s+\bregistered\s+office\s*:", re.I)
 _GLUED = re.compile(r"(?i)\b(incorporated|established|founded|set up|formed)(in)(\d{4})")
 _HISTORY = re.compile(r"^(?:originally\s+)?(?:incorporated|established|founded|set up|formed|promoted)\b[^,.;]*?\b(?:in|on)\s+\d{4}\s*(?:,|as\b[^,]*,|and\b)?\s*", re.I)
 # a results or sales line, not what the company does: "reported total dispatches of 7,34,403 units in October 2026"

@@ -2549,8 +2549,12 @@ def sector_rotation(region: str = "IN", set: str = "sectors", interval: str = "w
             # LIVE10A-011: a kept copy a close behind (the after-close copy not made yet, or made before the day's candles were out) is served
             # at once, dated by its own candles, and the chart is worked out again behind it (03:50 ET, 12 h after the close, the page said
             # "Still working…" while every member's prices were read again inside the request)
-            older = db.json_value(db.get_setting(last_key), {})
-            if isinstance(older, dict) and older.get("rows") and older.get("v") == rotation.VERSION and ROTATION_BEHIND and _rotation_behind(region, set, interval, tail, name):
+            # a store that can't be read is no older copy: the chart is worked out in the request, as before (Release 63 CI)
+            try:
+                older = db.json_value(db.get_setting(last_key), {}) if ROTATION_BEHIND else {}
+            except Exception:
+                older = {}
+            if isinstance(older, dict) and older.get("rows") and older.get("v") == rotation.VERSION and _rotation_behind(region, set, interval, tail, name):
                 return ok({**older, "skipped": [public_text(x) for x in older.get("skipped") or []], "updating": True})
     if out is None:
         try:
