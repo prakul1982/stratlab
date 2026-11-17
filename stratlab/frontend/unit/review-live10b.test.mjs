@@ -15,3 +15,17 @@ test("LIVE10B-024: a holdings file naming stocks already held is asked about, an
   assert.match(page, /data-testid="holdings-mode-note"/);
   assert.match(page, /you're asked before anything is added/);
 });
+
+test("LIVE10B-001: the rupee note names StratLab's US prices and says only rupee prices are charged in rupees", async () => {
+  const { usdNote } = await import("../src/lib/usdAbout.ts");
+  const note = usdNote(93.56, false, { basic: 8, pro: 20 });
+  assert.match(note, /^Prices in ₹ are charged in rupees\./);
+  assert.doesNotMatch(note, /Every price is charged in rupees/);
+  assert.match(note, /at ₹93\.56 to the dollar \(today's rate\): StratLab's US prices are Basic \$8 and Pro \$20 a month/);
+  assert.doesNotMatch(usdNote(93.56), /US prices/);                                   // no US prices read: not named
+  for (const p of ["src/pages/PlansPage.tsx", "src/pages/Login.tsx"]) assert.match(read(p), /usdNote\(rate, pricing\?\.usd_inr\?\.fallback, usd\)/);
+});
+
+test("LIVE10B-002: the dollar view's yearly small print is in dollars", () => {
+  assert.match(read("src/pages/Login.tsx"), /const yearly = \(p: "basic" \| "pro"\) => \(cur === "USD" && usd \? dollarText\(usd\[`\$\{p\}_year`\]\) : rupees\(p, true\)\);/);
+});

@@ -547,8 +547,9 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
   const rupees = (p: PlanId, year = false) => `₹${PRICE[p][year ? 1 : 0].toLocaleString("en-IN")}`;
   const intro = pricingIntro(offer, LIMITS.pro, "landing");
   const [period, setPeriod] = useState<"month" | "year">("month");
-  // the fine print's yearly prices are the ones a card shows
-  const yearly = (p: PlanId) => rupees(p, true);
+  // the fine print's yearly prices are the ones a card shows: dollars while dollars are shown (LIVE10B-002: "Paying yearly: Basic
+  // ₹6,999" in the dollar view)
+  const yearly = (p: "basic" | "pro") => (cur === "USD" && usd ? dollarText(usd[`${p}_year`]) : rupees(p, true));
   // "incl. GST" only while the invoices carry GST (the seller's GSTIN is set); nothing speaks of it before (R7M-001)
   const gst = pricing?.invoice?.gst === true;
   const small = finePrint(offer, { currency: "INR", inRupees: false, inRupeesYear: false,
@@ -631,7 +632,7 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
         </div>
         <AllFeatures />
         {!loading && top && intro.title !== "Plans" && <p className="small muted k-measure m80">{intro.lede}</p>}
-        {loading ? <span className="lp-skel lp-skel-fine" /> : <PhoneFold label="Prices, invoices and renewals"><p className="small muted k-measure m80" data-testid="usd-note">{[...small, cur === "USD" && usd ? usdPricesNote(usd, period, usdOn) : usdNote(rate, pricing?.usd_inr?.fallback)].join(" ")}</p></PhoneFold>}
+        {loading ? <span className="lp-skel lp-skel-fine" /> : <PhoneFold label="Prices, invoices and renewals"><p className="small muted k-measure m80" data-testid="usd-note">{[...small, cur === "USD" && usd ? usdPricesNote(usd, period, usdOn) : usdNote(rate, pricing?.usd_inr?.fallback, usd)].join(" ")}</p></PhoneFold>}
       </div>
     </section>
   );
