@@ -64,3 +64,33 @@ test("LIVE9A-014: day chips, market value at the price beside it, and the timing
   assert.match(page, /cell: \(r\) => capCell\(r, quotes\[r\.symbol\]\?\.price, \(v\) => screenCap\(v, r\.region\)\) \}/);
   assert.match(page, /laterDays\(\(data\?\.weeks \?\? \[\]\)\.flatMap/);
 });
+
+test("LIVE9B-010: the home page's watchlist paints its last rows at once, for this account only, and reserves its height", async () => {
+  const M = await import("../src/lib/mineMovers.ts");
+  const mem2 = new Map();
+  const store = { getItem: (k) => mem2.get(k) ?? null, setItem: (k, v) => mem2.set(k, String(v)), removeItem: (k) => mem2.delete(k) };
+  const now = Date.parse("2026-11-17T00:50:00Z");
+  M.keepMovers("u1", [{ symbol: "RELIANCE" }], now, store);
+  assert.deepEqual(M.readKeptMovers("u1", now + 60_000, store)?.rows, [{ symbol: "RELIANCE" }]);
+  assert.equal(M.readKeptMovers("u2", now, store), null);                       // another account's rows are never shown
+  assert.equal(M.readKeptMovers("u1", now + 5 * 86400_000, store), null);       // too old to help
+  M.forgetKeptMovers(store);
+  assert.equal(M.readKeptMovers("u1", now, store), null);
+  assert.match(read("src/lib/localData.ts"), /forgetKeptMovers\(\);/);           // gone at sign-out
+  const page = read("src/pages/MineHome.tsx");
+  assert.match(page, /lines=\{Math\.max\(3, Math\.min\(6, items\?\.length \?\? 3\)\)\}/);
+  assert.match(page, /data-testid="mine-movers-earlier">As read \{asOf\(earlier\.at, \{ year: false \}\)\}; today's prices are on their way\./);
+});
+
+test("LIVE9B-010: the market tiles paint their last levels, each with its own day, until the fresh read", async () => {
+  const M = await import("../src/lib/mine.ts");
+  const mem3 = new Map();
+  const store = { getItem: (k) => mem3.get(k) ?? null, setItem: (k, v) => mem3.set(k, String(v)) };
+  const now = Date.now();
+  M.keepStripTile("nifty", { values: [25030, 25291], last: 25291, prev: 25030, changePct: 1.04, day: "2026-11-16", at: now }, store);
+  const got = M.keptStrip(now + 1000, store);
+  assert.equal(got.nifty.last, 25291);
+  assert.equal(got.nifty.day, "2026-11-16");                                  // the tile says the day its level is of
+  assert.deepEqual(M.keptStrip(now + 5 * 86400_000, store), {});              // too old: the tile reads afresh
+  assert.match(read("src/lib/mine.ts"), /useState<Record<string, Series \| null \| undefined>>\(\(\) => keptStrip\(\)\)/);
+});

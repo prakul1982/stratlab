@@ -14,6 +14,7 @@ import { goldLineParts, type IndiaGold } from "../lib/gold";
 import { fmtDate, monthShort } from "../lib/format";
 import { CARDS, DEFAULT_LAYOUT, cleanLayout, slotSpans, type CardId, type Layout } from "../lib/mineLayout";
 import { usePersisted } from "../lib/persist";
+import { keepMovers, readKeptMovers } from "../lib/mineMovers";
 import { useAfterPaint } from "../lib/defer";
 import { researchApi, savedRegion, useWatchlist, type Quote, type Region } from "../lib/research";
 import { greetingAt, greetingZone, hourIn } from "../lib/greeting";
@@ -355,7 +356,9 @@ type Mover = { region: Region; symbol: string; name: string | null; q: Quote };
 
 function WatchCard() {
   const { items, failed, retry } = useWatchlist();
-  const { markets } = useApp();
+  const { markets, me } = useApp();
+  // the last rows this card showed for this account: painted at once, said as the earlier read, until today's arrive (LIVE9B-010)
+  const kept = useMemo(() => readKeptMovers<Mover>(me?.id), [me?.id]);
   const day = (m: Mover) => { const mk = markets.find((x) => x.id === m.region); return moverDay(m.region, m.q, new Date(), !!mk && mk.status !== "soon" && !marketState(mk).open); };
   const [movers, setMovers] = useState<Mover[] | null>(null);
   // the prices of the watchlist's first 24 in each market, biggest movers first: read when the list arrives and again each minute
@@ -371,29 +374,33 @@ function WatchCard() {
     if (items === null) return;
     if (!items.length) { setMovers([]); return; }
     let live = true;
-    read(items).then((m) => { if (live) setMovers(m); });
+    read(items).then((m) => { if (live) { setMovers(m); keepMovers(me?.id, m); } });
     return () => { live = false; };
   }, [items, read]);
   const on = useRef(true);
   useEffect(() => { on.current = true; return () => { on.current = false; }; }, []);
   const trading = useMarketsLive(["IN", "US"]);
-  useLiveRefresh(trading && !!items?.length && movers !== null, () => { void read(items!).then((m) => { if (on.current && m.length) setMovers(m); }); });
+  useLiveRefresh(trading && !!items?.length && movers !== null, () => { void read(items!).then((m) => { if (on.current && m.length) { setMovers(m); keepMovers(me?.id, m); } }); });
   // VR2-004: six rows each said "Mon 26 Oct" under the name: when every row is from the same earlier day it is said once, under the list
-  const days = (movers ?? []).map((m) => day(m));
+  const earlier = movers === null && !failed && kept && items !== null && items.length > 0 ? kept : null;
+  const rows = movers ?? earlier?.rows ?? null;
+  const days = (rows ?? []).map((m) => day(m));
   const sameDay = days.length > 1 && days[0] && days.every((d) => d === days[0]) ? days[0] : null;
   return (
     <Card testId="mine-watch">
       <CardHead title={movers?.length && movers.every((m) => day(m)) ? "Your watchlist" : "Your watchlist today"} actions={<Link className="btn quiet sm" to="/research/watchlist" aria-label="Open the watchlist">Open</Link>} />
       {failed ? <ErrorState title="Your watchlist couldn't be opened" action={{ label: "Try again", onClick: retry }}>Nothing was changed.</ErrorState>
-        : movers === null ? <Skeleton label="Reading your watchlist prices" lines={3} />
-        : !movers.length ? (
+        // the placeholder as tall as the rows it waits for (up to six), so their arrival doesn't move the page (LIVE9B-010)
+        : rows === null ? <Skeleton label="Reading your watchlist prices" lines={Math.max(3, Math.min(6, items?.length ?? 3))} />
+        : !rows.length ? (
           items && items.length
             ? <EmptyState title="No prices yet" action={{ label: "Open the watchlist", to: "/research/watchlist" }}>Today's prices for your watchlist are not available right now.</EmptyState>
             : <EmptyState title="Your watchlist is empty" action={{ label: "Find a company", to: "/research" }}>Press Watch on any company to follow it here, with the biggest movers first.</EmptyState>
         ) : (
           <>
-          <ul className="mine-movers">
-            {movers.map((m) => (
+          {earlier && <p className="k-note k-muted" role="status" data-testid="mine-movers-earlier">As read {asOf(earlier.at, { year: false })}; today's prices are on their way.</p>}
+          <ul className={`mine-movers${earlier ? " k-muted" : ""}`}>
+            {rows.map((m) => (
               <li key={`${m.region}-${m.symbol}`}>
                 <Link to={`/research/${m.region}/${encodeURIComponent(m.symbol)}`}><b>{m.symbol}</b>{m.name && <span className="k-stat-d">{m.name}</span>}</Link>
                 <span className="px">{price(m.q.price, m.region === "US" ? "USD" : "INR")}</span>

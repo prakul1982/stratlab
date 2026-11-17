@@ -203,9 +203,11 @@ def compute(registry, market: str, members: list[tuple[str, str]], interval: str
         bench_d = closes(bench_bars, "daily")
     except LookupError:
         raise
-    except Exception as e:      # without the benchmark there's no chart: say so instead of failing
-        raise LookupError(f"The benchmark's prices couldn't be loaded right now ({str(e)[:80] or e.__class__.__name__}). "
-                          "Try again in a minute.") from None
+    except Exception as e:      # without the benchmark there's no chart: say so instead of failing, once, in plain words (LIVE9A-017)
+        print("rotation benchmark:", market, str(e)[:120] or e.__class__.__name__)
+        busy = bool(getattr(e, "busy", False)) or "busy" in str(e).lower() or "rate limit" in str(e).lower()
+        raise LookupError("The benchmark's prices couldn't be read just now" + (": the market data source is busy" if busy else "")
+                          + ". Try again in a minute.") from None
     prov = registry.provider(market)
 
     def one(item):

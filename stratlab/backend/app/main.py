@@ -2463,6 +2463,18 @@ def rotation_after_close(now: datetime | None = None) -> list[str]:
     return done
 
 
+def rotation_kept(region: str, last_key: str, now: datetime | None = None) -> dict | None:
+    """The kept rotation chart when it is at the market's latest close and of this version, without its name and market; else None."""
+    try:
+        kept = db.json_value(db.get_setting(last_key), {})
+        day = stock_pages.last_close(region, now)[0].isoformat()
+    except Exception:
+        return None
+    if not isinstance(kept, dict) or not kept.get("rows") or kept.get("v") != rotation.VERSION or str(kept.get("as_of") or "")[:10] < day:
+        return None
+    return {k: v for k, v in kept.items() if k not in ("name", "market")}
+
+
 @app.get("/research/rotation")
 def sector_rotation(region: str = "IN", set: str = "sectors", interval: str = "weekly", tail: int = 5,
                     profile=Depends(current_profile)):
@@ -2492,6 +2504,13 @@ def sector_rotation(region: str = "IN", set: str = "sectors", interval: str = "w
             err(400, "empty", "Pick a group with at least two stocks, or star more companies for your watchlist.")
     key = ("rotation", region, set, tuple(_member_key(m) for m in members or []), interval, tail)
     out = _results.get(key)
+    if out is None and shared:
+        # the copy the price job keeps after each close is already at the latest completed session (a session still trading is left out of
+        # the chart either way): served at once instead of reading every member's prices again (rel1, LIVE9A-017: 15 s, and "Still
+        # working" 9 h after the close)
+        out = rotation_kept(region, last_key)
+        if out is not None:
+            _results.set(key, out, 600)
     if out is None:
         try:
             out = rotation_run(region, set, members, interval, tail, name if shared else None)

@@ -96,6 +96,31 @@ const seriesCache = new Map<string, { at: number; p: Promise<Series | null> }>()
 export const SERIES_KEEP_MS = 5 * 60_000;
 export const SERIES_LIVE_KEEP_MS = 45_000;
 
+/* The tiles' last levels, kept in this browser: a cold load paints each tile at once with the level and the day it was of (a tile says
+ * its day, so an earlier session's level reads as that day's), then the fresh read replaces it (rel1, LIVE9B-010: the India tiles were
+ * still grey 8 s after the home page opened on a closed day). Market levels only, nothing of the account's. */
+const STRIP_KEY = "stratlab.strip.v1";
+const STRIP_MAX_AGE_MS = 4 * 86400_000;
+
+export function keptStrip(now = Date.now(), store: Pick<Storage, "getItem"> | null = (() => { try { return localStorage; } catch { return null; } })()): Record<string, Series> {
+  try {
+    const got = JSON.parse(store?.getItem(STRIP_KEY) ?? "null") as Record<string, Series> | null;
+    const out: Record<string, Series> = {};
+    for (const [id, x] of Object.entries(got ?? {})) {
+      if (x && Array.isArray(x.values) && x.values.length && typeof x.last === "number" && typeof x.day === "string" && now - (x.at ?? 0) < STRIP_MAX_AGE_MS) out[id] = x;
+    }
+    return out;
+  } catch { return {}; }
+}
+
+export function keepStripTile(id: string, x: Series, store: Pick<Storage, "getItem" | "setItem"> | null = (() => { try { return localStorage; } catch { return null; } })()): void {
+  try {
+    const all = JSON.parse(store?.getItem(STRIP_KEY) ?? "null") ?? {};
+    all[id] = { ...x, values: x.values.slice(-23) };
+    store?.setItem(STRIP_KEY, JSON.stringify(all));
+  } catch { /* storage full or off */ }
+}
+
 function loadSeries(t: MarketTile, keep = SERIES_KEEP_MS): Promise<Series | null> {
   const hit = seriesCache.get(t.id);
   if (hit && Date.now() - hit.at < keep) return hit.p;
@@ -108,7 +133,9 @@ function loadSeries(t: MarketTile, keep = SERIES_KEEP_MS): Promise<Series | null
     const values = rows.map((c) => c.c);
     if (!values.length) return null;
     const last = values[values.length - 1], prev = values.length > 1 ? values[values.length - 2] : null;
-    return { values, last, prev, changePct: prev ? (last / prev - 1) * 100 : null, day: candleDay(rows[rows.length - 1].t, tz), at: Date.now() };
+    const x = { values, last, prev, changePct: prev ? (last / prev - 1) * 100 : null, day: candleDay(rows[rows.length - 1].t, tz), at: Date.now() };
+    keepStripTile(t.id, x);
+    return x;
   }).catch(() => { seriesCache.delete(t.id); return null; });
   seriesCache.set(t.id, { at: Date.now(), p });
   return p;
@@ -119,14 +146,15 @@ function loadSeries(t: MarketTile, keep = SERIES_KEEP_MS): Promise<Series | null
  * was until its new one comes (a read that fails changes nothing). The newest candle is today's, still forming: the
  * server brings it to the market's live price (research chart's `forming`, the candle reads' short keep). */
 export function useMarketStrip(enabled = true, live = false): Record<string, Series | null | undefined> {
-  const [out, setOut] = useState<Record<string, Series | null | undefined>>({});
+  const [out, setOut] = useState<Record<string, Series | null | undefined>>(() => keptStrip());
   const on = useRef(false);
   const liveNow = useRef(live);
   liveNow.current = live;
   useEffect(() => {
     if (!enabled) return;
     on.current = true;
-    MARKET_TILES.forEach((t) => loadSeries(t, liveNow.current ? SERIES_LIVE_KEEP_MS : SERIES_KEEP_MS).then((s) => { if (on.current) setOut((o) => ({ ...o, [t.id]: s })); }));
+    // a read that fails keeps the tile's kept level (with its day) rather than greying it
+    MARKET_TILES.forEach((t) => loadSeries(t, liveNow.current ? SERIES_LIVE_KEEP_MS : SERIES_KEEP_MS).then((s) => { if (on.current) setOut((o) => ({ ...o, [t.id]: s ?? o[t.id] ?? null })); }));
     return () => { on.current = false; };
   }, [enabled]);
   useLiveRefresh(enabled && live, () => {

@@ -3,6 +3,8 @@ Production logs (16 Nov, 18:09-19:43 UTC) show the theme check reading hundreds 
 "Screener.in is busy (our rate limit)", and pages failing between them (RELIANCE, 19:19). The jobs spent every turn of the shared
 allowance, so a person's request, which waits one second at most, found none. Now: turns are kept for requests, a deep dive waits a
 little longer, the company's last whole read stands in when it still can't be read, and with none the page asks again on its own."""
+import time
+
 import httpx
 import pytest
 
@@ -121,3 +123,37 @@ def test_a_us_deep_dive_in_the_session_values_the_company_at_the_last_close(monk
     assert seen == [356.27] and b["p"]["ratios"]["pe"] == 356.27 / 9.08 and b["in_session"]
     assert main.deep_live_price(b) == {"price": 352.10, "at": "2026-11-16T19:20:00+00:00"}
     assert main.close_day(b["trend"]) == "2026-11-13"
+
+
+# ---------- item 8 / LIVE9B-010: after the close, a stock's last-session quote serves every page until the next session ----------
+def test_a_closed_markets_quotes_come_from_the_kept_closes(monkeypatch):
+    from app.intel import company as C
+    C.forget_closed_quotes()
+    reads = []
+
+    class Kite:
+        def ready(self):
+            return True
+
+    class Hub(C.Research):
+        def __init__(self):
+            self.kite = Kite()
+
+        def _last_session(self, sym, q, bars=None):
+            reads.append(sym)                       # each costs the broker's daily candles
+            return {**q, "change_pct": 0.38}
+    monkeypatch.setattr(C, "market_open", lambda region, now=None: False)
+    monkeypatch.setattr(C, "_settled_day", lambda region: "2026-11-16")
+    monkeypatch.setattr(C.quote_share, "read", lambda kite, syms: {s: {"price": 100.0 + i, "at": "2026-11-16T15:30:00+05:30"} for i, s in enumerate(syms)})
+    h = Hub()
+    first, _ = h.quotes_pending("IN", ["RELIANCE", "TCS"])
+    assert first["RELIANCE"]["price"] == 100.0 and sorted(reads) == ["RELIANCE", "TCS"]
+    t0 = time.time()
+    again, _ = h.quotes_pending("IN", ["RELIANCE", "TCS"])
+    assert again == first and sorted(reads) == ["RELIANCE", "TCS"] and time.time() - t0 < 0.5     # no broker read the second time
+    # hours later, same settled session: still kept; once a newer session settles, read again
+    monkeypatch.setattr(C.time, "time", lambda: t0 + 5 * 3600)
+    assert C._closed_quote("IN", "TCS")["price"] == 101.0
+    monkeypatch.setattr(C, "_settled_day", lambda region: "2026-11-17")
+    assert C._closed_quote("IN", "TCS") is None
+    C.forget_closed_quotes()

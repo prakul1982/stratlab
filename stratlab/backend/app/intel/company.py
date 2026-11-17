@@ -111,23 +111,39 @@ def change_2dp(price, prev, given=None) -> float | None:
 
 
 CLOSED_KEEP = 10 * 60             # seconds a quote read after the market closed is reused by every page (LIVE5-001)
-_closed_quotes: dict[tuple[str, str], tuple[float, dict]] = {}
+CLOSED_LONG = 12 * 3600           # ...and up to this long while the market's latest settled session is still the one it was read in (rel1)
+_closed_quotes: dict[tuple[str, str], tuple[float, dict, str | None]] = {}
 _closed_lock = threading.Lock()
 
 
+def _settled_day(region: str) -> str | None:
+    """The market's latest completed, settled session (its close doesn't change until the next one), or None when it can't be said."""
+    try:
+        from ..last_session import latest_day
+        return latest_day(region)
+    except Exception:
+        return None
+
+
 def _closed_quote(region: str, symbol: str, now: float | None = None) -> dict | None:
-    """A quote read since the market closed, within CLOSED_KEEP; None otherwise."""
+    """A quote read since the market closed: within CLOSED_KEEP, or within CLOSED_LONG while the latest settled session is still the
+    one it was read in (rel1, LIVE9B-010: before the next open every page read 24 quotes, each with its daily candles, from the broker
+    again, and the home page's India tiles and watchlist stayed grey for 8-17 s). None otherwise."""
     hit = _closed_quotes.get((region, symbol))
-    if hit and (now if now is not None else time.time()) - hit[0] < CLOSED_KEEP:
+    if not hit:
+        return None
+    age = (now if now is not None else time.time()) - hit[0]
+    if age < CLOSED_KEEP or (age < CLOSED_LONG and hit[2] and hit[2] == _settled_day(region)):
         return dict(hit[1])
     return None
 
 
 def _keep_closed_quote(region: str, symbol: str, q: dict, now: float | None = None) -> None:
+    day = _settled_day(region)
     with _closed_lock:
         if len(_closed_quotes) > 4000:
             _closed_quotes.clear()
-        _closed_quotes[(region, symbol)] = (now if now is not None else time.time(), dict(q))
+        _closed_quotes[(region, symbol)] = (now if now is not None else time.time(), dict(q), day)
 
 
 def forget_closed_quotes() -> None:
@@ -980,14 +996,27 @@ class Research:
         if not symbols:
             return {}, []
         if region == "IN" and self._kite():
+            closed = not market_open(region)
+            # the market closed: each stock's quote of the last session, once worked out, serves every page until the next session (rel1)
+            kept = {s: q for s in symbols if closed and (q := _closed_quote(region, s)) is not None}
+            ask = [s for s in symbols if s not in kept]
+            if not ask:
+                return kept, []
             try:
                 # one read of the broker's feed shared by everyone for a few seconds, not one for each page open (LIVE-1: the pages
                 # read their prices again each minute)
-                got = quote_share.read(self.kite, symbols)
+                got = quote_share.read(self.kite, ask)
             except Exception:
                 got = None
             if got is not None:
-                return ({s: self._last_session(s, q) for s, q in got.items()} if not market_open(region) else got), []
+                if not closed:
+                    return got, []
+                out = dict(kept)
+                for s, q in got.items():
+                    out[s] = self._last_session(s, q)
+                    if out[s] and out[s].get("price") is not None:
+                        _keep_closed_quote(region, s, out[s])
+                return out, []
         out: dict[str, dict | None] = {}
         pending: list[str] = []
         closed = not market_open(region)
