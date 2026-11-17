@@ -1,9 +1,11 @@
 import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState, type JSX, type KeyboardEvent, type ReactNode, type SyntheticEvent } from "react";
 import { Link } from "react-router-dom";
-import { aboutUsd, usdNote, usePricing } from "../lib/currency";
+import { aboutUsd, usdCheckoutOn, usdNote, usePriceCur, usePricing } from "../lib/currency";
+import { cardPrice, dollarText, freePrice, usdPricesNote, usdRowOf } from "../lib/priceCurrency";
+import { CurrencySwitch } from "../components/CurrencySwitch";
 import { finePrint, landingAction, pricingIntro, YEARLY_LABEL, yearlySaving } from "../lib/offer";
 import { KEY, LIMITS, PLAN_IDS, PLAN_NAME, PRICE, WHO, type PlanId } from "../lib/planCore";   // the cards only: the tables (plans.ts) stay off the landing download
-import { signIn, signInUnfinished } from "../lib/signin";
+import { emailSignInOn, signIn, signInUnfinished, startSignIn } from "../lib/signin";
 import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 import { signInProblem } from "../lib/signinError";
 import { FAQ } from "../content/faq";
@@ -31,6 +33,8 @@ const ADS_HERE = adsLive(CONFIG, "public");
 const PublicAdLazy = lazy(() => import("../components/AdUnit").then((m) => ({ default: m.PublicAd })));
 const PublicAd = () => (ADS_HERE ? <Suspense fallback={null}><PublicAdLazy /></Suspense> : null);
 const PlanCompare = lazy(() => importWithRetry(() => import("../components/PlanCompare")).then((m) => ({ default: m.PlanCompare })));
+// sign-in by email (owner, 16 Nov): on the sign-in page only while /config.js switches it on; its code loads only then
+const EmailSignIn = lazy(() => importWithRetry(() => import("../components/EmailSignIn")).then((m) => ({ default: m.EmailSignIn })));
 
 /* The public landing page: what StratLab does, in its three spaces (Trade, the strategy lab it began as, first; then
  * Invest and Money), the alerts across them, the plans, and one way in (Google sign-in). Every button that signs in
@@ -319,7 +323,7 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
             {NAV_LINKS(ownMenu).map(([to, label]) => <a key={to} href={to}>{label}</a>)}
           </nav>
         </details>
-        {!login && <button type="button" className="btn outline sm" onClick={go}>Sign in</button>}
+        {!login && <button type="button" className="btn outline sm" onClick={() => void startSignIn().catch(() => setError("Couldn't start sign-in. Check your connection and try again."))}>Sign in</button>}
       </header>
 
       <main id="main" tabIndex={-1}>
@@ -335,13 +339,14 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
             {heading
               ? <h1 className="serif lp-h1 lp-own-h1">{heading}</h1>
               : <h1 className="serif lp-h1"><em>Test</em> it, research it, track it.</h1>}
-            <p className="serif lp-lede">{heading && intro ? intro : "One place for trading ideas, company research and your own money."}</p>
+            <p className="serif lp-lede">{login && emailSignInOn() ? "Sign in with your Google account or your email address: no password to set up." : heading && intro ? intro : "One place for trading ideas, company research and your own money."}</p>
             <div className="row wrap g12">
               {cta()}
               {full && <a className="btn quiet lp-cta-2" href="#trade">See how it works</a>}
             </div>
+            {login && emailSignInOn() && <Suspense fallback={null}><EmailSignIn /></Suspense>}
             {error && <p className="banner" role="alert">{error}</p>}
-            {login ? <p className="small muted">Signing in only reads your name and email from Google. By continuing you agree to the <Link className="link" to="/terms">Terms</Link> and <Link className="link" to="/privacy">Privacy policy</Link>.</p> : <p className="small muted">Free to start · No card · No code</p>}
+            {login ? <p className="small muted">Signing in only reads your name and email from Google{emailSignInOn() ? ", or only your email address by email" : ""}. By continuing you agree to the <Link className="link" to="/terms">Terms</Link> and <Link className="link" to="/privacy">Privacy policy</Link>.</p> : <p className="small muted">Free to start · No card · No code</p>}
           </div>
           {full && <HeroDemo />}
         </div>
@@ -528,6 +533,9 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
 function Pricing({ top }: { top?: { heading: string; error: string | null } } = {}) {
   const { pricing, status, rate } = usePricing();
   const loading = status === "loading";
+  // owner, 16 Nov: rupees or US dollars on a switch in view; dollars for the US region until the visitor picks (lib/priceCurrency)
+  const pc = usePriceCur();
+  const usd = usdRowOf(pricing), cur = usd ? pc.cur : "INR", usdOn = usdCheckoutOn();
   // what's on sale today comes from the server (plans.offer_state), the same answer the Plans page reads
   const offer = pricing?.offer ?? null;
   const rupees = (p: PlanId, year = false) => `₹${PRICE[p][year ? 1 : 0].toLocaleString("en-IN")}`;
@@ -565,19 +573,20 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
             <Seg label="Billing period" value={period} onChange={(v) => setPeriod(v as "month" | "year")}
               options={[{ value: "month", label: "Monthly" }, { value: "year", label: YEARLY_LABEL }]} />
           ) : loading ? <span className="lp-skel lp-skel-seg" /> : <span className="small muted">Prices are per month</span>}
-          {/* no currency picker (item 34): rupees, with the dollar beside each price, for every visitor */}
+          {!loading && usd && <CurrencySwitch cur={cur} auto={pc.auto} onChange={pc.choose} />}
         </div>
         <div className="lp-prices">
           {PLAN_IDS.map((p) => {
             const year = showYear && period === "year" && p !== "free";
             const act = landingAction(offer, p);
             const per = showYear && period === "year" ? "year" : "month";     // Free's $0 follows the switch too (R17-001)
-            // a year's saving in rupees, with its dollar figure
-            const save = p !== "free" && year ? yearlySaving(PRICE[p][0], PRICE[p][1]) : null;
-            const saveText = save == null ? "" : `₹${save.toLocaleString("en-IN")} (${aboutUsd(save, rate)})`;
-            // the rupee price in dollars, whole units, at the app's USD/INR rate, beside it (item 34)
+            // the card's price in the currency shown, and beside it the dollar figure of a rupee price or the rupee charge of a dollar one
             const inr = PRICE[p][year ? 1 : 0];
-            const about = inr > 0 ? aboutUsd(inr, rate) : null;
+            const price = p === "free" ? null : cardPrice({ plan: p, period: year ? "year" : "month", cur, inr, usd, checkoutOn: usdOn, aboutUsd: (v) => aboutUsd(v, rate) });
+            const about = price?.about ?? null;
+            // a year's saving in the currency shown (in rupees with its dollar figure)
+            const save = p !== "free" && year ? (price?.usdShown && usd ? yearlySaving(usd[p], usd[`${p}_year`]) : yearlySaving(PRICE[p][0], PRICE[p][1])) : null;
+            const saveText = save == null ? "" : price?.usdShown ? dollarText(save) : `₹${save.toLocaleString("en-IN")} (${aboutUsd(save, rate)})`;
             return (
               <div key={p} className={`lp-card lp-price${p === "pro" ? " lp-price-top" : ""}`} data-plan={p}>
                 <div className="stack g2">
@@ -587,7 +596,7 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
                 <div className="stack g2">
                   {loading ? <span className="lp-skel lp-skel-amount" role="img" aria-label="Loading the price" /> : (
                     <div className="lp-amount-row">
-                      <div className="serif lp-amount">{rupees(p, year)}<span className="small muted">{p === "free" ? " always" : ` / ${per}`}</span></div>
+                      <div className="serif lp-amount">{price ? price.shown : freePrice(cur, usd)}<span className="small muted">{p === "free" ? " always" : ` / ${per}`}</span></div>
                       {about && <span className="small muted" data-testid={`about-${p}`}>{about}</span>}
                     </div>
                   )}
@@ -595,7 +604,7 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
                   {p !== "free" && (loading || gst || save != null) && (
                     <span className="small lp-price-note">
                       {loading ? <span className="lp-skel lp-skel-note" />
-                        : gst ? "incl. GST" : ""}
+                        : gst && price?.chargedCur !== "USD" ? "incl. GST" : ""}
                       {!loading && save != null && <span className="lp-save">{`Saves ${saveText} a year against paying monthly`}</span>}
                     </span>
                   )}
@@ -615,7 +624,7 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
         </div>
         <AllFeatures />
         {!loading && top && intro.title !== "Plans" && <p className="small muted k-measure m80">{intro.lede}</p>}
-        {loading ? <span className="lp-skel lp-skel-fine" /> : <PhoneFold label="Prices, invoices and renewals"><p className="small muted k-measure m80" data-testid="usd-note">{[...small, usdNote(rate, pricing?.usd_inr?.fallback)].join(" ")}</p></PhoneFold>}
+        {loading ? <span className="lp-skel lp-skel-fine" /> : <PhoneFold label="Prices, invoices and renewals"><p className="small muted k-measure m80" data-testid="usd-note">{[...small, cur === "USD" && usd ? usdPricesNote(usd, period, usdOn) : usdNote(rate, pricing?.usd_inr?.fallback)].join(" ")}</p></PhoneFold>}
       </div>
     </section>
   );
