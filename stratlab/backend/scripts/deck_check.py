@@ -106,7 +106,11 @@ Failures (the exit code is 1 when any deck has one):
   carried log  a change log dated before the deck's own day that doesn't say "no change since" (a log carried from an earlier version)
   reason layer  a removal's or move's reason that names a layer (“X”) the deck has in none of its versions (Payments' “Card issuers and
                lenders” for its “Card issuers and consumer lenders”)
-  thin layer   a change log's layer "added (N companies)" with N under 3
+  thin layer   a change log's layer "added (N companies)" or "back (N companies)" with N under 3 whose companies' own words, as the deck
+               prints them (the "Smaller layers" rows, or the words the change log quotes for it), don't say what it is, or for which a
+               statistic is printed; and a layer of one company in the value chain's table with no such words or with a statistic
+               (r60, R60, updated on purpose: the owner's R59 review P0, a layer of one or two companies whose words say it stands, with
+               no median, range or ranking; earlier every such layer added failed. A stricter test of evidence, not a looser one)
   financial margin  r581 (the live R58 Regional banks deck: Fifth Third $80 m, 3152.5%; Huntington 141.5%): a net margin above 100% for a bank,
                lender or insurer (a deck whose theme names banks, lenders, finance or insurance, or a row naming one): its revenue line is
                not its total revenue
@@ -907,7 +911,72 @@ _DECK_DAY = re.compile(r"Theme deep dive · (\d{1,2} [A-Z][a-z]{2} \d{4})")
 _LOG_DAY = re.compile(r"On (\d{1,2} [A-Z][a-z]{2} \d{4})(, the latest change \(no change since\))?, against the version stored before it")
 _WORK_OF = re.compile(r"(?:don't show the work of|show it is of|not the work of|the work of) “([^”]+)”")
 _LAYER_SAID = re.compile(r"“([^”]+)” (?:renamed|removed|added|split|merged)|renamed “([^”]+)”|from “([^”]+)” to “([^”]+)”|from “([^”]+)”\)|into “([^”]+)”")
-_ADDED_LAYER = re.compile(r"“([^”]+)” added \((\d[\d,]*) compan(?:y|ies)\)")
+_ADDED_LAYER = re.compile(r"“([^”]+)” (?:added|back) \((\d[\d,]*) compan(?:y|ies)\)(?:, ([^;]*))?")
+SMALL_SAID = "Smaller layers"
+_SMALL_HEAD = re.compile(r"^\s*Layer\s{2,}Company\s{2,}What it does")
+_THIN_STAT = re.compile(r"(?<![\d(.])[−-]?\d[\d,]*(?:\.\d+)?(?:%|x\b| pts\b)")
+
+
+def small_rows(pages: list[str]) -> list[tuple[str, str, str]]:
+    """r60: (layer, company, what it does) of each row of the "Smaller layers" tables (a layer of two companies or fewer), the layer said on
+    its first row and carried to the next."""
+    out, layer = [], ""
+    for page in pages:
+        cols, block = None, []
+        for ln in page.split("\n") + [""]:
+            if _SMALL_HEAD.match(ln):
+                cols = (ln.index("Company"), ln.index("What it does"), ln.index("Revenue") if "Revenue" in ln else len(ln))
+                block = []
+                continue
+            if cols is None:
+                continue
+            if re.match(r"^\s*StratLab · ", ln) or ln.startswith("Each of these layers") or ln.startswith("Rows in"):
+                cols = None
+                continue
+            if ln.strip():
+                block.append(ln)
+                continue
+            # (a cell ends where a gap of two spaces or more starts: a right-aligned figure can reach into the column before it)
+            cell = lambda b, a, z: re.split(r"\s{2,}", b[a:z].strip())[0] if b[a:z].strip() else ""      # noqa: E731
+            lay = " ".join(x for x in (cell(b, 0, cols[0]) for b in block) if x)
+            comp = " ".join(x for x in (cell(b, cols[0], cols[1]) for b in block) if x)
+            what = " ".join(x for x in (cell(b, cols[1], cols[2] + 12) for b in block) if x and not re.match(r"^[₹$]", x))
+            layer = lay or layer
+            if comp:
+                out.append((layer, comp, what))
+            block = []
+    return out
+
+
+def says_layer(name: str, text: str) -> bool:
+    """r60: whether a company's words, as a deck prints them, say a word of a layer's name (four letters or more, one the start of the
+    other) or its concept (the placement's own reading, theme_base.concept_said, when the app is importable)."""
+    plain = {"and", "the", "other", "companies", "makers", "providers", "suppliers", "their", "own", "products", "services", "with"}
+    nw = {w for w in re.findall(r"[a-z]{4,}", name.lower()) if w not in plain}
+    tw = set(re.findall(r"[a-z]{4,}", str(text or "").lower()))
+    if any(a[:max(4, len(a) - 3)] == b[:max(4, len(a) - 3)] for a in nw for b in tw):
+        return True
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from app.intel.theme_base import concept_said
+    except Exception:
+        return False
+    return bool(concept_said(name, text))
+
+
+def thin_stat(pages: list[str], name: str) -> str:
+    """r60: a row of a value-chain table for a layer of one or two companies ("Reinsurance   1   ₹52,986 cr   –   – (1)") that prints a
+    statistic (a margin, multiple or points), its company's revenue aside; "" when none does."""
+    rx = re.compile(r"^\s*" + re.escape(name) + r"\s{2,}([12])\s{2,}(.*)$")
+    for page in pages:
+        for ln in page.split("\n"):
+            m = rx.match(ln)
+            if not m:
+                continue
+            rest = re.sub(r"[$₹]\s?[\d,.]+(?: lakh)?(?: ?(?:cr|bn|m|k))?", " ", m.group(2))
+            if _THIN_STAT.search(rest):
+                return ln.strip()
+    return ""
 _LARGEST = re.compile(r"; (.{3,80}?) is the largest at ")
 _ROLL = re.compile(r"In the layer's calculations \((\d[\d,]*) of (\d[\d,]*)\): (.*?)\. Left out \((\d[\d,]*)\): (.*?)\.(?= Every one| Membership| [A-Z(]|$)")
 _MV = re.compile(r"^([$₹])\s?([\d,]+(?:\.\d+)?)\s?(lakh cr|bn|m|cr|k)?$")
@@ -1087,7 +1156,26 @@ def y57_checks(pages: list[str], add) -> None:
                 add("carried log", n, f"a change log of {m.group(1)} in a deck of {dd.group(1)}, not said to be carried")
         for m in _ADDED_LAYER.finditer(flat):
             if _num(m.group(2)) < 3:
-                add("thin layer", n, m.group(0))
+                # r60 (updated on purpose: the owner's R59 review P0): a layer of one or two companies stands when its companies' words, as the
+                # deck prints them, say what it is, and no statistic is printed for it
+                rows_ = [r for r in small_rows(pages) if r[0] == m.group(1)]
+                quoted = re.findall(r"“([^”]+)”", m.group(3) or "")
+                said_ = (rows_ and all(says_layer(m.group(1), w) for _, _, w in rows_)) or any(says_layer(m.group(1), q) for q in quoted)
+                stat_ = thin_stat(pages, m.group(1))
+                if not said_ or stat_:
+                    add("thin layer", n, m.group(0)[:160] + (f" (a statistic printed: {stat_[:80]})" if stat_ else
+                                                            " (no words of its companies the deck prints say what it is)"))
+    # r60: a layer of one company on the "Smaller layers" page stands only on its company's own words, as printed, and with no statistic
+    small_ = small_rows(pages)
+    for lay_ in dict.fromkeys(r[0] for r in small_):
+        got_ = [r for r in small_ if r[0] == lay_]
+        if not lay_ or lay_.startswith("Other ") or len(got_) != 1:
+            continue
+        stat_ = thin_stat(pages, lay_)
+        if not says_layer(lay_, got_[0][2]) or stat_:
+            n_ = next((i for i, f in enumerate(flat_pages, 1) if SMALL_SAID in f and got_[0][1][:20] in f), 0)
+            add("thin layer", n_, f"“{lay_}”, one company ({got_[0][1][:60]})" + (f": a statistic printed: {stat_[:80]}" if stat_ else
+                                                                                  ": its words as printed don't say what it is"))
     names = set()
     for p in pages:
         names |= {re.sub(r" \((?:continued|notes)\)$", "", m.group(1).strip()) for ln in p.split("\n") for m in [_LAYER_TOP.match(ln)] if m}

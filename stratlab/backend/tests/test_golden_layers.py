@@ -117,7 +117,11 @@ _C1_OFF = "c1 (R44, approved on purpose): filed under retail, its own words desc
 DROPPED = {**{f"semis:{s_}": "solar products and no chips, filed as semiconductors: another business" for s_ in ("TE", "TYGO", "FTCI", "MAXNQ", "DQ", "ASTI")},
            **{f"retail:{s_}": "propane distribution and no stores, filed as retail: another business" for s_ in ("SPH", "FGPR")},
            **{f"retail:{s_}": 'filed under retail, its own words describe another business (pawnbroking, IT services to business, a blank-check company, a bank, payments or travel): R43, theme_check.OFF_INDUSTRY' for s_ in ('CDW', 'EZPW', 'FBCD', 'FCFS', 'IPSI', 'NSIT', 'TMS')},
-           **{f"retail:{s_}": _C1_OFF for s_ in ('AMZE', 'ESSI')}}
+           **{f"retail:{s_}": _C1_OFF for s_ in ('AMZE', 'ESSI')},
+           # r60 (updated on purpose: an independent review of the live R59 decks): a hydrogen-panel maker filed as semiconductors and a ship
+           # breaker filed under shipbuilding are another business by their own words (theme_check OFF_INDUSTRY, SCOPE_PRODUCTS)
+           "semis:HYSR": "hydrogen panels and hydrogen production, filed as semiconductors: another business",
+           "defence:HRYNSHP": "ship breaking, filed under shipbuilding: another business"}
 # lane d1 (R43, the outside review of the live Release 41 decks, approved on purpose): the moves its rules make on this older fixture,
 # each with why; kept apart from APPROVED_LAYER so the earlier lanes' checks of their own moves stand
 _D1_NARROW = 'R43 (lane d1, approved on purpose): the largest layer of its family took it by its industry alone, but that layer\'s own name states a kind of business its own words don\'t say, nor any word of its description, and it is no catch-all of its family (by_model.home_of `narrow`): the layer of its family it fits, else "Other"'

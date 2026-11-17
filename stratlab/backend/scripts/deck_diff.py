@@ -23,7 +23,8 @@ FAIL (the exit code is 1 when any theme has one):
                        layer holding a language-learning app (a layer named by a way of earning, such as "Hotels, travel and consumer
                        services", is that way of earning printed as the company's model, so this also catches a printed model its words
                        contradict); a layer name with no word of three letters or more
-  one-company layer    a layer of the new deck's value chain (not "Other ...") holding one company
+  one-company layer    a layer of the new deck's value chain (not "Other ...") holding one company whose words, as the deck prints them,
+                       don't say what it is, or for which a statistic is printed (r60, updated on purpose: the owner's R59 review P0)
 Exit codes: 0 no FAIL, 1 a FAIL, 2 bad usage. Read-only: reads the decks, writes nothing."""
 import argparse
 import json
@@ -327,6 +328,8 @@ def diff_theme(old_pages: list[str], new_pages: list[str]) -> dict:
         if m:
             ren[canon(m.group(1))] = canon(m.group(2))
     descr = {**descriptions(old_pages), **descriptions(new_pages)}
+    # r60: the "Smaller layers" rows as deck_check reads them (a cell ends at a two-space gap, so a right-aligned figure never joins its words)
+    descr.update({comp: what for _, comp, what in DC.small_rows(new_pages) if comp and what})
     layers_all = sorted(set(la) | set(lb) | set(a.values()) | set(b.values()), key=len, reverse=True)
     flat_all = " ".join(re.sub(r"\s+", " ", p) for p in old_pages + new_pages)
     rows, fails = [], []
@@ -400,8 +403,16 @@ def diff_theme(old_pages: list[str], new_pages: list[str]) -> dict:
         if not re.search(r"[A-Za-z]{3,}", name):
             fail("layer words", f"“{name}”", f"a layer name with no word, {n} companies")
         if n == 1:
+            # r60 (R60, updated on purpose: the owner's R59 review P0, "valid industry roles are being hidden simply because their category
+            # contains one company"): a layer of one company fails only when what the deck prints of its company's words doesn't say what it
+            # is (its name or concept), or when a statistic is printed for it; r582 failed every one. A stricter test of evidence
             who = [c for c, x in b.items() if x == name]
-            fail("one-company layer", f"“{name}”", (who[0] + " alone") if who else "1 company")
+            rows_ = [r for r in DC.small_rows(new_pages) if r[0] == name]
+            said_ = bool(rows_) and all(DC.says_layer(name, w) or G.shares(name, w) for _, _, w in rows_)
+            stat_ = DC.thin_stat(new_pages, name)
+            if not said_ or stat_:
+                fail("one-company layer", f"“{name}”", ((who[0] + " alone") if who else "1 company")
+                     + (f", a statistic printed: {stat_[:60]}" if stat_ else ", what the deck prints of its words not saying what it is"))
     # a layer new to the deck, or one a company was moved or added into: its name against its companies' words
     into: dict = {}
     for r in rows:

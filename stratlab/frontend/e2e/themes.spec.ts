@@ -51,15 +51,16 @@ test("the theme page is a deep dive made of tables, with each company only where
   // beside the map's
   await expect(members.getByRole("heading", { name: /official industry/ })).toHaveCount(0);
   await expect(members.getByRole("table", { name: /Coal and metal mining: companies in the theme/ })).toContainText("Vedanta");
-  // r582 (R58.2, updated on purpose): a layer of one company is not kept, so NTPC (the map's only power generator) moves to the layer its
-  // words fit, or Other, with the reason; it is still in the theme and still marked as added
+  // r60 (R60, updated on purpose: the owner's R59 review P0): a layer the map named whose one company's own words say what it is stays, so
+  // NTPC ("generates electricity ... power generation") keeps "Power generation", said to be one company; it is still marked as added
   await expect(members.getByRole("row").filter({ hasText: "NTPC" }).first()).toContainText("Added");
   // the whole chain in one table, with the basis said
   const chain = page.getByRole("table", { name: /value chain by layer/i });
   await expect(chain.locator("thead th")).toHaveText([/^Layer$/, /^i?Companies$/, /^i?Revenue$/, /^i?EBITDA margin$/, /^Net margin$/, /^i?ROCE$/]);
-  // r582 (R58.2, updated on purpose): the map's two layers of more than one company (R21: Vedanta placed in one of them); NTPC's
-  // one-company layer is not kept, so it sits in Other, outside the chain
-  await expect(chain.locator("tbody tr")).toHaveCount(2);
+  // r60 (R60, updated on purpose: the owner's R59 review P0): the map's two layers of more than one company (R21: Vedanta placed in one of
+  // them) and NTPC's one-company "Power generation", kept on its own words, shown with no median (r582 had it in Other, outside the chain)
+  await expect(chain.locator("tbody tr")).toHaveCount(3);
+  await expect(chain.locator("tbody tr").filter({ hasText: "Power generation" })).toHaveCount(1);
   await expect(main).toContainText("Consolidated accounts where the company files them");
   // a layer: its companies in their own words, the median and the range as rows; the wrong placement (ONGC under steel) isn't there
   const steel = page.locator("#layer-1");

@@ -704,6 +704,22 @@ def fall_why(snap: dict | None, dive: dict | None) -> dict:
     return dict(out)
 
 
+def moved_out_why(dive: dict | None) -> dict:
+    """r60 (R60, the live R59 Defence and Insurance decks: "86% ... against 91%" and "80% ... against 93% in the previous live placement",
+    the fall said with no reason: the snapshot compared was already the new placement, so fall_why found no company that left a layer): the
+    companies of "Other" a rule moved there from a layer, each with its reason printed, counted by the layer they left: {reason: count}."""
+    out: Counter = Counter()
+    for b in (dive or {}).get("layers") or [] if isinstance(dive, dict) else []:
+        if not str(b.get("layer") or "").startswith("Other"):
+            continue
+        for c in b.get("companies") or []:
+            r = c.get("refit") if isinstance(c.get("refit"), dict) else {}
+            frm = str(r.get("from") or "")
+            if frm and not frm.startswith("Other") and r.get("why"):
+                out[f"moved to “Other” from “{frm}” by a rule of the placement (each one's reason in the change log)"] += 1
+    return dict(out)
+
+
 def coverage_control(cov: dict | None, snap: dict | None, dive: dict | None = None) -> dict | None:
     """cl48 (R47): the coverage control of a theme's read: {"low": share under COVER_MIN, "fell": {"informative", "placed", "share", "why"}
     of the previous live placement when the share now is COVER_FALL points or more under it (t56: "why", fall_why), "lost" (lost_layers),
@@ -722,7 +738,7 @@ def coverage_control(cov: dict | None, snap: dict | None, dive: dict | None = No
         out["low"] = True
     if isinstance(base, list) and len(base) == 2 and base[1] and _share(*base) - share >= COVER_FALL:
         out["fell"] = {"informative": int(base[0]), "placed": int(base[1]), "share": _share(*base)}
-        why = fall_why(snap, dive)
+        why = fall_why(snap, dive) or moved_out_why(dive)
         if why:
             out["fell"]["why"] = why
     found = lost_layers(snap, dive)
