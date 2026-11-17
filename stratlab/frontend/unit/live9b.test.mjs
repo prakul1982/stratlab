@@ -93,3 +93,32 @@ test("LIVE9B-013: late answers hold their place: plan notes' price line, the cor
   assert.match(sg, /const lockedNow = me\?\.plan_info\.features\?\.signal_webhooks === false;/);
   assert.match(sg, /: lockedNow \|\| !ov\?\.allowed \? \(/);
 });
+
+test("LIVE9B-014: the Trade home's VIX tile has its change in colour with ▲/▼ and its day", () => {
+  const src = read("src/pages/SpaceHomes.tsx");
+  assert.match(src, /<span className=\{signCls\(vq\.change\)\}>\{vq\.change > 0 \? "▲ " : vq\.change < 0 \? "▼ " : ""\}\{vixChange\(vq\)\}<\/span>\{vixDay \? ` · \$\{vixDay\}` : ""\}/);
+});
+
+test("LIVE9B-015: a period grid's column half under the sticky row names fades beside them", () => {
+  assert.match(read("src/styles.css"), /data-scrolled\]:not\(\.stack\) \.k-table tbody th\[scope="row"\]:first-child::after,[\s\S]{0,240}right: -28px; width: 28px; pointer-events: none;/);
+});
+test("LIVE9B-015: the grid marks itself scrolled", () => {
+  assert.match(read("src/components/kit/DataTable.tsx"), /onScroll=\{scrollEnd \? \(e\) => markScrolled\(e\.currentTarget\) : undefined\}/);
+});
+
+test("LIVE9B-018: the Act's renumbering said once, and the year's sections named one way", () => {
+  const src = read("src/pages/TaxReportPage.tsx");
+  assert.match(src, /!\/not yet confirmed\/\.test\(n\) && !\/Income-tax Act, 2025\/\.test\(n\)/);
+  assert.match(src, /export function actSections\(text: string, map: Record<string, string> \| null \| undefined\): string/);
+  assert.match(src, /\{actSections\(l\.label, t\.sections\)\}/);
+  // the helper's rule, run here on its own text
+  const body = src.slice(src.indexOf("export function actSections"), src.indexOf("/** The year's total tax"));
+  const fn = new Function("text", "map", body.replace(/^export function actSections\([^)]*\): string \{/, "").replace(/\}\s*$/, ""));
+  assert.equal(fn("at the special rates (sections 111A, 112A and 112)", { "111A": "196", "112A": "198" }), "at the special rates (sections 196 (111A before), 198 (112A before) and 112)");
+  assert.equal(fn("Tax on intraday", { "111A": "196" }), "Tax on intraday");
+  assert.equal(fn("section 111A", null), "section 111A");
+});
+
+test("LIVE9B-019: a T-bill cut-off is the last weekly auction's, read on a day, not 'as on' the read day", () => {
+  assert.match(read("src/pages/money/RatesPage.tsx"), /r\.key\.startsWith\("tbill"\) \? `cut-off at the last weekly auction, read \$\{dateOnly\(r\.as_of\)\}`/);
+});

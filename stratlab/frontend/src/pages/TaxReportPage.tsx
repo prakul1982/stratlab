@@ -38,6 +38,8 @@ type Total = {
   income: { normal: number; special: number; total: number; salary: number; standard_deduction: number; deductions: number };
   carry_forward: { speculative: number; business: number }; steps: string[]; lines: { label: string; amount: number; kind: string }[];
   notes?: string[]; confirmed?: boolean; source?: string | null;
+  /** from FY 2026-27, the Income-tax Act, 2025's numbers for the sections it renumbers ({"111A": "196"}), LIVE9B-018 */
+  sections?: Record<string, string> | null;
   /** as the return rounds them: total income (section 288A) and the tax on it (section 288B), DH-004 */
   rounded?: { income: number; tax: number } | null;
 };
@@ -497,7 +499,7 @@ function Headline({ y, payable }: { y: Year; payable: Payable | null }) {
           full-width card */}
       <FactTable label="The year's tax" itemHead="Figure" figureHead="Amount" noteHead="What it is" numeric rows={[
         { id: "est", k: `Estimated tax for ${y.label}`, v: <span aria-label="Total tax estimate">{inr(t.total)}</span>,
-          n: <>{rounds && t.rounded ? `${inr(t.rounded.tax)} as the return rounds it (sections 288A and 288B). ` : ""}<a className="link" href="#tax-total">How it is worked out</a></> },
+          n: <>{rounds && t.rounded ? `${inr(t.rounded.tax)} as the return rounds it (sections 288A and 288B${t.sections ? " of the 1961 Act" : ""}). ` : ""}<a className="link" href="#tax-total">How it is worked out</a></> },
         ...(payable && !payable.locked && payable.total != null ? [{ id: "pay", k: "Payable now, with interest", v: <span aria-label="Payable now">{inr(payable.total)}</span>,
           n: payable.return_needed === false
             ? <>No return is needed for {y.label}: total income {inr(payable.income ?? 0)} is within the {inr(payable.exempt ?? 0)} basic exemption limit, so there is no late fee. {toolsLink}</>
@@ -509,17 +511,24 @@ function Headline({ y, payable }: { y: Year; payable: Payable | null }) {
   );
 }
 
+/** A line's section numbers as the year's Act numbers them: "section 196 (111A before)" from FY 2026-27, so the page names a section
+ *  one way, not the 1961 numbers in its tables beside a note that they changed (LIVE9B-018). Unchanged for an earlier year. */
+export function actSections(text: string, map: Record<string, string> | null | undefined): string {
+  if (!map || !/\bsections?\b/i.test(text)) return text;
+  return text.replace(/\b(\d{2,3}[A-Z]{0,3})\b/g, (m) => (map[m] ? `${map[m]} (${m} before)` : m));
+}
+
 /** The year's total tax, where it comes from, the inputs it needs and, below, how it was worked out. */
 function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omit<Inputs, "saved">) => Promise<void>; filing: boolean }) {
   const t = y.total;
   const chips: [string, number, string][] = [
-    ["Tax on capital gains", t.parts?.capital_gains ?? 0, "Tax on short- and long-term gains on listed shares and mutual funds, at the special rates (sections 111A, 112A and 112) or, for debt-fund gains, your slab rate, with its share of surcharge and cess."],
+    ["Tax on capital gains", t.parts?.capital_gains ?? 0, actSections("Tax on short- and long-term gains on listed shares and mutual funds, at the special rates (sections 111A, 112A and 112) or, for debt-fund gains, your slab rate, with its share of surcharge and cess.", t.sections)],
     ["Tax on intraday", t.parts?.intraday ?? 0, "Intraday results are speculative business income, taxed at your slab rate. Slab tax is split between your incomes in proportion to each."],
     ["Tax on F&O", t.parts?.fno ?? 0, "F&O, commodity and currency results, after the charges in your files, are non-speculative business income, taxed at your slab rate."],
     ["Tax on other income", t.parts?.other ?? 0, "Your salary, interest and other income as you entered it, after the standard deduction on salary."],
   ];
   const lineCols: Column<{ i: number; label: string; amount: number; kind: string }>[] = [
-    { key: "what", header: "Step", rowHeader: true, wrap: true, cell: (l) => (l.kind === "total" || l.kind === "subtotal" ? <b>{l.label}</b> : <span className={l.kind === "note" ? "k-muted" : undefined}>{l.label}</span>) },
+    { key: "what", header: "Step", rowHeader: true, wrap: true, cell: (l) => (l.kind === "total" || l.kind === "subtotal" ? <b>{actSections(l.label, t.sections)}</b> : <span className={l.kind === "note" ? "k-muted" : undefined}>{actSections(l.label, t.sections)}</span>) },
     { key: "amount", header: "Amount", numeric: true, cell: (l) => (l.kind === "total" || l.kind === "subtotal" || l.kind === "rounded" ? <b>{inr(l.amount)}</b> : <span className={l.kind === "amount" ? tone(l.amount) : undefined}>{inr(l.amount)}</span>) },
   ];
   return (
@@ -542,7 +551,8 @@ function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omi
           <FigureTable label="Where the tax comes from" header="Income" valueHeader="Amount" noteHeader={null}
             rows={chips.map(([label, v, info]) => ({ key: label, label: <>{label} <Info label={`About ${label}`}>{info}</Info></>, value: inr(v) }))} />
           {y.other_regime && <p className="k-note">With the same figures, the {REGIME[y.other_regime.regime].toLowerCase()} works out to {inr(y.other_regime.total)}{y.other_regime.regime === "old" ? " (with the deductions entered, if any)" : ""}.</p>}
-          {(t.notes ?? []).filter((n) => !/not yet confirmed/.test(n)).map((n) => <p key={n} className="k-small" role="note"><b>Note:</b> {n}</p>)}
+          {/* the Act's renumbering is said once, in the working below, not here as well (LIVE9B-018: printed twice on the page) */}
+          {(t.notes ?? []).filter((n) => !/not yet confirmed/.test(n) && !/Income-tax Act, 2025/.test(n)).map((n) => <p key={n} className="k-small" role="note"><b>Note:</b> {n}</p>)}
           {(t.carry_forward.speculative > 0 || t.carry_forward.business > 0) && (
             <p className="k-small">To carry forward:{t.carry_forward.speculative > 0 && <> intraday (speculative) loss <b className="k-down">{inr(t.carry_forward.speculative)}</b> (4 years, against speculative income only)</>}{t.carry_forward.speculative > 0 && t.carry_forward.business > 0 && ";"}{t.carry_forward.business > 0 && <> business loss <b className="k-down">{inr(t.carry_forward.business)}</b> (8 years, against business income)</>}. Only if the return is filed by its due date.</p>
           )}
@@ -555,10 +565,11 @@ function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omi
           with (owner, 7 Nov: "keep this open by default"); the words stay folded inside */}
       {t.available && (
         <Disclosure summary="How we got here" open>
-          {(t.notes ?? []).length > 0 && <ul className="k-list muted" aria-label="Notes on the estimate">{t.notes!.map((n) => <li key={n}>{n}</li>)}</ul>}
+          {/* only what isn't said above it already: the year's rules not yet confirmed, and the Act's renumbering */}
+          {(t.notes ?? []).some((n) => /not yet confirmed|Income-tax Act, 2025/.test(n)) && <ul className="k-list muted" aria-label="Notes on the estimate">{t.notes!.filter((n) => /not yet confirmed|Income-tax Act, 2025/.test(n)).map((n) => <li key={n}>{n}</li>)}</ul>}
           <DataTable label="Total tax breakdown" columns={lineCols} rows={t.lines.map((l, i) => ({ ...l, i }))} rowKey={(l) => String(l.i)} />
           {/* the steps in words say what the table's lines say in figures: one fold under it, not the same working twice in full (LIVE1C-056) */}
-          <Disclosure summary="The same working in words"><ol className="k-list">{t.steps.map((s, i) => <li key={i}>{s}</li>)}</ol></Disclosure>
+          <Disclosure summary="The same working in words"><ol className="k-list">{t.steps.map((s, i) => <li key={i}>{actSections(s, t.sections)}</li>)}</ol></Disclosure>
         </Disclosure>
       )}
     </Card>

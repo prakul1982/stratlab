@@ -2136,6 +2136,12 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-tbl-wrap[data-grid]:not(.stack):has(tbody th[scope="row"]:first-child) .k-table :is(thead, tfoot) th:first-child { position: sticky; left: 0; z-index: 1; background: var(--card); box-shadow: 1px 0 0 var(--line); }
 .k-tbl-wrap[data-grid]:not(.stack):has(tbody th[scope="row"]:first-child) .k-table thead th:first-child { background: var(--paper-2); z-index: 2; }
 .k-tbl-wrap[data-grid]:not(.stack) .k-table tbody tr:hover th[scope="row"]:first-child { background: var(--paper-2); }
+/* LIVE9B-015: the period half under the row names fades out beside them, instead of half-cut figures ("·7,966") read as whole ones */
+.k-tbl-wrap[data-grid][data-scrolled]:not(.stack) .k-table tbody th[scope="row"]:first-child::after,
+.k-tbl-wrap[data-grid][data-scrolled]:not(.stack):has(tbody th[scope="row"]:first-child) .k-table :is(thead, tfoot) th:first-child::after {
+  content: ""; position: absolute; top: 0; bottom: 0; right: -28px; width: 28px; pointer-events: none;
+  background: linear-gradient(to right, var(--card), color-mix(in srgb, var(--card) 0%, transparent)); }
+.k-tbl-wrap[data-grid][data-scrolled]:not(.stack):has(tbody th[scope="row"]:first-child) .k-table thead th:first-child::after { background: linear-gradient(to right, var(--paper-2), color-mix(in srgb, var(--paper-2) 0%, transparent)); }
 /* the totals line's long label wraps instead of widening the Symbol column; on a phone the first column stays put while the figures scroll (R18-003) */
 .k-table tfoot th { white-space: normal; min-width: 0; }
 @media (max-width: 640px) {

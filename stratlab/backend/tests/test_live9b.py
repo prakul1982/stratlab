@@ -133,3 +133,22 @@ def test_live9b_008_a_meeting_on_two_days_is_two_calendar_dates_with_the_filing_
     ev = money_calendar._ev(date(2026, 11, 17), got[0]["title"], "holdings", "concall_meet", got[0]["detail"], link=got[0]["link"])
     assert ev["link"] == url
     assert "Filing: " + url[:30] in money_calendar.to_ics([ev], False).replace("\r\n ", "")
+
+
+def test_live9b_016_the_company_header_says_the_peers_market_value(monkeypatch):
+    from app import screens
+    from app.intel import company as CO
+    monkeypatch.setattr(screens, "load_index", lambda region: {"rows": [{"symbol": "TCS", "market_cap": 870146.0, "price": 2405.0}]})
+    assert round(CO.one_cap("TCS", 869000.0, 2405.0)) == 870146          # the peers' count at the page's price
+    assert round(CO.one_cap("TCS", 869000.0, 2410.0)) == round(870146 / 2405 * 2410)
+    assert CO.one_cap("TCS", 500000.0, 2405.0) == 500000.0                # far off the page's own: the page's own stays
+    assert CO.one_cap("INFY", 600000.0, 1500.0) == 600000.0               # no row: the page's own
+
+
+def test_live9b_018_the_total_names_the_new_acts_sections_from_fy_2026():
+    from app import tax_total as TT
+    assert "196" == TT.NEW_SECTIONS["111A"]
+    assert "a section not listed keeps its 1961 Act number here" in TT.NEW_ACT_NOTE
+    v = {"regime": "new", "age": "below60", "resident": True, "salary": 0, "other": 500000}
+    assert TT.estimate(2026, v, [], 0, 0)["sections"]["111A"] == "196"
+    assert TT.estimate(2025, v, [], 0, 0)["sections"] is None

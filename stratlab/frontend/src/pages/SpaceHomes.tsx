@@ -157,11 +157,16 @@ function MarketStrip() {
   const fii = b && b !== "none" ? b.cash?.fii?.net ?? null : null;
   const ban = b && b !== "none" ? b.fo_ban ?? [] : null;
   const crore = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}₹${Math.abs(v).toLocaleString("en-IN", { maximumFractionDigits: 0 })} cr`;
-  const tiles: { to: string; k: string; v: ReactNode; note: string; id: string }[] = [
+  // LIVE9B-014: the VIX tile as its FII neighbour: the change with ▲/▼ in the up/down colour and the day it is of, not a plain grey "+0.18 (+1.16%)"
+  const vq = vix && vix !== "none" && vix !== "slow" ? vix.quote ?? null : null;
+  const vixDay = vq?.as_of ? fmtDate(vq.as_of, { year: false, tz: "Asia/Kolkata" }) : null;
+  const vixNote = vq && vq.change != null
+    ? <><span className={signCls(vq.change)}>{vq.change > 0 ? "▲ " : vq.change < 0 ? "▼ " : ""}{vixChange(vq)}</span>{vixDay ? ` · ${vixDay}` : ""}</> : null;
+  const tiles: { to: string; k: string; v: ReactNode; note: ReactNode; id: string }[] = [
     { id: "vix", to: "/trade/positioning#india-vix", k: "India VIX", v: vix === null ? null : vix === "none" || vix === "slow" || vix.value == null ? "–" : vix.value.toFixed(2),
       // a live quote comes with no day (the value is now's): its change stands in the line, so the tile is as tall as its three neighbours (VR2-013)
       note: vix && vix !== "none" && vix !== "slow" && vix.value_day ? fmtDate(vix.value_day, { year: false }) : vix === "none" ? "couldn't be read" : vix === "slow" ? "taking longer than usual"
-        : vixChange(vix ? vix.quote ?? null : null) ?? "" },
+        : vixNote ?? "" },
     { id: "fii", to: "/trade/positioning#pos-cash", k: "FII/FPI cash, net", v: b === null ? null : fii == null ? "–" : <span className={signCls(fii)}>{crore(fii)}</span>,
       note: b && b !== "none" && b.cash?.as_of ? fmtDate(b.cash.as_of, { year: false }) : b === "none" ? "couldn't be read" : "" },
     { id: "expiry", to: "/trade/events", k: "Next F&O expiry", v: ev === null ? null : expiry ? fmtDate(expiry.date, { weekday: true, year: false }) : "–",

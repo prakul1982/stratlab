@@ -169,7 +169,9 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
     const b = box.current;
     if (stackProp === undefined && !grid && !scrollEnd && !pinHead && !spill && b && b.scrollWidth > b.clientWidth + 2) setSpill(true);
   }, [phone, spill, stackProp, grid, scrollEnd, pinHead, allRows.length, columns.length]);
-  useLayoutEffect(() => { if (scrollEnd) scrollToEnd(box.current); }, [scrollEnd, columns.length, allRows.length]);
+  // a grid scrolled off its first period says so (data-scrolled): the column half under the row names fades beside them (LIVE9B-015)
+  const markScrolled = (el: HTMLElement | null) => { if (el) el.toggleAttribute("data-scrolled", el.scrollLeft > 1); };
+  useLayoutEffect(() => { if (scrollEnd) { scrollToEnd(box.current); markScrolled(box.current); } }, [scrollEnd, columns.length, allRows.length]);
   // LIVE5-002 (globally): a list table wider than its box on a desktop (a 1280 screen, a narrow Admin column) lets its words wrap and its
   // cells' padding narrow (`k-fit`), so every column is in view without sideways scrolling; figures stay on one line. Measured again when
   // the box's width changes. A grid read across on purpose (an option chain, periods) keeps its scroll.
@@ -213,7 +215,8 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
     <>
     {((file && file.rows.length > 0) || (cardsNow && selectAll && allRows.length > 0)) && (
       <div className="k-tbl-tools">{cardsNow && allBox(true)}{file && file.rows.length > 0 && <CsvButton name={file.name} label={label} columns={allColumns} rows={file.rows} />}</div>)}
-    <div ref={box} data-grid={grid || scrollEnd ? "" : undefined} className={`k-tbl-wrap${stack ? " stack" : ""}${stack && compact ? " compact" : ""}${stack && columns.some((c) => c.lead) ? " has-lead" : ""}${stack && columns.some((c) => c.up) ? " has-up" : ""}${columns.some((c) => c.narrow === false || c.tight === false) ? " has-narrow" : ""}${fit ? " k-fit" : ""}${pinHead ? " pinhead" : ""}`} role="region" aria-label={stack && phone ? `${label}, as cards` : `${label}, scrolls sideways`} tabIndex={0}>
+    <div ref={box} data-grid={grid || scrollEnd ? "" : undefined} className={`k-tbl-wrap${stack ? " stack" : ""}${stack && compact ? " compact" : ""}${stack && columns.some((c) => c.lead) ? " has-lead" : ""}${stack && columns.some((c) => c.up) ? " has-up" : ""}${columns.some((c) => c.narrow === false || c.tight === false) ? " has-narrow" : ""}${fit ? " k-fit" : ""}${pinHead ? " pinhead" : ""}`} role="region" aria-label={stack && phone ? `${label}, as cards` : `${label}, scrolls sideways`} tabIndex={0}
+      onScroll={scrollEnd ? (e) => markScrolled(e.currentTarget) : undefined}>
       <table className="k-table" aria-label={label} role={stack ? "table" : undefined}>
         <thead>
           <tr role={stack ? "row" : undefined}>{columns.map((c, ci) => {
