@@ -665,7 +665,7 @@ def theme_page_path(theme: str, region: str) -> str:
         name = theme_library.normalise(theme, region) or theme
     except Exception:
         name = theme
-    return public_themes.path(region, public_themes.slug(name))
+    return public_themes.page_path(region, name)        # the page's own address (LIVE9A-029) when the theme is stored
 
 
 def app_theme_path(theme: str, region: str) -> str:

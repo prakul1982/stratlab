@@ -89,6 +89,17 @@ def entries(region: str | None = None) -> list[dict]:
     return sorted((row for _, row in best.values()), key=lambda x: (x["region"], x["label"].lower()))
 
 
+def page_path(region: str, name: str) -> str:
+    """The public page of the theme the library keeps under `name`: the address its stored entry answers at (LIVE9A-029, from the name as
+    shown), or the name's own slug when no entry is stored (that address then finds it, or says no theme is there)."""
+    s = slug(name)
+    try:
+        hit = next((x for x in entries(region) if slug(x["name"]) == s), None)
+    except Exception:
+        hit = None
+    return path(region, hit["slug"] if hit else s)
+
+
 def find(region: str, s: str) -> tuple[dict | None, str | None]:
     """(the entry at this slug, None), or (None, the canonical slug) when the slug is one of a theme's aliases, or (None, None)."""
     rows = entries(region)

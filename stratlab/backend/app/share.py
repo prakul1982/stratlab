@@ -154,12 +154,13 @@ def theme_snapshot(region: str, got: dict) -> dict:
     if summary:
         sections.append({"title": "About the theme", "text": summary, "items": []})
     from . import public_themes
-    slug = public_themes.slug(got["name"])
+    page = public_themes.page_path(region, got["name"])        # the page's own address (LIVE9A-029), not the library key's old alias
+    slug = page.rsplit("/", 1)[-1]
     return {"v": 1, "kind": "theme", "region": region, "slug": slug, "title": label,
             "subtitle": f"{'India' if region == 'IN' else 'US'} · {n} checked compan{'y' if n == 1 else 'ies'} in {len(layers)} layer{'' if len(layers) == 1 else 's'}",
             "made": today(), "as_of": day_text(datetime.fromtimestamp(float(got.get("at") or 0), timezone.utc).isoformat()) if got.get("at") else "",
             "facts": [], "sections": sections, "layers": [{"name": v["name"], "n": len(v["companies"])} for v in layers],
-            "app": f"/research/themes?q={quote(got['name'])}&region={region}", "page": public_themes.path(region, slug)}
+            "app": f"/research/themes?q={quote(got['name'])}&region={region}", "page": page}
 
 
 SNAP_KEYS = {"v", "kind", "region", "symbol", "slug", "title", "subtitle", "made", "as_of", "facts", "sections", "layers", "app", "page"}
