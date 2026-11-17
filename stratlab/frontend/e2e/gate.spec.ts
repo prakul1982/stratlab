@@ -156,9 +156,13 @@ test("onboarding: asked once, on a home page only; the short tour once; the acco
   // (R11, owner 5 Nov: the companies question beside it starts on "All companies", the default everywhere)
   await expect(welcome.locator(":focus")).toHaveCount(1);
   await expect(page.getByText("Your first steps")).toHaveCount(0);                         // one guide at a time
+  // (updated on purpose, NAV3: the Trade tour opens its first page, /new, straight after the Trade home, and on a busy machine that move
+  // can land before a check of the address does; every address the page went to is kept, and the Trade home must be one of them, first)
+  const went: string[] = [];
+  page.on("framenavigated", (f) => { if (f === page.mainFrame()) went.push(new URL(f.url()).pathname); });
   await welcome.getByRole("button", { name: /^Trade/ }).click();
   await expect(welcome).toHaveCount(0);
-  await expect(page).toHaveURL(/\/trade$/);
+  await expect.poll(() => went.find((p) => p !== "/"), { timeout: 30_000 }).toBe("/trade");
 
   // then the tour of the space they picked, on its real pages (updated on purpose, R42 i1: Trade's five steps, each opening its page)
   const tour = page.getByRole("dialog", { name: "Tour: Trade" });
