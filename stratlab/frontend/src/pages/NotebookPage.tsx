@@ -483,7 +483,8 @@ function NotebookView() {
         <CardHead title="Experiments" info={HELP.experiments} infoLabel="About experiments"
           actions={nb.experiments.length >= 2 ? <Link className="link" to={`/n/${nb.id}/compare`}>Compare experiments →</Link> : undefined} />
         {!isUpload && (
-          <div className="k-field">
+          // the card's full width (LIVE10B-005: held to a lone field's 420px, "10 years" and "+ Custom" wrapped onto a second row)
+          <div className="k-field wide">
             <div className="k-label-row"><span className="k-lbl">Test period</span><Info label="About the test period">{HELP.period} Add your own with + Custom: any whole number of days, weeks, months or years up to the {maxDays.toLocaleString("en-IN")} days stored for {TF_NAME[s.tf].toLowerCase()} candles here.</Info></div>
             <ChipBar label="Test period" wrap value={periodValue} onChange={setDays}
               options={periods.map((d) => ({ value: String(d), label: periodName(d) }))}

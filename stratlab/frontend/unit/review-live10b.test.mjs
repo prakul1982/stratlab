@@ -69,3 +69,8 @@ test("LIVE10B-040: a business-update figure the newest filing doesn't hold says 
   const src = read("src/components/BizUpdates.tsx");
   assert.match(src, /\{periodName\(m\.latest\.period, m\.span\)\}\{m\.older \? ", an earlier filing" : ""\}/);
 });
+
+test("LIVE10B-005: the notebook's test-period chips take the card's width, not a lone field's 420px", () => {
+  assert.match(read("src/pages/NotebookPage.tsx"), /<div className="k-field wide">\s*<div className="k-label-row"><span className="k-lbl">Test period<\/span>/);
+  assert.match(read("src/styles.css"), /\.k-card > \.k-field\.wide \{ max-width: none; \}/);
+});
