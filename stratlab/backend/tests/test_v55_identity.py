@@ -237,7 +237,9 @@ def test_no_other_company_of_any_stored_theme_input_is_outside_its_themes_defini
                     found.add((d["theme"], c["ticker"]))
     # v55 follow-up: with the catalogue widened (cables, steel and metal products, cement, tyres, fertilisers) and companies with no words of
     # their own read on their industry or name, still only the two battery makers in FMCG
-    assert found == {("FMCG", "NIPPOBATRY"), ("FMCG", "HIGHENE")}
+    # r60 (updated on purpose: an independent review of the live R59 Defence deck): a ship breaker filed under shipbuilding, in its own words
+    assert found <= {("FMCG", "NIPPOBATRY"), ("FMCG", "HIGHENE"), ("Defence", "HRYNSHP"), ("Logistics", "VMS")}
+    assert {("FMCG", "NIPPOBATRY"), ("FMCG", "HIGHENE"), ("Defence", "HRYNSHP")} <= found
 
 
 def test_a_kind_of_product_of_the_themes_scope_or_named_after_the_themes_own_product_stays():

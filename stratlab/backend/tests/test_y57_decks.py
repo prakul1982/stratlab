@@ -90,7 +90,9 @@ def test_a_layer_table_with_its_heading_and_no_row_fails():
 
 def test_a_layer_added_with_under_three_companies_fails():
     """SW-1: "“Hotels, travel and consumer services” added (1 companies)", Duolingo its only member."""
-    assert found(r56("software"), "thin layer") == ["“Hotels, travel and consumer services” added (1 companies)"]
+    # (updated on purpose, r60: the owner's R59 review P0: the row says why it fails, its companies' printed words not saying what it is)
+    got = found(r56("software"), "thin layer")
+    assert len(got) == 1 and got[0].startswith("“Hotels, travel and consumer services” added (1 companies)") and "say what it is" in got[0]
     assert not found(r56("software", lambda p: p.replace("added (1 companies)", "added (4 companies)")), "thin layer")
 
 

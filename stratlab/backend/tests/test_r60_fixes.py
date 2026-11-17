@@ -297,12 +297,20 @@ def test_one_the_last_recheck_moved_out_on_no_words_is_not_put_back():
              **{t: f"{t} provides engineering research and development services to manufacturers." for t in "ABC"}}
     vc = [{"layer": "Engineering R&D services", "companies": [{"ticker": t, "name": t} for t in "ABC"] + [{"ticker": "N", "name": "N", "placed": "ai"}]},
           {"layer": "Other IT service companies", "official": True, "basis": "rest", "companies": []}]
-    got, rows = B.listed_out(vc, lambda s: words.get(s, ""), "IT services", {"N": ["Engineering R&D services", "Other IT service companies"]})
+    pub = {"A": "Engineering R&D services", "B": "Engineering R&D services", "C": "Engineering R&D services", "N": "Other IT service companies"}
+    got, rows = B.listed_out(vc, lambda s: words.get(s, ""), "IT services", {"N": ["Engineering R&D services", "Other IT service companies"]},
+                             published=pub)
     assert [(r["ticker"], r["to"]) for r in rows] == [("N", "")] and "the last re-check moved it out" in rows[0]["why"]
+    # a guard: a move out of the layer the published version does not hold (a layer that re-check lost, restored since) is no finding
+    vc2 = [dict(v, companies=[dict(c) for c in v["companies"]]) for v in vc]
+    vc2[1]["companies"] = []
+    assert not B.listed_out(vc2, lambda s: words.get(s, ""), "IT services", {"N": ["Engineering R&D services", "Other IT service companies"]},
+                            published={**pub, "N": "Engineering R&D services"})[1]
     # a guard: one whose words say the layer stays
     vc[0]["companies"][-1] = {"ticker": "A2", "name": "A2", "placed": "ai"}
     words["A2"] = "A2 provides engineering research and development services."
-    got, rows = B.listed_out(vc, lambda s: words.get(s, ""), "IT services", {"A2": ["Engineering R&D services", "Other IT service companies"]})
+    got, rows = B.listed_out(vc, lambda s: words.get(s, ""), "IT services", {"A2": ["Engineering R&D services", "Other IT service companies"]},
+                             published={**pub, "A2": "Other IT service companies"})
     assert not rows
 
 

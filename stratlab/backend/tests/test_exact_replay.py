@@ -226,7 +226,10 @@ DROPPED = {**{f"retail:{s_}": _PAWN.format(what) for s_, what in (
            # c1 (R44, the outside review of the live Release 43 Consumer retail deck: 29 of 90 in "Other"; theme_check.OFF_INDUSTRY)
            **{f"retail:{s_}": _PAWN.format(what).replace("R43", "c1, R44") for s_, what in (
                ("VIPZ", "an online mobile sportsbook"), ("MDEX", "a live broadcast network"), ("ESSI", "enterprise software"),
-               ("AMZE", "a virtual reality concert production company"), ("LIVE", "a diversified holding company"))}}
+               ("AMZE", "a virtual reality concert production company"), ("LIVE", "a diversified holding company"))},
+           # r60 (updated on purpose: an independent review of the live R59 Semiconductors deck): hydrogen panels, filed as semiconductors
+           "semis:HYSR": "hydrogen panels and hydrogen production, filed as semiconductors: another business (r60, theme_check.OFF_INDUSTRY)",
+           "defence:HRYNSHP": "ship breaking, filed under shipbuilding: another business (r60, theme_check.SCOPE_PRODUCTS)"}
 # the owner's review of Release 38: these companies' layers (or "Other") on the exact replay, whatever a later rule changes; R40 (the owner's
 # review of Release 39, updated on purpose): Chewy into the online layer; Ferrellgas, Suburban Propane and T1 Energy out of the theme (None)
 REGRESSION = {"auto:BOSCHLTD": "Component and systems suppliers", "auto:ASAHIINDIA": "Component and systems suppliers",
