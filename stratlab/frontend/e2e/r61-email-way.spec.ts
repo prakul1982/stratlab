@@ -34,16 +34,23 @@ test("email sign-in on: the landing hero offers email beside Google, and it open
   await expect(google).toBeVisible({ timeout: 30_000 });
   const way = hero.getByTestId("email-way");
   await expect(way).toBeVisible();
-  await expect(way).toHaveText("or sign in with email");
-  // right under the buttons, in the first screen
+  // (updated on purpose, R64 owner: "make it proper"): a button of the Google button's height in the row beside it, in the first screen
+  await expect(way).toHaveText("Sign in with email");
   const g = (await google.boundingBox())!, w = (await way.boundingBox())!;
-  expect(w.y).toBeGreaterThan(g.y);
-  expect(w.y - (g.y + g.height)).toBeLessThan(140);
+  expect(Math.abs(w.height - g.height)).toBeLessThan(4);
+  if (page.viewportSize()!.width > 640) {
+    expect(Math.abs(w.y - g.y)).toBeLessThan(4);                 // beside it on one row
+    expect(w.x).toBeGreaterThan(g.x + g.width);
+  } else {
+    expect(w.y - (g.y + g.height)).toBeGreaterThan(0);           // a phone stacks them: right under it, the same full width
+    expect(w.y - (g.y + g.height)).toBeLessThan(40);
+    expect(Math.abs(w.width - g.width)).toBeLessThan(4);
+  }
   expect(w.y + w.height).toBeLessThan(page.viewportSize()!.height);
   // the closing call and the plan cards have it too
   await expect(page.locator(".lp-final").getByTestId("email-way")).toHaveCount(1);
   expect(await page.locator("#pricing").getByTestId("email-way").count()).toBeGreaterThan(0);
-  await way.getByRole("link", { name: "sign in with email" }).click();
+  await way.click();
   await expect(page).toHaveURL(/\/login#email$/, { timeout: 30_000 });
   const box = page.getByLabel("Sign in with email");
   await expect(box).toBeFocused({ timeout: 30_000 });
