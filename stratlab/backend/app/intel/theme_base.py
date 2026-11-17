@@ -3039,7 +3039,14 @@ def sold_what(out: list[dict], placed_in: dict, by_how, main, fam, ev, theme_wor
         # engineering and cloud services", published there, judged "new" again on the change log and sent to "Other": 80% -> 73% in
         # informative layers): a company the published version has in this layer is no newcomer to it; the placement contract keeps a
         # published member unless its own words contradict it
-        if _HALF_RX.sub("", str((published or {}).get(s_) or "")) in names(v) and not (prev.get(s_) and prev[s_] not in names(v)):
+        mb_ = before.get(s_)
+        from_none = isinstance(mb_, (list, tuple)) and len(mb_) == 2 and (not mb_[0] or str(mb_[0]).startswith("Other "))
+        if _HALF_RX.sub("", str((published or {}).get(s_) or "")) in names(v) and not (prev.get(s_) and prev[s_] not in names(v)) \
+                and (not from_none or prints_layer(v, own_text(ev(c)), c.get("name") or "")) \
+                and not any(w is not v and shown(w) != shown(v) and not by_how(w) and judge(c, w)
+                            and prints_layer(w, own_text(ev(c)), c.get("name") or "") for w in named):
+            # (one that joined from no layer on no line of its words, r59's JPMorgan, is still judged; so is one whose own words say what
+            # another layer sells, in a line a deck prints: Gillette's "grooming and oral care" in packaged foods)
             return None
         if prev.get(s_) and prev[s_] not in names(v):
             return prev[s_]
@@ -3110,11 +3117,7 @@ def sold_what(out: list[dict], placed_in: dict, by_how, main, fam, ev, theme_wor
     for v, c, src in moves:
         s_ = c.get("ticker")
         elsewhere = [w for w in named if w is not v and shown(w) != shown(v)]          # never the other half of the same layer
-        # r60 (the R60 replay of the live R59 IT services input: Athena Global, sent back to "Engineering R&D services", whose name its
-        # words say nothing of, from "Mid-tier digital engineering and cloud services"): back to the layer it came from only when that
-        # layer is by how it earns or of its industry, its words or industry say what it sells, or its words print a line of it
-        dest = next((w for w in elsewhere if src and src in names(w) and (by_how(w) or w.get("industry_group") or judge(c, w)
-                     or (judge(c, w) is None and prints_layer(w, own_text(ev(c)), c.get("name") or "")))), None)
+        dest = next((w for w in elsewhere if src and src in names(w) and (by_how(w) or w.get("industry_group") or judge(c, w) is not False)), None)
         if dest is None and fam(c):
             how = [w for w in elsewhere if by_how(w) and main(w["companies"]) == fam(c)]
             dest = max(how, key=lambda w: len(w["companies"])) if how else None
