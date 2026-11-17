@@ -74,3 +74,11 @@ test("CX2 / LIVE10A-020: the calendars say how many companies no size counts, wh
   assert.match(f, /\{unknownSize > 0 && <span className="k-note k-muted" data-testid="cal-unsized">/);
   assert.doesNotMatch(f, /filters\.size\.length > 0 && unknownSize > 0/);
 });
+
+test("LIVE10A-004: a company checked against its own description whose passage isn't quoted never reads 'No description in its own words yet'", async () => {
+  const { noWords, NO_WORDS, NOT_QUOTED } = await import("../src/lib/themeFormat.ts");
+  assert.equal(noWords(false), NO_WORDS);
+  assert.equal(noWords(true), NOT_QUOTED);
+  assert.doesNotMatch(NOT_QUOTED, /No description/);
+  assert.match(read("src/components/ThemeDive.tsx"), /noWords\(c\.base \? ev\?\.\(c\.ticker\) === "description_verified" : !!c\.verified\)/);
+});

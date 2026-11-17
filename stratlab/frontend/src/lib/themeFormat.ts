@@ -67,6 +67,10 @@ export function layerLines(l: Layer): LayerLine[] {
  * page, the CSV and the deck): never a filing's title ("From its own filings: Annual report (20-F)"), its name alone, or an encyclopedia
  * lead that says where it is but not what it does. */
 export const NO_WORDS = "No description in its own words yet";
+/** LIVE10A-004: a company checked against its own description whose passage is not one this page quotes (a history, a ranking, a cut
+ *  sentence): said as that, never "No description in its own words yet" beside its "Description-verified". */
+export const NOT_QUOTED = "Checked against its own description; no line of it is quoted here";
+export const noWords = (checked: boolean) => (checked ? NOT_QUOTED : NO_WORDS);
 const WORK = /\b(?:provid\w*|produc(?:es|ers?|ing|ts?|tion)|manufactur\w*|makes?|making|makers?|sells?|selling|suppl(?:y|ies|ying|iers?)|designs?|designing|develop(?:s|ing|ers?)|operat(?:es|ing|ors?)|offers?|offering|distribut\w*|retail\w*|services?|servic(?:es|ing)|foundr(?:y|ies)|licens\w*|leases?|leasing|lend(?:s|ing|ers?)|insur\w*|earns?|revenues?|customers?|clients?|subscri\w*|platforms?|stores?|brands?|engag(?:ed|es)|build(?:s|ing|ers?)|construct\w*|mines?|mining|miners?|refin\w*|generat(?:es|ing|ors?)|transmi\w*|explor(?:es|ing|ation)|invest(?:s|ing|ments?)|manag(?:es|ing)|deliver\w*|software|hardware|solutions?|products?|systems?|equipment|devices?|vehicles?|drugs?|medicines?|banking|bank|loans?|chemicals?|steel|cement|power|electricity|specializ\w*|specialis\w*|focus(?:es|ed) on|helps?|enables?|protect\w*|secur(?:es|ing))\b/i;
 const FILING_TITLE = /^(?:annual|quarterly|current|interim|half[- ]yearly)\s+report\b|^(?:form\s+)?(?:10-[kq]|20-f|40-f|8-k|6-k|def\s*14a)\b|^(?:press release|investor presentation|board meeting|outcome of board meeting|shareholding pattern|financial results)\b/i;
 const LEGAL_WORDS = /\b(?:inc|incorporated|corp|corporation|co|company|ltd|limited|plc|llc|lp|nv|sa|ag|the|holdings?|group)\b\.?/gi;
