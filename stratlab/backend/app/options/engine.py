@@ -499,7 +499,9 @@ class OptionsEngine:
             self.note = "The daily loss cap was hit, so no more entries today."
             return out
         if self.entries_today >= t.maxEntries:
-            self.note = f"Took today's {t.maxEntries} entries; next entries on the next market day."
+            # LIVE10A-013: "Took today's 1 entries": the count's own word
+            self.note = (f"Took today's {t.maxEntries} {'entry' if t.maxEntries == 1 else 'entries'}; "
+                         f"{'the next entry' if t.maxEntries == 1 else 'next entries'} on the next market day.")
             return out
         if contracts and contracts.expiry == today and self._past_expiry_time(now):
             self.note = f"Today's {contracts.expiry} contracts have expired; next entry on the next market day."

@@ -248,3 +248,15 @@ def test_theme_post_table_rounds_a_half_up_as_the_text_does():
                                      "net": 12.35, "net_n": 10, "roce": None, "roce_n": 0, "v": 2}], "v": 2}
     _, head, rows = br._cells(src)
     assert "18.3%" in " ".join(str(c) for c in rows[0]) and "18.2%" not in " ".join(str(c) for c in rows[0])
+
+
+# ---------- LIVE10A-013: the session's note says "1 entry", not "1 entries" ----------
+def test_the_daily_entry_note_is_plural_only_for_more_than_one():
+    from tests.test_options import at, contracts, quotes, straddle
+    from app.options.engine import OptionsEngine
+    e, c = OptionsEngine(straddle()), contracts()
+    e.step(at("09:30"), 25000, c, quotes(25000), True)
+    e.step(at("10:05"), 25000, c, quotes(25000, bump=40), True)          # stopped out: flat, its one entry taken
+    assert e.pos is None and e.trades[-1]["why"] == "Stop loss"
+    e.step(at("10:30"), 25000, c, quotes(25000), True)
+    assert e.note == "Took today's 1 entry; the next entry on the next market day."
