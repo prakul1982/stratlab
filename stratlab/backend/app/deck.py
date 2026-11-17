@@ -2148,6 +2148,26 @@ READ_NO_LINE = "Description read; no sentence on its work a table can show"     
 NO_WORDS = "No description in its own words yet"          # LIVE6-007: the page's words for a company with none (theme_base.NO_WORDS)
 
 
+def layer_cell(text: str, layer: str, limit: int) -> str:
+    """r63e (the R62 replay of Airlines against the live R60 deck: Adani Enterprises in "Airport operators" as "Adani Enterprises Ltd has
+    business interests in various economic areas such as mining", its words naming airports past the cell's 110 characters): a company's
+    words for a table cell (whole_clause) that say no word of its layer's name where its whole words do keep the item of its list that says
+    it, after an ellipsis ("… airports")."""
+    got = whole_clause(text, limit)
+    if not got or not layer:
+        return got
+    from .intel.theme_base import says_name
+    if says_name(layer, [got]) is not False:
+        return got
+    flat = re.sub(r"\[\d+\]", "", re.sub(r"\s+", " ", text or "")).strip()
+    items = [x.strip(" .") for x in re.split(r"[,;:()]|\s(?:and|or|including|such as)\s", flat[len(got):], flags=re.I)]
+    item = next((x for x in items if x and len(x) <= limit // 2 and says_name(layer, [x])), "")
+    if not item:
+        return got
+    head = whole_clause(text, max(24, limit - len(item) - 3))
+    return f"{head} … {item}" if says_name(layer, [head]) is False else head
+
+
 def _what(text: str, name: str = "") -> str:
     """What a company does, as the page shows it, cleaned as a new read would be (theme_base.one_line): a "**Company Overview **" heading,
     "Incorporatedin1994" or a month's sales line never reaches a slide; nor a line that isn't its own words about its work (LIVE6-007:
@@ -7199,7 +7219,7 @@ def _smaller_layers(slides: list, small: list, amt, eyebrow: str) -> None:
                                                   MAP_TAG if c.get("by_map") else "")
             name = (f"{c['name']} ({mark})" if mark else c["name"]) \
                 + (f"; also listed, not confirmed: {', '.join(others)}" if others and i == len(sure) - 1 else "")
-            rows_.append(({**x, "layer": x["layer"] if i == 0 else ""}, c, name))
+            rows_.append(({**x, "layer": x["layer"] if i == 0 else "", "_of": x["layer"]}, c, name))
             cos.append(c)
     lend = is_lender_set(cos)
     keys = ("revenue", "roe", "net") if lend else ("revenue", "ebitda", "net", "roce")
@@ -7208,7 +7228,8 @@ def _smaller_layers(slides: list, small: list, amt, eyebrow: str) -> None:
     widths = [2.3, 2.3, 3.6] + [col[2] for col in cols] + [1.0]
     # r60 (LIVE9A-004, the live R59 decks: a company "Description-verified" beside "No description in its own words yet"): one whose stored
     # description was read and verified its membership, with no sentence on its work a table can show, is said so, never "no description"
-    body = [[x["layer"], name, whole_clause(_what(c.get("what") or "", c.get("name") or ""), 110)
+    body = [[x["layer"], name, layer_cell(_what(c.get("what") or "", c.get("name") or ""),
+                                       re.sub(r" \((?:larger|smaller)\)$", "", str(x.get("_of") or "")), 110)
              or (READ_NO_LINE if c.get("evidence") == "description_verified" else NO_WORDS)]
             + [co_cell(c, k, amt) for k, _, _ in cols] + [c.get("year") or "–"] for x, c, name in rows_]
     head, body, widths, numeric = drop_empty(head, body, widths, [False, False, False] + [True] * len(cols) + [False], keep=(0, 1, 2))
@@ -8052,7 +8073,61 @@ def _bizval(v, unit) -> str:
         return f"{text}%"
     if u.startswith("₹"):
         return f"₹{text} {u[1:].strip()}".strip()
+    if u[:1] in "$€£" and u[1:2] == " ":           # r63e: "$2,000 million", the sign before the amount as "₹" is
+        return f"{u[0]}{text} {u[1:].strip()}".strip()
     return f"{text} {u}".strip()
+
+
+# r63e (LIVE10A-018, the live Private banks theme: operating figures "₹33,275 billion" beside "₹6,51,491 crore"): one money unit in a table.
+# A currency's amounts filed in another scale are put in the one the table prints: rupees in crore, the deck's Indian unit; any other
+# currency in the scale most of its rows file
+_CURRENCY = (("₹", r"₹|rs\.?|inr|rupees?"), ("$", r"us\$|\$|usd"), ("€", r"€|eur"), ("£", r"£|gbp"))
+_SCALE = (("crore", r"crores?|cr", 1e7), ("lakh", r"lakhs?", 1e5), ("billion", r"billions?|bn", 1e9), ("million", r"millions?|mn|mln|m", 1e6),
+          ("thousand", r"thousands?|k", 1e3))
+
+
+def money_unit(unit) -> tuple[str, str, float] | None:
+    """("₹", "crore", 1e7) for "₹ Cr", "Rs crore" or "INR crore"; ("$", "million", 1e6) for "USD million"; None for a unit that is no
+    amount of money (units, %, MW) or names no scale."""
+    u = str(unit or "").strip().lower()
+    for sym, rx in _CURRENCY:
+        m = re.match(rf"^(?:{rx})\s*", u)
+        if m:
+            rest = u[m.end():].strip()
+            for name, srx, f in _SCALE:
+                if re.fullmatch(srx, rest):
+                    return sym, name, f
+            return None
+    return None
+
+
+def one_money_unit(rows: list) -> list:
+    """The operating figures' rows with each currency's amounts in one scale (value, previous and year-ago; the changes are ratios and stay),
+    the unit said as "₹ crore" or "$ million"; rows of a unit that is no money, and headings, as they are. Rows already in one scale are
+    unchanged."""
+    by: dict = {}
+    for r in rows:
+        mu = None if isinstance(r, dict) and "group" in r else money_unit(r.get("unit"))
+        if mu:
+            by.setdefault(mu[0], {}).setdefault((mu[1], mu[2]), 0)
+            by[mu[0]][(mu[1], mu[2])] += 1
+    to = {}
+    for sym, cnt in by.items():
+        if len(cnt) < 2 and not (sym == "₹" and next(iter(cnt))[0] != "crore"):
+            continue
+        to[sym] = ("crore", 1e7) if sym == "₹" else max(cnt.items(), key=lambda kv: (kv[1], kv[0][1] == 1e6))[0]
+    if not to:
+        return rows
+    out = []
+    for r in rows:
+        mu = None if isinstance(r, dict) and "group" in r else money_unit(r.get("unit"))
+        if not mu or mu[0] not in to or mu[1] == to[mu[0]][0]:
+            out.append(r)
+            continue
+        k = mu[2] / to[mu[0]][1]
+        out.append({**r, "unit": f"{mu[0]} {to[mu[0]][0]}", "unit_filed": r.get("unit"),
+                    **{f: round(r[f] * k, 2) for f in ("value", "prev", "year_ago") if isinstance(r.get(f), (int, float))}})
+    return out
 
 
 def _bizchg(c, unit) -> str:
@@ -8092,7 +8167,7 @@ def _biz_slides(slides: list, title: str, rows: list, eyebrow: str, today: date 
     head = ["Company", "Period", "Latest", "Previous", "Year ago", "On previous", "On the year", "Filed"]
     widths = [3.2, 1.35, 1.6, 1.5, 1.5, 1.15, 1.15, 1.3]
     out, held = [], False
-    for r in rows:
+    for r in one_money_unit(rows):
         if isinstance(r, dict) and "group" in r:
             out.append(r)
             continue
@@ -8281,6 +8356,10 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
         if val.get("ev_missing"):
             notes.append(f"EV/EBITDA is n/a for {_n(val['ev_missing'], 'company', 'companies')} where debt, cash or EBITDA isn't stored; the market's debt and "
                          "cash aren't kept, so it has no comparison.")
+        if val.get("history_apart"):            # r63e: kept weekly points of another membership, out of the line
+            ha = val["history_apart"]
+            notes.append(f"{_n(ha['points'], 'earlier weekly median', 'earlier weekly medians')} of another membership "
+                         f"({', '.join(f'{k:,}' for k in ha['n'])} companies, against its {ha['now']:,} now) left out of the theme's P/E history.")
         if len(hist) < MIN_POINTS:
             notes.append("The theme's own P/E history builds forward from its page: it keeps the median once a week"
                          + (f" ({_n(len(hist), 'week')} so far; a line is drawn from {MIN_POINTS})." if hist else "."))

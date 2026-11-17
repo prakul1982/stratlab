@@ -4637,6 +4637,10 @@ def in_place_name(name: str, word: str, texts: list[str]) -> str:
         return ""
     first = unsaid[0]
     put = word + ("s" if first.lower().endswith("s") and not word.lower().endswith("s") else "")
+    # r63e (LIVE10A-034: "Regional integrated producers" became "Cements integrated producers"): a word put in place of one that is not
+    # plural, a word before its noun, is singular ("Cement integrated producers")
+    if not first.lower().endswith("s") and re.search(r"[^s]s$", put, re.I) and len(put) > 4:
+        put = put[:-1]
     out = re.sub(r"\b" + re.escape(first) + r"\b", put, name, count=1)
     for w in unsaid[1:]:
         out = re.sub(r"\s*\b" + re.escape(w) + r"\b", "", out, count=1)
@@ -4707,8 +4711,13 @@ def truthful_layers(vc: list[dict], published: dict, evidence, theme: str) -> tu
         # largest companies share, where most of their own words say it too ("Commercial airframe integration (aircraft)")
         if not v.get("official") and len(v.get("companies") or []) >= 2 and not (v.get("by_model") or v.get("by_place") or v.get("industry_group")):
             shown_ = _HALF_RX.sub("", v["layer"])
+            # r63e (LIVE10A-034, the live R60 Cement deck: "Cements integrated producers (larger)" beside "Regional integrated producers
+            # (smaller)", one layer's two halves by market value under two names): a half's name is its whole layer's, so it is read over both
+            # halves' companies, and a rename renames both
+            twins = [x for x in vc if x is not v and not x.get("official") and _HALF_RX.search(str(x.get("layer") or ""))
+                     and _HALF_RX.sub("", str(x.get("layer"))) == shown_] if _HALF_RX.search(v["layer"]) else []
             texts_ = [" ".join(str(x or "") for x in (evidence(c.get("ticker")) if evidence else "", c.get("what"), c.get("industry"), c.get("name")))
-                      for c in v["companies"]]
+                      for c in v["companies"] + [c for x in twins for c in x.get("companies") or []]]
             if says_name(shown_, texts_) is False:
                 big = [c for c in sorted(v["companies"], key=lambda c: -(c.get("cap") or 0)) if c.get("industry")][:RENAME_TOP]
                 top_ind = Counter(plain_industry(c["industry"]) for c in big).most_common(1)
@@ -4735,8 +4744,11 @@ def truthful_layers(vc: list[dict], published: dict, evidence, theme: str) -> tu
                     if says_name(new_, texts_):
                         rows.append({"layer": shown_, "renamed": new_, "why": f"none of its companies' own words, industries or names say a word of "
                                                                              f"“{shown_}”; most of its largest companies are filed under {top_ind[0][0]}"})
-                        v["layer"] = new_ + v["layer"][len(shown_):]
-                        v["aka"] = list(dict.fromkeys((v.get("aka") or []) + [shown_]))
+                        for x in [v] + twins:
+                            x["layer"] = new_ + x["layer"][len(shown_):]
+                            x["aka"] = list(dict.fromkeys((x.get("aka") or []) + [shown_]))
+                            if x.get("sibling"):
+                                x["sibling"] = new_ + str(x["sibling"])[len(shown_):]
         if v.get("official") or v.get("scale") or not (v.get("by_model") or v.get("by_place") or v.get("industry_group")) or not v.get("companies"):
             continue
         name = _HALF_RX.sub("", v.get("layer") or "")

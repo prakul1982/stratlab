@@ -373,7 +373,10 @@ def revenue_basis_of(region: str, f: dict, profile: str) -> dict | None:
         b = f.get("revenue_basis")
         if isinstance(b, dict) and b.get("words"):
             return {k: b[k] for k in ("key", "words", "standard", "lines", "fte", "year", "concept") if b.get(k) is not None}
-        return {"key": "not_stored", "words": US_BASIS_UNSTORED}
+        # r63e (the owner's review: Huntington's $8.17 bn beside its report's $8.231 bn, "a stated basis visible in the deck", on a page that
+        # keeps no lines yet): a US bank's revenue is read from its filed US GAAP lines whatever its page keeps, never on the FTE basis of
+        # its own non-GAAP total revenue, so that is said for it too
+        return {"key": "not_stored", "words": US_BASIS_UNSTORED, **({"fte": False} if profile == "bank" else {})}
     return {"key": f"in_{profile}", "words": IN_BASIS[profile], "standard": "Indian accounting standards"}
 
 
@@ -2478,6 +2481,26 @@ def _peer_values(r: dict, market: list[dict], key: str, ok, theme: set) -> tuple
 PEER_NAMES = 3                # peers named beside a peer median (d1), the most used first
 PEER_KEEP = 120               # peer symbols kept behind a peer median, those the most companies are compared with first; "symbols_n" counts all
 PEER_MOVE = 5.0               # a peer median this many % away from the stored run before it is said with both (peer_moved)
+# r63e (LIVE10A-018, the live Private banks theme: "median P/E 7 Nov 9.2x (41 companies)" in its week-by-week table beside a theme of 20
+# members): a kept weekly point over a membership this far from this run's (a share of the larger count, and more than HISTORY_SLACK companies)
+# is another population's median, never this theme's history
+HISTORY_SPREAD = 0.25
+HISTORY_SLACK = 2
+
+
+def same_population(points: list, n: int) -> tuple[list, list]:
+    """(the kept weekly P/E points over this theme's membership, those over another): a point whose company count is more than HISTORY_SPREAD
+    of the larger count and more than HISTORY_SLACK companies from this run's `n` is another membership's median. A point with no count is kept."""
+    keep, apart = [], []
+    for p in points or []:
+        k = p.get("n") if isinstance(p, dict) else None
+        if isinstance(k, int) and n and abs(k - n) > max(HISTORY_SLACK, HISTORY_SPREAD * max(k, n)):
+            apart.append(p)
+        else:
+            keep.append(p)
+    return keep, apart
+
+
 PEER_RUNS = 8                 # a theme's kept peer medians, one for each run that differs from the one before (theme_routes.sources)
 
 
@@ -4028,7 +4051,9 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
     val["by_layer"] = layer_valuation(blocks, {r["symbol"] for r in members})
     point = {"d": src.today.isoformat(), "pe": val["pe"]["median"] if val["pe"] else None, "n": len(members)}
     try:
-        val["history"] = [p for p in src.history(slug(theme), point) if p.get("pe") is not None]
+        val["history"], apart_ = same_population([p for p in src.history(slug(theme), point) if p.get("pe") is not None], len(members))
+        if apart_:
+            val["history_apart"] = {"points": len(apart_), "n": sorted({p["n"] for p in apart_}), "now": len(members)}
     except Exception as e:
         print("theme data: history not kept:", type(e).__name__, str(e)[:100])
         val["history"] = []
