@@ -43,6 +43,7 @@ EXPORT = "export"                # Pro's export: the statements as a workbook or
 PEERS_MAX = 10                   # peers in the full table
 PEERS_FREE = 3                   # peers a Free account or a visitor sees, beside the company's own row
 PEERS_WIDEN = 3                  # an industry with fewer peers than this is widened to the company's sector
+PEER_BAND = 20                   # a peer's market value is within a twentieth of the company's own and twenty times it (rel1, CX1)
 YEARS_MAX = 12                   # years of statements kept on the page (as many as stored, up to this)
 YEARS_FREE = 3                   # the latest years of profit and loss a Free account sees
 QUARTERS_MAX = 12                # quarters of results and of shareholding
@@ -127,13 +128,23 @@ def peer_set(rows: list[dict], symbol: str) -> tuple[dict | None, list[dict], st
     """(the company's own index row, its peers nearest first, the set's basis "industry" | "sector" | "none"). Peers share its
     industry (its sector when the industry has fewer than PEERS_WIDEN others), its market and, for a US company, its kind of
     filer (a foreign filer beside foreign filers only); they are ordered by how near their market value is to its own (the
-    theme's "similar market value", half to twice first), those with no market value last. At most PEERS_MAX."""
+    theme's "similar market value", half to twice first), those with no market value last. When the company has a market value, only
+    companies within PEER_BAND times of it either way count (a micro-cap is not a large company's peer). At most PEERS_MAX."""
     own = next((r for r in rows if r.get("symbol") == symbol), None)
     if not own:
         return None, [], "none"
 
+    cap = _num(own.get("market_cap"))
+
     def alike(r: dict) -> bool:
-        return r.get("symbol") != symbol and bool(r.get("foreign")) == bool(own.get("foreign"))
+        """The same kind of filer and, when the company has a market value, one within PEER_BAND times of it either way (CX1: Reliance's
+        table held ₹74-498 cr companies that pulled its peers' median value to ₹10,851 cr)."""
+        if r.get("symbol") == symbol or bool(r.get("foreign")) != bool(own.get("foreign")):
+            return False
+        if not cap or cap <= 0:
+            return True
+        m = _num(r.get("market_cap"))
+        return m is not None and cap / PEER_BAND <= m <= cap * PEER_BAND
     basis, got = "none", []
     if own.get("industry"):
         got = [r for r in rows if alike(r) and r.get("industry") == own["industry"]]
@@ -144,7 +155,6 @@ def peer_set(rows: list[dict], symbol: str) -> tuple[dict | None, list[dict], st
             got, basis = wide, "sector"
     if not got:
         return own, [], "none"
-    cap = _num(own.get("market_cap"))
 
     def distance(r: dict) -> tuple:
         m = _num(r.get("market_cap"))
@@ -177,8 +187,11 @@ def median_row(rows: list[dict]) -> dict:
     return out
 
 
-BASIS_WORDS = {"industry": "same industry, nearest in market value", "sector": "same sector (its industry has too few listed companies), nearest in market value",
-               "none": "no companies of its industry or sector in the stored list"}
+BASIS_WORDS = {"industry": f"same industry, market value between 1/{PEER_BAND} of its own and {PEER_BAND} times it, nearest first",
+               "sector": f"same sector (its industry has too few listed companies of a like size), market value between 1/{PEER_BAND} of its own "
+                         f"and {PEER_BAND} times it, nearest first",
+               "none": f"no companies of its industry or sector with a market value between 1/{PEER_BAND} of its own and {PEER_BAND} times it "
+                       "in the stored list"}
 
 
 def peers_view(region: str, symbol: str, rows: list[dict], facts: dict | None, see: dict, as_of: str | None = None) -> dict:
@@ -327,6 +340,26 @@ def _growth(a: list | None) -> list | None:
     return out if any(v is not None for v in out) else None
 
 
+def _whole_only(values: list) -> bool:
+    got = [v for v in values if v is not None]
+    return bool(got) and all(float(v).is_integer() for v in got)
+
+
+def real_margins(pl: list[dict]) -> list[dict]:
+    """The profit and loss with an operating margin given in whole numbers ("OPM 27" for 27.11%) worked out again from the operating
+    profit and the sales, to one decimal (LIVE9B-003); a year missing either figure keeps the source's."""
+    sales, op = _find(pl, "sales", "revenue"), _find(pl, "operating profit")
+    worked = _ratio(op, sales)
+    if not worked:
+        return pl
+    out = []
+    for r in pl:
+        if r["label"].lower().startswith("opm") and _whole_only(r["values"]):
+            r = {**r, "values": [w if w is not None else v for w, v in zip(worked, r["values"])], "worked": True}
+        out.append(r)
+    return out
+
+
 def worked_ratios(pl: list[dict], bal: list[dict], have: set[str], lender: bool) -> list[dict]:
     """The usual ratios worked out from two figures of the same year, each only where the page's own ratios table doesn't
     already have it: sales growth, EBITDA margin, net margin, return on equity (year-end equity), debt to equity."""
@@ -365,10 +398,17 @@ def statements_view(p: dict, region: str, symbol: str, see: dict, bases: list[st
     sections = []
     for key, title in SECTIONS:
         rows = aligned(p.get(key), cols)
+        if key == "pl":
+            rows = real_margins(rows)
         if key == "ratios_table":
-            have = {r["label"].lower().rstrip(" %") for r in rows}
-            rows = rows + worked_ratios(sections[0]["rows"] if sections else [], next((s["rows"] for s in sections if s["key"] == "balance"), []),
-                                        have, lender)
+            # a source percentage given in whole numbers ("Sales growth 5" for 4.58%) gives way to the one worked out from the figures, to a real
+            # decimal (LIVE9B-003: "5.0%", "7.0%" printed with a decimal the source never had)
+            whole = {r["label"].lower().rstrip(" %") for r in rows if r["kind"] == "pct" and _whole_only(r["values"])}
+            have = {r["label"].lower().rstrip(" %") for r in rows} - whole
+            worked = worked_ratios(sections[0]["rows"] if sections else [], next((s["rows"] for s in sections if s["key"] == "balance"), []),
+                                   have, lender)
+            took = {w["label"].lower().rstrip(" %") for w in worked}
+            rows = [r for r in rows if not (r["label"].lower().rstrip(" %") in whole and r["label"].lower().rstrip(" %") in took)] + worked
         rows = [r for r in rows if any(v is not None for v in r["values"])]
         if rows:
             sections.append({"key": key, "title": title, "rows": rows})

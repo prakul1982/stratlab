@@ -48,16 +48,23 @@ export function peText(v: number | null | undefined): string {
 }
 
 /** A statement figure as its row is written: money in the table's unit grouped as its market writes it, a percentage, days, per share. */
-export function cellText(v: number | null | undefined, kind: Kind, region: Region): string {
+export function cellText(v: number | null | undefined, kind: Kind, region: Region, whole = false): string {
   if (v == null || !Number.isFinite(v)) return "–";
   switch (kind) {
-    case "pct": return pctPlain(v, 1).replace("-", "−");
+    // a row the source gives in whole numbers ("Tax % 25") is written whole, never with a decimal it never had ("25.0%", LIVE9B-003)
+    case "pct": return pctPlain(v, whole ? 0 : 1).replace("-", "−");
     case "days": return grouped(v, 0, region);
     case "per_share": return num(v, 2);
     case "ratio": return num(v, 2);
     case "count": return grouped(v, 0, region);
     default: return grouped(v, Math.abs(v) < 10 && !Number.isInteger(v) ? 1 : 0, region);
   }
+}
+
+/** Every figure given is a whole number (a source's percentage row or column given without decimals, LIVE9B-003). */
+export function wholeOnly(values: (number | null | undefined)[]): boolean {
+  const got = values.filter((v): v is number => v != null && Number.isFinite(v));
+  return got.length > 0 && got.every((v) => Number.isInteger(v));
 }
 
 /** Rows sorted by a column, nulls last whichever way; equal figures keep their order (nearest in market value first). */

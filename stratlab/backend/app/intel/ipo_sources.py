@@ -123,7 +123,7 @@ def nse_upcoming(raw) -> list[dict]:
         name, status, social = classify(r.get("companyName"))
         out.append({"symbol": str(r["symbol"]).strip().upper(), "name": name, "series": r.get("series"),
                     "segment": seg, "open": iso(day_of(r.get("issueStartDate"))), "close": iso(day_of(r.get("issueEndDate"))),
-                    "low": low, "high": high, "size_shares": whole(r.get("issueSize"))})
+                    "low": low, "high": high, "size_shares": whole(r.get("issueSize")), **_lot(r)})
         _note(out[-1], status, social)
     return out
 
@@ -142,7 +142,7 @@ def nse_current(raw) -> list[dict]:
         name, status, social = classify(r.get("companyName"))
         out.append({"symbol": str(r["symbol"]).strip().upper(), "name": name, "series": r.get("series"),
                     "segment": seg, "open": iso(day_of(r.get("issueStartDate"))), "close": iso(day_of(r.get("issueEndDate"))),
-                    "low": low, "high": high, "size_shares": whole(r.get("issueSize") or r.get("noOfSharesOffered"))})
+                    "low": low, "high": high, "size_shares": whole(r.get("issueSize") or r.get("noOfSharesOffered")), **_lot(r)})
         _note(out[-1], status, social)
     return out
 
@@ -319,6 +319,40 @@ def issue_split(text) -> dict:
     return out
 
 
+LOT_TITLE = re.compile(r"\b(?:bid|market|min(?:imum)?\.?\s*(?:bid|order|application))\s*(?:lot|quantity|qty|size)\b|\blot\s*size\b|^lot$", re.I)
+
+
+def lot_of(info: dict) -> int | None:
+    """The bid lot (the fewest shares one bid can be for) from an issue page's facts, under whichever of its names the exchange uses
+    ("Bid Lot", "Lot Size", "Market Lot", "Minimum Bid Quantity", "Min. Order Qty"): "55 Equity Shares and in multiples thereof" is 55
+    (rel1, CX1 problem 9: Crystal Crop's lot was blank). The exact names first, then any title of that kind; None when none has a number."""
+    exact = ("bid lot", "lot size", "market lot", "minimum order quantity", "minimum bid quantity", "min bid quantity", "bid lot size")
+    titles = [t for t in exact if info.get(t)] + [t for t in info if t not in exact and LOT_TITLE.search(t)]
+    for t in titles:
+        m = re.search(r"(\d[\d,]*)", str(info.get(t) or ""))
+        n = whole(m.group(1)) if m else None
+        if n and n > 0:
+            return n
+    return None
+
+
+def lot_in(r: dict) -> int | None:
+    """The lot in an exchange's list row (keys differ by list: lotSize, minBidQuantity, Min_Bid_Qty, Market_Lot), None without one."""
+    for k, v in (r or {}).items():
+        if re.fullmatch(r"(?i)(?:bid_?)?lot_?size|market_?lot|min_?bid_?(?:qty|quantity)|minimum_?bid_?(?:qty|quantity)|bid_?lot", str(k)):
+            m = re.search(r"(\d[\d,]*)", str(v or ""))
+            n = whole(m.group(1)) if m else None
+            if n and n > 0:
+                return n
+    return None
+
+
+def _lot(r: dict) -> dict:
+    """{"lot": n} when a list row gives the lot, else nothing (a row's keys stay as they were)."""
+    n = lot_in(r)
+    return {"lot": n} if n else {}
+
+
 def nse_detail(raw) -> dict:
     """One issue's own page on NSE, read into facts. {} when it is not an issue page.
     Keys: company, symbol, isin, industry, listing (ISO day), open, close, close_time, open_time, hours, low, high, face_value, lot, retail_max, issue_text, fresh, ofs,
@@ -351,8 +385,7 @@ def nse_detail(raw) -> dict:
     out["low"], out["high"] = band(info.get("price range"))
     fv = re.search(r"([\d.]+)", info.get("face value", ""))
     out["face_value"] = num(fv.group(1)) if fv else None
-    lot = re.search(r"([\d,]+)", info.get("bid lot", "") or info.get("lot size", "") or info.get("market lot", "") or info.get("minimum order quantity", ""))
-    out["lot"] = whole(lot.group(1)) if lot else None
+    out["lot"] = lot_of(info)
     rm = re.search(r"Rs\.?\s*([\d,]+)", info.get("maximum subscription amount for retail investor", ""), re.I)
     out["retail_max"] = whole(rm.group(1)) if rm else None
     out["issue_text"] = info.get("issue size") or None
@@ -422,7 +455,7 @@ def bse_issues(raw) -> list[dict]:
         out.append({"code": str(r["Scrip_cd"]), "name": name, "segment": seg,
                     "open": iso(day_of(r.get("Start_Dt"))), "close": iso(day_of(r.get("End_Dt"))), "low": low, "high": high,
                     "face_value": num(r.get("Face_Val")), "size_shares": whole(r.get("IssueSize")), "status": str(r.get("Status") or ""),
-                    "ipo_no": r.get("IPO_NO")})
+                    "ipo_no": r.get("IPO_NO"), **_lot(r)})
         _note(out[-1], status, social)
     return out
 

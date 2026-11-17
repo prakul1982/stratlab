@@ -7,7 +7,7 @@ import { useMarketRefresh } from "../lib/marketLive";
 import { axisInrFor, money, price, fmtDate, fmtDateTime, IST, tzLabel } from "../lib/format";
 import { chainStamp, exchangeTime, optionsMarket } from "../lib/marketHours";
 import { HELP } from "../lib/help";
-import { blankOptions, clampTyped, FALLBACK_HOURS, convertOptLimit, expiryChoices, IMPORTED, isAutoName, OPTIONS_DRAFT, OPTIONS_NOTES, legName, legRule, levelText, lotOf, mergeDraft, offsetsIn, optMoney, payoff, pickedExpiry, PICKS, POPULAR_FALLBACK, rangeText, recordedLine, sessionFor, signalFrom, startWhenText, signalLine, spotText, staleQuoteLine, STRUCTURES, STT_NOTE, timingIssues } from "../lib/options";
+import { blankOptions, clampTyped, FALLBACK_HOURS, convertOptLimit, expiryChoices, IMPORTED, isAutoName, OPTIONS_DRAFT, OPTIONS_NOTES, legName, legWords, levelText, lotOf, mergeDraft, offsetsIn, optMoney, payoff, pickedExpiry, PICKS, POPULAR_FALLBACK, rangeText, recordedLine, sessionFor, signalFrom, startWhenText, signalLine, spotText, staleQuoteLine, STRUCTURES, STT_NOTE, timingIssues } from "../lib/options";
 import type { LiveRow, Notebook, OptChain, OptCharges, OptionStrategy, OptLeg, OptPreview, StrikePick, Underlying } from "../lib/types";
 import { PayoffChart, type PayoffCurve, type PayoffMarker } from "../components/Charts";
 import { ModelInputs, ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
@@ -547,7 +547,7 @@ export function OptionsPage() {
     setRisk(k === "stop" ? { stopType: to, stop: x.value } : { tgtType: to, tgt: x.value });
     if (x.note) notify(x.note);
   };
-  const legsText = s.legs.map((l) => `${l.side === "sell" ? "Sell" : "Buy"} ${l.lots > 1 ? l.lots + "× " : ""}${legRule(l, s.offsetUnit)} ${l.opt}`).join(" · ");
+  const legsText = s.legs.map((l) => `${l.side === "sell" ? "Sell" : "Buy"} ${l.lots > 1 ? l.lots + "× " : ""}${legWords(l, s.offsetUnit)}`).join(" · ");
   const vf = s.vix;
   const expiryNames: Record<string, string> = { current: "the nearest expiry", next: "the next expiry", month: "the monthly expiry" };
   const exp = pickedExpiry(und?.expiries, s.expiry), lot = lotOf(und, s.expiry);

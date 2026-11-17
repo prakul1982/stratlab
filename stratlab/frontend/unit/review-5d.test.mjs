@@ -26,10 +26,12 @@ test("B2: a currency charged by its own plan names that currency's amount, with 
   assert.equal(paymentWindowLine("Pro", "month", "USD"), 'The payment window that opens next is headed "StratLab · Pro, monthly" and shows the amount in USD.');
   assert.match(paymentWindowLine("Pro", "month", "INR"), /in rupees\.$/);
   assert.match(paymentWindowLine("Pro", "month"), /in rupees\.$/);
-  // item 34 (owner, 29 Oct): the page always asks for the rupee plan and says the rupee charge, with the dollar beside it
+  // item 34 (owner, 29 Oct): the page asks for the rupee plan and says the rupee charge, with the dollar beside it;
+  // (updated on purpose: owner 16 Nov, US dollars on a visible switch; rupees stay the default outside the US and the charge is said in rupees until dollar checkout is on): the dollar plan only when dollars are really charged (lib/priceCurrency checkoutCur), then the dollar amount alone
   const plans = src("pages/PlansPage.tsx");
-  assert.match(plans, /body: \{ plan, period, currency: "INR" \}/);
-  assert.match(plans, /const chargeAmount = \(p: "basic" \| "pro"\) => rupeeCharge\(rupees\(p, period\), gst\);/);
+  assert.match(plans, /const currency = checkoutCur\(cur, usd, period, usdOn\);/);
+  assert.match(plans, /body: \{ plan, period, currency \}/);
+  assert.match(plans, /return c\.chargedCur === "USD" \? c\.charged : rupeeCharge\(rupees\(p, period\), gst\);/);
   assert.doesNotMatch(plans, /if \(own\) return/);
 });
 
@@ -43,7 +45,8 @@ test("B3: Account and the connection check name the real plan; the badge alone k
   assert.equal(planLabel({ ...invited, plan: "pro", promo: { until: "2026-10-22" } }), "Free");
   const acc = src("pages/AccountPage.tsx");
   assert.doesNotMatch(acc, /<dd>\{me\.plan_info\.name\}/);
-  assert.match(acc, /<dd>\{planName\}<\/dd>/);
+  // (updated on purpose, LIVE9B-028: the plan is named once, on Plan and usage; the Profile row that repeated it is gone)
+  assert.doesNotMatch(acc, /<dd>\{planName\}<\/dd>/);
   assert.match(acc, /\{planName\}\{me\.promo \? " \(launch offer\)"/);
   const set = src("pages/SettingsPage.tsx");
   assert.match(set, /\$\{planLabel\(me\)\} plan, \$\{u\.backtests_used\} Backtests this month/);

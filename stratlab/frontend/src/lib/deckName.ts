@@ -5,12 +5,13 @@
  * the landing page. */
 const BAD = /[\\/:*?"<>|\u0000-\u001f]+/g;
 
-export function deckDay(now: Date = new Date()): string {
-  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" }).format(now).replace(/\bSept\b/, "Sep");
+// r60b (LIVE9A-005): a US theme's deck is named by New York's day, the day the deck itself says
+export function deckDay(now: Date = new Date(), timeZone = "Asia/Kolkata"): string {
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone }).format(now).replace(/\bSept\b/, "Sep");
 }
 
-export function deckFileName(title: string, format: "pdf" | "pptx", now: Date = new Date()): string {
+export function deckFileName(title: string, format: "pdf" | "pptx", now: Date = new Date(), timeZone?: string): string {
   const clean = title.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[–—]/g, "-").replace(/[^\x20-\x7e]+/g, " ")
     .replace(BAD, " ").replace(/\s+/g, " ").trim().slice(0, 120) || "StratLab deck";
-  return `StratLab - ${clean} - ${deckDay(now)}.${format}`;
+  return `StratLab - ${clean} - ${deckDay(now, timeZone)}.${format}`;
 }

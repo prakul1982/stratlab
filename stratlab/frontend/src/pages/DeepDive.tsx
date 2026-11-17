@@ -7,7 +7,7 @@ import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { deckLock, deepDiveLimitLine } from "../lib/account";
 import { SampleDeckLink } from "../components/SampleDeck";
-import { asOf, CRORE, inrCompact, marketTz, pct, safeHref, fmtDate } from "../lib/format";
+import { asOf, CRORE, inrCompact, lowerKeepAcronyms, marketTz, pct, safeHref, fmtDate, fmtTime } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { marginText, millionsOf, scaleFor, usdAmount } from "../lib/research";
 import { Panel, TrendBars } from "../components/Research";
@@ -21,6 +21,7 @@ import { ShareCompanyButton } from "../components/ShareCompany";
 import { ShareResearchButton } from "../components/ShareResearch";
 import { track } from "../lib/analytics";
 import { CHECK_BADGE, checkCountsLine } from "../lib/checklistText";
+import { busyLine, busyRetryIn } from "../lib/busyRetry";
 
 type Year = { year: string; sales: number | null; profit: number | null; opm: number | null; capex: number | null;
   capex_pct_sales: number | null; cfo: number | null; cfi: number | null; fcf: number | null; debt: number | null };
@@ -42,6 +43,8 @@ export interface DeepView {
   symbol: string; region?: "IN" | "US"; ai?: boolean; source_url?: string | null; name: string; about: string; documents: Doc[]; doc_note: string | null; reads_stale: boolean;
   calls: number; card: Card | null; card_stale: boolean; checklist: Checklist;
   as_of?: string | null; numbers_at?: string | null; price_at?: string | null;
+  /** the source was busy: the figures are the company's last whole read, from numbers_at (rel1) */ figures_kept?: boolean;
+  /** the market trading: its live price and when it was read; the valuation stays on the last close of price_at (rel1) */ live?: { price: number; at: string | null } | null;
   industry_measures?: { key: string; label: string | null; measures: string[] };
   snapshot?: { div_yield: number | null };
   valuation?: { name: string; short: string; value: number | null; pe: number | null; why: string };
@@ -57,6 +60,10 @@ export interface DeepView {
       outlook: { statement: string; quote: string; source: Source }[]; sources: Source[] };
   };
 }
+
+/** A live share price as its market writes it: "$352.10", "₹1,344.80". */
+const livePrice = (v: number, us: boolean) =>
+  (us ? "$" : "₹") + v.toLocaleString(us ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /** An amount in ₹ crore as people say it in Indian units: "₹945 cr", "₹1.25 lakh cr". */
 const inrAmount = (v: number | null | undefined) => (v == null ? "–" : inrCompact(v * CRORE));
@@ -201,6 +208,8 @@ export function DeepDivePage() {
   const [error, setError] = useState<string | null>(null);
   const [limited, setLimited] = useState(false);         // the plan's monthly deep dives are used up
   const [tries, setTries] = useState(0);                   // one more with each "Try again" (RC5-001)
+  const [busy, setBusy] = useState<string | null>(null);   // the source is busy: the page asks again on its own (busyRetry)
+  const auto = useRef(0);                                  // automatic tries since the last one a person asked for
   const u = me?.usage;
   const [reading, setReading] = useState(false);
   const [carding, setCarding] = useState(false);
@@ -222,12 +231,24 @@ export function DeepDivePage() {
 
   useEffect(() => {
     let live = true;
+    let timer = 0;
     setV(null); setError(null); setLimited(false); setReading(false); setCarding(false);
     api<DeepView>(`/research/deep/${encodeURIComponent(sym)}${q()}`)
-      .then((x) => { if (live) { setV(x); void refreshMe(); } })
-      .catch((e) => { if (live) { setError((e as Error).message); setLimited(e instanceof ApiError && e.status === 402); } });
-    return () => { live = false; };
+      .then((x) => { if (live) { setV(x); setBusy(null); auto.current = 0; void refreshMe(); } })
+      .catch((e) => {
+        if (!live) return;
+        const wait = busyRetryIn(e, auto.current);
+        if (wait != null) {         // busy: said, and asked again a little later, never an error wall at once
+          setBusy(busyLine((e as Error).message, wait));
+          timer = window.setTimeout(() => { auto.current += 1; setTries((n) => n + 1); }, wait);
+          return;
+        }
+        auto.current = 0;           // a "Try again" after the error starts the automatic tries afresh
+        setBusy(null); setError((e as Error).message); setLimited(e instanceof ApiError && e.status === 402);
+      });
+    return () => { live = false; window.clearTimeout(timer); };
   }, [sym, region, tries]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { auto.current = 0; setBusy(null); }, [sym, region]);
 
   const readDocs = async (refresh = false) => {
     const mine = here.current;
@@ -263,16 +284,19 @@ export function DeepDivePage() {
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research")} title={`${v?.name ?? sym}: business, capex and growth`}
-        asOf={v?.numbers_at} asOfLabel="Reported numbers as of" asOfTz={marketTz(region)}
+        asOf={v?.numbers_at} asOfPending={!v} asOfLabel="Reported numbers as of" asOfTz={marketTz(region)}
         lede={us
           ? <>The numbers the company reports to the SEC in its annual and quarterly filings (10-K and 10-Q), in {cur === "$" ? "dollars" : `the currency it reports in (${cur})`}, each table and chart labelled with its unit{v?.source_url ? <> (<a className="link" href={safeHref(v.source_url)} target="_blank" rel="noopener noreferrer">its filings ↗</a>)</> : null}. Facts, not advice.</>
           : "The reported numbers, and what the company itself says in its latest investor presentation and earnings calls. Facts and the company's own words, not advice."}
         actions={<>
           {v?.price_at && <Badge>Last close as of {asOf(v.price_at, { tz: marketTz(region) })}</Badge>}
+          {/* the market trading: its live price, labelled live with the time it was read; the figures stay on the last close (rel1) */}
+          {v?.live?.price != null && <Badge tone="live">Live {livePrice(v.live.price, us)}{v.live.at ? ` at ${fmtTime(v.live.at, { tz: marketTz(region), zone: true })}` : ""}</Badge>}
           <Link className="btn quiet sm" to={`/research/${region}/${encodeURIComponent(sym)}`}>← {v?.name ?? sym}</Link>
           {v && <SaveButton kind="deep_dive" label="Save deep dive" name={`${v.name ?? sym} deep dive`} params={{ region, symbol: sym }} />}
         </>} />
-      <div className="k-row">
+      {/* the tools' row keeps a button's height while the dive loads, so the page doesn't drop when they arrive (LIVE9B-013: 0.196) */}
+      <div className="k-row dd-tools">
         {v && <>
           {/* FREE-TIER: no decks on Free: a locked button that says where they are, and the sample deck beside it */}
           {u?.deck_limit === 0 ? <>
@@ -293,7 +317,8 @@ export function DeepDivePage() {
       </div>
       {limited && <PlanNote>{error}</PlanNote>}
       {!limited && error && <ErrorState title="The deep dive couldn't be opened" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState>}
-      {!v && !error && <Card><Skeleton label="Reading the reported numbers" lines={5} /></Card>}
+      {!v && !error && <Card>{busy && <p className="k-small" role="status" data-testid="deep-busy">{busy}</p>}<Skeleton label="Reading the reported numbers" lines={5} /></Card>}
+      {v?.figures_kept && <p className="k-small k-muted" data-figures-kept>These are the company's figures as read on {fmtDate(v.numbers_at ?? "")}: the latest couldn't be read just now.</p>}
       {v && u?.deepdive_limit != null && (
         <p className="k-note">{deepDiveLimitLine(u.deepdive_used ?? 0, u.deepdive_limit, u.deck_used ?? 0, u.deck_limit)} <Link className="link" to="/plans">Plans</Link></p>
       )}
@@ -390,7 +415,7 @@ export function DeepDivePage() {
               empty="Only the company profile was read: no document was found." />}
             {v.doc_note && <p className="k-note">Filings: {v.doc_note}</p>}
             {reading && <Skeleton label={us ? "Reading the annual report (10-K) and earnings releases" : "Reading the latest investor presentation and earnings calls"} lines={3} />}
-            {!v.reads && !reading && <p className="k-small k-muted">The business model, {v.industry_measures?.label ? `the ${v.industry_measures.label.toLowerCase()} measures (${v.industry_measures.measures.slice(0, 3).join(", ")}…), ` : ""}capex plans and management's outlook come from these documents. Reading them takes about a minute and counts as one of your daily AI reads; a read is kept for a week and shared, so someone may already have done it.</p>}
+            {!v.reads && !reading && <p className="k-small k-muted">The business model, {v.industry_measures?.label ? `the ${lowerKeepAcronyms(v.industry_measures.label)} measures (${v.industry_measures.measures.slice(0, 3).join(", ")}…), ` : ""}capex plans and management's outlook come from these documents. Reading them takes about a minute and counts as one of your daily AI reads; a read is kept for a week and shared, so someone may already have done it.</p>}
             {v.reads?.problems?.length ? <p className="k-note">Couldn't read: {v.reads.problems.join(" · ")}</p> : null}
           </Card>
 

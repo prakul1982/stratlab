@@ -51,7 +51,8 @@ test("LIVE5 partial: the landing page on a phone is under 9,000 px, its long blo
   await page.waitForTimeout(2500);
   const h = await page.evaluate(() => document.documentElement.scrollHeight);
   expect(h, "the landing page's length on a phone").toBeLessThan(9000);
-  for (const label of ["Options, more Trade tools and the markets", "See a sample company page", "What Free includes", "The three steps"]) {
+  // (updated on purpose, NAV3, CX-1: no "more tools" teaser in the fold's name)
+  for (const label of ["Options, every Trade tool and the markets", "See a sample company page", "What Free includes", "The three steps"]) {
     const fold = page.locator("details.lp-phone-fold").filter({ has: page.locator(":scope > summary", { hasText: label }) }).first();
     await expect(fold).toHaveCount(1);
     await fold.locator(":scope > summary").click();

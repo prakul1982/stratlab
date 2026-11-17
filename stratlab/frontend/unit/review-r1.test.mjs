@@ -106,8 +106,8 @@ test("the menu follows the address, not the last space used (R1-011)", () => {
   assert.equal(menuView("/research/IN/TCS", "money"), "invest");
   assert.equal(menuView("/admin", "money"), "mine");              // its breadcrumb says Mine › Admin
   assert.equal(menuView("/settings", "trade"), "mine");
-  assert.equal(menuView("/holdings", "mine", true), "mine");      // a page pinned to Mine keeps Mine's menu
-  assert.equal(menuView("/holdings", "mine", false), "money");
+  // (updated on purpose, NAV3: one menu for every page; My space's own menu, which kept a pinned page in it, is gone)
+  assert.equal(menuView("/holdings", "mine"), "money");
   assert.equal(menuView("/", "invest"), "invest");               // the front door goes on to the space showing
 });
 

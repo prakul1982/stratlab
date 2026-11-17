@@ -505,6 +505,13 @@ def blog_posts():
                 got += 1
             day -= timedelta(days=1)
     print("blog:", blog_research.generate(builders=blog_research.source_posts()))
+    # blog2: the theme posts committed with the code (app/blog_themes), stored and published as a release stores them (e2e/blog.spec.ts)
+    from pathlib import Path
+    kept, blog_research.SEED_DIR = blog_research.SEED_DIR, Path(blog_research.__file__).with_name("blog_themes")
+    try:
+        print("blog theme posts:", blog_research.seed_theme_posts())
+    finally:
+        blog_research.SEED_DIR = kept
 
 
 def invite_rewards():
@@ -672,6 +679,11 @@ def screen_index():
         if region == "IN":          # the stored purchase dates reach back 120 days: the 30 and 90 day windows are covered, 180 and 365 not (RC3M-009)
             index["insider_from"] = (date.today() - timedelta(days=120)).isoformat()
         db.set_setting(screens.INDEX_KEY + region, json.dumps(index))
+        # ...and its copy in memory goes, as build_index's store does: a page read before this (fix9b's holdings sectors, read by the
+        # owner's holdings import above; the company read's one_cap in the loop) kept the empty index for ten minutes, and the heatmap,
+        # the peers and the screens drew no market value (ci60)
+        with screens._mem_lock:
+            screens._mem.pop(region, None)
 
 
 def company_tables_world(mp):

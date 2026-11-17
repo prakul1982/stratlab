@@ -82,7 +82,8 @@ test("RES-1 follow-up: business updates have a chart per company on one range, a
   assert.match(b, /\{ value: "6", label: "6 months" \}, \{ value: "12", label: "1 year" \}, \{ value: "24", label: "2 years" \}/);
   assert.match(b, /<Seg label="Range of the small charts" value=\{range\} onChange=\{setRange\}/);
   assert.match(b, /figureColumns\(months\)/);                                  // the sector table
-  assert.match(b, /figureColumns\(months, \{ key: "k", header: "From"/);       // and My stocks, on the same range
+  // and My stocks, on the same range (updated on purpose, LIVE9B-007: the From column only when holdings and watchlist are mixed)
+  assert.match(b, /figureColumns\(months, new Set\(mine\.rows\.map\(\(r\) => r\.kind\)\)\.size > 1 \? \{ key: "k", header: "From"/);
   assert.match(b, /foot=\{d\.total \?/);
   assert.match(b, /Total of \$\{d\.total\.companies\} companies/);
   assert.match(b, /data-testid="biz-none">No business update among their exchange filings:/);

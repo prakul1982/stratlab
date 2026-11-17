@@ -66,9 +66,13 @@ def test_2_media_cable_layer_counts_the_operator_whose_words_say_cable():
     _never_mostly_out("media")
     v = _layer(out, "Cable and satellite distribution")
     hb = next(c for c in v["companies"] if c["ticker"] == "HATHWAYB")
-    assert not hb.get("model_out") and hb.get("by_words") and hb.get("words_over") == "other"
+    # (updated on purpose, r60: Dish TV now stays in the layer on its direct-to-home words, so the layer is no longer mostly left out and
+    # r59's rule, which counts a left-out member on its words only in such a layer, need not act; Hathway Bhawani stays listed in it)
+    assert (not hb.get("model_out") and hb.get("by_words") and hb.get("words_over") == "other") or hb.get("model_out") == "other"
+    # (updated on purpose, r60: the owner's R59 review P0, Dish TV's "Direct to Home television and Teleport services" say the layer's
+    # concept, satellite distribution: it stays in the layer, counted on its words, never sent to "Other")
     w, c = _where(out, "DISHTV")
-    assert w["layer"].startswith("Other ") and "Cable and satellite distribution" in c["refit"]["why"]
+    assert w["layer"] == "Cable and satellite distribution" and not c.get("model_out")
     calc = [c["ticker"] for c in v["companies"] if c["ticker"] not in _outside(d, v)]
     assert len(calc) * 2 > len(v["companies"]), calc
 
@@ -81,9 +85,13 @@ def test_3_oilgas_services_layer_lists_only_members_whose_words_say_it():
     assert all(not c.get("model_out") for c in v["companies"]), [c["ticker"] for c in v["companies"] if c.get("model_out")]
     aak = next(c for c in v["companies"] if c["ticker"] == "AAKASH")          # "provides oilfield services": counted on its words
     assert aak.get("by_words")
-    for sym in ("VECTRAS", "ALPHAGEO", "ABAN", "DUKEOFS"):
+    # (updated on purpose, r60: the owner's R59 review, offshore drilling and seismic services say the concept of oilfield services: Aban
+    # Offshore and Alphageo are no longer sent to "Other" for lacking a literal word of the name; Vectras (EPC) and Duke Offshore still are)
+    for sym in ("VECTRAS", "DUKEOFS"):
         w, c = _where(out, sym)
         assert w["layer"].startswith("Other ") and "Oilfield services and equipment makers" in c["refit"]["why"], sym
+    for sym in ("ABAN", "ALPHAGEO"):
+        assert not _where(out, sym)[0]["layer"].startswith("Other "), sym
 
 
 def test_1_3_a_layer_keeps_two_companies():

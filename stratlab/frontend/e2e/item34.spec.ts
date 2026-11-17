@@ -4,6 +4,9 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 // "₹699 a month (about $8)", signed out and in, on /plans, the landing page, the paywall sentences and the subscribe step. A
 // browser that says en-US in New York (LIVE1B-078: it read "$8 / $20" alone) gets the same. The checkout still asks for the
 // rupee plan. The dollar figure is the app's USD/INR rate, fixed here at ₹90 so the figures are known.
+// (updated on purpose: owner 16 Nov, US dollars for US visitors: this New York browser now opens on the "Prices in" switch's
+// dollars, never dollars alone (the rupee charge is beside each), and item 34's rupee view is one press on "₹ INR" away; the
+// checkout still asks for the rupee plan. e2e/su1-email-usd.spec.ts has the dollar cases in full.)
 const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
 test.use({ locale: "en-US", timezoneId: "America/New_York" });
 
@@ -31,10 +34,13 @@ async function visit(page: Page, path: string, signedIn: number | false = false)
   return errors;
 }
 
-test("/plans signed out, en-US browser: rupees first with the dollar beside each price, no dollars alone, no currency picker", async ({ page }) => {
+test("/plans signed out, en-US browser: dollars with the rupee charge beside them; on ₹, rupees first with the dollar beside each price", async ({ page }) => {
   const errors = await visit(page, "/plans");
   const basic = page.locator('.lp-price[data-plan="basic"]');
-  await expect(basic.locator(".lp-amount")).toContainText("₹699", { timeout: 30_000 });
+  await expect(basic.locator(".lp-amount")).toContainText("$8", { timeout: 30_000 });
+  await expect(page.getByTestId("about-basic")).toHaveText("Charged as ₹699 in rupees");
+  await page.getByRole("radiogroup", { name: "Prices in" }).getByRole("radio", { name: "₹ INR" }).click();
+  await expect(basic.locator(".lp-amount")).toContainText("₹699");
   await expect(page.getByTestId("about-basic")).toHaveText("about $8");
   await expect(page.locator('.lp-price[data-plan="pro"] .lp-amount')).toContainText("₹1,999");
   await expect(page.getByTestId("about-pro")).toHaveText("about $22");
@@ -45,9 +51,8 @@ test("/plans signed out, en-US browser: rupees first with the dollar beside each
   await expect(page.locator('.lp-price[data-plan="basic"] .lp-amount')).toContainText("₹6,999");
   await expect(page.getByTestId("about-basic")).toHaveText("about $78");
   await expect(basic.locator(".lp-save")).toContainText(/Saves ₹[\d,]+ \(about \$\d+\) a year/);
-  // never a dollar amount as a card's main price, no picker to switch to one, and the rate said once under the plans
+  // on ₹, never a dollar amount as a card's main price, and the rate said once under the plans
   for (const amount of await page.locator(".lp-amount").allInnerTexts()) expect(amount).toMatch(/^₹/);
-  await expect(page.getByLabel("Prices in")).toHaveCount(0);
   await expect(page.getByText("In India? Show prices in ₹")).toHaveCount(0);
   await expect(page.getByTestId("usd-note")).toContainText("at ₹90 to the dollar (today's rate)");
   expect(errors).toEqual([]);
@@ -57,7 +62,10 @@ test("the landing page's plans say the same for an en-US visitor", async ({ page
   const errors = await visit(page, "/");
   const sec = page.locator("#pricing");
   await sec.scrollIntoViewIfNeeded();
-  await expect(sec.locator('.lp-price[data-plan="basic"] .lp-amount')).toContainText("₹699", { timeout: 30_000 });
+  await expect(sec.locator('.lp-price[data-plan="basic"] .lp-amount')).toContainText("$8", { timeout: 30_000 });
+  await expect(sec.getByTestId("about-basic")).toHaveText("Charged as ₹699 in rupees");
+  await sec.getByRole("radiogroup", { name: "Prices in" }).getByRole("radio", { name: "₹ INR" }).click();
+  await expect(sec.locator('.lp-price[data-plan="basic"] .lp-amount')).toContainText("₹699");
   await expect(sec.getByTestId("about-basic")).toHaveText("about $8");
   await expect(sec).not.toContainText("$8 /");
   expect(errors).toEqual([]);
@@ -69,6 +77,7 @@ test("signed in: the Plans cards, the subscribe step and its checkout are in rup
   });
   let asked: Record<string, unknown> | null = null;
   await page.route(`${API}/billing/subscribe`, (r) => { asked = r.request().postDataJSON(); return r.fulfill({ status: 200, json: { subscription_id: "sub_test", key_id: "rzp_test", email: "", currency: "INR" } }); });
+  await page.addInitScript(() => localStorage.setItem("stratlab.price-currency", "INR"));       // a US visitor who chose ₹ on the switch
   const errors = await visit(page, "/plans", info.project.name === "phone" ? 276 : 273);          // two Free accounts no other spec uses
   await expect(page.locator(".k-plan-price").nth(1)).toContainText("₹699", { timeout: 30_000 });
   await expect(page.getByTestId("about-basic")).toHaveText("about $8");

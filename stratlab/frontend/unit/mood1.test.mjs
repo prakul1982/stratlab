@@ -88,7 +88,8 @@ test("MOOD-1: breadth's figures are one table: the day, the day before, the chan
 test("MOOD-1: the alert is a bell on the 50-day row, not a card; it says the level when one is set", () => {
   const page = read("src/pages/BreadthPage.tsx"), a = read("src/components/BreadthAlert.tsx");
   assert.doesNotMatch(page, /function AlertBox|<AlertBox|Alert on the share above the 50-day average" \/>/);
-  assert.match(page, /r\.key === "p50" && !locked \? <BreadthAlertButton group=\{group\} \/>/);
+  // (updated on purpose, LIVE9A-016: the bell sits in the table card's head, not inside the 50-day row, which it made taller)
+  assert.match(page, /actions=\{!locked \? <BreadthAlertButton group=\{group\} \/> : undefined\}/);
   assert.match(a, /here\.length \? `Alert at \$\{here\.map\(\(a\) => `\$\{a\.level\}%`\)\.join\(", "\)\}` : "Alert me"/);
   assert.match(a, /breadthApi\.addAlert\(group\.id, n\)/);                           // the same alert as before: the same API
   assert.match(a, /<Dialog title="Alert on the share above the 50-day average"/);

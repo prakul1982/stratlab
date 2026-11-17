@@ -148,12 +148,12 @@ const LIVE_INFO = "Worked out every 15 minutes while the market is open, from li
   + "The numbers for the close, further down, are worked out after the market shuts and are not changed by these.";
 
 /** A measure's name with its (i) and a line on what it means, as the breadth tables write it. */
-function MeasureName({ r, help, extra }: { r: MeasureRow; help: Record<string, string>; extra?: ReactNode }) {
+function MeasureName({ r, help }: { r: MeasureRow; help: Record<string, string> }) {
   return (
     <>
-      <b>{r.label}</b>{r.info && help[r.info] && <Info label={`About ${r.label.toLowerCase()}`}>{help[r.info]}</Info>}
+      {/* LIVE9A-016: the (i) stays on the line of the label's last word (with the Markets panel docked it dropped onto a line of its own) */}
+      {r.info && help[r.info] ? (() => { const cut = r.label.lastIndexOf(" "); return <b>{cut > 0 ? `${r.label.slice(0, cut)} ` : ""}<span className="k-keep">{r.label.slice(cut + 1)}<Info label={`About ${r.label.toLowerCase()}`}>{help[r.info!]}</Info></span></b>; })() : <b>{r.label}</b>}
       <span className="k-sub-line">{r.means}</span>
-      {extra && <span className="k-sub-line k-alert-row">{extra}</span>}
     </>
   );
 }
@@ -240,7 +240,7 @@ function Headline({ t, h, group, help, live, pending, revised, locked }: { t: To
   const rows = measureRows(t, h);
   const cols: Column<MeasureRow>[] = [
     { key: "m", header: "Measure", rowHeader: true, wrap: true,
-      cell: (r) => <MeasureName r={r} help={help} extra={r.key === "p50" && !locked ? <BreadthAlertButton group={group} /> : undefined} /> },
+      cell: (r) => <MeasureName r={r} help={help} /> },
     { key: "now", header: shortDay(t.day), numeric: true, cell: (r) => <Parts parts={r.parts} of={(p) => figCell(p, p.now)} /> },
     { key: "prev", header: t.prev_day ? shortDay(t.prev_day) : "Day before", numeric: true, cell: (r) => <Parts parts={r.parts} of={(p) => figCell(p, p.before)} /> },
     { key: "chg", header: "Change", numeric: true, cell: (r) => <Changes parts={r.parts} /> },
@@ -249,7 +249,8 @@ function Headline({ t, h, group, help, live, pending, revised, locked }: { t: To
   ];
   return (
     <Card label={`Breadth on ${shortDay(t.day)}`} testId="breadth-today">
-      <CardHead title={latestDue(t.day, pending) ?? dailyTitle(shortDay(t.day), live)} />
+      {/* LIVE9A-016: the alert on the share above the 50-day average sits in the card's head, not inside one row (it made that row taller) */}
+      <CardHead title={latestDue(t.day, pending) ?? dailyTitle(shortDay(t.day), live)} actions={!locked ? <BreadthAlertButton group={group} /> : undefined} />
       <DataTable csv={`breadth ${t.day}`} stack label={`Breadth on ${shortDay(t.day)} against the day before`} columns={cols} rows={rows} rowKey={(r) => r.key} />
       <p className="k-note" data-testid="breadth-counted">{count(t.stocks.value)} stocks counted · {count(t.unch.value)} unchanged.</p>
       {/* DE-023: the correction is one short line with its details behind the (i), not a paragraph in the headline card */}
@@ -293,7 +294,7 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
           <LineChart lines={[{ values: h.ad_line, color: A, label: "A/D line", width: 2 }]} labels={labels} times={h.days} sync="breadth" ranges={false} table={false} height={200}
             format={fmtInt} ariaLabel={`Advance/decline line, ${labels[0]} to ${last}`} />
         </Box>
-        <Box title="Above the 50- and 200-day averages" info={help.ma} h={h} cols={[{ header: "Above 50-day", get: (i) => share(h.pct50[i]) }, { header: "Above 200-day", get: (i) => share(h.pct200[i]) }]} note={`Last ${last}`}>
+        <Box title="Share above averages" info={help.ma} h={h} cols={[{ header: "Above 50-day", get: (i) => share(h.pct50[i]) }, { header: "Above 200-day", get: (i) => share(h.pct200[i]) }]} note={`Last ${last}`}>
           <LineChart lines={[{ values: h.pct50, color: A, label: "Above 50-day", width: 2 }, { values: h.pct200, color: B, label: "Above 200-day", width: 2 }]} legend
             labels={labels} times={h.days} sync="breadth" ranges={false} table={false} height={200} format={fmtPct} axisFormat={(v) => `${Math.round(v)}%`} ariaLabel="Share of stocks above their 50- and 200-day averages" />
         </Box>

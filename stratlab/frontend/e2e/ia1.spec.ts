@@ -34,7 +34,8 @@ test("every page of the menu opens at its own address as the right tab of its en
     await page.goto(p.to);
     await expect(page.getByRole("heading", { level: 1 }).first(), p.to).toBeVisible({ timeout: 30_000 });
     await expect(page, `${p.to} stays at its address`).toHaveURL(new RegExp(`${p.to.replace(/[/]/g, "\\/")}(\\?.*)?$`));
-    if (group.pages.length > 1) {
+    // (updated on purpose, NAV3: More tools has no row of tabs; its breadcrumb menu lists its tools)
+    if (group.pages.length > 1 && !group.apart) {
       const tabs = page.getByTestId("hub-tabs");
       await expect(tabs, p.to).toHaveAttribute("aria-label", group.label);
       // (updated on purpose, R43: a tab may carry a shorter name where its entry's name says the rest, NavPage.tab, so the row of tabs
@@ -46,7 +47,7 @@ test("every page of the menu opens at its own address as the right tab of its en
   expect(errors).toEqual([]);
 });
 
-test("each space's Calendar entry opens the one Calendar pre-filtered for that space; All dates has every type, its filters and links", async ({ page }, info) => {
+test("the one Calendar entry opens All dates from every space's pages; All dates has every type, its filters and links", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   const errors = await open(page, "/calendar");
   const all = page.getByTestId("cal-all");
@@ -77,15 +78,16 @@ test("each space's Calendar entry opens the one Calendar pre-filtered for that s
   // a row opens its own page: an IPO's detail page
   await all.getByRole("link").first().click();
   await expect(page).toHaveURL(/\/invest\/ipos\/[^/]+$/);
-  // each space's menu entry: Trade on the market events, Invest on every date, Money on the person's own
-  for (const [space, label] of [["trade", "Trade"], ["invest", "Invest"], ["money", "Money"]] as const) {
+  // (updated on purpose, NAV3, CX-1: the Calendar was in each space's menu, pre-filtered; now one entry of the one menu, the same from every
+  // space's pages, opening All dates; the Trade and Money tabs are one tap from it)
+  for (const space of ["trade", "invest", "money"] as const) {
     await page.goto(NAV[space].home);
     if (phone) await page.getByRole("button", { name: "Open menu" }).click();
     const side = page.locator("aside.sidebar");
-    await expect(side.getByRole("group", { name: "Space" }).getByRole("button", { name: label })).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });
-    const cal = NAV[space].groups.find((g) => g.id === "calendar")!;
+    await expect(side.getByRole("link", { name: "Calendar", exact: true })).toHaveCount(1, { timeout: 30_000 });
+    const cal = NAV.invest.groups.find((g) => g.id === "calendar")!;
     await side.getByRole("link", { name: "Calendar", exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`${startOf(cal, space).replace(/[/]/g, "\\/")}$`));
+    await expect(page).toHaveURL(new RegExp(`${startOf(cal).replace(/[/]/g, "\\/")}$`));
     await expect(page.getByTestId("hub-tabs")).toHaveAttribute("aria-label", "Calendar");
   }
   expect(errors).toEqual([]);
@@ -98,7 +100,7 @@ test("Market today's Flows tab: the latest day's FII and DII figures as a table,
     await expect(page.getByTestId("hub-tabs")).toBeHidden({ timeout: 30_000 });
     await page.getByRole("navigation", { name: "Breadcrumb" }).locator(".k-crumb-btn").click();
     await page.getByRole("menuitem", { name: "Flows", exact: true }).click();
-  } else await page.getByRole("navigation", { name: "Market today" }).getByRole("link", { name: "Flows" }).click();
+  } else await page.getByRole("navigation", { name: "Markets" }).getByRole("link", { name: "Flows" }).click();          // (updated on purpose, NAV3: Market today is Markets)
   await expect(page).toHaveURL(/\/invest\/flows$/);
   await expect(page.getByRole("heading", { level: 1, name: "Flows" })).toBeVisible({ timeout: 30_000 });
   const latest = page.getByTestId("flows-latest");
@@ -115,8 +117,9 @@ test("Help lists every page by the name it had and where it is now, and the one 
   const places = page.getByTestId("help-places");
   await expect(places.getByRole("row")).toHaveCount(ALL_PAGES.length + 1, { timeout: 30_000 });
   await page.getByLabel("Narrow the pages and explanations").fill("screener");
-  await expect(places.getByRole("row", { name: /Screener/ })).toContainText("Invest › Find stocks › Figures");
-  await places.getByRole("link", { name: "Invest › Find stocks › Figures" }).click();
+  // (updated on purpose, NAV3: the entry is called Screener now, so "screener" matches its three tabs; Figures is the one that was named so)
+  await expect(places.getByRole("row", { name: /^Screener Invest › Screener › Figures/ })).toHaveCount(1);
+  await places.getByRole("link", { name: "Invest › Screener › Figures" }).click();
   await expect(page).toHaveURL(/\/research\/screens$/);
   expect(errors).toEqual([]);
 });

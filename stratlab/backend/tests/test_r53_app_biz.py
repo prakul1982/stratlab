@@ -19,10 +19,11 @@ def test_a_stored_year_to_date_figure_is_not_the_year_ago_month():
              "oct": _read("2026-11-01T13:24", "2026-10", 3519, 33103, "Total (in Nos) 3519 33103 4664 32069")}
     top = B.headline(B.series(reads))
     assert top["latest"]["value"] == 3519
-    assert top["change_year"] is None and top["year_ago"] is None
-    assert "89.4" not in (B.words(top) or "") and "down" not in (B.words(top) or "")
-    # nor is it drawn on the chart as Oct 2025
-    assert "2025-10" not in [p["period"] for p in top["points"]]
+    # (updated on purpose, LIVE9B-004: the row's own third column, 4,664, is the year-ago month: "On the year" is filled from it, never the 33,103)
+    assert top["change_year"] == -24.5 and top["year_ago"]["value"] == 4664
+    assert "89.4" not in (B.words(top) or "")
+    # nor is the year to date drawn on the chart as Oct 2025
+    assert [p["value"] for p in top["points"] if p["period"] == "2025-10"] == [4664]
     # the real year-ago month, once read, is used
     reads["oct"] = _read("2026-11-01T13:24", "2026-10", 3519, 4664, "Total (in Nos) 3519 33103 4664 32069", reader=B.READER)
     top = B.headline(B.series(reads))

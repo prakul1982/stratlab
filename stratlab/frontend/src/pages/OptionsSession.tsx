@@ -6,7 +6,7 @@ import { fmtDate, money, price, tzLabel, when } from "../lib/format";
 import { dayStat, upDown } from "../lib/tradeUi";
 import { HELP } from "../lib/help";
 import type { HeldGreeks, OptionSnapshot } from "../lib/types";
-import { atExpiry, costsLine, flatLine, STT_NOTE, legName, legRule, levelText, priceGrid, type HeldLeg } from "../lib/options";
+import { atExpiry, costsLine, flatLine, STT_NOTE, legName, legWords, levelText, priceGrid, type HeldLeg } from "../lib/options";
 import { ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
 import { ChartEmpty, LineChart } from "../components/Charts";
 import { Info } from "../components/ui";
@@ -146,7 +146,7 @@ export function OptionsSession() {
       <section className="k-card rules-strip" aria-label="Rules">
         <CardHead title="Rules" level={3} />
         <ul className="k-list">
-          <li>{s.legs.map((l) => `${l.side === "sell" ? "Sell" : "Buy"} ${legRule(l, s.offsetUnit)} ${l.opt}${l.lots > 1 ? ` × ${l.lots}` : ""}`).join(", ")}</li>
+          <li>{s.legs.map((l) => `${l.side === "sell" ? "Sell" : "Buy"} ${legWords(l, s.offsetUnit)}${l.lots > 1 ? ` × ${l.lots}` : ""}`).join(", ")}</li>
           {s.vix && <li data-testid="rule-vix">Enter only while India VIX is {s.vix.min && s.vix.max ? `between ${s.vix.min} and ${s.vix.max}` : s.vix.max ? `at or below ${s.vix.max}` : `at or above ${s.vix.min}`}</li>}
           <li>Enter {s.timing.entry}–{s.timing.lastEntry}, up to {s.timing.maxEntries} a day{s.timing.cooldown ? `, ${s.timing.cooldown} min apart` : ""}</li>
           <li>Square off {s.timing.squareoff}</li>

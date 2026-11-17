@@ -97,7 +97,9 @@ def changes(days: list[str], closes: list[float]) -> list[float | None]:
     out: list[float | None] = []
     for p in PERIODS:
         if p == "1d":
-            out.append(round((last / closes[-2] - 1) * 100, 2))
+            # LIVE9A-010: four places, so a stock down 0.004% is a faller here as in the breadth count (2 places made it "unchanged": the
+            # US map said 313 up, 182 down, 4 unchanged beside Mood's 313 / 183 / 3 for the same day)
+            out.append(round((last / closes[-2] - 1) * 100, 4))
         elif p == "ytd":
             out.append(since(f"{last_day.year - 1}-12-31"))
         else:
@@ -239,7 +241,8 @@ def view(region: str, universe: str | None = None, min_cap: float | None = None,
     if symbols is not None:
         want = list(dict.fromkeys(s for s in symbols if s))[:MAX_SYMBOLS]
     else:
-        want = breadth.members(group)
+        # LIVE9A-023: an exchange's placeholder symbol (NSE's DUMMY...) in a group's list is not a company ("1 of the 501 companies has no closes")
+        want = [s for s in breadth.members(group) if not str(s).upper().startswith("DUMMY")]
     rows, sectors = _facts(region)
     tiles = [tile(s, stocks[s], rows.get(s), sectors.get(s)) for s in want if s in stocks]
     if symbols is not None:

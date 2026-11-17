@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { eyebrowOf } from "../../lib/eyebrow";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { asOf, safeHref, fmtTime, IST, money, price } from "../../lib/format";
@@ -244,7 +245,7 @@ export function ClosingAuctionPage() {
 
   return (
     <div className="k-page cas-page">
-      <PageHeader eyebrow="Trade · F&O desk" title="Closing auction" asOf={v && (v.phase === "closed" || v.from_stored || !v.fresh) && v.day ? v.day : v?.as_of ?? v?.day}
+      <PageHeader eyebrow={eyebrowOf("/trade/closing-auction")} title="Closing auction" asOf={v && (v.phase === "closed" || v.from_stored || !v.fresh) && v.day ? v.day : v?.as_of ?? v?.day}
         lede="Since 3 Aug 2026, stocks with futures and options close through an auction from 15:15 to 15:35. Each stock's reference price, its indicative price through the auction and its final price, which is the official close. Facts, not advice." />
       {error ? <ErrorState title="The closing auction couldn't be read" action={{ label: "Try again", onClick: () => setAgain((x) => x + 1) }}>{error}</ErrorState>
         : !v ? <Card><Skeleton label="Reading the closing auction" /></Card> : (

@@ -929,12 +929,14 @@ class Job:
         check after a deploy that changed them (blog_research.GEN), and the brief posts are written again from their stored issues
         (blog.BRIEF_GEN): not at the next month's run, and not by hand. Remembered in memory once looked at, so a check with nothing
         to do reads nothing. Theme posts whose figures were worked out under older theme rules are worked out again from the theme's dive
-        (blog_research.refresh_theme_posts_if_due, lane upd1)."""
-        want = (blog.BRIEF_GEN, blog_research.GEN, tuple(blog_research.theme_stamp()))
+        (blog_research.refresh_theme_posts_if_due, lane upd1). Theme posts committed with a release are stored and published (blog2:
+        blog_research.seed_theme_posts)."""
+        want = (blog.BRIEF_GEN, blog_research.GEN, tuple(blog_research.theme_stamp()), blog_research.seed_mark())
         if self.last.get("blog-gen") == want:
             return
         try:
             blog_research.run_if_stale(now)
+            blog_research.seed_theme_posts(now)            # blog2: a theme post committed since the last run, without a GEN bump
             blog_research.refresh_theme_posts_if_due(now)
             if db.get_setting("blog:brief:gen") != str(blog.BRIEF_GEN):
                 issues = recent("market", "IN", INDEX_CAP) + recent("market", "US", INDEX_CAP)

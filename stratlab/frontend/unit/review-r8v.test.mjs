@@ -82,8 +82,9 @@ test("every landing address's raw h1 is the h1 the page draws there (R8V-008)", 
   const files = Object.fromEntries(pageFiles(template));
   // the home page (and /upgrade, /features, which are index.html; /plans has its page since DK-006): the tagline the landing page draws
   assert.equal(seo.pageMeta("/").heading, seo.TAGLINE);
-  assert.deepEqual(h1s(files["index.html"]), ["Test it, research it, track it."]);
-  assert.deepEqual(h1s(template), ["Test it, research it, track it."]);
+  // (updated on purpose, NAV3, CX-1: one promise in the hero, "Is your trading idea skill or luck?", not three jobs)
+  assert.deepEqual(h1s(files["index.html"]), ["Is your trading idea skill or luck?"]);
+  assert.deepEqual(h1s(template), ["Is your trading idea skill or luck?"]);
   for (const p of ["/upgrade", "/features", "/"]) assert.equal(seo.landingHeading(p), undefined, p);
   assert.equal(seo.landingHeading("/plans"), "Plans and prices");
   assert.deepEqual(h1s(files["plans/index.html"]), ["Plans and prices"]);
@@ -99,7 +100,7 @@ test("every landing address's raw h1 is the h1 the page draws there (R8V-008)", 
   const login = read("src/pages/Login.tsx");
   // the address's own heading is the hero's h1, the tagline above it (DI-033: it was drawn as the eyebrow)
   assert.match(login, /\? <h1 className="serif lp-h1 lp-own-h1">\{heading\}<\/h1>/);
-  assert.match(login, /<span className="eyebrow">\{heading \? <><em>Test<\/em> it, research it, track it\.<\/> :/);
+  assert.match(login, /<span className="eyebrow">\{heading \? <>Is your trading idea <em>skill<\/em> or luck\?<\/> :/);
   // (updated on purpose, LIVE7B-008: no sign-in dialog, so no panel prop)
   assert.match(read("src/visitor/VisitorApp.tsx"), /<Login section=\{view\.section\} heading=\{landingHeading\(pathname\)\} intro=\{landingIntro\(pathname\)\} plansOnly=\{isPlansPath\(pathname\)\} slim=\{slimOf\(pathname\) \?\? undefined\} \/>/);
   assert.match(read("src/styles.css"), /h1\.eyebrow \{ font-weight: 400; \}/);

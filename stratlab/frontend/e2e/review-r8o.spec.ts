@@ -84,6 +84,8 @@ test("R8O-002: Account says the day's fresh AI reads against the cap", async ({ 
 test("R8O-002: Plans lists the fresh AI reads a day, Pro with no cap", async ({ page }) => {
   const errors = await open(page, "/plans", visitor, { "stratlab.currency": "INR" });
   await expect(page.locator("#compare")).toBeVisible({ timeout: 30_000 });          // (R11: the comparison is open under the cards)
+  // (updated on purpose (nav3): 12 rows at a glance, every row of the full comparison one fold below them)
+  await page.locator("#compare summary", { hasText: "The full comparison, row by row" }).click();
   const row = page.getByRole("row", { name: /Fresh AI reads a day/ });
   await expect(row).toContainText("60", { timeout: 30_000 });
   await expect(row).toContainText("Unlimited");
@@ -154,7 +156,7 @@ test("R8O-009: a lazy page's tab has its title before its code arrives", async (
   const held = new Promise<void>((ok) => { release = ok; });
   await page.route(/\/assets\/Research-[A-Za-z0-9_-]+\.js$/, async (r) => { await held; return r.fallback(); });
   const errors = await open(page, "/research/rotation");
-  await expect(page).toHaveTitle("Sectors · Market today · StratLab", { timeout: 15_000 });          // IA-1: Market today's Sectors tab (was Sector rotation)
+  await expect(page).toHaveTitle("Sectors · Markets · StratLab", { timeout: 15_000 });          // (updated on purpose, NAV3: Market today is called Markets)          // IA-1: Market today's Sectors tab (was Sector rotation)
   release();
   expect(errors).toEqual([]);
 });

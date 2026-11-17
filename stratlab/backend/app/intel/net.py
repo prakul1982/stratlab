@@ -236,24 +236,31 @@ class SizedDict:
 
 
 class RateLimit:
-    """Token bucket: `per_minute` calls a minute, with short bursts up to `burst`."""
+    """Token bucket: `per_minute` calls a minute, with short bursts up to `burst`.
 
-    def __init__(self, per_minute: float, burst: int):
+    People's requests come first (rel1, CX1 problem 3): a request that finds the bucket empty may still take up to `reserve` turns
+    ahead, which the background jobs then wait out before their next turn. A job reading hundreds of companies in a row can no longer
+    leave a paying user's deep dive with "the source is busy", and with no requests about the jobs run exactly as before."""
+
+    def __init__(self, per_minute: float, burst: int, reserve: int | None = None):
         self.rate, self.cap = per_minute / 60.0, float(burst)
         self.tokens, self.at = float(burst), time.time()
+        self.reserve = (burst // 2 if burst >= 2 else 0) if reserve is None else max(0, int(reserve))
         self._lock = threading.Lock()
 
-    def take(self, max_wait: float = 8.0) -> bool:
+    def take(self, max_wait: float = 8.0, job: bool | None = None) -> bool:
+        """A turn, waiting up to `max_wait` seconds for one. `job`: whether a background job asks (by default, as in_job() says)."""
         deadline = time.time() + max_wait
+        floor = 1.0 if (in_job() if job is None else job) else 1.0 - self.reserve
         while True:
             with self._lock:
                 now = time.time()
                 self.tokens = min(self.cap, self.tokens + (now - self.at) * self.rate)
                 self.at = now
-                if self.tokens >= 1:
+                if self.tokens >= floor:
                     self.tokens -= 1
                     return True
-                wait = (1 - self.tokens) / self.rate
+                wait = (floor - self.tokens) / self.rate
             if time.time() + wait > deadline:
                 return False
             time.sleep(min(wait, 0.5))
@@ -268,6 +275,12 @@ _rate_wait: contextvars.ContextVar = contextvars.ContextVar("rate_wait", default
 
 def rate_wait() -> float:
     return _rate_wait.get()
+
+
+def in_job() -> bool:
+    """Whether this call is a background job's, not someone's request: a request's waits are REQUEST_WAIT (see RequestWaits),
+    or a longer wait a page asked for on purpose (with_rate_wait); a job's are JOB_WAIT."""
+    return _rate_wait.get() == JOB_WAIT
 
 
 def with_rate_wait(wait: float, fn):

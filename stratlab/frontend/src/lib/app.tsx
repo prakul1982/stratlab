@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { Session } from "@supabase/auth-js";
 import { api, ApiError, setApiHandlers, supabase } from "./api";
 import { clearLocalData } from "./localData";
-import { signOutHere } from "./signout";
+import { signOutHere, signingOutOnPurpose } from "./signout";
 import { clearSignInEnded, noteSignInEnded, noteSignInUnfinished } from "./signin";
 import type { Focus, Level, Market, Me, NotebookItem } from "./types";
 import { takeRef } from "./share";
@@ -183,6 +183,9 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
     } else check(0);
     const { data } = supabase.auth.onAuthStateChange((e, s) => {
       if (e === "SIGNED_OUT") { writeViewAs(null); clearLocalData(); }          // "View as" is the owner's, on this device: it doesn't outlive the sign-in
+      // signed out without anyone here asking (the saved sign-in left this browser mid-visit): the page says "You were signed out",
+      // never the first-visit "Sign in to see …" (rel1)
+      if (e === "SIGNED_OUT" && !signingOutOnPurpose()) noteSignInEnded();
       setSession(s);
       if (s) { setReady(true); clearSignInEnded(); }        // signed in again: a later sign-out is the person's own
     });

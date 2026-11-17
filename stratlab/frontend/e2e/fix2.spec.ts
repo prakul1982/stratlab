@@ -49,7 +49,7 @@ test("O5, O6: a brief's sections are tables, and the PDF button downloads the br
   const indices = pane.getByRole("table", { name: "Indices" });
   await expect(indices).toBeVisible();
   if (!phone) {
-    await expect(indices.locator("thead th")).toHaveText(["Index", "Close", "Day %", "From 52-week high"]);
+    await expect(indices.locator("thead th")).toHaveText(["Index", "Close", "Day %", "52-week high"])  /* (updated on purpose, LIVE9A-027) */;
     const first = indices.locator("tbody tr").first();
     await expect(first.locator("td").nth(0)).toHaveText(/^[\d,]+\.\d\d$/);
     await expect(first.locator("td").nth(1)).toHaveText(/^[▲▼] [+−]\d+\.\d\d%$|^– 0\.00%$/);            // an arrow and a sign

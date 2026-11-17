@@ -75,7 +75,7 @@ def indices(sec: dict, weekly: bool, high: dict | None = None) -> dict:
             continue
         rows.append([m.group(1), m.group(2), change_cell(_num(m.group(3)), tone="neutral" if "VIX" in m.group(1).upper() else "updown") if m.group(3) else "–",
                      _from_high((high or {}).get(m.group(1)))])
-    return _table(sec["title"], ["Index", "Close", "Week %" if weekly else "Day %", "From 52-week high"], "lrrr", rows)
+    return _table(sec["title"], ["Index", "Close", "Week %" if weekly else "Day %", "52-week high"], "lrrr", rows)      # LIVE9A-027: a short header that stays on one line on a phone
 
 
 def rotation(sec: dict) -> dict:

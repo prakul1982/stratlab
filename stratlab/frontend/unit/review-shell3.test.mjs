@@ -182,7 +182,7 @@ test("a signed-in visitor of a shared library page sees 'Open StratLab', not a s
   mem.set("sb-abc-auth-token", "{}");
   assert.equal(signedInHere(), true);
   const frame = read("src/components/PublicFrame.tsx");
-  assert.match(frame, /\{action \?\? \(signedInHere\(\) \? <OpenApp \/> : <a className="btn outline sm" href="\/" onPointerEnter=\{warmSignIn\} onFocus=\{warmSignIn\} onTouchStart=\{warmSignIn\} onClick=\{\(e\) => \{ e\.preventDefault\(\); void signIn\(\); \}\}>Sign in<\/a>\)\}/);
+  assert.match(frame, /\{action \?\? \(signedInHere\(\) \? <OpenApp \/> : <a className="btn outline sm" href="\/" onPointerEnter=\{warmSignIn\} onFocus=\{warmSignIn\} onTouchStart=\{warmSignIn\} onClick=\{\(e\) => \{ e\.preventDefault\(\); void startSignIn\(\); \}\}>Sign in<\/a>\)\}/);   // (updated on purpose: owner 16 Nov, startSignIn is Google's sign-in as before unless email sign-in is on, then the sign-in page with both)
   assert.match(frame, /<a className=\{className\} href="\/">Open StratLab<\/a>/);            // a whole page load: the app starts, not the visitor's landing page
   const lib = read("src/pages/PublicLibrary.tsx");
   // (PUB-1: the header's button is the small one, like the landing page's, the card's the full-size one)
@@ -233,9 +233,8 @@ test("moved addresses keep the query and hash; the space switch is buttons, not 
     assert.match(main, new RegExp(`path="${from}" element=\\{<Redirect to="[^"]+" />\\}`), from);
   }
   assert.doesNotMatch(main, /<Navigate to="/);
+  // (updated on purpose, NAV3: the space switch is gone, one menu for every page; each space's entries are a group named by the space)
   const shell = read("src/components/Shell.tsx");
-  assert.match(shell, /<div className="space-switch" role="group" aria-label="Space">/);
-  assert.match(shell, /<button key=\{v\} type="button" aria-pressed=\{space === v\}/);
-  assert.doesNotMatch(shell.slice(shell.indexOf("function SpaceSwitch")), /role="radio/);
-  assert.match(read("src/styles.css"), /\.space-switch button\[aria-pressed="true"\]/);
+  assert.doesNotMatch(shell, /space-switch|SpaceSwitch|role="radio/);
+  assert.match(shell, /className="side-section" role="group" aria-labelledby=\{`side-sec-\$\{sec\.space\}`\}/);
 });

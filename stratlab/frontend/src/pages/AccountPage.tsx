@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, supabase } from "../lib/api";
 import { leavePush } from "../lib/pwa";
-import { signOutHere } from "../lib/signout";
+import { markSignOutOnPurpose, signOutHere } from "../lib/signout";
+import { emailSignInOn } from "../lib/signin";
 import { useApp } from "../lib/app";
 import { download } from "../lib/share";
 import { dateOnly } from "../lib/format";
@@ -72,7 +73,7 @@ export function AccountPage() {
   };
   const everywhere = async () => {
     setBusy(true);
-    try { await leavePush(); const { error } = await supabase.auth.signOut({ scope: "global" }); if (error) throw error; } catch (e) { fail(e); setBusy(false); }
+    try { markSignOutOnPurpose(); await leavePush(); const { error } = await supabase.auth.signOut({ scope: "global" }); if (error) throw error; } catch (e) { fail(e); setBusy(false); }
   };
 
   const usage: [string, string][] = [
@@ -109,8 +110,8 @@ export function AccountPage() {
         <dl className="k-dl spread">
           {name && <div><dt>Name</dt><dd>{name}</dd></div>}
           <div><dt>Email</dt><dd>{me.email ?? session?.user.email ?? "–"}</dd></div>
-          {method && <div><dt>Signed in with</dt><dd>{method}{method === "Email link" && <span className="k-sub-line" data-testid="email-link-note">{EMAIL_LINK_NOTE}</span>}</dd></div>}
-          <div><dt>Plan</dt><dd>{planName}</dd></div>
+          {method && <div><dt>Signed in with</dt><dd>{method}{method === "Email link" && !emailSignInOn() && <span className="k-sub-line" data-testid="email-link-note">{EMAIL_LINK_NOTE}</span>}</dd></div>}
+          {/* the plan is named once on this page, on Plan and usage just below (LIVE9B-028: Profile, the card's pill and the sidebar said it three times) */}
         </dl>
       </Card>
 

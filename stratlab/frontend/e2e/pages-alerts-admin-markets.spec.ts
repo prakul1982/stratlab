@@ -303,7 +303,7 @@ test("market breadth: today's numbers, small charts, sectors, groups and ranges;
   await expect(today.locator(".k-delta").first()).toContainText(/[▲▼]/);
   const charts = page.getByTestId("breadth-charts");
   await expect(charts.getByRole("heading", { name: "Advance/decline line" })).toBeVisible();
-  for (const name of ["Above the 50- and 200-day averages", "New 52-week highs and lows", "McClellan oscillator", "Stocks up 4% or more and down 4% or more, each day",
+  for (const name of ["Share above averages" /* (updated on purpose, LIVE9A-016) */, "New 52-week highs and lows", "McClellan oscillator", "Stocks up 4% or more and down 4% or more, each day",
     "Sectors: share above the 50-day average", "Breadth thrust measure", "TRIN"]) await expect(charts.getByRole("heading", { name })).toBeVisible();
   // the index is its own small chart: no chart has a second scale
   await expect(charts.getByRole("heading", { name: /^NIFTY 500/ })).toBeVisible();
@@ -350,7 +350,7 @@ test("market breadth: today's numbers, small charts, sectors, groups and ranges;
 
   // a neighbouring tab of Market today (IA-1) and the Invest home lead here
   await page.goto("/research/rotation");
-  await tab(page, info.project.name === "phone", "Market today", "Breadth");
+  await tab(page, info.project.name === "phone", "Markets", "Breadth");          // (updated on purpose, NAV3: Market today is called Markets)
   await expect(page).toHaveURL(/\/invest\/breadth/);
   await page.goto("/invest");
   await expect(page.getByTestId("breadth-card")).toContainText("Above 50-day average");

@@ -1,0 +1,633 @@
+{
+ "adjacent_n": 1,
+ "as_of": "2026-11-16",
+ "basis": "Each company's latest full financial year ended March, in ₹ crore. Revenue, EBITDA margin (operating profit before depreciation as a share of revenue) and net margin (net profit as a share of revenue) are that year's; return on capital employed (ROCE) is the latest reported. Consolidated accounts where the company files them. Banks and lenders have no EBITDA margin or ROCE.",
+ "chain": {
+  "compared": [
+   "Fibre and cable manufacturing",
+   "Network equipment makers"
+  ],
+  "highest": "Fibre and cable manufacturing",
+  "line": "Among the 2 layers with at least 5 companies with the figure and one kind of business, median EBITDA margin is highest in Fibre and cable manufacturing (8.4%) and lowest in Network equipment makers (5.0%), a gap of 3.4 points; among the map's layers, the \"Other\" group left out. Shown, not ranked: Tower infrastructure (41.2%) and Telecom infrastructure services and EPC (4.1%), fewer than 5 companies with the figure; Mobile and broadband operators (51.1%), a different kind of business. Network equipment makers's companies together earn −16.7% of their revenue as EBITDA, against its median company's 5.0%, so its median is set by its larger companies.",
+  "lowest": "Network equipment makers",
+  "measure": "ebitda",
+  "unranked": [
+   {
+    "layer": "Tower infrastructure",
+    "why": "fewer than 5 companies with the figure"
+   },
+   {
+    "layer": "Mobile and broadband operators",
+    "why": "a different kind of business"
+   },
+   {
+    "layer": "Telecom infrastructure services and EPC",
+    "why": "fewer than 5 companies with the figure"
+   },
+   {
+    "layer": "Other telecom companies",
+    "why": "companies outside the map's layers"
+   }
+  ]
+ },
+ "lender": false,
+ "listed": 40,
+ "members": 34,
+ "notable": [
+  {
+   "from": -6.2,
+   "from_year": "Mar 2023",
+   "kind": "move",
+   "layer": "Network equipment makers",
+   "move": -10.6,
+   "n": 5,
+   "to": -16.8,
+   "to_year": "Mar 2026"
+  },
+  {
+   "from": 34.8,
+   "from_year": "Mar 2023",
+   "kind": "move",
+   "layer": "Tower infrastructure",
+   "move": 13.7,
+   "n": 3,
+   "to": 48.5,
+   "to_year": "Mar 2026"
+  }
+ ],
+ "page": "/themes/in/telecom",
+ "period": {
+  "n": 34,
+  "of": 34,
+  "year": "Mar 2026"
+ },
+ "read_on": "2026-11-16",
+ "region": "IN",
+ "rows": [
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Sterlite Technologies Limited",
+     "out": "",
+     "symbol": "STLTECH",
+     "unverified": false,
+     "what": "In July 2006, STL acquired the transmission line business of SIL to foray into the power transmission cables business",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "HFCL Limited",
+     "out": "",
+     "symbol": "HFCL",
+     "unverified": false,
+     "what": "HFCL Ltd (Himachal Futuristic Communications Limited) is a diverse telecom infrastructure enabler with active interest spanning telecom infrastructure development, system…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Orient Cables (India) Ltd",
+     "out": "",
+     "symbol": "ORIENTCABL",
+     "unverified": false,
+     "what": "Orient Cables is a cable and passive networking equipment manufacturer with nearly two decades of operating experience",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Birla Cable Ltd",
+     "out": "",
+     "symbol": "BIRLACABLE",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Aksh Optifibre Ltd",
+     "out": "",
+     "symbol": "AKSHOPTFBR",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tamil Nadu Telecommunications Ltd",
+     "out": "no revenue figure",
+     "symbol": "TNTELE",
+     "unverified": false,
+     "what": "Tamil Nadu Telecommunications Ltd was incorporated in 1988 to manufacture optical -fibre cables",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 8.4,
+   "ebitda_n": 5,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Fibre and cable manufacturing",
+   "listed": 6,
+   "n": 5,
+   "net": 2.2,
+   "net_n": 5,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 5.6,
+   "pb_n": 3,
+   "revenue": 11764.0,
+   "roce": 8.9,
+   "roce_n": 5,
+   "roe": 6.6,
+   "roe_n": 4,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Tejas Networks Limited",
+     "out": "",
+     "symbol": "TEJASNET",
+     "unverified": false,
+     "what": "Incorporated in 2000,Tejas Networks Ltd designs and manufactures wireline and wireless networking products, with a focus on technology, innovation and R&D",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "ITI Limited",
+     "out": "",
+     "symbol": "ITI",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Valiant Communications Ltd",
+     "out": "",
+     "symbol": "VALIANT",
+     "unverified": false,
+     "what": "Valiant Communications Ltd manufactures communication equipment, primarily for power utilities / other utilities and provides allied services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Umiya Buildcon Ltd",
+     "out": "",
+     "symbol": "UMIYA-MRO",
+     "unverified": false,
+     "what": "Umiya Buildcon Ltd is in the business of manufacture, supply, and distribution of Access and Networking equipment & Solutions",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Punjab Communications Ltd",
+     "out": "",
+     "symbol": "PUNJCOMMU",
+     "unverified": false,
+     "what": "Punjab Communications Ltd is in the business of telecom products manufacturing",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Telogica Ltd",
+     "out": "no revenue figure",
+     "symbol": "TELOGICA",
+     "unverified": false,
+     "what": "It trades in telecom equipment such as Spectrum Analyzers",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "ADC India Communications Ltd",
+     "out": "no revenue figure",
+     "symbol": "ADCINDIA",
+     "unverified": false,
+     "what": "ADC India Communications Ltd manufactures and trades Telecommunications & IT Networking products",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tikona Communication Ltd",
+     "out": "",
+     "symbol": "TIKONA",
+     "unverified": false,
+     "what": "Grand Foundry Ltd is engaged in the business of telecom and communication equipment",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 4.95,
+   "ebitda_n": 6,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Network equipment makers",
+   "listed": 8,
+   "n": 6,
+   "net": 7.55,
+   "net_n": 4,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 3.0,
+   "pb_n": 5,
+   "revenue": 3463.58,
+   "roce": 9.9,
+   "roce_n": 6,
+   "roe": -7.0,
+   "roe_n": 5,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Indus Towers Limited",
+     "out": "",
+     "symbol": "INDUSTOWER",
+     "unverified": false,
+     "what": "Indus Towers provides shared tower and related infrastructure services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Altius Telecom Infrastructure Trust",
+     "out": "",
+     "symbol": "ALTIUSINVIT",
+     "unverified": false,
+     "what": "Data Infrastructure Trust is enaged in the business to carry on the activities of an infrastructure investment trust, as permissible under the SEBI InvIT Regulations and to raise…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "GTL Infrastructure Ltd",
+     "out": "",
+     "symbol": "GTLINFRA",
+     "unverified": false,
+     "what": "It deploys, owns, manages telecom towers and communication structures that are shared by the Wireless Telecom Operators",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Suyog Telematics Ltd",
+     "out": "way of earning not shown",
+     "symbol": "SUYOG",
+     "unverified": false,
+     "what": "Suyog Telematics Limited is engaged primarily in the business of installing, commissioning and servicing of poles, towers and optical fibre cable (OFC ) systems, catering to the…",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 41.2,
+   "ebitda_n": 3,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Tower infrastructure",
+   "listed": 4,
+   "n": 3,
+   "net": 13.3,
+   "net_n": 2,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 4.1,
+   "pb_n": 2,
+   "revenue": 58030.0,
+   "roce": 14.05,
+   "roce_n": 2,
+   "roe": 13.6,
+   "roe_n": 2,
+   "scale": null,
+   "words": "Tower companies build and own sites and lease space to operators on long contracts."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Bharti Airtel Limited",
+     "out": "",
+     "symbol": "BHARTIARTL",
+     "unverified": false,
+     "what": "Segments & Presence Mobile, Broadband, DTH and Bank",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Vodafone Idea Limited",
+     "out": "",
+     "symbol": "IDEA",
+     "unverified": false,
+     "what": "Business Areas The company's business services include voice business/ services, broadband services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Jio Platforms Ltd",
+     "out": "",
+     "symbol": "JPL",
+     "unverified": false,
+     "what": "Incorporated in November 2019, JPL is the parent entity of RJIL. RIL holds 66.43% stake in JPL. The company has created an ecosystem, comprising networks, devices, applications…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bharti Hexacom Ltd",
+     "out": "",
+     "symbol": "BHARTIHEXA",
+     "unverified": false,
+     "what": "IIncorporated in 1995, Bharti Hexacom Ltd provides consumer mobile services, fixed- line telephone and broadband services in Rajasthan and Northeast telecom circles",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tata Teleservices (Maharashtra) Ltd",
+     "out": "",
+     "symbol": "TTML",
+     "unverified": false,
+     "what": "Tata Teleservices Ltd is engaged in the business of Wired and wireless telecommunication activities and holds a Unified License with Access Service Authorisation in Maharashtra…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Mahanagar Telephone Nigam Ltd",
+     "out": "",
+     "symbol": "MTNL",
+     "unverified": false,
+     "what": "Mahanagar Telephone Nigam Ltd is a Government of India-controlled telecom and infrastructure-asset company serving Delhi and Mumbai through landline, broadband/FTTH, mobile…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Quadrant Televentures Ltd",
+     "out": "no revenue figure",
+     "symbol": "QUADRANT",
+     "unverified": false,
+     "what": "Quadrant Televentures Ltd is in the business of providing unified telephony services",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "City Online Services Ltd",
+     "out": "",
+     "symbol": "CITYONLINE",
+     "unverified": false,
+     "what": "City Online Services Ltd is in the business of providing internet-based services",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 51.15,
+   "ebitda_n": 6,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Mobile and broadband operators",
+   "listed": 8,
+   "n": 7,
+   "net": 16.0,
+   "net_n": 5,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 9.85,
+   "pb_n": 2,
+   "revenue": 372361.72,
+   "roce": 14.85,
+   "roce_n": 6,
+   "roe": 20.3,
+   "roe_n": 3,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Tata Communications Limited",
+     "out": "",
+     "symbol": "TATACOMM",
+     "unverified": false,
+     "what": "It delivers managed solutions to multinational companies and service providers",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Reliance Communications Ltd",
+     "out": "",
+     "symbol": "RCOM",
+     "unverified": false,
+     "what": "Reliance Communications Ltd own and operate IP enabled connectivity infrastructure comprising of fibre optic cable systems",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Railtel Corporation of India Ltd",
+     "out": "no revenue figure",
+     "symbol": "RAILTEL",
+     "unverified": false,
+     "what": "RailTel was incorporated in 2000, with the objective of creating nationwide broadband and VPN services, telecom, and multimedia network, to modernize the train control operation…",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Route Mobile Limited",
+     "out": "",
+     "symbol": "ROUTE",
+     "unverified": false,
+     "what": "Route Mobile Limited is a cloud communications platform service provider catering to enterprises, OTT players, and mobile network operators (MNOs)",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 15.85,
+   "ebitda_n": 2,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Enterprise connectivity and messaging",
+   "listed": 4,
+   "n": 3,
+   "net": 4.9,
+   "net_n": 2,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 7.95,
+   "pb_n": 2,
+   "revenue": 29525.0,
+   "roce": 16.0,
+   "roce_n": 2,
+   "roe": 22.6,
+   "roe_n": 2,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "STL Networks Ltd",
+     "out": "",
+     "symbol": "STLNETWORK",
+     "unverified": false,
+     "what": "STL Networks Ltd is the new name for Invenia, a company recently demerged from Sterlite Technologies to focus on digital infrastructure and IT services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "GTL Ltd",
+     "out": "no revenue figure",
+     "symbol": "GTL",
+     "unverified": false,
+     "what": "GTL Ltd is in the business of providing telecom network services",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Uniinfo Telecom Services Ltd",
+     "out": "",
+     "symbol": "UNIINFO",
+     "unverified": false,
+     "what": "Uniinfo Telecom Services Ltd provides technical services relating to telecom network optimization, network planning, drive test, survey services, EV charging station…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Pace Digitek Ltd",
+     "out": "other business",
+     "symbol": "PACEDIGITK",
+     "unverified": false,
+     "what": "Pace Digitek provides solutions for telecom infra and solar industries",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Steelman Telecom Ltd",
+     "out": "",
+     "symbol": "STML",
+     "unverified": false,
+     "what": "It is engaged in Telecommunication Business and provides highly skilled services to telecom operators and OEMs",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 4.1,
+   "ebitda_n": 3,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Telecom infrastructure services and EPC",
+   "listed": 5,
+   "n": 3,
+   "net": -6.5,
+   "net_n": 3,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 2.3,
+   "pb_n": 3,
+   "revenue": 1232.52,
+   "roce": -0.8,
+   "roce_n": 3,
+   "roe": -11.3,
+   "roe_n": 3,
+   "scale": null,
+   "words": "These companies install, commission, maintain and optimise telecom networks, towers and related power systems for operators and equipment makers."
+  },
+  {
+   "adjacent": false,
+   "basis": "rest",
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Clenon Enterprises Ltd",
+     "out": "",
+     "symbol": "CLENON",
+     "unverified": false,
+     "what": "Clenon Enterprises Ltd is venturing into crude oil, water processing equipment, agro products, etc",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Nettlinx Ltd",
+     "out": "",
+     "symbol": "NETTLINX",
+     "unverified": false,
+     "what": "Nettlinx Ltd provides data voice and security and software development solutions",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Digital Fibre Infrastructure Trust",
+     "out": "",
+     "symbol": "DIGIFIBRE",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bondada Engineering Ltd",
+     "out": "",
+     "symbol": "BONDADA",
+     "unverified": false,
+     "what": "Bondada Engineering Limited provides engineering, procurement, and construction (EPC) services and operations and maintenance (O&M) services to companies operating in the telecom…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Optiemus Infracom Ltd",
+     "out": "",
+     "symbol": "OPTIEMUS",
+     "unverified": false,
+     "what": "The company manufactures mobile phones, hearables & wearables, telecom products",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 5.5,
+   "ebitda_n": 5,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Other telecom companies",
+   "listed": 5,
+   "n": 5,
+   "net": -1.5,
+   "net_n": 5,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": true,
+   "pb": 5.05,
+   "pb_n": 4,
+   "revenue": 23204.49,
+   "roce": 6.4,
+   "roce_n": 5,
+   "roe": 4.1,
+   "roe_n": 4,
+   "scale": null,
+   "words": ""
+  }
+ ],
+ "sector": "Telecom",
+ "stamp": [
+  62,
+  32,
+  3
+ ],
+ "theme": "Telecom",
+ "total": 40,
+ "unit": "₹ crore",
+ "unplaced": 0,
+ "v": 2,
+ "whole": false,
+ "window": {
+  "of": 40,
+  "shown": 40
+ }
+}

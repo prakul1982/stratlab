@@ -88,7 +88,9 @@ def test_intel_and_the_other_makers_are_back_with_the_makers_on_the_live_r53_sem
         assert got[s_] == MAKERS, s_
         r = row(out, s_)["refit"]
         assert r["from"] == EQUIP and r["to"] == MAKERS and "don't say it sells what “Chip equipment and subsystem suppliers” is" in r["why"]
-    assert {s for s in want if got.get(s) != want[s]} == {"INTC", "AAOI", "NLST", "LASR", "LEDS"}
+    # (updated on purpose, r60: SunHydrogen, "hydrogen panels" filed under semiconductors, is screened out of the theme as another business,
+    # so it is in no layer)
+    assert {s for s in want if got.get(s) != want[s]} == {"INTC", "AAOI", "NLST", "LASR", "LEDS", "HYSR"} and "HYSR" not in got
     # the equipment makers whose words say it stay: KLA "makes wafer fab equipment"
     assert got["KLAC"] == EQUIP and got["AMAT"] == EQUIP
 
@@ -124,7 +126,8 @@ def test_without_a_move_to_judge_the_live_placement_stands():
     """The check reads only companies new to a layer: without the stored log's moves (and with the previous version that already holds
     them), the live R53 Semiconductors and Medical devices placements are replayed exactly, every company in its live layer."""
     for key in ("semis", "meddev"):
-        assert layers(replay(key, moved=False)["value_chain"]) == live(key), key
+        # (updated on purpose, r60: SunHydrogen screened out of Semiconductors as another business, in no layer)
+        assert layers(replay(key, moved=False)["value_chain"]) == {s: x for s, x in live(key).items() if s != "HYSR"}, key
 
 
 def test_what_a_layer_sells_is_read_in_a_company_s_own_words_of_what_it_sells():
@@ -338,7 +341,7 @@ def test_deck_check_finds_moves_without_a_reason_scope_layers_counted_core_and_l
 def test_the_rules_version_and_the_new_inputs():
     from app import deck as K
     from app.intel import theme_routes as TR
-    assert B.RULES == 62 and TR.PLACE_CARRY[62] == 61 and TR.PLACE_CARRY[61] == 60 and TR.PLACE_CARRY[60] == 59 and TR.PLACE_CARRY[59] == 58 and TR.PLACE_CARRY[58] == 57 and TR.PLACE_CARRY[57] == 56 and TR.PLACE_CARRY[56] == 55 and TR.PLACE_CARRY[55] == 54 and TR.PLACE_CARRY[54] == 53 and TR.PLACE_CARRY[53] == 52 and K.THEME_DECK_VERSION == 72 and D.DIVE_TEXT == 32          # r59 (R59): RULES 62, PLACE_CARRY[62] = 61, EARLIER_MAX 17, deck 72, dive text 32 (updated on purpose); r582 (R58.2): RULES 61, PLACE_CARRY[61] = 60, EARLIER_MAX 16, deck 71, dive text 31 (updated on purpose); r581 (R58.1): RULES 60, PLACE_CARRY[60] = 59, EARLIER_MAX 15, deck 70, dive text 30 (updated on purpose); r58 (R58): RULES 59, PLACE_CARRY[59] = 58, EARLIER_MAX 14, deck 69, dive text 29 (updated on purpose); r572 (R57.2): RULES 58, PLACE_CARRY[58] = 57, EARLIER_MAX 13, deck 68, dive text 28 (updated on purpose); r571 (R57.1): RULES 57, PLACE_CARRY[57] = 56 (updated on purpose); p57 (R56 review): RULES 56, PLACE_CARRY[56] = 55, deck 67, dive text 27 (updated on purpose); t56 (R55 review): RULES 55, PLACE_CARRY[55] = 54, deck 66, dive text 26 (updated on purpose); v55 (R55 review): RULES 54, PLACE_CARRY[54] = 53, deck 65, dive text 25 (updated on purpose)
+    assert B.RULES == 63 and TR.PLACE_CARRY[63] == 62 and TR.PLACE_CARRY[62] == 61 and TR.PLACE_CARRY[61] == 60 and TR.PLACE_CARRY[60] == 59 and TR.PLACE_CARRY[59] == 58 and TR.PLACE_CARRY[58] == 57 and TR.PLACE_CARRY[57] == 56 and TR.PLACE_CARRY[56] == 55 and TR.PLACE_CARRY[55] == 54 and TR.PLACE_CARRY[54] == 53 and TR.PLACE_CARRY[53] == 52 and K.THEME_DECK_VERSION == 73 and D.DIVE_TEXT == 33          # r60 (R60): RULES 63, PLACE_CARRY[63] = 62, EARLIER_MAX 18, deck 73, dive text 33 (updated on purpose); r59 (R59): RULES 62, PLACE_CARRY[62] = 61, EARLIER_MAX 17, deck 72, dive text 32 (updated on purpose); r582 (R58.2): RULES 61, PLACE_CARRY[61] = 60, EARLIER_MAX 16, deck 71, dive text 31 (updated on purpose); r581 (R58.1): RULES 60, PLACE_CARRY[60] = 59, EARLIER_MAX 15, deck 70, dive text 30 (updated on purpose); r58 (R58): RULES 59, PLACE_CARRY[59] = 58, EARLIER_MAX 14, deck 69, dive text 29 (updated on purpose); r572 (R57.2): RULES 58, PLACE_CARRY[58] = 57, EARLIER_MAX 13, deck 68, dive text 28 (updated on purpose); r571 (R57.1): RULES 57, PLACE_CARRY[57] = 56 (updated on purpose); p57 (R56 review): RULES 56, PLACE_CARRY[56] = 55, deck 67, dive text 27 (updated on purpose); t56 (R55 review): RULES 55, PLACE_CARRY[55] = 54, deck 66, dive text 26 (updated on purpose); v55 (R55 review): RULES 54, PLACE_CARRY[54] = 53, deck 65, dive text 25 (updated on purpose)
     assert "moved_before" in B.place_rest.__code__.co_varnames
     assert re.search(r'"moved_before": moved_before\(r, theme, m\)', pathlib.Path(TR.__file__).read_text())
 
@@ -348,4 +351,5 @@ def test_the_live_r53_inputs_replay_exactly_with_the_check_off(key, monkeypatch)
     """The inputs replay the live placement exactly (every company in its live layer) once the check is off: the replays above differ from
     live by the check alone."""
     monkeypatch.setattr(B, "sold_what", lambda out, *a, **k: out)
-    assert layers(replay(key)["value_chain"]) == live(key)
+    # (updated on purpose, r60: SunHydrogen screened out of Semiconductors as another business, in no layer)
+    assert layers(replay(key)["value_chain"]) == {s: x for s, x in live(key).items() if s != "HYSR"}

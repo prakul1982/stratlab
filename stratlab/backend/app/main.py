@@ -80,7 +80,7 @@ from .data import DataError, Registry, split_id
 from .data import calendar as trading_calendar
 from .intel import routes as research_routes
 from .intel.company import Research, at_live_price
-from .intel.net import RequestWaits, TTLCache
+from .intel.net import RequestWaits, TTLCache, with_rate_wait
 from .intel import filings, sec, theme_routes
 from .intel.sec import SEC
 from .intel.us_calendar import USCalendar
@@ -1154,7 +1154,12 @@ def my_usage(profile=Depends(current_profile)):
     from . import computed
     from .plans import refreshes_allowed
     word = computed.plan_word(profile)
-    return ok({"plan": PLANS[plan]["name"], "rows": rows, "refresh_off": word != "admin" and not refreshes_allowed(word, profile)})
+    # LIVE9A-003: a Free account made before the smaller Free plan keeps the old counts until a date (plans.free_grace_until); every note that
+    # shows such a count ("60 left today", the decks left) says until when and what Free has after, so it never reads as Free's own limit
+    from .plans import free_grace_until
+    end = free_grace_until(profile) if plan == "free" else None
+    grace = {"until": end.isoformat(), "reads_after": PLANS["free"]["ai_reads_per_day"], "decks_after": PLANS["free"]["decks_per_month"]} if end else None
+    return ok({"plan": PLANS[plan]["name"], "rows": rows, "refresh_off": word != "admin" and not refreshes_allowed(word, profile), "grace": grace})
 
 
 _usage_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="usage-counts")
@@ -2463,6 +2468,18 @@ def rotation_after_close(now: datetime | None = None) -> list[str]:
     return done
 
 
+def rotation_kept(region: str, last_key: str, now: datetime | None = None) -> dict | None:
+    """The kept rotation chart when it is at the market's latest close and of this version, without its name and market; else None."""
+    try:
+        kept = db.json_value(db.get_setting(last_key), {})
+        day = stock_pages.last_close(region, now)[0].isoformat()
+    except Exception:
+        return None
+    if not isinstance(kept, dict) or not kept.get("rows") or kept.get("v") != rotation.VERSION or str(kept.get("as_of") or "")[:10] < day:
+        return None
+    return {k: v for k, v in kept.items() if k not in ("name", "market")}
+
+
 @app.get("/research/rotation")
 def sector_rotation(region: str = "IN", set: str = "sectors", interval: str = "weekly", tail: int = 5,
                     profile=Depends(current_profile)):
@@ -2492,6 +2509,13 @@ def sector_rotation(region: str = "IN", set: str = "sectors", interval: str = "w
             err(400, "empty", "Pick a group with at least two stocks, or star more companies for your watchlist.")
     key = ("rotation", region, set, tuple(_member_key(m) for m in members or []), interval, tail)
     out = _results.get(key)
+    if out is None and shared:
+        # the copy the price job keeps after each close is already at the latest completed session (a session still trading is left out of
+        # the chart either way): served at once instead of reading every member's prices again (rel1, LIVE9A-017: 15 s, and "Still
+        # working" 9 h after the close)
+        out = rotation_kept(region, last_key)
+        if out is not None:
+            _results.set(key, out, 600)
     if out is None:
         try:
             out = rotation_run(region, set, members, interval, tail, name if shared else None)
@@ -2918,6 +2942,10 @@ def deep_base_us(sym: str, years: int = 2) -> dict:
     """A US company from its SEC filings: numbers, industry and filings, with ratios from today's share price."""
     p = sec.with_fx(dict(research_routes.source_call(lambda: sec_feed.company(sym))), usd_per)
     m = us_price_ratios(p, sym)
+    # the market trading: the quote is a live price; the valuation stands on the last close, as on the public page (rel1)
+    in_session = bool(m.get("price") and m.get("prev_close") and not sec.non_common(sym) and research_hub_market_open("US"))
+    if in_session:
+        p["ratios"] = sec.ratios(p, m["prev_close"], m.get("high52"), m.get("low52"))
     try:
         wiki = research_hub.wiki.company(p.get("name") or sym) or {}
         p["about"] = wiki.get("extract") or ""
@@ -2931,8 +2959,17 @@ def deep_base_us(sym: str, years: int = 2) -> dict:
     cut = (datetime.now(IST).date() - timedelta(days=366 * years)).isoformat()
     docs = [d for d in p.get("documents") or [] if d["at"][:10] >= cut]
     trend, why = price_status(sym, "US")
-    return {"p": p, "docs": docs, "doc_note": None, "filings": None, "trend": trend, "trend_why": why,
+    return {"p": p, "docs": docs, "doc_note": None, "filings": None, "trend": trend, "trend_why": why, "in_session": in_session,
             "quote": {k: m.get(k) for k in ("price", "prev_close", "high", "low", "at")} if m.get("price") else None}
+
+
+def research_hub_market_open(region: str) -> bool:
+    """Whether the market is trading now (its hours, on a trading day)."""
+    from .intel.company import market_open
+    try:
+        return market_open(region)
+    except Exception:
+        return False
 
 
 def usd_per(cur: str) -> float | None:
@@ -2953,6 +2990,10 @@ def deep_years(years: int) -> int:
 BSE_WAIT = "Documents are not available from BSE right now (it is turning requests away). Try again later."
 
 
+DEEP_WAIT = 6.0
+DEEP_BUSY = ("The company's figures are being read: the source is taking requests slowly just now. This page asks again on its own "
+             "in a few seconds, and this deep dive isn't counted until it opens.")
+
 _deep_pool = ThreadPoolExecutor(max_workers=12, thread_name_prefix="deep-dive")   # the deep dive's sources, read side by side
 
 
@@ -2968,7 +3009,17 @@ def deep_base(sym: str, region: str = "IN", years: int = 2, trades: bool = True)
              "trend": _deep_pool.submit(price_status, sym)}
     if trades:
         ahead["insider"] = _deep_pool.submit(lambda: _quiet(lambda: filings_feed.insider_trades(sym)))
-    p = with_industry(sym, research_routes.source_call(lambda: research_hub.screener.company(code or sym)))
+    # a person's deep dive waits its turn at the fundamentals source a little longer than a page does (DEEP_WAIT), ahead of the
+    # background jobs (net.RateLimit.reserve); still busy, the company's last whole read stands in (Screener.kept), and with none
+    # the answer says the page asks again on its own, never a bare error (rel1, CX1 problem 3)
+    def read():
+        try:
+            return with_rate_wait(DEEP_WAIT, lambda: research_hub.screener.company(code or sym))()
+        except SourceError as e:
+            if getattr(e, "busy", False):
+                err(503, "source_busy", DEEP_BUSY)
+            raise
+    p = with_industry(sym, research_routes.source_call(read))
     try:
         p = research_hub.screener.with_cash(p)           # cash on hand, for enterprise value
     except Exception:
@@ -3038,7 +3089,7 @@ def price_status(sym: str, market: str = "IN") -> tuple[dict | None, str | None]
     except Exception:
         return None, "error"
     if got:
-        return got, None
+        return with_session(got, bars, market), None
     if len(bars) >= 30:
         return None, None
     # under 30 candles: a new listing, or an old share that trades on a handful of days a year (the broker's candles
@@ -3048,6 +3099,23 @@ def price_status(sym: str, market: str = "IN") -> tuple[dict | None, str | None]
         return None, "new" if (datetime.now(IST).date() - first).days <= 60 else "sparse"
     except (TypeError, ValueError):
         return None, "new"
+
+
+def with_session(trend: dict, bars: list[dict], market: str, now: datetime | None = None) -> dict:
+    """The trend, and when its last daily candle is a session still trading (the market open, the candle dated after the latest
+    completed session), that candle's price as `live` and the session before it as the close (`close`, `close_t`): a live price is
+    never labelled "last close" (rel1, CX1 problem 9: the AAPL deep dive said "Last close as of 16 Nov" at an intraday price, P/E 39.2,
+    while the public page said 13 Nov close, P/E 39.7)."""
+    from . import last_session
+    try:
+        done = last_session.latest_day(market, now)
+    except Exception:
+        return trend
+    day = str((bars[-1] if bars else {}).get("t") or "")[:10]
+    if not day or day <= done or len(bars) < 2:
+        return trend
+    prev = bars[-2]
+    return {**trend, "live": {"price": bars[-1].get("c"), "day": day}, "close": prev.get("c"), "close_t": prev.get("t")}
 
 
 def price_trend(sym: str, market: str = "IN") -> dict | None:
@@ -3095,6 +3163,30 @@ def pre_issue_cap(snap: dict, p: dict, listed_on: str | None) -> dict:
     return {**snap, "market_cap_cr": cap} if cap and balance_before(p, listed_on) else snap
 
 
+def close_price(trend: dict | None):
+    """The last close a page's valuation stands on: the session before one still trading, else the last candle's."""
+    t = trend or {}
+    return t.get("close") if t.get("live") else t.get("price")
+
+
+def close_day(trend: dict | None) -> str | None:
+    """The day of that close, for "Last close as of …"."""
+    t = trend or {}
+    return candle_day(t.get("close_t") if t.get("live") else t.get("t"))
+
+
+def deep_live_price(base: dict) -> dict | None:
+    """{"price", "at"} while the company's market is trading: the quote's own price and time when there is one (a US
+    company's), else the live candle's price and when it was read."""
+    t = base.get("trend") or {}
+    q = base.get("quote") or {}
+    if base.get("in_session") and q.get("price"):
+        return {"price": q["price"], "at": q.get("at")}
+    if t.get("live") and t["live"].get("price"):
+        return {"price": t["live"]["price"], "at": datetime.now(timezone.utc).isoformat(timespec="minutes")}
+    return None
+
+
 def deep_view(sym: str, base: dict) -> dict:
     p = base["p"]
     us = p.get("region") == "US"
@@ -3114,7 +3206,7 @@ def deep_view(sym: str, base: dict) -> dict:
     if not us:      # at the last close, as on the company page (the source's own ratios are at its once-a-day price)
         # a share listed in the last weeks (its candles are too few to scan): the source's value on the shares in issue now, not the old balance sheet's
         snap = pre_issue_cap(snap, p, (datetime.now(IST).date() - timedelta(days=60)).isoformat() if base.get("trend_why") == "new" else None)
-        snap = at_live_price(snap, (base.get("trend") or {}).get("price"), sym, p.get("fetched_at"))
+        snap = at_live_price(snap, close_price(base.get("trend")), sym, p.get("fetched_at"))
         # the public page's market value check: a failed value is blank here too, with the P/E, the deck's tile, the
         # valuation and the P/E worked out from it (R10C-001)
         snap = stock_pages.india_snap_checked(snap, p)
@@ -3129,7 +3221,7 @@ def deep_view(sym: str, base: dict) -> dict:
     snap = {**snap, "div_yield": dy}
     return {"symbol": sym, "region": "US" if us else "IN", "currency": "USD" if us else "INR", "source_url": p.get("url"),
             "reporting_currency": p.get("currency") or ("USD" if us else "INR"),
-            "name": p.get("name") or sym, "about": (p.get("about") or "")[:1200], "numbers": nums,
+            "name": (stock_pages.proper_name(p.get("name")) if us else p.get("name")) or sym, "about": (p.get("about") or "")[:1200], "numbers": nums,
             "snapshot": {**{k: snap.get(k) for k in ("market_cap_cr", "price", "pe", "pe_why", "pb", "roce", "roe", "debt_equity", "div_yield")},
                          "cap_note": stock_pages.CAP_UNAVAILABLE if snap.get("cap_problem") else None},
             "industry_measures": industry.measures(p, sym),
@@ -3138,7 +3230,11 @@ def deep_view(sym: str, base: dict) -> dict:
             "card": card_view, "card_stale": not deepdive.fresh(card), "trend": base["trend"], "filings": base["filings"],
             "checklist": checklist.evaluate(p, nums, base["filings"], base["trend"], card_view, None if us else sym, base.get("trades")),
             "ai": True, "report_card": True, "as_of": datetime.now(timezone.utc).isoformat(timespec="minutes"),
-            "numbers_at": p.get("fetched_at"), "price_at": candle_day((base["trend"] or {}).get("t")),
+            "numbers_at": p.get("fetched_at"), "price_at": close_day(base["trend"]),
+            # a session still trading: its price, labelled live with the time it was read; the figures above stay on the close
+            "live": deep_live_price(base),
+            # the latest read couldn't be had (the source busy): these are the company's last whole read, from numbers_at
+            "figures_kept": bool(p.get("kept_busy")),
             "calls": sum(d["kind"] == ("earnings_release" if us else "transcript") for d in base["docs"])}
 
 
@@ -3506,7 +3602,7 @@ def with_sectors(items: list[dict], known: dict[str, str] | None = None) -> list
         f = todo.get(i["symbol"])
         got = f.result() if f is not None and f.done() and not f.exception() else None
         out.append({**i, "sector": known.get(i["symbol"]) or holdings.sector_label(investor.sector_of("IN", i["symbol"]), got)})
-    return out
+    return _screen_sectors(out)
 
 
 connect_routes.setup(throttle)
@@ -3659,6 +3755,22 @@ def _full_names(items: list[dict]) -> list[dict]:
     return out
 
 
+def _screen_sectors(items: list[dict]) -> list[dict]:
+    """Each Indian stock in the sector the stock screens give it (one list for every page: the screens' index classifies every listed
+    company), in place of the label saved when it was imported (LIVE9B-005: 60 of 100 holdings "Not classified", others under a sector
+    index's name such as "Infrastructure" or "Capital Markets" that the screens never use). A stock the index doesn't hold keeps its own."""
+    ind = [i for i in items if holdings.market_of(i) == "IN" and not i.get("kind")]
+    if not ind:
+        return items
+    try:
+        from . import screens
+        known = {r["symbol"]: r["sector"] for r in screens.load_index("IN").get("rows") or [] if r.get("sector")}
+    except Exception:
+        return items
+    return [{**i, "sector": known[i["symbol"]]} if holdings.market_of(i) == "IN" and not i.get("kind") and known.get(i["symbol"]) else i
+            for i in items]
+
+
 def holdings_view(profile) -> dict:
     """The person's holdings at today's prices. The prices are read once and shared for a few seconds, so My space, Money,
     Holdings and the net worth add up to the same rupees when opened one after another."""
@@ -3678,7 +3790,7 @@ def holdings_view(profile) -> dict:
                     _PRICED.pop(k, None)
             _PRICED[key] = (time.monotonic(), got)
     live, us_quotes = got["live"], got["us_quotes"]
-    return {**holdings.view(_full_names(_etf_named(h["items"])), got["quotes"], us_quotes, got["rate"]), "source": h["source"], "updated_at": h["updated_at"],
+    return {**holdings.view(_screen_sectors(_full_names(_etf_named(h["items"]))), got["quotes"], us_quotes, got["rate"]), "source": h["source"], "updated_at": h["updated_at"],
             "prices": live or (not ind and bool(us_quotes)), "prices_at": got["prices_at"], "us_prices_at": got.get("us_prices_at"), "closes": got.get("closes"),
             "us_prices": bool(us_quotes) if us else None, "usd_inr_at": got.get("rate_at") if us and got["rate"] else None,
             "limit": holdings_limit(profile["_plan"]), "facts_max": HOLDINGS_FACTS}
@@ -4771,6 +4883,9 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
             checks["annual_filed"] = p["annual_filed"]      # when its newest annual report was filed (stock_pages.annual_behind)
             if p.get("annual_form"):
                 checks["annual_form"] = p["annual_form"]    # R46: which report (10-K, 20-F, 40-F), for a theme's figure source record
+        if "revenue_basis" in p:
+            # r60b: the lines the latest year's revenue is read from (sec.revenue_parts); {} when the build read no revenue for that year
+            checks["revenue_basis"] = p["revenue_basis"] if isinstance(p["revenue_basis"], dict) else {}
         if close and not sec.non_common(sym):
             # one P/E definition, the app's: the close over earnings per share for the last four reported quarters,
             # else the latest year's, said so (R7V-002, R7V-003); the earnings per share itself, for the app's page

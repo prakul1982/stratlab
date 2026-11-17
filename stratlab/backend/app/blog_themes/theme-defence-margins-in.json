@@ -1,0 +1,677 @@
+{
+ "adjacent_n": 0,
+ "as_of": "2026-11-16",
+ "basis": "Each company's latest full financial year ended March, in ₹ crore. Revenue, EBITDA margin (operating profit before depreciation as a share of revenue) and net margin (net profit as a share of revenue) are that year's; return on capital employed (ROCE) is the latest reported. Consolidated accounts where the company files them. Banks and lenders have no EBITDA margin or ROCE.",
+ "chain": {
+  "compared": [],
+  "highest": null,
+  "line": "Median EBITDA margin by layer: Electronics and sub-systems 27.1%; Explosives and missile makers 9.2% (5 of 6 companies); Precision aerospace components and drones 13.0%. Capital for each unit of revenue (book equity plus debt over revenue, a proxy for capital needs) differs more than threefold between these layers, so they are not ranked.",
+  "lowest": null,
+  "measure": "ebitda",
+  "unranked": null
+ },
+ "lender": false,
+ "listed": 43,
+ "members": 43,
+ "notable": [
+  {
+   "from": 22.2,
+   "from_year": "Mar 2023",
+   "kind": "move",
+   "layer": "Electronics and sub-systems",
+   "move": 6.9,
+   "n": 7,
+   "to": 29.1,
+   "to_year": "Mar 2026"
+  },
+  {
+   "from": 15.5,
+   "from_year": "Mar 2023",
+   "kind": "move",
+   "layer": "Explosives and missile makers",
+   "move": 7.2,
+   "n": 6,
+   "to": 22.7,
+   "to_year": "Mar 2026"
+  },
+  {
+   "from": 9.7,
+   "from_year": "Mar 2023",
+   "kind": "move",
+   "layer": "Naval shipbuilding",
+   "move": 5.5,
+   "n": 4,
+   "to": 15.2,
+   "to_year": "Mar 2026"
+  }
+ ],
+ "page": "/themes/in/defence",
+ "period": {
+  "n": 43,
+  "of": 43,
+  "year": "Mar 2026"
+ },
+ "read_on": "2026-11-16",
+ "region": "IN",
+ "rows": [
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Data Patterns (India) Limited",
+     "out": "",
+     "symbol": "DATAPATTNS",
+     "unverified": false,
+     "what": "It is among the few vertically integrated defence and aerospace electronics solutions providers catering to the indigenously developed defence products industry",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Astra Microwave Products Limited",
+     "out": "",
+     "symbol": "ASTRAMICRO",
+     "unverified": false,
+     "what": "Astra Microwave Products is engaged in the business of design, development and manufacture of sub-systems for Radio Frequency and microwave systems used in defense, space…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Apollo Micro Systems Limited",
+     "out": "",
+     "symbol": "APOLLO",
+     "unverified": false,
+     "what": "Apollo Micro Systems Ltd is a pioneer in design, development, assembly and testing of electronic and electro mechanical solutions",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Paras Defence and Space Technologies Limited",
+     "out": "",
+     "symbol": "PARAS",
+     "unverified": false,
+     "what": "Paras Defence and Space Technologies (PDST) is an Private sector company primarily engaged in the designing, developing, manufacturing, and testing of a variety of defence and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bharat Electronics Ltd",
+     "out": "",
+     "symbol": "BEL",
+     "unverified": false,
+     "what": "Bharat Electronics Ltd manufactures and supplies electronic equipment and systems to the defence sector",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tonbo Imaging India Ltd",
+     "out": "",
+     "symbol": "TONBO",
+     "unverified": false,
+     "what": "Tonbo Imaging India Ltd is a defence- electronics company designing electro- optical and infrared sensing, processing, communication and guidance systems for surveillance…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Avantel Ltd",
+     "out": "",
+     "symbol": "AVANTEL",
+     "unverified": false,
+     "what": "Avantel Limited is engaged in the business of designing, developing and maintaining wireless and satellite communication products, defence electronics, radar systems and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "DCX Systems Ltd",
+     "out": "way of earning not shown",
+     "symbol": "DCXINDIA",
+     "unverified": false,
+     "what": "Dcx Systems Ltd is in the business of System Integration and Cable & Wire Harnessing",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kavveri Defence & Wireless Technologies Ltd",
+     "out": "",
+     "symbol": "KAVDEFENCE",
+     "unverified": false,
+     "what": "Kavveri Defence & Wireless Technologies Ltd is engaged in the design and development, and manufacture of RF products and Antennas",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 27.05,
+   "ebitda_n": 8,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Electronics and sub-systems",
+   "listed": 9,
+   "n": 8,
+   "net": 16.6,
+   "net_n": 7,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 11.9,
+   "pb_n": 7,
+   "revenue": 31671.42,
+   "roce": 15.85,
+   "roce_n": 8,
+   "roe": 12.2,
+   "roe_n": 8,
+   "scale": null,
+   "words": "These firms build radars, avionics, electronic warfare units and boards that platform builders integrate."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Bharat Dynamics Limited",
+     "out": "",
+     "symbol": "BDL",
+     "unverified": false,
+     "what": "It is engaged in the manufacturing of guided missiles and allied defence equipments",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Solar Industries India Limited",
+     "out": "",
+     "symbol": "SOLARINDS",
+     "unverified": false,
+     "what": "Solar Industries is one of the largest domestic manufacturers of bulk and cartridge explosives, detonators, detonating cords and components which find applications in the mining…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Premier Explosives Ltd",
+     "out": "",
+     "symbol": "PREMEXPLN",
+     "unverified": false,
+     "what": "Premier Explosives Limited is engaged in the manufacturing of industrial explosives and detonators",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Keltech Energies Ltd",
+     "out": "",
+     "symbol": "KELENRG",
+     "unverified": false,
+     "what": "Keltech Energies Ltd manufactures explosives and perlite related products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Beezaasan Explotech Ltd",
+     "out": "",
+     "symbol": "BEEZAASAN",
+     "unverified": false,
+     "what": "Incorporated in August 2013, Beezaasan Explotech Limited manufactures and supplies a comprehensive range of explosives and explosive accessories",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "GOCL Corporation Ltd",
+     "out": "",
+     "symbol": "GOCLCORP",
+     "unverified": false,
+     "what": "GOCL Corporation Ltd is engaged in the business of Energetics, Mining & Infrastructure Services and Realty",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 9.2,
+   "ebitda_n": 5,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Explosives and missile makers",
+   "listed": 6,
+   "n": 6,
+   "net": 11.9,
+   "net_n": 5,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 9.3,
+   "pb_n": 6,
+   "revenue": 13422.0,
+   "roce": 17.15,
+   "roce_n": 6,
+   "roe": 18.25,
+   "roe_n": 6,
+   "scale": null,
+   "words": "These companies make missiles, industrial and defence explosives, detonators and energetics, and earn from manufacturing sales to government, mining and export customers."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Mazagon Dock Shipbuilders Limited",
+     "out": "",
+     "symbol": "MAZDOCK",
+     "unverified": false,
+     "what": "The company undertakes the construction and repair of naval vessels",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Garden Reach Shipbuilders & Engineers Limited",
+     "out": "",
+     "symbol": "GRSE",
+     "unverified": false,
+     "what": "Shipbuilding Segment GRSE shipbuilding division consists of the construction of vessels for clients engaged in the defense sector shipping industry",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Cochin Shipyard Limited",
+     "out": "",
+     "symbol": "COCHINSHIP",
+     "unverified": false,
+     "what": "Incorporated in the year 1972, Cochin Shipyard Limited(CSL) is a leading player in construction of all kinds of vessels, repairs and refits of all types of vessels including…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "CFF Fluid Control Ltd",
+     "out": "",
+     "symbol": "CFF",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Swan Defence and Heavy Industries Ltd",
+     "out": "",
+     "symbol": "SWANDEF",
+     "unverified": false,
+     "what": "Swan Defence and Heavy Industries Ltd is engaged in the construction of vessels, repairs, and refits of ships and rigs and heavy engineering",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 16.75,
+   "ebitda_n": 4,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Naval shipbuilding",
+   "listed": 5,
+   "n": 5,
+   "net": 16.8,
+   "net_n": 4,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 7.3,
+   "pb_n": 5,
+   "revenue": 24807.0,
+   "roce": 23.5,
+   "roce_n": 5,
+   "roe": 19.0,
+   "roe_n": 5,
+   "scale": null,
+   "words": "Shipyards build and refit warships and submarines and are paid by construction milestones."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Sigma Advanced System Ltd",
+     "out": "",
+     "symbol": "SIGMAADV",
+     "unverified": false,
+     "what": "Sigma Advanced Systems is a Hyderabad-based aerospace and defense manufacturing company",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Zen Technologies Ltd",
+     "out": "",
+     "symbol": "ZENTEC",
+     "unverified": false,
+     "what": "The company designs develop and manufacture combat training solutions and Counter-drone solutions for defense and security forces",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Unimech Aerospace and Manufacturing Ltd",
+     "out": "",
+     "symbol": "UNIMECH",
+     "unverified": false,
+     "what": "Unimech Aerospace and Manufacturing Limited is a global high precision engineering solutions company which specializes in manufacturing of complex products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Rossell Techsys Ltd",
+     "out": "",
+     "symbol": "ROSSTECH",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ideaforge Technology Ltd",
+     "out": "",
+     "symbol": "IDEAFORGE",
+     "unverified": false,
+     "what": "ideaForge Technology Limited is engaged in the business of manufacturing Unmanned Aircraft Systems (UAS)",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Jaykay Enterprises Ltd",
+     "out": "",
+     "symbol": "JAYKAY",
+     "unverified": false,
+     "what": "Its work includes composite applications, underwater mines, and aerospace machining",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Krishna Defence & Allied Industries Ltd",
+     "out": "",
+     "symbol": "KRISHNADEF",
+     "unverified": false,
+     "what": "It provides critical components to Indian Navy for its warships and develops special products for Indian Army",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "AXISCADES Technologies Ltd",
+     "out": "",
+     "symbol": "AXISCADES",
+     "unverified": false,
+     "what": "Service Offerings The company is a leading end-to-end aerospace and technology engineering and manufacturing company offering solutions across design",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Beml Ltd",
+     "out": "",
+     "symbol": "BEML",
+     "unverified": false,
+     "what": "BEML Ltd manufactures a wide range of heavy earthmoving equipment catering to the mining and construction industry, vehicles for defense forces and coaches for the metro and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Millworks Technologies Limited",
+     "out": "",
+     "symbol": "MILLWORKS",
+     "unverified": false,
+     "what": "Incorporated in November 2021, Millworks Technologies Limited is a precision engineering and manufacturing company specializing in the design, development, and production of…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Aequs Ltd",
+     "out": "",
+     "symbol": "AEQUS",
+     "unverified": false,
+     "what": "Aequs focuses on high-precision, high-complexity components and assemblies for global OEMs and Tier-1 suppliers, especially in civil aviation",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 13.0,
+   "ebitda_n": 11,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Precision aerospace components and drones",
+   "listed": 11,
+   "n": 11,
+   "net": 10.85,
+   "net_n": 8,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 9.0,
+   "pb_n": 10,
+   "revenue": 8399.0,
+   "roce": 11.5,
+   "roce_n": 11,
+   "roe": 8.2,
+   "roe_n": 11,
+   "scale": null,
+   "words": "These companies make precision machined parts, assemblies, drones and training or specialty systems for aerospace and defence customers."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Cyient DLM Ltd",
+     "out": "",
+     "symbol": "CYIENTDLM",
+     "unverified": false,
+     "what": "Cyient DLM is a leading electronics system design and manufacturing player, which provides system design, integration, testing, and manufacturing of electronic components and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Centum Electronics Ltd",
+     "out": "",
+     "symbol": "CENTUM",
+     "unverified": false,
+     "what": "Centum Electronics Limited is one of the largest Electronics System Design and Manufacturing (ESDM) companies in India",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 12.85,
+   "ebitda_n": 2,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Contract manufacturing",
+   "listed": 2,
+   "n": 2,
+   "net": 0.2,
+   "net_n": 2,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 10.55,
+   "pb_n": 2,
+   "revenue": 1896.0,
+   "roce": 17.15,
+   "roce_n": 2,
+   "roe": -3.35,
+   "roe_n": 2,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Nibe Ltd",
+     "out": "",
+     "symbol": "NIBE",
+     "unverified": false,
+     "what": "Nibe Ltd is in the business of manufacturing critical components for Defence, E-Vehicles and Software Development",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Taneja Aerospace & Aviation Ltd",
+     "out": "",
+     "symbol": "TANAA",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 36.1,
+   "ebitda_n": 2,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Parts, component and ingredient makers",
+   "listed": 2,
+   "n": 2,
+   "net": 23.3,
+   "net_n": 2,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 5.0,
+   "pb_n": 2,
+   "revenue": 456.0,
+   "roce": 13.3,
+   "roce_n": 2,
+   "roe": 8.6,
+   "roe_n": 2,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Sika Interplant Systems Ltd",
+     "out": "",
+     "symbol": "SIKA",
+     "unverified": false,
+     "what": "Its key business segments include engineered projects and systems",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Laxmipati Engineering Works Ltd",
+     "out": "",
+     "symbol": "LAXMIPATI",
+     "unverified": false,
+     "what": "Incorporate in 2012, Laxmipati Engineering Works Limited is engaged in shipbuilding, ship repair, fabrication, heavy engineering, engineering infrastructure services, shutdown…",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 19.7,
+   "ebitda_n": 2,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Project and consulting services",
+   "listed": 2,
+   "n": 2,
+   "net": 27.3,
+   "net_n": 2,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 8.95,
+   "pb_n": 2,
+   "revenue": 283.0,
+   "roce": 28.2,
+   "roce_n": 2,
+   "roe": 10.75,
+   "roe_n": 2,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": "rest",
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Hariyana Ship Breakers Ltd",
+     "out": "",
+     "symbol": "HRYNSHP",
+     "unverified": false,
+     "what": "Hariyana Ship Breakers Ltd is in the business of ship breaking, trading and investment activities",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Shree Refrigerations Ltd",
+     "out": "",
+     "symbol": "SHREEREF",
+     "unverified": false,
+     "what": "Shree Refrigerations Ltd is a defence-focused manufacturer of advanced refrigeration and HVAC systems",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Digilogic Systems Ltd",
+     "out": "",
+     "symbol": "DIGILOGIC",
+     "unverified": false,
+     "what": "Digilogic Systems Limited is a technology-led defence and aerospace engineering company engaged in the design",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Mishra Dhatu Nigam Limited",
+     "out": "",
+     "symbol": "MIDHANI",
+     "unverified": false,
+     "what": "The company was established as a Government of India enterprise under the Ministry of Defence to promote self-reliance in producing and supplying special steels",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Hindustan Aeronautics Limited",
+     "out": "",
+     "symbol": "HAL",
+     "unverified": false,
+     "what": "Hindustan Aeronautics Ltd (HAL), a 71.64% Government-owned Maha-Ratna CPSE, designs, manufactures, upgrades and provides lifecycle MRO for aircraft, helicopters, aero -engines…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bharat Forge Limited",
+     "out": "",
+     "symbol": "BHARATFORG",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 20.7,
+   "ebitda_n": 6,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Other defence companies",
+   "listed": 6,
+   "n": 6,
+   "net": 12.05,
+   "net_n": 6,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": true,
+   "pb": 4.8,
+   "pb_n": 6,
+   "revenue": 51344.5,
+   "roce": 13.2,
+   "roce_n": 6,
+   "roe": 12.5,
+   "roe_n": 6,
+   "scale": null,
+   "words": ""
+  }
+ ],
+ "sector": "Defence (India)",
+ "stamp": [
+  62,
+  32,
+  3
+ ],
+ "theme": "Defence",
+ "total": 43,
+ "unit": "₹ crore",
+ "unplaced": 0,
+ "v": 2,
+ "whole": false,
+ "window": {
+  "of": 43,
+  "shown": 43
+ }
+}

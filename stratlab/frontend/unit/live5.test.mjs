@@ -143,15 +143,15 @@ test("LIVE5-010: a row still pending at the deadline shows a dash, then its late
   assert.ok(calls >= 3);
 });
 
-test("LIVE5-011: a shared Calendar page opened fresh has its own space's trail on every device, whatever menu was saved there", async () => {
+// (updated on purpose, NAV3: one menu for every page, so a page's space is its address's alone, from any menu or device; My space's own
+// menu, which kept a pinned page or a Calendar tab "in My space", is gone)
+test("LIVE5-011: a Calendar page opened fresh has its own space's trail on every device, whatever menu was saved there", async () => {
   const { menuView } = await import("../src/lib/spaces.ts");
   // the phone saved "My space", the laptop "Invest": a fresh Results page is Invest's on both
-  assert.equal(menuView("/research/results", "mine", true, {}), "invest");
-  assert.equal(menuView("/research/results", "invest", true, {}), "invest");
-  // reached from My space's menu in this visit, it stays in My space
-  assert.equal(menuView("/research/results", "mine", true, { from: "mine" }), "mine");
-  // a page pinned to My space that is not shared keeps Mine's menu, as before
-  assert.equal(menuView("/holdings", "mine", true), "mine");
+  assert.equal(menuView("/research/results", "mine"), "invest");
+  assert.equal(menuView("/research/results", "invest"), "invest");
+  assert.equal(menuView("/holdings", "mine"), "money");
+  assert.equal(menuView("/trade/events", "money"), "trade");
 });
 
 test("LIVE4 partials: Angel One has its row in the Brokers table; HDFC's guide says plainly what can't be checked", async () => {

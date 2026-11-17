@@ -116,9 +116,14 @@ def test_p03_a_one_company_layer_of_the_published_version_stays_when_its_words_s
     # r582 (R58.2, updated on purpose: the brief on the live R58.1 decks, "a layer with one company either gains the stored members whose own
     # words support it, or the company folds into the best-fitting layer by its own words"): no company says its name, so the layer of one
     # is not kept; its company goes to "Other", with why
-    assert not [v for v in out if v["layer"] == "Distribution and aggregation"] and rows and rows[0]["to"] == "Other insurance companies"
-    # guard: a one-company layer no published version had, whose words don't say it, is still folded
-    out, rows = B.single_layers([dict(v) for v in vc], lambda s: words if s == "PB" else "", "Insurance", {})
+    # r60 (R60, updated on purpose again: the owner's R59 review P0, "valid industry roles are being hidden simply because their category
+    # contains one company"): its own words say what the layer is ("distributing ... financial products"), in a line a deck prints, so the
+    # layer stays with its one company, said to be one company, with no statistic
+    kept = [v for v in out if v["layer"] == "Distribution and aggregation"]
+    assert kept and kept[0].get("single_kept") and not rows
+    # guard: a one-company layer whose words don't say it is still folded
+    out, rows = B.single_layers([dict(v, companies=list(v["companies"])) for v in vc], lambda s: "PB Fintech runs hotels and resorts." if s == "PB" else "",
+                                "Insurance", {})
     assert rows and rows[0]["to"] == "Other insurance companies"
 
 

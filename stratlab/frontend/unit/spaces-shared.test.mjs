@@ -8,48 +8,31 @@ import { register } from "node:module";
 
 register("data:text/javascript," + encodeURIComponent(`export async function resolve(s, c, next) {
   try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
-const { NAV } = await import("../src/lib/nav.ts");
-const { menuView, sharedPage, spaceOf, spaceParam, SPACE_IDS } = await import("../src/lib/spaces.ts");
+const { NAV, MENU } = await import("../src/lib/nav.ts");
+const { menuView, spaceOf, SPACE_IDS } = await import("../src/lib/spaces.ts");
 
-// every page address and the spaces whose menus list it
+// (updated on purpose, NAV3, CX-1 "a 7-link Calendar group repeats in Trade, Invest and Money"; owner OK 16 Nov to merge menu entries): the
+// Calendar is one entry of one menu, so no page is in two spaces' menus any more, and the rule the owner asked for on 4 Nov ("keep the main
+// space there only") holds by construction: a Calendar tab opens in the same place whichever page it was reached from. An old link that
+// still carries ?space= opens the same page (the word is ignored).
 const menus = {};
 for (const sp of SPACE_IDS) for (const g of NAV[sp].groups) for (const p of g.pages) (menus[p.to] ??= new Set()).add(sp);
-const shared = Object.keys(menus).filter((to) => menus[to].size > 1);
 
-test("the menu map's shared pages are exactly the ones sharedPage() names (today: the Calendar's six tabs)", () => {
-  assert.ok(shared.length >= 6, shared.join(", "));
-  for (const to of ["/calendar", "/research/results", "/research/corporate-actions", "/invest/ipos", "/trade/events", "/money/calendar"]) assert.ok(shared.includes(to), to);
-  for (const to of Object.keys(menus)) assert.equal(sharedPage(to), shared.includes(to), to);
+test("no page is in two spaces' menus, and every entry is listed once in the one menu", () => {
+  for (const [to, sps] of Object.entries(menus)) assert.equal(sps.size, 1, to);
+  const ids = MENU.flatMap((s) => s.groups.map((g) => g.id));
+  assert.equal(new Set(ids).size, ids.length, ids.join(", "));
+  assert.equal(ids.filter((id) => id === "calendar").length, 1);
 });
 
-test("every shared page, reached from every space that lists it, keeps that space; its ?space= keeps it on a fresh load", () => {
-  for (const to of shared) for (const sp of menus[to]) {
-    for (const saved of [...SPACE_IDS, "mine"]) {
-      assert.equal(menuView(to, saved, false, { from: sp }), sp, `${to} from ${sp} (saved ${saved})`);
-      // Mine lists the Calendar too (keepsMine): the account's saved "My space", arriving after the click, still keeps the space
-      assert.equal(menuView(to, saved, true, { from: sp }), sp, `${to} from ${sp} (saved ${saved}, Mine links it)`);
-      assert.equal(menuView(to, saved, true, { search: `?space=${sp}` }), sp, `${to}?space=${sp} (Mine links it)`);
-      assert.equal(menuView(to, saved, false, { search: `?space=${sp}` }), sp, `${to}?space=${sp}`);
-      assert.equal(menuView(to, saved, false, { search: `?tab=x&space=${sp}`, from: SPACE_IDS.find((x) => x !== sp) }), sp, "the address wins");
-    }
-    // a fresh load with no ?space= (a link in an email, a typed address) opens the address's own space, as before
-    assert.equal(menuView(to, sp, false, {}), spaceOf(to), `${to} fresh`);
-    // reached from My space's own menu, it keeps Mine's when Mine links it; else its own space
-    assert.equal(menuView(to, "mine", true, { from: "mine" }), "mine");
-    assert.equal(menuView(to, "mine", false, { from: "mine" }), spaceOf(to));
-  }
+test("every page opens in its own address's space, whatever space it was reached from or an old ?space= says", () => {
+  for (const to of Object.keys(menus)) for (const from of [...SPACE_IDS, "mine"])
+    assert.equal(menuView(to, from), spaceOf(to) ?? "mine", `${to} from ${from}`);
+  assert.equal(menuView("/", "trade"), "trade");
 });
 
-test("a page in one space's menu still opens in its own space, whatever space it was reached from", () => {
-  for (const to of Object.keys(menus).filter((t) => !shared.includes(t))) for (const from of SPACE_IDS)
-    assert.equal(menuView(to, from, false, { from, search: `?space=${from}` }), spaceOf(to) ?? "mine", `${to} from ${from}`);
-  assert.equal(spaceParam("?space=nope"), null);
-  assert.equal(spaceParam(""), null);
-});
-
-test("the shell passes the address and the last page's space, and writes ?space= on a shared page opened in another space", () => {
+test("the shell takes the space from the address alone and writes no ?space= into it", () => {
   const shell = readFileSync(new URL("../src/components/Shell.tsx", import.meta.url), "utf8");
-  assert.match(shell, /menuView\(path, saved, keepsMine, \{ search: loc\.search, from: lastSpace\.current \}\)/);
-  assert.match(shell, /sharedPage\(path\) && space !== spaceOf\(path\) && spaceParam\(loc\.search\) !== space/);
-  assert.match(shell, /q\.set\("space", space\);/);
+  assert.match(shell, /const space = menuView\(path, saved\);/);
+  assert.doesNotMatch(shell, /q\.set\("space"|sharedPage|spaceParam/);
 });

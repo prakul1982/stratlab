@@ -1,0 +1,1281 @@
+{
+ "adjacent_n": 0,
+ "as_of": "2026-11-16",
+ "basis": "Each company's latest full financial year ended March, in ₹ crore. Revenue, EBITDA margin (operating profit before depreciation as a share of revenue) and net margin (net profit as a share of revenue) are that year's; return on capital employed (ROCE) is the latest reported. Consolidated accounts where the company files them. Banks and lenders have no EBITDA margin or ROCE.",
+ "chain": {
+  "compared": [
+   "Large-scale outsourcing and managed services",
+   "Mid-tier digital engineering and cloud services",
+   "Engineering R&D services",
+   "IT infrastructure and project-based integration"
+  ],
+  "highest": "Large-scale outsourcing and managed services",
+  "line": "Among the 4 layers with at least 5 companies with the figure and one kind of business, median EBITDA margin is highest in Large-scale outsourcing and managed services (18.6%) and lowest in IT infrastructure and project-based integration (11.7%), a gap of 6.9 points; among the map's layers, the \"Other\" group left out. Shown, not ranked: Software product licences and platforms (21.0%), a different kind of business; Healthcare and digital business process services (11.6%), how most of its companies earn is not shown; Business process outsourcing (11.2%) and Data centres, hosting and networks (49.6%), fewer than 5 companies with the figure.",
+  "lowest": "IT infrastructure and project-based integration",
+  "measure": "ebitda",
+  "unranked": [
+   {
+    "layer": "Software product licences and platforms",
+    "why": "a different kind of business"
+   },
+   {
+    "layer": "Healthcare and digital business process services",
+    "why": "how most of its companies earn is not shown"
+   },
+   {
+    "layer": "Business process outsourcing",
+    "why": "fewer than 5 companies with the figure"
+   },
+   {
+    "layer": "Makers of their own products",
+    "why": "fewer than 5 companies with the figure"
+   },
+   {
+    "layer": "Data centres, hosting and networks",
+    "why": "fewer than 5 companies with the figure"
+   },
+   {
+    "layer": "Other IT service companies",
+    "why": "companies outside the map's layers"
+   }
+  ]
+ },
+ "lender": false,
+ "listed": 103,
+ "members": 102,
+ "notable": [
+  {
+   "from": 29.1,
+   "from_year": "Mar 2023",
+   "kind": "move",
+   "layer": "Data centres, hosting and networks",
+   "move": 20.5,
+   "n": 3,
+   "to": 49.6,
+   "to_year": "Mar 2026"
+  }
+ ],
+ "page": "/themes/in/it-service",
+ "period": {
+  "n": 99,
+  "of": 102,
+  "year": "Mar 2026"
+ },
+ "read_on": "2026-11-16",
+ "region": "IN",
+ "rows": [
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Tata Consultancy Services Limited",
+     "out": "",
+     "symbol": "TCS",
+     "unverified": false,
+     "what": "It is an IT services, consulting and business solutions organization that has been partnering with many of the world's largest businesses in their transformation journeys for…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Infosys Limited",
+     "out": "",
+     "symbol": "INFY",
+     "unverified": false,
+     "what": "Infosys Ltd provides consulting, technology, outsourcing and next-generation digital services to enable clients to execute strategies for their digital transformation",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "HCL Technologies Limited",
+     "out": "",
+     "symbol": "HCLTECH",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Wipro Limited",
+     "out": "",
+     "symbol": "WIPRO",
+     "unverified": false,
+     "what": "Wipro Ltd is a global Information technology, consulting and business process services (BPS) company",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tech Mahindra Limited",
+     "out": "",
+     "symbol": "TECHM",
+     "unverified": false,
+     "what": "The group manages 150 companies across 22 major industries",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Zensar Technologies Limited",
+     "out": "",
+     "symbol": "ZENSARTECH",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "LTM Ltd",
+     "out": "",
+     "symbol": "LTM",
+     "unverified": false,
+     "what": "Larsen & Toubro Infotech Ltd offers extensive range of IT services like application development, maintenance and outsourcing, enterprise solutions, infrastructure management…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Xchanging Solutions Ltd",
+     "out": "",
+     "symbol": "XCHANGING",
+     "unverified": false,
+     "what": "Xchanging Solutions Ltd is an Information Technology services provider",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "3i Infotech Ltd",
+     "out": "",
+     "symbol": "3IINFOLTD",
+     "unverified": false,
+     "what": "The IT Solutions business comprises Cloud Computing, AAA, Platform Solutions, Infrastructure Management Services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Allied Digital Services Ltd",
+     "out": "",
+     "symbol": "ADSL",
+     "unverified": false,
+     "what": "Allied Digital Services Ltd provides a wide range of information technology and consultancy services",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 18.55,
+   "ebitda_n": 10,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Large-scale outsourcing and managed services",
+   "listed": 10,
+   "n": 10,
+   "net": 13.2,
+   "net_n": 10,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 3.65,
+   "pb_n": 10,
+   "revenue": 775113.0,
+   "roce": 22.95,
+   "roce_n": 10,
+   "roe": 17.45,
+   "roe_n": 10,
+   "scale": null,
+   "words": "These firms run clients' applications, infrastructure and processes under long contracts and also execute big transformation programmes."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Persistent Systems Limited",
+     "out": "",
+     "symbol": "PERSISTENT",
+     "unverified": false,
+     "what": "Persistent Systems provides software engineering and strategy services to help companies implement and modernize their businesses",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Coforge Limited",
+     "out": "",
+     "symbol": "COFORGE",
+     "unverified": false,
+     "what": "The company operates as an IT solutions provider with a focus on digital transformation and technology services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "MphasiS Limited",
+     "out": "",
+     "symbol": "MPHASIS",
+     "unverified": false,
+     "what": "Mphasis a global Information Technology (IT) solutions provider specializing in providing cloud and cognitive services, applies next-generation technology to help enterprises…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Hexaware Technologies Ltd",
+     "out": "",
+     "symbol": "HEXT",
+     "unverified": false,
+     "what": "Incoprorated in 1992, Hexaware Technologies Ltd provides AI based digital & technology solutions",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Fractal Analytics Ltd",
+     "out": "",
+     "symbol": "FRACTAL",
+     "unverified": false,
+     "what": "Fractal Analytics Ltd is in the business of offering Analytics and AI based solutions",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Birlasoft Ltd",
+     "out": "",
+     "symbol": "BSOFT",
+     "unverified": false,
+     "what": "Birlasoft is engaged in Computer programming, consultancy, and related activities",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sonata Software Ltd",
+     "out": "",
+     "symbol": "SONATSOFTW",
+     "unverified": false,
+     "what": "Sonata Software Ltd is primarily engaged in the business of providing Information Technology (IT) Services and Solutions to its various customers in the United States of America…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Mastek Ltd",
+     "out": "",
+     "symbol": "MASTEK",
+     "unverified": false,
+     "what": "Mastek is a provider of vertically-focused enterprise technology solutions",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Happiest Minds Technologies Ltd",
+     "out": "",
+     "symbol": "HAPPSTMNDS",
+     "unverified": false,
+     "what": "Happiest Minds Technologies Ltd is a next generation IT solutions & services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Latent View Analytics Ltd",
+     "out": "",
+     "symbol": "LATENTVIEW",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "NINtec Systems Ltd",
+     "out": "",
+     "symbol": "NINSYS",
+     "unverified": false,
+     "what": "NINtec Systems Ltd provides software development services and solutions",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Saksoft Ltd",
+     "out": "",
+     "symbol": "SAKSOFT",
+     "unverified": false,
+     "what": "Saksoft Ltd is engaged in providing business intelligence and information management solutions predominantly to mid-tier companies based out of USA and UK. It was established in…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Silver Touch Technologies Ltd",
+     "out": "",
+     "symbol": "SILVERTUC",
+     "unverified": false,
+     "what": "Silver Touch Technologies Ltd is a provider of IT Solutions, Digital Transformation & Emerging Technologies",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "InfoBeans Technologies Ltd",
+     "out": "",
+     "symbol": "INFOBEAN",
+     "unverified": false,
+     "what": "InfoBeans Technologies Ltd is in the business of software development services Business",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ksolves India Ltd",
+     "out": "",
+     "symbol": "KSOLVES",
+     "unverified": false,
+     "what": "The company is a CMMI Level 3 software development firm providing services to organisations as engineering and technology partners",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "CSM Technologies Ltd",
+     "out": "",
+     "symbol": "CSM",
+     "unverified": false,
+     "what": "The company specializes in delivering GovTech solutions and driving digital transformation initiatives",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "TechNVision Ventures Ltd",
+     "out": "",
+     "symbol": "TECHNVISN",
+     "unverified": false,
+     "what": "TechNVision Ventures Ltd is in the business of providing Information Technology Products and Services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "R Systems International Ltd",
+     "out": "",
+     "symbol": "RSYSTEMS",
+     "unverified": false,
+     "what": "",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Xtranet Technologies Ltd",
+     "out": "",
+     "symbol": "XTRANET",
+     "unverified": false,
+     "what": "XtraNet Technologies delivers AI-driven, compliance-safe and secure cloud transformation",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Expleo Solutions Ltd",
+     "out": "",
+     "symbol": "EXPLEOSOL",
+     "unverified": false,
+     "what": "Expleo Solutions Ltd is a technology, engineering",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kellton Tech Solutions Ltd",
+     "out": "",
+     "symbol": "KELLTONTEC",
+     "unverified": false,
+     "what": "Kellton Tech Solutions Ltd offers services in digital transformation, ERP and other IT services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sigma Solve Ltd",
+     "out": "",
+     "symbol": "SIGMA",
+     "unverified": false,
+     "what": "These plugins are categorized and sold by the company from its digital store",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "ASM Technologies Ltd",
+     "out": "",
+     "symbol": "ASMTEC",
+     "unverified": false,
+     "what": "ASM Technologies is engaged in the business of providing consulting and Product development services in the areas of Engineering Services and Product R&D. Service Offerings The…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Magellanic Cloud Ltd",
+     "out": "",
+     "symbol": "MCLOUD",
+     "unverified": false,
+     "what": "Motivity Labs and JNIT provide digital engineering and staffing",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Workmates Core2cloud Solution Ltd",
+     "out": "",
+     "symbol": "WORKMATES",
+     "unverified": false,
+     "what": "Workmates Core2Cloud Solution Limited is a cloud and digital transformation company specializing in modernizing, securing, and scaling enterprise IT infrastructure",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 17.5,
+   "ebitda_n": 25,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Mid-tier digital engineering and cloud services",
+   "listed": 25,
+   "n": 25,
+   "net": 11.1,
+   "net_n": 25,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 4.1,
+   "pb_n": 24,
+   "revenue": 95251.0,
+   "roce": 24.2,
+   "roce_n": 25,
+   "roe": 22.2,
+   "roe_n": 25,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Tata Elxsi Limited",
+     "out": "no revenue figure",
+     "symbol": "TATAELXSI",
+     "unverified": false,
+     "what": "Tata Elxsi provides design, engineering R&D and technology services across Transportation",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "L&T Technology Services Limited",
+     "out": "",
+     "symbol": "LTTS",
+     "unverified": false,
+     "what": "Incorporated in 2012, L&T Technology Services is an engineering and technology services company, a subsidiary of Larsen & Toubro, providing design, development, testing, and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "KPIT Technologies Limited",
+     "out": "",
+     "symbol": "KPITTECH",
+     "unverified": false,
+     "what": "KPIT is a global technology company with software solutions that will help mobility leapfrog towards autonomous, clean, smart and connected future",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Cyient Limited",
+     "out": "",
+     "symbol": "CYIENT",
+     "unverified": false,
+     "what": "The company offers engineering, manufacturing, geospatial, network, and operations management services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Mindteck (India) Ltd",
+     "out": "",
+     "symbol": "MINDTECK",
+     "unverified": false,
+     "what": "Mindteck Ltd is in the business of rendering engineering and IT services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tata Technologies Ltd",
+     "out": "",
+     "symbol": "TATATECH",
+     "unverified": false,
+     "what": "Tata Technologies Limited is a global engineering services company offering Product Development and Digital Solutions",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sasken Technologies Ltd",
+     "out": "",
+     "symbol": "SASKEN",
+     "unverified": false,
+     "what": "Sasken is a specialist in Product Engineering and Digital Transformation providing concept-to-market, chip-to-cognition R&D services to global leaders in Semiconductor…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Onward Technologies Ltd",
+     "out": "",
+     "symbol": "ONWARDTEC",
+     "unverified": false,
+     "what": "Onward Technologies is a software outsourcing company specialising in Digital and Engineering Research & Development services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Hypersoft Technologies Ltd",
+     "out": "",
+     "symbol": "HYPERSOFT",
+     "unverified": false,
+     "what": "Hypersoft Technologies Ltd is an India-listed software-development and IT-services group",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Innovana Thinklabs Ltd",
+     "out": "",
+     "symbol": "INNOVANA",
+     "unverified": false,
+     "what": "Innovana Thinklabs Ltd is in the business of Software development",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 13.2,
+   "ebitda_n": 9,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Engineering R&D services",
+   "listed": 10,
+   "n": 9,
+   "net": 8.1,
+   "net_n": 9,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 3.4,
+   "pb_n": 9,
+   "revenue": 32457.14,
+   "roce": 15.8,
+   "roce_n": 9,
+   "roe": 15.4,
+   "roe_n": 9,
+   "scale": null,
+   "words": "These firms do product design, embedded software and testing for manufacturers, billed on time-and-material or fixed-project terms."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Oracle Financial Services Software Limited",
+     "out": "",
+     "symbol": "OFSS",
+     "unverified": false,
+     "what": "Oracle Financial Services Software Ltd provides financial software, custom application development, consulting, IT infrastructure management, and outsourced business processing…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Rategain Travel Technologies Ltd",
+     "out": "",
+     "symbol": "RATEGAIN",
+     "unverified": false,
+     "what": "RateGain Travel Technologies Ltd is the leading distribution technology company globally and the largest Software as a Service (SaaS) provider in the travel and hospitality…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Intellect Design Arena Ltd",
+     "out": "",
+     "symbol": "INTELLECT",
+     "unverified": false,
+     "what": "Intellect Design Arena Limited works globally in the fields of Financial Technology for Banking, Insurance and other Financial Services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Newgen Software Technologies Ltd",
+     "out": "",
+     "symbol": "NEWGEN",
+     "unverified": false,
+     "what": "Subscription fees for licenses in relation to platform deployed on cloud",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "63 Moons Technologies Ltd",
+     "out": "",
+     "symbol": "63MOONS",
+     "unverified": false,
+     "what": "63 Moons Techs is engaged in Computer Programming, Consultancy and related services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Aurionpro Solutions Ltd",
+     "out": "",
+     "symbol": "AURIONPRO",
+     "unverified": false,
+     "what": "Aurionpro Solutions Limited works in providing business solutions in the fields of Transaction Banking Platform, Customer Experience (ACE Platform), Smart city and Smart…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Accelya Solutions India Ltd",
+     "out": "",
+     "symbol": "ACCELYA",
+     "unverified": false,
+     "what": "Accelya Kale Solutions Is a Software solutions provider to the global Airline and Travel Industry",
+     "year": "Jun 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Softtech Engineers Ltd",
+     "out": "",
+     "symbol": "SOFTTECH",
+     "unverified": false,
+     "what": "SoftTech Engineers Ltd is in the business of design, development, installation and servicing of information technology related resource",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tanla Platforms Ltd",
+     "out": "",
+     "symbol": "TANLA",
+     "unverified": false,
+     "what": "Tanla Platforms Ltd (formerly Tanla Solutions Ltd) is a cloud communications provider enabling businesses to communicate with their customers and intended recipients",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "C.E. Info Systems Ltd",
+     "out": "",
+     "symbol": "MAPMYINDIA",
+     "unverified": false,
+     "what": "The company is a data and technology products and platforms company, offering proprietary digital maps as a service (“MaaS”), software as a service (“SaaS”), and platform as a…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Capillary Technologies India Ltd",
+     "out": "",
+     "symbol": "CAPILLARY",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ramco Systems Ltd",
+     "out": "",
+     "symbol": "RAMCOSYS",
+     "unverified": false,
+     "what": "Ramco Systems Ltd develops ERP Software solutions, and provides that with related solutions and services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Nucleus Software Exports Ltd",
+     "out": "",
+     "symbol": "NUCLEUS",
+     "unverified": false,
+     "what": "Nucleus Software provides lending and transaction banking products to the global financial services industry",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Unicommerce eSolutions Ltd",
+     "out": "",
+     "symbol": "UNIECOM",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Quick Heal Technologies Ltd",
+     "out": "",
+     "symbol": "QUICKHEAL",
+     "unverified": false,
+     "what": "Quick Heal Technologies is engaged in the business of providing security software products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "IRIS Regtech Solutions Ltd",
+     "out": "",
+     "symbol": "IRIS",
+     "unverified": false,
+     "what": "IRIS Regtech Solutions Ltd offers Regtech solutions to regulators and enterprises",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Amagi Media Labs Ltd",
+     "out": "",
+     "symbol": "AMAGI",
+     "unverified": false,
+     "what": "Amagi Media Labs Ltd. is engaged in cloud-based broadcast and connected TV technology",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "eMudhra Ltd",
+     "out": "",
+     "symbol": "EMUDHRA",
+     "unverified": false,
+     "what": "The company is licensed by the Controller of Certifying Authorities (CCA), Ministry of Information Technology, and operates under the guidelines set by the Information technology…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Aurum Proptech Ltd",
+     "out": "",
+     "symbol": "AURUM",
+     "unverified": false,
+     "what": "Aurum PropTech Ltd is in the business of software development and other services for the real estate",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Izmo Ltd",
+     "out": "way of earning not shown",
+     "symbol": "IZMO",
+     "unverified": false,
+     "what": "(founded in 1995) is into the business of interactive marketing solutions",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Excelsoft Technologies Ltd",
+     "out": "",
+     "symbol": "EXCELSOFT",
+     "unverified": false,
+     "what": "Excelsoft Technologies Ltd is a software and SaaS company focused on digital learning and online assessment solutions, combining technology platforms, AI tools and professional…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Veefin Solutions Ltd",
+     "out": "",
+     "symbol": "VEEFIN",
+     "unverified": false,
+     "what": "Veefin Solutions Ltd provides Digital Lending and Supply Chain Finance technology product solutions",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Zaggle Prepaid Ocean Services Ltd",
+     "out": "",
+     "symbol": "ZAGGLE",
+     "unverified": false,
+     "what": "Zaggle builds world-class financial solutions and products to manage the business expenses of corporates, SMEs, & Startups through automated and innovative workflows",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Blue Cloud Softech Solutions Ltd",
+     "out": "",
+     "symbol": "BLUECLOUDS",
+     "unverified": false,
+     "what": "Blue Cloud Softech Solutions Ltd is in the business of computer software and data processing services Company",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 21.0,
+   "ebitda_n": 22,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Software product licences and platforms",
+   "listed": 24,
+   "n": 23,
+   "net": 11.3,
+   "net_n": 21,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 3.0,
+   "pb_n": 23,
+   "revenue": 29801.0,
+   "roce": 13.9,
+   "roce_n": 23,
+   "roe": 12.4,
+   "roe_n": 23,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Black Box Ltd",
+     "out": "",
+     "symbol": "BBOX",
+     "unverified": false,
+     "what": "AGC Networks Ltd. (AGC), incorporated in 1986 by Tata Telecom Pvt. Ltd. to manufacture telecommunication equipment",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ivalue Infosolutions Ltd",
+     "out": "",
+     "symbol": "IVALUE",
+     "unverified": false,
+     "what": "With 500+ experts, the company offers custom solutions and services, partnering with top OEMs across India, SAARC and SEA. Ivalue Infosolutions is a technology solutions…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Orient Technologies Ltd",
+     "out": "",
+     "symbol": "ORIENTTECH",
+     "unverified": false,
+     "what": "Incorporated in July 1997, Orient Technologies Limited is a rapidly expanding IT solutions provider based in Mumbai, Maharashtra, with deep expertise in creating specialized…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tera Software Ltd",
+     "out": "",
+     "symbol": "TERASOFT",
+     "unverified": false,
+     "what": "Tera Software Ltd is a Hyderabad-based e-governance and IT-infrastructure contractor executing government digitisation",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "ACS Technologies Ltd",
+     "out": "",
+     "symbol": "ACSTECH",
+     "unverified": false,
+     "what": "ACS Technologies Ltd is in the business as System Integrator, Security and Surveillance, IOT Solutions, Software Products and Services, in the area of Information Technology…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ceinsys Tech Ltd",
+     "out": "",
+     "symbol": "CEINSYS",
+     "unverified": false,
+     "what": "Ceinsys Tech Ltd provides Enterprise Geospatial & Engineering Services and sale of software and electricity",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Genesys International Corporation Ltd",
+     "out": "",
+     "symbol": "GENESYS",
+     "unverified": false,
+     "what": "Genesys is transitioning from project-based GIS services towards proprietary map content and recurring platform/ API monetisation",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Dynacons Systems & Solutions Ltd",
+     "out": "",
+     "symbol": "DSSL",
+     "unverified": false,
+     "what": "Dynacons Systems & Solutions Ltd is a Mumbai-based digital-infrastructure/system-integration company delivering data-centre & cloud, network/cybersecurity, digital-workplace and…",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 11.65,
+   "ebitda_n": 8,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "IT infrastructure and project-based integration",
+   "listed": 8,
+   "n": 8,
+   "net": 6.85,
+   "net_n": 8,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 2.6,
+   "pb_n": 8,
+   "revenue": 11009.0,
+   "roce": 23.05,
+   "roce_n": 8,
+   "roe": 19.15,
+   "roe_n": 8,
+   "scale": null,
+   "words": "These companies integrate and resell IT hardware, run infrastructure and deliver enterprise and government IT projects for clients."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Inventurus Knowledge Solutions Ltd",
+     "out": "",
+     "symbol": "IKS",
+     "unverified": false,
+     "what": "Inventurus Knowledge Solutions Ltd provides healthcare solutions through its care enablement platform",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sagility Ltd",
+     "out": "",
+     "symbol": "SAGILITY",
+     "unverified": false,
+     "what": "Incorporated in July 2021, Sagility India Limited (formerly Berkmeer India Pvt. Ltd) provides healthcare-focused technology-enabled solutions and services primarily to U.S.-based…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Protean eGov Technologies Ltd",
+     "out": "",
+     "symbol": "PROTEAN",
+     "unverified": false,
+     "what": "Incorporated in December 1995, Protean eGov Technologies Limited is engaged in the business of developing citizen-centric and population-scale e-governance solutions",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "BLS E-Services Ltd",
+     "out": "",
+     "symbol": "BLSE",
+     "unverified": false,
+     "what": "BLS-E Services Ltd provides Digital Services including E-Governance, Business Correspondent and allied services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Vakrangee Ltd",
+     "out": "",
+     "symbol": "VAKRANGEE",
+     "unverified": false,
+     "what": "Vakrangee Ltd provides diverse solutions, and activities in the e-commerce sector, including bullion and jewellery, through its Vakrangee Kendra (on B2B and B2C basis), and…",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 11.6,
+   "ebitda_n": 5,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Healthcare and digital business process services",
+   "listed": 5,
+   "n": 5,
+   "net": 10.1,
+   "net_n": 5,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 2.8,
+   "pb_n": 5,
+   "revenue": 12758.0,
+   "roce": 13.4,
+   "roce_n": 5,
+   "roe": 10.6,
+   "roe_n": 5,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Datamatics Global Services Ltd",
+     "out": "",
+     "symbol": "DATAMATICS",
+     "unverified": false,
+     "what": "Its offerings span digital technology solutions, business process management",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Digitide Solutions Ltd",
+     "out": "",
+     "symbol": "DIGITIDE",
+     "unverified": false,
+     "what": "Digitide Solutions Ltd is in the business of providing AI-led digital solutions, data intelligence, and business process services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Prodocs Solutions Ltd",
+     "out": "",
+     "symbol": "PRODOCS",
+     "unverified": false,
+     "what": "It helps global enterprises streamline data-driven processes through scalable delivery solutions",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 11.2,
+   "ebitda_n": 3,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Business process outsourcing",
+   "listed": 3,
+   "n": 3,
+   "net": 13.2,
+   "net_n": 3,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 1.9,
+   "pb_n": 3,
+   "revenue": 3797.13,
+   "roce": 13.2,
+   "roce_n": 3,
+   "roe": 10.7,
+   "roe_n": 3,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Netweb Technologies India Ltd",
+     "out": "",
+     "symbol": "NETWEB",
+     "unverified": false,
+     "what": "Netweb Technologies India (NTI) is one of India‘s leading high-end computing solutions (HCS) providers, with fully integrated design and manufacturing capabilities",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Axis Solutions Ltd",
+     "out": "",
+     "symbol": "AXISOL",
+     "unverified": false,
+     "what": "Axis Solutions Ltd manufactures various engineering products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Avio Smart Market Stack Limited",
+     "out": "",
+     "symbol": "ASMS",
+     "unverified": false,
+     "what": "Bartronics India Ltd provides Automatic Identification & Data Capture (AIDC) solutions",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 13.0,
+   "ebitda_n": 3,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Makers of their own products",
+   "listed": 3,
+   "n": 3,
+   "net": 9.4,
+   "net_n": 3,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 11.9,
+   "pb_n": 3,
+   "revenue": 2529.0,
+   "roce": 23.3,
+   "roce_n": 3,
+   "roe": 22.1,
+   "roe_n": 3,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "ESDS Software Solution Ltd",
+     "out": "",
+     "symbol": "ESDS",
+     "unverified": false,
+     "what": "ESDS Software Solution, incorporated in 2005 , provides AI-enabled cloud, managed services, data centre infra structure and software solutions",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "E2E Networks Ltd",
+     "out": "",
+     "symbol": "E2E",
+     "unverified": false,
+     "what": "E2E network provides a full-stack AI/ML and GenAI cloud ecosystem designed for scalable",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Titan Intech Ltd",
+     "out": "",
+     "symbol": "TITANIN",
+     "unverified": false,
+     "what": "Currently, company offers security for its clients’ IT infrastructure and business data",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 49.6,
+   "ebitda_n": 3,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Data centres, hosting and networks",
+   "listed": 3,
+   "n": 3,
+   "net": 16.4,
+   "net_n": 3,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 6.4,
+   "pb_n": 3,
+   "revenue": 752.01,
+   "roce": 5.5,
+   "roce_n": 3,
+   "roe": 3.9,
+   "roe_n": 3,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": "rest",
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Affle 3i Ltd",
+     "out": "",
+     "symbol": "AFFLE",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Brightcom Group Ltd",
+     "out": "",
+     "symbol": "BCG",
+     "unverified": false,
+     "what": "Brightcom Group Ltd (formerly Lycos Internet Ltd) offers digital marketing solutions to businesses, agencies and online publishers worldwide",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Armee Infotech Ltd",
+     "out": "",
+     "symbol": "ARMEE",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "String Metaverse Ltd",
+     "out": "",
+     "symbol": "META",
+     "unverified": false,
+     "what": "String Metaverse Ltd provides software development services related to gaming industry",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "SRIT India Ltd",
+     "out": "",
+     "symbol": "SRIT",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Exato Technologies Ltd",
+     "out": "",
+     "symbol": "EXATO",
+     "unverified": false,
+     "what": "Exato Technologies Limited is a customer transformation partner providing technology-driven solutions that enhance customer engagement and operational efficiency",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Subex Ltd",
+     "out": "",
+     "symbol": "SUBEXLTD",
+     "unverified": false,
+     "what": "Subex Ltd is a global provider of Operations and Business Support Systems to communication service providers worldwide, in the Telecom industry",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Panache Digilife Ltd",
+     "out": "",
+     "symbol": "PANACHE",
+     "unverified": false,
+     "what": "Panache Digilife Ltd is a Bhiwandi-based electronics system design and manufacturing company providing design-led/contract-led manufacturing, product engineering, integration…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "IDream Film Infrastructure Company Ltd",
+     "out": "",
+     "symbol": "IDREAM",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sotefin Bharat Ltd",
+     "out": "",
+     "symbol": "SOTEFIN",
+     "unverified": false,
+     "what": "Sotefin Bharat is engaged in the business of providing mechanised and automated parking solutions, offering comprehensive turnkey services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Unified Data- Tech Solutions Ltd",
+     "out": "",
+     "symbol": "UNIFIED",
+     "unverified": false,
+     "what": "Unified Data-Tech Solutions is a Mumbai-based IT service provider specializing in innovative and customized technology solutions",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "KS Smart Technlogies Limited",
+     "out": "",
+     "symbol": "KSSMART",
+     "unverified": false,
+     "what": "Soma Paper and Industries Ltd is in the business of",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 13.9,
+   "ebitda_n": 11,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Other IT service companies",
+   "listed": 12,
+   "n": 12,
+   "net": 9.6,
+   "net_n": 11,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": true,
+   "pb": 5.4,
+   "pb_n": 11,
+   "revenue": 15019.0,
+   "roce": 31.2,
+   "roce_n": 11,
+   "roe": 24.6,
+   "roe_n": 11,
+   "scale": null,
+   "words": ""
+  }
+ ],
+ "sector": "IT services",
+ "stamp": [
+  62,
+  32,
+  3
+ ],
+ "theme": "IT services",
+ "total": 252,
+ "unit": "₹ crore",
+ "unplaced": 0,
+ "v": 2,
+ "whole": false,
+ "window": {
+  "of": 252,
+  "shown": 103
+ }
+}

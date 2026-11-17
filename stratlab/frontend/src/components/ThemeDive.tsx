@@ -10,6 +10,8 @@ import { ThemeCsvButton, WorkbookButton } from "./ThemeChanges";
 import { useApp } from "../lib/app";
 import { download } from "../lib/share";
 import { deckLock } from "../lib/account";
+import { quarterText } from "../lib/themeFormat";
+import { decksWord, useUsage } from "../lib/usage";
 import { SampleDeckLink } from "./SampleDeck";
 import { LineChart } from "./Charts";
 import { bizChange, bizValue, periodName } from "../lib/biz";
@@ -171,6 +173,9 @@ export function memberRows(r: SectorAI, dive: Dive | null): MemberRow[] {
 export function ThemeDownloads({ r, dive, region, theme }: { r: SectorAI; dive: Dive | null; region: Region; theme: string }) {
   const { fail, refreshMe, me } = useApp();
   const locked = me?.usage?.deck_limit === 0;      // FREE-TIER: no decks on Free: a locked button and the sample deck
+  // LIVE9A-003: the month's decks used and left beside the buttons (Basic showed no count), with a Free account's earlier count said as one
+  const { usage } = useUsage();
+  const decksNote = decksWord(me?.usage?.deck_used, me?.usage?.deck_limit, usage);
   const [making, setMaking] = useState<"pptx" | "pdf" | null>(null);
   const [preparing, setPreparing] = useState<string | null>(null);
   const rows = useMemo(() => memberRows(r, dive), [r, dive]);
@@ -179,7 +184,7 @@ export function ThemeDownloads({ r, dive, region, theme }: { r: SectorAI; dive: 
     try {
       // R21: while the theme's AI map is being written the server answers "preparing"; the kit's bar shows and the page asks again
       const blob = await deckWhenReady(() => themeApi.deck(region, theme, format), { onWait: setPreparing });
-      download(blob, deckFileName(`${theme} theme (${REGION_NAME[region]})`, format));
+      download(blob, deckFileName(`${theme} theme (${REGION_NAME[region]})`, format, new Date(), region === "US" ? "America/New_York" : undefined));
       void refreshMe();                               // the deck count in Account
     } catch (e) { fail(e); } finally { setMaking(null); setPreparing(null); }
   };
@@ -191,6 +196,7 @@ export function ThemeDownloads({ r, dive, region, theme }: { r: SectorAI; dive: 
       <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pdf")} title="The whole theme as slides in a PDF: the chain and each layer, every company with its figures, the tailwinds and risks with their sources, the news and the theme in numbers"><Download size={16} />{making === "pdf" ? "Making the PDF…" : "Slides (PDF)"}</button>
       <button type="button" className="btn quiet sm" disabled={!!making || !dive} onClick={() => deck("pptx")} title="The same slides as PowerPoint"><Download size={16} />{making === "pptx" ? "Making the deck…" : "Slides (PowerPoint)"}</button></>}
       <WorkbookButton region={region} theme={theme} dive={dive} />
+      {decksNote && <span className="k-note" data-testid="decks-left">{decksNote}</span>}
       {preparing && <Working small label={preparing} />}
       {rows.length > 0 && <ThemeCsvButton region={region} theme={theme} dive={dive} />}
     </div>
@@ -288,6 +294,9 @@ export function LayerCard({ layer, i, region, business }: { layer: Layer; i: num
 /** Sub-themes, each with the listed companies that do it. */
 export function SubThemesCard({ dive, business }: { dive: Dive; business?: Business | null }) {
   const r = dive.region;
+  // LIVE9A-022: sub-themes with no listed company are named in one line under the ones that have companies (3 of 4 Private-bank
+  // sub-themes were each a heading, a paragraph and "No listed company is shown")
+  const full = dive.subs.filter((s) => s.companies.length > 0), empty = dive.subs.filter((s) => s.companies.length === 0);
   if (dive.subs.length === 0) return null;
   const cols: Column<(typeof dive.subs)[number]["companies"][number]>[] = [
     { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (x) => <Name r={r} sym={x.symbol} name={x.name} wide={x.company_wide} /> },
@@ -299,16 +308,15 @@ export function SubThemesCard({ dive, business }: { dive: Dive; business?: Busin
   return (
     <Card id="theme-subs" label="Sub-themes">
       <CardHead title="Sub-themes and the companies that do them" info="Each company is shown only where its own description says it does that work." />
-      {dive.subs.map((s) => (
+      {full.map((s) => (
         <section key={s.name} className="k-stack">
           <h3 className="k-sub">{s.name}</h3>
           <p className="k-small k-muted">{s.detail}</p>
-          {s.companies.length === 0
-            ? <p className="k-small">No listed company is shown for this sub-theme.</p>
-            : <Fold rows={s.companies} n={10} what="companies">{(shown) => <DataTable label={`${s.name}: listed companies`} columns={cols} rows={shown} rowKey={(x) => x.symbol} />}</Fold>}
+          {<Fold rows={s.companies} n={10} what="companies">{(shown) => <DataTable label={`${s.name}: listed companies`} columns={cols} rows={shown} rowKey={(x) => x.symbol} />}</Fold>}
           {(business?.subs.find((x) => x.name === s.name)?.rows.length ?? 0) > 0 && <BusinessTable rows={business!.subs.find((x) => x.name === s.name)!.rows} label={`${s.name}: operating figures from business updates`} />}
         </section>
       ))}
+      {empty.length > 0 && <p className="k-small" data-testid="subs-empty">No listed company is shown for {empty.length === 1 ? "this sub-theme" : "these sub-themes"}: {empty.map((s) => s.name).join(", ")}.</p>}
     </Card>
   );
 }
@@ -469,7 +477,7 @@ export function NumbersCards({ dive, prices, pricesBusy }: { dive: Dive; prices:
           { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (x: (typeof own.holdings)[number]) => <Name r={r} sym={x.symbol} name={x.name} /> },
           { key: "p", header: "Promoters", numeric: true, cell: (x) => pc(x.promoter) }, { key: "pc", header: "Change", numeric: true, cell: (x) => <Signed value={x.promoter_change}>{points(x.promoter_change)}</Signed> },
           { key: "i", header: "Named institutions", numeric: true, cell: (x) => pc(x.institutions) }, { key: "ic", header: "Change", numeric: true, cell: (x) => <Signed value={x.institutions_change}>{points(x.institutions_change)}</Signed> },
-          { key: "q", header: "Quarter", cell: (x) => x.quarter },
+          { key: "q", header: "Quarter", cell: (x) => quarterText(x.quarter) },
         ]} rows={shownH} rowKey={(x) => x.symbol} empty="No shareholding filings are stored for these companies yet." />}</Fold>
         </>}
         <h3 className="k-sub">{r === "IN" ? "Promoter and insider purchases and pledges, last 90 days" : "Insider purchases, last 90 days"}</h3>

@@ -4,9 +4,9 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { eyebrowOf } from "../lib/eyebrow";
 import { safeHref } from "../lib/format";
-import { bizChange, bizValue, filedOn, periodName, type Exchange } from "../components/BizUpdates";
-import { foldEmptyMonths } from "../lib/biz";
-import { Badge, Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, PageHeader, PlanNote, Seg, Skeleton, Spark, type Column } from "../components/kit";
+import { bizChange, filedOn, periodName, type Exchange } from "../components/BizUpdates";
+import { bizValueOne, foldEmptyMonths, monthsBefore } from "../lib/biz";
+import { Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, PageHeader, PlanNote, Seg, Skeleton, Spark, type Column } from "../components/kit";
 import { LockedPreview } from "../components/LockedPreview";
 import { useApp } from "../lib/app";
 
@@ -34,12 +34,21 @@ interface Mine { rows: MineRow[]; without: { symbol: string; name: string; kind:
 const RANGES = [{ value: "6", label: "6 months" }, { value: "12", label: "1 year" }, { value: "24", label: "2 years" }];
 
 const kindName = (k: "holding" | "watchlist") => (k === "holding" ? "Holding" : "Watchlist");
+/** A latest figure this many months behind today is an old one, said beside it: a monthly update is filed within weeks, a quarterly one
+ *  within about three months of its quarter. */
+const OLD_MONTHLY = 3, OLD_QUARTERLY = 6;
 
 /** The company, its figure and the period it is for, the changes, and the filing it came from: the same columns in My stocks and in a sector. */
 function figureColumns(months: number, extra?: Column<SectorRow>): Column<SectorRow>[] {
   const cols: Column<SectorRow>[] = [
     { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (r) => <><Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}#business-updates`}><b>{r.name}</b></Link><span className="k-sub-line">{r.metric}</span></> },
-    { key: "v", header: "Latest figure", numeric: true, cell: (r) => <>{bizValue(r.value, r.unit)}<span className="k-sub-line">{r.period ? periodName(r.period, r.span ?? "month") : ""}</span></> },
+    // one unit per kind down the column (rupees in crore), and a figure well behind the others says how old it is (LIVE9B-007: Q4 FY25 and
+    // Dec 2024 figures listed as "latest" beside Oct 2026 ones, with nothing to say so)
+    { key: "v", header: "Latest figure", numeric: true, cell: (r) => {
+      const old = r.period ? monthsBefore(r.period) : 0;
+      const stale = old > (r.span === "quarter" ? OLD_QUARTERLY : OLD_MONTHLY);
+      return <span className={stale ? "biz-old" : undefined} data-old={stale ? "" : undefined}>{bizValueOne(r.value, r.unit)}<span className="k-sub-line">{r.period ? periodName(r.period, r.span ?? "month") : ""}{stale ? ` · ${old} months old` : ""}</span></span>;
+    } },
     { key: "p", header: "On the previous", numeric: true, cell: (r) => bizChange(r.change_prev, r.unit) },
     { key: "y", header: "On the year", numeric: true, cell: (r) => bizChange(r.change_year, r.unit) },
     { key: "h", header: "History", cardLabel: "History", cell: (r) => {
@@ -119,7 +128,9 @@ export function BizUpdatesPage() {
               <CardHead title="My stocks" info="Your holdings first, then your watchlist: the Indian stocks that have business updates read into numbers. A stock with none read yet is named below the table." infoLabel="About my stocks" />
               {/* stack: on a phone each company is a card with every figure labelled, not a table cut to its first column (DF-014) */}
               <DataTable stack label="My stocks' latest business updates" rows={mine.rows} rowKey={(r) => r.symbol} rowAttrs={(r) => ({ "data-company": r.symbol })}
-                columns={figureColumns(months, { key: "k", header: "From", cell: (r) => <Badge tone="plain" dot={false}>{kindName((r as MineRow).kind)}</Badge> })} />
+                columns={figureColumns(months, new Set(mine.rows.map((r) => r.kind)).size > 1 ? { key: "k", header: "From", cell: (r) => kindName((r as MineRow).kind) } : undefined)} />
+              {/* holdings and watchlist mixed: a From column; all of one kind, said once here instead of a tag on every row (LIVE9B-007) */}
+              {new Set(mine.rows.map((r) => r.kind)).size === 1 && <p className="k-note" data-testid="biz-mine-kind">All from your {mine.rows[0].kind === "holding" ? "holdings" : "watchlist"}.</p>}
               {mine.without.some((x) => x.status === "none_filed") && <p className="k-note" data-testid="biz-mine-none">No business update among their exchange filings: {mine.without.filter((x) => x.status === "none_filed").map((x) => x.name).join(", ")}.</p>}
               {mine.without.some((x) => x.status !== "none_filed") && <p className="k-note">Not read yet: {mine.without.filter((x) => x.status !== "none_filed").map((x) => x.name).join(", ")}.</p>}
               <p className="k-note">{mine.note}</p>
@@ -134,7 +145,7 @@ export function BizUpdatesPage() {
             {filed.length === 0 ? <EmptyState title="Nothing read into numbers yet">No update in this list has been read into numbers yet. They are read each evening after they're filed.</EmptyState> : (
               <DataTable csv={`business updates ${d.label}`} stack label={d.label} rows={filed} rowKey={(r) => r.symbol} sticky={filed.length > 14} rowAttrs={(r) => ({ "data-company": r.symbol })}
                 columns={[...figureColumns(months), { key: "r", header: "Filings read", numeric: true, info: "How many of this company's update filings were read into figures that could be checked against the document.", cell: (r) => `${r.read_ok} of ${r.reads}` }]}
-                foot={d.total ? { c: `Total of ${d.total.companies} companies`, v: <>{bizValue(d.total.value, d.total.unit)}<span className="k-sub-line">{periodName(d.total.period, filed[0]?.span ?? "month")}</span></>,
+                foot={d.total ? { c: `Total of ${d.total.companies} companies`, v: <>{bizValueOne(d.total.value, d.total.unit)}<span className="k-sub-line">{periodName(d.total.period, filed[0]?.span ?? "month")}</span></>,
                   p: "", y: bizChange(d.total.change_year, d.total.unit), h: "", f: "", r: "" } : undefined} />
             )}
             {d.total && <p className="k-note" data-testid="biz-total">Total: the {d.total.companies} {d.total.companies === 1 ? "company" : "companies"} here with a figure in {d.total.unit} for {periodName(d.total.period, filed[0]?.span ?? "month")} added together{d.total.of > d.total.companies ? ` (${d.total.of - d.total.companies} others use another unit or period)` : ""}; each is the company's own total, so their definitions differ.{d.total.change_year == null ? " No change on the year: not every one of them has its year-ago figure." : ""}</p>}
@@ -165,7 +176,7 @@ function Compare({ c, label }: { c: Compare; label: string }) {
         const x = co.points[p];
         if (!x) return <span className="k-muted">–</span>;
         return <>
-          <a className="link" href={safeHref(x.url)} target="_blank" rel="noopener noreferrer" title={`Filed ${filedOn(x.filed)} on ${x.exchange ?? "the exchange"}${x.page ? `, page ${x.page}` : ""}`}>{bizValue(x.value, co.unit)}</a>
+          <a className="link" href={safeHref(x.url)} target="_blank" rel="noopener noreferrer" title={`Filed ${filedOn(x.filed)} on ${x.exchange ?? "the exchange"}${x.page ? `, page ${x.page}` : ""}`}>{bizValueOne(x.value, co.unit)}</a>
           <span className="k-sub-line">{x.year_change == null ? "no year-ago figure" : `${bizChange(x.year_change, co.unit)} on the year`}</span>
         </>;
       } })),

@@ -86,7 +86,8 @@ test("LIVE8B-014: an account with a Google sign-in is named Google; an email-lin
   assert.equal(acct.accountMethod("email", ["email"], null), "Email link");
   assert.equal(acct.accountMethod(undefined, undefined, "google"), "Google");
   assert.match(acct.EMAIL_LINK_NOTE, /Continue with Google, using this same email address/);
-  assert.match(read("src/pages/AccountPage.tsx"), /method === "Email link" && <span className="k-sub-line" data-testid="email-link-note">\{EMAIL_LINK_NOTE\}<\/span>/);
+  // (updated on purpose: owner 16 Nov, email sign-in: the note that sign-in is Google only is said only while email sign-in is off)
+  assert.match(read("src/pages/AccountPage.tsx"), /method === "Email link" && !emailSignInOn\(\) && <span className="k-sub-line" data-testid="email-link-note">\{EMAIL_LINK_NOTE\}<\/span>/);
 });
 
 test("LIVE8B-012: on a phone the peers come five at a time, quarters four a line; a bank's quarters say revenue", () => {
@@ -164,7 +165,9 @@ test("LIVE8B-023: a US company's next results day says expected", () => {
 
 test("LIVE8A-025: the results day chips don't repeat today by its date", () => {
   const page = read("src/pages/ResultsPage.tsx");
-  assert.match(page, /\.filter\(\(d\) => d\.date !== todayIn\(region\)\)/);
+  // (updated on purpose, rel1 LIVE9A-014: the chips after "Today" and "Tomorrow" now leave out every day up to tomorrow and empty days,
+  // through laterDays(), which unit/rel1-reliability.test.mjs checks; today is still never repeated by its date)
+  assert.match(page, /laterDays\(\(data\?\.weeks \?\? \[\]\)\.flatMap\(\(w\) => w\.days \?\? \[\]\), todayIn\(region\)\)/);
   assert.match(page, /const todayIn = \(region: Region\): string \| null => dayIn\(new Date\(\), marketTz\(region\)\);/);
 });
 

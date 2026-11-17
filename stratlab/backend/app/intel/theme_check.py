@@ -1058,8 +1058,12 @@ SELLS_OWN = (r"\bsold by us\b|\bwe sell (?!services|advertising|ads\b)|\bsells? 
 # R36 (GPT review of the live R35 Semiconductors deck: FTC Solar's trackers and T1 Energy's modules among "Makers of their own products"): the SEC
 # files solar module, tracker and inverter makers under semiconductors (SIC 3674); one whose own words describe solar products or installations
 # and no chips is in another business, whatever its code says. (official industry, its own words of another business, chip words that keep it)
+# r60 (an independent review of the live R59 Semiconductors deck: SunHydrogen, which "may sell hydrogen panels" and "hydrogen produced by
+# systems we own", listed as a semiconductor company): a hydrogen-from-sunlight panel or hydrogen producer filed under semiconductors is of
+# the same other business as a solar module maker
 OFF_INDUSTRY = ((r"semiconductor|\bchips?\b|integrated circuits?",
-                 r"\bsolar\b|photovoltaic|\bpv\b (?:modules?|panels?|cells?|industry|systems?)",
+                 r"\bsolar\b|photovoltaic|\bpv\b (?:modules?|panels?|cells?|industry|systems?)|\bhydrogen (?:panels?|produc\w*|generation|fuel)\b|"
+                 r"\b(?:green|renewable) hydrogen\b",
                  r"integrated circuits?|\bchips?\b|chipsets?|microcontrollers?|(?:micro)?processors?|\bics\b|\basics?\b|\bgpus?\b|"
                  r"wafer fab|semiconductor (?:devices|chips|equipment|manufacturing)|power semiconductors?|\bleds?\b|lasers?"),
                 # R40 (the owner's review of the live Release 39 Consumer retail deck: Ferrellgas and Suburban Propane, propane distributors,
@@ -1127,6 +1131,12 @@ SCOPE_PRODUCTS = (
      r"\btyres?\b|\btires\b|\bauto(?:motive)? (?:components?|parts|ancillar\w*)\b|\bvehicle (?:components?|parts)\b",
      r"\bauto(?:mo\w*)?\b|\bvehicles?\b|\bmobility\b|\btyres?\b|\btires?\b|\brubber\b|\bcomponents?\b|\bcapital goods\b|\bindustrials?\b|"
      r"\bengineering\b|\bdefen[cs]e|\btransport"),
+    # r60 (an independent review of the live R59 Defence deck: Hariyana Ship Breakers, "in the business of ship breaking, trading and
+    # investment", a member of Defence by its official industry, Ship Building & Allied Services): breaking up old ships for scrap is not
+    # building them
+    ("ship breaking and recycling",
+     r"\bship[- ]?breaking\b|\bship recycling\b|\b(?:dismantling|breaking up|demolition) of (?:old |obsolete )?(?:ships|vessels)\b",
+     r"\bship[- ]?breaking|\bship recycling|\bscrap\b|\brecycl|\bsteel\b|\bmetals? (?:and mining|trad\w*)|\bcommodit"),
     ("fertilisers and crop protection",
      r"\bfertili[sz]ers?\b|\bpesticides?\b|\bagrochemicals?\b|\binsecticides?\b|\bherbicides?\b|\bfungicides?\b|\bcrop protection\b",
      r"\bagri|\bfarm|\bcrop|\bfertili|\bchemical|\bcommodit|\bseeds?\b|\bplantation"),
@@ -1155,10 +1165,23 @@ def off_scope(about, theme_text: str, name: str = "") -> dict | None:
     for kind, products, scope in SCOPE_PRODUCTS:
         if re.search(scope, theme_text or "", re.I):
             continue
-        m = re.search(products, said, re.I)
+        txt = said
+        m = re.search(products, txt, re.I)
+        if m is None and said is not shown:
+            # r60: words of its work its own name shares ("ship breaking" of "Hariyana Ship Breakers") are read in the sentence as written,
+            # never the name itself
+            m2 = re.search(products, shown, re.I)
+            if m2 and m2.group(0).lower() not in str(name or "").lower():
+                txt, m = shown, m2
         # (a kind said of its parent or group, "a subsidiary of another company, a conglomerate with interest in ... cement", is not its own)
-        if m and not does_the_work(said[:m.start()], own) and not _OF_ANOTHER.search(said[:m.start()]):
-            return {"kind": kind, "said": m.group(0), "text": shown[:200]}
+        # (r60: "another company is in the business of ship breaking", the company's own name taken off its own sentence, is its own work)
+        lead = re.sub(r"\banother company (?=(?:is|was|has|operates|engages)\b)", "", txt[:m.start()]) if m else ""
+        # (r60: a kind named as its customers' business, "serving pharmaceuticals, food ... agrochemicals", is not its own)
+        for_ = re.search(r"\b(?:serv(?:es|ing)|customers?|clients?|caters? to|catering to|industries like|sectors such as)\b[^.;]{0,160}$", txt[:m.start()], re.I) if m else None
+        if m and not for_ and not does_the_work(txt[:m.start()], own) and not _OF_ANOTHER.search(lead):
+            # (r60: the quote says the company's own name where the reading put "another company" in its place)
+            quote = shown.replace("another company", name, 1) if name and name.split()[0] in str(about or "") else shown
+            return {"kind": kind, "said": m.group(0), "text": quote[:200]}
     return None
 
 

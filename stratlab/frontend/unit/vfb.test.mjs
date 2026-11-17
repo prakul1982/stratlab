@@ -136,7 +136,8 @@ test("VR1-141, VR1-142, VR1-143: Net worth has one quick add, a plain History fo
   assert.match(n, /<MoreMenu label="Quick add"/);
   assert.doesNotMatch(n, /<Card compact label="Add to your net worth">/);
   assert.doesNotMatch(n, /<CardHead title="Add to your net worth" \/>/);
-  assert.match(n, /History: \{hist\.length\} snapshot/);
+  // (updated on purpose, LIVE9B-020: the list's link ends the chart's "Last snapshot" line as "All N snapshots", not a "History:" caption of its own)
+  assert.match(n, /All \{hist\.length\} snapshot/);
   assert.doesNotMatch(n, /<summary className="k-small">The history's snapshots/);
   assert.match(n, /aria-label=\{`Remove the snapshot of \$\{dateOnly\(h\.d\)\}`\}/);
   assert.match(n, /!oneDay && <span className="k-sub-line">as of/);

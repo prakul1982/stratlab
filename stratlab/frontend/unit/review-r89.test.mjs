@@ -111,7 +111,9 @@ test("R90-005: the watchlist's price column says last session whenever the tab's
 
 test("R90-008/010/012: a US company's move says its day after the close; Pulse and the money calendar say what their dates are", () => {
   assert.match(read("src/components/Research.tsx"), /closed && \(q\.change_day \|\| quoteDay\) \? `on \$\{fmtDate\(\(q\.change_day \|\| quoteDay\)!, \{ year: false \}\)\}` : since/);
-  assert.match(read("src/pages/Research.tsx"), /title=\{pulseClosedDay\(data\?\.indices\) \? "How the market felt at the last close" : "How the market feels today"\}/);
+  // (updated on purpose, LIVE9A-031: one fixed title; live or last close is said in the line under it, pulseLede)
+  assert.match(read("src/pages/Research.tsx"), /title=\{PULSE_TITLE\}/);
+  assert.match(read("src/lib/researchFormat.ts"), /closedDay \? `Last close, \$\{closedDay\}: index levels` : "Live index levels"/);
   assert.match(read("src/pages/money/MoneyCalendarPage.tsx"), /asOfLabel="As of"/);
 });
 
@@ -256,7 +258,8 @@ test("Owner 26 Oct: + Custom flows as the last chip where the row wraps; the cos
 
 test("Owner 26 Oct: inside a notebook only the notebook is the selected menu entry; no dots caption", () => {
   const shell = read("src/components/Shell.tsx");
-  assert.match(shell, /const here = at\?\.page\.to === p\.to && !\(p\.to === "\/notebooks" && path\.startsWith\("\/n\/"\)\);/);
+  // (updated on purpose, NAV3: a pinned shortcut to a page that is in the menu too is never marked, `mark`)
+  assert.match(shell, /const here = mark && at\?\.page\.to === p\.to && !\(p\.to === "\/notebooks" && path\.startsWith\("\/n\/"\)\);/);
   assert.doesNotMatch(shell, /Dots: each notebook's last verdict/);
 });
 
@@ -273,7 +276,8 @@ test("DOC-2: the landing page names the newer tools, its lists keep full grid ro
   assert.equal(list("PORTFOLIO") % 2, 0);                // Money's cards in pairs
   for (const t of ["IPOs", "Business updates", "Named holders", "Closing auction", "Market events", "Chart replay", "Forward test", "Test a SIP", "Rates after tax"])
     assert.match(login, new RegExp(`\\["${t}",`), t);
-  assert.match(login, /"Trade · Invest · Money"/);                              // ("Ten markets" is in the intro's sentence only: VR5-owner-2)
+  // (updated on purpose, NAV3: the hero's eyebrow says who it is for, not the three spaces)
+  assert.match(login, /"For traders and investors in India and the US"/);       // ("Ten markets" is in the intro's sentence only: VR5-owner-2)
   assert.doesNotMatch(login, /Yahoo|Screener|Finnhub|Kite|Zerodha Kite/);        // no data vendor named on the page
   // docs/UI_CHECKER.md names every rule the checker has, R1 to R27 (VR7 added R26, LIVE5 R27)
   const rules = read("e2e/ui-lint.spec.ts").match(/^  R\d+: /gm) ?? [];

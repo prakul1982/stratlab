@@ -1,0 +1,891 @@
+{
+ "adjacent_n": 0,
+ "as_of": "2026-11-16",
+ "basis": "Each company's latest full financial year ended March, in ₹ crore. Revenue, EBITDA margin (operating profit before depreciation as a share of revenue) and net margin (net profit as a share of revenue) are that year's; return on capital employed (ROCE) is the latest reported. Consolidated accounts where the company files them. Banks and lenders have no EBITDA margin or ROCE.",
+ "chain": {
+  "compared": [],
+  "highest": null,
+  "line": "Median EBITDA margin by layer: Mining of coal and iron ore 13.4% (12 of 13 companies); Primary steel and stainless producers 14.8%; Ferro alloys 11.0% (5 of 7 companies). Their commodities differ, so these layers are not ranked.",
+  "lowest": null,
+  "measure": "ebitda",
+  "unranked": null
+ },
+ "lender": false,
+ "listed": 66,
+ "members": 64,
+ "notable": [
+  {
+   "from": 29.9,
+   "from_year": "Mar 2023",
+   "kind": "move",
+   "layer": "Mining of coal and iron ore",
+   "move": -7.7,
+   "n": 10,
+   "to": 22.2,
+   "to_year": "Mar 2026"
+  }
+ ],
+ "page": "/themes/in/metal-and-mining",
+ "period": {
+  "n": 64,
+  "of": 64,
+  "year": "Mar 2026"
+ },
+ "read_on": "2026-11-16",
+ "region": "IN",
+ "rows": [
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Coal India Limited",
+     "out": "",
+     "symbol": "COALINDIA",
+     "unverified": false,
+     "what": "Coal India Ltd is mainly engaged in mining and production of Coal and also operates Coal washeries",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "NMDC Limited",
+     "out": "",
+     "symbol": "NMDC",
+     "unverified": false,
+     "what": "NMDC is engaged in exploration and production of Iron Ore along with Diamond, production and sale of Sponge Iron and generation and sale of Wind Power",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "MOIL Limited",
+     "out": "",
+     "symbol": "MOIL",
+     "unverified": false,
+     "what": "MOIL Ltd is primarily engaged in mining of manganese ore and is the largest manganese ore producer in the country",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Gujarat Mineral Development Corporation Limited",
+     "out": "",
+     "symbol": "GMDCLTD",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bharat Coking Coal Ltd",
+     "out": "",
+     "symbol": "BHARATCOAL",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Lloyds Metals & Energy Ltd",
+     "out": "",
+     "symbol": "LLOYDSME",
+     "unverified": false,
+     "what": "Lloyds Metals & Energy is into the business of manufacturing of Sponge Iron, Power generation and mining activities",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ashapura Minechem Ltd",
+     "out": "",
+     "symbol": "ASHAPURMIN",
+     "unverified": false,
+     "what": "Incorporated on 19th February 1982, Ashapura Minechem Ltd. is engaged in the mining, manufacturing and trading of various minerals and its derivative products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Orissa Minerals Development Company Ltd",
+     "out": "",
+     "symbol": "ORISSAMINE",
+     "unverified": false,
+     "what": "It operates various Iron Ore and Manganese Ore in various districts through leases",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kachchh Minerals Ltd",
+     "out": "",
+     "symbol": "KACHCHH",
+     "unverified": false,
+     "what": "Kachchh Minerals Ltd is in the business of mineral processing",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "20 Microns Ltd",
+     "out": "",
+     "symbol": "20MICRONS",
+     "unverified": false,
+     "what": "20 Microns Ltd is in the business of Industrial Micronised Minerals and Speciality Chemicals Market Leadership The company is India’s sole & largest manufacturer of micronized to…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Asi Industries Ltd",
+     "out": "",
+     "symbol": "ASIIL",
+     "unverified": false,
+     "what": "ASI is the world’s largest stone mining company, holding the largest stone mining quarry in the world",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Southern Magnesium & Chemicals Ltd",
+     "out": "",
+     "symbol": "SOUTHMG",
+     "unverified": false,
+     "what": "Southern Magnesium & Chemicals Ltd is in the business of Magnesium Metal and related goods",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Raw Edge Industrial Solutions Ltd",
+     "out": "",
+     "symbol": "RAWEDGE",
+     "unverified": false,
+     "what": "Raw Edge Industrial Solutions Ltd deals in the manufacturing of lime and its allied activities",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 13.45,
+   "ebitda_n": 12,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Mining of coal and iron ore",
+   "listed": 13,
+   "n": 13,
+   "net": 11.65,
+   "net_n": 12,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 1.8,
+   "pb_n": 12,
+   "revenue": 228053.15,
+   "roce": 10.8,
+   "roce_n": 11,
+   "roe": 9.9,
+   "roe_n": 11,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Tata Steel Limited",
+     "out": "",
+     "symbol": "TATASTEEL",
+     "unverified": false,
+     "what": "Its products are sold under 20 brands, including Tata Astrum, Tata Tiscon, Galvano, Tata Steelium",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "JSW Steel Limited",
+     "out": "",
+     "symbol": "JSWSTEEL",
+     "unverified": false,
+     "what": "JSW Steel is primarily engaged in the business of manufacture and sale of Iron and Steel Products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Jindal Steel Limited",
+     "out": "",
+     "symbol": "JINDALSTEL",
+     "unverified": false,
+     "what": "Jindal Steel & Power Ltd is one of the India's leading steel producers with significant presence in sectors like steel and mining",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Steel Authority of India Limited",
+     "out": "",
+     "symbol": "SAIL",
+     "unverified": false,
+     "what": "Steel Authority of India Limited (SAIL) is one of the largest steel-making companies in India and one of the Maharatnas of the countrys Central Public Sector Enterprises",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Jindal Stainless Limited",
+     "out": "",
+     "symbol": "JSL",
+     "unverified": false,
+     "what": "Jindal Stainless Ltd is one of the largest manufacturers of Stainless Steel flat products, in Austenitic, Ferritic, Martensitic and Duplex grades in India used in a variety of…",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 14.8,
+   "ebitda_n": 5,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Primary steel and stainless producers",
+   "listed": 5,
+   "n": 5,
+   "net": 6.3,
+   "net_n": 5,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 2.3,
+   "pb_n": 5,
+   "revenue": 624601.0,
+   "roce": 11.0,
+   "roce_n": 5,
+   "roe": 10.2,
+   "roe_n": 5,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "APL Apollo Tubes Limited",
+     "out": "",
+     "symbol": "APLAPOLLO",
+     "unverified": false,
+     "what": "APL Apollo Tubes Limited (APL Apollo) is one of India’s leading branded steel products manufacturers",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ratnamani Metals & Tubes Limited",
+     "out": "",
+     "symbol": "RATNAMANI",
+     "unverified": false,
+     "what": "Ratnamani Metals & Tubes Ltd is engaged in the manufacturing of stainless steel pipes and tubes and carbon steel pipes from its manufacturing facilities in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Welspun Corp Limited",
+     "out": "",
+     "symbol": "WELCORP",
+     "unverified": false,
+     "what": "WCL is one of the largest manufacturers of large diameter pipes globally",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 13.3,
+   "ebitda_n": 3,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Steel and alloy pipe and tube makers",
+   "listed": 3,
+   "n": 3,
+   "net": 9.7,
+   "net_n": 3,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 5.5,
+   "pb_n": 3,
+   "revenue": 36374.0,
+   "roce": 21.5,
+   "roce_n": 3,
+   "roe": 16.7,
+   "roe_n": 3,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Hindalco Industries Limited",
+     "out": "",
+     "symbol": "HINDALCO",
+     "unverified": false,
+     "what": "The Co and its subsidiaries are primarily engaged in the production of Aluminium and Copper",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "National Aluminium Company Limited",
+     "out": "",
+     "symbol": "NATIONALUM",
+     "unverified": false,
+     "what": "It is one of the largest integrated Bauxite-Alumina-Aluminium-Power Complex in India and global leader in producing bauxite and alumina at the lowest cost",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Hindustan Copper Limited",
+     "out": "",
+     "symbol": "HINDCOPPER",
+     "unverified": false,
+     "what": "HCL is engaged in various processes right from copper mining to the final stage of converting copper into saleable products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Vedanta Aluminium Metal Ltd",
+     "out": "",
+     "symbol": "VAML",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 41.0,
+   "ebitda_n": 4,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Aluminium and copper mining and smelting",
+   "listed": 4,
+   "n": 4,
+   "net": 25.55,
+   "net_n": 4,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 4.4,
+   "pb_n": 4,
+   "revenue": 362756.0,
+   "roce": 39.6,
+   "roce_n": 3,
+   "roe": 31.15,
+   "roe_n": 4,
+   "scale": null,
+   "words": "These firms mine or refine bauxite and copper ore into aluminium and copper, earning from metal sold at global-linked prices."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Hindustan Zinc Limited",
+     "out": "",
+     "symbol": "HINDZINC",
+     "unverified": false,
+     "what": "Incorporated in 1966, Hindustan Zinc in Zinc-Lead and Silver business is world’s 2nd largest integrated Zinc producer and Hindustan Zinc is the 3rd largest silver producer…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Vedanta Limited",
+     "out": "",
+     "symbol": "VEDL",
+     "unverified": false,
+     "what": "The group engages in the exploration, production and sale of zinc, lead, silver, copper, aluminium, iron ore and oil & gas",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Pondy Oxides & Chemicals Ltd",
+     "out": "",
+     "symbol": "POCL",
+     "unverified": false,
+     "what": "Pondy Oxides and Chemicals Ltd manufactures Lead Metal and Alloys and other Non-ferrous metals",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ardee Industries Ltd",
+     "out": "",
+     "symbol": "ARDEE",
+     "unverified": false,
+     "what": "The company manufactures high purity refined lead and customized lead alloys used across energy storage",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Gravita India Ltd",
+     "out": "",
+     "symbol": "GRAVITA",
+     "unverified": false,
+     "what": "Gravita India Ltd is one of the largest lead producer in India",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 11.45,
+   "ebitda_n": 4,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Zinc, lead and silver miners and smelters",
+   "listed": 5,
+   "n": 5,
+   "net": 8.1,
+   "net_n": 4,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 3.9,
+   "pb_n": 4,
+   "revenue": 86828.0,
+   "roce": 36.25,
+   "roce_n": 4,
+   "roe": 48.0,
+   "roe_n": 4,
+   "scale": null,
+   "words": "These companies mine base-metal ores and smelt them into refined zinc, lead, silver and related metals."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Indian Metals & Ferro Alloys Ltd",
+     "out": "",
+     "symbol": "IMFA",
+     "unverified": false,
+     "what": "Indian Metals and Ferro Alloys Limited (IMFA) is a leading, fully integrated producer of Ferro Chrome in India which is primarily used in the production of stainless steel",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Maithan Alloys Ltd",
+     "out": "",
+     "symbol": "MAITHANALL",
+     "unverified": false,
+     "what": "Maithan Alloys is engaged in the business of manufacturing and exporting of all three bulk Ferro alloys- Ferro Manganese, Silico Manganese and Ferro Silicon",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Nilachal Carbo Metalicks Ltd",
+     "out": "",
+     "symbol": "NCML",
+     "unverified": false,
+     "what": "It has long-term relationships with top ferrochrome manufacturers and strong supply chain links with iron ore pellet producers",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Indsil Hydro Power & Manganese Ltd",
+     "out": "",
+     "symbol": "INDSILHYD",
+     "unverified": false,
+     "what": "Indsil Hydro Power and Manganese Ltd does manufacturing of Low /Medium /High Carbon Silico Manganese",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Impex Ferro Tech Ltd",
+     "out": "no revenue figure",
+     "symbol": "IMPEXFERRO",
+     "unverified": false,
+     "what": "Impex Ferro Tech Ltd is engaged in production of ferro alloys and trading of iron & steel products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Facor Alloys Ltd",
+     "out": "",
+     "symbol": "FACORALL",
+     "unverified": false,
+     "what": "Facor Alloys Ltd manufactures and exports Ferro Alloys",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Shyam Century Ferrous Ltd",
+     "out": "no revenue figure",
+     "symbol": "SHYAMCENT",
+     "unverified": false,
+     "what": "Shyam Century Ferrous Ltd is engaged in manufacturing of Ferro Alloys and generation of Power",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Chrome Silicon Ltd",
+     "out": "",
+     "symbol": "CHROME",
+     "unverified": false,
+     "what": "Chrome Silicon Ltd is a manufacturer of Ferro Alloys",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "VISA Chrome Ltd",
+     "out": "",
+     "symbol": "VISACHROME",
+     "unverified": false,
+     "what": "VISA Steel Ltd does manufacturing of High",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 11.0,
+   "ebitda_n": 5,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Ferro alloys",
+   "listed": 9,
+   "n": 7,
+   "net": 12.45,
+   "net_n": 4,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 0.5,
+   "pb_n": 5,
+   "revenue": 5913.07,
+   "roce": 7.7,
+   "roce_n": 5,
+   "roe": 4.05,
+   "roe_n": 6,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Bonlon Industries Ltd",
+     "out": "",
+     "symbol": "BONLON",
+     "unverified": false,
+     "what": "Bonlon Industries Ltd deals in nonferrous metals, cables & wires",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "N D Metal Industries Ltd",
+     "out": "",
+     "symbol": "NDMETAL",
+     "unverified": false,
+     "what": "N.D. Metal Industries Ltd imports and trades Copper, Brass, Zinc, Tin, and Aluminium scrap",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 1.1,
+   "ebitda_n": 1,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Distribution and trading",
+   "listed": 2,
+   "n": 2,
+   "net": 0.5,
+   "net_n": 1,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 3.15,
+   "pb_n": 2,
+   "revenue": 651.03,
+   "roce": 5.0,
+   "roce_n": 2,
+   "roe": 3.9,
+   "roe_n": 2,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Arfin India Ltd",
+     "out": "",
+     "symbol": "ARFIN",
+     "unverified": false,
+     "what": "Arfin India Ltd manufactures and trades non-ferrous metals",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bothra Metals & Alloys Ltd",
+     "out": "",
+     "symbol": "BMAL",
+     "unverified": false,
+     "what": "Bothra Metal & Alloy Ltd manufactures Aluminium Section and Ingots and trades Non-Ferrous Metals",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Hind Aluminium Industries Ltd",
+     "out": "",
+     "symbol": "HINDALUMI",
+     "unverified": false,
+     "what": "Hind Aluminium Industries Ltd is in the business of Aluminium Products, Power, and Treasury Operations",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Jivial Industries Ltd",
+     "out": "",
+     "symbol": "JIVIAL",
+     "unverified": false,
+     "what": "Jivial Industries Limited is engaged in the manufacturing of finished aluminium railings and fixtures from unfinished extruded aluminium railings and aluminium castings",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kanishk Aluminium India Ltd",
+     "out": "",
+     "symbol": "KANISHK",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Maan Aluminium Ltd",
+     "out": "",
+     "symbol": "MAANALU",
+     "unverified": false,
+     "what": "Maan Aluminium Ltd is in the business of manufacturing & trading of aluminium profiles, anodizing and fabrication of profiles, aluminium ingots, aluminium billets etc",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Maitri Enterprises Ltd",
+     "out": "",
+     "symbol": "MAITRI",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Manaksia Aluminium Company Ltd",
+     "out": "",
+     "symbol": "MANAKALUCO",
+     "unverified": false,
+     "what": "Manaksia Aluminium Ltd manufactures value-added secondary aluminium products like Aluminum Rolled Sheets /Coils",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "MMP Industries Ltd",
+     "out": "",
+     "symbol": "MMP",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Msafe Equipments Ltd",
+     "out": "",
+     "symbol": "MSAFE",
+     "unverified": false,
+     "what": "Msafe Equipments Limited is engaged in the manufacturing, sales, and rental of access and height-safety equipment used for safe working at heights",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Palco Metals Ltd",
+     "out": "",
+     "symbol": "PALCO",
+     "unverified": false,
+     "what": "Palco Metals Ltd does production of various Aluminum products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "PG Foils Ltd",
+     "out": "",
+     "symbol": "PGFOILQ",
+     "unverified": false,
+     "what": "PG Foils Ltd is a manufacturer of Aluminium Foil in various forms",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sacheta Metals Ltd",
+     "out": "",
+     "symbol": "SACHEMT",
+     "unverified": false,
+     "what": "Sacheta Metals Ltd is a manufacturer & exporter of aluminium, stainless, and mild steel Houseware kitchenware, and utensils",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sudal Industries Ltd",
+     "out": "",
+     "symbol": "SUDAI",
+     "unverified": false,
+     "what": "Sudal Industries Ltd manufactures Aluminium Extrusions and Aluminium based Alloys",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 6.75,
+   "ebitda_n": 14,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Aluminium",
+   "listed": 14,
+   "n": 14,
+   "net": 2.0,
+   "net_n": 13,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 1.4,
+   "pb_n": 14,
+   "revenue": 3965.93,
+   "roce": 13.2,
+   "roce_n": 14,
+   "roe": 8.65,
+   "roe_n": 14,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": "rest",
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Jain Resource Recycling Ltd",
+     "out": "",
+     "symbol": "JAINREC",
+     "unverified": false,
+     "what": "Jain Resource Recycling and its subsidiaries specialize in recycling non-ferrous metal scrap and producing lead, copper, and aluminium alloys",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Caliber Mining and Logistics Ltd",
+     "out": "",
+     "symbol": "CMLL",
+     "unverified": false,
+     "what": "Caliber Mining and Logistics Limited is an integrated service provider specializing in coal extraction and coal logistics",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Mardia Samyoung Capillary Tubes Company Ltd",
+     "out": "",
+     "symbol": "MSCTC",
+     "unverified": false,
+     "what": "Mardia Samyoung Capillary Tubes Company Ltd is in the manufacturing business",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Nile Ltd",
+     "out": "",
+     "symbol": "NILE",
+     "unverified": false,
+     "what": "Nile Ltd is a manufacturer of Pure Lead for battery consumption",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sizemasters Technology Ltd",
+     "out": "",
+     "symbol": "SIZEMASTER",
+     "unverified": false,
+     "what": "Sizemasters Technology Ltd manufactures and trades various types of gauges and tools",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bhagyanagar India Ltd",
+     "out": "",
+     "symbol": "BHAGYANGR",
+     "unverified": false,
+     "what": "Bhagyanagar India Ltd. is engaged in manufacturing of copper and other copper products and alloys",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Nagpur Power & Industries Ltd",
+     "out": "",
+     "symbol": "NAGPI",
+     "unverified": false,
+     "what": "Nagpur Power and Industries Ltd extracts High / Medium / Low Carbon Ferro Manganese and Silico",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sindhu Trade Links Ltd",
+     "out": "",
+     "symbol": "SINDHUTRAD",
+     "unverified": false,
+     "what": "The Co. through its subsidiaries is also engaged in diversified businesses like Media, Overseas Coal Mining",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Onix Solar Energy Ltd",
+     "out": "",
+     "symbol": "ONIXSOLAR",
+     "unverified": false,
+     "what": "Onix Solar Energy Ltd is in the business of renewable energy solutions",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Foundry Fuel Products Ltd",
+     "out": "no revenue figure",
+     "symbol": "FFPL",
+     "unverified": false,
+     "what": "Foundry Fuel Products Ltd manufactures and trades in Low Ash Metallurgical Coke",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Goa Carbon Ltd",
+     "out": "no revenue figure",
+     "symbol": "GOACARBON",
+     "unverified": false,
+     "what": "",
+     "year": null
+    }
+   ],
+   "ebitda": 5.9,
+   "ebitda_n": 9,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Other metals and mining companies",
+   "listed": 11,
+   "n": 9,
+   "net": 5.3,
+   "net_n": 9,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": true,
+   "pb": 2.6,
+   "pb_n": 9,
+   "revenue": 15506.150000000001,
+   "roce": 20.2,
+   "roce_n": 9,
+   "roe": 19.0,
+   "roe_n": 9,
+   "scale": null,
+   "words": ""
+  }
+ ],
+ "sector": "Metals and mining",
+ "stamp": [
+  62,
+  32,
+  3
+ ],
+ "theme": "Metals and mining",
+ "total": 66,
+ "unit": "₹ crore",
+ "unplaced": 0,
+ "v": 2,
+ "whole": false,
+ "window": {
+  "of": 66,
+  "shown": 66
+ }
+}

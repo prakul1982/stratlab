@@ -97,8 +97,11 @@ US_INDICES = {"SPX", "GSPC", "^GSPC", "NDX", "IXIC", "^IXIC", "DJI", "^DJI", "DJ
 IN_INDEX = re.compile(r"^(NIFTY|SENSEX|BANKNIFTY|FINNIFTY|MIDCPNIFTY|BANKEX|INDIAVIX|CNX)[A-Z0-9 &-]*$")
 # a market value above this (in the page's unit: $ million, ₹ crore) is a data error: no company is worth $8 trillion
 CAP_CEILING = {"US": 8_000_000.0, "IN": 10_000_000.0}
-IN_SHARES_MAX = 30e9        # an Indian company's implied share count (market value ÷ price) above this is a unit or share-count error (R26-001)
-IN_PS_MAX = 50              # an Indian market value over this many times its latest year's revenue is out of line (R26-001)
+# an Indian company's implied share count (market value ÷ price) above this is a unit or share-count error (R26-001); LIVE9A-024: 30 billion
+# left YES Bank (about 31 billion shares) without a value, and Vodafone Idea has over 100 billion
+IN_SHARES_MAX = 150e9
+IN_PS_MAX = 50              # an Indian market value over this many times its latest year's revenue is out of line (R26-001)...
+IN_PE_BACKED = 150          # ...unless its latest year's profit bears it out (LIVE9A-024: a holding company, Bajaj Holdings, earns little revenue)
 # an exchange operator that is not itself a listed company, which an instrument list can carry under its own code (R26-001)
 UNLISTED_NAMES = re.compile(r"^\s*national stock exchange of india\b", re.I)
 PE_MAX = 1000.0                # a P/E above this says the market value or the profit is off, not the company: n/a
@@ -908,6 +911,16 @@ def _latest_sales(f: dict):
     return vals[-1] if vals else None
 
 
+def _latest_profit(f: dict):
+    """The latest year's profit from the page's own table, when it is in the market value's unit (LIVE9A-024)."""
+    unit, cap_unit = str(f.get("unit") or ""), str(f.get("market_cap_unit") or "")
+    if not unit or unit != cap_unit:
+        return None
+    vals = [_num(y.get("profit")) for y in f.get("years") or [] if str(y.get("year") or "").strip().upper() != "TTM"]
+    vals = [v for v in vals if v is not None]
+    return vals[-1] if vals else None
+
+
 def cap_problem(f: dict | None) -> str | None:
     """Why a page's market value can't be right, or None when it passes every check (or there is none). Checked:
     - depositary shares whose ratio to ordinary shares couldn't be read (the value counts ordinary shares at the ADS price);
@@ -947,7 +960,9 @@ def cap_problem(f: dict | None) -> str | None:
         if price and price > 0 and cap * 1e7 / price > IN_SHARES_MAX:
             return "implied share count out of range"
         if sales is not None and sales > 0 and cap / sales > IN_PS_MAX:
-            return "out of line with revenue"
+            profit = _latest_profit(f)
+            if not (profit is not None and profit > 0 and cap / profit <= IN_PE_BACKED):
+                return "out of line with revenue"
     if region == "US":
         profit, pe = _num(f.get("profit_usd")), _num(f.get("pe"))
         if profit is None and str(f.get("unit") or "$").startswith("$"):
@@ -1144,6 +1159,15 @@ def financial_mismatch(f: dict | None) -> bool:
     except (TypeError, ValueError):
         return False
     return sales > 0 and profit > sales
+
+
+def basis_missing(f: dict | None) -> bool:
+    """r60b (R60, the owner's review of the live R59 decks: a regional bank's revenue beside its annual report's, the basis of neither said):
+    whether a stored US page of a bank, lender or insurer with reported years was built before its revenue's lines were kept
+    (sec.revenue_parts): it is built again once, so a theme can say each financial filer's revenue basis."""
+    if not isinstance(f, dict) or f.get("region") != "US" or not f.get("bank") or f.get("no_numbers") or f.get("not_company"):
+        return False
+    return "revenue_basis" not in f and any(isinstance(y, dict) and y.get("sales") is not None for y in f.get("years") or [])
 
 
 def behind_due(f: dict | None, ts: float | None, now: float | None = None) -> bool:
@@ -1390,7 +1414,7 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
     return {
         "v": FACTS_VERSION, **{k: checks[k] for k in ("sales_usd", "cap_unverified", "not_company", "divs_paid", "pe_basis", "pe_end", "eps",
                                                       "foreign", "profit_usd", "annual_unread", "annual_filed", "annual_form", "no_numbers", "cap_why",
-                                                      "type_unread", "eps_q", "no_interest", "pe_oneoff")
+                                                      "type_unread", "eps_q", "no_interest", "pe_oneoff", "revenue_basis")
                                if checks.get(k) is not None},
         "region": region, "symbol": symbol, "name": name, "exchange": exchange,
         "industry": _dedupe(public_text(str(x)) for x in (p.get("industry_path") or []) if x)[:4],
@@ -1521,7 +1545,7 @@ def unique_filings(rows: list[dict]) -> list[dict]:
     return out
 
 
-_REGISTRATION = re.compile(r"\s*/\s*(?:[A-Za-z]{2}|NEW)\s*/?\s*$")
+_REGISTRATION = re.compile(r"\s*/\s*(?:[A-Za-z]{2,3}|NEW)\s*/?\s*$")      # "/DE/", "/MD/", "/CAN/" (any case), "/NEW"
 
 
 def strip_registration(name: str | None) -> str | None:
@@ -2392,10 +2416,14 @@ th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:
 
 .card>h2:first-child{margin-top:0}.surv{margin:2px 0}.surv summary{cursor:pointer;min-height:44px;display:flex;align-items:center;flex-wrap:wrap;gap:2px 10px}.surv p{margin:0 0 8px}
 .badge{display:inline-block;border:1px solid var(--orange-ink);color:var(--orange-ink);background:var(--orange-soft);border-radius:999px;padding:2px 10px;font-size:13px;font-weight:600}
+/* LIVE9A-011: a public theme layer's companies as a table: names and tickers left, figures right, the name wrapping, sideways scroll on a phone */
+.cotbl{overflow-x:auto}.cotbl th.l,.cotbl td.l{text-align:left}.cotbl td:first-child{white-space:normal;min-width:150px;position:static}
+.cotbl th:first-child{position:static}
 ul.plain{list-style:none;padding:0;margin:0}ul.plain li{padding:10px 0;border-bottom:1px solid var(--line)}ul.plain li:last-child{border-bottom:0}
 .ctas{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
 ul.dir{list-style:none;padding:0;margin:16px 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));gap:8px}
 ul.dir li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 14px;background:var(--card);border:1px solid var(--line);border-radius:12px}
+ul.dir li:has(a+.muted){flex-wrap:wrap;row-gap:0}
 ul.dir li:hover{border-color:var(--line-2)}ul.dir a{display:flex;align-items:center;flex:1;min-width:0;min-height:48px;line-height:1.3;color:var(--ink);text-decoration:none}
 ul.dir a:hover{color:var(--blue)}ul.dir .muted{flex:none;font-size:13px}nav.links{margin:12px 0 6px}
 .links{display:flex;flex-wrap:wrap;gap:8px}.links a{display:inline-flex;align-items:center;min-height:40px;padding:4px 14px;border:1px solid var(--line);border-radius:999px;text-decoration:none;background:var(--card);color:var(--ink-2)}
@@ -2517,7 +2545,9 @@ def _links(region: str, rows: list[tuple[str, str]]) -> str:
     return '<div class="links">' + "".join(f'<a href="{e(path(region, s))}">{e(n if n == s else f"{tidy(n)} ({s})")}</a>' for s, n in rows) + "</div>"
 
 
-PUBLIC_MENU = (("/", "Home"), ("/library", "Library"), ("/stocks", "Companies"), ("/themes", "Themes"), ("/blog", "Blog"),
+# NAV3 (LIVE9A-019): the same list as the landing page's header and the app's public frame (PublicFrame.tsx PUBLIC_MENU) and index.html's
+# menu; the logo is the way home
+PUBLIC_MENU = (("/library", "Library"), ("/stocks", "Companies"), ("/themes", "Themes"), ("/blog", "Blog"),
                ("/pricing", "Plans"), ("/about", "About"), ("/contact", "Contact"))
 # the app's own addresses, which ask a signed-out visitor to sign in (frontend vercel.json sends them to the app): a link to one from a
 # public page says so and carries rel="nofollow", so neither a reader nor a crawler is led to a sign-in wall unawares (AS1)
@@ -2552,7 +2582,7 @@ def _top(sign_in: str | None = None) -> str:
     site = settings.PUBLIC_SITE_URL
     sign_in = sign_in or f"{site}/mine"
     # AS1: the site's public pages, the same on every page the server draws and in the app's public frame (PublicFrame.tsx
-    # PUBLIC_MENU): Home, the strategy library beside Companies (DK-008), Themes, Blog, Plans, About and Contact. Nothing in it
+    # PUBLIC_MENU): the strategy library beside Companies (DK-008), Themes, Blog, Plans, About and Contact. Nothing in it
     # leads to a page that asks for sign-in; Sign in says so itself
     menu = "".join(f'<a href="{h}">{t}</a>' for h, t in PUBLIC_MENU)
     return (f'<a class="skip" href="#main">Skip to main content</a><header class="nav"><a class="brand" href="{site}/" aria-label="StratLab home">'
@@ -2596,6 +2626,18 @@ def _find_form(region: str | None, q: str = "") -> str:
             '<button class="btn" type="submit">Find</button></form>')
 
 
+# a filing's legal endings as a name in its own case writes them
+_ENDINGS = {"INC": "Inc", "CORP": "Corp", "CO": "Co", "LTD": "Ltd", "PLC": "plc", "HOLDINGS": "Holdings", "GROUP": "Group", "COMPANY": "Company",
+            "CORPORATION": "Corporation", "INCORPORATED": "Incorporated", "LIMITED": "Limited"}
+# three-letter words a company name spells as a word, not as letters
+_WORDS3 = {"THE", "AND", "FOR", "OIL", "GAS", "NEW", "ONE", "TWO", "SUN", "AIR", "ALL", "BIG", "BOX", "CAR", "TOP", "WEB", "NET", "ART", "BAY",
+           "SEA", "SKY", "RED", "OAK", "ICE", "HUB", "KEY", "LAB", "MAN", "MAX", "PAY", "PET", "POP", "RAY", "RUN", "SEE", "SIX", "TEN", "TEX",
+           "TIN", "WAY", "WIN", "ZOO", "AGE", "BIO", "CAN", "CAP", "DOT", "EYE", "FIT", "FOX", "FUN", "GEO", "GOLD", "HOT", "JET", "LAW", "LOW",
+           "MED", "MIX", "NOW", "OPT", "OUR", "OWN", "PRO", "SAN", "SOL", "TEA", "TOY", "USE", "VAN", "VET", "WAR", "WET", "YES", "ARM", "ACE",
+           "AMP", "ARC", "ASH", "AVE", "BEE", "BET", "BUS", "COM", "DAY", "DEN", "DIG", "DRY", "EGG", "ELF", "END", "ERA", "FAN", "FAR", "FEW",
+           "GEM", "GUY", "HAT", "HIT", "INK", "INN", "ION", "JOY", "LEE", "LEG", "LID", "LOT", "MAP", "MET", "NUT", "ODD", "OLD", "ORE", "PAN",
+           "PEN", "PIE", "PIN", "RIM", "ROW", "RUB", "SAT", "SET", "SON", "TAP", "TIE", "TIP", "TOW", "TUB", "URN", "VIA", "WAX", "ZEN", "ACT",
+           "ADD", "ANT", "ASK", "ILL", "OFF", "SPA", "TRY", "FLY", "FRY", "SHY", "STY", "DRY", "CRY", "SLY", "SPY", "PLY", "GYM", "MRS", "INT"}
 _KEEP_UPPER = {"IBM", "AMD", "AIG", "UPS", "PNC", "PPG", "ICE", "CME", "USA", "US", "UK", "LLC", "LP", "NV", "SA", "AG", "SE", "ETF",
                "REIT", "ADR", "II", "III", "IV", "NVIDIA", "ASML", "HSBC", "UBS", "BHP", "SAP", "TSMC", "KLA", "CSX", "AT&T"}
 # words title case gets wrong, as the companies write them
@@ -2615,7 +2657,20 @@ def proper_name(name: str | None) -> str | None:
     dropped. A capitals name with a mixed-case ending ("ELI LILLY & Co") counts as capitals."""
     if name:
         name = strip_registration(name) or name
+        # an index list's "Home Depot (The)" is "The Home Depot"
+        name = re.sub(r"^(.+?),?\s*\(The\)$", r"The \1", name.strip(), flags=re.I)
     core = re.sub(r"\s+(?:Co|Inc|Corp|Ltd)\.?$", "", name or "")
+    if name and core != core.upper() and re.search(r"[a-z]", core):
+        # a name in its own case with the filing's legal ending in capitals ("TransDigm Group INC", "TFS Financial CORP") or a joining
+        # word in title case ("Bank Of Montreal"): only those words change (rel1, LIVE9A-011)
+        words = name.split(" ")
+        for i, w in enumerate(words):
+            bare = re.sub(r"[^A-Za-z]", "", w)
+            if bare in _ENDINGS and (i == len(words) - 1 or i >= len(words) - 2):
+                words[i] = w.replace(bare, _ENDINGS[bare])
+            elif i and bare in ("Of", "And", "The", "For") and w == bare:
+                words[i] = w.lower()
+        return " ".join(words)
     if not name or core != core.upper() or not re.search(r"[A-Z]{2}", core):
         return name
 
@@ -2627,6 +2682,10 @@ def proper_name(name: str | None) -> str | None:
             return w[:1] + w[1:].lower()
         if core in _KEEP_UPPER or (len(core) <= 4 and not re.search(r"[AEIOUY]", core)) or re.search(r"[A-Za-z]&[A-Za-z]", w):
             return w
+        if len(core) == 3 and core.isalpha() and core not in _WORDS3 and re.search(r"[^AEIOUY]{2}", core):
+            return w                                  # three letters with two consonants together that aren't a word are letters: "UFJ", "GSI" (rel1, LIVE9A-011)
+        if core in ("OF", "AND", "THE", "FOR") and w != name.split(" ")[0]:
+            return w.lower()
         return "-".join(x[:1] + x[1:].lower() for x in w.split("-"))
     return re.sub(r"\bAmazon Com\b", "Amazon.com", " ".join(word(w) for w in name.split(" ")))
 

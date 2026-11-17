@@ -1,0 +1,1179 @@
+{
+ "adjacent_n": 0,
+ "as_of": "2026-11-16",
+ "basis": "Each company's latest full financial year ended March, in ₹ crore. Revenue, EBITDA margin (operating profit before depreciation as a share of revenue) and net margin (net profit as a share of revenue) are that year's; return on capital employed (ROCE) is the latest reported. Consolidated accounts where the company files them. Banks and lenders have no EBITDA margin or ROCE.",
+ "chain": {
+  "compared": [
+   "Chlor-alkali and soda ash producers",
+   "Organic intermediates and petrochemical derivatives",
+   "Fluorochemicals and industrial gases",
+   "Specialty and performance chemicals"
+  ],
+  "highest": "Fluorochemicals and industrial gases",
+  "line": "Among the 4 layers with at least 5 companies with the figure and one kind of business, median EBITDA margin is highest in Fluorochemicals and industrial gases (24.0%) and lowest in Organic intermediates and petrochemical derivatives (6.0%), a gap of 18.0 points; among the map's layers, the \"Other\" group left out. Shown, not ranked: Custom synthesis and agrochemicals (24.2%), a different business model: contract manufacturing (stated by the layer's own name).",
+  "lowest": "Organic intermediates and petrochemical derivatives",
+  "measure": "ebitda",
+  "unranked": [
+   {
+    "layer": "Custom synthesis and agrochemicals",
+    "why": "a different business model: contract manufacturing (stated by the layer's own name)"
+   },
+   {
+    "layer": "Distribution and trading",
+    "why": "fewer than 5 companies with the figure"
+   },
+   {
+    "layer": "Other chemical companies",
+    "why": "companies outside the map's layers"
+   }
+  ]
+ },
+ "lender": false,
+ "listed": 102,
+ "members": 98,
+ "notable": [
+  {
+   "from": 25.5,
+   "from_year": "Mar 2023",
+   "kind": "move",
+   "layer": "Chlor-alkali and soda ash producers",
+   "move": -11.5,
+   "n": 6,
+   "to": 14.0,
+   "to_year": "Mar 2026"
+  }
+ ],
+ "page": "/themes/in/chemical",
+ "period": {
+  "n": 95,
+  "of": 98,
+  "year": "Mar 2026"
+ },
+ "read_on": "2026-11-16",
+ "region": "IN",
+ "rows": [
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Gujarat Alkalies and Chemicals Limited",
+     "out": "",
+     "symbol": "GUJALKALI",
+     "unverified": false,
+     "what": "Product Offerings The company has over 36 products in its portfolio, including Caustic Soda lye",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tata Chemicals Limited",
+     "out": "",
+     "symbol": "TATACHEM",
+     "unverified": false,
+     "what": "Incorporated in 1939, Tata Chemicals Ltd manufactures and exports basic chemistry and specialty products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Chemfab Alkalis Limited",
+     "out": "",
+     "symbol": "CHEMFAB",
+     "unverified": false,
+     "what": "Incorproated in 2009, Chemfab Alkalis Ltd manufactures basic inorganic chemicals and PVCO pipes",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Epigral Ltd",
+     "out": "",
+     "symbol": "EPIGRAL",
+     "unverified": false,
+     "what": "The company is the 6th largest producer of Chloromethanes in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "GHCL Ltd",
+     "out": "",
+     "symbol": "GHCL",
+     "unverified": false,
+     "what": "Established 1983, GHCL Limited is engaged in the business of manufacturing and trading of Inorganic Chemicals (Soda Ash)",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "TGV Sraac Ltd",
+     "out": "",
+     "symbol": "TGVSL",
+     "unverified": false,
+     "what": "TGV Sraac Ltd is a producer of Chlor-Alkali products, Chloromethane and also manufactures Castor Derivatives and Fatty Acids Business",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "DCW Ltd",
+     "out": "no revenue figure",
+     "symbol": "DCW",
+     "unverified": false,
+     "what": "",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "DCM Shriram Limited",
+     "out": "",
+     "symbol": "DCMSHRIRAM",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 15.3,
+   "ebitda_n": 6,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Chlor-alkali and soda ash producers",
+   "listed": 8,
+   "n": 7,
+   "net": 3.65,
+   "net_n": 6,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 1.1,
+   "pb_n": 6,
+   "revenue": 40332.0,
+   "roce": 8.2,
+   "roce_n": 6,
+   "roe": 5.9,
+   "roe_n": 6,
+   "scale": null,
+   "words": "These plants electrolyse salt or process limestone and brine to make caustic soda, chlorine and soda ash sold in bulk."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Deepak Nitrite Limited",
+     "out": "",
+     "symbol": "DEEPAKNTR",
+     "unverified": false,
+     "what": "Incorporated in 1970, Deepak Nitrite Ltd manufactures Basic Intermediates, Fine & Speciality Chemicals, Performance Products, and",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Aarti Industries Limited",
+     "out": "",
+     "symbol": "AARTIIND",
+     "unverified": false,
+     "what": "Aarti Industries Ltd, the flagship company of the Aarti group, manufacturing organic and inorganic chemicals at its major facilities in Vapi, Jhagadia, Dahej and Kutch, in…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Alkyl Amines Chemicals Ltd",
+     "out": "no revenue figure",
+     "symbol": "ALKYLAMINE",
+     "unverified": false,
+     "what": "by Mr Yogesh Kothari, Alkyl Amines is a leading manufacturer of aliphatic amines in India",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Balaji Amines Ltd",
+     "out": "",
+     "symbol": "BALAMINES",
+     "unverified": false,
+     "what": "Incorporate in 1989, Balaji Amines Ltd is engaged in manufacturing of specialty chemicals, aliphatic amines, and derivatives, along with ownership of a five-star hotel in…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Laxmi Organic Industries Ltd",
+     "out": "",
+     "symbol": "LXCHEM",
+     "unverified": false,
+     "what": "The Company primarily manufactures Ethyl Acetate, Acetic Acid and Diketene Derivative Products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "I G Petrochemicals Ltd",
+     "out": "",
+     "symbol": "IGPL",
+     "unverified": false,
+     "what": "I G Petrochemicals Ltd, incorporated in 1988, manufactures Phthalic Anhydride (PAN), Maleic Anhydride (MAN) and Benzoic Acid which are used in manufacturing of dyes, polyester…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Thirumalai Chemicals Ltd",
+     "out": "",
+     "symbol": "TIRUMALCHM",
+     "unverified": false,
+     "what": "Thirumalai Chemicals Ltd is a part of the Thirumalai Group, which has business interests in chemicals, surfactants, pigments and education",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Manali Petrochemicals Ltd",
+     "out": "",
+     "symbol": "MANALIPETC",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 6.0,
+   "ebitda_n": 7,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Organic intermediates and petrochemical derivatives",
+   "listed": 8,
+   "n": 7,
+   "net": 4.5,
+   "net_n": 7,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 2.1,
+   "pb_n": 7,
+   "revenue": 24886.0,
+   "roce": 4.7,
+   "roce_n": 7,
+   "roe": 4.1,
+   "roe_n": 7,
+   "scale": null,
+   "words": "These companies convert petrochemical and aromatic feedstocks into amines, phenol, anhydrides, glycols and acrylic fibre, sold to other manufacturers."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "SRF Limited",
+     "out": "",
+     "symbol": "SRF",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Navin Fluorine International Limited",
+     "out": "",
+     "symbol": "NAVINFLUOR",
+     "unverified": false,
+     "what": "Navin Fluorine International Ltd is primary engaged in producing refrigeration gases, inorganic fluorides, specialty organofluorines and offers contract research and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Gujarat Fluorochemicals Limited",
+     "out": "",
+     "symbol": "FLUOROCHEM",
+     "unverified": false,
+     "what": "It is one of the leading producers of Fluoro-polymers, Fluoro-specialities, Chemicals and Refrigerants in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tanfac Industries Ltd",
+     "out": "",
+     "symbol": "TANFACIND",
+     "unverified": false,
+     "what": "Tanfac Industries Ltd is amongst the leading producers of Hydrofluoric Acid and its derivatives",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Stallion India Fluorochemicals Ltd",
+     "out": "",
+     "symbol": "STALLION",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Linde India Ltd",
+     "out": "",
+     "symbol": "LINDEINDIA",
+     "unverified": false,
+     "what": "Linde India Limited, a subsidiary of BOC Group,UK (owns 75% stake in the co), is primarily engaged in manufacture of industrial and medical gases and construction of cryogenic…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ellenbarrie Industrial Gases Ltd",
+     "out": "",
+     "symbol": "ELLEN",
+     "unverified": false,
+     "what": "Ellenbarrie Industrial Gases Ltd. is engaged in the business of oxygen and nitrogen",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 24.0,
+   "ebitda_n": 7,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Fluorochemicals and industrial gases",
+   "listed": 7,
+   "n": 7,
+   "net": 11.6,
+   "net_n": 7,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 6.2,
+   "pb_n": 7,
+   "revenue": 28112.0,
+   "roce": 14.6,
+   "roce_n": 7,
+   "roe": 13.6,
+   "roe_n": 7,
+   "scale": null,
+   "words": "These firms make refrigerant gases, fluoropolymers and fluorides, and supply refrigerant and industrial gases."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "PI Industries Limited",
+     "out": "",
+     "symbol": "PIIND",
+     "unverified": false,
+     "what": "PI Industries Ltd is a leading player in the agro-chemicals space having strong presence in both Domestic and Export markets",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Anupam Rasayan India Limited",
+     "out": "",
+     "symbol": "ANURAS",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Aether Industries Ltd",
+     "out": "",
+     "symbol": "AETHER",
+     "unverified": false,
+     "what": "The company produces products for its customers under contractual supply agreements that can be either short-term or long-term",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Paushak Ltd",
+     "out": "",
+     "symbol": "PAUSHAKLTD",
+     "unverified": false,
+     "what": "Paushak is India’s largest phosgene based specialty chemicals manufacturer serving pharmaceutical, agrochemical and performance industries",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "NACL Industries Ltd",
+     "out": "",
+     "symbol": "NACLIND",
+     "unverified": false,
+     "what": "They have over 50 products covering all major crops",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Punjab Chemicals & Crop Protection Ltd",
+     "out": "",
+     "symbol": "PUNJABCHEM",
+     "unverified": false,
+     "what": "PCCPL operates in Agrochemicals",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sumitomo Chemical India Ltd",
+     "out": "",
+     "symbol": "SUMICHEM",
+     "unverified": false,
+     "what": "Sumitomo Chemical India Ltd. (SCIL) is one of the leading players in the industry which has a balanced portfolio of technical as well as formulation products along with backward…",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 24.2,
+   "ebitda_n": 7,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Custom synthesis and agrochemicals",
+   "listed": 7,
+   "n": 7,
+   "net": 16.8,
+   "net_n": 7,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 3.9,
+   "pb_n": 7,
+   "revenue": 15401.0,
+   "roce": 10.0,
+   "roce_n": 7,
+   "roe": 7.8,
+   "roe_n": 7,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Pidilite Industries Ltd",
+     "out": "",
+     "symbol": "PIDILITIND",
+     "unverified": false,
+     "what": "Pidilite Industries Limited is a leading manufacturer of adhesives and sealants, construction chemicals, craftsmen products, DIY products and polymer emulsions in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Upl Ltd",
+     "out": "",
+     "symbol": "UPL",
+     "unverified": false,
+     "what": "UPL is principally engaged in the business of agrochemicals, industrial chemicals, chemical intermediates, speciality chemicals and production and sale of field crops and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Deepak Fertilisers & Petrochemicals Corp Ltd",
+     "out": "",
+     "symbol": "DEEPAKFERT",
+     "unverified": false,
+     "what": "Deepak Fertilisers and Petrochemicals Corporation Ltd is in the business of fertlisers, agri services, bulk chemicals, mining chemicals and real estate Deepak Fertilisers and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Fine Organic Industries Ltd",
+     "out": "",
+     "symbol": "FINEORG",
+     "unverified": false,
+     "what": "Fine Organic Industries is engaged in and outside India as manufacturers, processors, suppliers, distributors, dealers, importers, exporters of wide range of oleochemical-based…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bayer CropScience Ltd",
+     "out": "",
+     "symbol": "BAYERCROP",
+     "unverified": false,
+     "what": "Bayer CropScience is engaged in Agri Care business which primarily includes manufacture, sale and distribution of insecticides, fungicides, herbicide and various other…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Atul Limited",
+     "out": "",
+     "symbol": "ATUL",
+     "unverified": false,
+     "what": "The products of the company are used in various Industries and come mainly under two segments, Life Science Chemicals and Performance and Other Chemicals under 9 Businesses",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Supreme Petrochem Ltd",
+     "out": "",
+     "symbol": "SPLPETRO",
+     "unverified": false,
+     "what": "Supreme Petrochem Ltd (SPL) is a petrochemical company engaged in the business of manufacturing Polystyrene, Compounds of Styrenics and other Polymers",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Privi Speciality Chemicals Ltd",
+     "out": "",
+     "symbol": "PRIVISCL",
+     "unverified": false,
+     "what": "Privi Speciality Chemicals Ltd (Formerly known as Privi Speciality Ltd.) is primarily engaged in the manufacturing, supply and exports of aroma and fragrance chemicals used in…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "BASF India Ltd",
+     "out": "",
+     "symbol": "BASF",
+     "unverified": false,
+     "what": "BASF India Ltd's portfolio consists of six segments: Agricultural Solutions, Materials, Industrial solutions, Surface Technologies, Nutrition & Care and Chemicals",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Vinati Organics Limited",
+     "out": "",
+     "symbol": "VINATIORGA",
+     "unverified": false,
+     "what": "Vinati Organics Ltd is an integrated B2B manufacturer of the specialty monomers, aromatics, butyl phenols, antioxidants, polymers and inorganic /specialty intermediates, with…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Elantas Beck India Ltd",
+     "out": "",
+     "symbol": "ELANTAS",
+     "unverified": false,
+     "what": "Elantas Beck India Ltd (EBIL) manufactures specialty insulation and protective materials: wire enamels, varnishes/resins, casting/potting compounds, PCB-protection systems and…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Jubilant Ingrevia Ltd",
+     "out": "",
+     "symbol": "JUBLINGREA",
+     "unverified": false,
+     "what": "Jubilant Ingrevia, a global integrated Life Science products and Innovative Solutions provider serving, Pharmaceutical, Nutrition, Agrochemical, Consumer and Industrial customers…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sudarshan Chemical Industries Limited",
+     "out": "",
+     "symbol": "SUDARSCHEM",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Clean Science and Technology Limited",
+     "out": "",
+     "symbol": "CLEAN",
+     "unverified": false,
+     "what": "Incorporated in 2003, Clean Science and Technology Ltd is one of the leading chemical manufacturers globally",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Galaxy Surfactants Limited",
+     "out": "",
+     "symbol": "GALAXYSURF",
+     "unverified": false,
+     "what": "The company is India’s Largest Manufacturer of Oleo chemical-based Surfactants and Specialty Care Products for Home Care and Personal Care Industries Product Segment The company…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Gujarat Narmada Valley Fertilizers & Chemicals Ltd",
+     "out": "",
+     "symbol": "GNFC",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Fineotex Chemical Ltd",
+     "out": "",
+     "symbol": "FCL",
+     "unverified": false,
+     "what": "Fineotex Chemicals Ltd is engaged in the business of manufacturing auxiliaries and specialty chemicals for textiles, construction, water treatment, fertilizer, leather, and paint…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Archean Chemical Industries Ltd",
+     "out": "",
+     "symbol": "ACI",
+     "unverified": false,
+     "what": "Business Area The company is specialty marine chemicals company engaged in the production of Industrial Salt",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Rain Industries Ltd",
+     "out": "",
+     "symbol": "RAIN",
+     "unverified": false,
+     "what": "Rain Industries Limited (RAIN) is a leading vertically integrated producer of carbon, cement and Advanced materials products",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Foseco India Ltd",
+     "out": "",
+     "symbol": "FOSECOIND",
+     "unverified": false,
+     "what": "Foseco India Limited is engaged in the manufacture of products used in the metallurgical industry which are in the nature of additives and consumables that improve the physical…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Yasho Industries Ltd",
+     "out": "",
+     "symbol": "YASHO",
+     "unverified": false,
+     "what": "Yasho Industries Ltd is a manufacturer of specialty chemicals, food antioxidants, aroma chemicals, rubber accelerators and lubricant additives",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Dhanuka Agritech Ltd",
+     "out": "",
+     "symbol": "DHANUKA",
+     "unverified": false,
+     "what": "Dhanuka Agritech manufactures a wide range of agro-chemicals like herbicides, insecticides, fungicides, plant growth regulators in various forms liquid, dust, powder and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Chemplast Sanmar Ltd",
+     "out": "",
+     "symbol": "CHEMPLASTS",
+     "unverified": false,
+     "what": "It is a major manufacturer of Speciality Chemicals such as Specialty Paste PVC resin and Custom Manufactured Chemicals for agro-chemical, pharmaceutical and fine chemicals sector",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tatva Chintan Pharma Chem Ltd",
+     "out": "",
+     "symbol": "TATVA",
+     "unverified": false,
+     "what": "Tatva Chintan Pharma Chem Limited was incorporated in 1996 and it is a manufacturer of a diverse portfolio of structure Directing Agents, Phase Transfer Catalysts, electrolyte…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Vishnu Chemicals Ltd",
+     "out": "",
+     "symbol": "VISHNU",
+     "unverified": false,
+     "what": "Vishnu Chemicals Limited is in the business of manufacturing, marketing and export of Chromium chemicals and Barium compounds across the world",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Rallis India Ltd",
+     "out": "no revenue figure",
+     "symbol": "RALLIS",
+     "unverified": false,
+     "what": "The company is into manufacturing of Agrochemicals and is present across the value chain of agriculture inputs - from seeds to organic plant growth nutrients",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Grauer & Weil (India) Ltd",
+     "out": "",
+     "symbol": "GRAUWEIL",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Styrenix Performance Materials Ltd",
+     "out": "",
+     "symbol": "STYRENIX",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kiri Industries Ltd",
+     "out": "",
+     "symbol": "KIRIINDUS",
+     "unverified": false,
+     "what": "Kiri Industries Limited (KIL) is engaged in the business of manufacturing and exporting a wide range of Dyes, Dye Intermediates, and Basic Chemicals from India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bhansali Engineering Polymers Ltd",
+     "out": "",
+     "symbol": "BEPL",
+     "unverified": false,
+     "what": "Bhansali Engineering Polymers Ltd is engaged in manufacturing and sale of ABS Resins, AES Resins, ASA resins, SAN resins and their alloys with other plastics in the Indian market",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Jubilant Agri & Consumer Products Ltd",
+     "out": "",
+     "symbol": "JUBLCPL",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "DDev Plastiks Industries Ltd",
+     "out": "",
+     "symbol": "DDEVPLSTIK",
+     "unverified": false,
+     "what": "DDev Plastiks Industries Ltd manufactures Plastic Compounds",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bhagiradha Chemicals & Industries Ltd",
+     "out": "",
+     "symbol": "BHAGCHEM",
+     "unverified": false,
+     "what": "Bhagiradha Chemicals & Industries is an Agro Chemical Company in India involved in the manufacturing of insecticides, fungicides, herbicides etc",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Rossari Biotech Ltd",
+     "out": "",
+     "symbol": "ROSSARI",
+     "unverified": false,
+     "what": "They are among the largest manufacturers of textile specialty chemicals in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Nocil Ltd",
+     "out": "",
+     "symbol": "NOCIL",
+     "unverified": false,
+     "what": "NOCIL Ltd., incorporated in 1961, manufactures rubber chemicals which are used by the tyre industry and other rubber processing industries",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "J.G.Chemicals Ltd",
+     "out": "",
+     "symbol": "JGCHEM",
+     "unverified": false,
+     "what": "J.G Chemicals is a leading Zinc Oxide Manufacturer having the capability to produce up to 80 grades of Zinc oxide",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "GSP Crop Science Ltd",
+     "out": "",
+     "symbol": "GSPCROP",
+     "unverified": false,
+     "what": "Company mejorly focusing on fungiside and insecticide and related pesticide Business Profile The Company is a research-driven agrochemical company with 40+ years of experience…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Titan Biotech Ltd",
+     "out": "",
+     "symbol": "TITANBIO",
+     "unverified": false,
+     "what": "Titan Biotech Ltd manufacturer and exporter of the Biological products Business",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bodal Chemicals Ltd",
+     "out": "",
+     "symbol": "BODALCHEM",
+     "unverified": false,
+     "what": "Bodal Chemicals Limited is one of India’s leading integrated Dyestuff companies and is the largest domestic manufacturer of Dye Intermediates",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "S H Kelkar & Company Ltd",
+     "out": "",
+     "symbol": "SHK",
+     "unverified": false,
+     "what": "S H Kelkar and Company Limited is engaged in manufacture, supply and exports of fragrances and aroma ingredients It is the largest domestic fragrance producer in India and the…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Indokem Ltd",
+     "out": "",
+     "symbol": "INDOKEM",
+     "unverified": false,
+     "what": "Indokem Ltd manufactures and deals in dyes, sizing chemicals auxiliaries and electrical capacitors",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Shree Pushkar Chemicals & Fertilizers Ltd",
+     "out": "",
+     "symbol": "SHREEPUSHK",
+     "unverified": false,
+     "what": "Shree Pushkar Chemicals & Fertilisers Ltd in the business of manufacturing and trading of Chemicals and Fertilisers",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bharat Rasayan Ltd",
+     "out": "",
+     "symbol": "BHARATRAS",
+     "unverified": false,
+     "what": "Bharat Rasayan Ltd is engaged in manufacturing Technical Grade Pesticides and Intermediates used in the agro-chemical industry",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Insecticides India Ltd",
+     "out": "",
+     "symbol": "INSECTICID",
+     "unverified": false,
+     "what": "Insecticides India is into manufacturing of agrochemicals (technicals and formulations) and biological and household products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Nitta Gelatin India Ltd",
+     "out": "",
+     "symbol": "NITTAGELA",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bhageria Industries Ltd",
+     "out": "",
+     "symbol": "BHAGERIA",
+     "unverified": false,
+     "what": "Bhageria Industries Ltd is in the business of Chemicals and Solar power generation & distribution",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Oriental Aromatics Ltd",
+     "out": "",
+     "symbol": "OAL",
+     "unverified": false,
+     "what": "Oriental Aromatics Ltd is a manufacturer of specialty-based aroma chemicals, camphor, and flavour and fragrance products History: In August 2008, Oriental Aromatics acquired a…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Vidhi Specialty Food Ingredients Ltd",
+     "out": "",
+     "symbol": "VIDHIING",
+     "unverified": false,
+     "what": "Vidhi Specialty Food Ingredients Limited, incorporated in 1994, is a leading manufacturer of Superior Synthetic and Natural Food Grade Colours",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Camlin Fine Sciences Ltd",
+     "out": "",
+     "symbol": "CAMLINFINE",
+     "unverified": false,
+     "what": "Camlin Fine Sciences is engaged in the Business of Speciality Chemicals",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "India Pesticides Ltd",
+     "out": "",
+     "symbol": "IPL",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Meghmani Organics Ltd",
+     "out": "",
+     "symbol": "MOL",
+     "unverified": false,
+     "what": "The company manufactures Pigments and Agrochemicals through its 6 manufacturing facilities located in Gujarat",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Citurgia Biochemicals Ltd",
+     "out": "no revenue figure",
+     "symbol": "CITURGIA",
+     "unverified": false,
+     "what": "Citric acid is used in foods, soft drinks, confectionery, pharmaceuticals, and industrial chemicals to provide stable pH conditions for polyester",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Astec Lifesciences Ltd",
+     "out": "",
+     "symbol": "ASTEC",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ultramarine & Pigments Ltd",
+     "out": "",
+     "symbol": "ULTRAMAR",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Indo Borax & Chemicals Ltd",
+     "out": "",
+     "symbol": "INDOBORAX",
+     "unverified": false,
+     "what": "Indo Borax & Chemicals Ltd is in the business of manufacturing Boron and Lithium products Change in Ownership Company informed that the share purchase transaction under the SPA…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Excel Industries Ltd",
+     "out": "",
+     "symbol": "EXCELINDUS",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Platinum Industries Ltd",
+     "out": "",
+     "symbol": "PLATIND",
+     "unverified": false,
+     "what": "Platinum Industries Ltd is a specialty chemicals company focused on PVC & CPVC additives",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Andhra Sugars Ltd",
+     "out": "",
+     "symbol": "ANDHRSUGAR",
+     "unverified": false,
+     "what": "Andhra Sugars Limited is a manufacturer of Sugar, Industrial Alcohol, Chlor Alkali Products, Aspirin, Sulphuric Acid, Liquid & Solid Propellants",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Vikram Thermo (India) Ltd",
+     "out": "",
+     "symbol": "VIKRAMTH",
+     "unverified": false,
+     "what": "It manufactures, markets, and exports pharmaceutical excipients and chemicals",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tamil Nadu Petro Products Ltd",
+     "out": "",
+     "symbol": "TNPETRO",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sudarshan Colorants India Ltd",
+     "out": "no revenue figure",
+     "symbol": "SUDARCOLOR",
+     "unverified": false,
+     "what": "",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Valiant Organics Ltd",
+     "out": "",
+     "symbol": "VALIANTORG",
+     "unverified": false,
+     "what": "Valiant Organics Ltd manufactures and deals in specialty chemicals and pharma intermediates",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Himadri Speciality Chemical Limited",
+     "out": "",
+     "symbol": "HSCL",
+     "unverified": false,
+     "what": "Himadri Speciality Chemical is primarily engaged in the manufacturing of carbon materials and chemicals",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Neogen Chemicals Limited",
+     "out": "",
+     "symbol": "NEOGEN",
+     "unverified": false,
+     "what": "About The company manufactures Bromine and Lithium-based chemical compounds.It also manufactures advanced intermediates in Pharma / Agro / Flavours and Fragrances",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 13.3,
+   "ebitda_n": 61,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Specialty and performance chemicals",
+   "listed": 64,
+   "n": 61,
+   "net": 7.05,
+   "net_n": 60,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 2.7,
+   "pb_n": 61,
+   "revenue": 222690.0,
+   "roce": 14.0,
+   "roce_n": 60,
+   "roe": 11.1,
+   "roe_n": 61,
+   "scale": null,
+   "words": "These firms make niche products such as additives, surfactants, dyes and pigments in smaller volumes for specific uses."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Sharda Cropchem Ltd",
+     "out": "",
+     "symbol": "SHARDACROP",
+     "unverified": false,
+     "what": "Sharda Cropchem is principally engaged in export of agrochemicals (technical grade and formulations) and non-agro products such as conveyor belts, rubber belts/sheets, dyes and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Agarwal Industrial Corporation Ltd",
+     "out": "",
+     "symbol": "AGARIND",
+     "unverified": false,
+     "what": "Agarwal Industrial Corporation Ltd is primarily engaged in the business activities of manufacturing and trading of Petrochemicals (Bitumen and Bituminous Products), logistics of…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Black Rose Industries Ltd",
+     "out": "",
+     "symbol": "BLACKROSE",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 10.2,
+   "ebitda_n": 3,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Distribution and trading",
+   "listed": 3,
+   "n": 3,
+   "net": 6.8,
+   "net_n": 3,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 2.0,
+   "pb_n": 3,
+   "revenue": 7243.0,
+   "roce": 18.7,
+   "roce_n": 3,
+   "roe": 13.6,
+   "roe_n": 3,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": "rest",
+   "companies": [
+    {
+     "evidence": "industry_code_supported",
+     "name": "BLS Polymers Ltd",
+     "out": "",
+     "symbol": "BLSPOLY",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Innovassynth Technologies (India) Ltd",
+     "out": "",
+     "symbol": "INOVSYNTH",
+     "unverified": false,
+     "what": "Innovassynth Technologies Ltd is a Contract Research, Development and Manufacturing Organization (CRDMO) specializing in pharmaceutical intermediates, oligonucleotide building…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Swan Corp Ltd",
+     "out": "",
+     "symbol": "SWANCORP",
+     "unverified": false,
+     "what": "VIL trades and distributes chemicals and petrochemical products used in paint",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Steamhouse India Ltd",
+     "out": "",
+     "symbol": "STEAMHOUSE",
+     "unverified": false,
+     "what": "Incorporated in June 2015, SteamHouse India is an industrial gas company specialising in the generation and centralised distribution of steam and nitrogen through its pipeline…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Prasol Chemicals Ltd",
+     "out": "",
+     "symbol": "PRASOLCHEM",
+     "unverified": false,
+     "what": "Prasol Chemicals operates in the specialty chemicals industry",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 11.4,
+   "ebitda_n": 5,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Other chemical companies",
+   "listed": 5,
+   "n": 5,
+   "net": 6.7,
+   "net_n": 5,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": true,
+   "pb": 7.45,
+   "pb_n": 4,
+   "revenue": 6547.0,
+   "roce": 16.0,
+   "roce_n": 5,
+   "roe": 20.6,
+   "roe_n": 5,
+   "scale": null,
+   "words": ""
+  }
+ ],
+ "sector": "Chemicals (India)",
+ "stamp": [
+  62,
+  32,
+  3
+ ],
+ "theme": "Chemicals",
+ "total": 261,
+ "unit": "₹ crore",
+ "unplaced": 0,
+ "v": 2,
+ "whole": false,
+ "window": {
+  "of": 261,
+  "shown": 102
+ }
+}

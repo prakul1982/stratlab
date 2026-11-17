@@ -1,0 +1,1160 @@
+{
+ "adjacent_n": 4,
+ "as_of": "2026-11-16",
+ "basis": "Each company's latest full financial year ended March, in ₹ crore. Revenue, EBITDA margin (operating profit before depreciation as a share of revenue) and net margin (net profit as a share of revenue) are that year's; return on capital employed (ROCE) is the latest reported. Consolidated accounts where the company files them. Banks and lenders have no EBITDA margin or ROCE.",
+ "chain": {
+  "compared": [
+   "Tyre manufacturers",
+   "Two-wheeler makers",
+   "Commercial vehicle makers"
+  ],
+  "highest": "Two-wheeler makers",
+  "line": "Among the 3 layers with at least 5 companies with the figure and one kind of business, median EBITDA margin is highest in Two-wheeler makers (14.9%) and lowest in Commercial vehicle makers (12.3%), a gap of 2.6 points. Shown, not ranked: Passenger and utility vehicle makers (11.7%) and Batteries and tractor makers (11.9%), fewer than 5 companies with the figure.",
+  "lowest": "Commercial vehicle makers",
+  "measure": "ebitda",
+  "unranked": [
+   {
+    "layer": "Component and systems suppliers",
+    "why": "a different kind of business"
+   },
+   {
+    "layer": "Passenger and utility vehicle makers",
+    "why": "fewer than 5 companies with the figure"
+   },
+   {
+    "layer": "Batteries and tractor makers",
+    "why": "fewer than 5 companies with the figure"
+   }
+  ]
+ },
+ "lender": false,
+ "listed": 100,
+ "members": 95,
+ "notable": [
+  {
+   "from": 11.1,
+   "from_year": "Mar 2023",
+   "kind": "move",
+   "layer": "Commercial vehicle makers",
+   "move": 6.9,
+   "n": 5,
+   "to": 18.0,
+   "to_year": "Mar 2026"
+  }
+ ],
+ "page": "/themes/in/automotive",
+ "period": {
+  "n": 93,
+  "of": 95,
+  "year": "Mar 2026"
+ },
+ "read_on": "2026-11-16",
+ "region": "IN",
+ "rows": [
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Samvardhana Motherson International Limited",
+     "out": "",
+     "symbol": "MOTHERSON",
+     "unverified": false,
+     "what": "Motherson Sumi Systems is engaged primarily in the manufacturer and sale of components to automotive original equipment manufacturers",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bosch Limited",
+     "out": "",
+     "symbol": "BOSCHLTD",
+     "unverified": false,
+     "what": "It manufactures and trades in products such as diesel and gasoline fuel injection systems, automotive aftermarket products, industrial equipment, electrical power tools, security…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bharat Forge Ltd",
+     "out": "",
+     "symbol": "BHARATFORG",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "UNO Minda Limited",
+     "out": "",
+     "symbol": "UNOMINDA",
+     "unverified": false,
+     "what": "Uno Minda Ltd is a manufacturer and supplier of Automotive Solutions and systems to",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Schaeffler India Ltd",
+     "out": "",
+     "symbol": "SCHAEFFLER",
+     "unverified": false,
+     "what": "Schaeffler India Ltd is engaged in the development, manufacturing and distribution of high-precision roller and ball bearings, engine systems and transmission components, chassis…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sona BLW Precision Forgings Limited",
+     "out": "",
+     "symbol": "SONACOMS",
+     "unverified": false,
+     "what": "The company is engaged in designing, manufacturing and supplying engineered automotive systems and components such as differential assemblies, gears, conventional and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tube Investments of India Ltd",
+     "out": "",
+     "symbol": "TIINDIA",
+     "unverified": false,
+     "what": "Tube Investments of India Limited (TII) is one of India’s leading manufacturers of a wide range of products for major industries such as Automotive, Railway, Construction…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Endurance Technologies Ltd",
+     "out": "",
+     "symbol": "ENDURANCE",
+     "unverified": false,
+     "what": "Product Portfolio The company is a leading automotive component manufacturer with operations in India and Europe",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Dhoot Transmission Ltd",
+     "out": "",
+     "symbol": "DHOOTTRANS",
+     "unverified": false,
+     "what": "Dhoot Transmission Limited is a global Tier-1 manufacturer of integrated electrical systems, specialising across eight product families: wiring and cable systems, interconnect…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Asahi India Glass Ltd",
+     "out": "",
+     "symbol": "ASAHIINDIA",
+     "unverified": false,
+     "what": "Asahi India Glass Ltd. (AIS) is India’s leading value-added and integrated glass solutions company and a dominant player both in the automotive and architectural glass segments",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Craftsman Automation Ltd",
+     "out": "",
+     "symbol": "CRAFTSMAN",
+     "unverified": false,
+     "what": "The co. manufactures several components and sub-assemblies on a supply and job-work basis according to client specifications in the automotive",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Gabriel India Ltd",
+     "out": "",
+     "symbol": "GABRIEL",
+     "unverified": false,
+     "what": "The Company has established a significant presence across all automotive customer segments, including OEMs, Aftermarket, and exports",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sansera Engineering Ltd",
+     "out": "",
+     "symbol": "SANSERA",
+     "unverified": false,
+     "what": "Sansera Engineering Ltd is an engineering-led manufacturer of complex and critical precision engineered components across automotive and non - automotive sectors",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Motherson Sumi Wiring India Ltd",
+     "out": "",
+     "symbol": "MSUMI",
+     "unverified": false,
+     "what": "Motherson Sumi Wiring India, a JV between Sumitomo Wiring System and Motherson Group, is a market leader in the Indian wiring harness industry with a market share of over 40%",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "ZF Commercial Vehicle Control System India Ltd",
+     "out": "",
+     "symbol": "ZFCVINDIA",
+     "unverified": false,
+     "what": "Operating under the ZF WABCO brand and part of ZF Group Commercial Vehicle Control Systems Division, WABCO INDIA Limited is India’s market leader for advanced braking systems…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Belrise Industries Ltd",
+     "out": "",
+     "symbol": "BELRISE",
+     "unverified": false,
+     "what": "Belrise Industries Limited manufactures Automotive Sheet Metal and casting parts, Polymer components, Suspension, and mirror systems for automotives",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sundram Fasteners Ltd",
+     "out": "",
+     "symbol": "SUNDRMFAST",
+     "unverified": false,
+     "what": "Sundaram fasteners ltd, a part of the TVS Group of Companies, is engaged in manufacturing critical, high precision components such as fasteners, power train components etc for…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "SPR Auto Technologies Ltd",
+     "out": "",
+     "symbol": "SHRIPISTON",
+     "unverified": false,
+     "what": "Shriram Pistons & Rings Ltd is primarily engaged in the manufacturing of pistons, piston pins, piston rings and engine valves for various automotive companies in the domestic and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tenneco Clean Air India Ltd",
+     "out": "",
+     "symbol": "TENNIND",
+     "unverified": false,
+     "what": "Tenneco Clean Air India Limited is a subsidiary of Tenneco Inc., a global leader in designing and manufacturing clean air and powertrain products for automotive applications",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Minda Corporation Ltd",
+     "out": "",
+     "symbol": "MINDACORP",
+     "unverified": false,
+     "what": "Minda Corporation Ltd is one of the leading automotive component manufacturing companies in India with a pan-India presence and international footprint",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Lumax Auto Technologies Ltd",
+     "out": "",
+     "symbol": "LUMAXTECH",
+     "unverified": false,
+     "what": "It is engaged in the business of manufacturing and supplying of Automotive Lamps, Plastic Moulded Parts, and Frame Chassis to two, three, and four-wheeler segments It has…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ramkrishna Forgings Ltd",
+     "out": "",
+     "symbol": "RKFORGE",
+     "unverified": false,
+     "what": "Ramkrishna Forgings Ltd is primarily engaged in manufacturing and sale of forged components of automobiles, railway wagons & coaches and engineering parts",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "CIE Automotive India Ltd",
+     "out": "",
+     "symbol": "CIEINDIA",
+     "unverified": false,
+     "what": "The company is engaged in the business of production and sale of automotive components to original equipment manufacturers and other customers in India and overseas",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sedemac Mechatronics Ltd",
+     "out": "",
+     "symbol": "SEDEMAC",
+     "unverified": false,
+     "what": "SEDEMAC Mechatronics Ltd is a Pune-based technology company specializing in control electronics",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "ASK Automotive Ltd",
+     "out": "",
+     "symbol": "ASKAUTOLTD",
+     "unverified": false,
+     "what": "ASK Automotive Limited is a manufacturer of Advance Braking Systems for two-wheelers in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Varroc Engineering Ltd",
+     "out": "",
+     "symbol": "VARROC",
+     "unverified": false,
+     "what": "It is engaged in the business of manufacturing and supplying automobile components to a wide range of OEMs across the globe History The Group was initially established as a…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "JBM Auto Ltd",
+     "out": "",
+     "symbol": "JBMA",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Banco Products (India) Ltd",
+     "out": "",
+     "symbol": "BANCOINDIA",
+     "unverified": false,
+     "what": "Banco Products (India) Ltd manufactures and supplies engine cooling modules and systems for automotive and industrial applications in both the domestic and international markets",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Steel Strips Wheels Ltd",
+     "out": "",
+     "symbol": "SSWL",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Pricol Ltd",
+     "out": "",
+     "symbol": "PRICOLLTD",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "S J S Enterprises Ltd",
+     "out": "",
+     "symbol": "SJS",
+     "unverified": false,
+     "what": "SJS Enterprises Ltd. (SJS) is one of the leading players in the Indian decorative aesthetics industry in terms of revenue",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Wheels India Ltd",
+     "out": "",
+     "symbol": "WHEELS",
+     "unverified": false,
+     "what": "Wheels India is engaged in the Business of Manufacture of Road Wheels , Parts & Accessories for Machinery / Equipments used by construction and mining industries and Wind Turbine…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Suprajit Engineering Ltd",
+     "out": "",
+     "symbol": "SUPRAJIT",
+     "unverified": false,
+     "what": "Suprajit is engaged in the manufacturing and trading of automotive cables and components, non-automotive cables and components, halogen lamps, LED drop in solutions, mechanic…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Hero Motors Ltd",
+     "out": "",
+     "symbol": "HEROMOTORS",
+     "unverified": false,
+     "what": "Incorporated in April 1998, Hero Motors Limited is an automotive technology company engaged in designing, developing, manufacturing, and supplying engineered powertrain solutions…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Jamna Auto Industries Ltd",
+     "out": "",
+     "symbol": "JAMNAAUTO",
+     "unverified": false,
+     "what": "Jamna Auto Industries makes suspension components and systems",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Fiem Industries Ltd",
+     "out": "",
+     "symbol": "FIEMIND",
+     "unverified": false,
+     "what": "It is engaged in the business manufacturing and supply of auto components like automotive lighting",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Rolex Rings Ltd",
+     "out": "",
+     "symbol": "ROLEXRINGS",
+     "unverified": false,
+     "what": "Rolex Rings is a leading manufacturer of forged and machined components in India and is one of the top 5 forging companies in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "L G Balakrishnan & Bros Ltd",
+     "out": "",
+     "symbol": "LGBBROSLTD",
+     "unverified": false,
+     "what": "L.G. Balakrishnan & Bros Ltd is a major manufacturer of chains, sprockets and metal formed parts for automotive applications",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sharda Motor Industries Ltd",
+     "out": "",
+     "symbol": "SHARDAMOTR",
+     "unverified": false,
+     "what": "Sharda Motor Industries Ltd is primarily engaged in the manufacturing and assembly of Auto Components and White Goods Components",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Lumax Industries Ltd",
+     "out": "",
+     "symbol": "LUMAXIND",
+     "unverified": false,
+     "what": "Company has 29 manufacturing facilities across 7 states in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "NRB Bearings Ltd",
+     "out": "",
+     "symbol": "NRBBEARING",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Uniparts India Ltd",
+     "out": "",
+     "symbol": "UNIPARTS",
+     "unverified": false,
+     "what": "Uniparts manufactures precision-engineered systems and components for off-highway vehicles",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Rane (Madras) Ltd",
+     "out": "",
+     "symbol": "RML",
+     "unverified": false,
+     "what": "Through its overseas subsidiary Rane Light Metal Castings Inc. (RLMCA), RML manufactures high pressure light metal casting components from its facility in Kentucky, USA. Part of…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "JTEKT India Ltd",
+     "out": "no revenue figure",
+     "symbol": "JTEKTINDIA",
+     "unverified": false,
+     "what": "JTEKT India Ltd., established in 1984, manufactures steering systems and driveline components for passenger cars, utility vehicles and light commercial vehicles",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sandhar Technologies Limited",
+     "out": "",
+     "symbol": "SANDHAR",
+     "unverified": false,
+     "what": "Sandhar Technologies Ltd and its joint ventures are primarily engaged in the manufacturing and assembling of automotive components for the automotive industry in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "M M Forgings Ltd",
+     "out": "",
+     "symbol": "MMFL",
+     "unverified": false,
+     "what": "M M Forgings Limited is engaged in the business of manufacturing Steel Forgings in raw, semi-machined and fully machined stages in various grades of Carbon, Alloy, Micro-Alloy…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Automotive Axles Ltd",
+     "out": "",
+     "symbol": "AUTOAXLES",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Carraro India Ltd",
+     "out": "",
+     "symbol": "CARRARO",
+     "unverified": false,
+     "what": "Carraro India Ltd manufactures axles and transmission systems for agricultural tractors and construction vehicles",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "India Nippon Electricals Ltd",
+     "out": "",
+     "symbol": "INDNIPPON",
+     "unverified": false,
+     "what": "India Nippon Electricals is a manufacturer of Ignition Systems for two-wheelers, three-wheelers, and portable engines It was incorporated in 1984 and was converted into a joint…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Divgi Torqtransfer Systems Ltd",
+     "out": "",
+     "symbol": "DIVGIITTS",
+     "unverified": false,
+     "what": "Divgi Torqtransfer System Ltd manufactures Auto Components and Parts",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Talbros Automotive Components Ltd",
+     "out": "",
+     "symbol": "TALBROAUTO",
+     "unverified": false,
+     "what": "Talbros Automotive Components is engaged in the business of manufacturing Gaskets and forging",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "GNA Axles Ltd",
+     "out": "",
+     "symbol": "GNA",
+     "unverified": false,
+     "what": "GNA Axles is engaged in the Business of manufacturing auto components for the four-wheeler industry, primary product being Rear Axles, Shafts, Spindles & other Automobiles…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Federal-Mogul Goetze (India) Ltd",
+     "out": "",
+     "symbol": "FMGOETZE",
+     "unverified": false,
+     "what": "Federal-Mogul Goetze (India) Ltd manufactures, supplies, and distributes automotive components like pistons, piston rings, etc to two/three/four-wheeler automobiles in Indian and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sundaram Clayton Ltd",
+     "out": "",
+     "symbol": "SUNCLAY",
+     "unverified": false,
+     "what": "Sundaram Clayton Ltd is in the business of manufacturing automotive components",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Rajratan Global Wire Ltd",
+     "out": "",
+     "symbol": "RAJRATAN",
+     "unverified": false,
+     "what": "The Company is engaged in the manufacturing of bead wire, a high-carbon steel wire utilized in the production of tires",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Menon Bearings Ltd",
+     "out": "",
+     "symbol": "MENONBE",
+     "unverified": false,
+     "what": "Menon Bearings Ltd manufactures & exports Auto Components",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "RACL Geartech Ltd",
+     "out": "",
+     "symbol": "RACLGEAR",
+     "unverified": false,
+     "what": "RACL Geartech Ltd manufactures and exports automotive gears and components",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Poojaa Precision Engg. Ltd",
+     "out": "",
+     "symbol": "PPEL",
+     "unverified": false,
+     "what": "Limited is a precision engineering company engaged in the manufacturing of aluminium die-casting and precision-machined components",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kross Ltd",
+     "out": "",
+     "symbol": "KROSS",
+     "unverified": false,
+     "what": "Kross Ltd manufactures high performance and safety critical components for the commercial vehicle, tractor and trailer axle industry",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Frontier Springs Ltd",
+     "out": "",
+     "symbol": "FRONTSP",
+     "unverified": false,
+     "what": "The company supplies components for wagons",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "NDR Auto Components Ltd",
+     "out": "",
+     "symbol": "NDRAUTO",
+     "unverified": false,
+     "what": "NDR Auto Components manufacturing seat frames and seat trims for passenger cars and utility vehicles",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Studds Accessories Ltd",
+     "out": "",
+     "symbol": "STUDDS",
+     "unverified": false,
+     "what": "Studds Accessories Limited is a manufacturer of two-wheeler helmets and motorcycle accessories",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Alicon Castalloy Ltd",
+     "out": "",
+     "symbol": "ALICON",
+     "unverified": false,
+     "what": "Alicon Castalloy manufactures aluminium castings including cylinder heads, support brackets, intake manifolds, crankshafts, and engine brackets for the auto industry",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Rico Auto Industries Ltd",
+     "out": "",
+     "symbol": "RICOAUTO",
+     "unverified": false,
+     "what": "Rico Auto Industries Ltd is in the business of manufacturing and sale of auto components for two and four wheeler vehicles",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Jay Bharat Maruti Ltd",
+     "out": "",
+     "symbol": "JAYBARMARU",
+     "unverified": false,
+     "what": "Jay Bharat Maruti manufactures automobile components and assemblies",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bharat Seats Ltd",
+     "out": "",
+     "symbol": "BHARATSE",
+     "unverified": false,
+     "what": "Bharat Seats Ltd manufactures complete seating system and interior component for the automotive and surface transport",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Igarashi Motors India Ltd",
+     "out": "",
+     "symbol": "IGARASHI",
+     "unverified": false,
+     "what": "Igarashi Motors India Ltd is engaged in the production and export of Permanent Magnet DC Motors for the Automotive Sector especially for the passenger vehicle sector It was…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Automobile Corporation Of Goa Ltd",
+     "out": "",
+     "symbol": "ACGL",
+     "unverified": false,
+     "what": "ACGL, jointly promoted by EDC Ltd and Tata Motors Ltd, is engaged in manufacturing pressed parts, components",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Pradeep Metals Ltd",
+     "out": "",
+     "symbol": "PRADPME",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 13.75,
+   "ebitda_n": 68,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Component and systems suppliers",
+   "listed": 69,
+   "n": 68,
+   "net": 7.5,
+   "net_n": 67,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 4.8,
+   "pb_n": 67,
+   "revenue": 421988.0,
+   "roce": 18.5,
+   "roce_n": 68,
+   "roe": 15.6,
+   "roe_n": 68,
+   "scale": null,
+   "words": "These firms make engineered parts such as drivetrain, electronics, wiring and braking systems for vehicle makers."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "MRF Limited",
+     "out": "",
+     "symbol": "MRF",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Apollo Tyres Limited",
+     "out": "",
+     "symbol": "APOLLOTYRE",
+     "unverified": false,
+     "what": "The product profile includes prominent tyre brands in the T&B",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "CEAT Limited",
+     "out": "",
+     "symbol": "CEATLTD",
+     "unverified": false,
+     "what": "CEAT, established in 1958, is one of the largest tyre manufacturers and one of the fastest-growing tyre companies in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Balkrishna Industries Ltd",
+     "out": "",
+     "symbol": "BALKRISIND",
+     "unverified": false,
+     "what": "For over 30 years, BKT has successfully focused on specialist segments such as agricultural, construction and industrial as well as earthmoving, port and mining, ATV, and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "JK Tyre & Industries Ltd",
+     "out": "",
+     "symbol": "JKTYRE",
+     "unverified": false,
+     "what": "JK Tyre & Industries is the flagship company of the JK group which is headed by Dr R P Singhania as its chairman and managing director",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "TVS Srichakra Ltd",
+     "out": "",
+     "symbol": "TVSSRICHAK",
+     "unverified": false,
+     "what": "TVS Srichakra, part of the TVS Group, is a leading manufacturer of two-wheeler tyres in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Goodyear India Ltd",
+     "out": "",
+     "symbol": "GOODYEAR",
+     "unverified": false,
+     "what": "Goodyear India is engaged in the business of manufacturing and trading of tyres, tubes, and flaps It is a leading player in the India farm tyre market Product Portfolio The…",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 13.2,
+   "ebitda_n": 7,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Tyre manufacturers",
+   "listed": 7,
+   "n": 7,
+   "net": 4.8,
+   "net_n": 7,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 2.8,
+   "pb_n": 7,
+   "revenue": 108567.0,
+   "roce": 15.5,
+   "roce_n": 7,
+   "roe": 12.6,
+   "roe_n": 7,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Maruti Suzuki India Limited",
+     "out": "",
+     "symbol": "MARUTI",
+     "unverified": false,
+     "what": "It is the market leader in passenger vehicle segment in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Mahindra & Mahindra Limited",
+     "out": "other business",
+     "symbol": "M&M",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tata Motors Passenger Vehicles Limited",
+     "out": "",
+     "symbol": "TMPV",
+     "unverified": false,
+     "what": "Part of the multi-national conglomerate, the Tata group, it offers a wide and diverse portfolio of cars, sports utility vehicles, etc",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Hyundai Motor India Limited",
+     "out": "",
+     "symbol": "HYUNDAI",
+     "unverified": false,
+     "what": "Incorporated in May 1996, Hyundai Motor India Limited is a part of the Hyundai Motor Group, which is the third largest auto original equipment manufacturer in the world based on…",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 11.7,
+   "ebitda_n": 3,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Passenger and utility vehicle makers",
+   "listed": 4,
+   "n": 3,
+   "net": 7.85,
+   "net_n": 2,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 4.4,
+   "pb_n": 3,
+   "revenue": 311938.0,
+   "roce": 18.9,
+   "roce_n": 3,
+   "roe": 29.9,
+   "roe_n": 3,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Hero MotoCorp Limited",
+     "out": "",
+     "symbol": "HEROMOTOCO",
+     "unverified": false,
+     "what": "Hero Moto Corp earlier also known as “Hero Honda” is one of India’s first motorcycle manufacturers",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bajaj Auto",
+     "out": "",
+     "symbol": "BAJAJ-AUTO",
+     "unverified": false,
+     "what": "Bajaj Auto, the flagship company of Bajaj Group, is a two-wheeler and three-wheeler manufacturing company that exports to 79 countries across several countries in Latin America…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "TVS Motor Company Limited",
+     "out": "",
+     "symbol": "TVSMOTOR",
+     "unverified": false,
+     "what": "TVS Motor Company Ltd (TVSM) is engaged in manufacturing two-wheelers and its accessories",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Eicher Motors Limited",
+     "out": "",
+     "symbol": "EICHERMOT",
+     "unverified": false,
+     "what": "Eicher has a joint venture with Sweden’s AB Volvo to create Volvo Eicher Commercial Vehicles Limited (VECV)",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ather Energy Ltd",
+     "out": "",
+     "symbol": "ATHERENERG",
+     "unverified": false,
+     "what": "It designs and develops E2Ws, battery packs, charging infrastructure, software, and accessories",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ola Electric Mobility Ltd",
+     "out": "",
+     "symbol": "OLAELEC",
+     "unverified": false,
+     "what": "Ola Electric Mobility Limited is an electric vehicle company that primarily manufactures electric vehicles and core components for electric vehicles",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Zelio E-Mobility Ltd",
+     "out": "",
+     "symbol": "ZELIO",
+     "unverified": false,
+     "what": "Zelio E-Mobility is primarily engaged in the business of manufacturing, assembling and supplying of electric vehicles, offering a range of electric two-wheelers (E-2Ws) and…",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 14.9,
+   "ebitda_n": 7,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Two-wheeler makers",
+   "listed": 7,
+   "n": 7,
+   "net": 9.2,
+   "net_n": 7,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 8.1,
+   "pb_n": 7,
+   "revenue": 196022.0,
+   "roce": 28.2,
+   "roce_n": 7,
+   "roe": 28.1,
+   "roe_n": 7,
+   "scale": null,
+   "words": "These firms build motorcycles and scooters sold through dealers and exported."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Ashok Leyland Limited",
+     "out": "",
+     "symbol": "ASHOKLEY",
+     "unverified": false,
+     "what": "Ashok Leyland is the flagship Company of the Hinduja group, having a long-standing presence in the domestic medium and heavy commercial vehicle (M&HCV) segment",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Force Motors Ltd",
+     "out": "",
+     "symbol": "FORCEMOT",
+     "unverified": false,
+     "what": "The company is in the business of manufacturing fully vertically integrated small and light CVs, multi-utility vehicles, and agricultural tractors, which it supplies to various…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Olectra Greentech Ltd",
+     "out": "",
+     "symbol": "OLECTRA",
+     "unverified": false,
+     "what": "It has 4,000+ vehicles on the road",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tata Motors Ltd",
+     "out": "",
+     "symbol": "TMCV",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "SML Mahindra Ltd",
+     "out": "",
+     "symbol": "SMLMAH",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Atul Auto Ltd",
+     "out": "",
+     "symbol": "ATULAUTO",
+     "unverified": false,
+     "what": "Atul Auto Ltd manufactures and exports Auto rickshaws",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 12.25,
+   "ebitda_n": 6,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Commercial vehicle makers",
+   "listed": 6,
+   "n": 6,
+   "net": 6.1,
+   "net_n": 6,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 6.7,
+   "pb_n": 6,
+   "revenue": 155248.0,
+   "roce": 25.95,
+   "roce_n": 6,
+   "roe": 28.3,
+   "roe_n": 6,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": true,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Bajaj Finance Limited",
+     "out": "",
+     "symbol": "BAJFINANCE",
+     "unverified": false,
+     "what": "The company is India's largest private-sector Non-Banking Financial Company",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Shriram Finance Limited",
+     "out": "",
+     "symbol": "SHRIRAMFIN",
+     "unverified": false,
+     "what": "STFC is engaged in the business of commercial vehicle financing mainly focusing on trucks from preowned to new ones",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Mahindra & Mahindra Financial Services Limited",
+     "out": "",
+     "symbol": "M&MFIN",
+     "unverified": false,
+     "what": "Mahindra & Mahindra Financial Services Limited (MMFSL), a part of the Mahindra Group,is a NBFC primarily engaged in the business of financing purchase of new and pre-owned auto…",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": null,
+   "ebitda_n": 0,
+   "gnpa": 2.86,
+   "gnpa_n": 2,
+   "layer": "Vehicle financiers",
+   "listed": 3,
+   "n": 3,
+   "net": 20.8,
+   "net_n": 3,
+   "nii_assets": 8.63,
+   "nii_assets_n": 3,
+   "official": false,
+   "pb": 2.1,
+   "pb_n": 3,
+   "revenue": 151146.0,
+   "roce": null,
+   "roce_n": 0,
+   "roe": 16.4,
+   "roe_n": 3,
+   "scale": null,
+   "words": "Non-bank lenders financing purchases of commercial vehicles, cars and tractors."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Exide Industries Ltd",
+     "out": "",
+     "symbol": "EXIDEIND",
+     "unverified": false,
+     "what": "Exide Industries Ltd is primarily engaged in the manufacturing of storage batteries and allied products in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Amara Raja Energy & Mobility Ltd",
+     "out": "",
+     "symbol": "ARE&M",
+     "unverified": false,
+     "what": "Amara Raja Batteries Limited (ARBL) , the flagship company of the Amara Raja Group, is the technology leader and is one of the largest manufacturers of lead-acid batteries for…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Escorts Kubota Ltd",
+     "out": "",
+     "symbol": "ESCORTS",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "V.S.T Tillers Tractors Limited",
+     "out": "",
+     "symbol": "VSTTILLERS",
+     "unverified": false,
+     "what": "V.S.T. Tillers Tractors Ltd manufactures and trades agricultural machinery, including power tillers, compact and higher-HP tractors, power weeders, reapers, brush cutters and…",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 11.95,
+   "ebitda_n": 4,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Batteries and tractor makers",
+   "listed": 4,
+   "n": 4,
+   "net": 7.5,
+   "net_n": 4,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 2.2,
+   "pb_n": 4,
+   "revenue": 44589.0,
+   "roce": 13.0,
+   "roce_n": 4,
+   "roe": 9.55,
+   "roe_n": 4,
+   "scale": null,
+   "words": "Companies making storage batteries or agricultural tractors and machinery, sold to farmers, fleets and consumers rather than as vehicle parts."
+  }
+ ],
+ "sector": "Automotive",
+ "stamp": [
+  62,
+  32,
+  3
+ ],
+ "theme": "Automotive",
+ "total": 186,
+ "unit": "₹ crore",
+ "unplaced": 0,
+ "v": 2,
+ "whole": false,
+ "window": {
+  "of": 186,
+  "shown": 100
+ }
+}

@@ -132,7 +132,7 @@ export function CorpActionsPage() {
 
   return (
     <div className="k-page">
-      <PageHeader eyebrow={eyebrowOf("/research/corporate-actions")} title="Dividends, bonuses and splits" asOf={data?.updated_at} asOfLabel="Updated" asOfTz={marketTz(region)}
+      <PageHeader eyebrow={eyebrowOf("/research/corporate-actions")} title="Dividends, bonuses and splits" asOf={data?.updated_at} asOfPending={!data && !error} asOfLabel="Updated" asOfTz={marketTz(region)}
         lede={region === "IN"
           ? "Dividends, bonus issues, splits, buybacks, rights issues and demergers by ex-date, as companies announced them to the exchange."
           : "Dividends and splits of the S&P 500 and the US companies you follow, by ex-date: dividends companies have declared for the next four weeks, and those that have gone ex."}
@@ -153,6 +153,8 @@ export function CorpActionsPage() {
               {(id) => <StockPicker id={id} market={region} onText={setQ} onPick={(s) => setQ(s)} placeholder={region === "IN" ? "Like TCS or Infosys" : "Like AAPL or Apple"} />}
             </Field>
           )}
+          {/* the alerts line's place is held until the calendar arrives: it no longer drops the filters card's foot by a line (LIVE9B-013: 0.50) */}
+          {!data && !error && <span className="k-meta-wait" aria-hidden="true"><CheckField checked={false} onChange={() => undefined} label="Message me when my stocks announce a corporate action, and the evening before an ex-date" /></span>}
           {data && (
             <CheckField checked={data.alerts} onChange={toggleAlerts}
               label={<>Message me when my stocks announce a corporate action, and the evening before an ex-date

@@ -100,8 +100,9 @@ export function HoldingsActionsPanel<V>({ onHoldings, version, onLoaded }: { onH
             const years = (data.by_fy ?? []).filter((y) => y.count > 0);
             const same = years.find((y) => Math.round(y.total) === Math.round(data.received_total));
             return (
-              <FactTable label="Dividends in total" itemHead="Period" figureHead="Amount" noteHead="Payments" rows={[
-                { id: "ahead", k: "Announced, ex-date ahead", v: inr(data.ahead_total) },
+              // amounts right-aligned as figures, and every row's payments said, the first one too (LIVE9B-023: "Amount" left-aligned, "Payments" blank on row one)
+              <FactTable label="Dividends in total" itemHead="Period" figureHead="Amount" noteHead="Payments" numeric rows={[
+                { id: "ahead", k: "Announced, ex-date ahead", v: inr(data.ahead_total), n: `${data.ahead.length} payment${data.ahead.length === 1 ? "" : "s"}` },
                 ...(!same ? [{ id: "12m", k: "Last 12 months (estimated)", v: inr(data.received_total), n: "by record date" }] : []),
                 ...years.map((y) => ({ id: `fy${y.fy}`, k: `${y.label} (estimated)`, v: inr(y.total),
                   n: <>{y.count} payment{y.count === 1 ? "" : "s"}{y === same ? ", the same as the last 12 months" : ""} · <Link className="link" to={fyLink("/money/tax-tools", y.fy)}>as in tax tools</Link></> })),

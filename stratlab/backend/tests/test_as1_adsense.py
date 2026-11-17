@@ -26,7 +26,8 @@ def _facts(**kw) -> dict:
     return {**base, **kw}
 
 
-MENU = ['<a href="/">Home</a>', '<a href="/library">Library</a>', '<a href="/stocks">Companies</a>', '<a href="/themes">Themes</a>',
+# (updated on purpose (nav3, LIVE9A-019): one public menu everywhere, with no "Home" entry: the logo is the way home)
+MENU = ['<a href="/library">Library</a>', '<a href="/stocks">Companies</a>', '<a href="/themes">Themes</a>',
         '<a href="/blog">Blog</a>', '<a href="/pricing">Plans</a>', '<a href="/about">About</a>', '<a href="/contact">Contact</a>']
 
 

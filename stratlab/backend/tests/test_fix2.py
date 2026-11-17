@@ -324,7 +324,7 @@ OLD_ISSUE = {   # a brief as it was stored before tables: item texts only
 def test_a_brief_stored_before_tables_is_read_into_tables():
     tabs = {t["title"]: t for t in news_tables.of(OLD_ISSUE)}
     idx = tabs["Indices"]
-    assert idx["head"] == ["Index", "Close", "Day %", "From 52-week high"] and idx["align"] == "lrrr"
+    assert idx["head"] == ["Index", "Close", "Day %", "52-week high"] and idx["align"] == "lrrr"   # (updated on purpose, LIVE9A-027: a header that fits a phone)
     assert idx["rows"][0][:2] == ["NIFTY 50", "22,698.85"] and idx["rows"][0][2] == {"t": "▼ −0.22%", "tone": "down"} and idx["rows"][0][3] == "14.6% below"
     assert idx["rows"][2][2]["tone"] == "flat"                                   # a rise in the VIX is not good news: an arrow, no green
     rot = tabs["Sector rotation"]
@@ -371,7 +371,7 @@ def test_the_email_draws_the_tables_with_a_one_column_fallback_on_a_phone():
     assert 'class="show-sm' in html and "Close 22,698.85 · Day % ▼ −0.22%" in html            # the phone's one line under the first cell
     assert ">NIFTY 50<" in html and ">TCS</a>" in html and ">Example Wire</a>" in html and ">Open the rotation chart</a>" in html
     assert "(ST S2)" not in html and "(ST S2)" not in text
-    assert "INDICES\nIndex  Close  Day %  From 52-week high\n- NIFTY 50  22,698.85  ▼ −0.22%  14.6% below" in text
+    assert "INDICES\nIndex  Close  Day %  52-week high\n- NIFTY 50  22,698.85  ▼ −0.22%  14.6% below" in text
     assert "Headline  Source" in text and "Sensex ends lower on profit taking  Example Wire (https://example.com/a)" in text
 
 

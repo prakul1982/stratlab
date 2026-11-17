@@ -379,6 +379,14 @@ export function inrCompact(v: number | null | undefined): string {
   return `${Math.round(a) === 0 ? "" : sign}₹${nf(Math.round(a), 0)}`;   // ₹0.4 is ₹0, with no sign
 }
 
+/** inrCompact with its decimals kept whatever the figure ("−₹8.30 lakh", never "−₹8.3 lakh" one minute and "−₹8.29 lakh" the next): for a
+ *  headline figure that is read again and again (LIVE9B-027: My space's net worth changed its precision between reads). */
+export function inrCompactSteady(v: number | null | undefined): string {
+  const s = inrCompact(v);
+  const m = /^(−?₹)(\d)(?:\.(\d{1,2}))?( lakh| cr| lakh cr)$/.exec(s);      // a figure under 10 of its unit carries two decimals
+  return m ? `${m[1]}${m[2]}.${(m[3] ?? "").padEnd(2, "0")}${m[4]}` : s;
+}
+
 /** A rupee amount of ₹100 crore or more (ten digits or more) in crore, "₹6,85,30,01,63,680" → "₹68,530 cr", for a tile too narrow
  * for its digits (LIVE1B-019); null for a shorter amount or any other text. */
 export function longRupees(text: string): string | null {
@@ -549,6 +557,21 @@ export function sourceWords(source: string): string {
   if (source.endsWith(" login")) return `your ${source}`;      // "Upstox login", "Dhan login"
   return `your ${source} file`;
 }
+
+/** A name lower-cased to sit inside a sentence, its acronyms kept: "IT services" → "IT services", "Banks and NBFCs" → "banks and NBFCs"
+ *  (LIVE9B-033: "the it services measures"). A word with two or more capitals stays as written. */
+export function lowerKeepAcronyms(text: string): string {
+  return text.split(/(\s+)/).map((w) => (/[A-Z].*[A-Z]/.test(w) ? w : w.toLowerCase())).join("");
+}
+
+/** How long ago a saved list was imported, in whole days (0 for today; null with no time). */
+export function daysOld(iso: string | null | undefined, now: Date = new Date()): number | null {
+  const t = iso ? Date.parse(iso) : NaN;
+  return Number.isFinite(t) ? Math.max(0, Math.floor((now.getTime() - t) / 86_400_000)) : null;
+}
+
+/** A list of holdings this many days old or more is said to be old beside it (LIVE9B-021: holdings of 25 Oct shown on 17 Nov with no word). */
+export const HOLDINGS_OLD_DAYS = 7;
 
 /** "a Zerodha Kite file", "an Angel One file": a name with its article (LIVE1B-004: "a Angel One", "a HDFC Securities", "a
  * ICICI Direct"). Letters said as vowels (HDFC, ICICI, IDBI, IIFL, SBI) and names that start with a vowel take "an". */

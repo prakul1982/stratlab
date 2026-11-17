@@ -1,0 +1,1159 @@
+{
+ "adjacent_n": 29,
+ "as_of": "2026-11-16",
+ "basis": "Each company's latest full financial year ended March, in ₹ crore. Revenue, EBITDA margin (operating profit before depreciation as a share of revenue) and net margin (net profit as a share of revenue) are that year's; return on capital employed (ROCE) is the latest reported. Consolidated accounts where the company files them. Banks and lenders have no EBITDA margin or ROCE.",
+ "chain": {
+  "compared": [
+   "Large multi-specialty hospital networks",
+   "Regional hospital groups",
+   "Speciality hospitals",
+   "Diagnostic lab chains"
+  ],
+  "highest": "Diagnostic lab chains",
+  "line": "Among the 4 layers with at least 5 companies with the figure, median EBITDA margin is highest in Diagnostic lab chains (26.1%, 12 of 13 companies) and lowest in Regional hospital groups (19.7%, 23 of 27 companies), a gap of 6.4 points; among the map's layers, the \"Other\" group left out. Shown, not ranked: Medical device and consumables makers (13.5%) and Contract research and life-science services (18.1%), adjacent participants, another kind of business than the theme's.",
+  "lowest": "Regional hospital groups",
+  "measure": "ebitda",
+  "unranked": [
+   {
+    "layer": "Medical device and consumables makers",
+    "why": "adjacent participants, another kind of business than the theme's"
+   },
+   {
+    "layer": "Contract research and life-science services",
+    "why": "adjacent participants, another kind of business than the theme's"
+   },
+   {
+    "layer": "Other hospital companies",
+    "why": "companies outside the map's layers"
+   }
+  ]
+ },
+ "lender": false,
+ "listed": 98,
+ "members": 64,
+ "notable": [],
+ "page": "/themes/in/hospital",
+ "period": {
+  "n": 64,
+  "of": 64,
+  "year": "Mar 2026"
+ },
+ "read_on": "2026-11-16",
+ "region": "IN",
+ "rows": [
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Apollo Hospitals Enterprise Limited",
+     "out": "",
+     "symbol": "APOLLOHOSP",
+     "unverified": false,
+     "what": "Apollo Hospitals has emerged as Asia’s foremost integrated healthcare services provider and has a robust presence across the healthcare ecosystem, including Hospitals…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Max Healthcare Institute Limited",
+     "out": "",
+     "symbol": "MAXHEALTH",
+     "unverified": false,
+     "what": "Max Healthcare Institute Limited is primarily engaged in the providing healthcare services through primary care clinics, multi-speciality hospitals / medical centres and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Fortis Healthcare Limited",
+     "out": "",
+     "symbol": "FORTIS",
+     "unverified": false,
+     "what": "It is a leading integrated healthcare service provider in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Narayana Hrudayalaya Ltd.",
+     "out": "",
+     "symbol": "NH",
+     "unverified": false,
+     "what": "Hospital Portfolio The company is a healthcare service provider in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Aster DM Quality Care Limited",
+     "out": "",
+     "symbol": "ASTERDM",
+     "unverified": false,
+     "what": "Aster DM Healthcare Limited is one of the largest integrated private healthcare service providers operating in GCC (Gulf Cooperation Council) countries and an emerging player in…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Manipal Health Enterprises Ltd",
+     "out": "",
+     "symbol": "MANIPALHOS",
+     "unverified": false,
+     "what": "Manipal Health Enterprises Limited is a healthcare service providers, operating a large network of multi-specialty hospitals, clinics, and diagnostic centres across the country",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 21.8,
+   "ebitda_n": 6,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Large multi-specialty hospital networks",
+   "listed": 6,
+   "n": 6,
+   "net": 9.7,
+   "net_n": 6,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 8.1,
+   "pb_n": 5,
+   "revenue": 65604.0,
+   "roce": 14.05,
+   "roce_n": 6,
+   "roe": 13.7,
+   "roe_n": 6,
+   "scale": null,
+   "words": "These chains run big tertiary hospitals in metro and large cities, earning from inpatient and outpatient treatment."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Krishna Institute of Medical Sciences Limited",
+     "out": "",
+     "symbol": "KIMS",
+     "unverified": false,
+     "what": "The company offers multidisciplinary healthcare services with primary, secondary, and tertiary care across 2-3 tier cities and an additional quaternary healthcare facility in…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Global Health Limited",
+     "out": "",
+     "symbol": "MEDANTA",
+     "unverified": false,
+     "what": "Global Health Limited operates a network of multi-specialty tertiary and quaternary care hospitals under the Medanta brand, primarily across North and East India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Jupiter Life Line Hospitals Limited",
+     "out": "",
+     "symbol": "JLHL",
+     "unverified": false,
+     "what": "Incorporated in 2007, Jupiter Life Line Hospitals Limited is a multi-specialty tertiary and quaternary healthcare provider in the Mumbai Metropolitan Area (MMR) and western…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kovai Medical Center & Hospital Limited",
+     "out": "no revenue figure",
+     "symbol": "KOVAI",
+     "unverified": false,
+     "what": "Kovai Medical Center & Hospital Ltd is a Coimbatore-based company which is in the business of advanced healthcare services",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Park Medi World Ltd",
+     "out": "",
+     "symbol": "PARKHOSPS",
+     "unverified": false,
+     "what": "Park Medi World engaged in the business of, inter alia, establishing, maintaining and running hospitals, nursing homes, clinics, dispensaries, maternity homes, child welfare…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Yatharth Hospital & Trauma Care Services Ltd",
+     "out": "",
+     "symbol": "YATHARTH",
+     "unverified": false,
+     "what": "Yatharth Hospital and Trauma Care Services Limited is a multi-care hospitals at Noida, Greater Noida, and Noida Extension, Uttar Pradesh",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Paras Healthcare Ltd",
+     "out": "",
+     "symbol": "PARASHLTH",
+     "unverified": false,
+     "what": "Incorporated in1987, Paras Healthcare Limited is a leading clinical specialty-led hospital platform providing tertiary and quaternary healthcare services across North India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Artemis Medicare Services Ltd",
+     "out": "",
+     "symbol": "ARTEMISMED",
+     "unverified": false,
+     "what": "Artemis Medicare Services Ltd (AMSL) was incorporated in 2004, operates a 541-bedded multi-specialty tertiary care hospital in Gurgaon",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "KMC Speciality Hospitals (India) Ltd",
+     "out": "",
+     "symbol": "KMCSHIL",
+     "unverified": false,
+     "what": "KMC Speciality Hospitals (India) is in the healthcare sector running, operating, maintaining multi-specialty hospital in Trichy",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Gujarat Kidney & Super Speciality Ltd",
+     "out": "",
+     "symbol": "GKSL",
+     "unverified": false,
+     "what": "Gujarat Kidney and Super Speciality Limited specializes in providing multispeciality healthcare services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "GPT Healthcare Ltd",
+     "out": "",
+     "symbol": "GPTHEALTH",
+     "unverified": false,
+     "what": "GPT Healthcare Ltd is engaged in running hospitals and providing medical services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Asarfi Hospital Ltd",
+     "out": "",
+     "symbol": "ASARFI",
+     "unverified": false,
+     "what": "Asarfi Hospital Ltd provides primary health services & treatment and specialized super speciality health service",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Hannah Joseph Hospital Ltd",
+     "out": "",
+     "symbol": "HANNAH",
+     "unverified": false,
+     "what": "Hannah Joseph Hospital Limited is a healthcare provider offering exceptional medical services across various specialties",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Aashka Hospitals Ltd",
+     "out": "",
+     "symbol": "AASHKA",
+     "unverified": false,
+     "what": "Aashka Hospitals Limited operates a multi-disciplinary private hospital, clinics and pharmacies, providing tertiary and super-speciality care in Gandhinagar, Gujarat",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Fortis Malar Hospitals Ltd",
+     "out": "",
+     "symbol": "FORTISMLR",
+     "unverified": false,
+     "what": "Fortis Malar Hospital Ltd is in the business of setting up, managing, and operating a multi-speciality hospital",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Shanmuga Hospital Ltd",
+     "out": "",
+     "symbol": "SHANMUGA",
+     "unverified": false,
+     "what": "SHL is in the service of providing multi- specialty healthcare solutions, medical expertise, advanced technology, and patient-centric care through a hospital located in Salem in…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "KK Shah Hospitals Ltd",
+     "out": "",
+     "symbol": "KKSHL",
+     "unverified": false,
+     "what": "Currently, the company runs a hospital by the name of KK Shah and provides multi-speciality medical services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Soni Medicare Ltd",
+     "out": "",
+     "symbol": "SML",
+     "unverified": false,
+     "what": "Soni Medicare Ltd offers hospital healthcare and education services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Global Longlife Hospital and Research Ltd",
+     "out": "",
+     "symbol": "GLHRL",
+     "unverified": false,
+     "what": "The company operates a multi-specialty tertiary care hospital in Gujarat , providing infrastructure and clinical support for a broad range of medical and surgical specialties",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Broach Lifecare Hospital Ltd",
+     "out": "",
+     "symbol": "BROACH",
+     "unverified": false,
+     "what": "BLHL operates boutique hospitals under the brand name ''Maple Hospitals''",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Indraprastha Medical Corporation Ltd",
+     "out": "no revenue figure",
+     "symbol": "INDRAMEDCO",
+     "unverified": false,
+     "what": "Apollo Hospitals is a leading healthcare player that owns and operates the largest hospital chain in the country",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sharma East India Hosp and Medical Research Ltd",
+     "out": "",
+     "symbol": "SHARMEH",
+     "unverified": false,
+     "what": "Sharma East India Hospital and Medical Research Ltd provides medical and healthcare services and real estate services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Chennai Meenakshi Multispeciality Hospital Ltd",
+     "out": "",
+     "symbol": "CMMHOSP",
+     "unverified": false,
+     "what": "Chennai Meenakshi Multispecialty Hospital Ltd is in the business of providing healthcare services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Family Care Hospitals Ltd",
+     "out": "",
+     "symbol": "FAMILYCARE",
+     "unverified": false,
+     "what": "Family Care Hospitals Ltd is in the business of providing Healthcare Services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "One Global Service Provider Ltd",
+     "out": "",
+     "symbol": "ONEGLOBAL",
+     "unverified": false,
+     "what": "One Global Service Provider Ltd is in the business of healthcare services The company acts as a one-stop supplier to the healthcare industry: Medical and diagnostic equipment…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Abate As Industries Ltd",
+     "out": "",
+     "symbol": "ABATEAS",
+     "unverified": false,
+     "what": "Abate As Industries Ltd primarily operates in the eye healthcare segment through its super specialty hospitals and optical outlets",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "N G Industries Ltd",
+     "out": "",
+     "symbol": "NGIND",
+     "unverified": false,
+     "what": "N G Industries Ltd is in the business of providing healthcare services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tejnaksh Healthcare Ltd",
+     "out": "",
+     "symbol": "TEJNAKSH",
+     "unverified": false,
+     "what": "THL provides hospital and healthcare service in Mumbai and other parts of Maharashtra",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Dolphin Medical Services Ltd",
+     "out": "no revenue figure",
+     "symbol": "DOLPHMED",
+     "unverified": false,
+     "what": "Dolphin Medical Services Ltd is in the business of diagnostics and other allied services",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Dhanvantri Jeevan Rekha Ltd",
+     "out": "",
+     "symbol": "ZDHJERK",
+     "unverified": false,
+     "what": "DJRL runs an NABH-accredited hospital by the name of Dhanvantri Hospital and provides a varied range of patient care and super specialty services",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 19.7,
+   "ebitda_n": 23,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Regional hospital groups",
+   "listed": 30,
+   "n": 27,
+   "net": 9.8,
+   "net_n": 23,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 2.4,
+   "pb_n": 23,
+   "revenue": 17244.72,
+   "roce": 11.8,
+   "roce_n": 27,
+   "roe": 11.1,
+   "roe_n": 25,
+   "scale": null,
+   "words": "These operators build and run hospitals concentrated in a state or region, earning from inpatient care paid by insurers, government schemes and cash."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Rainbow Childrens Medicare Limited",
+     "out": "",
+     "symbol": "RAINBOW",
+     "unverified": false,
+     "what": "Rainbow Children's Medicare Limited operates a multi-specialty pediatric, obstetrics, and gynecology hospital chain in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Shalby Limited",
+     "out": "",
+     "symbol": "SHALBY",
+     "unverified": false,
+     "what": "It operates a chain of multi-specialty hospitals across India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Dr Agarwals Health Care Ltd",
+     "out": "",
+     "symbol": "AGARWALEYE",
+     "unverified": false,
+     "what": "Dr. Agarwal’s Health Care offers a wide array of eye care services, which include cataract and refractive surgeries, consultations, diagnoses, and non-surgical treatments",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Healthcare Global Enterprises Ltd",
+     "out": "",
+     "symbol": "HCG",
+     "unverified": false,
+     "what": "Healthcare Global Enterprises Ltd is engaged in setting up and managing hospitals and medical diagnostic services including scientific testing and consultancy services in the…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Dr Agarwals Eye Hospital Ltd",
+     "out": "",
+     "symbol": "DRAGARWQ",
+     "unverified": false,
+     "what": "History Incorporated in 1994, is a leading eye care services chain with a predominant presence in Tamil Nadu",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Rays of Belief Ltd",
+     "out": "",
+     "symbol": "MOMSBELIEF",
+     "unverified": false,
+     "what": "Rays of Belief Ltd. is a for-profit social enterprise providing personalised intervention plans for children with Neurodevelopmental Disorders (NDDs)",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Lotus Eye Hospital & Institute Ltd",
+     "out": "",
+     "symbol": "LOTUSEYE",
+     "unverified": false,
+     "what": "Lotus Eye Hospital and Institute Ltd provides ophthalmology and other related services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Nephrocare Health Services Ltd",
+     "out": "",
+     "symbol": "NEPHROPLUS",
+     "unverified": false,
+     "what": "It operates through captive hospital-based clinics",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Gaudium IVF and Women Health Ltd",
+     "out": "",
+     "symbol": "GAUDIUMIVF",
+     "unverified": false,
+     "what": "Incorporated in March 2015, Gaudium IVF and Women Health Limited have engaged in In Vitro Fertilization (IVF) treatments throughout India",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 22.5,
+   "ebitda_n": 9,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Speciality hospitals",
+   "listed": 9,
+   "n": 9,
+   "net": 7.7,
+   "net_n": 9,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 5.5,
+   "pb_n": 9,
+   "revenue": 9137.279999999999,
+   "roce": 12.7,
+   "roce_n": 9,
+   "roe": 7.7,
+   "roe_n": 9,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Dr. Lal Path Labs Ltd.",
+     "out": "",
+     "symbol": "LALPATHLAB",
+     "unverified": false,
+     "what": "Lal PathLabs Limited is one of India’s leading consumer healthcare brand in diagnostic services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Metropolis Healthcare Limited",
+     "out": "",
+     "symbol": "METROPOLIS",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Thyrocare Technologies Limited",
+     "out": "",
+     "symbol": "THYROCARE",
+     "unverified": false,
+     "what": "Thyrocare Technologies is engaged in the business of healthcare industry and is involved in providing quality diagnostic services at affordable costs to patients, laboratories…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Vijaya Diagnostic Centre Limited",
+     "out": "",
+     "symbol": "VIJAYA",
+     "unverified": false,
+     "what": "Vijaya Diagnostics Centre limited is a leading diagnostic medicare services provider in Southern India and offers comprehensive services that include nuclear medicine, radiology…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Suraksha Diagnostic Ltd",
+     "out": "",
+     "symbol": "SURAKSHA",
+     "unverified": false,
+     "what": "Suraksha Diagnostic offers an integrated pathology, radiology testing, and medical consultancy services solution",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Krsnaa Diagnostics Ltd",
+     "out": "",
+     "symbol": "KRSNAA",
+     "unverified": false,
+     "what": "Krsnaa Diagnostics Ltd provides a range of technology-enabled diagnostic services such as imaging, clinical laboratory, and teleradiology services to hospitals, medical colleges…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Aspira Pathlab & Diagnostics Ltd",
+     "out": "",
+     "symbol": "ASPIRA",
+     "unverified": false,
+     "what": "Aspira Pathlab & Diagnostics Ltd provides pathology and radiology investigation services through diagnostic centers in Mumbai",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Star Imaging and Path Lab Ltd",
+     "out": "",
+     "symbol": "STARIMAGIN",
+     "unverified": false,
+     "what": "Star Imaging and Path Lab Limited is a healthcare company providing diagnostic services across a wide range of medical tests",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Modern Diagnostic & Research Centre Ltd",
+     "out": "",
+     "symbol": "MDRC",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Clinitech Laboratory Ltd",
+     "out": "",
+     "symbol": "CTLLAB",
+     "unverified": false,
+     "what": "Clinitech Laboratory Ltd is in the business of providing pathology and related healthcare services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Dr Lalchandani Labs Ltd",
+     "out": "",
+     "symbol": "DLCL",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "A D S Diagnostic Ltd",
+     "out": "",
+     "symbol": "ADSDIAG",
+     "unverified": false,
+     "what": "ADS Diagnostic supplies and trades medical equipment",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Samsrita Labs Ltd",
+     "out": "",
+     "symbol": "SAMSRITA",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Gian Lifecare Ltd",
+     "out": "no revenue figure",
+     "symbol": "GIANLIFE",
+     "unverified": false,
+     "what": "Gian Lifecare Ltd is in the business of independent diagnostic/pathological laboratories",
+     "year": null
+    }
+   ],
+   "ebitda": 26.05,
+   "ebitda_n": 12,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Diagnostic lab chains",
+   "listed": 14,
+   "n": 13,
+   "net": 10.8,
+   "net_n": 12,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 2.4,
+   "pb_n": 13,
+   "revenue": 7322.149999999999,
+   "roce": 17.3,
+   "roce_n": 13,
+   "roe": 13.6,
+   "roe_n": 13,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": true,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Molbio Diagnostics Ltd",
+     "out": "",
+     "symbol": "MOLBIO",
+     "unverified": false,
+     "what": "Molbio Diagnostics is an innovative point- of-care (POC) diagnostics company that develops affordable, rapid, and accurate diagnostic solutions for infectious and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Poly Medicure Ltd",
+     "out": "",
+     "symbol": "POLYMED",
+     "unverified": false,
+     "what": "Poly Medicure Limited is an India-based manufacturer and exporter of medical devices",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sahajanand Medical Technologies Ltd",
+     "out": "",
+     "symbol": "SMT",
+     "unverified": false,
+     "what": "Sahajanand Medical Technologies Ltd (SMT) develops and manufactures Class III /Class C- D cardiovascular devices used in vascular and structural-heart interventions",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Tarsons Products Ltd",
+     "out": "",
+     "symbol": "TARSONS",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Laxmi Dental Ltd",
+     "out": "",
+     "symbol": "LAXMIDENTL",
+     "unverified": false,
+     "what": "Laxmi Dental is an integrated dental products company offering a comprehensive portfolio of Dental Products Leading Dental Company Laxmi Dental is India’s only end-to-end…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Hemant Surgical Industries Ltd",
+     "out": "",
+     "symbol": "HSIL",
+     "unverified": false,
+     "what": "Hemant Surgical Industries Ltd is in the business of Medical Equipment & Supplies",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Prevest Denpro Ltd",
+     "out": "",
+     "symbol": "PREVEST",
+     "unverified": false,
+     "what": "Prevest DenPro Limited is into development and manufacturing of dental materials used for diagnosis, prevention and treatment of dental conditions",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "QMS Medical Allied Services Ltd",
+     "out": "",
+     "symbol": "QMSMEDI",
+     "unverified": false,
+     "what": "QMS Medical Allied Services Ltd is a manufacturer and distributor of medical devices",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Nureca Ltd",
+     "out": "",
+     "symbol": "NURECA",
+     "unverified": false,
+     "what": "Nureca Ltd is in the business of Home Healthcare and Wellness Products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Earkart Limited",
+     "out": "",
+     "symbol": "EARKART",
+     "unverified": false,
+     "what": "Earkart an Indian tech-driven hearing healthcare company dedicated to making advanced audiology services and hearing aids more accessible, affordable, and transparent",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Choksi Asia Ltd",
+     "out": "",
+     "symbol": "CHOKSI",
+     "unverified": false,
+     "what": "Choksi Asia Ltd is in the business of manufacturing and dealing in Photosensitized materials and other products for the healthcare industry",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Shree Pacetronix Ltd",
+     "out": "other business",
+     "symbol": "SHREEPAC",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Amkay Products Ltd",
+     "out": "",
+     "symbol": "AMKAY",
+     "unverified": false,
+     "what": "APL manufactures medical devices",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "KMS Medisurgi Ltd",
+     "out": "",
+     "symbol": "KMSMEDI",
+     "unverified": false,
+     "what": "KMS Medisurgi Ltd operates in the manufacturing of Surgical Equipment",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Royal Sense Ltd",
+     "out": "",
+     "symbol": "ROYAL",
+     "unverified": false,
+     "what": "Royal Sense Ltd specializes in medical device and pharmaceutical trading",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "GKB Ophthalmics Ltd",
+     "out": "",
+     "symbol": "GKB",
+     "unverified": false,
+     "what": "GKB Ophthalmics Ltd is engaged in the manufacture and sale of ophthalmic lenses made up of Glass and Plastic",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Centenial Surgical Suture Ltd",
+     "out": "",
+     "symbol": "CSURGSU",
+     "unverified": false,
+     "what": "Centenial Surgical Suture is engaged in the development, manufacturing and supply of Medical Devices",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Transpact Enterprises Ltd",
+     "out": "",
+     "symbol": "TRANSPACT",
+     "unverified": false,
+     "what": "Transpact Enterprises Ltd deals in investment portfolio, Investment advisory, Corporate funding, Market consulting, for various clients",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Fischer Medical Ventures Ltd",
+     "out": "",
+     "symbol": "FISCHER",
+     "unverified": false,
+     "what": "It makes and services medical-imaging equipment and provides AI-based health screening and digital-health solutions",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "3B Blackbio DX Ltd",
+     "out": "",
+     "symbol": "3BBLACKBIO",
+     "unverified": false,
+     "what": "3B BlackBio Dx Ltd manufactures and exports PCR based Molecular Diagnostic kits, PCR Enzymes & PCR Reagents, and agrochemical-based products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Adeshwar Meditex Ltd",
+     "out": "",
+     "symbol": "ADESHWAR",
+     "unverified": false,
+     "what": "Adeshwar Meditex Ltd is a manufacturer and exporter of sterile surgical wound dressings and medical disposables",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 13.5,
+   "ebitda_n": 20,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Medical device and consumables makers",
+   "listed": 21,
+   "n": 20,
+   "net": 6.85,
+   "net_n": 20,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 3.2,
+   "pb_n": 19,
+   "revenue": 6289.680000000001,
+   "roce": 12.25,
+   "roce_n": 20,
+   "roe": 10.1,
+   "roe_n": 20,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": true,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Syngene International Ltd",
+     "out": "",
+     "symbol": "SYNGENE",
+     "unverified": false,
+     "what": "Syngene (established in 1993) as a Biocon subsidiary is India's first Contract Research Organization (CRO) which expanded later to be an integrated service provider offering…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Indegene Ltd",
+     "out": "",
+     "symbol": "INDGN",
+     "unverified": false,
+     "what": "Indegene Ltd provides solutions consisting of analytics, technology and commercial, medical, regulatory and safety services to life science and health care organizations Business",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Vimta Labs Ltd",
+     "out": "",
+     "symbol": "VIMTALABS",
+     "unverified": false,
+     "what": "Vimta Labs Ltd is a contract research and testing services provider",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Fabtech Technologies Ltd",
+     "out": "",
+     "symbol": "FABTECH",
+     "unverified": false,
+     "what": "Business Profile Fabtech provides end-to-end turnkey pharma plant solutions covering design, engineering, procurement, installation, and regulatory validation, while also…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bilcare Ltd",
+     "out": "",
+     "symbol": "BI",
+     "unverified": false,
+     "what": "Bilcare Ltd. is engaged in the business of Pharmaceutical Packaging, Global Clinical Services, R&D services and Anti Counterfeit Technology (nCid)",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Take Ltd",
+     "out": "",
+     "symbol": "TAKE",
+     "unverified": false,
+     "what": "TAKE Solutions Ltd is in the business of Life Sciences and Support Services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Jeevan Scientific Technology Ltd",
+     "out": "",
+     "symbol": "JSTL",
+     "unverified": false,
+     "what": "Jeevan Scientific Technology Ltd is an Independent Clinical Contract Research Organization which offers technology-driven clinical research solutions",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Vanta Bioscience Ltd",
+     "out": "",
+     "symbol": "VANTABIO",
+     "unverified": false,
+     "what": "Vanta Bioscience Ltd is a full-service preclinical contract research organisation",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Suven Life Sciences Ltd",
+     "out": "",
+     "symbol": "SUVEN",
+     "unverified": false,
+     "what": "Suven Life Sciences is a clinical-stage biopharmaceutical company developing proprietary New Chemical Entities for central nervous system disorders",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Novelix Pharmaceuticals Ltd",
+     "out": "other business",
+     "symbol": "NOVELIX",
+     "unverified": false,
+     "what": "Currently, it is engaged in pharmaceutical research and the production and trading of bulk drugs as well as key starting materials and intermediates",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Choksi Laboratories Ltd",
+     "out": "other business",
+     "symbol": "CHOKSILA",
+     "unverified": false,
+     "what": "Choksi Laboratories Ltd provides contract testing and analytical services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Transgene Biotek Ltd",
+     "out": "other business",
+     "symbol": "TRABI",
+     "unverified": false,
+     "what": "Transgene Biotek Ltd is in the business of Research &",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 18.1,
+   "ebitda_n": 8,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Contract research and life-science services",
+   "listed": 12,
+   "n": 9,
+   "net": 8.85,
+   "net_n": 8,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 3.7,
+   "pb_n": 9,
+   "revenue": 6636.36,
+   "roce": 10.0,
+   "roce_n": 9,
+   "roe": 7.8,
+   "roe_n": 9,
+   "scale": null,
+   "words": "These companies provide research, testing, analytics and engineering services to drug and life-science firms, and earn project or service fees."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Bandaram Pharma Packtech Ltd",
+     "out": "",
+     "symbol": "BANDARAM",
+     "unverified": false,
+     "what": "BPPL is engaged in the business of trading of paper board and recycled wastepaper",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Boston Commerce Limited",
+     "out": "",
+     "symbol": "BOSTON",
+     "unverified": false,
+     "what": "Boston Bio Systems Ltd is in the business of trading in goods e.g",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ashram Online.com Ltd",
+     "out": "",
+     "symbol": "ASHRAM",
+     "unverified": false,
+     "what": "Ashram Online.com Ltd does trading and marketing of Raksha Threads (sacred threads) and other allied religious and devotional products through online and offline channels",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": -48.05,
+   "ebitda_n": 2,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Distribution and trading",
+   "listed": 3,
+   "n": 3,
+   "net": -18.85,
+   "net_n": 2,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 1.0,
+   "pb_n": 2,
+   "revenue": 11.920000000000002,
+   "roce": -2.3,
+   "roce_n": 2,
+   "roe": -3.9,
+   "roe_n": 2,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": "rest",
+   "companies": [
+    {
+     "evidence": "industry_code_supported",
+     "name": "Looks Health Services Ltd",
+     "out": "",
+     "symbol": "LOOKS",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Health X Platform Ltd",
+     "out": "",
+     "symbol": "HEALTHX",
+     "unverified": false,
+     "what": "Sastasundar Ventures Ltd is in the business of digital network of healthcare and portfolio management services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Deccan Health Care Ltd",
+     "out": "",
+     "symbol": "DECCAN",
+     "unverified": false,
+     "what": "Deccan Healthcare Ltd is a manufacturer of Fast moving consumer health products",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 6.3,
+   "ebitda_n": 3,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Other hospital companies",
+   "listed": 3,
+   "n": 3,
+   "net": 3.1,
+   "net_n": 3,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": true,
+   "pb": 0.9,
+   "pb_n": 3,
+   "revenue": 1455.8200000000002,
+   "roce": 0.2,
+   "roce_n": 3,
+   "roe": 0.4,
+   "roe_n": 3,
+   "scale": null,
+   "words": ""
+  }
+ ],
+ "sector": "Hospitals",
+ "stamp": [
+  62,
+  32,
+  3
+ ],
+ "theme": "Hospitals",
+ "total": 98,
+ "unit": "₹ crore",
+ "unplaced": 0,
+ "v": 2,
+ "whole": false,
+ "window": {
+  "of": 98,
+  "shown": 98
+ }
+}

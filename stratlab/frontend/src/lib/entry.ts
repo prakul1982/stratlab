@@ -17,13 +17,14 @@ export function hasAuthInUrl(search: string, hash: string): boolean {
   return /(^|&)(access_token|refresh_token|provider_token|code|token_hash)=/.test(parts);
 }
 
-/** An emailed one-time sign-in link (the reviewer and test-account links Admin sends): the site's own address with the
- * link's hashed token, which the app trades for a session (SECMEM 1b: with PKCE no session token is ever in the address).
- * Null for any other address. */
-export function emailLinkIn(search: string): { token_hash: string; type: "magiclink" } | null {
+/** An emailed one-time sign-in link: the reviewer and test-account links Admin sends ("magiclink"), and the link in the email
+ * sign-in's own email ("email", owner 16 Nov): the site's own address with the link's hashed token, which the app trades for a
+ * session (SECMEM 1b: with PKCE no session token is ever in the address). A hashed token needs nothing kept in the browser, so the
+ * link works in whichever app opens the email. Null for any other address. */
+export function emailLinkIn(search: string): { token_hash: string; type: "magiclink" | "email" } | null {
   const q = new URLSearchParams(search);
-  const token = q.get("token_hash");
-  return token && q.get("type") === "magiclink" && /^[\w-]{8,200}$/.test(token) ? { token_hash: token, type: "magiclink" } : null;
+  const token = q.get("token_hash"), type = q.get("type");
+  return token && (type === "magiclink" || type === "email") && /^[\w-]{8,200}$/.test(token) ? { token_hash: token, type } : null;
 }
 
 /** The address with the emailed link's token taken out, so a reload or the history never holds it. */

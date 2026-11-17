@@ -77,12 +77,27 @@ def entries(region: str | None = None) -> list[dict]:
         name = str(m.get("q") or "")
         if not slug(name):
             continue
-        row = {"region": e["region"], "name": name, "label": public_words(e.get("label") or name, 80) or name, "slug": slug(name),
-               "aliases": [slug(a) for a in m.get("aliases") or [] if slug(a)], "at": e.get("at"), "hk": hk}
+        label = public_words(e.get("label") or name, 80) or name
+        # LIVE9A-029: the address is the theme's name as shown ("/themes/in/logistics", "/us/aerospace-and-defense"), not the library's
+        # singular key ("/logistic", "/capital-good"); the old address is an alias that answers 301 to it
+        own = slug(short_label(label)) or slug(name)
+        row = {"region": e["region"], "name": name, "label": label, "slug": own,
+               "aliases": [x for x in dict.fromkeys([slug(name)] + [slug(a) for a in m.get("aliases") or []]) if x and x != own], "at": e.get("at"), "hk": hk}
         key, rank = (e["region"], slug(name)), (m["rules"], str(e.get("at") or ""))
         if key not in best or rank > best[key][0]:
             best[key] = (rank, row)
     return sorted((row for _, row in best.values()), key=lambda x: (x["region"], x["label"].lower()))
+
+
+def page_path(region: str, name: str) -> str:
+    """The public page of the theme the library keeps under `name`: the address its stored entry answers at (LIVE9A-029, from the name as
+    shown), or the name's own slug when no entry is stored (that address then finds it, or says no theme is there)."""
+    s = slug(name)
+    try:
+        hit = next((x for x in entries(region) if slug(x["name"]) == s), None)
+    except Exception:
+        hit = None
+    return path(region, hit["slug"] if hit else s)
 
 
 def find(region: str, s: str) -> tuple[dict | None, str | None]:
@@ -92,7 +107,16 @@ def find(region: str, s: str) -> tuple[dict | None, str | None]:
     if hit:
         return hit, None
     alias = [x for x in rows if s in x["aliases"]]
-    return (None, alias[0]["slug"]) if len(alias) == 1 else (None, None)
+    if len(alias) == 1:
+        return None, alias[0]["slug"]
+    # blog2: the theme as people write it ("it-services", "private-banks", "medical-devices") is the library's normalised name
+    # ("it-service", ...): it answers 301 to that page, never "No theme at this address"
+    try:
+        norm = slug(theme_library.normalise(s.replace("-", " "), region))
+    except Exception:
+        norm = ""
+    hit = next((x for x in rows if norm and x["slug"] == norm), None)
+    return (None, hit["slug"]) if hit and hit["slug"] != s else (None, None)
 
 
 def payload(entry: dict) -> dict | None:
@@ -109,6 +133,36 @@ def _index_caps(region: str) -> dict:
         return {r["symbol"]: r.get("market_cap") for r in screens.load_index(region).get("rows") or [] if r.get("symbol")}
     except Exception:
         return {}
+
+
+def _price_day(region: str, symbols) -> str | None:
+    """LIVE9A-011: the close the page's market values are at (the newest price day among its companies in the screens' index), or None."""
+    try:
+        from . import screens
+        want = set(symbols)
+        days = [str(r.get("price_at") or "")[:10] for r in screens.load_index(region).get("rows") or [] if r.get("symbol") in want]
+        days = [d for d in days if re.match(r"^\d{4}-\d\d-\d\d$", d)]
+        return max(days) if days else None
+    except Exception:
+        return None
+
+
+def short_label(label: str) -> str:
+    """LIVE9A-011/020: a theme's name as a page title or card says it: without a market in brackets ("Capital goods (India)", the market is
+    said beside it) and without a long bracketed gloss ("Utilities (Indian power, gas and water-linked infrastructure)")."""
+    out = re.sub(r"\s*\((?:India|Indian|US|USA|United States)\)\s*$", "", str(label or ""), flags=re.I).strip()
+    m = re.match(r"^(.*?)\s*\(([^)]*)\)\s*$", out)
+    if m and m.group(1) and len(m.group(2)) > 20:
+        out = m.group(1).strip()
+    return out or str(label or "")
+
+
+def clean_name(name: str) -> str:
+    """LIVE9A-011: a company's name as people write it, not a filing's capitals or state mark ("TransDigm Group INC", "Bank Of Montreal /can/")."""
+    n = stock_pages.proper_name(name) or name
+    n = re.sub(r"\s*/[A-Za-z]{2,4}/?\s*$", "", n).strip()
+    n = re.sub(r"\b(INC|CORP|LTD|PLC|CO)\b\.?", lambda m_: m_.group(1).title() + ("." if m_.group(0).endswith(".") else ""), n)
+    return re.sub(r"\bOf\b", "of", n) if re.search(r"[a-z]", n) else n
 
 
 def _dive(region: str, name: str, p: dict) -> dict:
@@ -165,11 +219,14 @@ def view(entry: dict, p: dict) -> dict:
             rev = revs.get(sym)
             # e54: what its place rests on; a company the map added is shown only confirmed by its own words (share.checked)
             state = "description_verified" if c.get("verified") is True else (ev(sym) if ev else None)
-            rows.append({"symbol": sym, "name": public_words(c.get("name") or sym, 100) or sym,
+            rows.append({"symbol": sym, "name": clean_name(public_words(c.get("name") or sym, 100) or sym),
                          "page": stock_pages.path(region, sym) if sym in known else None,
-                         "cap": money(region, caps.get(sym)), "revenue": money(region, rev[0], rev[2]) if rev else None,
+                         "cap": money(region, caps.get(sym)), "cap_v": caps.get(sym) if isinstance(caps.get(sym), (int, float)) else None,
+                         "revenue": money(region, rev[0], rev[2]) if rev else None,
                          "year": str(rev[1] or "")[:20] if rev else None, "evidence": state if state in EVIDENCE_PUBLIC else None})
         # l55 (R55): each layer's companies by what their place rests on, as the page's count does for the whole theme
+        # LIVE9A-011: a layer's companies largest first by market value (those without one last, by name)
+        rows.sort(key=lambda r_: (r_["cap_v"] is None, -(r_["cap_v"] or 0), r_["name"].lower()))
         mine = {r_["symbol"]: r_.get("evidence") for r_ in rows}
         layers.append({"name": v["name"], "companies": rows,
                        "evidence": {k: sum(1 for x in mine.values() if x == k) for k in EVIDENCE_PUBLIC} if ev else None})
@@ -178,6 +235,7 @@ def view(entry: dict, p: dict) -> dict:
     tally = {k: sum(1 for x in once.values() if x == k) for k in EVIDENCE_PUBLIC} if ev else None
     return {"region": region, "label": entry["label"], "slug": entry["slug"], "name": entry["name"], "evidence": tally,
             "summary": public_words(p.get("summary"), 700), "layers": layers, "members": n,
+            "prices": _price_day(region, {c["symbol"] for v in layers for c in v["companies"] if c.get("cap")}),
             "day": datetime.fromtimestamp(float(entry["at"]), timezone.utc).date().isoformat() if entry.get("at") else None,
             "indexable": len(layers) >= MIN_LAYERS and n >= MIN_MEMBERS}
 
@@ -215,9 +273,8 @@ def _app(region: str, name: str | None = None) -> str:
 
 
 def _where(v: dict) -> str:
-    """ "companies in India", or just "companies" when the theme's own name says the market ("India steel and mining")."""
-    word = "India" if v["region"] == "IN" else "US"
-    return "companies" if re.search(rf"\b{word}\b", v["label"], re.I) else f"companies in {_market(v['region'])}"
+    """ "Listed companies in India" (LIVE9A-011: one pattern, never "Hospitals companies in India" or "Capital goods (India) companies")."""
+    return f"Listed companies in {_market(v['region'])}"
 
 
 def render(v: dict) -> str:
@@ -225,41 +282,50 @@ def render(v: dict) -> str:
     site = settings.PUBLIC_SITE_URL
     r = v["region"]
     canonical = site + path(r, v["slug"])
-    title = f"{v['label']} {_where(v)}: the theme's layers · StratLab"
+    label = short_label(v["label"])
+    title = f"{label}: {_where(v).lower()} by layer · StratLab"
     word = "" if v.get("evidence") else "checked "          # e54: with the states kept, each company says how it was checked
-    desc = (f"{v['label']} in {_market(r)}: {v['members']} {word}companies in {len(v['layers'])} layers"
+    desc = (f"{label} in {_market(r)}: {v['members']} {word}companies in {len(v['layers'])} layers"
             + (f", from {', '.join(x['name'] for x in v['layers'][:3])}" if v["layers"] else "") + ". Facts from filings, not advice.")
     crumbs_html, crumbs_ld = stock_pages._crumbs([("Themes", "/themes"), ("India" if r == "IN" else "US", f"/themes/{r.lower()}"),
-                                                  (v["label"], path(r, v["slug"]))])
-    ld = stock_pages._ld({"@context": "https://schema.org", "@type": "Dataset", "name": f"{v['label']} companies in {_market(r)}",
+                                                  (label, path(r, v["slug"]))])
+    ld = stock_pages._ld({"@context": "https://schema.org", "@type": "Dataset", "name": f"{label}: listed companies in {_market(r)}",
                           "description": stock_pages.clamp_desc(desc, 300), "url": canonical, "dateModified": v["day"],
                           "creator": {"@type": "Organization", "name": "StratLab", "url": site}, "isAccessibleForFree": True}) + crumbs_ld
     head = stock_pages._head(title, desc, canonical, extra=ld, robots="index,follow" if v["indexable"] else "noindex,follow")
     app = _app(r, v["name"])
-    body = (crumbs_html + f"<h1>{e(v['label'])} <span class=\"muted\">{e(_where(v))}</span></h1>"
+    body = (crumbs_html + f"<h1>{e(label)} <span class=\"muted\">{e(_where(v))}</span></h1>"
             f'<p class="muted">{v["members"]} {word}compan{"y" if v["members"] == 1 else "ies"} in {len(v["layers"])} layer{"" if len(v["layers"]) == 1 else "s"}'
-            + (f" · map made {e(day_text(v['day']))}" if v.get("day") else "") + "</p>")
+            + (f" · map made {e(day_text(v['day']))}" if v.get("day") else "")
+            # LIVE9A-011: the close the market values are at, said once
+            + (f" · market values at the {e(day_text(v['prices']))} close" if v.get("prices") else "") + "</p>")
     if v.get("evidence"):          # e54: the companies by what their place rests on, adding up to those shown
         body += '<p class="muted small" data-evidence>Membership: ' + e(evidence_said(v["evidence"])) + ".</p>"
-    if v["summary"]:
-        body += f"<p>{e(v['summary'])}</p>"
+    # LIVE9A-011 (owner, 29 Oct: "wherever you can, just make a table"): each layer is a table, largest company first; the theme's
+    # description comes after the companies, so a phone's first screen holds companies, not a paragraph
     for x in v["layers"]:
-        items = ""
+        state = any(c.get("evidence") and c["evidence"] != "description_verified" for c in x["companies"])
+        rows = ""
         for c in x["companies"]:
             name = f'<a href="{e(c["page"])}">{e(c["name"])}</a>' if c["page"] else e(c["name"])
-            figs = [f"Market value {c['cap']}"] if c["cap"] else []
-            if c["revenue"]:
-                figs.append(f"revenue {c['revenue']}" + (f" ({e(c['year'])})" if c.get("year") else ""))
-            if c.get("evidence") and c["evidence"] != "description_verified":
-                figs.append(EVIDENCE_PUBLIC[c["evidence"]])        # e54: never said confirmed by its own words when it isn't
-            items += f'<li>{name} <span class="muted small">{e(c["symbol"])}' + (" · " + e(", ".join(figs)) if figs else "") + "</span></li>"
-        lev = (f'<p class="muted small" data-layer-evidence>{e(evidence_said(x["evidence"]))}</p>' if x.get("evidence") else "")
-        body += f'<section class="card" data-layer><h2>{e(x["name"])}</h2>{lev}<ul class="plain">{items}</ul></section>'
+            rev = (e(c["revenue"]) + (f' <span class="muted small">{e(c["year"])}</span>' if c.get("year") else "")) if c["revenue"] else "–"
+            ev = ""
+            if state:                  # e54: never said confirmed by its own words when it isn't
+                ev = f'<td class="l">{e(EVIDENCE_PUBLIC[c["evidence"]]) if c.get("evidence") and c["evidence"] != "description_verified" else "description-verified" if c.get("evidence") else "–"}</td>'
+            rows += f'<tr><td>{name}</td><td class="l">{e(c["symbol"])}</td><td>{e(c["cap"]) if c["cap"] else "–"}</td><td>{rev}</td>{ev}</tr>'
+        thead = ('<tr><th scope="col">Company</th><th scope="col" class="l">Ticker</th><th scope="col">Market value</th><th scope="col">Revenue</th>'
+                + ('<th scope="col" class="l">Membership</th>' if state else "") + "</tr>")
+        # the layer's own mix of states only where it isn't every company description-verified (the page's line above says the whole)
+        lev = (f'<p class="muted small" data-layer-evidence>{e(evidence_said(x["evidence"]))}</p>' if x.get("evidence") and state else "")
+        body += (f'<section class="card" data-layer><h2>{e(x["name"])}</h2>{lev}<div class="cotbl"><table aria-label="{e(x["name"])}">'
+                 f"<thead>{thead}</thead><tbody>{rows}</tbody></table></div></section>")
     if not v["layers"]:
         body += '<p class="note">No company in this theme has been checked yet.</p>'
+    if v["summary"]:
+        body += f'<section class="card" data-about><h2>About the theme</h2><p>{e(v["summary"])}</p></section>'
     body += (f'<section class="card" data-cta><h2>See the full theme on StratLab</h2><p>Sign in for the whole theme: the figures of each layer, '
              f"every company placed by the map and how it was checked, the tailwinds and risks with their sources, the news and the slides.</p>"
-             f'<div class="ctas"><a class="btn" href="{e(app)}">Open the {e(v["label"])} theme</a><a class="btn ghost" href="{e(site)}/pricing">See the plans</a></div></section>'
+             f'<div class="ctas"><a class="btn" href="{e(app)}">Open the {e(label)} theme</a><a class="btn ghost" href="{e(site)}/pricing">See the plans</a></div></section>'
              f'<details class="how"><summary>How this page is made</summary><p>{e(METHOD)}</p></details>'
              f'<p class="note">{e(FACTS_LINE)} <a href="{e(site)}/help#feedback">Report an error</a>.</p>')
     return stock_pages._page(head, app, body)
@@ -275,18 +341,37 @@ def directory(region: str | None) -> str:
     desc = f"Themes{where} mapped into layers of listed companies, each checked against its own filings. Facts, not advice."
     trail = [("Themes", "/themes")] + ([("India" if region == "IN" else "US", f"/themes/{region.lower()}")] if region else [])
     crumbs_html, crumbs_ld = stock_pages._crumbs(trail)
+    if not region:
+        crumbs_html = ""               # LIVE9A-020: a breadcrumb "Themes" over the h1 "Themes" said the page's name twice
     head = stock_pages._head(title, desc, canonical, extra=crumbs_ld)
     tabs = "".join(f'<a href="/themes{p}"' + (' aria-current="page"' if (region or "") == R else "") + f">{t}</a>"
                    for p, R, t in (("", "", "All"), ("/in", "IN", "India"), ("/us", "US", "US")))
     body = (crumbs_html + f"<h1>Themes{e(where)}</h1><p class=\"muted\">{e(desc)}</p><nav class=\"links\" aria-label=\"Markets\">{tabs}</nav>")
     if rows:
-        body += ('<ul class="dir">' + "".join(f'<li><a href="{e(path(x["region"], x["slug"]))}">{e(x["label"])}</a>'
-                                               f'<span class="muted">{"India" if x["region"] == "IN" else "US"}</span></li>' for x in rows) + "</ul>")
+        # LIVE9A-020: each card its short name (never "Capital goods (India) · India"), how many companies and the map's date
+        body += ('<ul class="dir">' + "".join(f'<li><a href="{e(path(x["region"], x["slug"]))}">{e(short_label(x["label"]))}</a>'
+                                               f'<span class="muted">{e(card_line(x))}</span></li>' for x in rows) + "</ul>")
     else:
         body += '<p class="note">No theme has been mapped and checked yet. Open the themes in the app to map one.</p>'
     body += (f'<div class="ctas"><a class="btn" href="{e(_app(region or "IN"))}">Map any theme on StratLab</a></div>'
              f'<p class="note">{e(FACTS_LINE)}</p>')
     return stock_pages._page(head, _app(region or "IN"), body)
+
+
+def card_line(x: dict) -> str:
+    """LIVE9A-020: a directory card's small line: "India · 69 companies · 16 Nov" (the count of checked companies on its page)."""
+    bits = ["India" if x["region"] == "IN" else "US"]
+    try:
+        p = payload(x)
+        n = len({c["ticker"] for v in theme_layers(p) for c in v["companies"]}) if p else 0
+    except Exception:
+        n = 0
+    if n:
+        bits.append(f"{n} compan{'y' if n == 1 else 'ies'}")
+    if x.get("at"):
+        d = datetime.fromtimestamp(float(x["at"]), timezone.utc)
+        bits.append(f"{d.day} {d.strftime('%b')}")
+    return " · ".join(bits)
 
 
 def not_found() -> str:

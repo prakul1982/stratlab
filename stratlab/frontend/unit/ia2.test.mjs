@@ -34,7 +34,8 @@ const { NAV } = await import("../src/lib/nav.ts");
 
 test("item 36: the 14 headings stay; every heading with more than one page lists them, as its tabs do", () => {
   const ids = new Set(Object.values(NAV).flatMap((s) => s.groups.map((g) => g.id)));
-  assert.equal(ids.size, 14);
+  // (updated on purpose, NAV3: 13 headings for the spaces' pages, with My space the menu's 14; Market data and Plan are More tools)
+  assert.equal(ids.size, 13);
   const shell = read("src/components/Shell.tsx");
   // the list is drawn from the heading's own pages (the tabs' list), through the same link the menu always used (locks, titles)
   assert.match(shell, /<div id=\{`side-sub-\$\{g\.id\}`\} className="side-list side-sub" hidden=\{!open\}>\n\s*\{g\.pages\.map\(\(p\) => \(/);
@@ -52,7 +53,7 @@ test("item 36: a disclosure button per section, the section you are in open, the
   assert.match(shell, /usePersisted<Record<string, boolean>>\(`\$\{OPEN_KEY\}\.\$\{me\?\.id \?\? "guest"\}`, NO_CHOICE\)/);
   assert.match(shell, /const isOpen = \(g: NavGroup\) => opened\[g\.id\] \?\? g\.id === current;/);
   // the heading still opens the section's first page; it is marked only when its own page shows, else only bold
-  assert.match(shell, /const to = startOf\(g, sp\);/);
+  assert.match(shell, /const to = startOf\(g\);/);          // (updated on purpose, NAV3: one menu, an entry opens its first tab in every view)
   assert.match(shell, /className=\{here \? "active" : inIt \? "in-section" : undefined\} aria-current=\{here \? "page" : undefined\}/);
   const css = read("src/styles.css");
   assert.match(css, /\.side-list a\.in-section \{ color: var\(--ink\); font-weight: 600; \}/);

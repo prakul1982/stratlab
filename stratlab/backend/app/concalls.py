@@ -624,7 +624,10 @@ def calendar_dates(uid: str, days: int, frm: date | None = None) -> list[dict]:
             continue
         when = f" at {r['time']}{' ' + r['tz'] if r['tz'] else ''}" if r["time"] else ""
         first = next((x["url"] for x in r["links"] if x["kind"] == "join"), None) or next((x["url"] for x in r["links"] if x["kind"] == "notice"), None)
-        out.append({"date": r["date"], "title": f"{r['symbol']}: {r['type_label'].lower()}{when}", "kind": f"concall_{r['type']}",
-                    "id": r["id"], "detail": f"{r['name']}: {r['type_label'].lower()}{when}, as its filing with the exchange says."
-                    + (f" Link from the filing: {first}" if first else ""), "url": f"/research/IN/{r['symbol']}"})
+        # one line per day the filing lists (LIVE9B-008: SBIN's meetings on 17 and 18 Nov showed only the 17th), the company's name as the
+        # detail (not the title again) and the filing as a link, never its address written out
+        for day in [d for d in (r.get("dates") or [r["date"]]) if frm.isoformat() <= d <= to.isoformat()] or [r["date"]]:
+            out.append({"date": day, "title": f"{r['symbol']}: {r['type_label'].lower()}{when}", "kind": f"concall_{r['type']}",
+                        "id": r["id"] if day == r["date"] else f"{r['id']}|{day}", "detail": f"{r['name']}, from its filing with the exchange.",
+                        "link": first if str(first or "").startswith("https://") else None, "url": f"/research/IN/{r['symbol']}"})
     return out

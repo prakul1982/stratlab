@@ -127,7 +127,8 @@ test("RC6-014: deleting a notebook with a running paper session says the session
   expect(run.ok()).toBeTruthy();
   const errors = await signIn(page, u, `/n/${nb.id}`);
   await expect(page.getByRole("link", { name: /Paper trading · open/ })).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "More" }).first().click();
+  // (updated on purpose (nav3): the one menu's "More tools pages" button is named "More..." too: the notebook's More is matched exactly)
+  await page.getByRole("button", { name: "More", exact: true }).first().click();
   await page.getByRole("menuitem", { name: "Delete notebook" }).click();
   const dlg = page.getByRole("dialog", { name: /Delete the notebook/ });
   await expect(dlg).toContainText("Its paper session is running and stays running");
@@ -136,7 +137,7 @@ test("RC6-014: deleting a notebook with a running paper session says the session
   // a notebook with no session says nothing of one
   await page.goto(`/n/${quiet.id}`);
   await expect(page.locator("main h1, main input").first()).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "More" }).first().click();
+  await page.getByRole("button", { name: "More", exact: true }).first().click();
   await page.getByRole("menuitem", { name: "Delete notebook" }).click();
   await expect(page.getByRole("dialog", { name: /Delete the notebook/ })).not.toContainText("paper session");
   expect(errors).toEqual([]);

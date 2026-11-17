@@ -33,6 +33,8 @@ USERS = {
     **{f"cf2-{i}": (f"u-cf2-{i}", f"cf2{i}@example.com", ("free", "basic", "pro")[i // 8]) for i in range(24)},
     # the F3 lane's e2e (e2e/f3-import-report.spec.ts): its own accounts, one per test and project (free, basic, pro in turn)
     **{f"f3-{i}": (f"u-f3-{i}", f"f3{i}@example.com", ("free", "basic", "pro")[i % 3]) for i in range(12)},
+    # lane su1's e2e (e2e/su1-email-usd.spec.ts): its own Free accounts, one per test and project; su1-0 to su1-5 signed in by email
+    **{f"su1-{i}": (f"u-su1-{i}", f"su1{i}@example.com", "free") for i in range(12)},
     "free-token": ("u-free", "free@example.com", "free"),
     "basic-token": ("u-basic", "basic@example.com", "basic"),
     "pro-token": ("u-pro", "pro@example.com", "pro"),
@@ -234,7 +236,7 @@ class FakeAuth:
             u = None                          # the sign-in record is gone: the token no longer checks out
         if not u:
             raise AuthApiError("invalid JWT: unable to parse or verify signature", 401, "bad_jwt")
-        provider = "email" if token == "email-signup-admin-token" else "google"
+        provider = "email" if token == "email-signup-admin-token" or token in {f"su1-{i}" for i in range(6)} else "google"
         return SimpleNamespace(user=SimpleNamespace(id=u[0], email=u[1], email_confirmed_at="2026-01-01T00:00:00Z",
                                                     app_metadata={"provider": provider, "providers": [provider]}))
 

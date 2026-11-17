@@ -15,7 +15,7 @@ import { Info } from "../components/ui";
 import { SurvBadges } from "../components/Surveillance";
 import { useMoreColumns } from "../components/MoreColumns";
 import {
-  Card, CardHead, ChipSet, CheckField, ConfirmDialog, DataTable, ShowLess, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton,
+  Card, CardHead, ChipSet, CsvButton, CheckField, ConfirmDialog, DataTable, ShowLess, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton,
   type Column,
 } from "../components/kit";
 import { limitLine, planIdOf } from "../lib/lockText";
@@ -232,7 +232,9 @@ export function ScreensPage() {
         </Card>
       )}
 
-      <div className="k-split2 screens-split">
+      {/* with nothing to list (no figures yet, or none match) the filters and the empty answer stack: side by side, the empty answer stood
+          beside a long filter column with most of the row blank (ui-lint R1) */}
+      <div className={out && rows.length === 0 ? "k-stack screens-split-empty" : "k-split2 screens-split"}>
         <div className="inv-sticky">
           <Card label="Filters" className="screens-filters">
             <CardHead title={n ? `Filters (${n})` : "Filters"} actions={<>
@@ -309,7 +311,9 @@ export function ScreensPage() {
             <CardHead title={out ? `${out.total.toLocaleString("en-IN")} of ${out.indexed.toLocaleString("en-IN")} companies match` : "Checking…"}
               actions={<>
                 <Select label="Sort by" small value={sort} onChange={(v) => { setSort(v); setDesc(false); }} options={cols.map((c) => ({ value: c.id, label: c.short ?? c.label }))} />
-                <button className="btn quiet sm" onClick={() => setDesc((d) => !d)}>{desc ? "High to low ↓" : sort === "name" || sort === "sector" ? "A to Z ↑" : "Low to high ↑"}</button>{more.toggle}</>} />
+                <button className="btn quiet sm" onClick={() => setDesc((d) => !d)}>{desc ? "High to low ↓" : sort === "name" || sort === "sector" ? "A to Z ↑" : "Low to high ↑"}</button>{more.toggle}
+                {/* the CSV in the header row with the sort, not alone on a line over the table (LIVE9B-012) */}
+                {rows.length > 0 && <CsvButton name="screen results" label="Companies that match" columns={shownCols} rows={rows} />}</>} />
             {!out && !error && <div className="screens-wait"><Skeleton label="Finding the companies" lines={8} /></div>}
             {error && <ErrorState title="The companies couldn't be read" action={{ label: "Try again", onClick: () => { setMetaTries((t) => t + 1); run(0); } }}>{error}</ErrorState>}
             {out && out.indexed === 0 && <EmptyState title="Still gathering company numbers">StratLab is still gathering company numbers for {REGION_NAME[region]}. Check back in a little while.</EmptyState>}
@@ -319,7 +323,7 @@ export function ScreensPage() {
             )}
             {rows.length > 0 && (
               <div className="screens-table">
-                <DataTable csv="screen results" label="Companies that match" rows={rows} rowKey={(r) => r.symbol} stack columns={shownCols} sort={{ key: sort, desc, onSort: sortBy }} />
+                <DataTable label="Companies that match" rows={rows} rowKey={(r) => r.symbol} stack columns={shownCols} sort={{ key: sort, desc, onSort: sortBy }} />
               </div>
             )}
             {out && rows.length < out.total && <button className="btn quiet sm k-btn-end" disabled={loading} onClick={() => run(rows.length)}>Show more ({(out.total - rows.length).toLocaleString("en-IN")} left)</button>}

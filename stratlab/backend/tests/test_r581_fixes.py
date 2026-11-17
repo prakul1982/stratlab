@@ -138,8 +138,11 @@ def test_a_line_says_the_words_that_place_it_in_its_layer():
           "flagship brands Business Model PB Fintech runs an asset-light, digital-first model for distributing and servicing financial products. "
           "It does not underwrite insurance.")
     assert B.layer_line("PB Fintech Ltd, popularly known as Policy Bazar is India's largest online platform for insurance", pb, "PB Fintech Limited",
-                        "Distribution and aggregation") == \
-        "PB Fintech runs an asset-light, digital-first model for distributing and servicing financial products"
+                        "Distribution and aggregation") in (
+        # (updated on purpose, r60: "online platform for insurance" says the layer's concept, insurance distribution, so the line given
+        # already places it; before, only the literal "distributing" did)
+        "PB Fintech Ltd, popularly known as Policy Bazar is India's largest online platform for insurance",
+        "PB Fintech runs an asset-light, digital-first model for distributing and servicing financial products")
     bio = ("Biocon is engaged in the business of manufacture of biotechnology products and research services.(Source : Annual Report) Business "
            "Segments: a) Biosimilars (60% in FY26): Biocon Biologics Ltd develops and markets a range of 20 biosimilars including insulins, "
            "monoclonal antibodies, and conjugated recombinant proteins.")

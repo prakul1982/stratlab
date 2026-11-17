@@ -2,6 +2,7 @@
 market's close; margins named for what they are; missing figures shown as n/a; mixed currencies and extreme margins
 said out loud; peers ranked by size; market caps in words; the site's own header and footer; and a helpful answer for
 funds, indices, share classes, /stocks and a trailing slash."""
+from pathlib import Path
 import json
 import re
 from datetime import datetime, timedelta, timezone
@@ -321,8 +322,14 @@ def test_public_company_pages_have_a_phone_menu_and_16px_inputs():
     assert '<details class="menu"><summary>Menu</summary>' in head
     menu = re.search(r"<details.*?</details>", head, re.S).group(0)
     # (updated on purpose, AS1: the menu is the site's public pages, the same on every page)
-    for label in ("Home", "Library", "Companies", "Themes", "Blog", "Plans", "About", "Contact"):
+    # (updated on purpose, NAV3/LIVE9A-019: the same list as the landing page's header and index.html's; the logo is the way home, no "Home")
+    for label in ("Library", "Companies", "Themes", "Blog", "Plans", "About", "Contact"):
         assert f">{label}</a>" in menu, label
+    assert ">Home</a>" not in menu
+    from app.stock_pages import PUBLIC_MENU
+    index = (Path(__file__).resolve().parents[2] / "frontend" / "index.html").read_text()
+    boot = re.search(r'<nav class="boot-nav" aria-label="Site">(.*?)</nav>', index).group(1)
+    assert re.findall(r'<a href="([^"]+)">([^<]+)</a>', boot) == [(h, t) for h, t in PUBLIC_MENU], "index.html's menu is the public menu"
     css = _css(page)
     assert "details.menu{display:block}" in css and ".nav>nav{display:none}" in css
     last = re.findall(r"@media \(max-width:640px\)\{([^@]*)\}", css)[-1]

@@ -52,7 +52,8 @@ NRI_TDS = "TDS on NRI sales is deducted by the broker; this estimate does not re
 # the Income-tax Act, 2025 renumbers the sections from tax year 2026-27 (FY 2026-27); the rules themselves are the same
 NEW_SECTIONS = {"111A": "196", "112A": "198", "87A": "156", "115BAC": "202", "139": "263", "234B": "424", "234C": "425"}
 NEW_ACT_NOTE = ("From 1 April 2026 the Income-tax Act, 2025 replaces the 1961 Act and renumbers its sections: "
-                + ", ".join(f"{o} is now {n}" for o, n in NEW_SECTIONS.items()) + ". The rules used here are the same.")
+                + ", ".join(f"{o} is now {n}" for o, n in NEW_SECTIONS.items()) + ". The rules used here are the same; a section not listed keeps "
+                "its 1961 Act number here.")
 
 # where each year's rules were checked; a year missing from here shows "rules for this year not yet confirmed"
 YEAR_SOURCES = {
@@ -546,7 +547,9 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
                        # the F&O and intraday lines the Money home shows beside the total (R6O-014)
                        "business": round(business, 2), "intraday": round(intraday, 2)},
             "carry_forward": {"speculative": round(spec_cf, 2), "business": round(biz_cf, 2)}, "brought_forward": bf, "set_off": cyla,
-            "steps": steps, "lines": lines, "notes": notes, "confirmed": r["confirmed"], "source": r["source"]}
+            "steps": steps, "lines": lines, "notes": notes, "confirmed": r["confirmed"], "source": r["source"],
+            # the 2025 Act's numbers for the sections it renumbers, so the page names each section one way from FY 2026-27 (LIVE9B-018)
+            "sections": dict(NEW_SECTIONS) if fy >= 2026 else None}
 
 
 # ---------- returns and audit, facts only ----------

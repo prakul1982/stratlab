@@ -88,7 +88,9 @@ test("refresh on Free says it is on Basic, not 'back at midnight'", () => {
   assert.equal(usage.refreshNotOnPlan(free), true);
   assert.equal(usage.refreshNotOnPlan(basic), false);
   assert.equal(usage.REFRESH_ON_BASIC, "Refreshing a stored read is on Basic and Pro");
-  assert.match(read("src/components/StoredStamp.tsx"), /\{off \? "On Basic" : none \? "None left today"/);
+  // (updated on purpose, LIVE9A-003: the count's words are leftWord's, which say a Free account's earlier count is one)
+  assert.match(read("src/components/StoredStamp.tsx"), /\{off \? "On Basic" : leftWord\(left \?\? 0, usage\)\}/);
+  assert.match(read("src/lib/usageText.ts"), /left === 0 \? "None left today"/);
 });
 
 test("the tax report's downloads are Basic's: a lock banner on the page and a locked button", () => {
