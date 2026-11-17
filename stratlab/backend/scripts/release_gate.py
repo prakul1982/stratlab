@@ -35,9 +35,10 @@ FAIL (the exit code is 1 when any theme has one; each row says on which side it 
                        a layer whose name has no word of three letters or more
   financial margin     r581 (the live R58 Regional banks deck: Fifth Third's 3,152.5%): a bank's, lender's or insurer's net margin above 100% in
                        the figures the input carries (its revenue line is not its total revenue)
-  one-company layer    a named layer (not "Other ...", not an official group) holding one company (r582, R58.2: its member's words saying
-                       its name or not; r58 let one whose words say it stand), or holding one company in the dive's figures window
-                       (theme_base.for_figures) while it has more
+  one-company layer    a named layer (not "Other ...", not an official group) holding one company whose own words don't say what it is
+                       in a line a deck prints (r60, R60, updated on purpose: the owner's R59 review P0, a valid role is never hidden
+                       because one company plays it, so a layer of one company whose words say it stands, shown with no statistic; r582
+                       failed every one), or holding one company in the dive's figures window (theme_base.for_figures) while it has more
   largest left out     a company of a named layer left out of its figures on insufficient evidence alone (read only weakly, no words, none
                        found, no way of earning stated) that is one of the theme's 10 largest by market value (never more than its
                        largest quarter: theme_base.TOP_MEMBERS, TOP_SHARE) or larger than every company
@@ -110,7 +111,10 @@ def shares(name: str, text: str) -> bool | None:
     if not nw:
         return None
     tw = text_words(text)
-    return any(a == b or (len(a) >= 4 and len(b) >= 4 and (a.startswith(b) or b.startswith(a))) for a in nw for b in tw)
+    # r60 (R60, the owner's review of the live R59 decks: Dish TV's "Direct to Home television" read as no word of "Cable and satellite
+    # distribution"): words that say the layer's concept say it (theme_base.concept_said, the placement's own reading)
+    return any(a == b or (len(a) >= 4 and len(b) >= 4 and (a.startswith(b) or b.startswith(a))) for a in nw for b in tw) \
+        or bool(B.concept_said(name, text))
 
 
 # the words before a model's words that make them the customers' business, not the company's ("shared by the Wireless Telecom Operators",
@@ -523,11 +527,17 @@ def checks(d: dict, vc: list, placements: dict, moved_in: set = frozenset(), why
             continue
         if len(cos) == 1:
             s, c = cos[0]
-            # r582 (R58.2, the live R58.1 decks: 19 layers of one company): a layer of one company is a FAIL, its member's words saying its
-            # name or not (r58 let one whose words say it stand); it gains the companies whose words say it, or its company goes elsewhere
+            # r582 (R58.2, the live R58.1 decks: 19 layers of one company) failed every layer of one company. r60 (R60, updated on purpose:
+            # the owner's R59 review P0, "valid industry roles are being hidden simply because their category contains one company"): a
+            # layer of one company fails only when its member's own words don't say what it is in a line a deck prints (the stricter test of
+            # evidence: theme_base.prints_layer, the layer's concept read); one whose words say it stands, and no statistic is worked out
             w1 = words_of(d, s, c)
-            said_ = shares(name, w1) is True or B.words_support(name, w1, d.get("theme") or "")
-            fail("one-company layer", f"“{name}”", f"{c.get('name') or s} ({s}) alone" + ("" if said_ else ", its own words not saying the layer's name"))
+            own_ = (d.get("evidence") or {}).get(s) or ""
+            said_ = (shares(name, w1) is True or B.words_support(name, w1, d.get("theme") or "", v.get("description") or "")) \
+                and B.prints_layer(v, B.own_text(own_), c.get("name") or "")
+            if not said_:
+                fail("one-company layer", f"“{name}”", f"{c.get('name') or s} ({s}) alone, its own words not saying what the layer is in a "
+                                                       f"line a deck prints")
         said = [shares(name, words_of(d, s, c)) for s, c in cos]
         if said and all(x is False for x in said):
             who = ", ".join(f"{c.get('name') or s}" for s, c in cos[:4]) + (f" and {len(cos) - 4} more" if len(cos) > 4 else "")
