@@ -19,6 +19,14 @@ const listPath = (t: Tab, limit: number) => (t === "mine" ? `/news?kind=my_stock
  * (DI-027: it stopped at 3 Oct with nothing older). */
 const FIRST = 20, ALL = 60;
 const wide = () => typeof matchMedia === "function" && matchMedia("(min-width: 901px)").matches;
+/** Each list as last read, by its path: a tab opened again (or read ahead while the first one was shown) paints at once and
+ * is read again behind it (LIVE10A-036: the US tab said "Loading the issues…" for over 4 s). */
+const seen = new Map<string, IssueRow[]>();
+const readList = (path: string) => api<{ issues?: IssueRow[] }>(path).then((r) => {
+  const rows = Array.isArray(r?.issues) ? r.issues : [];
+  if (!path.includes("my_stocks")) seen.set(path, rows);   // a reader's own list is never kept past its page
+  return rows;
+});
 
 /** The newsletters, readable in the app: a list of issues per brief, and the one picked shown beside it. */
 export function NewsPage() {
@@ -50,10 +58,17 @@ export function NewsPage() {
 
   useEffect(() => {
     let live = true;
-    setList(null); setListError(null);
-    api<{ issues?: IssueRow[] }>(listPath(tab, limit))
-      .then((r) => { if (live) setList({ tab, rows: Array.isArray(r?.issues) ? r.issues : [] }); })
-      .catch((e: ApiError) => { if (!live) return; if (e.status === 404) setList({ tab, rows: [] }); else setListError(e.message || "Something went wrong."); });
+    const path = listPath(tab, limit), had = seen.get(path);
+    setList(had ? { tab, rows: had } : null); setListError(null);
+    readList(path)
+      .then((rows) => {
+        if (!live) return;
+        setList({ tab, rows });
+        // the other market's brief read ahead, quietly, so its tab opens at once
+        const other = listPath(tab === "US" ? "IN" : "US", FIRST);
+        if (tab !== "mine" && !seen.has(other)) readList(other).catch(() => { /* read again when opened */ });
+      })
+      .catch((e: ApiError) => { if (!live || had) return; if (e.status === 404) setList({ tab, rows: [] }); else setListError(e.message || "Something went wrong."); });
     return () => { live = false; };
   }, [tab, tries, limit]);
 

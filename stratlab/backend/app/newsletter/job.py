@@ -159,7 +159,10 @@ def save(issue: dict) -> dict:
 
 def recent(kind: str, scope: str, limit: int = 20) -> list[dict]:
     out = []
-    for iid in ids(kind, scope)[:max(1, min(INDEX_CAP, limit))]:
+    want = ids(kind, scope)[:max(1, min(INDEX_CAP, limit))]
+    # the issues in one database call, not one call each (LIVE10A-036: the US list took over 4 s to come)
+    db.prefetch_settings([_key(*p) for p in map(parse_id, want) if p])
+    for iid in want:
         issue = load(iid)
         if issue:
             out.append(issue)

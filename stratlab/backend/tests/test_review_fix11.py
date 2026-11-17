@@ -27,3 +27,19 @@ def test_a_loss_smaller_than_buy_and_holds_leads_with_the_loss_and_says_both_ret
     assert V.fact_headline("no_edge", [], 30, -4.1, -4.5) == "Lost money after costs (−4.1%), within a point of buying and holding (−4.5%)."
     # behind buy and hold the shortfall still leads (R6V-005)
     assert V.fact_headline("no_edge", [], 30, -4.1, 20.0) == "24.1 points behind buy and hold; lost money after costs."
+
+
+# ---------- LIVE10A-036: the briefs list reads its issues in one database call ----------
+def test_the_briefs_list_reads_its_issues_in_one_call(monkeypatch):
+    import json
+    from app import db
+    from app.newsletter import job
+    store = {"news-index:market:US": json.dumps(["market.US.2026-11-16", "market.US.2026-11-13"]),
+             "news:market:US:2026-11-16": json.dumps({"id": "market.US.2026-11-16", "kind": "my_stocks", "day": "2026-11-16"}),
+             "news:market:US:2026-11-13": json.dumps({"id": "market.US.2026-11-13", "kind": "my_stocks", "day": "2026-11-13"})}
+    asked = []
+    monkeypatch.setattr(db, "get_setting", store.get)
+    monkeypatch.setattr(db, "prefetch_settings", lambda keys: asked.append(list(keys)))
+    got = job.recent("market", "US", 20)
+    assert [i["id"] for i in got] == ["market.US.2026-11-16", "market.US.2026-11-13"]
+    assert asked == [["news:market:US:2026-11-16", "news:market:US:2026-11-13"]]
