@@ -10,7 +10,8 @@ const css = read("src/styles.css");
 test("VR2-013: a live India VIX tile on Trade home gives its change where the day would be, so it is as tall as its neighbours", () => {
   const home = read("src/pages/SpaceHomes.tsx");
   assert.match(home, /type VixBrief = \{ value: number \| null; value_day\?: string \| null; quote\?: VixQuote \| null \};/);
-  assert.match(home, /vixChange\(vix \? vix\.quote \?\? null : null\) \?\? ""/);
+  // (updated on purpose, LIVE9B-014: the change in its up/down colour with ▲/▼ and its day, still where the day would be)
+  assert.match(home, /: vixNote \?\? "" \},/);
 });
 
 test("VR2-014: the experiment page's Period stat has no note, so The numbers is as tall as What you'd keep; the candles are in its (i)", () => {

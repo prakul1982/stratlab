@@ -93,6 +93,7 @@ export function signedOutTitle(path: string): string {
   if (p === "/pricing" || p === "/upgrade") return withBrand("Plans");
   if (p === "/help") return withBrand("Help");
   if (p === "/") return HOME_TITLE;
+  if (p === "/tour") return withBrand("How StratLab works");          // a visitor's tour: the landing's spaces and steps (LIVE9B-029)
   if (p === "/features") return withBrand("What StratLab does");      // its own title, not the home page's (DI-033)
   if (p === "/app") return withBrand("Get the app");                 // readable signed out: the install steps (DI-029)
   if (!isAppPath(p)) return NOT_FOUND_TITLE;

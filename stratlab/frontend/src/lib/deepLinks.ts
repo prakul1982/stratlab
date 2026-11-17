@@ -31,7 +31,7 @@ const PATTERNS = APP_ROUTES.map((r) => new RegExp("^" + r.replace(/\/\*$/, "(/.*
 
 /** The landing page and its sections: shown to a visitor as the landing page, scrolled to the section. */
 export const LANDING_SECTIONS: Record<string, string | null> = { "/": null, "/pricing": "pricing", "/plans": "pricing", "/upgrade": "pricing", "/help": "faq", "/faq": "faq", "/features": "trade",
-  "/login": null, "/signup": null };
+  "/login": null, "/signup": null, "/tour": "about" };     // a visitor's tour is the page's three spaces and how it works, not a sign-in wall (LIVE9B-029)
 
 const clean = (path: string) => path.split(/[?#]/)[0] || "/";
 

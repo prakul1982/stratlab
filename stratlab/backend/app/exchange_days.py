@@ -113,14 +113,15 @@ def rows_of(text: str) -> list[dict]:
 
 def cash_rows(text: str) -> dict[str, dict]:
     """The cash market's common bhavcopy: {symbol: {"close", "prev", "series"}} for the equity series (EQ, BE, BZ, SM,
-    ST). A file without that shape is an error."""
+    ST) and the units of REITs and InvITs (RR, IV), which trade like shares (LIVE9B-025: an InvIT's dividend row had no price or
+    yield). A file without that shape is an error."""
     out: dict[str, dict] = {}
     rows = rows_of(text)
     if rows and "TckrSymb" not in rows[0]:
         raise ValueError("not the cash bhavcopy")
     for r in rows:
         sym, series = r.get("TckrSymb", "").upper(), r.get("SctySrs", "").upper()
-        if not sym or series not in ("EQ", "BE", "BZ", "SM", "ST"):
+        if not sym or series not in ("EQ", "BE", "BZ", "SM", "ST", "RR", "IV"):
             continue
         close = num(r.get("ClsPric")) or num(r.get("LastPric"))
         if close is None or close <= 0:

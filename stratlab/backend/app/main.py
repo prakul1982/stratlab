@@ -3602,7 +3602,7 @@ def with_sectors(items: list[dict], known: dict[str, str] | None = None) -> list
         f = todo.get(i["symbol"])
         got = f.result() if f is not None and f.done() and not f.exception() else None
         out.append({**i, "sector": known.get(i["symbol"]) or holdings.sector_label(investor.sector_of("IN", i["symbol"]), got)})
-    return out
+    return _screen_sectors(out)
 
 
 connect_routes.setup(throttle)
@@ -3755,6 +3755,22 @@ def _full_names(items: list[dict]) -> list[dict]:
     return out
 
 
+def _screen_sectors(items: list[dict]) -> list[dict]:
+    """Each Indian stock in the sector the stock screens give it (one list for every page: the screens' index classifies every listed
+    company), in place of the label saved when it was imported (LIVE9B-005: 60 of 100 holdings "Not classified", others under a sector
+    index's name such as "Infrastructure" or "Capital Markets" that the screens never use). A stock the index doesn't hold keeps its own."""
+    ind = [i for i in items if holdings.market_of(i) == "IN" and not i.get("kind")]
+    if not ind:
+        return items
+    try:
+        from . import screens
+        known = {r["symbol"]: r["sector"] for r in screens.load_index("IN").get("rows") or [] if r.get("sector")}
+    except Exception:
+        return items
+    return [{**i, "sector": known[i["symbol"]]} if holdings.market_of(i) == "IN" and not i.get("kind") and known.get(i["symbol"]) else i
+            for i in items]
+
+
 def holdings_view(profile) -> dict:
     """The person's holdings at today's prices. The prices are read once and shared for a few seconds, so My space, Money,
     Holdings and the net worth add up to the same rupees when opened one after another."""
@@ -3774,7 +3790,7 @@ def holdings_view(profile) -> dict:
                     _PRICED.pop(k, None)
             _PRICED[key] = (time.monotonic(), got)
     live, us_quotes = got["live"], got["us_quotes"]
-    return {**holdings.view(_full_names(_etf_named(h["items"])), got["quotes"], us_quotes, got["rate"]), "source": h["source"], "updated_at": h["updated_at"],
+    return {**holdings.view(_screen_sectors(_full_names(_etf_named(h["items"]))), got["quotes"], us_quotes, got["rate"]), "source": h["source"], "updated_at": h["updated_at"],
             "prices": live or (not ind and bool(us_quotes)), "prices_at": got["prices_at"], "us_prices_at": got.get("us_prices_at"), "closes": got.get("closes"),
             "us_prices": bool(us_quotes) if us else None, "usd_inr_at": got.get("rate_at") if us and got["rate"] else None,
             "limit": holdings_limit(profile["_plan"]), "facts_max": HOLDINGS_FACTS}

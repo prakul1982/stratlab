@@ -110,7 +110,7 @@ export function AccountPage() {
           {name && <div><dt>Name</dt><dd>{name}</dd></div>}
           <div><dt>Email</dt><dd>{me.email ?? session?.user.email ?? "–"}</dd></div>
           {method && <div><dt>Signed in with</dt><dd>{method}{method === "Email link" && <span className="k-sub-line" data-testid="email-link-note">{EMAIL_LINK_NOTE}</span>}</dd></div>}
-          <div><dt>Plan</dt><dd>{planName}</dd></div>
+          {/* the plan is named once on this page, on Plan and usage just below (LIVE9B-028: Profile, the card's pill and the sidebar said it three times) */}
         </dl>
       </Card>
 

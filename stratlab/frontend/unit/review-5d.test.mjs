@@ -43,7 +43,8 @@ test("B3: Account and the connection check name the real plan; the badge alone k
   assert.equal(planLabel({ ...invited, plan: "pro", promo: { until: "2026-10-22" } }), "Free");
   const acc = src("pages/AccountPage.tsx");
   assert.doesNotMatch(acc, /<dd>\{me\.plan_info\.name\}/);
-  assert.match(acc, /<dd>\{planName\}<\/dd>/);
+  // (updated on purpose, LIVE9B-028: the plan is named once, on Plan and usage; the Profile row that repeated it is gone)
+  assert.doesNotMatch(acc, /<dd>\{planName\}<\/dd>/);
   assert.match(acc, /\{planName\}\{me\.promo \? " \(launch offer\)"/);
   const set = src("pages/SettingsPage.tsx");
   assert.match(set, /\$\{planLabel\(me\)\} plan, \$\{u\.backtests_used\} Backtests this month/);

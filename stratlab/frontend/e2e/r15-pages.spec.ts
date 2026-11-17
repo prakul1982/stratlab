@@ -46,7 +46,9 @@ test("R15 #3: Where you stand is the headline figure beside a small own / owe / 
   const head = card.getByTestId("nw-headline");
   await expect(head.getByTestId("nw-figure")).toHaveText(/^₹[\d,]+$/);
   const table = card.getByRole("table", { name: "Where you stand" });
-  for (const r of ["What you own", "What you owe", "Net worth"]) await expect(table.getByRole("row").filter({ hasText: r })).toHaveCount(1);
+  for (const r of ["What you own", "What you owe"]) await expect(table.getByRole("row").filter({ hasText: r })).toHaveCount(1);
+  // (updated on purpose, LIVE9B-012: the net worth is the headline beside the table, not a third row repeating it)
+  await expect(table.getByRole("row").filter({ hasText: "Net worth" })).toHaveCount(0);
   if (info.project.name === "desktop") {
     // balanced edge to edge: the figure on the left half, the table on the right
     const [c, f, t] = [await card.boundingBox(), await head.getByTestId("nw-figure").boundingBox(), await table.boundingBox()];

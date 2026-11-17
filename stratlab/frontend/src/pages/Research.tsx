@@ -28,7 +28,7 @@ import { liveQuote, useLiveRefresh } from "../lib/liveRefresh";
 import { useShareCompany } from "../components/ShareCompany";
 import { MoreMenu } from "../components/MoreMenu";
 import { suggestions, type Suggestion } from "../components/CompanyCombobox";
-import { rememberName, useDocTitle } from "../lib/title";
+import { knownName, rememberName, useDocTitle } from "../lib/title";
 import { DealsPanel } from "../components/Deals";
 import { StoredNote, StoredStamp, useStoredRefresh } from "../components/StoredStamp";
 import { SaveButton } from "../components/SavedSearches";
@@ -313,10 +313,14 @@ function CompanyView() {
       </Card>
     </div>
   );
+  // the wait holds the header's final shape: the name this device last saw (or the symbol), a line where "NSE · TCS" goes and the
+  // two date chips' places, unseen; the page no longer drops 70 px when they arrive (LIVE9B-001: CLS 0.3 desktop, 0.65 phone)
   if (!c) return (
-    <div className="k-page">
-      <PageHeader eyebrow={eyebrow} title={sym} />
-      <Card><Skeleton label={`Pulling live data for ${sym}`} lines={5} onRetry={() => setTries((n) => n + 1)} /></Card>
+    <div className="k-page co-wait" data-name-known={knownName(region, sym) ? "1" : "0"}>
+      <PageHeader eyebrow={eyebrow} title={knownName(region, sym) ?? sym} lede={<span className="k-meta-wait">{sym}</span>}
+        actions={<><span className="k-meta-wait" aria-hidden="true"><Badge>Prices as of 16 Nov 2026, 15:30 IST</Badge></span>
+          <span className="k-meta-wait" aria-hidden="true"><Badge>Latest results: quarter to Sep 2026</Badge></span></>} />
+      <Card><Skeleton label={`Pulling live data for ${sym}`} lines={5} onRetry={() => setTries((n) => n + 1)} page /></Card>
     </div>
   );
 

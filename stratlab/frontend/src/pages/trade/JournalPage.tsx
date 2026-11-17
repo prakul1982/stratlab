@@ -86,7 +86,7 @@ function holdText(t: Trade) {
     if (m < 60) return `${Math.max(1, Math.round(m))} min`;
     if (t.hold_days === 0) return `${(m / 60).toFixed(1)} h`;
   }
-  return t.hold_days === 0 ? "Same day" : `${t.hold_days} day${t.hold_days === 1 ? "" : "s"}`;
+  return t.hold_days === 0 ? "Same day" : `${t.hold_days.toLocaleString("en-IN")} day${t.hold_days === 1 ? "" : "s"}`;      // "2,744 days" (LIVE9B-024)
 }
 
 const VIEWS: [string, string][] = [["weekday", "Day of week (entry day)"], ["hour", "Time of day"], ["tag", "Setup"], ["instrument", "Instrument"], ["hold", "Holding time"],
@@ -562,7 +562,8 @@ function Trades({ j, onEdit }: { j: Journal; onEdit: (t: Trade) => void }) {
           <b>{t.symbol}</b>
           <button type="button" className="btn quiet sm" onClick={() => onEdit(t)} aria-label={`Journal: ${t.symbol} ${when(t.exit_t)}`}><Pencil size={15} />{Object.keys(t.note).length ? "Edit" : "Note"}</button>
         </div>
-        <span className="k-note">{t.side === "long" ? "Long" : t.side === "short" ? "Short" : "Long or short: not in the file"} · {t.segment_label}</span>
+        {/* a side the file doesn't give is said once over the table, not on every row (LIVE9B-024: the same "not in the file" on all nine rows) */}
+        <span className="k-note">{t.side === "long" ? "Long · " : t.side === "short" ? "Short · " : ""}{t.segment_label}</span>
         {(t.note.tag || t.src === "practice") && <div className="k-row">
           {t.src === "practice" && <Badge dot={false}>Chart replay</Badge>}
           {t.note.tag && <Badge tone="ok" dot={false}>{t.note.tag}</Badge>}</div>}
@@ -580,6 +581,7 @@ function Trades({ j, onEdit }: { j: Journal; onEdit: (t: Trade) => void }) {
     <Card label="Trades">
       <CardHead title="Trades" actions={
         <label className="k-search j-search"><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a symbol or setup" aria-label="Find a symbol or setup" /></label>} />
+      {rows.some((t) => t.side !== "long" && t.side !== "short") && <p className="k-note" data-testid="j-no-side">{rows.every((t) => t.side !== "long" && t.side !== "short") ? "Your files don't say whether these trades were long or short" : "Trades with no Long or Short under them: your file doesn't say which they were"}. Add it with Note on a trade.</p>}
       <DataTable csv={{ name: "journal trades", rows }} stack label="Trades" columns={cols} rows={rows.slice(0, shown)} rowKey={(t) => t.id} empty="No trade matches that." />
       {(rows.length > shown || (shown > 50 && rows.length > 50)) && <div className="k-center">
         {rows.length > shown && <button type="button" className="btn quiet sm" onClick={() => setShown((n) => n + 100)}>Show more ({rows.length - shown} left)</button>}

@@ -417,6 +417,25 @@ def pe_one_off_note(effects: list[dict], scr: dict | None) -> str | None:
     return f"{hit['quarter']} had {hit['other_income']}" if hit else None
 
 
+def one_cap(symbol: str, cap_cr: float | None, price: float | None) -> float | None:
+    """A company's market value in crore on the share count the peers table and the screens use (the stored page's value over its price),
+    at this page's price, so the page says one figure (LIVE9B-016: TCS ₹8.69 lakh cr in its header, ₹8.70 lakh cr in Peers and Screens).
+    The page's own when the index has no row for it, or its count is far off the page's own (a split or a bad read)."""
+    if not cap_cr or not price or price <= 0:
+        return cap_cr
+    try:
+        from .. import screens
+        r = next((x for x in screens.load_index("IN").get("rows") or [] if x.get("symbol") == symbol), None)
+        icap, iprice = num((r or {}).get("market_cap")), num((r or {}).get("price"))
+    except Exception:
+        return cap_cr
+    if not icap or not iprice or icap <= 0 or iprice <= 0:
+        return cap_cr
+    shares = icap / iprice
+    mine = shares * price
+    return mine if abs(mine / cap_cr - 1) <= 0.02 else cap_cr
+
+
 def at_live_price(s: dict, live: float | None, symbol: str | None = None, since=None) -> dict:
     """The fundamentals summary re-priced at the live price, so the market value, P/E, P/B and dividend yield on a
     company's page agree with the price at the top of it. The fundamentals source prices its ratios once a day; the
@@ -1764,7 +1783,7 @@ class Research:
             "cap_note": stock_pages.CAP_UNAVAILABLE if s.get("cap_problem") else None,
             # the figures are the company's last stored ones (the fundamentals source busy): when they were worked out (LIVE4-004)
             **({"figures_kept": kept.get("built_at") or True} if kept and not scr else {}),
-            "market_cap": s["market_cap_cr"] * 1e7 if s.get("market_cap_cr") else None,
+            "market_cap": one_cap(sym, s.get("market_cap_cr"), s.get("price")) * 1e7 if s.get("market_cap_cr") else None,
             # a share listed within the year: its range is since its first day of trading, said so (DD-011)
             "quote": quote, "range52": {"low": lo52, "high": hi52, **({"since": listed_on} if listed_on else {}),
                                      **({"traded_from": traded_from} if traded_from and not listed_on else {})},

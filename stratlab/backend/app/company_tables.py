@@ -340,6 +340,26 @@ def _growth(a: list | None) -> list | None:
     return out if any(v is not None for v in out) else None
 
 
+def _whole_only(values: list) -> bool:
+    got = [v for v in values if v is not None]
+    return bool(got) and all(float(v).is_integer() for v in got)
+
+
+def real_margins(pl: list[dict]) -> list[dict]:
+    """The profit and loss with an operating margin given in whole numbers ("OPM 27" for 27.11%) worked out again from the operating
+    profit and the sales, to one decimal (LIVE9B-003); a year missing either figure keeps the source's."""
+    sales, op = _find(pl, "sales", "revenue"), _find(pl, "operating profit")
+    worked = _ratio(op, sales)
+    if not worked:
+        return pl
+    out = []
+    for r in pl:
+        if r["label"].lower().startswith("opm") and _whole_only(r["values"]):
+            r = {**r, "values": [w if w is not None else v for w, v in zip(worked, r["values"])], "worked": True}
+        out.append(r)
+    return out
+
+
 def worked_ratios(pl: list[dict], bal: list[dict], have: set[str], lender: bool) -> list[dict]:
     """The usual ratios worked out from two figures of the same year, each only where the page's own ratios table doesn't
     already have it: sales growth, EBITDA margin, net margin, return on equity (year-end equity), debt to equity."""
@@ -378,10 +398,17 @@ def statements_view(p: dict, region: str, symbol: str, see: dict, bases: list[st
     sections = []
     for key, title in SECTIONS:
         rows = aligned(p.get(key), cols)
+        if key == "pl":
+            rows = real_margins(rows)
         if key == "ratios_table":
-            have = {r["label"].lower().rstrip(" %") for r in rows}
-            rows = rows + worked_ratios(sections[0]["rows"] if sections else [], next((s["rows"] for s in sections if s["key"] == "balance"), []),
-                                        have, lender)
+            # a source percentage given in whole numbers ("Sales growth 5" for 4.58%) gives way to the one worked out from the figures, to a real
+            # decimal (LIVE9B-003: "5.0%", "7.0%" printed with a decimal the source never had)
+            whole = {r["label"].lower().rstrip(" %") for r in rows if r["kind"] == "pct" and _whole_only(r["values"])}
+            have = {r["label"].lower().rstrip(" %") for r in rows} - whole
+            worked = worked_ratios(sections[0]["rows"] if sections else [], next((s["rows"] for s in sections if s["key"] == "balance"), []),
+                                   have, lender)
+            took = {w["label"].lower().rstrip(" %") for w in worked}
+            rows = [r for r in rows if not (r["label"].lower().rstrip(" %") in whole and r["label"].lower().rstrip(" %") in took)] + worked
         rows = [r for r in rows if any(v is not None for v in r["values"])]
         if rows:
             sections.append({"key": key, "title": title, "rows": rows})

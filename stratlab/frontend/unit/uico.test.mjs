@@ -36,7 +36,8 @@ test("item 2: Key numbers are small tables (name | Value | Basis | Range), one w
   // the range column says what it is (owner, 5 Nov: "where is the context of it?"): "Usual range", the shaded span and its two figures under each bar
   // (updated on purpose, LIVE8B-015: a group with no range bar, or no basis, has no column for it, so the header is plain)
   for (const h of ['header: "Value"', 'header: "Basis"', 'header: "Usual range"', 'className="inv-krange-txt"']) assert.ok(r.includes(h), h);
-  assert.match(r, /if \(m\.note && m\.note\.length > LONG_NOTE\) foot\.push/);                                  // a long qualifier is a numbered note under the tables
+  // a long qualifier is a numbered note under the tables (updated on purpose, LIVE9B-012: and so is a basis only a few of the group's rows have)
+  assert.match(r, /if \(m\.note && \(m\.note\.length > LONG_NOTE \|\| sparse\(g\)\)\) foot\.push/);
   assert.match(r, /\{mark\(m\) && <sup className="cmp-foot-mark"/);                                               // marked next to the value
   assert.match(r, /m\.note && !mark\(m\) \? m\.note : ""/);                                                      // and never inside the row
   const css = read("src/styles-invest.css");

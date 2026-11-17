@@ -680,6 +680,9 @@ td.num, .num { font-family: var(--sans); }
 .lp-hero { padding: clamp(40px, 7vw, 96px) 0 clamp(32px, 4vw, 56px); border-bottom: 1px solid var(--line); }
 .lp-hero-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: clamp(32px, 5vw, 72px); align-items: center; }
 .lp-hero-solo { grid-template-columns: minmax(0, 1fr); }   /* an address of its own with no demo beside the heading (RC2B-032) */
+/* /login and /signup: the sign-in in one centred 640px column, as the gated pages show it (.gate), the heading at the app's size (LIVE9B-012) */
+.lp-hero-login { max-width: 640px; }
+.lp-hero-login .lp-own-h1 { font-size: var(--t-h1); max-width: none; line-height: 1.1; }
 .lp-h1 { font-size: clamp(44px, 6.2vw, 80px); line-height: 1; font-weight: 400; letter-spacing: -.035em; max-width: 12ch; }
 .lp-h1 em { color: var(--orange); }
 .lp-lede { font-size: clamp(18px, 1.8vw, 22px); line-height: 1.45; color: var(--ink-2); max-width: 38ch; }
@@ -1059,7 +1062,8 @@ body:has(.k-coach) .consent { visibility: hidden; }
 .rc-target, .rc-said, .rc-result { display: flex; flex-direction: column; gap: 4px; }
 .rc-said { align-items: flex-end; } .rc-result { align-items: flex-start; }
 .rc-quote { max-width: 70ch; }
-.dd-share { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; min-width: 90px; } .dd-share .k-meter { width: 100%; }
+/* LIVE9B-020: the share beside its bar on the row's line, not above it (the column's figures sat higher than the row's) */
+.dd-share { display: flex; flex-direction: row-reverse; gap: 8px; align-items: center; justify-content: flex-start; min-width: 120px; } .dd-share .k-meter { width: 56px; flex: none; }
 /* TABLE-SWEEP: a fund's tax kind, its own field under the table of what is held */
 .mf-kind { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); margin-top: var(--s3); }
 .mf-kind .k-input { width: auto; min-width: 12rem; }
@@ -1164,7 +1168,9 @@ body:has(main .k-state.error button, main .k-state.error a.btn) .banner .account
 .screens-ranges .k-table :is(th, td):first-child { width: auto; }
 .screens-ranges .k-input-unit { --unit-w: 30px; }
 .screens-ranges .k-input { height: 38px; padding: 0 var(--unit-w, 30px) 0 10px; font-size: 14px; }
-.screens-fname { display: inline-flex; flex-wrap: wrap; gap: 2px 4px; align-items: center; font-size: 14px; }
+/* LIVE9B-012: the (i) follows the label's last word, never wrapping under it on a line of its own (6 of 9 rows were taller for it) */
+.screens-fname { display: block; font-size: 14px; }
+.screens-fname > :last-child { display: inline-flex; vertical-align: middle; margin-left: 4px; }
 .screens-filters .k-chipset { gap: 6px; }
 @media (max-width: 420px) { .screens-ranges .k-table :is(th, td):nth-child(n+2) { width: 88px; } .screens-ranges .k-input { padding-left: 8px; } }
 
@@ -1271,6 +1277,7 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 .mc-evs { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .mc-ev { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 10px; align-items: start; }
 .mc-ev.past { opacity: .6; }
+.mc-ev.untagged { grid-template-columns: minmax(0, 1fr); }
 .mc-ev-title { font-weight: 500; overflow-wrap: anywhere; }
 /* an earnings call's line ends with the webcast address from its filing, one long word: it breaks rather than push a phone's page sideways (ui-lint R10) */
 .mc-ev-body > .k-note { overflow-wrap: anywhere; }
@@ -2131,6 +2138,12 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-tbl-wrap[data-grid]:not(.stack):has(tbody th[scope="row"]:first-child) .k-table :is(thead, tfoot) th:first-child { position: sticky; left: 0; z-index: 1; background: var(--card); box-shadow: 1px 0 0 var(--line); }
 .k-tbl-wrap[data-grid]:not(.stack):has(tbody th[scope="row"]:first-child) .k-table thead th:first-child { background: var(--paper-2); z-index: 2; }
 .k-tbl-wrap[data-grid]:not(.stack) .k-table tbody tr:hover th[scope="row"]:first-child { background: var(--paper-2); }
+/* LIVE9B-015: the period half under the row names fades out beside them, instead of half-cut figures ("·7,966") read as whole ones */
+.k-tbl-wrap[data-grid][data-scrolled]:not(.stack) .k-table tbody th[scope="row"]:first-child::after,
+.k-tbl-wrap[data-grid][data-scrolled]:not(.stack):has(tbody th[scope="row"]:first-child) .k-table :is(thead, tfoot) th:first-child::after {
+  content: ""; position: absolute; top: 0; bottom: 0; right: -28px; width: 28px; pointer-events: none;
+  background: linear-gradient(to right, var(--card), color-mix(in srgb, var(--card) 0%, transparent)); }
+.k-tbl-wrap[data-grid][data-scrolled]:not(.stack):has(tbody th[scope="row"]:first-child) .k-table thead th:first-child::after { background: linear-gradient(to right, var(--paper-2), color-mix(in srgb, var(--paper-2) 0%, transparent)); }
 /* the totals line's long label wraps instead of widening the Symbol column; on a phone the first column stays put while the figures scroll (R18-003) */
 .k-table tfoot th { white-space: normal; min-width: 0; }
 @media (max-width: 640px) {
@@ -2405,6 +2418,10 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .mine-movers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .mine-movers li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--s3); align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .mine-movers li:last-child { border-bottom: 0; }
+/* LIVE9B-012: the watchlist and Coming up share a row; the shorter list's rows share out the card's height, so neither ends with a block of
+   nothing under its last row (the watchlist sat ~110px short of Coming up) */
+.mine-slot[data-card="watch"] .mine-movers, .mine-slot[data-card="coming"] .mine-tl { flex: 1 0 auto; }
+.mine-movers li, .mine-tl-i { flex: 1 0 auto; }
 .mine-movers a { display: flex; flex-direction: column; min-width: 0; color: inherit; text-decoration: none; }
 .mine-movers a .k-stat-d { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mine-movers .px { font-weight: 500; }
@@ -2752,6 +2769,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .feat-list li > a, .feat-group-title a, .nav-page .k-card-title a { display: inline-flex; align-items: center; min-height: 32px; min-width: 32px; }
 }
 /* net worth: the history's snapshots, each removable on its own */
+.nw-hist-foot { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--s3); }
+.nw-hist-foot > .nw-snaps { flex: 1 1 100%; } .nw-hist-foot > .nw-snaps:not([open]) { flex: 0 1 auto; }
 .nw-snaps summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
 .nw-snaps ul { list-style: none; margin: 0; padding: 0; }
 .nw-snaps li { justify-content: flex-start; flex-wrap: wrap; gap: var(--s2); }   /* CK-2 (R20): the remove icon follows the snapshot's text, not 550px away at the card's edge */
@@ -3053,6 +3072,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
  * a link in the public footers and on the Help page. */
 .linklike { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
 .linklike.link { color: var(--accent-ink, inherit); text-decoration: underline; text-underline-offset: 2px; }
+/* LIVE9B-029: the same colour as the links beside it (.linklike's colour: inherit, later in the file, undid .muted) */
+.legal-links .legal-feedback { color: var(--muted); }
 .legal-links .legal-feedback { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding-block: 12px; box-sizing: border-box; text-decoration: underline; }   /* the same tap size as the links beside it (A11Y-2), underlined like them (LIVE8B-029) */
 /* the phone top bar's logo link is a full tap target and never squeezed by the buttons beside it (R7O-010) */
 .topbar .brand { min-width: 44px; justify-content: center; flex: none; }
@@ -3156,3 +3177,9 @@ th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
 @media print { .k-report { display: none; } }
 /* f4: the workbook's plan note on its own line under the theme's download buttons (components/ThemeChanges.tsx) */
 .theme-wb-lock { flex-basis: 100%; order: 1; }
+/* LIVE9B-012: Holdings' "Where your stocks stand": the four totals as a compact table with the notes beside it on a wide screen */
+.h-sum { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s4); align-items: start; }
+.h-sum-notes { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
+@media (min-width: 900px) { .h-sum { grid-template-columns: minmax(0, 560px) minmax(0, 1fr); } }
+/* LIVE9B-013: the deep dive's tools row holds a small button's height before the dive arrives */
+.dd-tools { min-height: 32px; }

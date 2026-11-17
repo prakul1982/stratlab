@@ -328,8 +328,11 @@ function SessionView({ sid, onGone }: { sid: string; onGone: () => void }) {
 export function SignalsPage() {
   const { sid } = useParams();
   const nav = useNavigate();
-  const { fail, refreshMe } = useApp();
+  const { fail, refreshMe, me } = useApp();
   const [ov, setOv] = useState<Overview | null>(null);
+  // a plan without forward tests is shown its lock from the first frame, not a placeholder that the lock note then pushes down
+  // (LIVE9B-013: layout shift 0.167 when the overview arrived)
+  const lockedNow = me?.plan_info.features?.signal_webhooks === false;
   const [failed, setFailed] = useState(false);
   const load = useCallback(() => api<Overview>("/trade/signals").then((o) => { setOv(o); setFailed(false); }).catch((e) => { fail(e); setFailed(true); }), [fail]);
   useEffect(() => { load(); }, [load, sid]);
@@ -349,7 +352,7 @@ export function SignalsPage() {
         infoLabel="How this works"
         info="Point your TradingView or Chartink alerts at a secret URL. Each signal fills at StratLab's own live price with charges, every signal is logged, and the verdict's checks run once there are enough trades. Paper only: no real orders. Facts, not advice." />
       {failed && !ov ? <ErrorState title="Your signal sessions couldn't be read" action={{ label: "Try again", onClick: () => { void load(); } }}>Nothing was changed.</ErrorState>
-        : !ov ? <Card><Skeleton label="Opening signal sessions" /></Card> : !ov.allowed ? (
+        : !ov && !lockedNow ? <Card><Skeleton label="Opening signal sessions" /></Card> : lockedNow || !ov?.allowed ? (
         // the lock note above already offers the plans: one "See plans", not two (DA-040)
         <LockedPreview title="Forward test" actions={false} points={[
           "A secret webhook address for your TradingView or Chartink alerts.",

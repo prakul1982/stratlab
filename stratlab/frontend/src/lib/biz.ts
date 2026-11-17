@@ -37,6 +37,34 @@ export function bizValue(v: number | null | undefined, unit: string | null) {
   return `${n} ${u}`.trim();
 }
 
+// rupees in any scale a filing used, as crore (LIVE9B-007: one column read "₹45,520 million", "₹3,085 mn", "₹56,244 billion",
+// "₹6.51 lakh crore" and "₹5,542 crore"); tonnes in words
+const TO_CRORE: [RegExp, number][] = [[/^lakh\s*(crore|cr)$/i, 1e5], [/^(crore|cr|crores)$/i, 1], [/^(billion|bn)$/i, 100], [/^(million|mn|mio)$/i, 0.1],
+  [/^(lakh|lac|lakhs)$/i, 0.01], [/^(thousand|k|'000)$/i, 1e-4], [/^(trillion|tn)$/i, 1e5]];
+const TONNES: [RegExp, string][] = [[/^(lac|lakh)\s*(mt|t|tonnes?|metric tonnes?)$/i, "lakh tonnes"], [/^(mn|million|mmt)\s*(t|mt|tonnes?|metric tonnes?)?$|^mmt$/i, "million tonnes"],
+  [/^(mt|metric tonnes?)$/i, "tonnes"]];
+
+/** A figure in one unit per kind across a table of companies: rupees in crore, tonnes in words; anything else as filed (bizValue). */
+export function bizValueOne(v: number | null | undefined, unit: string | null) {
+  const u = (unit ?? "").trim();
+  if (v != null && Number.isFinite(v) && u.startsWith("₹")) {
+    const scale = u.slice(1).trim();
+    const hit = TO_CRORE.find(([rx]) => rx.test(scale));
+    if (hit) {
+      const cr = v * hit[1];
+      return `₹${cr.toLocaleString("en-IN", { maximumFractionDigits: Math.abs(cr) >= 100 ? 0 : 2 }).replace(/^-/, "−")} crore`;
+    }
+  }
+  const t = TONNES.find(([rx]) => rx.test(u));
+  return bizValue(v, t ? t[1] : unit);
+}
+
+/** How many whole months a period ("2025-03") ends before `now`. */
+export function monthsBefore(period: string, now: Date = new Date()): number {
+  const i = monthIndex(period);
+  return Number.isFinite(i) ? now.getFullYear() * 12 + now.getMonth() - i : 0;
+}
+
 /** "+24.4%", or "+1.2 pts" for a figure that is itself a percent. Plain text, no colour: a change, not a verdict. */
 export function bizChange(c: number | null | undefined, unit: string | null) {
   if (c == null) return "–";

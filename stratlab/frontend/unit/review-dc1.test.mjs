@@ -85,7 +85,7 @@ test("DC-013: a failed source is said on the events page, and a notice not read 
   assert.match(lib, /couldn't be read at the last check, so its newest dates and figures may be missing here\./);
   const page = read("src/pages/trade/EventsPage.tsx");
   assert.match(page, /data-testid="ev-failed"/);
-  assert.match(page, /testId="ev-index-unread"/);
+  assert.match(page, /data-testid="ev-index-unread"/);      // (updated on purpose, LIVE9B-032: a part of the Index changes card, not a card of its own)
 });
 
 test("DC-015: the events page promises figures only where it reads them", () => {

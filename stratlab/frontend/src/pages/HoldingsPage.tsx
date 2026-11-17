@@ -5,7 +5,7 @@ import { numberProblem, problems, qtyProblem, type Limits } from "../lib/validat
 import { useApp } from "../lib/app";
 import { useMarketRefresh } from "../lib/marketLive";
 import { usTodayNote } from "../lib/marketHours";
-import { aFile, ago, asOf as asOfText, dateOnly, fmtDate, inr, istToday, marketTz, money, pct, price, qty as qtyText, safeHref, signTone, sourceWords } from "../lib/format";
+import { aFile, ago, asOf as asOfText, dateOnly, daysOld, fmtDate, HOLDINGS_OLD_DAYS, inr, istToday, marketTz, money, pct, price, qty as qtyText, safeHref, signTone, sourceWords } from "../lib/format";
 import { Modal } from "../components/ui";
 import { NoBreak } from "../components/NoBreak";
 import { Trash } from "../components/Icons";
@@ -395,7 +395,9 @@ export function HoldingsPage() {
           <PageNav items={[{ id: "h-summary", label: "Where you stand" }, { id: "h-positions", label: "Positions" }, { id: "h-import", label: "Import a file" }, { id: "h-add", label: "Add a stock" }, ...(withFilings.length > 0 ? [{ id: "h-filings", label: "Filings" }] : [])]} />
           <Card id="h-summary">
             <CardHead title="Where your stocks stand" />
-            {/* TABLE-SWEEP: the totals as a table (the figure, the amount and its change), not four tiles with their changes under them */}
+            {/* TABLE-SWEEP: the totals as a table (the figure, the amount and its change), not four tiles with their changes under them.
+                LIVE9B-012: a compact table on the left with its notes beside it, not four figures across a 1,030px table, each far from its label */}
+            <div className="h-sum">
             <FigureTable label="Where your stocks stand" header="Total" valueHeader="Amount" noteHeader="Change" rows={[
               { key: "value", label: "Current value", value: inr(t.value) },
               { key: "invested", label: "Invested", value: inr(t.invested) },
@@ -404,10 +406,15 @@ export function HoldingsPage() {
               { key: "day", label: dayLabel(t.session, istToday(), (d) => fmtDate(d, { weekday: true, year: false })), value: t.day == null ? "–" : inr(t.day), tone: signTone(t.day),
                 note: t.day == null ? undefined : <Delta value={t.day}>{pct(t.day_pct, 2)}</Delta> },
             ]} />
+            <div className="h-sum-notes">
             <p className="k-note">
-              {t.count} stock{t.count === 1 ? "" : "s"}{view.source ? ` · from ${sourceWords(view.source)}` : ""}{view.updated_at ? ` · updated ${ago(view.updated_at)}` : ""}
+              {/* "imported from … on 25 Oct": a login's holdings are as of when they were read, not a live connection (LIVE9B-021) */}
+              {t.count} stock{t.count === 1 ? "" : "s"}{view.source ? ` · imported from ${sourceWords(view.source)}` : ""}{view.updated_at ? `${view.source ? " on" : " · imported"} ${fmtDate(view.updated_at, { year: false })} (${ago(view.updated_at)})` : ""}
               {(() => { const n = priceNote(view.prices, view.closes, rows, (d) => fmtDate(d, { weekday: true, year: false })); return n && ` · ${n}`; })()}
             </p>
+            {(daysOld(view.updated_at) ?? 0) >= HOLDINGS_OLD_DAYS && (
+              <p className="k-note" data-testid="holdings-old">These holdings are {daysOld(view.updated_at)} days old: the prices are today's, the shares and quantities as imported. Import again to bring in any trades since.</p>
+            )}
             {t.no_cost && (
               <p className="k-note">
                 Not in these totals: {t.no_cost.symbols.join(", ")} ({t.no_cost.count === 1 ? "no buy price" : "no buy prices"}), worth {inr(t.no_cost.value)} now{view.usd_inr && rows.some((r) => isUS(r) && t.no_cost!.symbols.includes(r.symbol)) ? ` (at ${dollarRate(view.usd_inr, view.usd_inr_at)})` : ""}, except Today, which includes {t.no_cost.count === 1 ? "its" : "their"} change.
@@ -427,6 +434,8 @@ export function HoldingsPage() {
                   {view.us_prices === false && " · US prices are offline right now, so these are at cost"}. Sales of US stocks come from the trades on the <Link className="link" to="/money/us-tax">US stocks tax page</Link>, not from this list.</span>
               </p>
             )}
+            </div>
+            </div>
           </Card>
           <HoldingsActionsPanel<View> version={actionsAt} onHoldings={put} onLoaded={() => setActionsReady(true)} />
           {!actionsReady && <Card><Skeleton label="Opening your sectors and positions" /></Card>}

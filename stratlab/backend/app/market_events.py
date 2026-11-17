@@ -571,7 +571,9 @@ def read_index_list(html_text: str) -> list[dict]:
 
 
 def _effective(text: str, title: str = "") -> date | None:
-    for src in (text[:3000], title):
+    # the notice's own title first: its "w.e.f. November 17, 2026" is this change's day, where the release's text can quote an earlier
+    # one first (LIVE9B-006: "From Wed, 2 Sep 2026: Exclusion of Ennature Bio Pharma Ltd. w.e.f. November 17, 2026 · announced 13 Nov")
+    for src in (title, text[:3000]):
         m = re.search(rf"(?:effective from|w\.?\s?e\.?\s?f\.?)\s*(?:the\s+)?({MONTH_RX})\s+(\d{{1,2}}),?\s*(\d{{4}})", re.sub(r"\s+", " ", src or ""), re.I)
         if m:
             try:
@@ -1168,7 +1170,11 @@ def events(today: date | None = None, listed=None, frm: date | None = None, to: 
 def index_changes(today: date | None = None) -> list[dict]:
     """Each kept index change in full, the latest first (by the day it takes effect, then the day it was announced):
     [{id, url, title, announced, effective, sections}]. A notice not read into stocks is kept too, with no sections."""
-    return sorted((load_state().get("index") or {}).get("changes") or [],
+    def own_day(c: dict) -> dict:
+        # a change stored before the title came first keeps the day its own title names (LIVE9B-006)
+        t = _iso(_effective("", str(c.get("title") or "")))
+        return {**c, "effective": t} if t and t != c.get("effective") else c
+    return sorted((own_day(c) for c in (load_state().get("index") or {}).get("changes") or []),
                   key=lambda c: (c.get("effective") or c["announced"], c["announced"]), reverse=True)
 
 

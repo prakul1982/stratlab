@@ -81,7 +81,9 @@ test("The rule line reads \"3% stop\", never \"3 % stop\" (R6O-010 leftover)", (
 });
 
 test("Small things: the trade card names its figure, Mine names the US part of today, a bank's quarters, the class move, a removable snapshot (R7O-012, R7O-013)", () => {
-  assert.match(read("src/pages/SpaceHomes.tsx"), /net after charges/);
+  // (updated on purpose, LIVE9B-011: "net" beside the card's own "after charges" line; the foot is one short line on a phone)
+  assert.match(read("src/pages/SpaceHomes.tsx"), /closed trade"\)\},<\/span> <span className="nowrap">\{money\(journal\.net, "INR"\)\} net<\/span>/);
+  assert.match(read("src/pages/SpaceHomes.tsx"), /line: "Your real trades as round trips, after charges\."/);
   assert.match(read("src/pages/MineHome.tsx"), /usTodayNote\(markets, h\.us, h\.usd_inr\)/);
   const research = read("src/components/Research.tsx");
   assert.match(research, /bank \? "Financing margin" : "EBITDA margin"/);

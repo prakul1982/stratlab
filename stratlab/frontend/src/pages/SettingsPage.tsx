@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api, CFG, supabase } from "../lib/api";
 import { useApp } from "../lib/app";
-import { ago, sourceWords } from "../lib/format";
+import { ago, daysOld, fmtDate, HOLDINGS_OLD_DAYS, sourceWords } from "../lib/format";
 import { aiCountText, aiMissingRow, serverRow } from "../lib/connection";
 import { HELP } from "../lib/help";
 import { planLabel } from "../lib/account";
@@ -139,7 +139,8 @@ function ConnectedAccounts() {
       {/* the three files share the card's width: in four 240px columns they left the right quarter empty (VR3-009) */}
       <TileGrid className="k-linkcards" fill>
         <LinkCard to="/holdings" title="My Holdings" note={note(h, noun(h?.count, "stock", "stocks"))}>
-          {h?.source ? `From ${sourceWords(h.source)}. Import a broker file or type them in.` : "Import a broker file or type your shares in."}
+          {/* imported once, with the day: never "From your Zerodha login" beside "Zerodha · Not connected" as if it still came from there (LIVE9B-021) */}
+          {h?.source ? `Imported from ${sourceWords(h.source)}${h.updated_at ? ` on ${fmtDate(h.updated_at, { year: false })}` : ""}${(daysOld(h.updated_at) ?? 0) >= HOLDINGS_OLD_DAYS ? `, ${daysOld(h.updated_at)} days ago` : ""}. Import a broker file or type them in.` : "Import a broker file or type your shares in."}
         </LinkCard>
         <LinkCard to="/money/mutual-funds" title="Mutual funds statement" note={note(mf, noun(mf?.count, "scheme", "schemes"))}>Upload your Consolidated Account Statement (PDF or CSV).</LinkCard>
         <LinkCard to="/tax-report" title="Broker tradebooks" note={note(tax, noun(tax?.count, "file", "files"))}>Upload tradebooks and tax P&amp;L files from any broker for your capital gains.</LinkCard>

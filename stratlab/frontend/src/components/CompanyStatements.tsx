@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { download as saveFile } from "../lib/share";
-import { cellText, downloadPath, yearLabel, type Region, type StatementRow, type Statements } from "../lib/companyTables";
+import { cellText, downloadPath, wholeOnly, yearLabel, type Region, type StatementRow, type Statements } from "../lib/companyTables";
 import { Card, CardHead, ChipBar, DataTable, ErrorState, PlanNote, Seg, Skeleton, type Column } from "./kit";
 import "./companyTables.css";
 
@@ -54,7 +54,7 @@ export function StatementsCard({ region, symbol, id = "co-statements" }: { regio
     { key: "label", header: quarters ? "Quarter" : "Year", rowHeader: true, wrap: true,
       cell: (r) => <>{r.label}{r.worked && <span className="ct-worked" title="Worked out from the figures above">{" "}·<span className="sr-only"> worked out from the figures above</span></span>}</> },
     ...cols.map((c, i): Column<StatementRow> => ({ key: `c${i}`, header: quarters ? c : yearLabel(c, region), numeric: true,
-      cell: (r) => cellText(r.values[i], r.kind, region), csvHeader: c })),
+      cell: (r) => cellText(r.values[i], r.kind, region, r.kind === "pct" && wholeOnly(r.values)), csvHeader: c })),
   ];
   const actions = <>
     {v.bases.length > 1 && v.full && <Seg label="Accounts" options={v.bases.map((b) => ({ value: b, label: BASIS[b] ?? b }))} value={v.basis} onChange={setBasis} />}

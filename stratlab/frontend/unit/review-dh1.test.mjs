@@ -12,7 +12,7 @@ test("DH-003, DH-006: the tax report leads with the year's total and what is pay
   assert.ok(head > 0 && head < src.indexOf('title="Upload your trades"'));          // above the upload card
   assert.match(src, /Payable now, with interest/);
   assert.match(src, /data-testid="tax-payable-locked"/);
-  assert.match(src, /as the return rounds it \(sections 288A and 288B\)/);
+  assert.match(src, /as the return rounds it \(sections 288A and 288B\$\{t\.sections \? " of the 1961 Act" : ""\}\)/);   // (updated on purpose, LIVE9B-018)
   assert.match(src, /y\.exemption\.used > 0 && <Meter/);                            // no blue sliver at ₹0
   assert.match(src, /const FIRST_SALES = 10;/);
 });

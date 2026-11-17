@@ -32,7 +32,7 @@ def test_a_banks_read_says_revenue_and_a_one_off_note_once():
     out = G.polish_company(read, "IN", lender=True, today=date(2026, 11, 14))
     text = " ".join([out["summary"], *out["bull"], *out["bear"]])
     assert "Sales" not in text and " sales " not in text
-    assert out["summary"].startswith("Revenue in the Sep 2026 quarter were")
+    assert out["summary"].startswith("Revenue in the Sep 2026 quarter was")      # (updated on purpose, LIVE9B-002: "Revenue … were" now "was")
     assert out["bear"] == ["Quarterly revenue fell 3%."]
     assert text.count("tax rate of") == 1
     # a company that isn't a lender keeps its sales

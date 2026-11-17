@@ -100,7 +100,8 @@ test("DG-030 .. DG-034, DP2-002: the SIP test's words, its start date and a resu
 
 test("DG-040 .. DG-042, DP2-015: rates are dated, compounding compared, every slab chip in view", () => {
   const rates = read("src/pages/money/RatesPage.tsx");
-  assert.match(rates, /sub\(`as on \$\{dateOnly\(r\.as_of\)\}`\)/);
+  // (updated on purpose, LIVE9B-019: a T-bill's row says the last weekly auction, read on a day; the others stay "as on")
+  assert.match(rates, /: `as on \$\{dateOnly\(r\.as_of\)\}`\) : null\)\)/);
   assert.match(rates, /a year compounded/);
   assert.match(rates, /data-testid="tbill-note"/);
   assert.match(rates, /onChange=\{\(v\) => setPick\(v === "mine" \? "mine" : Number\(v\)\)\} wrap \/>/);

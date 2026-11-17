@@ -33,6 +33,12 @@
 .inv-head > .inv-head-more:not(:has(*)) { display: none; }
 @media (max-width: 900px) { .inv-head { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .inv-head > .inv-head-price { grid-column: 1 / -1; } }
 @media (max-width: 560px) { .inv-head { grid-template-columns: minmax(0, 1fr); } }
+/* LIVE9B-027: on a phone the header's six actions are two even rows of three, not three ragged rows with "More" alone on the last */
+@media (max-width: 560px) {
+  .inv-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s2); }
+  .inv-actions > *, .inv-actions > * > .btn { width: 100%; justify-content: center; min-width: 0; }
+  .inv-actions .btn { white-space: normal; text-align: center; line-height: 1.2; }
+}
 .inv-badges { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
 .inv-badges:empty { display: none; }
 .inv-head-price { gap: var(--s2); }
@@ -205,6 +211,8 @@
 }
 /* business updates: the small history chart in a company's row (RES-1 follow-up) */
 .biz-spark { display: block; width: 120px; max-width: 100%; }
+/* a latest figure well behind the others (LIVE9B-007): muted, with its age under it */
+.biz-old { color: var(--muted); }
 .res-sym { display: flex; align-items: baseline; gap: 6px; flex-wrap: nowrap; white-space: nowrap; min-width: 0; }
 .res-moves { display: flex; flex-wrap: wrap; gap: 0 8px; }
 /* a results row is two lines (owner, 5 Nov): the symbol, its tags and the name, then the meeting and a small filing link; what is longer than
