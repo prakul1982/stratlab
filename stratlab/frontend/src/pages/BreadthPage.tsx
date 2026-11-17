@@ -114,7 +114,7 @@ export function BreadthPage() {
         </select>
         {data && !data.locked && all && (
           // named for what it moves: the history charts, not the live card under it (R63-008)
-          <ChipBar oneLine label="History charts' range" options={presets} value={chosen} onChange={pick} custom={{ storageKey: "stratlab.breadth.periods", units: PERIOD_UNITS, defaultUnit: "months" }} />
+          <ChipBar label="History charts' range" oneLine options={presets} value={chosen} onChange={pick} custom={{ storageKey: "stratlab.breadth.periods", units: PERIOD_UNITS, defaultUnit: "months" }} />
         )}
       </div>
       {coversAll && chosen !== "all" && <p className="k-note">Only {Math.round(span).toLocaleString("en-IN")} days of data so far, so this shows all of them.</p>}
