@@ -105,3 +105,9 @@ test("LIVE10A-040: a theme whose companies are all of one industry has no Indust
   assert.match(dive, /const oneIndustry = new Set\(groups\.flatMap\(\(g\) => g\.rows\.map\(indOf\)\)\)\.size <= 1;/);
   assert.match(dive, /\.\.\.\(oneIndustry \? \[\] : \[\{ key: "i", header: "Industry"/);
 });
+
+test("LIVE10A-039: the index-change notices say what the press release holds, without an excuse", () => {
+  const page = read("src/pages/trade/EventsPage.tsx");
+  assert.doesNotMatch(page, /couldn't be read from it here/);
+  assert.match(page, /Each press release lists the stocks going in and out of the index\./);
+});
