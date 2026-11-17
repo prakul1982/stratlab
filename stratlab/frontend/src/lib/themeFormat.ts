@@ -116,3 +116,19 @@ export function plainIndustry(text: string | null | undefined): string {
   const out = core.replace(/ & /g, " and ").split(" ").map((w) => SIC_ACRONYMS[w.toLowerCase().replace(/[(),]/g, "")] ?? w.toLowerCase()).join(" ");
   return out.slice(0, 1).toUpperCase() + out.slice(1);
 }
+
+const FUND_WORDS: Record<string, string> = { ISHARES: "iShares", INVESCO: "Invesco", VANECK: "VanEck", NIPPON: "Nippon", INDIA: "India" };
+/** LIVE9A-026: a fund's name as people write it, not the exchange's capitals ("ISHARES SEMICONDUCTOR ETF" → "iShares Semiconductor ETF"):
+ * a word of four letters or more in capitals in title case, short ones (ETF, SS, S&P) and those with digits kept; a name with lower case kept. */
+export function fundName(name: string | null | undefined): string {
+  const n = String(name ?? "");
+  if (/[a-z]/.test(n)) return n;
+  return n.split(/(\s+)/).map((w) => FUND_WORDS[w] ?? (/^[A-Z]{4,}$/.test(w) && w !== "SPDR" && w !== "BEES" ? w[0] + w.slice(1).toLowerCase() : w)).join("");
+}
+
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** LIVE9A-026: a filing quarter as "Sep 2026", never "2026-09-30"; anything else as it is. */
+export function quarterText(q: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-\d{2}$/.exec(String(q ?? ""));
+  return m ? `${MON[Number(m[2]) - 1]} ${m[1]}` : String(q ?? "–");
+}

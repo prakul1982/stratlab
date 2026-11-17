@@ -103,3 +103,26 @@ test("the Themes shortcut is plain text on its own page, and results rows are wr
   assert.match(page, /price\(x\.price, cur, region === "IN" \? 2 : undefined\)/);
   assert.match(page, /\{i > 0 \? " " : ""\}<Move v=\{v\} bare \/>/);
 });
+
+// ---------- LIVE9A-022: no empty layer cards or sub-theme sections, no loader left on the page ----------
+test("theme page: empty layers and sub-themes are named in one line; the listings loader ends", async () => {
+  const page = src("pages/ThemesPage.tsx"), dive = src("components/ThemeDive.tsx");
+  assert.match(page, /dive\.layers\.filter\(\(l\) => l\.companies\.length > 0\)\.map/);
+  assert.match(page, /data-testid="layers-empty"/);
+  assert.match(page, /if \(l\.pending && ipoTries \+ 1 >= LISTING_TRIES\) \{ setIpos\(\{ items: \[\], checked: false \}\); return; \}/);
+  assert.match(dive, /data-testid="subs-empty"/);
+  assert.doesNotMatch(dive, /No listed company is shown for this sub-theme\.<\/p>/);
+});
+
+// ---------- LIVE9A-026: fund names and filing quarters as people write them ----------
+test("theme tables: fund names out of capitals, quarters as a month", async () => {
+  const { fundName, quarterText } = await import("../src/lib/themeFormat.ts");
+  assert.equal(fundName("ISHARES SEMICONDUCTOR ETF"), "iShares Semiconductor ETF");
+  assert.equal(fundName("SS SPDR S&P SEMICONDUCTOR"), "SS SPDR S&P Semiconductor");
+  assert.equal(fundName("NIPPON INDIA NIFTY BANK BEES ETF"), "Nippon India Nifty Bank BEES ETF");
+  assert.equal(fundName("Invesco QQQ Trust"), "Invesco QQQ Trust");
+  assert.equal(quarterText("2026-09-30"), "Sep 2026");
+  assert.equal(quarterText("Sep 2026"), "Sep 2026");
+  assert.match(src("components/ThemeDive.tsx"), /cell: \(x\) => quarterText\(x\.quarter\)/);
+  assert.match(src("pages/ThemesPage.tsx"), /cell: \(e\) => fundName\(e\.name\)/);
+});
