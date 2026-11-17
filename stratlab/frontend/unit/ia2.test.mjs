@@ -98,8 +98,11 @@ test("item 38: end-of-line labels get a column as wide as the longest one, or no
 // Item 39 (owner, 30 Oct: "these not colored"): every ▲/▼ change pill is green up and red down; there is no grey "neutral" pill any more.
 test("item 39: the change pill always takes its direction's colour, and nothing asks for a grey one", async () => {
   const stat = read("src/components/kit/Stat.tsx");
-  assert.match(stat, /export function Delta\(\{ value, children \}: \{ value: number \| null \| undefined; children: ReactNode \}\) \{/);
-  assert.match(stat, /<span className=\{`k-delta \$\{dir\}`\}>\n\s*\{dir !== "flat" && <span aria-hidden="true">\{dir === "up" \? "▲" : "▼"\}<\/span>\}/);
+  // updated on purpose (Release 63, LIVE10A-024): a bad-news count (fallers, 52-week lows) swaps green and red, so the class is `tone`; an
+  // arrowed pill still always has "up" or "down", never the grey "flat"
+  assert.match(stat, /export function Delta\(\{ value, children, badRise = false \}/);
+  assert.match(stat, /const tone = badRise && dir !== "flat" \? \(dir === "up" \? "down" : "up"\) : dir;/);
+  assert.match(stat, /<span className=\{`k-delta \$\{tone\}`\}>\n\s*\{dir !== "flat" && <span aria-hidden="true">\{dir === "up" \? "▲" : "▼"\}<\/span>\}/);
   // an arrow is drawn only for "up" or "down", so an arrowed pill always has the class that colours it
   const css = read("src/styles.css");
   assert.match(css, /\.k-delta\.up \{ background: var\(--up-soft\); color: var\(--up\); \}/);

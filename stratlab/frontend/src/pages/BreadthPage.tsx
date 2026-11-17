@@ -167,7 +167,7 @@ const figCell = (p: Part, v: number | null) => <span className={partTone(p, v)}>
 function Changes({ parts }: { parts: Part[] }) {
   if (parts.every((p) => p.change == null)) return <>–</>;
   // LIVE10A-024: a "down" part (fell, 52-week lows, down 4% or more) in the plain chip: its rise was green
-  return <Parts parts={parts} of={(p) => (p.change == null ? "–" : <Delta neutral={p.tone === "down"} value={Number(p.change.toFixed(p.unit === "count" ? 0 : p.unit === "ratio" || p.unit === "level" ? 2 : 1))}>{figChange(p.change, p.unit)}</Delta>)} />;
+  return <Parts parts={parts} of={(p) => (p.change == null ? "–" : <Delta badRise={p.tone === "down"} value={Number(p.change.toFixed(p.unit === "count" ? 0 : p.unit === "ratio" || p.unit === "level" ? 2 : 1))}>{figChange(p.change, p.unit)}</Delta>)} />;
 }
 
 /** While the market is open: the counts so far today against the last close, as one table, with the line through the day under it. When

@@ -88,7 +88,7 @@ export function BreadthTable({ b: given, open = true, behind = false }: { b: Non
     { key: "now", header: b.live ? (b.at ? `Today, ${b.at}` : "Today") : day(b.day), numeric: true, brief: true, cell: (r) => (r.now == null ? (b.live ? <span className="k-muted" title="Counted from the exchange's evening price file">{waiting}</span> : "–") : r.kind === "share" ? `${r.now.toFixed(1)}%` : whole(r.now)) },
     { key: "prev", header: day(b.prev_day) || "Day before", numeric: true, cell: (r) => (r.before == null ? "–" : r.kind === "share" ? `${r.before.toFixed(1)}%` : whole(r.before)) },
     // LIVE10A-024: more stocks falling or at 52-week lows is no good news: those rows' changes in the plain chip ("New 52-week lows ▲+1" was green)
-    { key: "chg", header: "Change", numeric: true, cell: (r) => (r.change == null ? "–" : <Delta neutral={r.key === "dec" || r.key === "lows"} value={r.change}>{r.kind === "share" ? signedPts(r.change) : signedWhole(r.change)}</Delta>) },
+    { key: "chg", header: "Change", numeric: true, cell: (r) => (r.change == null ? "–" : <Delta badRise={r.key === "dec" || r.key === "lows"} value={r.change}>{r.kind === "share" ? signedPts(r.change) : signedWhole(r.change)}</Delta>) },
   ];
   return (
     <Card testId="pulse-breadth">

@@ -82,10 +82,14 @@ test("LIVE10A-023: a Settings change says Saved or that it couldn't save, and an
   assert.equal((page.match(/"Not set yet: pick one\."/g) || []).length, 2);
 });
 
-test("LIVE10A-024: a rise in stocks that fell, 52-week lows or down 4% moves is shown in the plain chip, not green", () => {
-  assert.match(read("src/components/kit/Stat.tsx"), /<span className=\{`k-delta \$\{neutral \? "flat" : dir\}`\}>/);
-  assert.match(read("src/pages/BreadthPage.tsx"), /<Delta neutral=\{p\.tone === "down"\}/);
-  assert.match(read("src/pages/PulseMood.tsx"), /<Delta neutral=\{r\.key === "dec" \|\| r\.key === "lows"\}/);
+// updated on purpose (Release 63 CI, e2e ia2 item 39): the owner retired the grey ▲/▼ pill (item 39, 30 Oct), so a rise in a bad-news count is
+// coloured by meaning (red), the reviewer's other choice, not drawn plain
+test("LIVE10A-024: a rise in stocks that fell, 52-week lows or down 4% moves is red, a fall green, never the grey pill", () => {
+  const stat = read("src/components/kit/Stat.tsx");
+  assert.match(stat, /const tone = badRise && dir !== "flat" \? \(dir === "up" \? "down" : "up"\) : dir;/);
+  assert.match(stat, /<span className=\{`k-delta \$\{tone\}`\}>/);
+  assert.match(read("src/pages/BreadthPage.tsx"), /<Delta badRise=\{p\.tone === "down"\}/);
+  assert.match(read("src/pages/PulseMood.tsx"), /<Delta badRise=\{r\.key === "dec" \|\| r\.key === "lows"\}/);
 });
 
 test("LIVE10A-021: the theme ideas are a row of their own under Map it", () => {
