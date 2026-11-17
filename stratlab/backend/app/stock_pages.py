@@ -1973,6 +1973,17 @@ BROAD_INDUSTRY = re.compile(r"\bnec\b|not elsewhere classified|business services
 PEER_STALE_DAYS = 7                               # a peer whose last price is older than this (before the newest) is left out
 
 
+def sector_first(region: str, symbol: str, parts: list[str]) -> list[str]:
+    """A US company's line under its name with its sector as the page's "Same sector" list names it (the S&P 500's), in
+    place of the SEC's broad division before the industry (CX2: Apple read "Manufacturing · Electronic computers" at the
+    top and "Information Technology" under Same sector). Any other page's parts as they are."""
+    sector = _sp500_sectors().get(symbol) if region == "US" else None
+    if not sector or not parts:
+        return parts
+    rest = parts[1:] if len(parts) > 1 else parts
+    return [sector] + [x for x in rest if x.lower() != sector.lower()]
+
+
 def _sp500_sectors() -> dict[str, str]:
     """{symbol: GICS sector} for the S&P 500 (the committed list), a coarser grouping than the SIC industry."""
     global _SP500_SECTORS
@@ -2843,7 +2854,7 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
               {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [
                   {"@type": "ListItem", "position": 1, "name": "StratLab", "item": site + "/"},
                   {"@type": "ListItem", "position": 2, "name": name, "item": canonical}]}, *faq_ld(questions)])
-    ind = " · ".join(shown_industry(f.get("industry"), plain=region == "US"))
+    ind = " · ".join(sector_first(region, symbol, shown_industry(f.get("industry"), plain=region == "US")))
     notes = _notes(f)
     # PUB-2: the name, one quiet line, the price; then the chart; then the key figures; the explanations come last
     parts = [f"""<h1>{e(name)} <span class="muted">({e(symbol)})</span></h1>

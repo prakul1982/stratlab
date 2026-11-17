@@ -1255,6 +1255,8 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
            "eps_q": {e: round(v, 4) for e, v in sorted(quarterly(facts, EPS, f"{cur}/shares").items())[-8:] if v is not None},
            "interest_shown": None if lender else any(abs(_days(e, ends[-1])) <= 10 for e in read_a(INTEREST)),
            "industry_path": sic_path(sic, subs.get("sicDescription")) or KIND_PATHS.get(kind or "", []),
+           # fix12 (CX2): the exchange each of its tickers is listed on, as the SEC's filing list names it ("AAPL": "Nasdaq")
+           "listings": listings(subs),
            "bank": kind is None and lender,
            "kind": kind, "no_revenue": no_revenue, "figure_errors": figure_errors, "sales_untagged": sales_untagged, "profit_untagged": profit_untagged,
            "capex_untagged": capex_untagged,
@@ -1799,10 +1801,21 @@ def has_filing(facts_json: dict, accn: str) -> bool:
     return False
 
 
+def listings(subs: dict | None) -> dict[str, str]:
+    """{ticker as quote screens write it: exchange} from the SEC's filing list, which gives the two side by side."""
+    subs = subs or {}
+    return {price_symbol(t): str(x).strip() for t, x in zip(subs.get("tickers") or [], subs.get("exchanges") or [])
+            if t and x and str(x).strip()}
+
+
 def for_symbol(p: dict, symbol: str) -> dict:
     """The company as one of its tickers sees it: with several classes of stock, the share count in that class's
-    terms (BRK-B's in Class B shares, BRK-A's in Class A shares), so price times shares is the whole company's value."""
+    terms (BRK-B's in Class B shares, BRK-A's in Class A shares), so price times shares is the whole company's value;
+    and the exchange that ticker is listed on (`listed_on`), when the SEC names it."""
     out = {**p, "symbol": symbol.upper()}
+    on = (p.get("listings") or {}).get(price_symbol(symbol))
+    if on:
+        out["listed_on"] = on
     shares = (p.get("class_shares") or {}).get(price_symbol(symbol))
     if shares:
         out["shares"] = shares

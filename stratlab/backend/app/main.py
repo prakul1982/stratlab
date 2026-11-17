@@ -4872,7 +4872,8 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
                 # build knows it isn't a fund (R12-013: GSMT, listed from such a build, answered "GSMT is a fund" when next built)
                 checks["type_unread"] = True
             items = [{"at": d["at"], "title": d["title"], "url": d.get("url")} for d in p.get("documents") or []]
-            exchange, red = "Listed in the US", None
+            # the exchange the SEC names for this ticker ("Nasdaq"), as an Indian page names NSE (CX2: Apple's page named none)
+            exchange, red = p.get("listed_on") or "Listed in the US", None
         else:
             p = with_industry(sym, research_hub.screener.company(co["bse"] or sym))
             if (p or {}).get("about"):

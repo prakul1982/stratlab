@@ -76,3 +76,28 @@ def test_a_filing_sent_again_with_a_new_link_is_one_row_that_says_it_was_listed_
     got = fl.without_repeats([a, b, other])
     assert [i["id"] for i in got] == ["2", "3"] and got[0]["copies"] == 2 and "copies" not in got[1]
     assert fl.report(type("F", (), {"announcements": lambda self, s: [a, b, other]})(), "ACME")["items"][0]["copies"] == 2
+
+
+# ---------- CX2: Apple's page named no exchange, and read "Manufacturing · Electronic computers" over "Same sector: Information Technology" ----------
+def test_a_us_page_names_its_exchange_from_the_secs_filing_list():
+    from app.intel import sec
+    subs = {"tickers": ["AAPL"], "exchanges": ["Nasdaq"]}
+    assert sec.listings(subs) == {"AAPL": "Nasdaq"}
+    assert sec.for_symbol({"listings": sec.listings(subs)}, "aapl")["listed_on"] == "Nasdaq"
+    assert sec.listings({"tickers": ["BRK.B", "BRK.A"], "exchanges": ["NYSE", "NYSE"]}) == {"BRK-B": "NYSE", "BRK-A": "NYSE"}
+    assert "listed_on" not in sec.for_symbol({"listings": {}}, "XYZ")
+    import inspect
+    from app import main as m
+    assert 'exchange, red = p.get("listed_on") or "Listed in the US", None' in inspect.getsource(m.stock_page_facts)
+
+
+def test_a_us_pages_line_under_its_name_uses_the_sector_its_same_sector_list_names():
+    from app import stock_pages
+    from tests.test_stock_pages_r5v import _facts
+    assert stock_pages._sp500_sectors().get("AAPL") == "Information Technology"
+    page = stock_pages.render(_facts(region="US", symbol="AAPL", name="Apple Inc.", exchange="Nasdaq", currency="USD", unit="$ million",
+                                     industry=["Manufacturing", "Electronic Computers"]), "US", "AAPL", None)
+    assert ">Nasdaq · Information Technology · Electronic computers</p>" in page and "Manufacturing" not in page
+    # a company outside the S&P 500 keeps the SEC's division; India's are left as listed
+    assert stock_pages.sector_first("US", "ZZZZ", ["Manufacturing", "Electronic computers"]) == ["Manufacturing", "Electronic computers"]
+    assert stock_pages.sector_first("IN", "AAPL", ["Industrials"]) == ["Industrials"]
