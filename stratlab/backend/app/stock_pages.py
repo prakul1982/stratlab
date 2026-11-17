@@ -1146,6 +1146,15 @@ def financial_mismatch(f: dict | None) -> bool:
     return sales > 0 and profit > sales
 
 
+def basis_missing(f: dict | None) -> bool:
+    """r60b (R60, the owner's review of the live R59 decks: a regional bank's revenue beside its annual report's, the basis of neither said):
+    whether a stored US page of a bank, lender or insurer with reported years was built before its revenue's lines were kept
+    (sec.revenue_parts): it is built again once, so a theme can say each financial filer's revenue basis."""
+    if not isinstance(f, dict) or f.get("region") != "US" or not f.get("bank") or f.get("no_numbers") or f.get("not_company"):
+        return False
+    return "revenue_basis" not in f and any(isinstance(y, dict) and y.get("sales") is not None for y in f.get("years") or [])
+
+
 def behind_due(f: dict | None, ts: float | None, now: float | None = None) -> bool:
     """Whether the screens' sweep should build a page that is behind its newest annual report (annual_behind) ahead of
     the rest: it was built before that report's data could be out, or not for a week. A page built after it and still
@@ -1390,7 +1399,7 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
     return {
         "v": FACTS_VERSION, **{k: checks[k] for k in ("sales_usd", "cap_unverified", "not_company", "divs_paid", "pe_basis", "pe_end", "eps",
                                                       "foreign", "profit_usd", "annual_unread", "annual_filed", "annual_form", "no_numbers", "cap_why",
-                                                      "type_unread", "eps_q", "no_interest", "pe_oneoff")
+                                                      "type_unread", "eps_q", "no_interest", "pe_oneoff", "revenue_basis")
                                if checks.get(k) is not None},
         "region": region, "symbol": symbol, "name": name, "exchange": exchange,
         "industry": _dedupe(public_text(str(x)) for x in (p.get("industry_path") or []) if x)[:4],

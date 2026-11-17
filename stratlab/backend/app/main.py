@@ -4771,6 +4771,9 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
             checks["annual_filed"] = p["annual_filed"]      # when its newest annual report was filed (stock_pages.annual_behind)
             if p.get("annual_form"):
                 checks["annual_form"] = p["annual_form"]    # R46: which report (10-K, 20-F, 40-F), for a theme's figure source record
+        if "revenue_basis" in p:
+            # r60b: the lines the latest year's revenue is read from (sec.revenue_parts); {} when the build read no revenue for that year
+            checks["revenue_basis"] = p["revenue_basis"] if isinstance(p["revenue_basis"], dict) else {}
         if close and not sec.non_common(sym):
             # one P/E definition, the app's: the close over earnings per share for the last four reported quarters,
             # else the latest year's, said so (R7V-002, R7V-003); the earnings per share itself, for the app's page

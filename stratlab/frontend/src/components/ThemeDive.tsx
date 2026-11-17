@@ -179,7 +179,7 @@ export function ThemeDownloads({ r, dive, region, theme }: { r: SectorAI; dive: 
     try {
       // R21: while the theme's AI map is being written the server answers "preparing"; the kit's bar shows and the page asks again
       const blob = await deckWhenReady(() => themeApi.deck(region, theme, format), { onWait: setPreparing });
-      download(blob, deckFileName(`${theme} theme (${REGION_NAME[region]})`, format));
+      download(blob, deckFileName(`${theme} theme (${REGION_NAME[region]})`, format, new Date(), region === "US" ? "America/New_York" : undefined));
       void refreshMe();                               // the deck count in Account
     } catch (e) { fail(e); } finally { setMaking(null); setPreparing(null); }
   };

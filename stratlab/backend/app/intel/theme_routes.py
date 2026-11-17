@@ -1254,6 +1254,15 @@ def facts_piece(region: str, sym: str, fresh: bool = False) -> tuple[dict | None
                     kept = computed.put(theme_library.FACTS, [region, sym], page, label=sym, region=region)
                     return page, (kept or {}).get("at")
                 return hit["value"], hit.get("at")
+            # r60b (R60): a US financial filer's piece kept before its page kept its revenue's lines (stock_pages.basis_missing) is taken
+            # again once the stored page keeps them, so the deck says its revenue basis; until then the deck says it is not stored
+            from ..stock_pages import basis_missing
+            if basis_missing(hit["value"]) and callable(R.public_facts):
+                page = R.public_facts(region, sym)
+                if page and not basis_missing(page) and (page.get("v") or 1) >= (hit["value"].get("v") or 1):
+                    kept = computed.put(theme_library.FACTS, [region, sym], page, label=sym, region=region)
+                    return page, (kept or {}).get("at")
+                return hit["value"], hit.get("at")
             if (hit["value"].get("v") or 1) >= _facts_version() or not callable(R.public_facts):
                 return hit["value"], hit.get("at")
             page = R.public_facts(region, sym)
@@ -1946,8 +1955,15 @@ DECK_TTL = 6 * 3600
 REGION_WORD = {"IN": "India", "US": "US"}
 
 
+def market_day(r: str) -> date:
+    """r60b (LIVE9A-005): today in the theme's own market (New York for a US theme, India otherwise), as its deck dates itself."""
+    from .. import deck as _deck
+    return datetime.now(timezone.utc).astimezone(_deck.market_tz(r)).date()
+
+
 def deck_file_name(theme: str, r: str, fmt: str, day: date) -> str:
-    """The file's name as the page saves it (lib/deckName.ts): "StratLab - India Defence theme (India) - 7 Nov 2026.pdf", plain ASCII."""
+    """The file's name as the page saves it (lib/deckName.ts): "StratLab - India Defence theme (India) - 7 Nov 2026.pdf", plain ASCII.
+    r60b (LIVE9A-005): `day` is the theme's market's (market_day), the day its deck says."""
     import re
     import unicodedata
     clean = unicodedata.normalize("NFKD", f"{theme} theme ({REGION_WORD.get(r, r)})").encode("ascii", "ignore").decode()
@@ -2054,7 +2070,7 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
         db.add_usage(profile["id"], mark)
     from fastapi.responses import Response
     return Response(body, media_type="application/pdf" if format == "pdf" else "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                    headers={"Content-Disposition": f'attachment; filename="{deck_file_name(theme, r, format, today)}"'})
+                    headers={"Content-Disposition": f'attachment; filename="{deck_file_name(theme, r, format, market_day(r))}"'})
 
 
 @router.get("/theme-dive/workbook")
@@ -2080,7 +2096,7 @@ def theme_dive_workbook(q: str, region: str = "IN", profile=Depends(current_prof
         db.add_usage(profile["id"], mark)
     from fastapi.responses import Response
     return Response(body, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    headers={"Content-Disposition": f'attachment; filename="{deck_file_name(theme, r, "xlsx", today)}"'})
+                    headers={"Content-Disposition": f'attachment; filename="{deck_file_name(theme, r, "xlsx", market_day(r))}"'})
 
 
 

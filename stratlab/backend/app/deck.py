@@ -388,6 +388,23 @@ class Slide:
 IST = timezone(timedelta(hours=5, minutes=30))
 
 
+def market_tz(region: str | None):
+    """r60b (LIVE9A-005): the timezone a deck dates itself in: its market's (New York for a US theme, India's otherwise)."""
+    if region == "US":
+        from zoneinfo import ZoneInfo
+        return ZoneInfo("America/New_York")
+    return IST
+
+
+def price_dates_note(v: dict) -> str:
+    """r60b (LIVE9A-005, the live R59 Semiconductors deck: cover "Prices as of 16 Nov 2026", p.3 "P/E ... prices at the 13 Nov 2026 close"):
+    the cover's price date with the close the deck's multiples are on, when that is another day: "P/E and peers at the 13 Nov 2026 close";
+    "" when they are the same day."""
+    val = (v.get("sections") or {}).get("valuation") or {}
+    day, asof = str(val.get("price_at") or "")[:10], str(v.get("as_of") or "")[:10]
+    return f"the latest company price; P/E and peers at the {_day(day)} close" if day and asof and day != asof else ""
+
+
 def plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     """The deck's slides for one deep-dive view, and the footer line (dated in IST, as the page is: after 5:30 AM IST the UTC
     date is a day behind, R20-016)."""
@@ -2493,7 +2510,29 @@ def reconciled_counts(v: dict, cov: dict) -> dict:
         checked = t["checked"]
     return {"considered": cov["total"] + rejected, "members": cov["total"], "rejected": rejected, "confirmed": confirmed,
             "checked": checked, "with_figures": cov["n"], "counted": v.get("members_with_figures") or 0, "each": each,
-            "split": split, "tally": t if split else None, "adjacent": population(v)["adjacent"]}
+            "split": split, "tally": t if split else None, "adjacent": population(v)["adjacent"], "adjacent_members": adjacent_members(v)}
+
+
+def adjacent_members(v: dict) -> int:
+    """r60b (R60, the owner's review of the live R59 Public sector banks deck: 12 core banks and two infrastructure financiers named adjacent,
+    and one disclosure still calling all 14 "members"): the theme's adjacent participants, each company once, figures or not: the companies of
+    an adjacent layer and those marked adjacent in theirs."""
+    adj = {x.get("symbol") for x in v.get("adjacent") or [] if x.get("symbol")}
+    got = set()
+    for b in v.get("layers") or []:
+        for c in b.get("companies") or []:
+            s_ = c.get("symbol")
+            if s_ and (b.get("adjacent") or c.get("adjacent") or s_ in adj):
+                got.add(s_)
+    return len(got)
+
+
+def members_words(c: dict, members: int | None = None) -> str:
+    """r60b: the theme's members as every count line says them: "208 members", or with adjacent participants "12 core members + 2 adjacent
+    participants", the same two words wherever the members are counted."""
+    members = c.get("members", c.get("considered") or 0) if members is None else members
+    adj = min(c.get("adjacent_members") or 0, members)
+    return f"{members - adj:,} core members + {_n(adj, 'adjacent participant')}" if adj else f"{members:,} members"
 
 
 def confirmed_words(c: dict, members: int, short: bool = False) -> str:
@@ -2533,7 +2572,7 @@ def counts_words(c: dict, short: bool = False) -> str:
     conf = confirmed_words(c, members, short) if c.get("confirmed") is not None else f"in the theme, with figures {c['counted']:,}"
     each = ", ".join(f"{label} {k:,}" for label, k in c["each"])
     # tx2 (R46): the companies screened out as another business are counted among those considered, said apart from the members
-    out = f"{c.get('rejected') or 0:,} screened out as another business, {members:,} members" if c.get("rejected") else ""
+    out = f"{c.get('rejected') or 0:,} screened out as another business, {members_words(c, members)}" if c.get("rejected") else ""
     return f"Considered {c['considered']:,}" + (f" ({out})" if out else "") + f" · {conf} · {figures_words(c, short)}" \
         + (f" · in each calculation: {each}" if each else "")
 
@@ -3819,8 +3858,8 @@ def screening_row(v: dict, cov: dict) -> list[str]:
     l55: the members by evidence state, "membership checked 85 of 85: 60 description-verified, 25 industry-supported, 0 not checked"."""
     c = reconciled_counts(v, cov)
     members, rejected = c["members"], c["rejected"]
-    head = (f"{c['considered']:,} considered = {rejected:,} screened out as another business (candidates, never members) + {members:,} members"
-            if rejected else f"{c['considered']:,} considered, none screened out as another business: {members:,} members")
+    head = (f"{c['considered']:,} considered = {rejected:,} screened out as another business (candidates, never members) + {members_words(c, members)}"
+            if rejected else f"{c['considered']:,} considered, none screened out as another business: {members_words(c, members)}")
     # y57 (R57, the audit of the live R56 Payments deck: "none screened out as another business" beside a removal on business membership in the
     # change log): a company the latest re-check removed on its business is said here too, with where the reason is
     ch_ = v.get("changes") if isinstance(v.get("changes"), dict) else {}
@@ -4391,6 +4430,9 @@ def _comparison_basis(slides: list, v: dict, eyebrow: str) -> None:
     note = ("Each figure: the layer's median company, its count in brackets. Capital, a proxy for capital needs: book equity (market value over "
             "price to book, else debt over debt to equity) plus debt, over the latest year's revenue, both parts stored for the year. Business "
             "model: the one the map's own name for the layer states, else how its companies earn. Companies in the figure: those in its median.")
+    if any(r.get("rule") == "operating model" for b in recs for r in b.get("rules") or []):         # r60b
+        note += (" Operating model: the one the layer's own name states; layers of two are never ranked against each other, whatever their "
+                 "figures.")
     nh = note_h(note)
     made = sum(1 for b in recs if b.get("made", True))
     pages = []                      # (claim, rule lines or None on a page that goes on, table rows)
@@ -4625,9 +4667,24 @@ def col_fmt(key: str, rng: bool = False):
     return (lambda x: _times(x, 2)) if key == "solvency" else _pc          # LIVE7A-014: a range's figures with the real minus too
 
 
+NM = "n.m."
+NM_NOTE = ("n.m.: not meaningful as a margin, beyond ±100% of revenue (costs more than twice the revenue, or a net profit above it); the company's "
+           "own figure, out of every median, range and aggregate")
+
+
+def not_meaningful(c: dict, key: str) -> bool:
+    """r60b (LIVE9A-012, the live review of R59: Atomera "Revenue $70,000, EBITDA margin −32423.1%", Poet −5884.1%, SmartKem −1811.0%, a
+    net margin of 151.3% printed as a margin): an EBITDA or net margin beyond ±100% of revenue is printed n.m. (theme_data.in_median keeps it
+    out of every median and range)."""
+    from .intel.theme_data import beyond_margin
+    return key in ("ebitda", "net") and beyond_margin(c.get(key))
+
+
 def co_cell(c: dict, key: str, amt) -> str:
     if key in (c.get("nc") or ()):            # R27: on another basis than its table's (metric_registry: not comparable)
         return "n.c."
+    if not_meaningful(c, key):                # r60b (LIVE9A-012): never printed as a margin
+        return NM + ((ONE_OFF if c.get("one_off") else GAIN if c.get("gain") else "") if key == "net" else "")
     if key == "revenue":
         return amt(c.get("revenue"))
     if key == "ebitda":
@@ -4855,12 +4912,62 @@ def metric_note_rows(keys: list[str], financials: bool = True) -> list[list[str]
     return [note_row(k, financials, _NO_FINANCIALS) for k in keys if k in BY_ID]
 
 
-def notes_slides(slides: list, eyebrow: str, financials: bool = True) -> list[Slide]:
+BASIS_NAMES_MAX = 25            # r60b: the companies a revenue basis other than the most common one names, before "and N more"
+FTE_LIMIT = ("As filed: net interest income is not put on a fully taxable-equivalent (FTE) basis, so a bank's own non-GAAP “total revenue, "
+             "FTE” is higher by its FTE adjustment (the tax it would pay on its tax-exempt interest)")
+
+
+def revenue_basis_rows(layers: list) -> list[list[str]]:
+    """r60b (R60, the owner's review of the live R59 Regional banks deck: Huntington's revenue $8.17 bn against $8.231 bn in its annual report,
+    "the report should name the exact accounting basis for the difference rather than silently treating them as identical"): what the notes
+    page's Revenue row adds on a bank's, lender's or insurer's revenue ([label, definition, "", limitation]): each basis (the lines it is made of, its standard; for a US bank, that
+    it is as filed, not on the FTE basis of a bank's own non-GAAP total), each naming its companies, the most common one counting them.
+    Over the companies in the theme with a revenue figure and a basis (theme_data.revenue_basis_of); [] when there are none."""
+    seen, groups = set(), {}
+    for x in layers or []:
+        for c in x.get("companies") or []:
+            b = c.get("revenue_basis")
+            if not isinstance(b, dict) or not b.get("words") or c.get("status") == "unverified" or c.get("revenue") is None or c.get("symbol") in seen:
+                continue
+            seen.add(c.get("symbol"))
+            words = b["words"] + (f" ({b['standard']})" if b.get("standard") and b["key"] != "not_stored" else "")
+            if b.get("key") == "line" and b.get("concept"):
+                words = f"{b['words']}, {b['concept']} ({b.get('standard') or 'US GAAP'})"
+            groups.setdefault(words, {"fte": b.get("fte") is False, "names": []})["names"].append(clean_name(c.get("name") or c.get("symbol") or ""))
+    if not groups:
+        return []
+    order = sorted(groups.items(), key=lambda kv: -len(kv[1]["names"]))
+    total = sum(len(g["names"]) for _, g in order)
+    parts = []
+    for i, (words, g) in enumerate(order):
+        k = len(g["names"])
+        if i == 0 and len(order) > 1:
+            parts.append(f"{words}: {k} of the {total}, every one not named below")
+        elif i == 0:
+            parts.append(f"{words}: all {total}")
+        else:
+            nm = g["names"][:BASIS_NAMES_MAX]
+            parts.append(f"{words}: {', '.join(nm)}" + (f" and {k - len(nm)} more" if k > len(nm) else ""))
+    fte = any(g["fte"] for _, g in order)
+    return [["Revenue", "A bank's, lender's or insurer's, by the lines it is made of: " + "; ".join(parts), "",
+             FTE_LIMIT if fte else "As each company's annual figures state it"]]
+
+
+def notes_slides(slides: list, eyebrow: str, financials: bool = True, layers: list | None = None) -> list[Slide]:
     """One compact page (two at most) on how the figures the deck shows are built (R25): each figure's measure, arithmetic, period and source,
-    and limitation, in one table; nothing about what a level of a figure means."""
-    rows = metric_note_rows(shown_metrics(slides), financials)
+    and limitation, in one table; nothing about what a level of a figure means. r60b: with a bank's, lender's or insurer's revenue basis
+    (revenue_basis_rows) after the figures' rows, when the deck shows revenue."""
+    keys = shown_metrics(slides)
+    rows = metric_note_rows(keys, financials)
     if not rows:
         return []
+    if "revenue" in keys and financials:
+        for extra in revenue_basis_rows(layers or []):        # r60b: on the Revenue row itself, one row a figure
+            at = next((i for i, r in enumerate(rows) if r[0] == "Revenue"), None)
+            if at is None:
+                continue
+            r = rows[at]
+            rows[at] = [r[0], f"{r[1]}. {extra[1]}", r[2], f"{r[3]}. {extra[3]}"]
     if any(b["kind"] == "table" and any(not isinstance(r, dict) and r and str(r[0]).startswith(("P/E, companies with", "ROCE, companies with",
                                                                                             "Revenue growth, 3 years a year, companies with"))
                                         for r in b.get("rows") or []) for s in slides for b in s.blocks):
@@ -6010,7 +6117,10 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     A part with nothing to show is said once on the last slide, never drawn empty. `v`: see theme_routes.deck_view."""
     us = v.get("region") == "US"
     unit = v.get("unit") or ("$ million" if us else "₹ crore")
-    today = (now or datetime.now(timezone.utc)).astimezone(IST).strftime("%d %b %Y")
+    # r60b (LIVE9A-005, the live review of R59: a US deck made in the 16 Nov New York session said "17 Nov 2026", India's date, and its map
+    # "written 08 Nov" beside the app's "Last updated 7 Nov, 16:33 ET"): every date the deck states is the theme's own market's day
+    tz = market_tz(v.get("region"))
+    today = (now or datetime.now(timezone.utc)).astimezone(tz).strftime("%d %b %Y")
     sector = v.get("sector") or "Theme"
     footer = f"{sector} · Theme deep dive · {today}"
     asof = v.get("as_of")
@@ -6087,11 +6197,11 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         # R29: the total is of the confirmed companies with figures and a market value, said so (the live R27 Semiconductors cover had "58 of
         # 112 with one" beside "the 105 with one")
         ("Their market value", cap(size.get("total_cap")) if size.get("total_cap") is not None else "–", f"{_n(size.get('with_value', 0), 'company', 'companies')} with figures and a market value"),
-        ("Median ROE", _med((sec.get("medians") or {}).get("roe"))) if lender else ("Median EBITDA margin", ebm(med)), ("Prices as of", asof_text)])
+        ("Median ROE", _med((sec.get("medians") or {}).get("roe"))) if lender else ("Median EBITDA margin", ebm(med)), ("Prices as of", asof_text, price_dates_note(v))])
     written = ""
     if v.get("generated_at"):
         try:
-            written = f" The AI's map was written {datetime.fromtimestamp(float(v['generated_at']), timezone.utc).astimezone(IST).strftime('%d %b %Y')}."
+            written = f" The AI's map was written {datetime.fromtimestamp(float(v['generated_at']), timezone.utc).astimezone(tz).strftime('%d %b %Y')}."
         except (TypeError, ValueError, OverflowError):
             written = ""
     s.add("text", (M, 6.55, CW, 0.4), paras=[f"Prepared {today} with StratLab.{written} The overview and each layer's description are written by AI; "
@@ -6382,7 +6492,13 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             {"title": "Who is here", "lines": [x for x in (common, official) if x]} if official or common else None
         hist = layer.get("history") or {}
         mkey, mname = ("roe", "ROE") if lend else ("ebitda", "EBITDA margin")
-        bars = [c for c in cos if c.get(mkey) is not None and c["symbol"] not in unsure | unmodelled]
+        # r60b (R60, deck_check's "outlier range" on the live R59 Software deck, p.30: a company spending ahead of its revenue, −1080.1% EBITDA
+        # margin on $7 m, charted beside a 24.3% one, its bar's label printed on the layer's median row): a company counted apart from every
+        # margin median and range (spending ahead of its revenue, or in distress) keeps its figure on its row and is not charted beside the
+        # layer's others
+        from .intel.theme_data import DEVELOPER_KEYS, DISTRESS_KEYS
+        bars = [c for c in cos if c.get(mkey) is not None and c["symbol"] not in unsure | unmodelled and not not_meaningful(c, mkey)
+                and not (c.get("developer") and mkey in DEVELOPER_KEYS) and not (c.get("distress") and mkey in DISTRESS_KEYS)]
         chart = None
         if len(hist.get("years") or []) >= 2 and not lend and (hist.get("n") or 0) >= MIN_BASE:       # an aggregate of 3 or more (R21)
             chart = {"kind": "lines", "title": f"Margins by year, the same {_n(hist.get('n') or 0, 'company', 'companies')}",
@@ -6441,6 +6557,8 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
             fparts.append("(in distress): " + "; ".join(f"{clean_name(c['name'])}, {c['distress']}" for c in hurt[:4])
                           + (f"; and {len(hurt) - 4} more" if len(hurt) > 4 else "") + "; its margins and returns are shown on its row and left out of "
                           "every median and range.")
+        if any(not_meaningful(c, k) for c in cos for k in ("ebitda", "net")):          # r60b (LIVE9A-012)
+            fparts.append(f"{NM_NOTE}.")
         if any(c.get("nc") for c in cos):
             fparts.append("n.c.: not comparable, the figure is on another basis than the rest of its column (latest full year against filed "
                           "results annualised), so it is left out of the median.")
@@ -6569,6 +6687,16 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
                 keep.append(consolidated_note(cons, False) if p_.startswith("(consolidated)") and "consolidated" not in tags_now else p_)
             cont = cont_intro + foot(keep)[0]
             fnote, fh = [], 0.0
+        # r60b (R60, the owner's review of the live R59 decks: Medical devices p.27 and Restaurants p.22 held one membership note and the
+        # footer): notes of SPARSE_LINES lines or fewer never go on a page of their own; they go with the layer's next companies on its
+        # "(continued)" page (a page that shows every company sends its last one there)
+        carry = bool(cont) and sum(len(wrap(x, BODY_MIN, CW)) for x in cont) <= SPARSE_LINES
+        if carry and k_fit >= len(body) and k_fit > 1:
+            k_fit -= 1
+            while k_fit > 1 and table_height(head, body[:k_fit] + tail, widths, tw) > room - REST_H:
+                k_fit -= 1
+        elif carry and k_fit >= len(body):
+            carry = False
         s = Slide(title, msg, eyebrow=eb("The value chain"))
         if card:
             s.add("cards", (M, TOP, CW, chh), cols=1, fill=True, items=[card])
@@ -6588,23 +6716,33 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         # r572 round 2 (the live R57.1 decks: "Fabless chip design: The largest 4 of 38", "eVTOL and drone aircraft developers: The largest 4
         # of 20", five layer pages under min(5, N) rows after every step above, their long names wrapping over three lines): the next of its
         # companies go on a page of their own right after it, "<layer> (continued)", until min(5, N) of them are shown
-        if k_fit < want:
+        ch2 = sum(note_h(x) for x in cont) + 0.06 * (len(cont) - 1) + 0.12 if cont else 0.0
+        if k_fit < want or carry:
             more = body[k_fit:]
-            room_c = BOT - TOP - REST_H
+            room_c = BOT - TOP - REST_H - (ch2 if carry else 0.0)
             k_c = len(more)
             while k_c > 1 and table_height(head, more[:k_c], widths, CW) > room_c:
                 k_c -= 1
             k_c = max(k_c, min(len(more), want - k_fit))
-            s3 = Slide(f"{title} (continued)", f"Its companies {k_fit + 1} to {k_fit + k_c} of {len(cos)}", eyebrow=eb("The value chain"))
+            if carry and table_height(head, more[:k_c], widths, CW) > room_c:
+                carry, room_c = False, BOT - TOP - REST_H          # (the rows it must show leave the notes no room: they keep a page)
+                k_c = len(more)
+                while k_c > 1 and table_height(head, more[:k_c], widths, CW) > room_c:
+                    k_c -= 1
+                k_c = max(k_c, min(len(more), want - k_fit))
+            s3 = Slide(f"{title} (continued)", f"Its companies {k_fit + 1} to {k_fit + k_c} of {len(cos)}"
+                       + (", and who is in the layer's calculations" if carry else ""), eyebrow=eb("The value chain"))
             th3 = min(room_c, table_height(head, more[:k_c], widths, CW))
             s3.add("table", (M, TOP, CW, th3), head=head, rows=more[:k_c], widths=widths, tight=True)
             s3.add("text", (M, TOP + th3 + 0.04, CW, REST_H - 0.04),
                    paras=[f"Companies {k_fit + 1} to {k_fit + k_c} of {len(cos)}, in the order of the table before; every one: appendix, "
                           f"⟦Every company's figures⟧."], size=BODY_MIN, floor=BODY_MIN, color=MUTED)
+            if carry:
+                s3.add("text", (M, TOP + th3 + REST_H + 0.08, CW, min(ch2, BOT - TOP - th3 - REST_H - 0.08)), paras=cont, size=BODY_MIN,
+                       floor=BODY_MIN, color=MUTED)
             slides.append(s3)
-        if cont:
+        if cont and not carry:
             s2 = Slide(f"{title} (notes)", "Who is in the layer's calculations, and what its table's marks mean", eyebrow=eb("The value chain"))
-            ch2 = sum(note_h(x) for x in cont) + 0.06 * (len(cont) - 1) + 0.12
             s2.add("text", (M, TOP, CW, min(BOT - TOP, ch2)), paras=cont, size=BODY_MIN, floor=BODY_MIN, color=MUTED)
             slides.append(s2)
 
@@ -6706,6 +6844,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
                 + (" (whole company): whole-company figures." if wide else "")
                 + (f" {ONE_OFF} {ONE_OFF_NOTE}." if any(x.get("one_off") for x in lead) else "")
                 + (f" {GAIN} {GAIN_NOTE}." if any(x.get("gain") and not x.get("one_off") for x in lead) else "")
+                + (f" {NM_NOTE}." if any(not_meaningful(x, k) for x in lead for k in ("ebitda", "net")) else "")
                 + (f" No reported figures yet: {names5(bare)}." if bare else ""))
         full = {c["symbol"]: c for x in layers for c in x.get("companies") or []}          # the layers' rows carry each company's years
         gb = growth_base_line([{**full.get(x["symbol"], {}), **x} for x in lead], amt)
@@ -6863,7 +7002,7 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     notes = s
     slides.append(s)
     fin = any(c.get("bank") for x in layers for c in x.get("companies") or []) or any(x.get("bank") for x in sec.get("leaders") or [])
-    built = notes_slides(slides + later_slides, eb("Notes"), fin)         # R25: one page on how the figures shown are built, before the appendix
+    built = notes_slides(slides + later_slides, eb("Notes"), fin, layers)      # R25: one page on how the figures shown are built, before the appendix
     slides.extend(built)
     if not members:
         s = Slide("No company yet", "No company has been placed in this theme yet", eyebrow=eb("Notes"))
@@ -6939,6 +7078,7 @@ AGG_GAP = 10.0                  # y57: points between a layer's median EBITDA ma
 SMALL_TITLE = "Smaller layers"
 SMALL_MAX = 2                   # d1: a layer of this many confirmed companies or fewer has no page of its own (a median is of MIN_BASE or more)
 LAYER_ROWS_MIN = 5              # d1: a layer's page shows at least this many of its companies (all of a smaller layer)
+SPARSE_LINES = 2                # r60b: notes of this many lines or fewer never make a page of their own (they go with the layer's next rows)
 
 
 def _smaller_layers(slides: list, small: list, amt, eyebrow: str) -> None:
