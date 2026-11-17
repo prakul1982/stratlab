@@ -93,3 +93,21 @@ def test_the_stored_9_nov_brief_is_measured_against_the_muhurat_session(monkeypa
     assert kept["indices"][0]["change_pct"] == 0.23
     assert "+0.23%" in kept["subject"] and "+0.06%" not in kept["subject"] + kept["summary"] + kept["text"]
     assert job.repair_official_changes("IN", days=3650) == 0                 # done once
+
+
+# ---------- CX2: a board meeting on raising money through NCDs is a debt raise, not a red-flag fund raise ----------
+def test_a_raise_through_ncds_is_a_debt_raise_not_a_fund_raise_flag():
+    from app.intel import filings as F
+    got = F.classify("Board Meeting Intimation", "The Board will consider raising of funds through issue of Non-Convertible Debentures on a private placement basis.")
+    assert got == ("ncd", "amber")
+    assert F.classify("Board Meeting Intimation", "The Board will consider raising of funds by way of issue of equity shares.") == ("fund_raise", "red")
+    assert F.classify("Fund Raising", "Approved fund raising up to Rs 500 crore.")[0] == "fund_raise"
+
+
+# ---------- CX2: an analyst or investor meeting filing is not labelled Financial results ----------
+def test_an_investor_meet_filing_about_results_is_an_investor_meeting():
+    from app.intel import filings as F
+    cid, sev = F.classify("Analysts/Institutional Investor Meet/Con. Call Updates",
+                          "Schedule of the analysts meet on 3 Nov 2026 to discuss the unaudited financial results for the quarter.")
+    assert cid in ("investor_meet", "concall") and sev == "info"
+    assert F.classify("Outcome of Board Meeting", "Approved the unaudited financial results for the quarter ended 30 Sep 2026.")[0] == "results"
