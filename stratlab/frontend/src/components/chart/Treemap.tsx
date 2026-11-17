@@ -95,7 +95,7 @@ export function Treemap({ tiles, size, color, period, group, index, query = "", 
             const cls = stepClass(step(p.value, color, period), color);
             const text = figure(p.value);
             const { px, fig, vert } = tileWords(p.tile.s, text, w, h, textWidth);
-            const scale = (px === 15 ? " lg" : px === 10 ? " sm" : "") + (vert ? " vert" : "");
+            const scale = (px === 15 ? " lg" : px === 10 ? " sm" : px === 9 ? " xs" : "") + (vert ? " vert" : "");
             const off = searching && !matches(p.tile, query);
             return (
               <Link key={p.tile.s} to={href(p.tile)} tabIndex={-1} className={`hm-tile ${cls}${scale}${off ? " off" : searching ? " hit" : ""}`}

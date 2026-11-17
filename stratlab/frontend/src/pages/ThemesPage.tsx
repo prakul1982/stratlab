@@ -14,7 +14,7 @@ import { ChangesCard } from "../components/ThemeChanges";
 import { SaveButton, SavedList } from "../components/SavedSearches";
 import { themeReady, themeSnap } from "../lib/savedSnap";
 import { Card, CardHead, DataTable, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PageNav, Skeleton, Working } from "../components/kit";
-import { fundName } from "../lib/themeFormat";
+import { fundName, themeFunds } from "../lib/themeFormat";
 
 /* ================= Themes: a theme deep dive =================
  * Who is in the theme: every company the exchange classifies in its official industries, sorted into layers by AI, with the AI's additions
@@ -197,11 +197,13 @@ export function ThemesPage() {
                 <Link className="btn quiet sm" to={`/invest/heatmap?theme=${encodeURIComponent(q)}&region=${region}`}>Heatmap of this theme</Link>
               </div>
             )}
-            {r.etfs.length > 0 && (
+            {themeFunds(r.etfs).funds.length > 0 && (
               <DataTable label="Funds that track the theme" columns={[
                 { key: "t", header: "Fund", rowHeader: true, cell: (e: (typeof r.etfs)[number]) => <Link className="link" to={`/research/${region}/${encodeURIComponent(e.ticker)}`}><b>{e.ticker}</b></Link> },
-                { key: "n", header: "Name", wrap: true, cell: (e) => fundName(e.name) }]} rows={r.etfs} rowKey={(e) => e.ticker} />
+                { key: "n", header: "Name", wrap: true, cell: (e) => fundName(e.name) }]} rows={themeFunds(r.etfs).funds} rowKey={(e) => e.ticker} />
             )}
+            {/* LIVE11A-011: a whole-market index fund is not offered as a theme's fund; said once */}
+            {themeFunds(r.etfs).broad > 0 && <p className="k-note" data-testid="theme-funds-broad">{themeFunds(r.etfs).broad === 1 ? "A fund that tracks the whole market is left out: it holds far more than this theme." : `${themeFunds(r.etfs).broad} funds that track the whole market are left out: they hold far more than this theme.`}</p>}
           </Card>
           {/* still being prepared: a moving bar and one short line; the page asks again on its own (owner, 5 Nov: no warnings for work in progress) */}
           {pending && stopped && <p className="k-note" data-testid="theme-still-checking">Some of this theme's checks are still running. Refresh to see them.</p>}

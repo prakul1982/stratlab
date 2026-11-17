@@ -189,7 +189,13 @@ def display_name(region: str, name: str | None) -> str | None:
     from .stock_pages import proper_name, tidy_in_name
     if not name:
         return name
-    return (proper_name(name) if region == "US" else tidy_in_name(name)) or name
+    out = (proper_name(name) if region == "US" else tidy_in_name(name)) or name
+    # LIVE11A-023: one punctuation of the legal ending ("Apple Inc." / "Amazon.com Inc" / "Meta Platforms, Inc." side by side): no comma
+    # before it, no full stop after it
+    return _ENDING_MARKS.sub(r" \1", out) if region == "US" else out
+
+
+_ENDING_MARKS = re.compile(r",?\s+(Inc|Corp|Co|Ltd|Plc|Corporation|Company|Incorporated)\.?$")
 
 
 def calendar_rows(raw: list, names: dict | None = None) -> list[dict]:

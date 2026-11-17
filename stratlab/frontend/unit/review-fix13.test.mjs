@@ -57,3 +57,21 @@ test("LIVE11A-018/024: Breadth's CSV sits beside Alert me in the card head; the 
   assert.match(b, /data-testid="breadth-today-tools">\n        \{!locked && <BreadthAlertButton group=\{group\} \/>\}\n        \{rows\.length > 0 && <CsvButton/);
   assert.match(read("src/pages/PulseMood.tsx"), /\{ key: "w", header: "When", cell: \(i\) => <span data-testid="index-when"/);
 });
+
+test("LIVE11A-023: a mid-size heatmap tile names a long symbol at 9px instead of leaving it blank", async () => {
+  const { tileWords } = await import("../src/lib/heatmap.ts");
+  const width = (text) => text.length * 6.5;
+  assert.deepEqual(tileWords("POWERGRIDX", "+1.2%", 70, 50, width), { px: 9, fig: true });
+  assert.deepEqual(tileWords("HINDUNILVR", "+1.2%", 60, 40, width), { px: 0, fig: false });
+  assert.match(read("src/components/chart/Treemap.tsx"), /px === 9 \? " xs"/);
+});
+
+test("LIVE11A-029: a price this device read during a session that has closed is not shown under its 'last close' label", async () => {
+  const { readInSession } = await import("../src/lib/marketDay.ts");
+  const nse = { id: "NSE", tz: "Asia/Kolkata", hours: { open: "09:15", close: "15:30" }, holidays: [] };
+  const night = new Date("2026-11-17T22:35:00Z");                                  // 04:05 IST Wed 18 Nov: shut, last session Tue 17 Nov
+  assert.equal(readInSession(nse, "2026-11-17T08:50:00Z", night), true);          // 14:20 IST, during the session
+  assert.equal(readInSession(nse, "2026-11-17T10:30:00Z", night), false);         // 16:00 IST, after the close
+  assert.equal(readInSession(nse, "2026-11-17T08:50:00Z", new Date("2026-11-17T09:00:00Z")), false);   // still trading
+  assert.match(read("src/components/watch/WatchPanel.tsx"), /return !!m && readInSession\(m, at\);/);
+});

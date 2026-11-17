@@ -472,9 +472,10 @@ def html_ttl(region: str | None, now: datetime | None = None) -> int:
     return max(MIN_CACHE, min(600, int((nxt - (now or datetime.now(timezone.utc))).total_seconds())))
 
 
-def last_close(region: str, now: datetime | None = None) -> tuple[date, datetime]:
+def last_close(region: str, now: datetime | None = None, after: int | None = None) -> tuple[date, datetime]:
     """(day, when) of the market's latest settled close: the latest trading day whose close was at least settle(region)
-    ago. Before then, today's candle is still a session in progress (or not yet the official close), not a close."""
+    ago (or `after` seconds, for a reader that takes the day's last candle before the official close is out). Before then,
+    today's candle is still a session in progress (or not yet the official close), not a close."""
     from .data.calendar import is_trading_day
     from .data.markets import BY_ID
     m = BY_ID.get(region) or {}
@@ -484,7 +485,7 @@ def last_close(region: str, now: datetime | None = None) -> tuple[date, datetime
     for _ in range(15):
         hh, mm = (close_of(region, d) or "23:59").split(":")
         at = datetime.combine(d, dtime(int(hh), int(mm)), tz)
-        if is_trading_day(region, d) and at + timedelta(seconds=settle(region)) <= local:
+        if is_trading_day(region, d) and at + timedelta(seconds=settle(region) if after is None else after) <= local:
             return d, at
         d -= timedelta(days=1)
     hh, mm = (close_of(region, d) or "23:59").split(":")

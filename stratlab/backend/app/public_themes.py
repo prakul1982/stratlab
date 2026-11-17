@@ -332,7 +332,9 @@ def render(v: dict) -> str:
         rows = ""
         for c in x["companies"]:
             name = f'<a href="{e(c["page"])}">{e(c["name"])}</a>' if c["page"] else e(c["name"])
-            rev = (e(c["revenue"]) + (f' <span class="muted small">{e(c["year"])}</span>' if c.get("year") else "")) if c["revenue"] else "–"
+            # LIVE11A-017: the value and its period in one box, so a phone's stacked row keeps them together at the right (the value sat
+            # mid-row, its period at the edge, while Ticker and Market value were right-aligned)
+            rev = ("<span>" + e(c["revenue"]) + (f' <span class="muted small">{e(c["year"])}</span>' if c.get("year") else "") + "</span>") if c["revenue"] else "–"
             ev = ""
             if state:                  # e54: never said confirmed by its own words when it isn't
                 ev = f'<td class="l">{e(EVIDENCE_PUBLIC[c["evidence"]]) if c.get("evidence") and c["evidence"] != "description_verified" else "description-verified" if c.get("evidence") else "–"}</td>'

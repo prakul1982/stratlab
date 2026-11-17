@@ -79,6 +79,7 @@
 .hm-map a.hm-tile:hover, .hm-map a.hm-tile:focus-visible { color: var(--heat-ink); text-decoration: none; }
 .hm-map a.hm-tile:is(.hm-d3, .hm-u3, .hm-v4, .hm-v5):hover, .hm-map a.hm-tile:is(.hm-d3, .hm-u3, .hm-v4, .hm-v5):focus-visible { color: var(--heat-on); }
 .hm-tile.sm { font-size: 10px; }
+.hm-tile.xs { font-size: 9px; }           /* LIVE11A-023: a mid-size tile's long symbol */
 .hm-tile.lg { font-size: 15px; gap: 4px; }
 .hm-sym { font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: clip; white-space: nowrap; letter-spacing: .01em; }
 .hm-fig { font-variant-numeric: tabular-nums; white-space: nowrap; font-size: .92em; }

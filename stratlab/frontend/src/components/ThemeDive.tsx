@@ -70,8 +70,10 @@ function Spk({ row }: { row: BizRow }) {
 }
 
 /** LIVE6-017: a long table shows its first rows and the rest a press away ("Show all N"), so the page isn't 16,000 px tall. */
-function Fold<T>({ rows, n = 10, what = "rows", children }: { rows: T[]; n?: number; what?: string; children: (shown: T[]) => ReactNode }) {
+function Fold<T>({ rows, n: wide = 10, what = "rows", children }: { rows: T[]; n?: number; what?: string; children: (shown: T[]) => ReactNode }) {
   const [all, setAll] = useState(false);
+  // LIVE11A-010: on a phone each row is a card, so a fold shows fewer (Cement was 72,468 px for 41 companies)
+  const n = usePhone() ? Math.min(wide, PHONE_FOLD) : wide;
   return (
     <>
       {children(all || rows.length <= n + 2 ? rows : rows.slice(0, n))}
@@ -84,6 +86,7 @@ const isDash = (v: ReactNode) => v == null || v === "–" || v === "" || (typeof
 const said = (rows: KV[]) => rows.filter((x) => ![x.a, x.b].every(isDash));
 
 const MEMBERS_SHOWN = 12;     // a group's first rows; the rest a press away (a theme of 500 drug makers is listed in full)
+const PHONE_FOLD = 4;         // ...and on a phone, where each row is a card (LIVE11A-010)
 
 /** Every company in the theme, by layer (THEMES): the base is every listed company the exchange classifies in the theme's industries,
  * which the AI can sort into its layers but never removes; the AI's additions from other industries are marked, confirmed in their own
@@ -104,20 +107,29 @@ export function MembersCard({ r, region, dive }: { r: SectorAI; region: Region; 
   if (groups.length === 0) return null;
   const total = p?.total ?? new Set(groups.flatMap((g) => g.rows.map((c) => c.ticker))).size;
   const ev = evidenceOf(dive);
+  // LIVE11A-011: each group largest first by market value (ACC ₹23,442 cr sat above Shree ₹89,900 cr); a company with none goes last
+  for (const g of groups) g.rows = [...g.rows].sort((a, b) => (caps.get(b.ticker) ?? b.cap ?? -1) - (caps.get(a.ticker) ?? a.cap ?? -1));
   const named = p?.named ?? 0, base = (p?.base ?? 0) - named, added = p?.added ?? 0, inds = p?.industries ?? [];
   // LIVE10A-040: an Industry column that says the same industry on every row (Cement's 41 cards each "Industry: Cement & Cement Products")
   // is left out; the theme's industries are said once in the counts line
   const indOf = (c: Co) => (region === "US" ? plainIndustry(c.industry) : c.industry) || "";
   const oneIndustry = new Set(groups.flatMap((g) => g.rows.map(indOf))).size <= 1;
+  // LIVE11A-011: "In the theme by" saying the same on every row ("Official industry / Description-verified" on all of Cement's) is said once
+  const byOf = (c: Co) => (c.base ? `${c.basis === "list" ? "list" : "official"}|${ev ? ev(c.ticker) : ""}` : `added|${c.verified ? 1 : 0}`);
+  const allRows = groups.flatMap((g) => g.rows);
+  const sameBy = allRows.length > 1 && new Set(allRows.map(byOf)).size === 1;
+  const byOnce = sameBy && allRows[0] ? (allRows[0].base ? `${allRows[0].basis === "list" ? "Named in the theme's list" : "Official industry"}${ev ? ` · ${EVIDENCE_ONE[ev(allRows[0].ticker)]}` : ""}`
+    : allRows[0].verified ? "Added · Description-verified" : "Added · Not yet description-verified") : null;
   const cols: Column<Co>[] = [
     { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (c) => <><Name r={region} sym={c.ticker} name={c.name} /><span className="k-sub-line k-muted">{c.ticker}</span></> },
     ...(oneIndustry ? [] : [{ key: "i", header: "Industry", wrap: true, cell: (c: Co) => indOf(c) || dash } as Column<Co>]),
     { key: "m", header: "Market value", numeric: true, cell: (c) => amount(caps.get(c.ticker) ?? c.cap ?? null, region) },
-    { key: "w", header: "What it does, in its own words", wrap: true, cell: (c) => { const w = ownWords(c.what, c.name);
+    // LIVE11A-010: on a phone the quote runs across the card under the name, not squeezed into a half column beside an empty one
+    { key: "w", header: "What it does, in its own words", wrap: true, lead: true, cell: (c) => { const w = ownWords(c.what, c.name);
       return w ? <>“{w}”</> : <span className="k-muted">{noWords(c.base ? ev?.(c.ticker) === "description_verified" : !!c.verified)}</span>; } },
-    { key: "f", header: "In the theme by", cell: (c) => (c.base ? <>{c.basis === "list" ? "Named in the theme's list" : "Official industry"}
+    ...(sameBy ? [] : [{ key: "f", header: "In the theme by", cell: (c: Co) => (c.base ? <>{c.basis === "list" ? "Named in the theme's list" : "Official industry"}
       {ev && <span className="k-sub-line k-muted" data-testid="member-evidence">{EVIDENCE_ONE[ev(c.ticker)]}</span>}</>
-      : <><Badge tone="plain" dot={false}>Added</Badge><span className="k-sub-line">{c.verified ? "Description-verified" : "Not yet description-verified"}</span></>) },
+      : <><Badge tone="plain" dot={false}>Added</Badge><span className="k-sub-line">{c.verified ? "Description-verified" : "Not yet description-verified"}</span></>) } as Column<Co>]),
   ];
   // e54 (R54): what each company's place rests on, the same states and counts as the deck; l55 (R55): by the deck's names, the membership
   // check's count apart from the count with figures, and each layer's companies by state
@@ -130,6 +142,7 @@ export function MembersCard({ r, region, dive }: { r: SectorAI; region: Region; 
         <b>{total.toLocaleString("en-IN")} compan{total === 1 ? "y" : "ies"}</b>: {base.toLocaleString("en-IN")} from the official industry list, {named > 0 && `${named.toLocaleString("en-IN")} named in the theme's list, `}{added.toLocaleString("en-IN")} added
         {added > 0 && ` (${p?.confirmed ?? 0} description-verified)`}.
       </p>
+      {byOnce && <p className="k-small k-muted" data-testid="theme-by-once">Every company here is in the theme by: {byOnce}.</p>}
       {evLine && <p className="k-small k-muted" data-testid="theme-evidence">{evLine}.{withFigures != null && <> With figures: {withFigures.toLocaleString("en-IN")} (the membership check reads no figures).</>}</p>}
       {inds.length > 0
         ? <p className="k-small k-muted">Official industries{p?.industries_by === "words" ? ", matched by the theme's own words" : p?.industries_by === "ai" ? ", picked by AI from the exchange's own list" : ""}: {inds.join(" · ")}.</p>
@@ -143,13 +156,14 @@ export function MembersCard({ r, region, dive }: { r: SectorAI; region: Region; 
 
 function MemberGroup({ name, official, rows, cols, evidence }: { name: string; official: boolean; rows: Co[]; cols: Column<Co>[]; evidence: string }) {
   const [all, setAll] = useState(false);
-  const shown = all ? rows : rows.slice(0, MEMBERS_SHOWN);
+  const first = usePhone() ? PHONE_FOLD : MEMBERS_SHOWN;
+  const shown = all ? rows : rows.slice(0, first);
   return (
     <section className="k-stack">
       <h3 className="k-sub">{name}{official && <span className="k-muted"> · official industry</span>}</h3>
       {evidence && <p className="k-small k-muted" data-testid="layer-evidence">{evidence}</p>}
       <DataTable label={`${name}: companies in the theme`} columns={cols} rows={shown} rowKey={(c) => c.ticker} />
-      {rows.length > MEMBERS_SHOWN && (all ? <ShowLess onLess={() => setAll(false)} /> : <button type="button" className="btn quiet sm" onClick={() => setAll(true)}>{`Show all ${rows.length} companies`}</button>)}
+      {rows.length > first && (all ? <ShowLess onLess={() => setAll(false)} /> : <button type="button" className="btn quiet sm" onClick={() => setAll(true)}>{`Show all ${rows.length} companies`}</button>)}
     </section>
   );
 }

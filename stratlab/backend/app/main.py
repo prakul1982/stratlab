@@ -2439,6 +2439,8 @@ def rotation_run(region: str, set: str, members, interval: str, tail: int, keep_
     """Work out a rotation chart and hold it ten minutes; a shared set (keep_as names it) also keeps a copy for the
     hours the market's data is offline."""
     out = rotation.run(markets, region, set, members, interval, tail)
+    # LIVE11A-007: a chart made from the session's candles before its close is settled is made once more after it
+    out = {**out, "settled": str(out.get("as_of") or "")[:10] <= stock_pages.last_close(region)[0].isoformat()}
     _results.set(("rotation", region, set, tuple(_member_key(m) for m in members or []), interval, tail), out, 600)
     if keep_as:
         try:
@@ -2447,6 +2449,26 @@ def rotation_run(region: str, set: str, members, interval: str, tail: int, keep_
         except Exception as e:                    # a page that worked isn't failed for want of a copy
             print("rotation copy not kept:", e)
     return out
+
+
+ROTATION_AFTER = 15 * 60          # seconds after a close the sector chart is made with that session's candle (LIVE11A-007)
+
+
+def rotation_day(region: str, now: datetime | None = None) -> str:
+    """LIVE11A-007: the session a sector chart should run to: the latest one whose close is ROTATION_AFTER past. India's prices are taken as
+    settled three hours after its close (18:30 IST), by when the broker may be offline for the night, so the copy kept at 16 Nov stood until
+    the next morning ("Closes up to 16 Nov" at 04:40 IST, 13 h after the 17 Nov close)."""
+    return stock_pages.last_close(region, now, after=ROTATION_AFTER)[0].isoformat()
+
+
+def rotation_behind(kept: dict | None, region: str, now: datetime | None = None) -> bool:
+    """Whether a kept sector chart is to be made again: behind the latest session, of an older version, or made from that session's candles
+    before its close was settled while the settled close is in now."""
+    k = kept or {}
+    as_of = str(k.get("as_of") or "")[:10]
+    if k.get("v") != rotation.VERSION or as_of < rotation_day(region, now):
+        return True
+    return not k.get("settled", True) and as_of <= stock_pages.last_close(region, now)[0].isoformat()
 
 
 def rotation_after_close(now: datetime | None = None) -> list[str]:
@@ -2458,11 +2480,10 @@ def rotation_after_close(now: datetime | None = None) -> list[str]:
         prov = markets.provider(region)
         if prov is None or not prov.ready():
             continue
-        day = stock_pages.last_close(region, now)[0].isoformat()
         name = rotation.index_sets(region)["sectors"]["name"]
         for interval in ("weekly", "daily"):
             kept = db.json_value(db.get_setting(f"rotation:last:{region}:sectors:{interval}:5"), {})
-            if str((kept or {}).get("as_of") or "")[:10] >= day and (kept or {}).get("v") == rotation.VERSION:
+            if not rotation_behind(kept, region, now):
                 continue
             try:
                 rotation_run(region, "sectors", None, interval, 5, name)
@@ -2508,6 +2529,8 @@ def rotation_kept(region: str, last_key: str, now: datetime | None = None) -> di
     except Exception:
         return None
     if not isinstance(kept, dict) or not kept.get("rows") or kept.get("v") != rotation.VERSION or str(kept.get("as_of") or "")[:10] < day:
+        return None
+    if rotation_behind(kept, region, now):        # LIVE11A-007: the session that closed in the last hours isn't in it yet
         return None
     return {k: v for k, v in kept.items() if k not in ("name", "market")}
 

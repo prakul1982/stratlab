@@ -138,3 +138,11 @@ export function quarterText(q: string | null | undefined): string {
   const m = /^(\d{4})-(\d{2})-\d{2}$/.exec(String(q ?? ""));
   return m ? `${MON[Number(m[2]) - 1]} ${m[1]}` : String(q ?? "–");
 }
+
+/** LIVE11A-011: a fund that tracks the whole market (a NIFTY 50, SENSEX or S&P 500 fund) is no fund of a theme: Cement offered NIFTYBEES.
+ * The funds the theme's map names, without those, and how many were left out. */
+const BROAD_FUND = /\b(?:nifty\s*(?:50|100|200|500|next\s*50|total\s*market)|sensex|s&p\s*500|s&p\s*bse\s*500|total\s*(?:stock\s*)?market|nasdaq[-\s]?100|russell\s*(?:1000|2000|3000)|dow\s*jones\s*industrial)(?!\s*(?:equal|value|momentum|quality|low\s*vol))\b/i;
+export function themeFunds<T extends { ticker: string; name: string }>(etfs: T[]): { funds: T[]; broad: number } {
+  const funds = etfs.filter((e) => !BROAD_FUND.test(`${e.name} ${e.ticker}`));
+  return { funds, broad: etfs.length - funds.length };
+}

@@ -172,3 +172,65 @@ def test_a_stored_us_results_row_says_its_quarter_is_fiscal(monkeypatch):
     monkeypatch.setattr(results.db, "get_setting", lambda k: json.dumps({"rows": rows}))
     got = results.load("US")["rows"]
     assert got[0]["purpose"] == "Quarterly results (fiscal Q3 2027)" and got[1]["purpose"] == "Quarterly results (Q3 2027)"
+
+
+# ---------- LIVE11A-004: a theme's prices answer within a few seconds; the companies not read in time are read behind the request ----------
+def test_theme_prices_answer_at_once_and_the_rest_are_read_behind(monkeypatch):
+    import time as _time
+    from app.intel import theme_routes as T
+    T.PRICE_CACHE.clear()
+    T._behind.clear()
+    monkeypatch.setattr(T, "PRICE_BEHIND", True)
+    monkeypatch.setattr(T.price_reads, "hit", lambda *a, **k: True)
+    bars = [{"t": f"2026-11-{d:02d}", "c": 100.0 + d} for d in range(2, 18)]
+
+    def slow(sym):
+        _time.sleep(0.4)                       # a busy price source: 40 companies would take 16 s inside the request
+        return bars
+
+    def no_bench():
+        raise RuntimeError("offline")
+    members = [(f"S{i}", f"S{i}") for i in range(40)]
+    t0 = _time.monotonic()
+    out = T.gather_prices("US", members, slow, no_bench, daily=({}, None, {}))
+    assert _time.monotonic() - t0 < T.PRICE_BUDGET + 1.5 and out["pending"] > 0
+    deadline = _time.monotonic() + 30
+    while _time.monotonic() < deadline and any(T.PRICE_CACHE.get(f"US:{s}") is None for s, _ in members):
+        _time.sleep(0.2)
+    assert all(T.PRICE_CACHE.get(f"US:{s}") is not None for s, _ in members)       # read behind it, one worker
+    assert T.gather_prices("US", members, slow, no_bench, daily=({}, None, {}))["pending"] == 0
+    T.PRICE_CACHE.clear()
+
+
+# ---------- LIVE11A-007: the sector chart is made with the session that just closed, not only three hours after India's close ----------
+def test_the_india_sector_chart_is_behind_once_the_session_has_closed(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from app import main as M
+    from app.data import calendar
+    monkeypatch.setattr(calendar, "is_trading_day", lambda region, d: d.weekday() < 5)
+    ist = timezone(timedelta(hours=5, minutes=30))
+    at = lambda h, m=0: datetime(2026, 11, 17, h, m, tzinfo=ist)        # noqa: E731
+    v = M.rotation.VERSION
+    assert M.rotation_day("IN", at(15, 50)) == "2026-11-17" and M.rotation_day("IN", at(15, 35)) == "2026-11-16"
+    assert M.rotation_behind({"as_of": "2026-11-16", "v": v}, "IN", at(16, 0)) is True       # before: current until 18:30 IST
+    assert M.rotation_behind({"as_of": "2026-11-17", "v": v, "settled": False}, "IN", at(17, 0)) is False
+    assert M.rotation_behind({"as_of": "2026-11-17", "v": v, "settled": False}, "IN", at(19, 0)) is True     # once more, settled
+    assert M.rotation_behind({"as_of": "2026-11-17", "v": v, "settled": True}, "IN", at(19, 0)) is False
+    assert M.rotation_behind({"as_of": "2026-11-17", "v": v}, "IN", at(19, 0)) is False                      # a copy kept before this
+
+
+# ---------- LIVE11A-017: a public theme page's revenue keeps its value and period together in a phone's stacked row ----------
+def test_public_theme_revenue_value_and_period_are_one_box(monkeypatch):
+    import re
+    from tests.test_review_live10a import _theme_view
+    _, page = _theme_view(monkeypatch, {"BIG": (12_345.0, "Mar 2026", "₹ crore")})
+    cell = re.search(r'<td data-label="Revenue">(.*?)</td>', page).group(1)
+    assert cell.startswith("<span>") and cell.endswith("</span>") and "Mar 2026" in cell     # one flex item beside the label
+
+
+# ---------- LIVE11A-023: US names in one punctuation ----------
+def test_us_names_end_in_one_punctuation():
+    from app.results import display_name
+    assert [display_name("US", n) for n in ("Apple Inc.", "Amazon.com Inc", "Meta Platforms, Inc.", "MICROSOFT CORP")] == \
+        ["Apple Inc", "Amazon.com Inc", "Meta Platforms Inc", "Microsoft Corp"]
+    assert display_name("IN", "Larsen & Toubro Ltd.") == "Larsen & Toubro Ltd."          # India's names as the exchange lists them

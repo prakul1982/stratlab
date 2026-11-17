@@ -18,7 +18,9 @@ const isQuote = (q: unknown): q is WatchQuote & { seen: number } => {
 /** The prices kept, as the panel's quotes ({key: quote}); empty when nothing is kept or storage can't be read. `since`: the day (ISO) a
  * key's market last traded; a price kept from before it is left out, so a row never paints an older session's price under the newer
  * session's date (LIVE8A-007: 12 Nov's prices under "Closed · last close Fri 13 Nov" until the reads came). */
-export function keptQuotes(who: string, now = Date.now(), store: Pick<Storage, "getItem"> | null = safeStore(), since?: (key: string) => string | null): Record<string, WatchQuote> {
+export function keptQuotes(who: string, now = Date.now(), store: Pick<Storage, "getItem"> | null = safeStore(), since?: (key: string) => string | null,
+  /** LIVE11A-029: a price read during a session that has closed since is left out (the close comes with the first read) */
+  midSession?: (key: string, at: string | null | undefined) => boolean): Record<string, WatchQuote> {
   try {
     const raw = JSON.parse(store?.getItem(`${QUOTES_KEY}.${who}`) ?? "{}") as Kept;
     const out: Record<string, WatchQuote> = {};
@@ -26,6 +28,7 @@ export function keptQuotes(who: string, now = Date.now(), store: Pick<Storage, "
       if (!isQuote(q) || q.price == null || now - q.seen > MAX_AGE_MS) continue;
       const day = since?.(k);
       if (day && (!q.at || String(q.at).slice(0, 10) < day)) continue;
+      if (midSession?.(k, q.at)) continue;
       const { seen: _seen, ...quote } = q;
       out[k] = quote;
     }
