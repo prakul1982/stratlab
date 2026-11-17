@@ -57,3 +57,10 @@ test("LIVE10B-011: the journal offers the tax report's newer trades only while b
   assert.match(page, /taxLast\.slice\(0, 10\) > newestReal && \(j\.tax_new \?\? 1\) > 0 && \(/);
   assert.match(page, /tax_new\?: number;/);
 });
+
+test("LIVE10B-039: a delivery trade whose file's charges leave STT out is marked, with a note under the trades", () => {
+  const page = read("src/pages/trade/JournalPage.tsx");
+  assert.match(page, /\{t\.no_stt && <sup aria-label="leaves STT out">\*<\/sup>\}/);
+  assert.match(page, /data-testid="j-no-stt"/);
+  assert.match(page, /the file leaves STT out, so/);
+});

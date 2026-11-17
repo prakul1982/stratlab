@@ -84,6 +84,8 @@ def _row(t: dict) -> dict:
     """One trade as the page shows it, rounded."""
     out = {k: t.get(k) for k in ("id", "symbol", "u", "segment", "side", "entry_t", "exit_t", "hold_s", "hold_days", "fills",
                                  "src", "expired", "charges_from", "note")}
+    if t.get("no_stt"):
+        out["no_stt"] = True              # its file's charges leave STT out (LIVE10B-039)
     for k, dp in (("qty", 6), ("entry", 4), ("exit", 4), ("gross", 2), ("charges", 2), ("net", 2), ("r", 2)):
         out[k] = J._r(t.get(k), dp)
     out["segment_label"] = J.SEGMENTS.get(t["segment"], t["segment"])

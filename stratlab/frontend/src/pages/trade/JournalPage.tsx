@@ -29,6 +29,8 @@ type Trade = {
   id: string; symbol: string; u: string; segment: string; segment_label: string; currency: string; side: "long" | "short" | null; entry_t: string; exit_t: string;
   qty: number; entry: number; exit: number; gross: number; charges: number; net: number; r: number | null; hold_s: number | null; hold_days: number;
   fills: number; src: "tradebook" | "pnl" | "manual" | "practice"; expired: boolean; charges_from: string; note: Note;
+  /** a delivery trade whose file's charges are less than its STT alone: the file left STT out (LIVE10B-039) */
+  no_stt?: boolean;
 };
 type Row = { key: string; label?: string; n: number; win_rate: number; net: number; avg: number; gross: number; charges: number };
 type Check = { id: string; title: string; status: CheckStatus; detail: string; data: any };
@@ -579,14 +581,16 @@ function Trades({ j, onEdit }: { j: Journal; onEdit: (t: Trade) => void }) {
     { key: "qty", header: "Qty", numeric: true, cell: (t) => qtyText(t.qty) },
     { key: "px", header: "Entry → exit", numeric: true, cell: (t) => `${t.entry.toLocaleString("en-IN", { maximumFractionDigits: 2 })} → ${t.exit.toLocaleString("en-IN", { maximumFractionDigits: 2 })}` },
     { key: "ch", header: "Charges", numeric: true, cell: (t) => (
-      <span title={t.charges_from === "file" ? "As your broker listed them" : t.charges_from === "mixed" ? "As your broker listed them where the file had them, else worked out at the published rates" : t.charges_from === "you" ? "As you entered them" : t.charges_from === "none" ? "None entered" : t.charges_from === "replay" ? "Worked out at the published rates when the replay was played" : "Worked out at the published rates"}>{m(t.charges, 2)}</span>) },
+      <span title={t.charges_from === "file" ? "As your broker listed them" : t.charges_from === "mixed" ? "As your broker listed them where the file had them, else worked out at the published rates" : t.charges_from === "you" ? "As you entered them" : t.charges_from === "none" ? "None entered" : t.charges_from === "replay" ? "Worked out at the published rates when the replay was played" : "Worked out at the published rates"}>{m(t.charges, 2)}{t.no_stt && <sup aria-label="leaves STT out">*</sup>}</span>) },
   ];
+  const noStt = rows.filter((t) => t.no_stt).length;
   return (
     <Card label="Trades">
       <CardHead title="Trades" actions={
         <label className="k-search j-search"><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a symbol or setup" aria-label="Find a symbol or setup" /></label>} />
       {rows.some((t) => t.side !== "long" && t.side !== "short") && <p className="k-note" data-testid="j-no-side">{rows.every((t) => t.side !== "long" && t.side !== "short") ? "Your files don't say whether these trades were long or short" : "Trades with no Long or Short under them: your file doesn't say which they were"}. Add it with Note on a trade.</p>}
       <DataTable csv={{ name: "journal trades", rows }} stack label="Trades" columns={cols} rows={rows.slice(0, shown)} rowKey={(t) => t.id} empty="No trade matches that." />
+      {noStt > 0 && <p className="k-note" data-testid="j-no-stt">* {noStt === 1 ? "1 delivery trade has" : `${noStt.toLocaleString("en-IN")} delivery trades have`} charges, as your broker's file listed them, below the STT alone (0.1% of the buy and of the sale): the file leaves STT out, so {noStt === 1 ? "its charges are" : "their charges are"} understated here and in the charges check.</p>}
       {(rows.length > shown || (shown > 50 && rows.length > 50)) && <div className="k-center">
         {rows.length > shown && <button type="button" className="btn quiet sm" onClick={() => setShown((n) => n + 100)}>Show more ({rows.length - shown} left)</button>}
         {shown > 50 && rows.length > 50 && <ShowLess onLess={() => setShown(50)} />}</div>}

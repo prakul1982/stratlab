@@ -125,3 +125,16 @@ def test_live10b_011_the_journal_says_how_many_tax_trades_are_not_brought_in_yet
     assert c.get("/trade/journal", headers=PRO).json()["tax_new"] == 3
     r = c.post("/trade/journal/import-tax", headers=PRO).json()
     assert r["added"] == 3 and r["journal"]["tax_new"] == 0                     # nothing newer to offer once brought in
+
+
+def test_live10b_039_a_delivery_trade_whose_file_charges_leave_stt_out_is_marked():
+    """ITC 100 @380 -> 490 showed charges of Rs 2.00 from the file, though its STT alone is Rs 87."""
+    from app import journal as J
+    S = J.clean_settings({})
+    line = {"sym": "ITC", "ed": "2024-01-02", "et": "", "xd": "2024-06-03", "xt": "", "qty": 100.0, "bv": 38000.0, "sv": 49000.0,
+            "charges": 2.0, "side": None, "exchange": "NSE"}
+    t = J.line_trades([line], S)[0]
+    assert t["charges"] == 2.0 and t["no_stt"] is True                       # the file's figure kept, and marked
+    assert J.line_trades([{**line, "charges": 120.0}], S)[0]["no_stt"] is False   # a total that holds STT
+    assert J.line_trades([{**line, "charges": None}], S)[0]["no_stt"] is False    # worked out at the rates: STT in
+    assert J.line_trades([{**line, "xd": "2024-01-02", "charges": 2.0}], S)[0]["no_stt"] is False   # intraday: no delivery STT
