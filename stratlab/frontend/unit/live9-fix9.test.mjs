@@ -95,3 +95,11 @@ test("US IPOs: the size without the option and the day a filed offering missed a
   assert.match(page, /sizeText\(\{ \.\.\.r, size: r\.size_base \}\)\} without the underwriters' 15% option/);
   assert.match(page, /Was expected to price \{fmtDate\(r\.expected\)\}/);
 });
+
+// ---------- LIVE9A-025 / 028: one highlighted Themes entry; results prices and moves ----------
+test("the Themes shortcut is plain text on its own page, and results rows are written cleanly", () => {
+  assert.match(src("styles.css"), /\.side-list a\.side-feature\.here \{ border-color: transparent; background: none;/);
+  const page = src("pages/ResultsPage.tsx");
+  assert.match(page, /price\(x\.price, cur, region === "IN" \? 2 : undefined\)/);
+  assert.match(page, /\{i > 0 \? " " : ""\}<Move v=\{v\} bare \/>/);
+});

@@ -90,7 +90,7 @@ test("LIVE6-016: on the Themes page only the menu's Themes entry is highlighted;
   assert.match(shell, /className=\{`side-feature\$\{path\.startsWith\(THEMES\) \? " here" : ""\}`\}/);
   const here = css.match(/\.side-list a\.side-feature\.here \{([^}]*)\}/)?.[1] ?? "";
   assert.match(here, /background: none/);
-  assert.match(here, /border-color: var\(--line-2\)/);                 // no orange edge: it doesn't read as selected
+  assert.match(here, /border-color: transparent/);                     // (updated on purpose, LIVE9A-025: no box at all, not an outline)
   assert.doesNotMatch(here, /orange/);
 });
 
