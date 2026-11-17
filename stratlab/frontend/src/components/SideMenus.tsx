@@ -7,7 +7,7 @@ import { VIEW_AS_CHOICES, choiceToPlan, planToChoice } from "../lib/viewAs";
 import { inWords, marketState } from "../lib/marketHours";
 import { useMinute } from "../lib/clock";
 import type { Market, Me } from "../lib/types";
-import { Close, Compass, Download, Gear, Help, Layers, LogOut, Share, Shield, Updown, User, Wallet } from "./Icons";
+import { Close, Compass, Download, Gear, Help, Layers, LogOut, Share, Shield, Sparkle, Updown, User, Wallet } from "./Icons";
 import { openFeedback } from "./FeedbackOpen";
 
 /** Feedback's icon, here and not in Icons.tsx: Icons rides in the file every visitor downloads, and the landing page's budget
@@ -109,8 +109,8 @@ export function MarketsNow({ markets }: { markets: Market[] }) {
   );
 }
 
-/** The person's initials button, with the plan, opening Account, Settings, Plan, Invite, Get the app, All features, Help, the
- * tour and Sign out. The plan is named once, on Plan (DI-022); Help opens the help page, the tour is its own item (DI-014). */
+/** The person's initials button, with the plan, opening Account, Settings, Connected accounts, the AI assistant, Plan, Invite, Get
+ * the app, All features, Help, the tour and Sign out. The plan is named once, on Plan (DI-022); Help opens the help page, the tour is its own item (DI-014). */
 export function AccountMenu({ me, onTour, onGo }: { me: Me | null; onTour: () => void; onGo: () => void }) {
   const { open, setOpen, btn, panel } = usePop();
   const id = useId();
@@ -146,6 +146,10 @@ export function AccountMenu({ me, onTour, onGo }: { me: Me | null; onTour: () =>
           {email && <div className="side-pop-head" role="presentation"><span className="muted acct-email">{email}</span></div>}
           <Link role="menuitem" to="/account" onClick={done(onGo)}><User size={16} />Account</Link>
           <Link role="menuitem" to="/settings" onClick={done(onGo)}><Gear size={16} />Settings</Link>
+          {/* NAV3: My space's own menu is gone (one menu for every page), so its two personal links are here, beside Settings; the AI
+              assistant only for a plan that has it, not as a locked upsell (DI-017, DI-018) */}
+          <Link role="menuitem" to="/settings#accounts" onClick={done(onGo)}><Wallet size={16} />Connected accounts</Link>
+          {me?.plan_info?.features?.assistant !== false && <Link role="menuitem" to="/assistant" onClick={done(onGo)}><Sparkle size={16} />Connect an AI assistant</Link>}
           <Link role="menuitem" to="/plans" onClick={done(onGo)}><Wallet size={16} />Plan{plan && <span className="plan-tag">{plan}</span>}</Link>
           <Link role="menuitem" to="/invite" onClick={done(onGo)}><Share size={16} />Invite friends</Link>
           <Link role="menuitem" to="/app" onClick={done(onGo)}><Download size={16} />Get the app</Link>

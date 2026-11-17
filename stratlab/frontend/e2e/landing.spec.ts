@@ -15,7 +15,8 @@ async function open(page: Page) {
   });
   await page.goto("/");
   // the landing page's own heading, inside .lp (R8V-008: the start-up block's h1 now has the same words as the page's)
-  await expect(page.locator(".lp").getByRole("heading", { name: /Test it, research it, track it/ })).toBeVisible({ timeout: 30_000 });
+  // (updated on purpose, NAV3, CX-1: one promise in the hero)
+  await expect(page.locator(".lp").getByRole("heading", { name: /Is your trading idea skill or luck/ })).toBeVisible({ timeout: 30_000 });
   return errors;
 }
 
@@ -30,7 +31,8 @@ test("landing: the three spaces with Trade first, alerts, plans, FAQ and markets
   }
   // the sections, and the menu, go Trade, Invest, Money: the strategy lab is where StratLab began
   expect(await page.locator("main section[id]").evaluateAll((els) => els.map((e) => e.id).filter((id) => id !== "top"))).toEqual(order);
-  await expect(page.locator('nav[aria-label="Sections"] a')).toHaveText(["Trade", "Invest", "Money", "Alerts", "Plans", "FAQ", "Library", "Companies", "Blog"]);
+  // (updated on purpose, NAV3/LIVE9A-019: the header is the public menu, the same on every public page; the sections stay in this order)
+  await expect(page.locator('nav[aria-label="Site"] a')).toHaveText(["Library", "Companies", "Themes", "Blog", "Plans", "About", "Contact"]);
   await expect(page.locator(".lp-space")).toHaveText([/Trade/, /Invest/, /Money/]);
   await expect(page.locator(".lp-space .lp-space-list li"), "each space lists three things it does").toHaveCount(9);
   await expect(page.locator("#trade .lp-options")).toContainText("Paper trade option structures");
@@ -38,8 +40,10 @@ test("landing: the three spaces with Trade first, alerts, plans, FAQ and markets
   await expect(page).toHaveTitle("StratLab: backtest trading ideas, research stocks, track money");
   for (const sel of ['meta[name="description"]', 'meta[property="og:description"]']) await expect(page.locator(sel)).toHaveAttribute("content", /trad/i);
   // what ships today, one line each
-  // the long lists show a few and fold the rest ("12 more Trade tools"): open them, everything is still there
+  // the long lists show a few and fold the rest: open them, everything is still there
+  // (updated on purpose, NAV3, CX-1: the folds name what is in them, "Every Trade tool", with no "16 more tools" count anywhere on the page)
   const more = page.locator(".lp-more > summary");
+  for (const t of await page.locator("summary").allInnerTexts()) expect(t, "a teaser count").not.toMatch(/\d+ more\b/i);
   expect(await more.count(), "the tool lists fold").toBeGreaterThanOrEqual(3);
   for (const s of await more.all()) await s.click();
   const research = page.locator("#invest");
@@ -178,14 +182,15 @@ test("landing: no fake buttons, no card that looks picked, the bitcoin sign, and
   await expect(crypto.locator("svg.lp-btc")).toHaveCount(1);
   await expect(page.locator("#markets")).not.toContainText("฿");
   if (info.project.name === "phone") {
-    await expect(page.locator('nav[aria-label="Sections"]')).toBeHidden();
+    await expect(page.locator('nav[aria-label="Site"]')).toBeHidden();
     // its name is its visible word, and it is at least 40px to tap (R5V-016)
     const summary = page.locator(".lp-menu > summary");
     await expect(summary).toHaveText("Menu");
     expect((await summary.boundingBox())!.height).toBeGreaterThanOrEqual(40);
     await summary.click();
-    const menu = page.getByRole("navigation", { name: "Sections (menu)" });
-    await expect(menu.getByRole("link")).toHaveText(["Trade", "Invest", "Money", "Alerts", "Plans", "FAQ", "Library", "Companies", "Blog"]);
+    // (updated on purpose, NAV3/LIVE9A-019: the public menu, as on every public page)
+    const menu = page.getByRole("navigation", { name: "Site (menu)" });
+    await expect(menu.getByRole("link")).toHaveText(["Library", "Companies", "Themes", "Blog", "Plans", "About", "Contact"]);
     await page.keyboard.press("Escape");                                          // Esc closes it, and focus goes back to the button
     await expect(menu).toBeHidden();
     await expect(summary).toBeFocused();
@@ -276,18 +281,23 @@ test("/plans: one heading and one line, the cards in view, the public header, in
   if (info.project.name !== "phone") expect(top, "the cards start above the fold").toBeLessThan(420);
   // the same header as the other public pages
   // (updated on purpose, R44/AS1: one menu on every public page, components/PublicFrame.tsx PUBLIC_MENU)
-  if (info.project.name !== "phone") await expect(page.locator('nav[aria-label="Sections"] a')).toHaveText(["Home", "Library", "Companies", "Themes", "Blog", "Plans", "About", "Contact"]);
+  // (updated on purpose, NAV3/LIVE9A-019: the same list everywhere, the landing page's header and index.html's too; the logo is the way home)
+  if (info.project.name !== "phone") await expect(page.locator('nav[aria-label="Site"] a')).toHaveText(["Library", "Companies", "Themes", "Blog", "Plans", "About", "Contact"]);
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "index, follow");
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", "https://stratlab.studio/plans");
   // Free, Basic and Pro stand at the same x in each table (wide screens: a phone's tables scroll or wrap)
   if (info.project.name !== "phone") {
-    const xs = await page.locator("#compare table").evaluateAll((ts) => ts.map((t) => [...t.querySelectorAll("thead th")].slice(1).map((th) => Math.round(th.getBoundingClientRect().x))));
+    // (updated on purpose, NAV3: the tables in view: the 12-row glance and, once opened, the full comparison's)
+    await page.locator("#compare summary", { hasText: "The full comparison, row by row" }).click();
+    const xs = await page.locator("#compare table").evaluateAll((ts) => ts.filter((t) => (t as HTMLElement).offsetParent !== null).map((t) => [...t.querySelectorAll("thead th")].slice(1).map((th) => Math.round(th.getBoundingClientRect().x))));
     // one table per group of features since DP1-022 (Trading, Research and alerts, Money and tax) and the limits: every one
     // with its plan columns at the same place
     expect(xs.length).toBeGreaterThanOrEqual(3);
     for (const x of xs.slice(1)) expect(x).toEqual(xs[0]);
   }
+  if (info.project.name === "phone") await page.locator("#compare summary", { hasText: "The full comparison, row by row" }).click();
   await expect(page.getByRole("row", { name: /Paper trading sessions at a time/ })).toContainText("1 (5-market-day trial)");
+  await expect(page.getByRole("row", { name: /Paper trading sessions at once/ })).toContainText("1 (5-market-day trial)");          // the glance's row says it too
   expect(errors).toEqual([]);
 });
 
@@ -349,6 +359,7 @@ test("landing: 'ten markets', 'facts, not tips' and 'never real orders' are neve
   expect(count("never real orders"), "never real orders").toBeLessThanOrEqual(1);
   const hero = (await page.locator(".lp-hero").innerText()).toLowerCase();
   expect(hero).not.toMatch(/ten markets|never tips|facts|real orders|paper trading only/);
-  expect(hero).toContain("one place for trading ideas, company research and your own money.");
+  // (updated on purpose, NAV3, CX-1: the hero's line is the one promise, not "one place for trading ideas, company research and your own money")
+  expect(hero).toContain("write it in plain words. stratlab tests it on years of real prices after every charge");
   expect(errors).toEqual([]);
 });

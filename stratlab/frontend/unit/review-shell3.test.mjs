@@ -233,9 +233,8 @@ test("moved addresses keep the query and hash; the space switch is buttons, not 
     assert.match(main, new RegExp(`path="${from}" element=\\{<Redirect to="[^"]+" />\\}`), from);
   }
   assert.doesNotMatch(main, /<Navigate to="/);
+  // (updated on purpose, NAV3: the space switch is gone, one menu for every page; each space's entries are a group named by the space)
   const shell = read("src/components/Shell.tsx");
-  assert.match(shell, /<div className="space-switch" role="group" aria-label="Space">/);
-  assert.match(shell, /<button key=\{v\} type="button" aria-pressed=\{space === v\}/);
-  assert.doesNotMatch(shell.slice(shell.indexOf("function SpaceSwitch")), /role="radio/);
-  assert.match(read("src/styles.css"), /\.space-switch button\[aria-pressed="true"\]/);
+  assert.doesNotMatch(shell, /space-switch|SpaceSwitch|role="radio/);
+  assert.match(shell, /className="side-section" role="group" aria-labelledby=\{`side-sec-\$\{sec\.space\}`\}/);
 });

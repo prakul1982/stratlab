@@ -4,26 +4,31 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { register } from "node:module";
+
+register("data:text/javascript," + encodeURIComponent(`export async function resolve(s, c, next) {
+  try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
-test("R16: the menu's first row, in every space, carries the highlighted Themes link with the Themes icon, beside the space's home", () => {
+// (updated on purpose, NAV3, CX-1 "Themes appears twice"; owner OK 16 Nov to merge menu entries): Themes is no longer buried behind the Invest
+// switch, so the highlighted pill that answered R16 is gone: Themes is an entry of the one menu, in view in every view and in the phone's
+// drawer, once.
+test("R16/NAV3: Themes is in view in the one menu on every page, as one entry, not a second highlighted link", async () => {
   const shell = read("src/components/Shell.tsx");
-  assert.match(shell, /export const THEMES = "\/research\/themes";/);
-  // the first row of the scrolling menu, before the space's own entries, so every space (and the phone's drawer) shows it; it shares
-  // the home link's row, so the menu is no taller (IA-2: a 1280x800 laptop's menu doesn't scroll)
-  // owner, 7 Nov (changed on purpose): on My space and Invest only, not Trade or Money
-  assert.match(shell, /<div className="side-list side-home">\s*<NavLink to=\{homeOf\(space\)\} end>[^\n]*\n[^\n]*\n\s*\{\(space === "invest" \|\| space === "mine"\) && <Link to=\{THEMES\} className=\{`side-feature[^`]*`\}[^>]*><Compass size=\{16\} \/>Themes<\/Link>\}/);
-  const nav = shell.slice(shell.indexOf('<nav ref={sideScroll} className="side-groups"'));
-  assert.ok(nav.indexOf('className={`side-feature') < nav.indexOf("{spaceGroups ?? minePart}"));
-  // never marked current: on the Themes page Invest's own entry is the one highlighted item (ui-lint R7)
-  assert.doesNotMatch(shell.match(/<Link to=\{THEMES\}[^>]*>/)[0], /aria-current|active/);
+  assert.doesNotMatch(shell, /side-feature/);
+  // the one menu draws every space's entries on every page (MENU), so Themes is never behind a switch
+  assert.match(shell, /\{MENU\.map\(\(sec\) =>/);
+  assert.doesNotMatch(shell, /SpaceSwitch|space-switch/);
+  const { MENU } = await import("../src/lib/nav.ts");
+  const all = MENU.flatMap((s) => s.groups.map((g) => g.label));
+  assert.equal(all.filter((l) => l === "Themes").length, 1);
 });
 
-test("R16: the Themes link has an accent edge and tint", () => {
-  const css = read("src/styles.css");
-  assert.match(css, /\.side-home \{ flex-direction: row;/);
-  assert.match(css, /\.side-list a\.side-feature \{[^}]*border-left: 3px solid var\(--orange\);[^}]*background: var\(--orange-soft\);/);
+test("R16/NAV3: the menu's first row is My space, the one home in the menu", () => {
+  const shell = read("src/components/Shell.tsx");
+  assert.match(shell, /<div className="side-list side-home">\s*<NavLink to=\{MINE_HOME\} end>/);
+  assert.match(read("src/styles.css"), /\.side-home \{ flex-direction: row;/);
 });
 
 test("R16: Themes stays an entry of Invest's menu (its breadcrumb is Invest › Themes)", async () => {

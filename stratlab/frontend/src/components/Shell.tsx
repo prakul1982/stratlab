@@ -3,13 +3,13 @@ import { TOUR_MENU, tourMenuHeld } from "../lib/tourMenu";
 import { useDialogFocus } from "./kit/Dialog";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { Bell, Book, Calendar, Chevron, Close, Compass, Gear, Layers, Library, Lens, Markets, Menu, News, Pin, Plus, Pulse, Receipt, Search, Sparkle, Upload, Wallet } from "./Icons";
+import { Bell, Book, Calendar, Chevron, Close, Compass, Layers, Library, Lens, Markets, Menu, News, Pin, Plus, Pulse, Receipt, Search, Sparkle, Upload, Wallet } from "./Icons";
 import { Logo } from "./Logo";
 import { VERDICT_FACT } from "./ui";
 import { AccountMenu, MarketsNow } from "./SideMenus";
 import { useScrollMemory } from "../lib/scrollMemory";
-import { NAV, locate, locateGroup, startOf, type NavGroup, type NavPage } from "../lib/nav";
-import { MINE_HOME, MINE_NAME, SPACE_IDS, SPACES, homeOf, menuView, sharedPage, spaceOf, spaceParam, type SpaceView } from "../lib/spaces";
+import { MENU, locate, locateGroup, startOf, type NavGroup, type NavPage } from "../lib/nav";
+import { MINE_HOME, MINE_NAME, menuView, spaceOf, type SpaceView } from "../lib/spaces";
 import { titleFor } from "../lib/title";
 import { usePersisted } from "../lib/persist";
 import { usePins } from "../lib/pins";
@@ -36,14 +36,8 @@ const ICONS: Record<string, (p: { size?: number }) => ReactNode> = { book: Book,
  * so two people on one browser keep their own menus. A section with no entry follows the rule: the one you are in is open. */
 const OPEN_KEY = "stratlab.side.open";
 const NO_CHOICE: Record<string, boolean> = {};
-/** The pages Mine's own menu links to: opening one keeps Mine's menu showing. */
-export const MINE_LINKS = ["/news", "/alerts", "/research/watchlist", "/calendar"];
-/** Menu entries Mine's own menu has too (IA-1): moving between their tabs keeps Mine's menu showing. */
-export const MINE_GROUPS = ["watch", "calendar"];
-/** Pages that belong to the person, not to a space (Account, Settings, the assistant, the app, invites): they open Mine's menu. */
+/** Pages that belong to the person, not to a space (Account, Settings, the assistant, the app, invites): My space's. */
 const MINE_PAGES = ["/account", "/settings", "/assistant", "/app", "/invite"];
-/** The page the menu's highlighted shortcut opens, under the search box in every space (R16). */
-export const THEMES = "/research/themes";
 
 /** `ask`: the analytics question (Tracking), in the page column after the page (LIVE8B-004: above it, its arrival after the first paint
  * pushed the page down, CLS 0.19 a time). */
@@ -94,22 +88,9 @@ export function Shell({ children, ask }: { children: ReactNode; ask?: ReactNode 
   const path = loc.pathname;
   const at = locate(path);
   const onGroup = locateGroup(path);
-  // a link into another space shows that space's menu, so where you are is always in it. Mine keeps its own menu on the
-  // pages it links to (pinned pages, Briefs, Connected accounts): that is what it is for.
-  const keepsMine = !!at && (pins.has(at.page.to) || MINE_LINKS.includes(at.page.to) || MINE_GROUPS.includes(at.group.id));
-  // the menu comes from the address itself (lib/spaces menuView), so it can't lag behind a saved choice that loads later
-  // the space of the page before this one in this visit: a page in several spaces' menus (the Calendar's tabs) opens inside it
-  const lastSpace = useRef<SpaceView | null>(null);
-  const space = menuView(path, saved, keepsMine, { search: loc.search, from: lastSpace.current });
-  useEffect(() => {
-    lastSpace.current = space;
-    // ...and its address says so (?space=trade), so a bookmark, a shared link or a reload keeps it (owner, 4 Nov)
-    if (space !== "mine" && sharedPage(path) && space !== spaceOf(path) && spaceParam(loc.search) !== space) {
-      const q = new URLSearchParams(loc.search);
-      q.set("space", space);
-      nav({ pathname: path, search: `?${q}`, hash: loc.hash }, { replace: true, state: loc.state });
-    }
-  }, [space, path]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // the space the page is in (its breadcrumb and the main button), from the address itself (lib/spaces menuView), so it can't lag
+  // behind a saved choice that loads later. NAV3: the menu is the same on every page; only these follow the space.
+  const space = menuView(path, saved);
   // remember it on this device, so the front door opens the space last used (only real spaces and Mine's own pages).
   // Runs when the page changes, not when the saved choice does: picking a space in the switcher saves it first and
   // navigates a moment later, and the page still showing must not save its own space over that choice.
@@ -129,7 +110,8 @@ export function Shell({ children, ask }: { children: ReactNode; ask?: ReactNode 
     ? <NavLink key={to} to={to} title={title} end>{icon}{label}</NavLink>
     : <Link key={to} to={to} title={title} className={active ? "active" : undefined} aria-current={active ? "page" : undefined}>{icon}{label}</Link>);
   // `bare`: a page listed under its section's heading, without an icon (the heading has it), so the list reads as one section's pages
-  const pageLink = (p: NavPage, name: string = p.label, bare = false) => {
+  // `mark` false: a shortcut to a page that is in the menu too (Pinned, NAV3), never a second highlighted item (ui-lint R7)
+  const pageLink = (p: NavPage, name: string = p.label, bare = false, mark = true) => {
     const Icon = ICONS[p.icon] ?? Compass;
     // a page that is a paid feature this plan lacks carries its plan, with a lock (lib/gates.ts)
     const gate = gateFor(p.to);
@@ -142,7 +124,7 @@ export function Shell({ children, ask }: { children: ReactNode; ask?: ReactNode 
     const label = locked ? <>{name}<span className="side-lock" data-plan={PLAN_NAME[gatePlan(gate!)]} aria-hidden="true" /></> : name;
     // inside a notebook the notebook under Notebooks is the one selected entry: Notebooks itself isn't highlighted too
     // (owner, 26 Oct: both had the selected background)
-    const here = at?.page.to === p.to && !(p.to === "/notebooks" && path.startsWith("/n/"));
+    const here = mark && at?.page.to === p.to && !(p.to === "/notebooks" && path.startsWith("/n/"));
     return item(p.to, bare ? null : <Icon />, label, here, off ? `${p.line} (${gate!.whole ? "" : "part of it "}on the ${PLAN_NAME[gatePlan(gate!)]} plan)` : p.line);
   };
   const allNotebooks = "/notebooks";
@@ -171,15 +153,25 @@ export function Shell({ children, ask }: { children: ReactNode; ask?: ReactNode 
   );
   // the notebooks list shows under Notebooks while you are in a notebook (or the list), so it never makes the menu long
   const inNotebooks = path === allNotebooks || path.startsWith("/n/") || path === "/new";
-  // IA-2 (item 36, owner 30 Oct: "you have squeezed the menu bar too much"): the 14 headings stay, and under each heading are its pages,
-  // the same pages, names, plan locks and order as its tabs, so nothing is reachable only through a tab or the breadcrumb's menu. The
-  // section you are in is open; the others fold, each with its own open/close button, and what the person opened or folded is kept.
-  // A heading with one page (Themes, Trade journal) is that page, with no list under it.
-  const current = space === "mine" ? null
-    : onGroup?.space === space ? onGroup.group.id
-    : at && NAV[space].groups.some((g) => g.id === at.group.id) ? at.group.id : null;
+  // IA-2 (item 36, owner 30 Oct: "you have squeezed the menu bar too much"): under each heading are its pages, the same pages, names,
+  // plan locks and order as its tabs, so nothing is reachable only through a tab or the breadcrumb's menu. The section you are in is
+  // open; the others fold, each with its own open/close button, and what the person opened or folded is kept. A heading with one page
+  // (Themes, Trade journal) is that page, with no list under it.
+  // NAV3 (CX-1, 16 Nov: about 55 links, the Calendar in three spaces' menus, Themes twice, a switcher of four spaces): one menu for every
+  // page, on a laptop and in a phone's drawer alike: My space, then each space's entries under the space's name, then More tools. 14
+  // entries, each once; every page keeps its address.
+  const current = onGroup?.group.id ?? at?.group.id ?? null;
   const isOpen = (g: NavGroup) => opened[g.id] ?? g.id === current;
   const toggle = (g: NavGroup) => { const now = isOpen(g); setOpened((cur) => ({ ...cur, [g.id]: !now })); };
+  // NAV3: the one menu is longer than a space's was, so on a short laptop screen the page you are on is scrolled into the menu's view
+  // (within the menu only: the page itself never moves)
+  useEffect(() => {
+    const box = sideScroll.current;
+    const here = box?.querySelector<HTMLElement>("[aria-current=page], a.in-section");
+    if (!box || !here) return;
+    const top = here.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
+    if (top < box.scrollTop || top + here.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTop = Math.max(0, top - box.clientHeight / 3);
+  }, [path]);
   // coming back into a section opens it again, even if it was folded the last time the person was in it
   useEffect(() => {
     if (current && opened[current] === false) setOpened((cur) => { const { [current]: _, ...rest } = cur; return rest; });
@@ -187,7 +179,7 @@ export function Shell({ children, ask }: { children: ReactNode; ask?: ReactNode 
   // The heading opens its section's first page. It is the selected item only when its own page is showing (a one-page section, or
   // the section's page of cards); when one of its pages is, that page is the selected one and the heading is only bold (owner, 26
   // Oct: never two selected at once). Inside a notebook the notebook is selected, not Strategies or Notebooks too.
-  const entryLink = (g: NavGroup, sp: Exclude<SpaceView, "mine">) => {
+  const entryLink = (g: NavGroup) => {
     const Icon = ICONS[g.icon] ?? Compass;
     const inIt = g.id === current && !(g.id === "strategies" && path.startsWith("/n/"));
     const here = inIt && (g.pages.length === 1 || onGroup?.group.id === g.id);
@@ -196,72 +188,59 @@ export function Shell({ children, ask }: { children: ReactNode; ask?: ReactNode 
     const locked = locks.every(Boolean) ? locks[0] : null;
     const label = locked ? <>{g.label}<span className="side-lock" data-plan={PLAN_NAME[gatePlan(locked)]} aria-hidden="true" /></> : g.label;
     const tabs = g.pages.length > 1 ? `${g.label}: ${g.pages.map((p) => p.label).join(", ")}` : g.pages[0].line;
-    const to = startOf(g, sp);
+    const to = startOf(g);
     return <Link key={to} to={to} title={locked ? `${tabs} (on the ${PLAN_NAME[gatePlan(locked)]} plan)` : tabs}
       className={here ? "active" : inIt ? "in-section" : undefined} aria-current={here ? "page" : undefined}><Icon />{label}</Link>;
   };
-  const spaceGroups = space === "mine" ? null : (
-    <div className="side-list side-nav side-entries">
-      {NAV[space].groups.map((g) => {
-        const many = g.pages.length > 1;
-        const open = many && isOpen(g);
-        return (
-          <div key={g.id} className="side-entry" data-group={g.id} data-open={many ? String(open) : undefined}>
-            <div className="side-head">
-              {entryLink(g, space)}
-              {many && (
-                // named by its words (hidden), not an aria-label, so a page's own "Stock" field is the only thing labelled "Stock"
-                <button type="button" className="side-toggle" aria-expanded={open} aria-controls={`side-sub-${g.id}`}
-                  title={open ? `Fold ${g.label}` : `Show the pages of ${g.label}`} onClick={() => toggle(g)}>
-                  <span className="side-chev" aria-hidden="true"><Chevron size={12} /></span><span className="sr-only">{g.label} pages</span>
-                </button>
-              )}
-            </div>
-            {many && (
-              <div id={`side-sub-${g.id}`} className="side-list side-sub" hidden={!open}>
-                {g.pages.map((p) => (
-                  <Fragment key={p.to}>
-                    {pageLink(p, p.label, true)}
-                    {p.to === allNotebooks && inNotebooks && notebookList}
-                  </Fragment>
-                ))}
-              </div>
-            )}
+  const entry = (g: NavGroup) => {
+    const many = g.pages.length > 1;
+    const open = many && isOpen(g);
+    return (
+      <div key={g.id} className="side-entry" data-group={g.id} data-open={many ? String(open) : undefined}>
+        <div className="side-head">
+          {entryLink(g)}
+          {many && (
+            // named by its words (hidden), not an aria-label, so a page's own "Stock" field is the only thing labelled "Stock"
+            <button type="button" className="side-toggle" aria-expanded={open} aria-controls={`side-sub-${g.id}`}
+              title={open ? `Fold ${g.label}` : `Show the pages of ${g.label}`} onClick={() => toggle(g)}>
+              <span className="side-chev" aria-hidden="true"><Chevron size={12} /></span><span className="sr-only">{g.label} pages</span>
+            </button>
+          )}
+        </div>
+        {many && (
+          <div id={`side-sub-${g.id}`} className="side-list side-sub" hidden={!open}>
+            {g.pages.map((p) => (
+              <Fragment key={p.to}>
+                {pageLink(p, p.label, true)}
+                {p.to === allNotebooks && inNotebooks && notebookList}
+              </Fragment>
+            ))}
           </div>
-        );
-      })}
+        )}
+      </div>
+    );
+  };
+  // each space's entries under the space's name (a group named for screen readers), then More tools on its own
+  const menuList = (
+    <div className="side-list side-nav side-entries">
+      {MENU.map((sec) => (sec.label
+        ? <div key={sec.label} className="side-section" role="group" aria-labelledby={`side-sec-${sec.space}`} data-space={sec.space ?? undefined}>
+            <span className="side-section-title" id={`side-sec-${sec.space}`}>{sec.label}</span>
+            {sec.groups.map(entry)}
+          </div>
+        : <div key="apart" className="side-section side-apart">{sec.groups.map(entry)}</div>))}
     </div>
   );
-  const minePart = (
-    <>
-      <section className="side-group" data-group="pinned">
-        <div className="side-head"><span className="side-title plain">Pinned</span></div>
-        <div className="side-list side-nav" id="side-pinned">
-          {/* a tab renamed by IA-1 is pinned with its entry's name ("Find stocks: Figures"): "Figures" alone says nothing in this menu */}
-          {pins.pins.map((l) => pageLink(l.page, l.page.was ? `${l.group.label}: ${l.page.label}` : l.page.label))}
-          {!pins.pins.length && <span className="small muted side-note-wrap" title="Open the menu in a page's breadcrumb to pin it here">Nothing pinned yet. Pin a page from its breadcrumb menu.</span>}
-        </div>
-      </section>
-      {/* the everyday things, each one tap from My space; the AI assistant only for a plan that has it, not as a locked
-          upsell on Free and Basic (DI-017, DI-018) */}
-      <section className="side-group" data-group="mine-more">
-        <div className="side-list side-nav">
-          {item("/news", <News />, "Today's brief", at?.page.to === "/news", "Today's brief, past issues and the subscribe switches")}
-          {item("/research/watchlist", <Pin />, "Watchlist", at?.group.id === "watch", "Watchlist: the companies you follow, and Alerts: a message when a stock or the market does what you asked about")}
-          {item("/calendar", <Calendar />, "Calendar", at?.group.id === "calendar", "Calendar: results, corporate actions, IPOs, market events and your own money dates")}
-          {item("/settings#accounts", <Wallet />, "Connected accounts", path === "/settings" && loc.hash === "#accounts", "Your holdings, funds and tradebooks: the files StratLab reads")}
-          {item("/settings", <Gear />, "Settings", path === "/settings" && loc.hash !== "#accounts", "Notifications, what you see first, the theme and the connection check")}
-          {me?.plan_info?.features?.assistant !== false && item("/assistant", <Sparkle />, "Connect an AI assistant", path === "/assistant", "Keys that let Claude or ChatGPT use your StratLab")}
-        </div>
-      </section>
-    </>
+  // the person's own shortcuts, under the menu, only once something is pinned (a page's breadcrumb menu pins it)
+  const pinned = pins.pins.length > 0 && (
+    <section className="side-group" data-group="pinned">
+      <div className="side-head"><span className="side-title plain">Pinned</span></div>
+      <div className="side-list side-nav" id="side-pinned">
+        {/* a tab renamed by IA-1 is pinned with its entry's name ("Screener: Figures"): "Figures" alone says nothing in this menu */}
+        {pins.pins.map((l) => pageLink(l.page, l.page.was ? `${l.group.label}: ${l.page.label}` : l.page.label, false, false))}
+      </div>
+    </section>
   );
-  const goSpace = (s: SpaceView) => {
-    setOpen(false);
-    if (s !== space) setSpace(s);
-    nav(homeOf(s, focus));
-  };
-  const homeLabel = space === "mine" ? MINE_NAME : `${SPACES[space].label} home`;
   // the space's main action, in the menu and on a phone's top bar alike (DI-021: the phone's "+" was always New notebook)
   const main = mainAction(space, focus, !!me?.has_holdings);
   // on the page the main button opens, it goes to the place on it for that action (`data-main-action`: My Holdings' upload; a notebook's
@@ -283,7 +262,6 @@ export function Shell({ children, ask }: { children: ReactNode; ask?: ReactNode 
           <button className="side-close" aria-label="Close menu" onClick={() => setOpen(false)}><Close size={18} /></button>
           <button className="side-hide" aria-label="Hide the menu" title="Hide the menu (more room for the page)" onClick={() => setSlim(true)}><Chevron size={14} /></button>
         </div>
-        <SpaceSwitch space={space} onPick={goSpace} />
         {/* the space's main button, on every page (owner, 5 Nov: on My Holdings it vanished and left a gap); on the page it opens it
             brings that page's own place for it into view instead of opening the page again. Not marked current: the menu's own entry
             for the page is the one highlighted item (ui-lint R7) */}
@@ -294,16 +272,13 @@ export function Shell({ children, ask }: { children: ReactNode; ask?: ReactNode 
         </button>
       </div>
       <nav ref={sideScroll} className="side-groups" aria-label="Main" data-fade={fade}>
-        {/* Themes, one of StratLab's best tools (owner, 7 Nov: "buried" in Invest), highlighted on the menu's first row in My space and Invest and
-            in the phone's drawer, beside the space's home: no row of its own, so the menu still fits a 1280x800 laptop unscrolled (IA-2).
-            It stays in Invest's menu too, where its breadcrumb puts it; that entry is the one highlighted item on its page (ui-lint R7), so
-            on the Themes page the pill loses its orange and is a plain link (LIVE6-016: both looked selected) */}
+        {/* My space first: the person's own home (NAV3: the one home in the menu; each space's home is the first step of its pages' breadcrumb).
+            Themes is an entry of its own in every view now, so the highlighted Themes pill beside it (owner, 7 Nov: "buried") is gone */}
         <div className="side-list side-home">
-          <NavLink to={homeOf(space)} end><Compass size={16} /><span className="side-home-label">{homeLabel}</span></NavLink>
-          {/* owner, 7 Nov: on My space and Invest only, where people research; Trade and Money stay as they were */}
-          {(space === "invest" || space === "mine") && <Link to={THEMES} className={`side-feature${path.startsWith(THEMES) ? " here" : ""}`} title="Themes: map a sector or trend and see the listed companies linked to it"><Compass size={16} />Themes</Link>}
+          <NavLink to={MINE_HOME} end><Compass size={16} /><span className="side-home-label">{MINE_NAME}</span></NavLink>
         </div>
-        {spaceGroups ?? minePart}
+        {menuList}
+        {pinned}
       </nav>
       {/* the menu's faded bottom edge says there is more; this says it in words and scrolls to it (R5O-038). The mouse
           wheel and the keyboard reach the same items, so it is left out of the Tab order and of screen readers. */}
@@ -345,7 +320,7 @@ export function Shell({ children, ask }: { children: ReactNode; ask?: ReactNode 
       </header>
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
       {sidebar}
-      <main className="main" id="main" tabIndex={-1}><div className="page"><div className="crumb-row"><PageBreadcrumb mine={space === "mine"} space={space} />{at && <HubTabs at={at} path={path} />}</div>{children}</div></main>
+      <main className="main" id="main" tabIndex={-1}><div className="page"><div className="crumb-row"><PageBreadcrumb />{at && <HubTabs at={at} path={path} />}</div>{children}</div></main>
       {ask}{/* after the page (LIVE8B-004): its coming and going never moves the page, and "Skip to content" lands on the page, not on it */}
       <Suspense fallback={null}>
         {search && <SearchPalette onClose={() => setSearch(false)} />}
@@ -386,19 +361,4 @@ function useScrollFade(ref: { current: HTMLElement | null }): "top" | "bottom" |
     return () => { el.removeEventListener("scroll", look); stopSize(); mo.disconnect(); };
   }, [ref]);
   return fade;
-}
-
-/** Mine · Trade · Invest · Money at the top of the menu: which space's menu shows. A click goes to that space's home (the
- * active one too), so these are buttons (the current one pressed), not a radio group: a radio group moves with the arrow
- * keys, and an arrow key must not open a page. Every page stays reachable from any of them (search, links, the breadcrumb). */
-function SpaceSwitch({ space, onPick }: { space: SpaceView; onPick: (s: SpaceView) => void }) {
-  const views: [SpaceView, string, string][] = [["mine", MINE_NAME, "Your own space: your money, the markets and what is coming up"],
-    ...SPACE_IDS.map((s) => [s, SPACES[s].label, SPACES[s].what] as [SpaceView, string, string])];
-  return (
-    <div className="space-switch" role="group" aria-label="Space">
-      {views.map(([v, label, what]) => (
-        <button key={v} type="button" aria-pressed={space === v} title={what} data-space={v} onClick={() => onPick(v)}>{label}</button>
-      ))}
-    </div>
-  );
 }

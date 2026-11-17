@@ -159,7 +159,8 @@ test("R39: on a phone the plan switch's buttons and the footer's policy links ar
   assert.doesNotMatch(phone, /font-size/);
   // the landing page's tabs, nav and footer landmarks stay as they are
   const lp = read("src/pages/Login.tsx");
-  for (const re of [/role="tablist"/, /role="tab"/, /role="tabpanel"/, /aria-selected=\{k === i\}/, /<nav aria-label="Sections">/, /<footer className="lp-foot">/]) assert.match(lp, re);
+  // (updated on purpose, NAV3/LIVE9A-019: the landing page's header nav is the public menu, named "Site" as on every public page)
+  for (const re of [/role="tablist"/, /role="tab"/, /role="tabpanel"/, /aria-selected=\{k === i\}/, /<nav aria-label="Site">/, /<footer className="lp-foot">/]) assert.match(lp, re);
 });
 
 test("round 39: on a phone, chips and small buttons are 44 px to tap; the desktop keeps its density", () => {
@@ -171,7 +172,8 @@ test("round 39: on a phone, chips and small buttons are 44 px to tap; the deskto
   assert.match(block, /\.k-chip \{ height: 44px; \}/);
   assert.match(block, /\.btn\.sm, \.k-card-head \.btn\.sm[^{]*\{ min-height: 44px; \}/);
   assert.match(block, /\.side-toggle \{ width: 44px; height: 44px; \}/);
-  assert.match(block, /\.space-switch button[^{]*\{ height: auto; min-height: 44px; \}/);
+  // (updated on purpose, NAV3: the space switch is gone, one menu for every page; the menu's links keep their 44px)
+  assert.match(block, /\.side-title, \.side-list a[^{]*\{ height: auto; min-height: 44px; \}/);
   // the desktop sizes are untouched
   assert.match(css, /\.k-chip \{ flex: none; height: 32px;/);
   assert.match(css, /\.side-toggle \{ flex: none; display: grid; place-items: center; width: 26px; height: 26px;/);

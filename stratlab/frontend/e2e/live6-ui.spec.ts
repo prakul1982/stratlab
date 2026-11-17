@@ -75,19 +75,17 @@ test("on a phone the heatmap's settings fold into one row and the map starts on 
 });
 
 // LIVE6-016: on the Themes page the orange Themes pill and the menu's Themes entry both looked selected
+// (updated on purpose, NAV3 and LIVE9A-025: the pill is gone; Themes is one entry of the one menu, the only thing lit on its page)
 test("on the Themes page only the menu's Themes entry is highlighted (LIVE6-016)", async ({ page }, info) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const errors = await open(page, "/research/themes?region=IN", "Themes", session);
-  const pill = page.locator(".side-feature");
-  await expect(pill).toHaveClass(/\bhere\b/);
-  const look = await pill.evaluate((e) => { const s = getComputedStyle(e); return { bg: s.backgroundColor, edge: s.borderLeftColor, top: s.borderTopColor }; });
-  expect(look.bg === "rgba(0, 0, 0, 0)" || look.bg === "transparent", `the pill's background ${look.bg}`).toBe(true);
-  expect(look.edge, "no orange edge").toBe(look.top);
+  await expect(page.locator(".side-feature")).toHaveCount(0);
+  await expect(page.locator(".side-groups").getByRole("link", { name: "Themes", exact: true })).toHaveCount(1);
   await expect(page.locator(".side-groups a[aria-current=page]")).toHaveCount(1);
+  await expect(page.locator('.side-groups .side-entry[data-group="themes"] a')).toHaveAttribute("aria-current", "page");
   await shot(page, "themes-side", info);
-  // on another page the pill is the orange feature again
   await page.goto("/invest");
-  await expect(pill).not.toHaveClass(/\bhere\b/);
+  await expect(page.locator(".side-groups").getByRole("link", { name: "Themes", exact: true })).toHaveCount(1);
   await sane(page, errors);
 });
 
