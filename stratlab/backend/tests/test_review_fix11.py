@@ -164,3 +164,20 @@ def test_holdings_names_kept_in_capitals_are_shown_in_the_one_style():
     got = [i["name"] for i in M._named_now(items)]
     assert got == ["State Bank of India", "ICICI Bank", "NIPPON INDIA GOLD BEES ETF", "TCS"]
     assert items[0]["name"] == "STATE BANK OF INDIA"                      # what is stored is left as it is
+
+
+# ---------- LIVE10B-019: the same screen saved again is refused in words ----------
+def test_saving_the_same_screen_twice_is_refused_in_words(monkeypatch):
+    import pytest
+    from app import db, screens
+    store = {}
+    monkeypatch.setattr(db, "get_setting", store.get)
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    monkeypatch.setattr(screens, "_symbols", lambda region, f: [])
+    monkeypatch.setattr(screens, "clean", lambda region, f: dict(f or {}))
+    req = {"name": "R test IT quality", "region": "IN", "filters": {"pe_max": 30}, "sort": "name"}
+    assert screens.save("u1", req, 10)["name"] == "R test IT quality"
+    with pytest.raises(screens.ScreenError, match="already saved with these conditions"):
+        screens.save("u1", {**req, "name": "r test it quality "}, 10)
+    assert screens.save("u1", {**req, "filters": {"pe_max": 25}}, 10)            # other conditions: a screen of its own
+    assert len(screens.items("u1")) == 2

@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { useMarketRefresh } from "../lib/marketLive";
-import { axisInrFor, money, price, fmtDate, fmtDateTime, IST, tzLabel } from "../lib/format";
+import { axisInrFor, dayIn, money, price, fmtDate, fmtDateTime, IST, tzLabel } from "../lib/format";
 import { chainStamp, exchangeTime, optionsMarket } from "../lib/marketHours";
 import { HELP } from "../lib/help";
 import { blankOptions, clampTyped, FALLBACK_HOURS, convertOptLimit, expiryChoices, IMPORTED, isAutoName, OPTIONS_DRAFT, OPTIONS_NOTES, legName, legWords, levelText, lotOf, mergeDraft, offsetsIn, optMoney, payoff, pickedExpiry, PICKS, POPULAR_FALLBACK, rangeText, recordedLine, sessionFor, signalFrom, startWhenText, signalLine, spotText, staleQuoteLine, STRUCTURES, STT_NOTE, timingIssues } from "../lib/options";
@@ -612,6 +612,8 @@ export function OptionsPage() {
                 onChange={(v) => patch({ expiry: v })} />
               {/* the expiry priced, once there is a price: the one the pill names is the one the numbers use (R11C-007) */}
               {und && <span className="k-note" data-testid="opt-expiry-note">{[preview ? expiryName(preview.expiry) : exp ? expiryName(exp) : "", (preview ? preview.lot : lot) != null ? `lot ${preview ? preview.lot : lot} ${s.underlying}` : ""].filter(Boolean).join(" · ")}</span>}
+              {/* LIVE10B-017: an expiry that is today says so ("Start over" after midday gave today's contract with nothing saying it ends in hours) */}
+              {(preview?.expiry ?? exp)?.slice(0, 10) === dayIn(new Date(), IST) && <span className="k-note" data-testid="opt-expiry-today">This expiry is today{s.exchange === "NFO" || s.exchange === "BFO" ? ": the contracts end at 15:30 IST" : ""}.</span>}
               {sameExpiry && <span className="k-note" data-testid="opt-expiry-same">{s.underlying} has monthly expiries only, so Nearest and Monthly are the same day.</span>}
             </div>
           </FieldGroup>

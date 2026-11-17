@@ -759,8 +759,13 @@ def save(uid: str, req: dict, limit: int, sid: str | None = None) -> dict | None
                 old["matched"] = _symbols(s["region"], s["filters"])
             _write(uid, row_)
             return old
+        # LIVE10B-019: the same name, market and conditions again is refused in words, not saved as a twin chip beside the first
+        same = next((x for x in row_["items"] if str(x.get("name") or "").strip().lower() == str(s.get("name") or "").strip().lower()
+                     and x.get("region") == s["region"] and x.get("filters") == s["filters"]), None)
         if len(row_["items"]) >= limit:
             raise LimitReached(limit)
+        if same:
+            raise ScreenError(f"“{same['name']}” is already saved with these conditions.")
         s.update(id=secrets.token_hex(6), created_at=_now(), updated_at=None, matched=_symbols(s["region"], s["filters"]),
                  last_sent_at=None)
         row_["items"].append(s)

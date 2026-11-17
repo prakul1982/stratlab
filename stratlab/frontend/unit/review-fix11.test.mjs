@@ -118,3 +118,18 @@ test("LIVE10B-043: Settings says a holdings import's day once, in India's time",
   assert.match(page, /note=\{h\?\.source && h\.updated_at \? noun\(h\.count, "stock", "stocks"\) : note\(h, noun\(h\?\.count, "stock", "stocks"\)\)\}/);
   assert.match(page, /on \$\{fmtDate\(h\.updated_at, \{ year: false, tz: "Asia\/Kolkata" \}\)\}/);
 });
+
+test("LIVE10B-031: the Enough trades card says what its count means when the run kept no words for it", () => {
+  const page = read("src/pages/ExperimentPage.tsx");
+  assert.match(page, /\{\(c\.detail \|\| \(c\.id === "sample" && d\)\) && <p className="k-small k-muted">\{c\.detail \|\| sampleWords\(d!\.trades\)\}<\/p>\}/);
+  const fn = page.slice(page.indexOf("export function sampleWords"));
+  const sampleWords = new Function("n", fn.slice(fn.indexOf("{") + 1, fn.lastIndexOf("}")));
+  assert.equal(sampleWords(16), "16 trades, a small sample: a few lucky trades could decide the result.");
+  assert.equal(sampleWords(9), "9 trades, too few to tell skill from luck.");
+  assert.equal(sampleWords(40), "40 trades, enough to judge.");
+});
+
+test("LIVE10B-017: the options builder says when the expiry priced is today", () => {
+  const page = read("src/pages/OptionsPage.tsx");
+  assert.match(page, /\(preview\?\.expiry \?\? exp\)\?\.slice\(0, 10\) === dayIn\(new Date\(\), IST\) && <span className="k-note" data-testid="opt-expiry-today">This expiry is today\{s\.exchange === "NFO" \|\| s\.exchange === "BFO" \? ": the contracts end at 15:30 IST" : ""\}\.<\/span>/);
+});
