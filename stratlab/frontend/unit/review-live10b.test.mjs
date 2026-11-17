@@ -35,3 +35,11 @@ test("LIVE10B-013: the paper chart's forming candle takes the server's open, hig
   assert.match(page, /forming\.current = \{ t: f\.t, o: f\.o \?\? f\.c, h: f\.h \?\? f\.c, l: f\.l \?\? f\.c \}/);
   assert.match(page, /if \(f\.o != null\) forming\.current\.o = f\.o;/);
 });
+
+test("LIVE10B-028: the options stop dialog says the open legs are squared off", async () => {
+  const { OPTIONS_STOP_DIALOG } = await import("../src/lib/paperText.ts");
+  assert.match(OPTIONS_STOP_DIALOG, /^Open paper legs are squared off at the last price before the stop, and the trade is booked\./);
+  const page = read("src/pages/OptionsSession.tsx");
+  assert.match(page, /\{OPTIONS_STOP_DIALOG\}<\/ConfirmDialog>/);
+  assert.doesNotMatch(page, /Any open paper position is left as it is/);
+});

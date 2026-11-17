@@ -75,3 +75,22 @@ def test_live10b_013_the_snapshot_sends_the_forming_candles_open_high_and_low():
     from app import live
     src = inspect.getsource(live.LiveSession.snapshot)
     assert '"o": forming["o"], "h": forming["h"]' in src and '"l": forming["l"], "c": forming["c"]' in src
+
+
+def test_live10b_028_stopping_an_options_session_squares_off_its_open_legs():
+    """A short straddle left open at the stop stayed "Open since 14:05" for good, though its contracts expired that day."""
+    from tests.test_options import at, contracts, opt_row, quotes, straddle, StubData
+    from app.options.engine import OptionsEngine
+    from app.options.session import OptionSession
+    e = OptionsEngine(straddle())
+    e.step(at("09:31"), 25000, contracts(), quotes(25000), True)
+    s = OptionSession(None, opt_row(straddle(), e.dump()), StubData())
+    s.quotes = quotes(25100)
+    assert s.engine.pos
+    st = s.final_state(at("10:05"))
+    assert st.get("pos") is None and s.engine.pos is None                      # nothing left open
+    last = s.engine.trades[-1]
+    assert last["why"] == "Session stopped" and all(l["exit"] is not None for l in last["legs"])
+    assert st["equity_curve"][-1]["eq"] == round(s.engine.cash, 2)            # the account is its cash once flat
+    # nothing open: the state as it was
+    assert OptionSession(None, opt_row(straddle()), StubData()).final_state(at("10:05"))["equity_curve"] == []
