@@ -43,3 +43,11 @@ test("LIVE10B-028: the options stop dialog says the open legs are squared off", 
   assert.match(page, /\{OPTIONS_STOP_DIALOG\}<\/ConfirmDialog>/);
   assert.doesNotMatch(page, /Any open paper position is left as it is/);
 });
+
+test("LIVE10B-016/030: under a day to expiry theta is said per hour, in the summary and the Greeks table", () => {
+  const src = read("src/components/OptionModel.tsx");
+  assert.match(src, /const hourly = maxDays - days < 1;/);
+  assert.match(src, /<Stat label="Net theta" value=\{inr\(hourly \? sc\.theta \/ 24 : sc\.theta\)\} note=\{hourly \? "an hour: under a day to expiry" : "a day"\} \/>/);
+  assert.match(src, /header: hourly \? "Theta \/ hour" : "Theta \/ day"/);
+  assert.match(src, /hourly=\{hourly\} \/>/);
+});
