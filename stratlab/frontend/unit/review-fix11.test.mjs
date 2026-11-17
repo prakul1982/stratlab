@@ -139,3 +139,12 @@ test("LIVE10B-042: on a phone the email button is full width and the footer's li
   assert.match(css, /\.email-signin-row \.btn \{ flex: 1 1 100%; justify-content: center; \}/);
   assert.match(css, /\.legal-links\[aria-label="Policies"\], \.legal-links\[aria-label="Explore"\] \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
 });
+
+test("LIVE10B-037: a ready-made idea's rules carry no \"AI's reading\" tag (no AI read them)", async () => {
+  assert.match(read("src/pages/Home.tsx"), /instName: null, usedAI: false, fallback: "" \},/);
+  const { readAs } = await import("../src/lib/rules.ts");
+  const s = { side: "long", entry: [{ l: { t: "ema", p: 20 }, op: "xa", r: { t: "ema", p: 50 } }], exit: [{ l: { t: "ema", p: 20 }, op: "xb", r: { t: "ema", p: 50 } }],
+    tf: "1d", risk: { sl: 2 }, entryJoin: "all" };
+  const { lines } = readAs(s, { mentioned: ["exit", "tf", "sl"], usedAI: false }, true);
+  assert.ok(lines.every((l) => l.mark !== "ai"), JSON.stringify(lines));
+});

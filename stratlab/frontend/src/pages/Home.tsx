@@ -100,7 +100,8 @@ function Starters({ where }: { where?: Where | null }) {
     create({
       strategy: { ...s, text: st.text, entry: p.entry, exit: p.exit, risk: { ...s.risk, ...p.risk } },
       instrument: null, question: st.question,
-      gaps: { mentioned: ["exit", "tf", ...Object.keys(p.risk)], notes: [], instName: null, usedAI: true, fallback: "" },
+      // a ready-made idea's rules are read word for word here, never by the AI: no "AI's reading" tag on them (LIVE10B-037)
+      gaps: { mentioned: ["exit", "tf", ...Object.keys(p.risk)], notes: [], instName: null, usedAI: false, fallback: "" },
     });
   };
   return (
