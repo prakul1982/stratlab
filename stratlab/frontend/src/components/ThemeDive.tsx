@@ -105,9 +105,13 @@ export function MembersCard({ r, region, dive }: { r: SectorAI; region: Region; 
   const total = p?.total ?? new Set(groups.flatMap((g) => g.rows.map((c) => c.ticker))).size;
   const ev = evidenceOf(dive);
   const named = p?.named ?? 0, base = (p?.base ?? 0) - named, added = p?.added ?? 0, inds = p?.industries ?? [];
+  // LIVE10A-040: an Industry column that says the same industry on every row (Cement's 41 cards each "Industry: Cement & Cement Products")
+  // is left out; the theme's industries are said once in the counts line
+  const indOf = (c: Co) => (region === "US" ? plainIndustry(c.industry) : c.industry) || "";
+  const oneIndustry = new Set(groups.flatMap((g) => g.rows.map(indOf))).size <= 1;
   const cols: Column<Co>[] = [
     { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (c) => <><Name r={region} sym={c.ticker} name={c.name} /><span className="k-sub-line k-muted">{c.ticker}</span></> },
-    { key: "i", header: "Industry", wrap: true, cell: (c) => (region === "US" ? plainIndustry(c.industry) : c.industry) || dash },
+    ...(oneIndustry ? [] : [{ key: "i", header: "Industry", wrap: true, cell: (c: Co) => indOf(c) || dash } as Column<Co>]),
     { key: "m", header: "Market value", numeric: true, cell: (c) => amount(caps.get(c.ticker) ?? c.cap ?? null, region) },
     { key: "w", header: "What it does, in its own words", wrap: true, cell: (c) => { const w = ownWords(c.what, c.name); return w ? <>“{w}”</> : <span className="k-muted">{NO_WORDS}</span>; } },
     { key: "f", header: "In the theme by", cell: (c) => (c.base ? <>{c.basis === "list" ? "Named in the theme's list" : "Official industry"}

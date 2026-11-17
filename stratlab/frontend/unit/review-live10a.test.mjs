@@ -99,3 +99,9 @@ test("LIVE10A-012: a heatmap group head too narrow for its name shows the short 
   assert.equal(groupWords("Power", 20, w), "Power");                                   // no short name: as it is (the CSS cuts it)
   assert.match(read("src/components/chart/Treemap.tsx"), /<span className="hm-group-name">\{groupWords\(g\.name,/);
 });
+
+test("LIVE10A-040: a theme whose companies are all of one industry has no Industry column", () => {
+  const dive = read("src/components/ThemeDive.tsx");
+  assert.match(dive, /const oneIndustry = new Set\(groups\.flatMap\(\(g\) => g\.rows\.map\(indOf\)\)\)\.size <= 1;/);
+  assert.match(dive, /\.\.\.\(oneIndustry \? \[\] : \[\{ key: "i", header: "Industry"/);
+});
