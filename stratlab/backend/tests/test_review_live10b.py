@@ -156,3 +156,14 @@ def test_live10b_040_a_monthly_filers_figure_left_out_of_some_months_has_no_prev
     assert weeder["prev"] is None and weeder["change_prev"] is None and weeder["step"] == "month"
     assert weeder.get("older") is True and not rows["Tractor"].get("older")
     assert rows["Tractor"]["prev"]["period"] == "2026-09"
+
+
+def test_live10b_008_a_hand_trade_on_a_day_that_has_not_come_is_refused(w):
+    from datetime import timedelta
+    from app import journal_routes
+    from tests.test_journal import manual
+    c = w["client"]
+    ahead = (journal_routes.today() + timedelta(days=5)).isoformat()
+    r = manual(c, entry_date=ahead, exit_date=ahead)
+    assert r.status_code == 400 and "hasn't come yet" in r.json()["detail"]["message"]
+    assert manual(c).status_code == 200

@@ -734,13 +734,17 @@ function AddTrade({ onClose, onSaved }: { onClose: () => void; onSaved: (x: Jour
   // times are the exchange's own clock: India's for the Indian segments, New York's for US stocks
   const zone = f.segment === "us" ? tzLabel(ET) : f.segment === "crypto" ? undefined : tzLabel(IST);
   // what's missing is said under its own box, not only in a toast (R5O-029)
-  const [bad, setBad] = useState<Partial<Record<"symbol" | "qty" | "entry_price" | "exit_price", string>>>({});
+  const [bad, setBad] = useState<Partial<Record<"symbol" | "qty" | "entry_price" | "exit_price" | "entry_date" | "exit_date", string>>>({});
   const save = async () => {
     const n = (v: string) => Number(v.replace(/,/g, ""));
     const price = (v: string) => (!v.trim() ? "Enter the price." : !(Number.isFinite(n(v)) && n(v) > 0) ? "Enter a price above 0." : undefined);
     const problems = { symbol: f.symbol.trim() ? undefined : "Enter the symbol.", qty: n(f.qty) > 0 ? undefined : "Enter a quantity above 0.",
-      entry_price: price(f.entry_price), exit_price: price(f.exit_price) };
+      entry_price: price(f.entry_price), exit_price: price(f.exit_price),
+      // a day ahead of today, or an entry after the exit, is said under its box (LIVE10B-008: an entry on 20 Nov, after a 17 Nov exit, said nothing)
+      entry_date: f.entry_date > today ? "This day hasn't come yet." : f.entry_date > f.exit_date ? "The entry is after the exit." : undefined,
+      exit_date: f.exit_date > today ? "This day hasn't come yet." : undefined };
     setBad(problems);
+    if (problems.entry_date || problems.exit_date) { notify("Check the dates."); return; }
     if (Object.values(problems).some(Boolean)) { notify("Fill in the symbol, quantity and both prices."); return; }
     setBusy(true);
     try {
@@ -759,10 +763,10 @@ function AddTrade({ onClose, onSaved }: { onClose: () => void; onSaved: (x: Jour
           <Field label="Segment">{(id) => <Select id={id} value={f.segment} onChange={(v) => setF(moveSegment(f, v))} options={ADD_SEGMENTS} />}</Field>
           <Field label="Long or short">{(id) => <Select id={id} value={f.side} onChange={(v) => setF({ ...f, side: v })} options={[{ value: "long", label: "Long (bought first)" }, { value: "short", label: "Short (sold first)" }]} />}</Field>
           <Field label="Quantity" error={bad.qty} inputMode="decimal" value={f.qty} onChange={set("qty")} />
-          <DateField label="Entry date" value={f.entry_date} onChange={(d) => set("entry_date")({ target: { value: d } })} />
+          <DateField label="Entry date" value={f.entry_date} max={today} error={bad.entry_date} onChange={(d) => set("entry_date")({ target: { value: d } })} />
           <Field label="Entry time" optional>{(id) => <TimeInput id={id} label="Entry time" zone={zone} value={f.entry_time} onChange={(v) => setF({ ...f, entry_time: v })} allowEmpty />}</Field>
           <Field label="Entry price" error={bad.entry_price} inputMode="decimal" value={f.entry_price} onChange={set("entry_price")} />
-          <DateField label="Exit date" value={f.exit_date} onChange={(d) => set("exit_date")({ target: { value: d } })} />
+          <DateField label="Exit date" value={f.exit_date} max={today} error={bad.exit_date} onChange={(d) => set("exit_date")({ target: { value: d } })} />
           <Field label="Exit time" optional>{(id) => <TimeInput id={id} label="Exit time" zone={zone} value={f.exit_time} onChange={(v) => setF({ ...f, exit_time: v })} allowEmpty />}</Field>
           <Field label="Exit price" error={bad.exit_price} inputMode="decimal" value={f.exit_price} onChange={set("exit_price")} />
           <Field label={abroad ? "Charges ($)" : "Charges (₹)"} optional inputMode="decimal" value={f.charges} onChange={set("charges")}

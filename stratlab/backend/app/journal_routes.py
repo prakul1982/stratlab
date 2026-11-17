@@ -3,7 +3,7 @@
 Everything here is the signed-in user's own trades. Free keeps the last 50 closed trades with the trade list, the
 journal fields and the basic stats; Basic and up keep every trade and add the honesty checks, the breakdowns, the
 R-multiples and paper vs real. Facts about past trades only: nothing here says what to do next."""
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -291,6 +291,8 @@ def add_trade(req: ManualReq, profile=Depends(current_profile)):
     et, xt = _clock(req.entry_time), _clock(req.exit_time)
     if (xd, xt or "99") < (ed, et or "00"):
         M.err(400, "bad_dates", "The exit is before the entry. Check the dates and times.")
+    if xd > (today() + timedelta(days=1)).isoformat():       # a day's slack for a reader whose day is ahead of India's (LIVE10B-008)
+        M.err(400, "bad_dates", "That exit is on a day that hasn't come yet. Check the dates.")
     j = J.load(profile["id"])
     if len(j["manual"]) >= J.MAX_MANUAL:
         M.err(400, "too_many", f"The journal keeps up to {J.MAX_MANUAL:,} trades added by hand. Import your tradebook instead.")

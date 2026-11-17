@@ -103,3 +103,9 @@ test("LIVE10B-007: a chart's window keeps its last point on a time axis (relativ
   assert.equal(ms + 1e-9, ms);
   assert.ok(ms + 1e-9 * ms > ms);
 });
+
+test("LIVE10B-008: the hand-trade dialog says a day ahead, or an entry after the exit, under its box", () => {
+  const page = read("src/pages/trade/JournalPage.tsx");
+  assert.match(page, /entry_date: f\.entry_date > today \? "This day hasn't come yet\." : f\.entry_date > f\.exit_date \? "The entry is after the exit\." : undefined,/);
+  assert.match(page, /<DateField label="Entry date" value=\{f\.entry_date\} max=\{today\} error=\{bad\.entry_date\}/);
+});
