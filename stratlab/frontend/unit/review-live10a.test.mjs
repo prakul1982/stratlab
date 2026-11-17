@@ -111,3 +111,10 @@ test("LIVE10A-039: the index-change notices say what the press release holds, wi
   assert.doesNotMatch(page, /couldn't be read from it here/);
   assert.match(page, /Each press release lists the stocks going in and out of the index\./);
 });
+
+test("LIVE10A-037: a results row's purpose sits on its own line under the name, never cut after it", () => {
+  const css = read("src/styles-invest.css");
+  assert.match(css, /\.res-sub > \.res-name, \.res-sub > \.res-purpose \{ display: block;/);
+  assert.doesNotMatch(css, /\.res-name \+ \.res-purpose::before \{ content: " · "; \}/);
+  assert.match(css, /\.res-name \+ \.res-purpose\.res-plain \{ display: none; \}/);          // a plain results meeting keeps two lines
+});
