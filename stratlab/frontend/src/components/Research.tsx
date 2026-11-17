@@ -200,7 +200,7 @@ const TERMS: Record<string, string> = {
 
 /** A note longer than this under a figure is a footnote under the grid ("Jun 2025 had other income of Rs 15,119 crore against a median of Rs 4,464 crore...": five
  * lines beside a -24.6%, so its row was four times as tall as its neighbours, LIVE1A-062). A short one stays under its label. */
-const LONG_NOTE = 90;
+const LONG_NOTE = 60;
 
 /** A figure of a range in the measure's own unit, short: "12", "0.5", "25%" (no ".0"). */
 function rangeFig(v: number, unit: string | null | undefined): string {
@@ -233,7 +233,10 @@ const industryWord = (industry?: string | null): string => (/\bbank/i.test(indus
 export function MetricsGrid({ groups, currency, industry }: { groups: MetricGroup[]; currency: string; industry?: string | null }) {
   const used = Object.entries(TERMS).filter(([k]) => groups.some((g) => g.items.some((m) => m.label === k)));
   const foot: { n: number; label: string; text: string }[] = [];
-  for (const g of groups) for (const m of g.items) if (m.note && m.note.length > LONG_NOTE) foot.push({ n: foot.length + 1, label: m.label, text: m.note });
+  // LIVE9B-012: a group where only some rows have a basis gives those as numbered notes too, not a Basis column empty in three of its four rows
+  // (Sales growth, Profit growth); and a basis too long for a narrow cell is a note as well (Div yield's ran to five lines)
+  const sparse = (g: MetricGroup) => { const n = g.items.filter((m) => m.note).length; return n > 0 && n * 2 < g.items.length; };
+  for (const g of groups) for (const m of g.items) if (m.note && (m.note.length > LONG_NOTE || sparse(g))) foot.push({ n: foot.length + 1, label: m.label, text: m.note });
   const mark = (m: { label: string; note?: string | null }) => foot.find((f) => f.label === m.label && f.text === m.note);
   const anyBar = groups.some((g) => g.items.some((m) => bandPosition(m.label, m.value, industry)));
   // LIVE4-013: the note says which spans are this industry's, or that they are the same for all (a bank and a defence maker had identical

@@ -679,6 +679,9 @@ td.num, .num { font-family: var(--sans); }
 .lp-hero { padding: clamp(40px, 7vw, 96px) 0 clamp(32px, 4vw, 56px); border-bottom: 1px solid var(--line); }
 .lp-hero-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: clamp(32px, 5vw, 72px); align-items: center; }
 .lp-hero-solo { grid-template-columns: minmax(0, 1fr); }   /* an address of its own with no demo beside the heading (RC2B-032) */
+/* /login and /signup: the sign-in in one centred 640px column, as the gated pages show it (.gate), the heading at the app's size (LIVE9B-012) */
+.lp-hero-login { max-width: 640px; }
+.lp-hero-login .lp-own-h1 { font-size: var(--t-h1); max-width: none; line-height: 1.1; }
 .lp-h1 { font-size: clamp(44px, 6.2vw, 80px); line-height: 1; font-weight: 400; letter-spacing: -.035em; max-width: 12ch; }
 .lp-h1 em { color: var(--orange); }
 .lp-lede { font-size: clamp(18px, 1.8vw, 22px); line-height: 1.45; color: var(--ink-2); max-width: 38ch; }
@@ -1163,7 +1166,9 @@ body:has(main .k-state.error button, main .k-state.error a.btn) .banner .account
 .screens-ranges .k-table :is(th, td):first-child { width: auto; }
 .screens-ranges .k-input-unit { --unit-w: 30px; }
 .screens-ranges .k-input { height: 38px; padding: 0 var(--unit-w, 30px) 0 10px; font-size: 14px; }
-.screens-fname { display: inline-flex; flex-wrap: wrap; gap: 2px 4px; align-items: center; font-size: 14px; }
+/* LIVE9B-012: the (i) follows the label's last word, never wrapping under it on a line of its own (6 of 9 rows were taller for it) */
+.screens-fname { display: block; font-size: 14px; }
+.screens-fname > :last-child { display: inline-flex; vertical-align: middle; margin-left: 4px; }
 .screens-filters .k-chipset { gap: 6px; }
 @media (max-width: 420px) { .screens-ranges .k-table :is(th, td):nth-child(n+2) { width: 88px; } .screens-ranges .k-input { padding-left: 8px; } }
 
@@ -2405,6 +2410,10 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .mine-movers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .mine-movers li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--s3); align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .mine-movers li:last-child { border-bottom: 0; }
+/* LIVE9B-012: the watchlist and Coming up share a row; the shorter list's rows share out the card's height, so neither ends with a block of
+   nothing under its last row (the watchlist sat ~110px short of Coming up) */
+.mine-slot[data-card="watch"] .mine-movers, .mine-slot[data-card="coming"] .mine-tl { flex: 1 0 auto; }
+.mine-movers li, .mine-tl-i { flex: 1 0 auto; }
 .mine-movers a { display: flex; flex-direction: column; min-width: 0; color: inherit; text-decoration: none; }
 .mine-movers a .k-stat-d { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mine-movers .px { font-weight: 500; }
@@ -3155,3 +3164,7 @@ th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
 @media print { .k-report { display: none; } }
 /* f4: the workbook's plan note on its own line under the theme's download buttons (components/ThemeChanges.tsx) */
 .theme-wb-lock { flex-basis: 100%; order: 1; }
+/* LIVE9B-012: Holdings' "Where your stocks stand": the four totals as a compact table with the notes beside it on a wide screen */
+.h-sum { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s4); align-items: start; }
+.h-sum-notes { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
+@media (min-width: 900px) { .h-sum { grid-template-columns: minmax(0, 560px) minmax(0, 1fr); } }

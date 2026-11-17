@@ -53,3 +53,27 @@ test("LIVE9B-008: the money calendar links the filing instead of writing its add
   assert.match(src, /\{tag && <span className=\{`badge mc-cat/);
   assert.match(read("src/styles.css"), /\.mc-ev\.untagged \{ grid-template-columns: minmax\(0, 1fr\); \}/);
 });
+
+test("LIVE9B-011: the Trade home's journal card is as short as its neighbours (no four-line caveat, no dangling dot)", () => {
+  const src = read("src/pages/SpaceHomes.tsx");
+  assert.doesNotMatch(src, /F&O lines in your tax report are kept there as totals, not counted here/);
+  assert.doesNotMatch(src, /closed trade"\)\} · /);
+});
+
+test("LIVE9B-012: owner patterns: centred sign-in, net worth said once, even home cards, compact holdings totals, sparse bases as notes, screens CSV in the header", () => {
+  assert.match(read("src/pages/Login.tsx"), /\$\{login \? " lp-hero-login" : ""\}/);
+  const css = read("src/styles.css");
+  assert.match(css, /\.lp-hero-login \{ max-width: 640px; \}/);
+  assert.match(css, /\.mine-movers li, \.mine-tl-i \{ flex: 1 0 auto; \}/);
+  assert.match(css, /@media \(min-width: 900px\) \{ \.h-sum \{ grid-template-columns: minmax\(0, 560px\) minmax\(0, 1fr\); \} \}/);
+  assert.match(css, /\.screens-fname \{ display: block; font-size: 14px; \}/);
+  const nw = read("src/pages/money/NetWorthPage.tsx");
+  assert.doesNotMatch(nw, /\{ id: "net", k: <b>Net worth<\/b>/);
+  assert.match(read("src/pages/HoldingsPage.tsx"), /<div className="h-sum">\n\s*<FigureTable label="Where your stocks stand"/);
+  const r = read("src/components/Research.tsx");
+  assert.match(r, /const LONG_NOTE = 60;/);
+  assert.match(r, /m\.note && \(m\.note\.length > LONG_NOTE \|\| sparse\(g\)\)/);
+  const sc = read("src/pages/Screens.tsx");
+  assert.match(sc, /<CsvButton name="screen results" label="Companies that match"/);
+  assert.doesNotMatch(sc, /<DataTable csv="screen results"/);
+});

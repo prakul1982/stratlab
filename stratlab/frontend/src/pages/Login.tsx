@@ -327,7 +327,8 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
       {/* VR1-170: /help starts at the questions: no hero with a second "Help" title, the home page's tagline and a sign-in button above them */}
       {helpOnly && error && <p className="banner lp-wrap" role="alert">{error}</p>}
       {!helpOnly && <section id="top" className="lp-hero ruled">
-        <div className={`lp-wrap lp-hero-grid${full ? "" : " lp-hero-solo"}`}>
+        {/* /login and /signup: one centred column the width of the sign-in on a gated page, not a block in the left 45% (LIVE9B-012) */}
+        <div className={`lp-wrap lp-hero-grid${full ? "" : " lp-hero-solo"}${login ? " lp-hero-login" : ""}`}>
           <div className="stack g22 lp-hero-copy">
             {/* an address of its own (/help, /faq, /pricing, /about) leads with its own heading and line, not the home page's
                 hero under a renamed eyebrow (DI-033) */}

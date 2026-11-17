@@ -428,10 +428,11 @@ export function NetWorthPage() {
           </span>
           {restated && <span className="k-note">{restated}</span>}
         </div>
+        {/* what you own and owe beside the net worth they make: the net worth itself is the headline, not a third line of the table under it
+            as well (LIVE9B-012: ₹22,23,546 said three times on one card) */}
         <FactTable label="Where you stand" itemHead="Total" figureHead="Now" numeric rows={[
           { id: "assets", k: "What you own", v: inr(t.assets) },
           { id: "loans", k: "What you owe", v: inr(t.liabilities) },
-          { id: "net", k: <b>Net worth</b>, v: <b>{inr(t.net)}</b> },
         ]} />
       </div>
     );

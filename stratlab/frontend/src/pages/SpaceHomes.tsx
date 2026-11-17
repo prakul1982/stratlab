@@ -105,13 +105,14 @@ export function TradeHome() {
     { ...TRADE_TOP[1], testId: "paper-summary",
       status: rows === null ? null : running.length ? `${running.length} running` : rows.length ? ["None running", ...notRunning(rows)].join(" · ") : "" },
     { ...TRADE_TOP[2],
-      // the journal and the tax report are two uploads of different trades: F&O lines kept in the tax report as totals are not round trips here (R10O carry-over of R7M-013)
-      ...(journal !== null && journal !== "none" && journal.count ? { line: "Your real trades as round trips, after charges. F&O lines in your tax report are kept there as totals, not counted here." } : {}),
-      // the figure named: the trades' total after charges, not a per-trade expectancy (R7O-012: "11 closed trades · ₹3")
+      // the figure named: the trades' total, after charges as the card's line says, not a per-trade expectancy (R7O-012: "11 closed trades · ₹3").
+      // Short, as the other cards' feet are: on a phone the strip's cards are one height, and the journal's four-line caveat about the tax
+      // report's F&O totals (said on the journal page itself) and a three-line status stretched every card ~150 px past its text (LIVE9B-011)
       status: journal === null ? null : journal !== "none" && journal.count
         // the amount's minus stays with its number on a narrow card (R57-003)
         // one span: the footer is a flex box, and loose pieces wrapped as "net / after / charge / s" (R58-003)
-        ? <span>{plural(journal.count, "closed trade")} · <span className="nowrap">{money(journal.net, "INR")}</span> net after charges</span> : "",
+        // two pieces that each stay whole, the comma with the first: no "·" left dangling at a line's end on a narrow card (LIVE9B-011)
+        ? <span><span className="nowrap">{plural(journal.count, "closed trade")},</span> <span className="nowrap">{money(journal.net, "INR")} net</span></span> : "",
       // a net loss isn't shown with the green "live" dot
       plain: journal !== null && journal !== "none" && journal.net < 0 },
     { to: "/library", icon: <Library size={18} />, title: "Strategy library", line: "Published rules, each with the result of its checks." },
