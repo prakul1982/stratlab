@@ -93,3 +93,13 @@ test("LIVE10B-014/033/045/003: paper start says it starts flat; one minus and gr
   assert.match(login, /\$\{signup \? "Sign up" : "Sign in"\} with your Google account or your email address/);
   assert.match(read("src/components/EmailSignIn.tsx"), /\{signup \? "Sign up" : "Sign in"\} with email<\/label>/);
 });
+
+test("LIVE10B-007: a chart's window keeps its last point on a time axis (relative slack, not 1e-9 on milliseconds)", () => {
+  const src = read("src/components/chart/XYChart.tsx");
+  assert.match(src, /const eps = 1e-9 \* Math\.max\(1, Math\.abs\(a\), Math\.abs\(b\)\);/);
+  assert.match(src, /in1 = Math\.max\(0, lowerBound\(X, b \+ eps\) - 1\);/);
+  // the arithmetic the fix rests on
+  const ms = Date.parse("2026-11-13T00:00:00Z");
+  assert.equal(ms + 1e-9, ms);
+  assert.ok(ms + 1e-9 * ms > ms);
+});
