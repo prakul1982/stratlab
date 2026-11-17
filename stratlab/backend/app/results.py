@@ -877,10 +877,28 @@ class Context:
         self.sets = index_sets(region)
         self.fos = fo_symbols() if region == "IN" else set()
 
+    def official(self, symbol: str) -> tuple[float | None, str | None]:
+        """(close, day) of a listing the screener has no row for, from the exchange's own closes of the latest session (a REIT's or an
+        InvIT's units: LIVE9B-025, "–" for their price and yield though they trade). (None, None) when that day isn't stored."""
+        if self.region != "IN":
+            return None, None
+        if not hasattr(self, "_closes"):
+            self._closes: tuple[dict, str | None] = ({}, None)
+            try:
+                from . import last_session, official_close
+                day = last_session.latest_day("IN")
+                self._closes = (official_close.stored(day) or {}, day)
+            except Exception:
+                pass
+        rows, day = self._closes
+        v = rows.get(symbol)
+        return (v, day) if v else (None, None)
+
     def facts(self, symbol: str) -> dict:
         s = self.snaps.get(symbol) or {}
-        return {"cap": s.get("market_cap"), "band": band_of(self.region, s), "sector": s.get("sector"), "last": s.get("price"),
-                "last_at": s.get("price_at"), "fo": symbol in self.fos, "indices": [name for pid, (name, mem) in self.sets.items() if symbol in mem],
+        last, last_at = (s.get("price"), s.get("price_at")) if s.get("price") is not None else self.official(symbol)
+        return {"cap": s.get("market_cap"), "band": band_of(self.region, s), "sector": s.get("sector"), "last": last,
+                "last_at": last_at, "fo": symbol in self.fos, "indices": [name for pid, (name, mem) in self.sets.items() if symbol in mem],
                 "q": ({"sales": s.get("q_sales"), "profit": s.get("q_profit"), "of": s.get("q_of")} if s.get("q_sales") is not None or s.get("q_profit") is not None else None)}
 
     def passes(self, r: dict, size=(), sector: str = "", index: str = "", fo: bool = False) -> bool:

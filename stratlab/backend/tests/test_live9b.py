@@ -152,3 +152,18 @@ def test_live9b_018_the_total_names_the_new_acts_sections_from_fy_2026():
     v = {"regime": "new", "age": "below60", "resident": True, "salary": 0, "other": 500000}
     assert TT.estimate(2026, v, [], 0, 0)["sections"]["111A"] == "196"
     assert TT.estimate(2025, v, [], 0, 0)["sections"] is None
+
+
+def test_live9b_025_reit_and_invit_units_have_a_close_and_a_yield(monkeypatch):
+    from app import exchange_days as X, last_session, official_close, results, screens
+    text = ("TradDt,TckrSymb,SctySrs,ClsPric,LastPric,PrvsClsgPric\n"
+            "2026-11-16,TCS,EQ,2405.00,2405.00,2407.40\n2026-11-16,PGINVIT,IV,92.15,92.10,91.80\n2026-11-16,EMBASSY,RR,410.50,410.00,409.00\n")
+    got = X.cash_rows(text)
+    assert got["PGINVIT"]["close"] == 92.15 and got["EMBASSY"]["series"] == "RR" and got["TCS"]["series"] == "EQ"
+    monkeypatch.setattr(screens, "load_index", lambda region: {"rows": [{"symbol": "TCS", "price": 2405.0, "price_at": "2026-11-16", "market_cap": 870146.0}]})
+    monkeypatch.setattr(last_session, "latest_day", lambda region, now=None: "2026-11-16")
+    monkeypatch.setattr(official_close, "stored", lambda day: {"PGINVIT": 92.15, "TCS": 2405.0} if day == "2026-11-16" else None)
+    ctx = results.Context("IN")
+    assert ctx.facts("PGINVIT")["last"] == 92.15 and ctx.facts("PGINVIT")["last_at"] == "2026-11-16"
+    assert ctx.facts("TCS")["last"] == 2405.0                      # the screener's row first
+    assert ctx.facts("NOSUCH")["last"] is None

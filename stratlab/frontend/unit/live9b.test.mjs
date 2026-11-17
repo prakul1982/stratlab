@@ -150,3 +150,12 @@ test("LIVE9B-022: a leg to fix reads 'Buy CE (distance to fix)', and the market'
   assert.equal(bad.filter((x) => x.includes("the market's hours are")).length, 1);
   assert.match(read("src/pages/OptionsPage.tsx"), /\$\{legWords\(l, s\.offsetUnit\)\}/);
 });
+
+test("LIVE9B-023, 024: dividends totals right-aligned with every row's payments; the journal's missing side said once, days grouped", () => {
+  const ha = read("src/components/HoldingsActions.tsx");
+  assert.match(ha, /noteHead="Payments" numeric rows=\{\[/);
+  assert.match(ha, /v: inr\(data\.ahead_total\), n: `\$\{data\.ahead\.length\} payment/);
+  const j = read("src/pages/trade/JournalPage.tsx");
+  assert.match(j, /\$\{t\.hold_days\.toLocaleString\("en-IN"\)\} day/);
+  assert.match(j, /data-testid="j-no-side"/);
+});
