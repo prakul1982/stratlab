@@ -123,3 +123,17 @@ def test_a_phone_card_with_short_column_names_starts_each_figure_level():
     long = {**t, "head": ["Rules", "Return after costs", "Buy and hold return", "Difference in points", "Trades", "Checks passed"]}
     assert " top" not in blog.blocks_html([long]).split("<table>")[0]          # names that wrap keep the figure at the cell's foot (VR6-019)
     assert ".btbl.wide.top td{justify-content:flex-start}" in blog_pages.STYLE
+
+
+# ---------- LIVE10A-022: one header format on every public theme page ----------
+def test_a_theme_page_without_kept_states_says_its_count_as_the_others_do(monkeypatch):
+    from app import public_themes
+    payload = {"value_chain": [{"layer": "Ships", "companies": [{"ticker": "A", "name": "A Ltd", "verified": True, "what": "builds ships"},
+                                                                {"ticker": "B", "name": "B Ltd", "verified": True, "what": "repairs ships"}]}]}
+    monkeypatch.setattr(public_themes, "_dive", lambda r, n, p: {})
+    monkeypatch.setattr(public_themes, "_index_caps", lambda r: {})
+    monkeypatch.setattr(public_themes.stock_pages, "companies", lambda r: set())
+    v = public_themes.view({"region": "IN", "name": "Ships", "label": "Ships", "slug": "ships", "at": None}, payload)
+    assert not v.get("evidence")
+    page = public_themes.render(v)
+    assert "2 companies in 1 layer" in page and "checked companies" not in page.split("<body>")[1].split("Layers")[0]

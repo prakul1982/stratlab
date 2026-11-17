@@ -295,7 +295,7 @@ def render(v: dict) -> str:
     canonical = site + path(r, v["slug"])
     label = short_label(v["label"])
     title = f"{label}: listed companies in {_market(r)} by layer · StratLab"      # LIVE10A-022: "in India", never "in india"
-    word = "" if v.get("evidence") else "checked "          # e54: with the states kept, each company says how it was checked
+    word = ""        # LIVE10A-022: one header format on every theme page ("41 companies in 9 layers"; "checked" was on the pages without kept states)
     desc = (f"{label} in {_market(r)}: {v['members']} {word}companies in {len(v['layers'])} layers"
             + (f", from {', '.join(x['name'] for x in v['layers'][:3])}" if v["layers"] else "") + ". Facts from filings, not advice.")
     crumbs_html, crumbs_ld = stock_pages._crumbs([("Themes", "/themes"), ("India" if r == "IN" else "US", f"/themes/{r.lower()}"),
