@@ -168,9 +168,12 @@ export function ThemesPage() {
           <AlreadyRead region={region} typed={text} current={q} onPick={go} />
           <FormActions>
             <button className="btn" disabled={busy}>{busy ? "Mapping…" : "Map it"}</button>
+          </FormActions>
+          {/* LIVE10A-021: the ideas are their own row under the button ("Map it" sat inside the chip row, one idea alone on a second line) */}
+          <div className="k-row theme-ideas" data-testid="theme-ideas">
             <span className="k-small k-muted">Or try</span>
             {THEME_IDEAS[region].map((t) => <button key={t} type="button" className="btn quiet sm" onClick={() => go(t)}>{t}</button>)}
-          </FormActions>
+          </div>
         </FormGrid>
       </Card>
       {/* R19: the themes the person saved, each with when it was last read, Open, Update (what changed since), Rename and Remove */}

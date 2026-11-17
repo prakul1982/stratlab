@@ -83,3 +83,10 @@ test("LIVE10A-024: a rise in stocks that fell, 52-week lows or down 4% moves is 
   assert.match(read("src/pages/BreadthPage.tsx"), /<Delta neutral=\{p\.tone === "down"\}/);
   assert.match(read("src/pages/PulseMood.tsx"), /<Delta neutral=\{r\.key === "dec" \|\| r\.key === "lows"\}/);
 });
+
+test("LIVE10A-021: the theme ideas are a row of their own under Map it", () => {
+  const page = read("src/pages/ThemesPage.tsx");
+  assert.match(page, /<FormActions>\n\s+<button className="btn" disabled=\{busy\}>\{busy \? "Mapping…" : "Map it"\}<\/button>\n\s+<\/FormActions>/);
+  assert.match(page, /<div className="k-row theme-ideas" data-testid="theme-ideas">/);
+  assert.match(read("src/styles.css"), /\.theme-ideas \{ grid-column: 1 \/ -1;/);
+});
