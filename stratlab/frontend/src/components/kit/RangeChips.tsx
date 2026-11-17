@@ -31,7 +31,7 @@ export function RangeChips({ chart, times, options, value, onChange, label = "Ra
   const storageKey = `stratlab.range.custom.${chart}`;
   useMemo(() => pruneCustom(storageKey, times), [storageKey, times]);          // before the bar opens: no remembered chip the data doesn't reach
   return (
-    <ChipBar label={label} options={options} value={value} onChange={onChange} oneLine
+    <ChipBar label={label} options={options} value={value} onChange={onChange}
       custom={{
         storageKey, units: CUSTOM_UNITS, defaultUnit: "months",
         // a custom stretch that reaches back past the first point shows what "All" shows: refused in words, never added as a twin chip

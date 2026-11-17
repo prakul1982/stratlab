@@ -177,8 +177,7 @@ test("library cards: facts about the checks, buy and hold beside the return, whi
   assert.match(bits, /<VerdictBadge v=\{e\.verdict\.verdict\} facts label=\{e\.verdict\.label\} tone=\{headTone\(e\)\} \/>/);   // one face for both (MO-5a)
   assert.match(lib, /<LibraryTable key=\{`[^`]*`\} rows=\{rows\}/);        // one table for both since TABLES EVERYWHERE (owner, 4 Nov)
   assert.match(bits, /\{num\(gap, 1\)\} points \{h\.gap < 0 \? "behind" : "ahead"\}/);
-  // (updated on purpose, fix12/CX2 jargon: the header in words; its (i) says the gap is in percentage points)
-  assert.match(bits, /\{ key: "gap", header: "Vs buy and hold"/);    // buy and hold beside the return: its own column, and the gap in points
+  assert.match(bits, /\{ key: "gap", header: "vs hold \(pts\)"/);    // buy and hold beside the return: its own column, and the gap in points
   const pub = read("src/pages/PublicLibrary.tsx");
   assert.match(pub, /<LibraryTable key=\{`[^`]*`\} rows=\{shown\} rules=\{false\}/);
   // LIVE3-013 changed this on purpose: the strategy's own page says the gap once, in its headline, and both totals in one table

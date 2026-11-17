@@ -22,18 +22,11 @@ test("LIVE10A-010: the headlines card asks again while the read shown is the ses
   assert.match(page, /\{ai\.updating && <p className="k-note" data-testid="pulse-ai-updating">\{PULSE_UPDATING_NOTE\}<\/p>\}/);
 });
 
-test("LIVE10A-027: a chart's range chips are one scrolling line on a phone, '+ Custom' beside them, not 'All' alone on a second line", () => {
-  const bar = read("src/components/kit/ChipBar.tsx");
-  assert.match(bar, /const wrapRow = !oneLine && \(wrap \|\| all\.length <= 12\);/);
-  assert.match(read("src/components/kit/RangeChips.tsx"), /<ChipBar label=\{label\} options=\{options\} value=\{value\} onChange=\{onChange\} oneLine/);
-  assert.match(read("src/pages/BreadthPage.tsx"), /<ChipBar label="History charts' range" oneLine/);
-});
-
 test("LIVE10A-027: Breadth on a phone folds its later measures, the sectors and the last 20 days under their headings (nothing removed)", () => {
   const page = read("src/pages/BreadthPage.tsx");
   assert.match(page, /const phone = usePhone\(\);/);
   assert.match(page, /<PhoneFold phone=\{phone\} title="More breadth measures" meta="6 charts" testId="breadth-more">/);
-  assert.match(page, /<FoldCard title=\{SECTORS_TITLE\} info=\{help\.sectors\} meta=\{`\$\{data\.sectors\.rows\.length\} sectors`\}/);
+  assert.match(page, /<FoldCard title=\{SECTORS_FOLD\} info=\{help\.sectors\} meta=\{`\$\{data\.sectors\.rows\.length\} sectors`\}/);
   assert.match(page, /<FoldCard title=\{RECENT_TITLE\} info=\{RECENT_INFO\}/);
   // every chart is still drawn: six inside the fold, four above it
   const more = page.slice(page.indexOf('title="More breadth measures"'), page.indexOf("</PhoneFold>"));
@@ -46,20 +39,18 @@ test("CX2: a filing the exchange listed more than once is one row on the company
 });
 
 test("CX2 #7 (jargon): a strategy's trading terms and the library's columns are explained in plain words", async () => {
-  const { termMeanings, LIBRARY_COLUMNS } = await import("../src/lib/termMeanings.ts");
+  const { termMeanings, VS_HOLD_SAID } = await import("../src/lib/termMeanings.ts");
   const st = termMeanings("Supertrend (10, 3) · NIFTY 50 stocks");
   assert.equal(st.length, 1);
   assert.match(st[0], /^Supertrend \(N, M\): a line that trails the price/);
   assert.equal(termMeanings("Golden cross (50/200-day averages)").length, 2);     // the cross and the moving average
   assert.deepEqual(termMeanings("Buy the dip"), []);
-  for (const say of [...Object.values(LIBRARY_COLUMNS), ...termMeanings("Stage 2 + RSI + MACD + Bollinger + ADX + ATR + VWAP + EMA + breakout")]) {
+  for (const say of [VS_HOLD_SAID, ...termMeanings("Stage 2 + RSI + MACD + Bollinger + ADX + ATR + VWAP + EMA + breakout")]) {
     assert.doesNotMatch(say, /\b(should|buy now|sell now|recommend|target price|outperform)\b/i, say);   // facts, no advice
   }
   const lib = read("src/components/LibraryBits.tsx");
-  assert.match(lib, /header: "Vs buy and hold", numeric: true, sortable: true, info: LIBRARY_COLUMNS\.gap/);
-  assert.doesNotMatch(lib, /vs hold \(pts\)/);
-  assert.match(lib, /termMeanings\(strategyName\(e\)\)\.length > 0 && <> <Info label=\{`What \$\{strategyName\(e\)\} means`\}>/);
-  for (const k of ["ret", "bh", "mdd", "unseen", "checks"]) assert.match(lib, new RegExp(`key: "${k}", header: "[^"]+", (?:numeric|wrap): true, sortable: true, info: LIBRARY_COLUMNS\\.${k},`));
+  assert.match(read("src/pages/LibraryPage.tsx"), /\{rows\.some\(\(e\) => needs\(e\)\) && <> \{COPY_ANY_PLAN\}<\/>\} \{VS_HOLD_SAID\}/);
+  assert.match(lib, /termMeanings\(strategyName\(e\)\)\.length > 0 && <p className="k-note lib-line" data-testid="lib-terms">\{termMeanings\(strategyName\(e\)\)\.join\(" "\)\}<\/p>/);
 });
 
 test("LIVE10B-026: holdings say each source once with its own one date, and the age note stays for the old part", async () => {

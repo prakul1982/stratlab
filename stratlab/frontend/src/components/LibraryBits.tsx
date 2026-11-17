@@ -3,11 +3,11 @@ import { num, pct } from "../lib/format";
 import { opSay, refName } from "../lib/rules";
 import type { Cond, Strategy, VerdictKind } from "../lib/types";
 import { plainTerms } from "../lib/plainTerms";
-import { LIBRARY_COLUMNS, termMeanings } from "../lib/termMeanings";
+import { termMeanings } from "../lib/termMeanings";
 import { libMeta, strategyName } from "../lib/libraryList";
 import { pricesStop, testedRange } from "../lib/libraryText";
 import { checksOf, headTone, trails, unseenLabel } from "../lib/tradeUi";
-import { Info, VERDICT_FACT, VerdictBadge } from "./ui";
+import { VERDICT_FACT, VerdictBadge } from "./ui";
 import { Signed } from "./kit/Signed";
 import { DataTable, type Column } from "./kit/DataTable";
 import { ShowLess } from "./kit/ShowLess";
@@ -136,16 +136,16 @@ export function LibraryTable({ rows, actions, extra, label = "Strategies", rules
   const fig = (n: number | null, tone = true) => (n == null ? "–" : tone ? <Signed value={n} fmt={(v) => pct(v)} /> : pct(n));
   const cols: Column<LibEntry>[] = [
     { key: "name", header: "Strategy", rowHeader: true, wrap: true, cell: (e) => (
-      <span className="k-stack k-tight"><b>{strategyName(e)}{termMeanings(strategyName(e)).length > 0 && <> <Info label={`What ${strategyName(e)} means`}>{termMeanings(strategyName(e)).join(" ")}</Info></>}</b>
+      <span className="k-stack k-tight"><b>{strategyName(e)}</b>
         <span className="k-note">By {e.author}{e.copies ? ` · copied ${e.copies} time${e.copies === 1 ? "" : "s"}` : ""}</span>
         {pricesStop(e.range, e.ran_at ?? e.published_at) && <span className="k-note k-warn-text" data-testid="lib-stops">{pricesStop(e.range, e.ran_at ?? e.published_at)}</span>}</span>) },
     { key: "market", header: "Market", wrap: true, cell: (e) => <span className="k-small">{libMeta(e)}</span> },
-    { key: "ret", header: "After costs", numeric: true, sortable: true, info: LIBRARY_COLUMNS.ret, up: true, cell: (e) => fig(shownStats(e).ret, !trails(e)) },
-    { key: "bh", header: "Buy and hold", numeric: true, sortable: true, info: LIBRARY_COLUMNS.bh, cell: (e) => fig(e.stats.buy_hold) },
-    { key: "gap", header: "Vs buy and hold", numeric: true, sortable: true, info: LIBRARY_COLUMNS.gap, cardLabel: "Vs buy and hold (points)", csvHeader: "Vs buy and hold (percentage points)", cell: (e) => (e.vs_hold ? <span data-testid="lib-gap"><Signed value={e.vs_hold.gap} fmt={(v) => `${v > 0 ? "+" : ""}${num(v, 1)}`} /></span> : "–") },
-    { key: "mdd", header: "Worst fall", numeric: true, sortable: true, info: LIBRARY_COLUMNS.mdd, cell: (e) => fig(shownStats(e).mdd) },
-    { key: "unseen", header: "Unseen period", numeric: true, sortable: true, info: LIBRARY_COLUMNS.unseen, cell: (e) => fig(shownStats(e).unseen) },
-    { key: "checks", header: "Checks", wrap: true, sortable: true, info: LIBRARY_COLUMNS.checks, cell: (e) => (
+    { key: "ret", header: "After costs", numeric: true, sortable: true, up: true, cell: (e) => fig(shownStats(e).ret, !trails(e)) },
+    { key: "bh", header: "Buy and hold", numeric: true, sortable: true, cell: (e) => fig(e.stats.buy_hold) },
+    { key: "gap", header: "vs hold (pts)", numeric: true, sortable: true, cell: (e) => (e.vs_hold ? <span data-testid="lib-gap"><Signed value={e.vs_hold.gap} fmt={(v) => `${v > 0 ? "+" : ""}${num(v, 1)}`} /></span> : "–") },
+    { key: "mdd", header: "Worst fall", numeric: true, sortable: true, cell: (e) => fig(shownStats(e).mdd) },
+    { key: "unseen", header: "Unseen period", numeric: true, sortable: true, cell: (e) => fig(shownStats(e).unseen) },
+    { key: "checks", header: "Checks", wrap: true, sortable: true, cell: (e) => (
       <span className="k-stack k-tight"><VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} tone={headTone(e)} />
         {!shownStats(e).ran ? <span className="k-note">Not run</span> : checksBeyond(checksOf(e), e.verdict.label) && <span className="k-note">{checksBeyond(checksOf(e), e.verdict.label)}</span>}</span>) },
     { key: "act", header: "", action: true, cell: actions },
@@ -163,6 +163,8 @@ export function LibraryTable({ rows, actions, extra, label = "Strategies", rules
       {e.range && <p className="k-note lib-line" data-testid="lib-window">Tested {testedRange(e.range)}{e.stats.trades != null ? ` · ${e.stats.trades} trades` : ""}</p>}
       {e.reason && <p className="k-note lib-line lib-reason">{e.reason}</p>}
       {e.description && <p className="k-small lib-about">{plainTerms(e.description)}</p>}
+      {/* CX2 #7 (jargon): what the trading terms in its name mean, in plain words, with its rules (an (i) in the name widened the table past 1280) */}
+      {termMeanings(strategyName(e)).length > 0 && <p className="k-note lib-line" data-testid="lib-terms">{termMeanings(strategyName(e)).join(" ")}</p>}
       {rules && <Rules s={e.strategy} />}
       {extra?.(e)}
     </div>

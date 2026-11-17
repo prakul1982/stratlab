@@ -138,8 +138,10 @@ test("LIVE9B-021: holdings say when they were imported, and that they are old af
   assert.equal(daysOld(null), null);
   assert.equal(HOLDINGS_OLD_DAYS, 7);
   const h = read("src/pages/HoldingsPage.tsx");
-  assert.match(h, /` · imported from \$\{sourceWords\(view\.source\)\}`/);
-  assert.match(h, /data-testid="holdings-old">These holdings are \{daysOld\(view\.updated_at\)\} days old/);
+  // (updated on purpose, fix12/LIVE10B-026: each source with its own date (importedLine), and the age note for the old part (oldPart))
+  assert.match(h, /importedLine\(view\.sources, \{ source: view\.source, at: view\.updated_at \}/);
+  assert.match(read("src/lib/holdingsEdit.ts"), /return s\.source \? ` · imported from \$\{words\(s\.source\)\}\$\{when\(s\.at\)\}`/);
+  assert.match(h, /data-testid="holdings-old">\{old\.words\} \{old\.days\} days old/);
   assert.match(read("src/pages/SettingsPage.tsx"), /`Imported from \$\{sourceWords\(h\.source\)\}/);
 });
 

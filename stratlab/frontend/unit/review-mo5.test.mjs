@@ -33,7 +33,7 @@ test("MO-5a (as a table): a row says each fact once: one author line, the figure
   assert.match(table, /By \{e\.author\}/);
   assert.doesNotMatch(table, /<Badge tone="ok"|e\.badge/, "no StratLab badge beside a \"by StratLab\" line");
   assert.doesNotMatch(table, /<BehindHold|<HoldLine|k-eyebrow/);
-  for (const [key, header] of [["ret", '"After costs"'], ["bh", '"Buy and hold"'], ["gap", '"Vs buy and hold"'] /* (updated on purpose, fix12/CX2 jargon: "vs hold (pts)" said in words, its (i) gives the points) */, ["mdd", '"Worst fall"'], ["unseen", '"Unseen period"']])
+  for (const [key, header] of [["ret", '"After costs"'], ["bh", '"Buy and hold"'], ["gap", '"vs hold \\(pts\\)"'], ["mdd", '"Worst fall"'], ["unseen", '"Unseen period"']])
     assert.match(table, new RegExp(`\\{ key: "${key}", header: ${header}, numeric: true, sortable: true`), key);
   assert.match(table, /\{ key: "checks", header: "Checks", wrap: true, sortable: true/);
   // the dates, the reason, the words and the rules are in the row's details, one tap away

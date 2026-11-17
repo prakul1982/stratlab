@@ -22,12 +22,6 @@ export function termMeanings(text: string | null | undefined): string[] {
   return TERMS.filter(([re]) => re.test(t)).map(([, say]) => say);
 }
 
-/** The library table's column explanations (CX2: "vs hold (pts)" and the rest read as shorthand). */
-export const LIBRARY_COLUMNS = {
-  ret: "The strategy's total return over the test, after trading costs (brokerage, charges and slippage).",
-  bh: "What buying on the test's first day and holding to its last day returned, for comparison.",
-  gap: "The return after costs minus buy and hold's, in percentage points: 30% against 20% is +10 points; a minus means it finished behind.",
-  mdd: "The largest drop in the strategy's money from a high to a later low during the test.",
-  unseen: "The return in the last 30% of the test period, which the rules were never set against.",
-  checks: "The four checks on luck: enough trades, nearby settings, the unseen period, and the same trades reshuffled into another order.",
-};
+/** What the library table's "vs hold (pts)" column is, said once under the list (CX2 #7: shorthand; an (i) in its header pushed the
+ * table's last column past a 1280 screen's edge, ui-lint R27). */
+export const VS_HOLD_SAID = "vs hold (pts): the return after costs minus buying and holding's over the same dates, in percentage points (30% against 20% is +10).";

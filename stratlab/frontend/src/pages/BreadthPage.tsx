@@ -114,7 +114,7 @@ export function BreadthPage() {
         </select>
         {data && !data.locked && all && (
           // named for what it moves: the history charts, not the live card under it (R63-008)
-          <ChipBar label="History charts' range" oneLine options={presets} value={chosen} onChange={pick} custom={{ storageKey: "stratlab.breadth.periods", units: PERIOD_UNITS, defaultUnit: "months" }} />
+          <ChipBar label="History charts' range" options={presets} value={chosen} onChange={pick} custom={{ storageKey: "stratlab.breadth.periods", units: PERIOD_UNITS, defaultUnit: "months" }} />
         )}
       </div>
       {coversAll && chosen !== "all" && <p className="k-note">Only {Math.round(span).toLocaleString("en-IN")} days of data so far, so this shows all of them.</p>}
@@ -346,7 +346,7 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
       </div>
       </PhoneFold>
       {data.sectors && data.sectors.rows.length > 0 && (phone
-        ? <FoldCard title={SECTORS_TITLE} info={help.sectors} meta={`${data.sectors.rows.length} sectors`} testId="breadth-sectors-fold"><SectorHeat t={data.sectors} /></FoldCard>
+        ? <FoldCard title={SECTORS_FOLD} info={help.sectors} meta={`${data.sectors.rows.length} sectors`} testId="breadth-sectors-fold"><SectorHeat t={data.sectors} /></FoldCard>
         : <Card>
           <CardHead title={SECTORS_TITLE} info={help.sectors} />
           <SectorHeat t={data.sectors} />
@@ -362,6 +362,7 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
 }
 
 const SECTORS_TITLE = "Sectors: share above the 50-day average";
+const SECTORS_FOLD = "Sectors above the 50-day average";       // a phone's fold title is one line (it doesn't wrap: ui-lint R10/R26 at 390)
 const RECENT_TITLE = "The last 20 trading days";
 const RECENT_INFO = "The counts behind the charts, newest first.";
 

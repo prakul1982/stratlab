@@ -43,3 +43,31 @@ test("the main pages show their heading within 3 s and hold no placeholder past 
   console.log(out.join("\n"));
   expect(slow, slow.join("\n")).toEqual([]);
 });
+
+// LIVE10A-027: Breadth ran to 17,313 px on a phone; its later measures, the sectors and the last 20 days are folded under their headings there
+test("Breadth on a phone folds its long sections under their headings, each opening to the same table (LIVE10A-027)", async ({ browser }, info) => {
+  test.skip(info.project.name === "phone", "sets its own phone width");
+  test.setTimeout(120_000);
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await ctx.addInitScript((s) => { try { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); } catch { /* none */ } }, session);
+  const p = await ctx.newPage();
+  await p.goto("/invest/breadth");
+  await expect(p.getByTestId("breadth-charts")).toBeVisible({ timeout: 60_000 });
+  const tall = await p.evaluate(() => document.documentElement.scrollHeight);
+  console.log(`Breadth at 390: ${tall} px`);
+  for (const id of ["breadth-more", "breadth-recent-fold"]) await expect(p.getByTestId(id)).toBeVisible();
+  // opening a fold shows what it holds; with every fold open the page is as long as it was before (nothing is left out)
+  await p.getByTestId("breadth-recent-fold").locator("button.k-foldcard-btn").click();
+  await expect(p.getByTestId("breadth-recent-fold").locator(".k-foldcard-body")).toBeVisible();
+  for (const id of ["breadth-more", "breadth-sectors-fold"]) {
+    const f = p.getByTestId(id);
+    if (await f.count()) await f.locator("button.k-foldcard-btn").first().click();
+  }
+  await expect(p.getByTestId("breadth-more").getByRole("heading", { name: "TRIN" })).toBeVisible();
+  const open = await p.evaluate(() => document.documentElement.scrollHeight);
+  console.log(`Breadth at 390 with every fold open (as before): ${open} px`);
+  expect(tall).toBeLessThan(9000);
+  expect(open).toBeGreaterThan(tall * 1.5);
+  expect(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  await ctx.close();
+});

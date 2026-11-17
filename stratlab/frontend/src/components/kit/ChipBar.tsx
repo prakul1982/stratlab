@@ -20,11 +20,8 @@ function save(key: string, list: Choice[]) {
 /** Many choices in one scrolling row of chips (timeframes, ranges of more than four). With `custom`, a dashed "+ Custom"
  * chip opens a number and unit box; what is added joins the row and is remembered on this device under `custom.storageKey`
  * (the chip's value is "35 minutes"-style text: `${n} ${unit.value}`). */
-export function ChipBar({ label, options, value, onChange, custom, wrap, oneLine }: {
+export function ChipBar({ label, options, value, onChange, custom, wrap }: {
   label: string; options: Choice[]; value: string; onChange: (v: string) => void;
-  /** One row that scrolls on a phone however few the chips, "+ Custom" beside it: a chart's range chips (LIVE10A-027: "All" and
-   *  "+ Custom" alone on a second line under 1W…1Y). */
-  oneLine?: boolean;
   /** Keep wrapping onto more lines on a phone, instead of one row that scrolls: for a short row whose every chip should show. */
   wrap?: boolean;
   custom?: { storageKey: string; units: CustomUnit[]; defaultUnit?: string; max?: number; validate?: (n: number, unit: string) => CustomCheck };
@@ -65,7 +62,7 @@ export function ChipBar({ label, options, value, onChange, custom, wrap, oneLine
   };
   // CK-2 (R18): a row of up to 12 chips wraps on a phone too, so none is cut at the edge behind a fade (ten markets, two of them in view); only a
   // long strip (14 candle sizes) scrolls
-  const wrapRow = !oneLine && (wrap || all.length <= 12);
+  const wrapRow = wrap || all.length <= 12;
   const count = Number(n);
   // up to four digits ("1000" days is a real period); a minus sign is kept in the box and refused in words, not dropped so that
   // "-3" quietly became 3 (DA-013)
