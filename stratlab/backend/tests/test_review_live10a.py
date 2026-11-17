@@ -236,3 +236,15 @@ def test_listing_price_is_the_listing_days_open_never_a_later_candle(monkeypatch
     on_day = [{"t": "2026-11-09", "o": 94.0, "h": 95.0, "l": 88.0, "c": 89.3}] + later
     p = ipo.performance(row, Y(on_day), today=_date(2026, 11, 17))
     assert p["listing_price"] == 94.0 and p["day_close"] == 89.3
+
+
+# ---------- LIVE10A-019: the theme post's table and chart round as its sentences do ----------
+def test_theme_post_table_rounds_a_half_up_as_the_text_does():
+    from app import blog_research as br
+    from app.intel import theme_data as td
+    assert td.pts(18.25) == "18.3%" and br.half_up_pc(18.25) == "18.3%"
+    assert br.half_up_pc(-0.04) == "0.0%" and br.half_up_pc(-4.0) == "−4.0%" and br.half_up_pc(13.0, whole=True) == "13%"
+    src = {"region": "US", "rows": [{"layer": "Semiconductor equipment", "n": 11, "listed": 11, "ebitda": 18.25, "ebitda_n": 10, "revenue": 1000.0,
+                                     "net": 12.35, "net_n": 10, "roce": None, "roce_n": 0, "v": 2}], "v": 2}
+    _, head, rows = br._cells(src)
+    assert "18.3%" in " ".join(str(c) for c in rows[0]) and "18.2%" not in " ".join(str(c) for c in rows[0])
