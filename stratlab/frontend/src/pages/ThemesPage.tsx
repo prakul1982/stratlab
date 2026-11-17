@@ -14,6 +14,7 @@ import { ChangesCard } from "../components/ThemeChanges";
 import { SaveButton, SavedList } from "../components/SavedSearches";
 import { themeReady, themeSnap } from "../lib/savedSnap";
 import { Card, CardHead, DataTable, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PageNav, Skeleton, Working } from "../components/kit";
+import { fundName } from "../lib/themeFormat";
 
 /* ================= Themes: a theme deep dive =================
  * Who is in the theme: every company the exchange classifies in its official industries, sorted into layers by AI, with the AI's additions
@@ -21,6 +22,8 @@ import { Card, CardHead, DataTable, ErrorState, Field, FormActions, FormGrid, No
  * holds: the whole chain in one table, margins by layer, the sub-themes' companies, the latest news and the theme as a whole. The AI writes
  * no figure; a company is shown only where its own description says it does the work. */
 const PRICE_TRIES = 6;
+/** "the layer Small finance banks" / "the layers A, B and C" (LIVE9A-022). */
+export const emptyNames = (names: string[]): string => `the ${names.length === 1 ? "layer" : "layers"} ${names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`}`;
 const PRICE_EVERY_MS = 8000;
 const LISTING_TRIES = 8;
 // a map whose AI parts are still being written behind it is asked again on its own, every 5 s for 90 s, then the page stops asking
@@ -87,6 +90,8 @@ export function ThemesPage() {
     let ipoTimer: ReturnType<typeof setTimeout> | undefined, ipoTries = 0;
     const listings = () => themeApi.listings(region, q).then((l) => {
       if (!live) return;
+      // LIVE9A-022: still matching after the last ask: said as not checked, never "Loading the issues…" left on the page
+      if (l.pending && ipoTries + 1 >= LISTING_TRIES) { setIpos({ items: [], checked: false }); return; }
       setIpos(l);
       if (l.pending && ++ipoTries < LISTING_TRIES) ipoTimer = setTimeout(listings, PRICE_EVERY_MS);
     }).catch(() => live && setIpos({ items: [], checked: false }));
@@ -136,7 +141,7 @@ export function ThemesPage() {
   // LIVE6-017: the section links sit at the top, under the theme's head, not halfway down the page after the companies
   const nav = r ? [
     { id: "theme-members", label: "Companies" },
-    ...(dive && dive.members > 0 ? [{ id: "theme-chain", label: "The chain" }] : []), ...(dive?.layers.length ? [{ id: "layer-0", label: "Layers" }] : []), ...(dive?.subs.length ? [{ id: "theme-subs", label: "Sub-themes" }] : []),
+    ...(dive && dive.members > 0 ? [{ id: "theme-chain", label: "The chain" }] : []), ...(dive?.layers.some((l) => l.companies.length > 0) ? [{ id: "layer-0", label: "Layers" }] : []), ...(dive?.subs.length ? [{ id: "theme-subs", label: "Sub-themes" }] : []),
     ...(r.tailwinds.length + r.risks.length > 0 ? [{ id: "theme-claims", label: "Tailwinds and risks" }] : []), ...(dive ? [{ id: "theme-news", label: "Latest" }] : []),
     ...(dive && dive.members > 0 ? [{ id: "numbers-size", label: "The theme in numbers" }, { id: "numbers-leaders", label: "Every company" }] : []),
   ] : [];
@@ -180,7 +185,7 @@ export function ThemesPage() {
             {r.etfs.length > 0 && (
               <DataTable label="Funds that track the theme" columns={[
                 { key: "t", header: "Fund", rowHeader: true, cell: (e: (typeof r.etfs)[number]) => <Link className="link" to={`/research/${region}/${encodeURIComponent(e.ticker)}`}><b>{e.ticker}</b></Link> },
-                { key: "n", header: "Name", wrap: true, cell: (e) => e.name }]} rows={r.etfs} rowKey={(e) => e.ticker} />
+                { key: "n", header: "Name", wrap: true, cell: (e) => fundName(e.name) }]} rows={r.etfs} rowKey={(e) => e.ticker} />
             )}
           </Card>
           {/* still being prepared: a moving bar and one short line; the page asks again on its own (owner, 5 Nov: no warnings for work in progress) */}
@@ -216,7 +221,9 @@ export function ThemesPage() {
               ) : <ChainCard dive={dive} />}
               {dive.figures && dive.figures.of > dive.figures.shown && <p className="k-note">The figures below are for {dive.figures.shown} of the theme's {dive.figures.of.toLocaleString("en-IN")} companies: every one the map names, then the largest of the rest by market value.</p>}
               {biz && !biz.allowed && dive.region === "IN" && <p className="k-note">Operating figures that companies file between results (monthly sales, output, traffic) are on the Basic plan.</p>}
-              {dive.layers.map((l, i) => <LayerCard key={l.layer} layer={l} i={i} region={dive.region} business={bizFor(biz, l)} />)}
+              {/* LIVE9A-022: a layer with no listed company is named in one line, not a card of its own that says it is empty */}
+              {dive.layers.filter((l) => l.companies.length > 0).map((l, i) => <LayerCard key={l.layer} layer={l} i={i} region={dive.region} business={bizFor(biz, l)} />)}
+              {dive.layers.some((l) => l.companies.length === 0) && <p className="k-note" data-testid="layers-empty">No listed company is shown for {emptyNames(dive.layers.filter((l) => l.companies.length === 0).map((l) => l.layer))}: none of the companies the map named has a description that shows it does this work.</p>}
               <SubThemesCard dive={dive} business={biz} />
               <ThemeLinksCard region={dive.region} theme={q} />
             </>

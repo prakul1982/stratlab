@@ -47,7 +47,7 @@ for (const region of ["IN", "US"] as const) {
     const first = (await page.locator('table[aria-label="Index levels"] tbody tr').first().locator("td").first().innerText()).replace(/\..*$/, "");
     expect(headline + lines.join(" ")).not.toContain(first);
     // breadth, volatility, other markets and the headlines are tables with a header row
-    for (const [id, heads] of [["pulse-breadth", ["Measure", "Change"]], ["pulse-risk", ["Measure", "Level", "Change"]], ["pulse-global", ["Market", "Move", "Session"]]] as const) {
+    for (const [id, heads] of [["pulse-breadth", ["Measure", "Change"]], ["pulse-risk", ["Measure", "Level", "Change", "As of"]], ["pulse-global", ["Market", "Move", "Session"]]] as const) {
       const card = page.getByTestId(id);
       await expect(card).toBeVisible();
       for (const h of heads) await expect(card.getByRole("columnheader", { name: h })).toBeVisible();
@@ -131,7 +131,7 @@ for (const group of ["nifty500", "sp500"]) {
       const day = (await rows.nth(n - 1).locator("th").innerText()).trim();
       return { day, n };
     };
-    const A = "Advance/decline line", B = "Above the 50- and 200-day averages";
+    const A = "Advance/decline line", B = "Share above averages"   /* (updated on purpose, LIVE9A-016: one-line title) */;
     const chips = (await ranges.getByRole("button").allInnerTexts()).filter((t) => !/Custom|Remove/.test(t));
     expect(chips.length).toBeGreaterThanOrEqual(2);
     let widest = Infinity, last = "";

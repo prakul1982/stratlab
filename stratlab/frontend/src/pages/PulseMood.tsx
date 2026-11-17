@@ -5,7 +5,7 @@ import { fmtDate, fmtTime, marketTz, pct, safeHref } from "../lib/format";
 import { newsWhen } from "../lib/researchFormat";
 import { researchApi, type MoodBreadthRow, type NewsItem, type PulseAI, type PulseMood, type Region } from "../lib/research";
 import { keepMood, keptMood, moodStale } from "../lib/moodCache";
-import { companyRows, crore, moverRows, movedBy, pairable, quoteMove, riskLevel, sectorCount, sessionHeader, sessionWord, signedPoints, signedPts, signedWhole, storyOf, whole } from "../lib/pulseMood";
+import { companyRows, crore, fromHighText, moverRows, movedBy, pairable, quoteMove, riskLevel, sectorCount, sessionHeader, sessionWord, signedPoints, signedPts, signedWhole, storyOf, whole } from "../lib/pulseMood";
 import { Card, CardHead, DataTable, Delta, EmptyState, Signed, Skeleton, Working, type Column } from "../components/kit";
 import { sparseNotes } from "../components/kit/DataTable";
 
@@ -57,13 +57,16 @@ export function MoodCard({ m, region, updating = false, behindNote }: { m: Pulse
   const readDay = m.read_at ? new Date(m.read_at).toLocaleDateString("en-CA", { timeZone: tz }) : null;
   const today = new Date().toLocaleDateString("en-CA", { timeZone: tz });
   const readAt = m.read_at ? `${readDay !== today ? `${fmtDate(readDay!, { weekday: true, year: false })}, ` : ""}${fmtTime(m.read_at, { tz: marketTz(region), zone: true })}` : "";
+  // LIVE9A-001/002: a read of an earlier session than the index levels above is never shown as the current one: its card is titled with its
+  // session and its headline starts with that day, and the line saying the new session's read is under way comes first
+  const behind = !!behindNote && !!m.session;
   return (
     <Card testId="pulse-mood-card">
-      <CardHead title="The mood" info="One short headline and a few lines, each worked out from the tables below with one rounding, so a line and its table cannot disagree. Facts about today, not a forecast. The index levels are in the first table."
+      <CardHead title={behind ? `The mood · ${day(m.session)} session` : "The mood"} info="One short headline and a few lines, each worked out from the tables below with one rounding, so a line and its table cannot disagree. Facts about today, not a forecast. The index levels are in the first table."
         actions={m.read_at ? <span className="k-row k-note" data-testid="pulse-mood-read">Read {readAt}{updating && <Working inline label="Reading the market again" />}</span> : undefined} />   {/* with its zone (LIVE4-007) */}
-      {m.headline ? <p className="inv-summary" data-testid="pulse-mood"><b>{m.headline}</b></p> : <p className="k-small k-muted">The tables below are the day's figures; their summary isn't available right now.</p>}
-      {m.lines.length > 0 && <ul className="k-list" data-testid="pulse-mood-lines">{m.lines.map((l) => <li key={l}>{l}</li>)}</ul>}
       {behindNote && <p className="k-note" data-testid="pulse-mood-behind">{behindNote}</p>}
+      {m.headline ? <p className="inv-summary" data-testid="pulse-mood"><b>{behind ? `On ${day(m.session)}: ${m.headline}` : m.headline}</b></p> : <p className="k-small k-muted">The tables below are the day's figures; their summary isn't available right now.</p>}
+      {m.lines.length > 0 && <ul className="k-list" data-testid="pulse-mood-lines">{m.lines.map((l) => <li key={l}>{l}</li>)}</ul>}
     </Card>
   );
 }
@@ -155,7 +158,9 @@ export function RiskTable({ r }: { r: NonNullable<PulseMood["risk"]> }) {
     { key: "n", header: "Measure", rowHeader: true, cell: (x) => x.label },
     { key: "p", header: "Level", numeric: true, brief: true, cell: (x) => riskLevel(x) },
     // a yield's move in basis points, the rest in percent (LIVE7A-023)
-    { key: "c", header: "Change", numeric: true, brief: true, cell: (x) => { const mv = quoteMove(x); return <Signed value={mv.value}>{mv.text}</Signed>; } },
+    { key: "c", header: "Change", numeric: true, brief: true, cell: (x) => { const mv = quoteMove(x); return mv.value == null ? mv.text : <Delta value={mv.value}>{mv.text}</Delta>; } },
+    // LIVE9A-002: each level's own session, so a level from an earlier day is never read as today's (it had no date at all)
+    { key: "s", header: "As of", cell: (x) => sessionWord(x.day, "", day) },
   ];
   return (
     <Card testId="pulse-risk">
@@ -182,18 +187,22 @@ export function GlobalTable({ g, region, today }: { g: NonNullable<PulseMood["gl
   );
 }
 
-export function CalendarTable({ c }: { c: NonNullable<PulseMood["calendar"]> }) {
+export function CalendarTable({ c, today }: { c: NonNullable<PulseMood["calendar"]>;
+  /** the market's date now: a result or event dated before it is over, never "coming up" (LIVE9A-002: "13 Nov Results" on 16 Nov) */
+  today?: string | null }) {
   type Row = { key: string; when: string; kind: string; what: ReactNode };
+  const ahead = <T,>(xs: T[], at: (x: T) => string | null | undefined) => xs.filter((x) => { const d = at(x); return !today || !d || d.slice(0, 10) >= today; });
   const rows: Row[] = [
-    ...c.results.map((r) => ({ key: `r-${r.symbol}-${r.date}`, when: day(r.date), kind: "Results", what: <>{r.name}{r.purpose ? <span className="k-sub-line">{r.purpose}</span> : null}</> })),
+    ...ahead(c.results, (r) => r.date).map((r) => ({ key: `r-${r.symbol}-${r.date}`, when: day(r.date), kind: "Results", what: <>{r.name}{r.purpose ? <span className="k-sub-line">{r.purpose}</span> : null}</> })),
     ...c.ipos.map((i) => ({ key: `i-${i.name}`, when: i.close ? `closes ${day(i.close)}` : "open", kind: "IPO open", what: <>{i.name}{i.low != null && i.high != null ? <span className="k-sub-line">Price band {i.low}–{i.high}</span> : null}</> })),
-    ...c.events.map((e) => ({ key: `e-${e.date}-${e.title}`, when: `${day(e.date)}${e.time ? `, ${e.time}` : ""}`, kind: "Event", what: e.title })),
+    ...ahead(c.events, (e) => e.date).map((e) => ({ key: `e-${e.date}-${e.title}`, when: `${day(e.date)}${e.time ? `, ${e.time}` : ""}`, kind: "Event", what: e.title })),
   ];
   const cols: Column<Row>[] = [
     { key: "w", header: "When", rowHeader: true, cell: (r) => r.when },
     { key: "k", header: "Type", brief: true, cell: (r) => r.kind },
     { key: "d", header: "Details", wrap: true, cell: (r) => r.what },
   ];
+  if (!rows.length) return null;
   return (
     <Card testId="pulse-calendar">
       <CardHead title="Coming up" info="Results due from the largest companies in the next seven days, IPOs open now, and the economic events on the app's calendar." />
@@ -218,7 +227,8 @@ export function IndexTable({ indices, missing, dayText, whenOf }: { indices: { n
     { key: "n", header: "Index", rowHeader: true, cell: (i) => i.name },
     { key: "l", header: "Level", numeric: true, brief: true, cell: level },
     { key: "c", header: "Change", numeric: true, brief: true, cell: (i) => (i.change_pct == null ? "–" : <Delta value={i.change_pct}>{pct(i.change_pct, 2)}</Delta>) },
-    { key: "h", header: "Against 52-week high", numeric: true, cell: (i) => (i.from_high_pct == null ? "–" : i.from_high_pct > -0.5 ? "near its high" : `${Math.abs(i.from_high_pct).toFixed(1)}% below`) },
+    // LIVE9A-027: the brief's own rule, so the two never differ ("near its high" here, "0.3% below" in the brief, for one level)
+    { key: "h", header: "Against 52-week high", numeric: true, cell: (i) => (i.from_high_pct == null ? "–" : fromHighText(i.from_high_pct)) },
     { key: "w", header: "As of", cell: (i) => <span data-testid="index-when" data-stale={i.stale ? "1" : undefined}>{whenOf(i)}</span> },
   ];
   void dayText;

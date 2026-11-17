@@ -14,6 +14,7 @@ deck_check: "evidence state" and "population mismatch".
 
 The live inputs are tests/fixtures/themes_live/inputs_r52 (the owner's read-only placement inputs of 14 Nov 2026); every figure is synthetic."""
 import json
+import re
 from datetime import date
 
 from app import deck, public_themes
@@ -207,7 +208,9 @@ def test_the_public_page_says_each_companys_evidence_state_from_the_stored_dive(
     page = public_themes.render(v)
     # l55 (R55, the owner's review of the live R54 decks, updated on purpose): the deck's state names, never "confirmed"
     assert "Membership: 1 description-verified, 1 industry-supported, 1 not checked." in page
-    assert "B · industry-supported (official industry only)" in page and "D · not checked" in page and "3 companies in 1 layer" in page
+    # (updated on purpose, LIVE9A-011: each company's state is its row's Membership cell in the layer's table)
+    assert re.search(r'<td class="l">B</td>.*?<td class="l">industry-supported \(official industry only\)</td>', page, re.S)
+    assert re.search(r'<td class="l">D</td>.*?<td class="l">not checked</td>', page, re.S) and "3 companies in 1 layer" in page
 
 
 def test_a_coverage_table_continued_on_the_next_page_is_checked_as_one_table():

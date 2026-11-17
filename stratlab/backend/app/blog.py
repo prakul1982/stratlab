@@ -37,7 +37,7 @@ MAX_ROWS = 150
 MAX_BARS = 30
 
 MINUS = "−"
-BRIEF_GEN = 2                           # the version of the words and tables a brief post is written with (O5: tables); bump it and the stored posts are written again from their issues
+BRIEF_GEN = 3                           # (3: LIVE9A-021, India's day changes from the exchange's own index closes) the version of the words and tables a brief post is written with (O5: tables); bump it and the stored posts are written again from their issues
 MAIN_INDEX = {"IN": "NIFTY 50", "US": "S&P 500"}
 # the rotation chart and the closing-price pages the posts point to (the app's own addresses)
 ROTATION_PATH = {"IN": "/research/rotation?region=IN", "US": "/research/rotation?region=US"}
@@ -496,6 +496,42 @@ def _holiday(region: str, day: date) -> str | None:
         return None
 
 
+def official_changes(region: str, day: date, indices: list) -> tuple[list, bool]:
+    """LIVE9A-021: an Indian brief's day changes from the exchange's own daily file of index closes, against the session before the day as
+    the calendar now knows it (a special session found later included: the 9 Nov brief said NIFTY 50 +0.06% against 6 Nov, the exchange
+    +0.23% against the 8 Nov Muhurat session). An index the file doesn't carry keeps its change, unless the session before was a special one,
+    which its stored change missed: then no change is shown for it. (indices, whether any changed)."""
+    if region != "IN" or not indices:
+        return indices, False
+    try:
+        from . import official_close
+        from .data.calendar import is_trading_day, special_days
+        prev = day - timedelta(days=1)
+        for _ in range(10):
+            if is_trading_day("IN", prev):
+                break
+            prev -= timedelta(days=1)
+        now_c, prev_c = official_close.index_closes(day.isoformat()), official_close.index_closes(prev.isoformat())
+        special = prev.isoformat() in special_days("IN")
+    except Exception:
+        return indices, False
+    if not now_c or not prev_c:
+        return indices, False
+    out, changed = [], False
+    for i in indices:
+        if not isinstance(i, dict):
+            out.append(i)
+            continue
+        n = str(i.get("name") or "").upper()
+        a, b = now_c.get(n), prev_c.get(n)
+        old = i.get("change_pct")
+        new = round((a / b - 1) * 100, 2) if a and b else (None if special else old)
+        if new != (round(old, 2) if isinstance(old, (int, float)) else old):
+            changed = True
+        out.append({**i, "change_pct": new})
+    return out, changed
+
+
 def brief_post(issue: dict, now: datetime | None = None) -> dict | None:
     """A daily Market Brief issue as a post, or None for anything else (a weekly issue, a My Stocks issue, a market that has
     no blog, a day that isn't a date). Only the issue's market-level fields are read: its day, the index closes, the sector
@@ -510,6 +546,10 @@ def brief_post(issue: dict, now: datetime | None = None) -> dict | None:
     except ValueError:
         return None
     iso, name = day.isoformat(), MARKET_NAME[region]
+    fixed, changed = official_changes(region, day, issue.get("indices") or [])
+    if changed:
+        # LIVE9A-021: the day's changes as the exchange's own index closes give them; the Indices table is drawn again from these figures
+        issue = {**issue, "indices": fixed, "sections": [x for x in issue.get("sections") or [] if not (isinstance(x, dict) and x.get("title") == "Indices")]}
     indices = [i for i in issue.get("indices") or [] if isinstance(i, dict) and isinstance(i.get("price"), (int, float)) and i.get("name")]
     moved = [i for i in indices if isinstance(i.get("change_pct"), (int, float))]
     open_day = _open_day(region, day)

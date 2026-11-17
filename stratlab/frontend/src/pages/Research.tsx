@@ -39,7 +39,7 @@ import { CompanyLinksCard } from "../components/CompanyLinks";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge, EtfGapDetailView } from "../components/EtfGap";
 import { typingFirst } from "../lib/typingFirst";
-import { companyRows, moodBehindNote, moodDay } from "../lib/pulseMood";
+import { companyRows, moodBehindNote, moodDay, PULSE_TITLE, PULSE_AI_RETRY_MS, PULSE_AI_TRIES, pulseBeingWritten } from "../lib/pulseMood";
 import { BreadthTable, CalendarTable, FlowsTable, GlobalTable, HeadlinesTable, HotTable, IndexTable, MoodCard, MoodSkeleton, MoversTable, Pair, RiskTable, SectorsTable, ThemesTable, TopicsTable, usePulseMood } from "./PulseMood";
 import { FoBadges } from "../components/FoBadges";
 import { IndexBadges } from "../components/IndexBadges";
@@ -527,11 +527,18 @@ export function PulsePage() {
     const mine = seq.current;
     rf.run(async () => { const out = await researchApi.pulseAI(region, "", true); if (mine === seq.current) setAi(out); return out; });
   };
-  const loadAI = async (refresh = false) => {
+  const loadAI = async (refresh = false, tries = 0) => {
     const mine = ++seq.current;
     setBusy(true); setAiErr(null);
     try { const out = await researchApi.pulseAI(region, "", refresh); if (mine === seq.current) setAi(out); }
-    catch (e) { if (mine === seq.current) setAiErr((e as Error).message); }
+    catch (e) {
+      // LIVE9A-008: another visit is writing this read: asked again in a moment, a few times, never a request held open for minutes
+      if (mine === seq.current && pulseBeingWritten((e as Error).message) && tries < PULSE_AI_TRIES) {
+        setTimeout(() => { if (mine === seq.current) void loadAI(false, tries + 1); }, PULSE_AI_RETRY_MS);
+        return;
+      }
+      if (mine === seq.current) setAiErr((e as Error).message);
+    }
     finally { if (mine === seq.current) setBusy(false); }
   };
   useEffect(() => {
@@ -542,7 +549,7 @@ export function PulsePage() {
   const aiNothing = !!ai && !ai.tone && !ai.hot.length && !ai.flows.length && !ai.themes.length;
   return (
     <div className="k-page">
-      <PageHeader eyebrow={eyebrowOf("/research/pulse")} title={pulseClosedDay(data?.indices) ? "How the market felt at the last close" : "How the market feels today"}
+      <PageHeader eyebrow={eyebrowOf("/research/pulse")} title={PULSE_TITLE}
         lede={pulseLede((() => { const d = pulseClosedDay(data?.indices); return d ? fmtDate(d, { year: false }) : null; })(), !!data?.indices.some((i) => i.settling))}
         asOf={data?.indices.map((i) => i.at).filter(Boolean).sort().pop() ?? undefined} asOfPending={!data} asOfLabel="Prices as of" asOfTz={marketTz(region)} />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
@@ -579,7 +586,7 @@ export function PulsePage() {
       {mood && <Pair nl={mood.flows?.rows.length ? mood.flows.rows.length + 1 : 0} nr={mood.risk?.rows.length ?? 0}
         left={mood.flows ? <FlowsTable f={mood.flows} source={ai?.flows_source} /> : null} right={mood.risk ? <RiskTable r={mood.risk} /> : null} />}
       {mood?.global && <GlobalTable g={mood.global} region={region} today={dayIn(new Date(), marketTz(region))} />}
-      {mood?.calendar && <CalendarTable c={mood.calendar} />}
+      {mood?.calendar && <CalendarTable c={mood.calendar} today={dayIn(new Date(), marketTz(region))} />}
       {ai && companyRows(ai.hot).length > 0 && <HotTable ai={ai} region={region} />}
       {ai && ai.flows.length > 0 && <TopicsTable ai={ai} />}
       {ai && ai.themes.length > 0 && <ThemesTable ai={ai} region={region} />}

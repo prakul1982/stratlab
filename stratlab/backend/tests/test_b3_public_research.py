@@ -182,13 +182,15 @@ def test_public_theme_page_lists_checked_members_with_reported_figures_only(w, m
         assert name in t
     assert "Unchecked Ltd" not in t and "Only unchecked" not in t
     assert '<a href="/stocks/in/RELIANCE">Reliance Industries Ltd</a>' in t                 # members link to their public pages
-    assert "Market value ₹19.00 lakh crore" in t and "Market value ₹12,345 crore" in t
+    # (updated on purpose, LIVE9A-011, owner 29 Oct "wherever you can, just make a table": each layer is a table with a Market value column)
+    assert '<th scope="col">Market value</th>' in t and "<td>₹19.00 lakh crore</td>" in t and "<td>₹12,345 crore</td>" in t
     layers = "".join(re.findall(r"<section class=\"card\" data-layer>.*?</section>", t, re.S))
     assert layers and not DERIVED.search(layers)                                             # no figure StratLab works out
     assert "median" not in t.lower()
     assert "See the full theme on StratLab" in t and "/research/themes?q=defence&amp;region=IN" in t
     assert "Companies that design and build defence equipment." in t and not ADVICE.search(t.split("<body>")[1])
-    assert not PROVIDERS.search(t) and "How this page is made" in t and "Download" not in t and "<table" not in t
+    assert not PROVIDERS.search(t) and "How this page is made" in t and "Download" not in t
+    assert t.count("<table") == len(re.findall(r"data-layer>", t))                         # (updated on purpose, LIVE9A-011) one table a layer, no other
     assert c.head("/themes/in/defence").status_code == 200
 
 

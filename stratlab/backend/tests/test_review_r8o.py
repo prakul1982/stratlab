@@ -166,7 +166,7 @@ def test_the_market_mood_never_counts_and_is_never_refused(usage):
 def test_the_pulse_and_company_routes_say_what_counts(usage, monkeypatch):
     calls = []
 
-    def fake(profile, kind, key, ttl, refresh, build, counted=True, min_age=0):
+    def fake(profile, kind, key, ttl, refresh, build, counted=True, min_age=0, **kw):     # (updated on purpose, LIVE9A-008: wait_for_other)
         calls.append((kind, refresh, counted, min_age))
         return {"summary": "s", "bull": [], "bear": [], "watch": [], "ideas": []}
     monkeypatch.setattr(routes, "ai_call", fake)

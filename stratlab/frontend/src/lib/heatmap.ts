@@ -27,6 +27,10 @@ export function closesNote(v: Pick<HeatView, "members" | "with_prices" | "price_
   return parts.length ? parts.join(" ") : null;
 }
 
+/** LIVE9A-010: what follows "Closes of <day>" on the facts line. The map is drawn from daily closes; while the market trades it says that day is
+ * the last close and when the map is redrawn (at 14:29 ET with the NYSE open it said only "Closes of 13 Nov" beside Mood's live index levels). */
+export const closesTail = (open: boolean): string => (open ? ", the last close · the market is open; the map is redrawn after today's close" : "");
+
 export const PERIODS = ["1d", "1w", "1m", "3m", "ytd", "1y"] as const;
 export type Period = (typeof PERIODS)[number];
 export const PERIOD_LABEL: Record<Period, string> = { "1d": "1 day", "1w": "1 week", "1m": "1 month", "3m": "3 months", ytd: "Year to date", "1y": "1 year" };

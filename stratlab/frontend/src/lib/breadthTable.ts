@@ -12,7 +12,9 @@ export type Part = { now: number | null; before: number | null; change: number |
 export const shareTone = (v: number | null | undefined): "k-up" | "k-down" | undefined => (v == null || !Number.isFinite(v) || v === 50 ? undefined : v > 50 ? "k-up" : "k-down");
 
 /** The class a breadth figure is drawn in: a pair's part by its side, a share by which side of half it is. */
-export const partTone = (p: Pick<Part, "tone">, v: number | null | undefined) => (p.tone === "up" ? "k-up" : p.tone === "down" ? "k-down" : p.tone === "share" ? shareTone(v) : undefined);
+/* LIVE9A-016: a share of stocks is a level, drawn plain (75.0% green, 48.8% red and 33.2% white in one table had no rule a reader could see);
+ * only a rose/fell pair keeps its side's colour, and every change its ▲/▼ pill */
+export const partTone = (p: Pick<Part, "tone">, _v?: number | null) => (p.tone === "up" ? "k-up" : p.tone === "down" ? "k-down" : undefined);
 export type MeasureRow = { key: string; label: string; means: string; info: "ad" | "ma" | "highs_lows" | "moves" | "stage2" | "mcclellan" | "summation" | "trin" | null; parts: Part[] };
 
 /** The mean of the last 20 days of a series (today's included), skipping days with no value; null with under 5 of them. */

@@ -236,8 +236,9 @@ export function ResultsPage() {
     { key: "cap", header: "Market value", numeric: true, phone: false, narrow: false, cell: (r) => capCell(r, quotes[r.symbol]?.price, (v) => screenCap(v, r.region)) },
     { key: "px", header: "Price", numeric: true, brief: true, csvHeader: "Price now", cell: (r) => {
       const x = quotes[r.symbol];
-      if (x?.price != null) return <span title={x.at ? `Read ${fmtTime(x.at, { tz: marketTz(region), zone: true })}` : undefined}>{price(x.price, cur)}</span>;
-      return r.last == null ? <span className="k-muted">–</span> : <span className="k-muted" title={r.last_at ? `Last close, ${resultDay(r.last_at)}` : "Last close"}>{price(r.last, cur)}</span>;
+      // LIVE9A-028: an Indian share is priced to the paisa ("₹0.7800" had four places under ₹1)
+      if (x?.price != null) return <span title={x.at ? `Read ${fmtTime(x.at, { tz: marketTz(region), zone: true })}` : undefined}>{price(x.price, cur, region === "IN" ? 2 : undefined)}</span>;
+      return r.last == null ? <span className="k-muted">–</span> : <span className="k-muted" title={r.last_at ? `Last close, ${resultDay(r.last_at)}` : "Last close"}>{price(r.last, cur, region === "IN" ? 2 : undefined)}</span>;
     } },
     { key: "day", header: "Day", numeric: true, brief: true, cell: (r) => {
       const x = quotes[r.symbol];
@@ -259,7 +260,8 @@ export function ResultsPage() {
             {m ? <b>±{m.avg.toFixed(1)}%</b> : <span className="k-muted">–</span>}
             {since && <span className="k-note k-muted" title={`Since the results of ${resultDay(since.date)}, close to latest close`}>since {resultDay(since.date)} <Move v={since.pct} /></span>}
           </span>
-          {m && <span className="k-note res-moves k-tight-hide" title="The latest four, newest first, in %">{m.last.map((v, i) => <Move key={i} v={v} bare />)}</span>}
+          {/* LIVE9A-028: a space between the latest moves, so two flat ones never read as "0.00.0" */}
+          {m && <span className="k-note res-moves k-tight-hide" title="The latest four, newest first, in %">{m.last.map((v, i) => <span key={i}>{i > 0 ? " " : ""}<Move v={v} bare /></span>)}</span>}
         </span>);
     } },
     ...(showImplied ? [{ key: "im", header: "Implied", cardLabel: "Implied", csvHeader: "Options imply", numeric: true, info: "For stocks with futures and options: the price of the at-the-money call and put together, as a share of the stock's price, for the first expiry on or after the results day. Read from the broker's option prices while it is connected.", cell: (r: ResultRow) => {

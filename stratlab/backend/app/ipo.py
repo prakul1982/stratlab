@@ -195,6 +195,10 @@ def stage_of(row: dict, now: datetime | None = None) -> str:
     if row["market"] == "US":
         if row.get("priced"):
             return "listed" if row["priced"] <= now.astimezone(NY).date().isoformat() else "closed"
+        # LIVE9A-015: an offering whose expected pricing day has passed (a day's grace for the calendar to list it priced) and that has not
+        # priced is not "upcoming" (Rezera "Expected to price 12 Nov" on 16 Nov): it is back among the filed ones, with the day it missed
+        if row.get("expected") and row["expected"] < (now.astimezone(NY).date() - timedelta(days=1)).isoformat():
+            return "filed"
         return "upcoming" if row.get("expected") else "filed"
     local = now.astimezone(IST)
     today, hm = local.date().isoformat(), local.strftime("%H:%M")
@@ -235,11 +239,19 @@ def timeline(row: dict, now: datetime | None = None) -> dict:
     return out
 
 
+OVER_ALLOT = 0.15                     # the underwriters' option on a US offering: 15% more shares (LIVE9A-015)
+OPTION_BASIS = "including the underwriters' option of 15% more shares"
+
+
 def sizes(row: dict) -> dict:
     """The issue's size in rupees crore (or dollars): what the issue states, else the shares times the top of the band."""
     if row["market"] == "US":
         shares, price = row.get("shares"), row.get("price") or row.get("high")
         amount = row.get("amount") or (round(shares * price, 0) if shares and price else None)
+        # LIVE9A-015: the calendar's dollar value can include the underwriters' option to sell 15% more shares (825 m shares at $78 is
+        # $64.35 billion; it said $74 billion, 1.15 times that): said so, with the size without it
+        if row.get("amount") and shares and price and abs(row["amount"] / (shares * price) - (1 + OVER_ALLOT)) < 0.005:
+            return {"amount": amount, "basis": OPTION_BASIS, "base": round(shares * price, 0)}
         return {"amount": amount, "basis": "stated" if row.get("amount") else "shares at the offer price" if amount else None}
     stated = None
     top = row.get("price") or row.get("high")
@@ -292,6 +304,8 @@ def public(row: dict, now: datetime | None = None) -> dict:
             pass
     sz = sizes(row)
     out["size"], out["size_basis"] = sz["amount"], sz["basis"]
+    if sz.get("base"):
+        out["size_base"] = sz["base"]
     if sz.get("in_bids"):
         out["size_in_bids"] = sz["in_bids"]
     anchor = re.search(r"anchor[^0-9]{0,30}([\d,]{5,})\s+equity shares", str(row.get("issue_text") or ""), re.I)
@@ -1006,7 +1020,7 @@ def _settle(row: dict, bars: list[dict], first: dict | None, now: datetime) -> t
 LATER_DAYS = 7                         # how far past the last candle the exchange's own closes are looked for
 
 
-def later_closes(row: dict, after: str, now: datetime) -> list[dict]:
+def later_closes(row: dict, after: str, now: datetime, fetch_today: bool = True) -> list[dict]:
     """The exchange's official closes of an NSE issue for the trading days after its last daily candle, as candles (LIVE8A-016: an SME
     issue's candles ran two sessions behind, "₹304.35 · Close 11 Nov" where the exchange's 13 Nov close was ₹274.70; the cash
     bhavcopy has the SME series too). Days whose file isn't stored yet are left out; nothing past today's settled close."""
@@ -1032,7 +1046,7 @@ def later_closes(row: dict, after: str, now: datetime) -> list[dict]:
                     break                      # today's session isn't settled: no close yet
             except ValueError:
                 break
-        c = _official(sym, d.isoformat(), now, d == today)
+        c = _official(sym, d.isoformat(), now, fetch_today and d == today)
         if c is None:
             continue
         out.append({"t": d.isoformat(), "o": c, "h": c, "l": c, "c": c, "v": None, "official": True})
@@ -1118,6 +1132,12 @@ def official_perf(row: dict, perf: dict | None, now: datetime | None = None) -> 
         c = _official(row["symbol"], out.get(day_key) or "", now, False)
         if c is not None and out.get(px_key) and official_close.same_basis(c, out[px_key]):
             out[px_key], out[pct_key] = c, round((c / out["issue_price"] - 1) * 100, 2)
+    # LIVE9A-007: a stored figure whose latest close is days old (SME issues read "₹304.35 · Close 11 Nov" on 16 Nov) takes the newest
+    # official close the stored bhavcopies hold for the trading days after it (the SME series are in the file)
+    for c in reversed(later_closes(row, out.get("latest_date") or "", now, fetch_today=False)):      # stored files only: nothing is read
+        if official_close.same_basis(c["c"], out.get("latest") or c["c"]):
+            out["latest"], out["latest_date"], out["change_pct"] = c["c"], c["t"], round((c["c"] / out["issue_price"] - 1) * 100, 2)
+            break
     return out
 
 
@@ -1718,7 +1738,7 @@ def list_row(row: dict, now: datetime) -> dict:
     sub = row.get("sub") or {}
     perf = official_perf(row, row.get("perf"), now)
     keys = ("id", "market", "segment", "name", "symbol", "stage", "open", "close", "close_time", "allotment", "allotment_expected", "listing", "listing_expected",
-            "low", "high", "price", "lot", "min_amount", "min_basis", "size", "size_basis", "size_parts", "issue_status", "exchanges", "exchange",
+            "low", "high", "price", "lot", "min_amount", "min_basis", "size", "size_basis", "size_base", "size_parts", "issue_status", "exchanges", "exchange",
             "expected", "priced", "filed", "shares", "currency")
     out = {k: pub.get(k) for k in keys if pub.get(k) is not None}
     out["docs"] = sorted({d["kind"] for d in doc_links(row) if d["kind"]})
@@ -1876,7 +1896,7 @@ def ipo_detail(rid: str, profile=Depends(current_profile)):
         perf = perf_for(row) or row.get("perf")
     perf = official_perf(row, perf, now)
     keys = ("id", "market", "segment", "name", "symbol", "stage", "isin", "industry", "exchanges", "exchange", "open", "close", "close_time", "hours", "allotment", "allotment_expected",
-            "listing", "listing_expected", "low", "high", "price", "lot", "retail_max", "face_value", "min_amount", "min_basis", "size", "size_basis", "size_parts", "issue_status",
+            "listing", "listing_expected", "low", "high", "price", "lot", "retail_max", "face_value", "min_amount", "min_basis", "size", "size_basis", "size_base", "size_parts", "issue_status",
             "fresh", "ofs", "fresh_cr", "ofs_cr", "size_shares", "issue_type", "issue_text", "lead_managers", "registrar", "expected", "priced", "filed",
             "shares", "amount", "currency", "industry", "credit", "credit_expected", "size_in_bids", "anchor_shares")
     ipo = {k: pub.get(k) for k in keys if pub.get(k) is not None}

@@ -97,8 +97,11 @@ US_INDICES = {"SPX", "GSPC", "^GSPC", "NDX", "IXIC", "^IXIC", "DJI", "^DJI", "DJ
 IN_INDEX = re.compile(r"^(NIFTY|SENSEX|BANKNIFTY|FINNIFTY|MIDCPNIFTY|BANKEX|INDIAVIX|CNX)[A-Z0-9 &-]*$")
 # a market value above this (in the page's unit: $ million, ₹ crore) is a data error: no company is worth $8 trillion
 CAP_CEILING = {"US": 8_000_000.0, "IN": 10_000_000.0}
-IN_SHARES_MAX = 30e9        # an Indian company's implied share count (market value ÷ price) above this is a unit or share-count error (R26-001)
-IN_PS_MAX = 50              # an Indian market value over this many times its latest year's revenue is out of line (R26-001)
+# an Indian company's implied share count (market value ÷ price) above this is a unit or share-count error (R26-001); LIVE9A-024: 30 billion
+# left YES Bank (about 31 billion shares) without a value, and Vodafone Idea has over 100 billion
+IN_SHARES_MAX = 150e9
+IN_PS_MAX = 50              # an Indian market value over this many times its latest year's revenue is out of line (R26-001)...
+IN_PE_BACKED = 150          # ...unless its latest year's profit bears it out (LIVE9A-024: a holding company, Bajaj Holdings, earns little revenue)
 # an exchange operator that is not itself a listed company, which an instrument list can carry under its own code (R26-001)
 UNLISTED_NAMES = re.compile(r"^\s*national stock exchange of india\b", re.I)
 PE_MAX = 1000.0                # a P/E above this says the market value or the profit is off, not the company: n/a
@@ -908,6 +911,16 @@ def _latest_sales(f: dict):
     return vals[-1] if vals else None
 
 
+def _latest_profit(f: dict):
+    """The latest year's profit from the page's own table, when it is in the market value's unit (LIVE9A-024)."""
+    unit, cap_unit = str(f.get("unit") or ""), str(f.get("market_cap_unit") or "")
+    if not unit or unit != cap_unit:
+        return None
+    vals = [_num(y.get("profit")) for y in f.get("years") or [] if str(y.get("year") or "").strip().upper() != "TTM"]
+    vals = [v for v in vals if v is not None]
+    return vals[-1] if vals else None
+
+
 def cap_problem(f: dict | None) -> str | None:
     """Why a page's market value can't be right, or None when it passes every check (or there is none). Checked:
     - depositary shares whose ratio to ordinary shares couldn't be read (the value counts ordinary shares at the ADS price);
@@ -947,7 +960,9 @@ def cap_problem(f: dict | None) -> str | None:
         if price and price > 0 and cap * 1e7 / price > IN_SHARES_MAX:
             return "implied share count out of range"
         if sales is not None and sales > 0 and cap / sales > IN_PS_MAX:
-            return "out of line with revenue"
+            profit = _latest_profit(f)
+            if not (profit is not None and profit > 0 and cap / profit <= IN_PE_BACKED):
+                return "out of line with revenue"
     if region == "US":
         profit, pe = _num(f.get("profit_usd")), _num(f.get("pe"))
         if profit is None and str(f.get("unit") or "$").startswith("$"):
@@ -2392,10 +2407,14 @@ th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:
 
 .card>h2:first-child{margin-top:0}.surv{margin:2px 0}.surv summary{cursor:pointer;min-height:44px;display:flex;align-items:center;flex-wrap:wrap;gap:2px 10px}.surv p{margin:0 0 8px}
 .badge{display:inline-block;border:1px solid var(--orange-ink);color:var(--orange-ink);background:var(--orange-soft);border-radius:999px;padding:2px 10px;font-size:13px;font-weight:600}
+/* LIVE9A-011: a public theme layer's companies as a table: names and tickers left, figures right, the name wrapping, sideways scroll on a phone */
+.cotbl{overflow-x:auto}.cotbl th.l,.cotbl td.l{text-align:left}.cotbl td:first-child{white-space:normal;min-width:150px;position:static}
+.cotbl th:first-child{position:static}
 ul.plain{list-style:none;padding:0;margin:0}ul.plain li{padding:10px 0;border-bottom:1px solid var(--line)}ul.plain li:last-child{border-bottom:0}
 .ctas{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
 ul.dir{list-style:none;padding:0;margin:16px 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));gap:8px}
 ul.dir li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 14px;background:var(--card);border:1px solid var(--line);border-radius:12px}
+ul.dir li:has(a+.muted){flex-wrap:wrap;row-gap:0}
 ul.dir li:hover{border-color:var(--line-2)}ul.dir a{display:flex;align-items:center;flex:1;min-width:0;min-height:48px;line-height:1.3;color:var(--ink);text-decoration:none}
 ul.dir a:hover{color:var(--blue)}ul.dir .muted{flex:none;font-size:13px}nav.links{margin:12px 0 6px}
 .links{display:flex;flex-wrap:wrap;gap:8px}.links a{display:inline-flex;align-items:center;min-height:40px;padding:4px 14px;border:1px solid var(--line);border-radius:999px;text-decoration:none;background:var(--card);color:var(--ink-2)}

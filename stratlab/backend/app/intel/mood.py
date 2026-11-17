@@ -311,6 +311,13 @@ def quote_rows(spec: list[tuple], got: dict[str, dict | None], today: str) -> li
 
 
 # ---------- the words ----------
+def same_session(breadth: dict | None, session: str | None) -> dict | None:
+    """The breadth count when it is of `session` (a live round, or the stored count of that day), else None (LIVE9A-002)."""
+    if not breadth:
+        return None
+    return breadth if breadth.get("live") or (session and breadth.get("day") == session) else None
+
+
 def headline_of(indices: list[dict], sectors: dict | None, cmp: dict | None, breadth: dict | None = None) -> str:
     """One short headline the figures below justify: the day's tone from the index moves, how big a day it is against the
     usual, and (when there is a count) how many sector indices went the same way. No level and no move is repeated.
@@ -516,10 +523,21 @@ class Mood:
             self.payloads.put(region, value, at)
             self._kept_at[region] = at
 
-    def _build_kept(self, region: str) -> dict:
+    def _build_kept(self, region: str, force: bool = False) -> dict:
         value = self.build(region)
+        if force:
+            self._kept_at[region] = 0.0
         self._keep(region, value)
         return value
+
+    def refresh_now(self, region: str, timeout: float = 120.0) -> dict | None:
+        """LIVE9A-001: the payload read now (joining a read already running), kept in memory and written to the database at once
+        (not held back by KEEP_EVERY), for the clock after each close (mood_job); None when the read failed or took too long."""
+        f = self.payloads._start(region, lambda: self._build_kept(region, force=True))
+        try:
+            return f.result(timeout=timeout)
+        except Exception:
+            return None
 
     def forget(self):
         self.payloads = Snapshot(FRESH_OPEN, give_up=40)
@@ -780,7 +798,9 @@ class Mood:
              "compare": cmp, "breadth": b, "sectors": sectors, "movers": movers, "flows": flows,
              "risk": {"rows": risk} if risk else None, "global": {"rows": glob} if glob else None,
              "calendar": cal if any(cal.values()) else None}
-        p["headline"] = headline_of(levels, sectors, cmp, b)
+        # LIVE9A-002: the headline sets the index moves against a breadth count of the same session only (at 14:23 ET on Mon 16 Nov: "all
+        # three indices down on the day, but 313 of 499 S&P 500 stocks rose", the count being Friday's); the dated line under it stays
+        p["headline"] = headline_of(levels, sectors, cmp, same_session(b, p["session"]))
         p["lines"] = lines_of(p)
         bad = verify(p)
         if bad:                           # a line the tables don't bear out is never shown (the tables still are)

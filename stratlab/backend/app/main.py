@@ -1154,7 +1154,12 @@ def my_usage(profile=Depends(current_profile)):
     from . import computed
     from .plans import refreshes_allowed
     word = computed.plan_word(profile)
-    return ok({"plan": PLANS[plan]["name"], "rows": rows, "refresh_off": word != "admin" and not refreshes_allowed(word, profile)})
+    # LIVE9A-003: a Free account made before the smaller Free plan keeps the old counts until a date (plans.free_grace_until); every note that
+    # shows such a count ("60 left today", the decks left) says until when and what Free has after, so it never reads as Free's own limit
+    from .plans import free_grace_until
+    end = free_grace_until(profile) if plan == "free" else None
+    grace = {"until": end.isoformat(), "reads_after": PLANS["free"]["ai_reads_per_day"], "decks_after": PLANS["free"]["decks_per_month"]} if end else None
+    return ok({"plan": PLANS[plan]["name"], "rows": rows, "refresh_off": word != "admin" and not refreshes_allowed(word, profile), "grace": grace})
 
 
 _usage_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="usage-counts")
