@@ -50,3 +50,14 @@ test("LIVE10A-032 / LIVE10B-023: a company page says how many of your alerts wat
   assert.match(form, /onClose=\{\(\) => \{ setOpen\(false\); setSeen\(\(n\) => n \+ 1\); \}\}/);
   assert.match(read("src/pages/Research.tsx"), /<AlertButton region=\{region\} symbol=\{c\.symbol\} showOn \/>/);
 });
+
+test("LIVE10A-028: /new holds the market chips' row and the search box while the markets are read", () => {
+  assert.match(read("src/pages/Home.tsx"), /\{!markets\.length \? <div className="k-where-wait" role="status" aria-busy="true" aria-label="Reading the markets"><span className="lp-skel" \/><span className="lp-skel" \/><\/div>/);
+  assert.match(read("src/styles.css"), /\.k-where-wait \.lp-skel \+ \.lp-skel \{ height: 44px; \}/);
+});
+
+test("LIVE10A-027: a phone's results row names the company under its symbol, on one line", () => {
+  const css = read("src/styles-invest.css");
+  assert.doesNotMatch(css, /\.k-tbl-wrap\.compact \.res-name \{ display: none; \}|\.k-tbl-wrap\.compact \.res-plain, \.k-tbl-wrap\.compact \.res-name/);
+  assert.match(css, /\.k-tbl-wrap\.compact \.res-name \{ white-space: nowrap; \}/);
+});
