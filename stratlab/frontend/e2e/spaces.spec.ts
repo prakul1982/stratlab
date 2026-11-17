@@ -325,7 +325,8 @@ test("search labels each result with its space", async ({ page }, info) => {
   // IA-1: a tab's result names its entry, and an old name finds it where it is now
   await expect(box.getByRole("option", { name: /^Practise › Options builder/ }).locator(".space-tag")).toHaveText("Trade");
   await box.getByLabel("Search or ask anything").fill("sector rotation");
-  await expect(box.getByRole("option", { name: /^Market today › Sectors \(Sector rotation\)/ }).first().locator(".space-tag")).toHaveText("Invest");
+  // (updated on purpose, NAV3: Market today is called Markets)
+  await expect(box.getByRole("option", { name: /^Markets › Sectors \(Sector rotation\)/ }).first().locator(".space-tag")).toHaveText("Invest");
   await box.getByLabel("Search or ask anything").fill("money");
   await box.getByRole("option", { name: /^Money/ }).first().click();
   await expect(page).toHaveURL(/\/money$/);

@@ -40,8 +40,10 @@ test("landing: the three spaces with Trade first, alerts, plans, FAQ and markets
   await expect(page).toHaveTitle("StratLab: backtest trading ideas, research stocks, track money");
   for (const sel of ['meta[name="description"]', 'meta[property="og:description"]']) await expect(page.locator(sel)).toHaveAttribute("content", /trad/i);
   // what ships today, one line each
-  // the long lists show a few and fold the rest ("12 more Trade tools"): open them, everything is still there
+  // the long lists show a few and fold the rest: open them, everything is still there
+  // (updated on purpose, NAV3, CX-1: the folds name what is in them, "Every Trade tool", with no "16 more tools" count anywhere on the page)
   const more = page.locator(".lp-more > summary");
+  for (const t of await page.locator("summary").allInnerTexts()) expect(t, "a teaser count").not.toMatch(/\d+ more\b/i);
   expect(await more.count(), "the tool lists fold").toBeGreaterThanOrEqual(3);
   for (const s of await more.all()) await s.click();
   const research = page.locator("#invest");
@@ -293,6 +295,7 @@ test("/plans: one heading and one line, the cards in view, the public header, in
     expect(xs.length).toBeGreaterThanOrEqual(3);
     for (const x of xs.slice(1)) expect(x).toEqual(xs[0]);
   }
+  if (info.project.name === "phone") await page.locator("#compare summary", { hasText: "The full comparison, row by row" }).click();
   await expect(page.getByRole("row", { name: /Paper trading sessions at a time/ })).toContainText("1 (5-market-day trial)");
   await expect(page.getByRole("row", { name: /Paper trading sessions at once/ })).toContainText("1 (5-market-day trial)");          // the glance's row says it too
   expect(errors).toEqual([]);
@@ -356,6 +359,7 @@ test("landing: 'ten markets', 'facts, not tips' and 'never real orders' are neve
   expect(count("never real orders"), "never real orders").toBeLessThanOrEqual(1);
   const hero = (await page.locator(".lp-hero").innerText()).toLowerCase();
   expect(hero).not.toMatch(/ten markets|never tips|facts|real orders|paper trading only/);
-  expect(hero).toContain("one place for trading ideas, company research and your own money.");
+  // (updated on purpose, NAV3, CX-1: the hero's line is the one promise, not "one place for trading ideas, company research and your own money")
+  expect(hero).toContain("write it in plain words. stratlab tests it on years of real prices after every charge");
   expect(errors).toEqual([]);
 });

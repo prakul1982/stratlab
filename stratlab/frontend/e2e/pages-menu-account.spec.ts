@@ -50,6 +50,10 @@ test("plans: short cards, the full comparison, and backtests (not experiments)",
   await expect(row("All 20+ indicators in strategy rules")).toHaveText(["All 20+ indicators in strategy rules", "–", "✓", "✓"]);
   await expect(row("Trade notifications")).toHaveText(["Trade notifications", "–", "✓", "✓"]);
   await expect(row("Indian F&O in notebooks and backtests")).toHaveText(["Indian F&O in notebooks and backtests", "–", "–", "✓"]);   // Basic's options paper trading is its own row (R54-008)
+  // (updated on purpose, NAV3, CX-1 "about 60 feature rows": 12 rows at a glance in view, every row above one fold below them)
+  await expect(table.locator('[data-plans-group="glance"] tbody tr')).toHaveCount(12);
+  await expect(row("Backtests a month")).toHaveText(["Backtests a month", "5", "100", "Unlimited"]);
+  await table.getByText("The full comparison, row by row").click();
   // what every plan has is one folded table, and what each plan adds is under its own subheadings (DP1-022, DI-032)
   await expect(table.getByRole("heading", { name: "Trading" })).toBeVisible();
   await expect(table.getByRole("heading", { name: "Money and tax" })).toBeVisible();
@@ -346,7 +350,7 @@ test("the account menu: Account, Settings, Plan, Invite, Get the app, Admin, All
   // (updated on purpose, NAV3: My space's own menu is gone, so Connected accounts and the AI assistant sit beside Settings here)
   await expect(acct.getByRole("menuitem")).toHaveText(["Account", "Settings", "Connected accounts", "Connect an AI assistant", /^Plan\s*Pro$/, "Invite friends", "Get the app", "Admin", "All features", "Help", "Feedback", "Take the tour", "Sign out"]);   // Feedback beside Help (owner, 5 Nov)
   for (const [name, href] of [["Account", "/account"], ["Settings", "/settings"], ["Plan", "/plans"], ["Invite friends", "/invite"], ["Get the app", "/app"], ["All features", "/features"], ["Help", "/help"]])
-    await expect(acct.getByRole("menuitem", { name })).toHaveAttribute("href", href);
+    await expect(acct.getByRole("menuitem", name === "Plan" ? { name: /^Plan\b/ } : { name, exact: true })).toHaveAttribute("href", href);          // (updated on purpose, NAV3: exact, beside "Connected accounts")
   if (phone) {
     for (const el of await acct.getByRole("menuitem").all()) expect((await el.boundingBox())!.height).toBeGreaterThanOrEqual(40);
     const box = (await acct.boundingBox())!;

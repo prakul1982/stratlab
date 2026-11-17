@@ -101,7 +101,7 @@ const CALENDAR: NavGroup = {
  * Each keeps its address, its plan lock and its card; the old Market data and Plan entries' pages open it (`was`). */
 const MORE: NavGroup = {
   id: "more", label: "More tools", icon: "layers", was: ["market-data", "plan"], apart: true,
-  blurb: "The narrower tools: the closing auction, chart replay and forward tests; ETFs against their NAV, margin funding and stock lending fees; business updates, business groups and named holders; a SIP test and rates after tax.",
+  blurb: "The narrower tools: the closing auction, chart replay and forward tests; ETFs against their NAV, margin funding and stock lending fees; business updates, business groups and named holders; a SIP test and today's interest rates.",
   pages: [
     page("/trade/closing-auction", "Closing auction", "pulse", "closing auction 15:15 15:35 reference price indicative price settlement expiry day", { space: "trade" }),
     page("/trade/replay", "Chart replay", "lens", "chart replay practise past candles bar replay manual trading practice journal", { flag: "chart_replay", space: "trade" }),

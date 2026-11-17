@@ -226,7 +226,9 @@ test("LIVE4-020: one source for the plan cards (landing and Plans page alike); t
   assert.doesNotMatch(read("src/lib/plans.ts"), /export const FEATURES/);
   const F = await import("../src/lib/planFeatures.ts");
   for (const p of ["free", "basic", "pro"]) assert.ok(F.FEATURES[p].length >= 6, p);
-  assert.match(css, /\.lp-examples > \.lp-example:nth-child\(n\+2\), \.lp-examples-skel > \.lp-skel-card:nth-child\(n\+2\) \{ display: none; \}/);
+  // (updated on purpose, NAV3, CX-1 "no example shows what a good result looks like": two on a phone, one that passed and one that failed,
+  // inside the page's own fold, so the page's length is unchanged)
+  assert.match(css, /\.lp-examples > \.lp-example:nth-child\(n\+3\), \.lp-examples-skel > \.lp-skel-card:nth-child\(n\+3\) \{ display: none; \}/);
   // /features for a visitor is the landing page at its Trade section, kept out of search: noindex from the server and no canonical address
   const vercel = JSON.parse(read("vercel.json"));
   const noindex = vercel.headers.find((h) => h.headers.some((x) => x.key === "X-Robots-Tag" && /noindex/.test(x.value)) && new RegExp(`^${h.source.replace(/\(\?:/g, "(?:")}$`).test("/features"));

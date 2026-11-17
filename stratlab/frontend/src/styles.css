@@ -807,7 +807,8 @@ td.num, .num { font-family: var(--sans); }
 .lp-markets .lp-sym { width: 32px; height: 32px; border-radius: 50%; font-size: 13px; }
 /* LIVE4-020: the landing page on a phone was 14,902px: one example verdict (the link under it opens all of them), and the markets as small chips */
 @media (max-width: 640px) {
-  .lp-examples > .lp-example:nth-child(n+2), .lp-examples-skel > .lp-skel-card:nth-child(n+2) { display: none; }
+  /* NAV3: two, one that passed its checks and one that failed (the page's own fold holds them, so its length is unchanged) */
+  .lp-examples > .lp-example:nth-child(n+3), .lp-examples-skel > .lp-skel-card:nth-child(n+3) { display: none; }
   .lp-markets .lp-market { padding: 4px 12px 4px 4px; gap: 8px; font-size: 14px; }
   .lp-markets .lp-sym { width: 26px; height: 26px; font-size: 12px; }
 }
@@ -2058,6 +2059,8 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-disclosure[open] > summary::before { transform: rotate(45deg); }
 .k-disclosure-body { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s1) 0 0 var(--s4); }
 .k-disclosure-body:has(> .k-tbl-wrap) { padding-left: 0; }   /* VR1-122: a table in a fold lines up with the cards around it, not 16px in */
+/* NAV3: the plans' full comparison is one fold of several tables, each under its heading: they line up with the glance table above */
+.k-compare .k-disclosure-body { padding-left: 0; }
 /* FoldCard (owner, 5 Nov: "make it like a dropdown everywhere"): a card that is one row until opened; the title is the button and the
    whole row its target (the button's ::after covers it), the (i) above that layer; on the right what is inside and a chevron */
 .k-foldcard { gap: 0; padding-block: var(--s3); }
@@ -2705,7 +2708,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 @media (max-width: 600px) {
   .lp-hero .lp-demo { display: flex; }
   .lp-hero { padding-top: 28px; }
-  .lp-demo-rule, .lp-cta-2 { display: none; }
+  /* NAV3: the hero's second button opens a real result without signing in, so a phone keeps it (it was "See how it works", hidden here) */
+  .lp-demo-rule { display: none; }
   .lp-demo-tabs { align-self: stretch; }
   /* one line each, sized to its words and sharing what is left (RC2B-033: "NIFTY 50" wrapped to two lines on an iPhone) */
   .lp-demo-tabs button { flex: 1 1 auto; white-space: nowrap; padding: 0 10px; }

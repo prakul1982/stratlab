@@ -36,8 +36,16 @@ for (const space of SPACE_IDS) {
     // one Calendar link in the whole menu, and no space switch
     await expect(side.getByRole("link", { name: "Calendar", exact: true })).toHaveCount(1);
     await expect(side.getByRole("group", { name: "Space" })).toHaveCount(0);
-    await side.getByRole("link", { name: "Calendar", exact: true }).click();
-    await expect(page).toHaveURL(/\/calendar$/, { timeout: 30_000 });
+    // on a phone the one menu is longer than the drawer: the link is scrolled to first, and the menu's "More below" line can move it as the
+    // scroll ends, so the tap is tried again until it lands
+    const cal = side.getByRole("link", { name: "Calendar", exact: true });
+    await expect(async () => {
+      if (phone && !(await page.locator("aside.sidebar.open").count())) await page.getByRole("button", { name: "Open menu" }).click();
+      await cal.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+      await cal.click({ timeout: 3000 });
+      await expect(page).toHaveURL(/\/calendar$/, { timeout: 3000 });
+    }).toPass({ timeout: 30_000 });
     for (const p of CALENDAR.pages) {
       if (phone) {
         await crumb.locator(".k-crumb-btn").click();
