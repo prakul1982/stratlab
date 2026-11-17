@@ -61,3 +61,10 @@ test("LIVE10A-027: a phone's results row names the company under its symbol, on 
   assert.doesNotMatch(css, /\.k-tbl-wrap\.compact \.res-name \{ display: none; \}|\.k-tbl-wrap\.compact \.res-plain, \.k-tbl-wrap\.compact \.res-name/);
   assert.match(css, /\.k-tbl-wrap\.compact \.res-name \{ white-space: nowrap; \}/);
 });
+
+test("CX2: /home opens My space, sent to the app by every web server (it was \"Page not found\")", async () => {
+  assert.match(read("src/main.tsx"), /<Route path="\/home" element=\{<Redirect to="\/mine" \/>\} \/>/);
+  const { APP_ROUTES } = await import("../src/lib/deepLinks.ts");
+  assert.ok(APP_ROUTES.includes("/home"));
+  for (const f of ["Caddyfile", "vercel.json", "public/sw.js"]) assert.match(read(f), /mine\|all\|home\|features/, f);
+});

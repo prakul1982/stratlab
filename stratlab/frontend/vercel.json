@@ -95,7 +95,7 @@
       ]
     },
     {
-      "source": "/((?:index.html)?|(?:mine|all|features|trade|invest|money|notebooks|new|n|import|options|paper|plans|upgrade|help|tour|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|chart|scans|watchlist|dev|login|signup|about|verdict|calendar|start|pricing|faq|terms|privacy|refunds|contact)(?:/.*)?)",
+      "source": "/((?:index.html)?|(?:mine|all|home|features|trade|invest|money|notebooks|new|n|import|options|paper|plans|upgrade|help|tour|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|chart|scans|watchlist|dev|login|signup|about|verdict|calendar|start|pricing|faq|terms|privacy|refunds|contact)(?:/.*)?)",
       "headers": [
         {
           "key": "Cache-Control",
@@ -104,7 +104,7 @@
       ]
     },
     {
-      "source": "/((?:mine|all|features|trade|invest|money|notebooks|new|n|import|options|paper|plans/.+|upgrade|help|tour|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|chart|scans|watchlist|dev|login|signup|verdict|calendar|v|c|r|embed)(?:/.*)?)",
+      "source": "/((?:mine|all|home|features|trade|invest|money|notebooks|new|n|import|options|paper|plans/.+|upgrade|help|tour|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|chart|scans|watchlist|dev|login|signup|verdict|calendar|v|c|r|embed)(?:/.*)?)",
       "headers": [
         {
           "key": "X-Robots-Tag",
@@ -247,7 +247,7 @@
       "destination": "https://stratlab-production-ca25.up.railway.app/news-link/:issue/:n"
     },
     {
-      "source": "/((?:mine|all|features|trade|invest|money|notebooks|new|n|import|options|paper|plans|upgrade|help|tour|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|chart|scans|watchlist|dev|login|signup|about|verdict|calendar)(?:/.*)?|start|pricing|faq|terms|privacy|refunds|contact)",
+      "source": "/((?:mine|all|home|features|trade|invest|money|notebooks|new|n|import|options|paper|plans|upgrade|help|tour|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|chart|scans|watchlist|dev|login|signup|about|verdict|calendar)(?:/.*)?|start|pricing|faq|terms|privacy|refunds|contact)",
       "destination": "/index.html"
     }
   ]

@@ -271,6 +271,8 @@ function Routed() {
         <Route path="/" element={<SpaceHome />} />
         <Route path="/mine" element={<MineHome />} />
         <Route path="/all" element={<Redirect to="/mine" />} />
+        {/* CX2: a "home" address typed or kept from elsewhere opens My space, not "Page not found" */}
+        <Route path="/home" element={<Redirect to="/mine" />} />
         <Route path="/features" element={<FeaturesPage />} />
         {/* the landing page's own addresses, signed in: nothing to sign in to, so home; "about" is what the features page tells */}
         <Route path="/login" element={<Redirect to="/" />} />
