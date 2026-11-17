@@ -137,3 +137,20 @@ def test_a_theme_page_without_kept_states_says_its_count_as_the_others_do(monkey
     assert not v.get("evidence")
     page = public_themes.render(v)
     assert "2 companies in 1 layer" in page and "checked companies" not in page.split("<body>")[1].split("Layers")[0]
+
+
+# ---------- LIVE10A-005: a public theme page and its card give the day the map was written, as the app and the deck do ----------
+def test_the_public_theme_day_is_the_maps_written_day_in_the_markets_time(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from app import public_themes
+    written = datetime(2026, 11, 8, 3, 0, tzinfo=timezone(timedelta(hours=5, minutes=30))).timestamp()   # app: "Last updated 8 Nov, 03:00 IST"
+    stored = datetime(2026, 11, 16, 12, 0, tzinfo=timezone.utc).timestamp()                               # stored again on 16 Nov
+    payload = {"generated_at": written, "value_chain": [{"layer": "Ships", "companies": [{"ticker": "A", "name": "A Ltd", "verified": True, "what": "builds ships"}]}]}
+    monkeypatch.setattr(public_themes, "_dive", lambda r, n, p: {})
+    monkeypatch.setattr(public_themes, "_index_caps", lambda r: {})
+    monkeypatch.setattr(public_themes.stock_pages, "companies", lambda r: set())
+    entry = {"region": "IN", "name": "Ships", "label": "Ships", "slug": "ships", "at": stored}
+    assert public_themes.view(entry, payload)["day"] == "2026-11-08"          # not the UTC 7 Nov, not the stored 16 Nov
+    monkeypatch.setattr(public_themes, "payload", lambda x: payload)
+    assert public_themes.card_line(entry).endswith("· 8 Nov")
+    assert public_themes.view({**entry}, {k: v for k, v in payload.items() if k != "generated_at"})["day"] == "2026-11-16"   # no map time: the entry's

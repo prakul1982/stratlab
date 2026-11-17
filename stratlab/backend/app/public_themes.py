@@ -247,8 +247,18 @@ def view(entry: dict, p: dict) -> dict:
     return {"region": region, "label": entry["label"], "slug": entry["slug"], "name": entry["name"], "evidence": tally,
             "summary": public_words(p.get("summary"), 700), "layers": layers, "members": n,
             "prices": _price_day(region, {c["symbol"] for v in layers for c in v["companies"] if c.get("cap")}),
-            "day": datetime.fromtimestamp(float(entry["at"]), timezone.utc).date().isoformat() if entry.get("at") else None,
+            "day": _map_day(region, p, entry),
             "indexable": len(layers) >= MIN_LAYERS and n >= MIN_MEMBERS}
+
+
+def _map_day(region: str, p: dict, entry: dict) -> str | None:
+    """LIVE10A-005: the day the map was written (the payload's generated_at, the app's "Last updated" and the deck's "map was written"), in the
+    market's own time; the library entry's time (when it was last stored again: "map made 16 Nov" beside the app's 7 Nov) only without it."""
+    from zoneinfo import ZoneInfo
+    t = float(p.get("generated_at") or 0) or float(entry.get("at") or 0)
+    if not t:
+        return None
+    return datetime.fromtimestamp(t, ZoneInfo("Asia/Kolkata" if region == "IN" else "America/New_York")).date().isoformat()
 
 
 def indexable(entry: dict) -> bool:
@@ -380,6 +390,7 @@ def directory(region: str | None) -> str:
 def card_line(x: dict) -> str:
     """LIVE9A-020: a directory card's small line: "India · 69 companies · 16 Nov" (the count of checked companies on its page)."""
     bits = ["India" if x["region"] == "IN" else "US"]
+    p = None
     try:
         p = payload(x)
         n = len({c["ticker"] for v in theme_layers(p) for c in v["companies"]}) if p else 0
@@ -387,8 +398,9 @@ def card_line(x: dict) -> str:
         n = 0
     if n:
         bits.append(f"{n} compan{'y' if n == 1 else 'ies'}")
-    if x.get("at"):
-        d = datetime.fromtimestamp(float(x["at"]), timezone.utc)
+    day = _map_day(x["region"], p or {}, x)          # LIVE10A-005: the map's own day, as its page and the app say it
+    if day:
+        d = datetime.fromisoformat(day)
         bits.append(f"{d.day} {d.strftime('%b')}")
     return " · ".join(bits)
 
