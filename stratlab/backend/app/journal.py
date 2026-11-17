@@ -586,7 +586,7 @@ def _dp(kind: str, intraday: bool = False) -> float:
 
 
 def no_stt(kind: str, bv: float, sv: float, charges: float) -> bool:
-    """A delivery trade whose charges, as its file listed them, are less than the STT alone that it paid (0.1% of the buy
+    """A delivery trade whose charges, as its file listed them, are less than the STT alone that it paid (0.1% of the purchase
     and of the sale): the file left STT out (LIVE10B-039: "₹2.00" on an ₹87,000 round trip whose STT is ₹87). The
     figures stay the file's, as the tax report's do (R9R-001); the page says they leave STT out."""
     if kind != "in_eq":
