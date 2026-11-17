@@ -1,6 +1,6 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
-// Lane su1 (owner, 16 Nov) on the fake world: (1) sign-in by email beside Google, hidden while /config.js leaves EMAIL_SIGNIN off
+// Lane su1 (owner, 16 Nov) on the fake world: (1) sign-in by email beside Google, hidden while /config.js leaves EMAIL_SIGNIN off (the shipped one turns it on)
 // and shown when it is on, with the sign-in service's answers mocked (nothing is emailed); (2) US dollar prices for US visitors on
 // a visible "Prices in" switch, and a checkout whose amount is the one the page confirmed: rupees while dollar checkout is off or
 // the server has no USD plans, dollars only when both are on.
@@ -35,7 +35,8 @@ const errorsOf = (page: Page) => { const e: string[] = []; page.on("pageerror", 
 test.use({ serviceWorkers: "block" });          // each visit reads the config.js the test gives, never one a service worker kept
 
 test.describe("email sign-in", () => {
-  test("switched off (as shipped): the sign-in page and the gate offer Google only, and Sign in goes straight to Google", async ({ page }) => {
+  // (updated on purpose (owner, 17 Nov): the shipped config.js now turns email sign-in on; switched off is still the default without it)
+  test("switched off (the default without EMAIL_SIGNIN): the sign-in page and the gate offer Google only, and Sign in goes straight to Google", async ({ page }) => {
     const errors = errorsOf(page);
     let authorize = "";
     await page.route(`${SB}/authorize**`, (r) => { authorize = r.request().url(); return r.fulfill({ status: 200, body: "signing in", contentType: "text/plain" }); });
@@ -151,6 +152,7 @@ test.describe("US dollar prices", () => {
       expect(errors).toEqual([]);
     });
 
+    // (the shipped config.js turns dollar checkout on, owner 17 Nov; this is the app without USD_CHECKOUT, as the test world serves it)
     test("signed in, no dollar checkout: dollars shown, the confirm step and checkout are the rupee amount", async ({ page }, info) => {
       const errors = errorsOf(page);
       await page.addInitScript(() => {

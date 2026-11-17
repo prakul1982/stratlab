@@ -154,8 +154,9 @@ test("email sign-in is drawn only while config.js switches it on, and ships swit
   // a send can't be repeated for a minute (the sign-in service's own limit per address, and its hourly limit, still apply)
   assert.match(comp, /export const RESEND_WAIT = 60;/);
   assert.match(comp, /if \(busy \|\| wait > 0\) return;/);
-  // the site ships with both switched off: nothing changes until the owner turns them on
+  // (updated on purpose (owner, 17 Nov: the sign-in service's email templates and SMTP are set up, and the payment provider takes
+  // international payments): the site ships with email sign-in and dollar checkout both on)
   const cfg = read("public/config.js");
-  assert.doesNotMatch(cfg, /EMAIL_SIGNIN\s*:\s*("on"|"true"|true)/);
-  assert.doesNotMatch(cfg, /USD_CHECKOUT\s*:\s*("on"|"true"|true)/);
+  assert.match(cfg, /EMAIL_SIGNIN\s*:\s*"on"/);
+  assert.match(cfg, /USD_CHECKOUT\s*:\s*"on"/);
 });
