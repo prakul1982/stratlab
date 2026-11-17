@@ -38,7 +38,7 @@ export function PeersCard({ region, symbol, id = "co-peers" }: { region: Region;
   };
 
   const head = (actions?: React.ReactNode) => <CardHead title="Peers" actions={actions}
-    info="Listed companies of the same industry (its sector when the industry has too few), nearest in market value. Sales growth is compounded over 3 years; EBITDA margin, net margin and the return are of the latest reported year; P/E at the last close. A lender is compared on return on equity." />;
+    info="Listed companies of the same industry (its sector when the industry has too few) with a market value between 1/20 of the company's own and 20 times it, nearest first. Sales growth is compounded over 3 years; EBITDA margin, net margin and the return are of the latest reported year; P/E at the last close. A lender is compared on return on equity." />;
 
   if (error) return <Card id={id}>{head()}<ErrorState title="The peers couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState></Card>;
   if (!v) return <Card id={id}>{head()}<Skeleton label="Reading the peers" lines={4} /></Card>;

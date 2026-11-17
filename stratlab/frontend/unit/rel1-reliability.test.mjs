@@ -94,3 +94,7 @@ test("LIVE9B-010: the market tiles paint their last levels, each with its own da
   assert.deepEqual(M.keptStrip(now + 5 * 86400_000, store), {});              // too old: the tile reads afresh
   assert.match(read("src/lib/mine.ts"), /useState<Record<string, Series \| null \| undefined>>\(\(\) => keptStrip\(\)\)/);
 });
+
+test("rel1 item 7: the peers card states the size rule", () => {
+  assert.match(read("src/components/CompanyPeers.tsx"), /with a market value between 1\/20 of the company's own and 20 times it, nearest first\./);
+});
