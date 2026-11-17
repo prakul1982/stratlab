@@ -126,6 +126,7 @@ export function TaxReportPage() {
   const [fy, setFy] = useState<number | null>(null);
   const [movedFrom, setMovedFrom] = useState<number | null>(null);      // the empty year it opened past, if it did
   const [mode, setMode] = useState<"add" | "replace">("add");
+  const [replacing, setReplacing] = useState<File[] | null>(null);       // files that would replace the stored trades, asked first (LIVE10B-032)
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportReply | null>(null);
   const [allSales, setAllSales] = useState(false);
@@ -160,6 +161,12 @@ export function TaxReportPage() {
     const list = all.filter((f) => f.size <= capMb(f.name) * 1024 * 1024);
     for (const f of all) if (f.size > capMb(f.name) * 1024 * 1024) notify(`${f.name} is larger than ${capMb(f.name)} MB. Split it by year (or quarter) and upload each one.`);
     if (!list.length) { reset(); return; }
+    // "Start again" over stored trades is asked first, as holdings asks (LIVE10B-032: every trade went at once with no question)
+    if (mode === "replace" && (rep?.trades ?? 0) > 0) { reset(); setReplacing(list); return; }
+    await send(list);
+    reset();
+  };
+  const send = async (list: File[]) => {
     setBusy(true); clearProblem();
     let got: ImportReply | null = null;
     try {
@@ -174,7 +181,6 @@ export function TaxReportPage() {
       // a later file that failed doesn't hide the files before it: those are stored, so the page shows them, then the error stands
       if (got) { setResult(got); setRep(got.report); setFy(open(got.report, null)); setMode("add"); }
       setBusy(false);
-      reset();
     }
   };
 
@@ -473,6 +479,10 @@ export function TaxReportPage() {
           <button type="button" className="btn danger k-btn-end" onClick={() => setAsking(true)}><Trash size={16} />Delete my tax data</button>
         </section>
       )}
+      {replacing && <ConfirmDialog title="Start again with this file?" confirmLabel="Replace my trades" onClose={() => setReplacing(null)}
+        onConfirm={() => { const l = replacing; setReplacing(null); void send(l); }}>
+        This replaces your {(rep?.trades ?? 0).toLocaleString("en-IN")} trade{rep?.trades === 1 ? "" : "s"} with the ones in {replacing.length === 1 ? replacing[0].name : `these ${replacing.length} files`}. To keep them and add this file's, choose Add to my trades.
+      </ConfirmDialog>}
       {asking && <ConfirmDialog title="Delete my tax data?" confirmLabel="Delete my tax data" busy={busy} onConfirm={() => void remove()} onClose={() => setAsking(false)}>Every uploaded trade and file is removed from StratLab. Your broker account isn't touched.</ConfirmDialog>}
     </div>
   );

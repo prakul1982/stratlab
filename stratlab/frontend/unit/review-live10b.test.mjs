@@ -109,3 +109,10 @@ test("LIVE10B-008: the hand-trade dialog says a day ahead, or an entry after the
   assert.match(page, /entry_date: f\.entry_date > today \? "This day hasn't come yet\." : f\.entry_date > f\.exit_date \? "The entry is after the exit\." : undefined,/);
   assert.match(page, /<DateField label="Entry date" value=\{f\.entry_date\} max=\{today\} error=\{bad\.entry_date\}/);
 });
+
+test("LIVE10B-032: replacing the tax report's trades with a file is asked first, naming how many go", () => {
+  const page = read("src/pages/TaxReportPage.tsx");
+  assert.match(page, /if \(mode === "replace" && \(rep\?\.trades \?\? 0\) > 0\) \{ reset\(\); setReplacing\(list\); return; \}/);
+  assert.match(page, /<ConfirmDialog title="Start again with this file\?" confirmLabel="Replace my trades"/);
+  assert.match(page, /This replaces your \{\(rep\?\.trades \?\? 0\)\.toLocaleString\("en-IN"\)\} trade/);
+});
