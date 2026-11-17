@@ -33,11 +33,14 @@
 .inv-head > .inv-head-more:not(:has(*)) { display: none; }
 @media (max-width: 900px) { .inv-head { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .inv-head > .inv-head-price { grid-column: 1 / -1; } }
 @media (max-width: 560px) { .inv-head { grid-template-columns: minmax(0, 1fr); } }
-/* LIVE9B-027: on a phone the header's six actions are two even rows of three, not three ragged rows with "More" alone on the last */
+/* LIVE9B-027: on a phone the header's actions are even rows, never ragged ones with "More" alone; the main action has a row of its own and the
+   rest go two to a row, so no label wraps inside its button (three to a row left 103px buttons with "Test a strategy on TCS →" on 3 lines) */
 @media (max-width: 560px) {
-  .inv-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s2); }
+  .inv-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); }
+  .inv-actions > :first-child { grid-column: 1 / -1; }
+  .inv-actions > :last-child:nth-child(even) { grid-column: 1 / -1; }
   .inv-actions > *, .inv-actions > * > .btn { width: 100%; justify-content: center; min-width: 0; }
-  .inv-actions .btn { white-space: normal; text-align: center; line-height: 1.2; }
+  .inv-actions .btn { white-space: nowrap; text-align: center; }
 }
 .inv-badges { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
 .inv-badges:empty { display: none; }

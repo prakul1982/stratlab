@@ -2086,6 +2086,8 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-foldcard-body { display: flex; flex-direction: column; gap: var(--s4); padding-top: var(--s4); min-width: 0; }
 .k-foldcard-body[hidden] { display: none; }
 @media (max-width: 640px) { .k-foldcard-btn::after { inset: calc(-1 * var(--s3)) calc(-1 * var(--s4)); } .k-foldcard-meta { gap: var(--s2); } }
+/* a fold card's title never shrinks to a word a line when its count and actions sit beside it on a phone: the head wraps instead (ui-lint R4: "Your schemes" ran on 5 lines in a 40px button) */
+@media (max-width: 640px) { .k-foldcard-head { flex-wrap: wrap; } .k-foldcard-head .k-card-titlerow { flex: 1 1 auto; } .k-foldcard-btn { white-space: nowrap; } }
 @media (prefers-reduced-motion: reduce) { .k-foldcard-chev { transition: none; } }
 /* Every page section closes to its header row and moves up or down, remembered (owner, 7 Nov; kit/Section.tsx): two quiet buttons at the
    right end of the header, the "⋯" menu and the chevron. The header keeps their room, so its own controls never run under them. */

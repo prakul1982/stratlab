@@ -177,7 +177,11 @@ test("LIVE9B-027: My space's net worth keeps its two decimals; the company heade
   assert.equal(inrCompactSteady(1850000), "₹18.5 lakh");
   assert.equal(inrCompactSteady(925), "₹925");
   assert.match(read("src/pages/MineHome.tsx"), /value=\{inrCompactSteady\(v\.totals\.net\)\}/);
-  assert.match(read("src/styles-invest.css"), /\.inv-actions \{ display: grid; grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); gap: var\(--s2\); \}/);
+  // updated on purpose (ui-lint R4 in CI: three to a row left 103px buttons whose labels ran on 3-4 lines): the main action a row of its own, the rest two to a row
+  const inv = read("src/styles-invest.css");
+  assert.match(inv, /\.inv-actions \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); gap: var\(--s2\); \}/);
+  assert.match(inv, /\.inv-actions > :first-child \{ grid-column: 1 \/ -1; \}/);
+  assert.match(inv, /\.inv-actions \.btn \{ white-space: nowrap;/);
 });
 
 test("LIVE9B-028, 029: the plan named once on Account; a visitor's /tour shows how StratLab works; Feedback in its neighbours' colour", async () => {
