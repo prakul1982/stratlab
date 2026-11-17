@@ -193,7 +193,8 @@ function NetWorthCard() {
         note={move ? sinceNote(move, (d) => asOf(d) ?? d, inrCompact) : restated ?? `As of ${asOf(v.as_of) ?? "today"}`} />
       {/* two snapshots joined by a line read as a trend: the chart waits for a third (DI-012); until then the card shows the number alone, not a
           boxed dashed line that reads as a broken chart (VR1-005) */}
-      {whole.length >= 3 ? <Spark values={whole.map((h) => h.net)} tone={diff !== null && diff < 0 ? "down" : "up"} area height={64} label="Net worth over time" />
+      {/* the line's colour follows the line itself, first point to last (LIVE10B-010: a rising line was red from the day's fall beside it) */}
+      {whole.length >= 3 ? <Spark values={whole.map((h) => h.net)} tone={whole[whole.length - 1].net < whole[0].net ? "down" : "up"} area height={64} label="Net worth over time" />
         : !v.history_allowed && <HistoryPlaceholder />}
     </Card>
   );

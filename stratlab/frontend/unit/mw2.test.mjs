@@ -129,7 +129,8 @@ test("a row is one line of symbol, last, change and change %, in columns shared 
   // under a finger (44px handles) the symbol keeps its room: the change in price gives way below 480px, the percent stays
   assert.match(css, /@media \(max-width: 900px\), \(pointer: coarse\) \{\n  @container mw \(max-width: 479px\) \{[^@]*\.mw-c-abs \{ display: none; \}/);
   // "Closed" is not said on every row of a list whose markets are all shut: the foot says it once
-  assert.match(p, /open\[it\.market\] === false && !allShut \? "Closed" : null/);
+  // (updated on purpose, fix11 LIVE10A-014: a shut market's row says Closed before Delayed; still nothing on the row when every market is shut)
+  assert.match(p, /open\[it\.market\] === false \? \(allShut \? null : "Closed"\)/);
   // the visitor's board is the same table
   assert.match(read("src/components/watch/PublicBoard.tsx"), /<div className="mw-table fixed plain no-abs">/);
 });

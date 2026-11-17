@@ -1448,7 +1448,7 @@ table:has(td.num:nth-child(2)) th:nth-child(2) { text-align: right; }
 /* a short symbol ("IEX") is still a 32 px target for a thumb (R95-003: 29 px wide) */
 .fo-row .link { display: inline-flex; justify-content: center; min-width: 32px; }
 
-.surv-badge.fo-badge { white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }   /* one line: in a narrow tile the badge moves to a line of its own as a whole (the row wraps) and only a badge wider than the whole tile is cut, with the full text in its tooltip; a pill on two lines was R19 */
+.surv-badge.fo-badge { white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-family: var(--sans); }   /* LIVE10B-047: a sentence ("Lot 225→250 from Jan 2027") in the page's letters, like the header's other chips; the exchange's short codes stay in mono */   /* one line: in a narrow tile the badge moves to a line of its own as a whole (the row wraps) and only a badge wider than the whole tile is cut, with the full text in its tooltip; a pill on two lines was R19 */
 /* market events (/trade/events): neutral tags, figures in ink, the index table scrolling inside its card */
 
 .ev-figure { font-variant-numeric: tabular-nums; }
@@ -1694,6 +1694,11 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-chipbar::-webkit-scrollbar { display: none; }
 .k-chip { flex: none; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--card); color: var(--ink-2); font-size: var(--t-label); font-weight: 500; cursor: pointer; white-space: nowrap; }
 .k-chip:hover { border-color: var(--ink); }
+a.k-chip { display: inline-flex; align-items: center; text-decoration: none; }
+/* LIVE10A-028: the market chips' row and the search box, held while the markets are read */
+.k-where-wait { display: grid; gap: 12px; }
+.k-where-wait .lp-skel { display: block; height: 36px; border-radius: 10px; }
+.k-where-wait .lp-skel + .lp-skel { height: 44px; }
 .k-chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
 .k-chip.add { border-style: dashed; color: var(--blue-ink); }
 /* a remembered custom choice: its chip and a small × that forgets it (the pair is one rounded shape) */
@@ -2685,6 +2690,12 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .email-signin-row { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
 .email-signin-row .k-input { flex: 1 1 220px; min-height: 44px; font-size: 16px; }   /* 16px: a phone doesn't zoom into the box */
 .email-signin-row .btn { min-height: 44px; }
+/* LIVE10B-042: on a phone "Email me a code" is as wide as the Google button above it, and the footer's links sit in two columns, never one
+   link alone on a row with a wide gap */
+@media (max-width: 640px) {
+  .email-signin-row .btn { flex: 1 1 100%; justify-content: center; }
+  .legal-links[aria-label="Policies"], .legal-links[aria-label="Explore"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; row-gap: 0; }
+}
 .email-signin-code { letter-spacing: .2em; font-family: var(--mono); max-width: 220px; }
 .email-signin .banner { margin-bottom: 0; }
 /* the plans' currency switch (components/CurrencySwitch.tsx) */
@@ -2967,6 +2978,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 @media (max-width: 420px) { .h-filing { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--s3); } .h-filing > :first-child { min-width: 7.5em; } .h-filing > :nth-child(3) { flex: 1 1 100%; } }
 
 .watch-add .k-field, .watch-add .k-field > * { max-width: none; width: 100%; }
+/* LIVE10A-014: the Markets panel's other lists, one line each */
+.watch-lists { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 
 /* RC2B-043: the add-a-trade form's six boxes in one row where the page is wide (they wrapped 4 + 2, or 5 + 1 with "Fees" alone),
    three and three on a tablet, two on a phone */

@@ -7,7 +7,7 @@ import { isAdVisit } from "./entry";
 
 /** Every route main.tsx has for a signed-in person (its <Route path>s, without the catch-all). */
 export const APP_ROUTES = [
-  "/", "/mine", "/all", "/features", "/trade/g/:group", "/invest/g/:group", "/money/g/:group", "/trade", "/invest", "/money",
+  "/", "/mine", "/all", "/home", "/features", "/trade/g/:group", "/invest/g/:group", "/money/g/:group", "/trade", "/invest", "/money",
   "/notebooks", "/new", "/n/:id", "/n/:id/market", "/n/:id/compare", "/n/:id/e/:v", "/import", "/library", "/options",
   "/trade/positioning", "/trade/positioning/stocks", "/options/s/:sid", "/paper", "/paper/:sid", "/trade/journal",
   "/trade/fo-changes", "/trade/closing-auction", "/trade/replay", "/trade/signals", "/trade/signals/:sid", "/trade/events",

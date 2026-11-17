@@ -187,14 +187,26 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
 }
 
 /** "Set alert" for a company page, the deep dive or the watchlist: opens the form in a pop-up. */
-export function AlertButton({ region, symbol, choices, label = "Set alert", condition }: {
+export function AlertButton({ region, symbol, choices, label = "Set alert", condition, showOn = false }: {
   region: Region; symbol?: string; choices?: { region: Region; symbol: string }[]; label?: string; condition?: string;
+  /** A company page: how many of your alerts watch this stock, beside the button, linking to them (LIVE10A-032 / LIVE10B-023: an alert
+   *  set on SBIN left the page with a plain "Set alert" and nothing saying one was on) */
+  showOn?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [on, setOn] = useState(0);
+  const [seen, setSeen] = useState(0);
+  useEffect(() => {
+    if (!showOn || !symbol) return;
+    let live = true;
+    alertsApi.list().then((r) => { if (live) setOn(r.active.filter((a) => a.region === region && a.symbol === symbol).length); }).catch(() => undefined);
+    return () => { live = false; };
+  }, [showOn, region, symbol, seen]);
   return (
     <>
       <button className="btn quiet sm" onClick={() => setOpen(true)} disabled={choices && !choices.length}><Bell size={17} />{label}</button>
-      {open && <AlertDialog region={region} symbol={symbol} choices={choices} condition={condition} onClose={() => setOpen(false)} />}
+      {showOn && on > 0 && <Link className="k-chip" to="/alerts" data-testid="alerts-on">{on} alert{on === 1 ? "" : "s"} on</Link>}
+      {open && <AlertDialog region={region} symbol={symbol} choices={choices} condition={condition} onClose={() => { setOpen(false); setSeen((n) => n + 1); }} />}
     </>
   );
 }

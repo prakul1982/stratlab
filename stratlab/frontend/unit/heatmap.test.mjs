@@ -141,8 +141,9 @@ test("a tile shows its symbol and figure only at a size they fit at, so no word 
   assert.deepEqual(tileWords("TCS", "+1.2%", 40, 12, width), { px: 0, fig: false });         // too short for a line
   // whatever is shown fits its tile's width
   for (const sym of ["A", "ITC", "RELIANCE", "BAJAJ-AUTO", "MAHINDRAHOLIDAYS"]) for (let w = 10; w <= 260; w += 7) {
-    const { px, fig } = tileWords(sym, "−12.5 pts", w, 90, width);
-    if (px) assert.ok((width(sym, 600) * px) / 10 <= w - 6, `${sym} at ${px}px in ${w}px`);
+    // (updated on purpose, fix11 LIVE10A-012: a tall, narrow tile names its symbol down its length, so it fits the tile's height instead)
+    const { px, fig, vert } = tileWords(sym, "−12.5 pts", w, 90, width);
+    if (px) assert.ok((width(sym, 600) * px) / 10 <= (vert ? 90 : w) - 6, `${sym} at ${px}px in ${w}px`);
     if (fig) assert.ok((width("−12.5 pts", 400) * px * 0.92) / 10 <= w - 6, `figure at ${px}px in ${w}px`);
   }
 });

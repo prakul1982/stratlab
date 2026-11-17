@@ -90,7 +90,7 @@ export function FlowsPage() {
                       {shown.length >= 2 && (
                         <LineChart lines={[{ values: shown.map((p) => p.fii), color: "var(--pos-call)", width: 2, label: "FII/FPI" },
                           { values: shown.map((p) => p.dii), color: "var(--pos-put)", width: 2, label: "DII" }]}
-                          labels={shown.map((p) => dayName(p.day))} times={shown.map((p) => p.day.slice(0, 10))} ranges={false} legend format={(v) => crore(v, true)} signedTip
+                          labels={shown.map((p) => dayName(p.day))} times={shown.map((p) => p.day.slice(0, 10))} x={shown.map((p) => Date.parse(`${p.day.slice(0, 10)}T00:00:00Z`))} ranges={false} legend format={(v) => crore(v, true)} signedTip
                           axisFormat={(v) => crore(v)} baseline={0} height={220} ariaLabel="FII and DII net cash market flows by day" />
                       )}
                       <DataTable csv="FII DII flows by day" label="FII and DII net buying by day" columns={cols} rows={rows} rowKey={(r) => r.day} phonePage={30}

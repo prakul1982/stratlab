@@ -56,7 +56,8 @@ export function RiskOverview({ onOpen }: { onOpen: (id: string, kind: string) =>
               <Stat item label={dayLabel(c)} value={money(c.session_pnl ?? c.today, c.currency)} tone={tone(c.session_pnl ?? c.today)} />
               <Stat item label="Since the start" value={money(c.pnl, c.currency)} tone={tone(c.pnl)} note={`${c.sessions} session${c.sessions === 1 ? "" : "s"}`} />
               <Stat item label="Worst day" value={c.worst_day ? money(c.worst_day.pnl, c.currency) : "–"} tone={tone(c.worst_day?.pnl ?? null)} note={c.worst_day ? day(c.worst_day.date) : "None yet"} />
-              <Stat item label="Deepest fall" value={`${num(c.max_drawdown_pct, 1)}%`}
+              {/* a fall under a tenth of a percent keeps its digits (LIVE10A-013 / LIVE10B-029: "0.0%" beside "−₹392 at the lowest point") */}
+              <Stat item label="Deepest fall" value={`${num(c.max_drawdown_pct, c.max_drawdown_pct && Math.abs(c.max_drawdown_pct) < 0.1 ? 2 : 1)}%`}
                 note={c.deepest_fall ? (c.deepest_fall.intraday && (c.deepest_fall.held ?? c.deepest_fall.day_close === c.deepest_fall.pnl)
                   // the low held to the close: one figure, not "-3,94,147 ... the day closed at -3,94,147" (R77-007)
                   ? `${money(c.deepest_fall.pnl, c.currency)} on ${day(c.deepest_fall.date)}${c.deepest_fall.at ? `, reached at ${c.deepest_fall.at} IST` : ""} and held to the close`

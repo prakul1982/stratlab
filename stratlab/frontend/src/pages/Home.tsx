@@ -70,7 +70,9 @@ function WhereToTest({ where, setWhere }: { where: Where; setWhere: (w: Where) =
       <ChipBar label="Market" value={where.market} onChange={(id) => setWhere({ market: id, instrument: null })}
         options={usable.map((m) => ({ value: m.id, label: `${[...m.symbol].length === 1 && m.symbol !== "+" ? m.symbol + " " : ""}${m.name}${m.status === "offline" ? " (offline)" : ""}` }))} />
       {soon.length > 0 && <p className="k-note">Coming soon: {soon.map((m) => m.name).join(", ")}. Until then, use "Your own data" with a CSV.</p>}
-      {where.market === "CSV" ? (
+      {/* LIVE10A-028: while the markets are read, the chips and the search box keep their place, so step 2 doesn't move down when they come */}
+      {!markets.length ? <div className="k-where-wait" role="status" aria-busy="true" aria-label="Reading the markets"><span className="lp-skel" /><span className="lp-skel" /></div>
+        : where.market === "CSV" ? (
         <p className="k-small k-muted">You'll upload your CSV of candles right after the notebook is created.</p>
       ) : where.instrument ? (
         <div className="k-row">
@@ -98,7 +100,8 @@ function Starters({ where }: { where?: Where | null }) {
     create({
       strategy: { ...s, text: st.text, entry: p.entry, exit: p.exit, risk: { ...s.risk, ...p.risk } },
       instrument: null, question: st.question,
-      gaps: { mentioned: ["exit", "tf", ...Object.keys(p.risk)], notes: [], instName: null, usedAI: true, fallback: "" },
+      // a ready-made idea's rules are read word for word here, never by the AI: no "AI's reading" tag on them (LIVE10B-037)
+      gaps: { mentioned: ["exit", "tf", ...Object.keys(p.risk)], notes: [], instName: null, usedAI: false, fallback: "" },
     });
   };
   return (

@@ -1,4 +1,7 @@
 import { DocSearchLink } from "../components/DocSearchLink";
+import { openMarkets } from "../components/watch/Launcher";
+import { getLists } from "../lib/watchApi";
+import { labelOf, type WatchList } from "../lib/watch";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, type ApiError } from "../lib/api";
@@ -390,7 +393,7 @@ function CompanyView() {
             {!c.delisted && (lead === "deep" ? (c.testable && <button className="btn quiet sm" onClick={() => test(c)}>Test a strategy</button>) : deep("quiet"))}
             {!c.delisted && <Link className="btn quiet sm" to={`/research/compare?region=${region}&a=${encodeURIComponent(c.symbol)}`}>Compare</Link>}
             {!c.delisted && <StarButton region={region} symbol={c.symbol} name={c.name} />}
-            {!c.delisted && <AlertButton region={region} symbol={c.symbol} />}
+            {!c.delisted && <AlertButton region={region} symbol={c.symbol} showOn />}
             <MoreMenu items={[
               { label: share.busy ? "Making the card…" : "Share", run: () => { void share.run(); } },
               ...(region === "IN" ? [{ label: "Test a SIP", run: () => nav(`/money/sip-test?symbol=${encodeURIComponent(c.symbol)}`) }] : []),
@@ -816,6 +819,13 @@ export function WatchlistPage() {
   const { fail, notify, markets } = useApp();
   const [importing, setImporting] = useState(false);
   const [quotes, setQuotes] = useState<Record<string, Quote | null> | null>(null);
+  // LIVE10A-014: the lists made in the Markets panel are named here too, each opening there (they were nowhere on this page)
+  const [others, setOthers] = useState<WatchList[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    getLists().then((a) => { if (live) setOthers(a.lists.filter((l) => !l.default)); }).catch(() => undefined);
+    return () => { live = false; };
+  }, []);
   // between the US close and its settle point the prices are the day's last prints, said as the company header says it (R13-005)
   const settling = settlingNow(markets.find((m) => m.id === region));
   // the market closed (a weekend, a holiday, after the bell): its prices are the last session's, whatever the date is in
@@ -927,6 +937,20 @@ export function WatchlistPage() {
               // on a phone card Remove sits at the card's top right, not alone on a last row of its own (VR3-006)
               { key: "r", header: "", action: true, corner: true, cell: (w) => <button className="btn quiet sm icon-only" aria-label={`Remove ${w.symbol} from your watchlist`} title="Remove" onClick={() => remove(w)}><Trash size={16} /></button> },
             ]} />
+        </Card>
+      )}
+      {others && others.length > 0 && (
+        <Card testId="watch-other-lists">
+          <CardHead title="Your other lists" info="The lists made in the Markets panel. Each opens there, with its prices and charts." />
+          <ul className="watch-lists">
+            {others.map((l) => (
+              <li key={l.id}>
+                <b>{l.name}</b>
+                <span className="k-small k-muted"> · {l.items.length} symbol{l.items.length === 1 ? "" : "s"}{l.items.length ? `: ${l.items.slice(0, 6).map(labelOf).join(", ")}${l.items.length > 6 ? ", …" : ""}` : ""}</span>
+                {" "}<button type="button" className="link" onClick={() => openMarkets({ open: true, list: l.id })}>Open in the Markets panel</button>
+              </li>
+            ))}
+          </ul>
         </Card>
       )}
     </div>

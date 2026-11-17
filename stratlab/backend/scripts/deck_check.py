@@ -379,9 +379,12 @@ def check_pages(pages: list[str]) -> dict:
                     add("unread kind", n, f"{ln.strip()} (no way of earning read: p.{unread})")
     for n, page in enumerate(pages, 1):
         flat = flat_text(page)
+        # r63e (the live R62 Telecom deck, p.33: "Other telecom companies" 7 of 15 in its calculations): the "Other" group lists the companies
+        # that fit none of the map's layers, never compared, so its share with figures is no layer's left out
+        other_page = re.search(r"^\s*Layer \d+ · Other [^\n]*$", page, re.M) is not None
         for m in _IN_CALC.finditer(flat):
             a, b = int(m.group(1).replace(",", "")), int(m.group(2).replace(",", ""))
-            if b >= LEFT_MIN and a * 2 < b:
+            if b >= LEFT_MIN and a * 2 < b and not other_page:
                 add("left out>50%", n, flat[m.start():m.start() + 140])
         for m in _ZERO_NOT_YET.finditer(flat):
             add("unchecked as 0", n, m.group(0))
@@ -1452,10 +1455,16 @@ def financial_checks(pages: list[str], add) -> None:
     title = next((lines[i + 1] for i, ln in enumerate(lines[:-1]) if "THEME DEEP DIVE" in ln), "")      # the theme's name, under the cover's head
     fin_deck = bool(_FIN_THEME.search(title))
     for n, page in enumerate(pages, 1):
+        # r63e (the live R62 P&C deck: Loews' combined ratio 105.9% read as a margin): a figure under a ratio column's head (loss, expense,
+        # combined: claims and costs over premiums, past 100% for an underwriting loss) is no margin
+        cols = [(m.start() - 12, m.end() + 4) for ln in page.split("\n") if re.search(r"\bmargin\b|\bRevenue\b", ln)
+                for m in re.finditer(r"(?:Loss|Expense|Combined|Cost-income|Efficiency) ratio", ln, re.I)]
         for ln in page.split("\n"):
             if not (fin_deck or _FIN_THEME.search(ln)):
                 continue
             for m in _BIG_PCT.finditer(ln):
+                if any(a <= (m.start() + m.end()) / 2 <= b for a, b in cols):
+                    continue
                 if float(m.group(1).replace(",", "")) > 100.0:
                     add("financial margin", n, ln.strip()[:200])
                     break

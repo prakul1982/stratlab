@@ -51,7 +51,8 @@ test("LIVE4-010: the results calendar is compact on a phone and its headers fit 
   for (const k of ["cap", "q"]) assert.match(page, new RegExp(`key: "${k}", [^\\n]*phone: false`), k);   // LIVE5-002: rev and pat are one "q" column
   for (const k of ["rev", "pat"]) assert.match(page, new RegExp(`key: "${k}", [^\\n]*csvOnly: true`), k);
   assert.match(invCss, /\.inv-day \.k-table thead th \{ white-space: nowrap; \}/);
-  assert.match(invCss, /\.k-tbl-wrap\.compact \.res-moves, \.k-tbl-wrap\.compact \.res-plain, \.k-tbl-wrap\.compact \.res-name \{ display: none; \}/);
+  // (updated on purpose, fix11 LIVE10A-027: the company name now shows on a phone row too; the arrows and plain line stay hidden)
+  assert.match(invCss, /\.k-tbl-wrap\.compact \.res-moves, \.k-tbl-wrap\.compact \.res-plain \{ display: none; \}/);
   // the day's CSV button shares the day's heading line; on a phone it says "CSV"
   assert.match(invCss, /\.inv-day > \.k-eyebrow \+ \.k-tbl-tools \{ grid-column: 2;/);
   assert.match(read("src/components/kit/DataTable.tsx"), /<span className="k-csv-verb">Download <\/span>CSV/);

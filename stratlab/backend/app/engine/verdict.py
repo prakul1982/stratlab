@@ -448,6 +448,10 @@ def fact_headline(verdict: str, checks: list[dict], n: int, ret: float, hold: fl
     costs = "" if "after costs" in low else " after costs"     # "…; lost money after costs." says it once (R59-008)
     if gap <= -1:
         return f"{abs(gap):.1f} points behind buy and hold{costs}; {low}."
+    if lab == "Lost money after costs":
+        # a loss "ahead of buy and hold" read as a contradiction (LIVE10A-035): the loss leads, both returns said
+        return (f"Lost money after costs ({_pc(ret)}); buying and holding lost more ({_pc(hold)})." if gap >= 1
+                else f"Lost money after costs ({_pc(ret)}), within a point of buying and holding ({_pc(hold)}).")
     if gap >= 1:
         return f"{gap:.1f} points ahead of buy and hold{costs}; {low}."
     return f"Within a point of buy and hold{costs}; {low}."

@@ -196,11 +196,18 @@ export function layout(tiles: Tile[], o: { size: SizeBy; color: ColorBy; period:
 /** The words a tile of `w` × `h` px has room for: the font size (15, 12 or 10px; 0 for none) and whether the figure goes under the
  * symbol. `width(text, weight)` is the text's width at 10px in the page's font; a width grows with the size. Nothing is shown
  * that its tile would cut. */
-export function tileWords(symbol: string, figure: string, w: number, h: number, width: (text: string, weight: number) => number): { px: number; fig: boolean } {
+export function tileWords(symbol: string, figure: string, w: number, h: number, width: (text: string, weight: number) => number): { px: number; fig: boolean; vert?: boolean } {
   const room = w - 7;                                                    // the tile's padding and a pixel to spare
-  const fits = (px: number) => (width(symbol, 600) * px) / 10 + symbol.length * 0.01 * px <= room;
+  const along = (px: number, r: number) => (width(symbol, 600) * px) / 10 + symbol.length * 0.01 * px <= r;
+  const fits = (px: number) => along(px, room);
   const px = w >= 120 && h >= 72 && fits(15) ? 15 : w >= 56 && h >= 28 && fits(12) ? 12 : h >= 15 && fits(10) ? 10 : 0;
   const fig = px > 0 && h >= (px === 15 ? 46 : px === 12 ? 34 : 28) && (width(figure, 400) * px * 0.92) / 10 <= room;
+  // LIVE10A-012: a tall, narrow tile too thin for its symbol across (a large Commodities or Industrials tile was left unlabelled) names it
+  // down its length
+  if (!px && h > w) {
+    const v = w >= 20 && along(12, h - 7) ? 12 : w >= 15 && along(10, h - 7) ? 10 : 0;
+    if (v) return { px: v, fig: false, vert: true };
+  }
   return { px, fig };
 }
 

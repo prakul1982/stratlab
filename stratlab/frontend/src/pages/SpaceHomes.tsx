@@ -161,7 +161,7 @@ function MarketStrip() {
   const vq = vix && vix !== "none" && vix !== "slow" ? vix.quote ?? null : null;
   const vixDay = vq?.as_of ? fmtDate(vq.as_of, { year: false, tz: "Asia/Kolkata" }) : null;
   const vixNote = vq && vq.change != null
-    ? <><span className={signCls(vq.change)}>{vq.change > 0 ? "▲ " : vq.change < 0 ? "▼ " : ""}{vixChange(vq)}</span>{vixDay ? ` · ${vixDay}` : ""}</> : null;
+    ? <><span className={signCls(vq.change)}>{vq.change > 0 ? "▲ " : vq.change < 0 ? "▼ " : ""}{vixChange(vq)}</span>{vixDay ? <> · <span className="nowrap">{vixDay}</span></> : ""}</> : null;   // the day never splits over two lines (LIVE10B-047: "17 / Nov")
   const tiles: { to: string; k: string; v: ReactNode; note: ReactNode; id: string }[] = [
     { id: "vix", to: "/trade/positioning#india-vix", k: "India VIX", v: vix === null ? null : vix === "none" || vix === "slow" || vix.value == null ? "–" : vix.value.toFixed(2),
       // a live quote comes with no day (the value is now's): its change stands in the line, so the tile is as tall as its three neighbours (VR2-013)

@@ -158,7 +158,9 @@ def us_rows(raw: list) -> list[dict]:
             continue
         q, y = r.get("quarter"), r.get("year")
         period = f"Q{q} {y}" if q and y else None
-        x = row("US", sym, day, "Quarterly results" + (f" ({period})" if period else ""), when=WHEN.get(str(r.get("hour") or "")),
+        # the company's own fiscal quarter, said as one (LIVE10A-020: "(Q3 2027)" beside the calendar's "(quarter ended Sep 2026)" for the same
+        # season read as a typo)
+        x = row("US", sym, day, "Quarterly results" + (f" (fiscal {period})" if period else ""), when=WHEN.get(str(r.get("hour") or "")),
                 src="company data", period=period)
         rep = reported(r)
         if rep:
@@ -1071,7 +1073,7 @@ def view(region: str, uid: str, scope: str = "mine", q: str = "", today: date | 
             days.append({"date": d, "count": len(on_day), "shown": min(cap, len(on_day)), "session": _session_day(region, d)})
             more += max(0, len(on_day) - cap)
         weeks.append({"label": label, "from": start.isoformat(), "to": end.isoformat(), "days": days, "rows": shown})
-    unknown = sum(1 for r in window if r["band"] is None) if size else 0
+    unknown = sum(1 for r in window if r["band"] is None)       # said whatever the filters (CX2: sizes adding to 9 under "10 companies")
     return {"region": region, "scope": scope, "today": today.isoformat(), "updated_at": cal["at"], "weeks": weeks,
             "more": more, "day_rows": limit, "mine_count": len(mine), "alerts": alerts_on(uid), "note": NOTE,
             "total": len(window), "matching": len(narrowed), "unknown_size": unknown,

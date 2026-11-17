@@ -17,7 +17,7 @@ const AppPanel = lazy(() => importWithRetry(loadApp)) as unknown as ComponentTyp
 const PublicPanel = lazy(() => importWithRetry(loadPublic)) as unknown as ComponentType<PanelProps>;
 
 /** Open (or shut, or flip) the panel from anywhere on the page; with `chart`, on that instrument's chart ("IN:RELIANCE"). */
-export function openMarkets(detail: { open?: boolean | "toggle"; chart?: string } = { open: true }) {
+export function openMarkets(detail: { open?: boolean | "toggle"; chart?: string; list?: string } = { open: true }) {
   window.dispatchEvent(new CustomEvent("stratlab:markets", { detail }));
 }
 
@@ -65,11 +65,12 @@ export function MarketsLauncher({ mode, userId, button = mode, autoOpen }: { mod
   useEffect(() => { if (autoOpen) openIt(); }, []);   // eslint-disable-line react-hooks/exhaustive-deps -- once, as this mounts
   useEffect(() => {
     const on = (e: Event) => {
-      const d = ((e as CustomEvent).detail ?? {}) as { open?: boolean | "toggle"; chart?: string };
+      const d = ((e as CustomEvent).detail ?? {}) as { open?: boolean | "toggle"; chart?: string; list?: string };
       // "toggle" goes by what is on screen: a phone's sheet kept as open but not drawn (a sheet is never open at page load) opens
       // on the first press, where it used to take two (the first only marked it shut)
       const open = d.open === "toggle" ? !shownNow.current : d.open !== false;
-      if (open) openIt(d.chart ? { chart: d.chart } : {}); else patch({ open: false });
+      // a list named (the Watchlist page's other lists, LIVE10A-014): the panel opens on that list
+      if (open) openIt(d.chart ? { chart: d.chart } : d.list ? { list: d.list, chart: null } : {}); else patch({ open: false });
     };
     window.addEventListener("stratlab:markets", on);
     return () => window.removeEventListener("stratlab:markets", on);

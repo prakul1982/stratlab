@@ -174,7 +174,8 @@ function CheckCard({ c, cur }: { c: Check; cur: string }) {
       )}
       {c.id === "shuffle" && d && <DrawdownBand yours={d.yours} p95={d.p95} worst={d.worst} />}
       {c.id === "sample" && d && <div className="k-big">{d.trades}</div>}
-      <p className="k-small k-muted">{c.detail}</p>
+      {/* a run stored without its check's words says the count's meaning, never an empty line (LIVE10B-031: "Warning 16" then nothing) */}
+      {(c.detail || (c.id === "sample" && d)) && <p className="k-small k-muted">{c.detail || sampleWords(d!.trades)}</p>}
       {/* why a bad-luck drawdown is a warning, for a run saved before its own words said so (R45A-002) */}
       {c.id === "shuffle" && c.status === "warn" && d && !String(c.detail ?? "").includes("worse order") && (
         <p className="k-small k-muted" data-testid="shuffle-why">A warning because at least 5 of 100 reshuffles fell more than one and a half times as far as yours: with the same trades in a worse order, the fall could have been much deeper.</p>
@@ -692,4 +693,9 @@ function ShareMenu({ nb, e, pub }: { nb: Notebook; e: Experiment; pub: PublicLin
       {ask === "library" && <ConfirmDialog title="Take this strategy out of the library?" confirmLabel="Take it out" onConfirm={unpublish} onClose={() => setAsk(null)}>Copies people already made stay theirs.</ConfirmDialog>}
     </>
   );
+}
+
+/** The Enough-trades check's sentence for a count, in the library's words (LIVE10B-031). */
+export function sampleWords(n: number): string {
+  return n < 15 ? `${n} trades, too few to tell skill from luck.` : n < 30 ? `${n} trades, a small sample: a few lucky trades could decide the result.` : `${n} trades, enough to judge.`;
 }

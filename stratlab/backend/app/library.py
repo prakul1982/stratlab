@@ -217,6 +217,11 @@ def restated(e: dict) -> dict:
     if hold:
         rel = ("about the same as" if abs(hold["gap"]) < 0.05 else "less than" if hold["gap"] < 0 else "more than")
         head = f"{lab}, and returned {rel} buy and hold"
+        if lab == "Lost money after costs" and hold["gap"] > -1:
+            # a loss beside "returned more than buy and hold" read as a contradiction (LIVE10A-035): both returns said
+            r, h = float(st["ret"]), float(st["buy_hold"])
+            head = (f"Lost money after costs ({_pc(r)}); buying and holding lost more ({_pc(h)})" if hold["gap"] >= 0.05
+                    else f"Lost money after costs ({_pc(r)}), about what buying and holding lost ({_pc(h)})")
         if hold["gap"] <= -1:
             # behind buy and hold: the shortfall leads, before any check it passed (R6V-005: "Passed all 3 checks run"
             # above "+55.8% vs +172.9%, 117.1 points behind")

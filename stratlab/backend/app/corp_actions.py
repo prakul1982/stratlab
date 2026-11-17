@@ -1130,7 +1130,7 @@ def view(region: str, uid: str, scope: str = "mine", q: str = "", kind: str = ""
 
     ahead = ordered([r for r in rows if r["ex_date"] >= t], False)
     recent = ordered([r for r in rows if back <= r["ex_date"] < t], True)
-    unknown = sum(1 for r in window if r["band"] is None) if size else 0
+    unknown = sum(1 for r in window if r["band"] is None)       # said whatever the filters (CX2: sizes adding to 9 under "10 companies")
     return {"region": region, "scope": scope, "kind": kind, "today": t, "updated_at": cal["at"], "ahead": ahead[:limit], "recent": recent[:limit],
             "more": max(0, len(ahead) - limit) + max(0, len(recent) - limit), "mine_count": len(mine), "alerts": alerts_on(uid),
             "kinds": list(KINDS), "ahead_known": ahead_known(region, cal["rows"], cal.get("declared_at")), "note": NOTE, "recent_days": recent_days,

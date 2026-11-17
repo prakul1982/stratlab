@@ -19,7 +19,7 @@ import { filedOn } from "./BizUpdates";
 import { fmtDate, pct, ratio, safeHref } from "../lib/format";
 import type { Co, Region, SectorAI } from "../lib/research";
 import {
-  amount, calcOf, calcWords, layerLines, medCell, MIN_BASE, NO_WORDS, ownWords, pc, pcw, plainIndustry, points, span, times,
+  amount, calcOf, calcWords, layerLines, medCell, MIN_BASE, NO_WORDS, noWords, ownWords, pc, pcw, plainIndustry, points, span, times,
   themeApi, EVIDENCE_ONE, evidenceLine, evidenceOf, membershipLine,
   type BizRow, type Business, type Dive, type DiveRow, type Layer, type LayerLine, type Listing, type NewsRow, type Prices, type Stat,
 } from "../lib/theme";
@@ -113,7 +113,8 @@ export function MembersCard({ r, region, dive }: { r: SectorAI; region: Region; 
     { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (c) => <><Name r={region} sym={c.ticker} name={c.name} /><span className="k-sub-line k-muted">{c.ticker}</span></> },
     ...(oneIndustry ? [] : [{ key: "i", header: "Industry", wrap: true, cell: (c: Co) => indOf(c) || dash } as Column<Co>]),
     { key: "m", header: "Market value", numeric: true, cell: (c) => amount(caps.get(c.ticker) ?? c.cap ?? null, region) },
-    { key: "w", header: "What it does, in its own words", wrap: true, cell: (c) => { const w = ownWords(c.what, c.name); return w ? <>“{w}”</> : <span className="k-muted">{NO_WORDS}</span>; } },
+    { key: "w", header: "What it does, in its own words", wrap: true, cell: (c) => { const w = ownWords(c.what, c.name);
+      return w ? <>“{w}”</> : <span className="k-muted">{noWords(c.base ? ev?.(c.ticker) === "description_verified" : !!c.verified)}</span>; } },
     { key: "f", header: "In the theme by", cell: (c) => (c.base ? <>{c.basis === "list" ? "Named in the theme's list" : "Official industry"}
       {ev && <span className="k-sub-line k-muted" data-testid="member-evidence">{EVIDENCE_ONE[ev(c.ticker)]}</span>}</>
       : <><Badge tone="plain" dot={false}>Added</Badge><span className="k-sub-line">{c.verified ? "Description-verified" : "Not yet description-verified"}</span></>) },
