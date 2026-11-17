@@ -203,6 +203,8 @@ export interface PulseAI {
   story?: { label: string; n: number; of: number; indices: number[]; headlines: string[] } | null;
   /** Where the FII/DII figures the read quotes come from, when it quotes them (DD-001). */
   flows_source?: string;
+  /** fix12: the session's latest read, shown while a newer one is written in the background; the page asks again for it. */
+  updating?: boolean;
 }
 /** The Market pulse's tables (intel/mood.py): each part is null when its figures can't be read, and the page leaves it out. */
 export interface MoodMover { symbol: string; name?: string; change_pct: number; points?: number }

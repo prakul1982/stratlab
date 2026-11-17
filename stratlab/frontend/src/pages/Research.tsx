@@ -42,7 +42,7 @@ import { CompanyLinksCard } from "../components/CompanyLinks";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge, EtfGapDetailView } from "../components/EtfGap";
 import { typingFirst } from "../lib/typingFirst";
-import { companyRows, moodBehindNote, moodDay, PULSE_TITLE, PULSE_AI_RETRY_MS, PULSE_AI_TRIES, pulseBeingWritten } from "../lib/pulseMood";
+import { companyRows, moodBehindNote, moodDay, PULSE_TITLE, PULSE_AI_RETRY_MS, PULSE_UPDATING_NOTE, pulseAskAgain } from "../lib/pulseMood";
 import { BreadthTable, CalendarTable, FlowsTable, GlobalTable, HeadlinesTable, HotTable, IndexTable, MoodCard, MoodSkeleton, MoversTable, Pair, RiskTable, SectorsTable, ThemesTable, TopicsTable, usePulseMood } from "./PulseMood";
 import { FoBadges } from "../components/FoBadges";
 import { IndexBadges } from "../components/IndexBadges";
@@ -537,10 +537,15 @@ export function PulsePage() {
   const loadAI = async (refresh = false, tries = 0) => {
     const mine = ++seq.current;
     setBusy(true); setAiErr(null);
-    try { const out = await researchApi.pulseAI(region, "", refresh); if (mine === seq.current) setAi(out); }
+    try {
+      const out = await researchApi.pulseAI(region, "", refresh);
+      if (mine === seq.current) setAi(out);
+      // fix12: the session's earlier read is shown while a newer one is written: asked again in a moment for the newer one
+      if (mine === seq.current && pulseAskAgain(tries, out)) setTimeout(() => { if (mine === seq.current) void loadAI(false, tries + 1); }, PULSE_AI_RETRY_MS);
+    }
     catch (e) {
       // LIVE9A-008: another visit is writing this read: asked again in a moment, a few times, never a request held open for minutes
-      if (mine === seq.current && pulseBeingWritten((e as Error).message) && tries < PULSE_AI_TRIES) {
+      if (mine === seq.current && pulseAskAgain(tries, null, (e as Error).message)) {
         setTimeout(() => { if (mine === seq.current) void loadAI(false, tries + 1); }, PULSE_AI_RETRY_MS);
         return;
       }
@@ -581,6 +586,7 @@ export function PulsePage() {
               {ai.tone ? <p className="inv-summary" data-testid="pulse-tone">{ai.tone}</p>
                 // LIVE7A-016: a read with no reason for the day's move left the card with a head and no body: it says so, and where the rest is
                 : <p className="k-small" data-testid="pulse-tone-none">{ai.story_line || "No headline gives a reason for the day's move."} The companies, topics and themes the headlines name are in the tables below.</p>}
+              {ai.updating && <p className="k-note" data-testid="pulse-ai-updating">{PULSE_UPDATING_NOTE}</p>}
               {/* the FII/DII source line goes under the FII table (LIVE4-006); without that table it stays here */}
               {ai.flows_source && !mood?.flows && <p className="k-note" data-testid="pulse-flows-source">{ai.flows_source}</p>}
             </>
