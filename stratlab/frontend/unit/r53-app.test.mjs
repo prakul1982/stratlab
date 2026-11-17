@@ -167,7 +167,8 @@ test("LIVE8A-025: the results day chips don't repeat today by its date", () => {
   const page = read("src/pages/ResultsPage.tsx");
   // (updated on purpose, rel1 LIVE9A-014: the chips after "Today" and "Tomorrow" now leave out every day up to tomorrow and empty days,
   // through laterDays(), which unit/rel1-reliability.test.mjs checks; today is still never repeated by its date)
-  assert.match(page, /laterDays\(\(data\?\.weeks \?\? \[\]\)\.flatMap\(\(w\) => w\.days \?\? \[\]\), todayIn\(region\)\)/);
+  // (updated on purpose, fix10a LIVE10A: laterDays takes the region too, so a US list shows trading days only)
+  assert.match(page, /laterDays\(\(data\?\.weeks \?\? \[\]\)\.flatMap\(\(w\) => w\.days \?\? \[\]\), todayIn\(region\), region\)/);
   assert.match(page, /const todayIn = \(region: Region\): string \| null => dayIn\(new Date\(\), marketTz\(region\)\);/);
 });
 
