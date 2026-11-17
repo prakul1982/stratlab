@@ -216,3 +216,35 @@ def test_large_share_counts_and_holding_companies_keep_their_value():
     # still caught: a value 1,000 times off, with no profit to bear it out
     assert sp.cap_problem({**holding, "market_cap": 130_000_00.0, "years": [{"year": "Mar 2026", "sales": 1_500.0, "profit": 7_000.0}]}) is not None
     assert sp.cap_problem({**yes, "market_cap": 56_600_000.0}) is not None
+
+
+# ---------- LIVE9A-011 / 020: public theme pages as sorted tables, one title pattern, short card names with a count ----------
+def test_public_theme_layers_are_tables_sorted_by_value_with_clean_names(monkeypatch):
+    from app import public_themes as pt
+    payload = {"summary": "Companies that build ships.", "value_chain": [{"layer": "Ships", "companies": [
+        {"ticker": "SMALL", "name": "SMALL SHIPS INC", "verified": True, "what": "builds ships"},
+        {"ticker": "BIG", "name": "Bank Of Montreal /can/", "verified": True, "what": "builds ships"},
+        {"ticker": "NONE", "name": "No Value Ltd", "verified": True, "what": "builds ships"}]}]}
+    monkeypatch.setattr(pt, "_dive", lambda r, n, p: {})
+    monkeypatch.setattr(pt, "_index_caps", lambda r: {"SMALL": 500.0, "BIG": 90_000.0})
+    monkeypatch.setattr(pt, "_price_day", lambda r, syms: "2026-11-16")
+    monkeypatch.setattr(pt.stock_pages, "companies", lambda r: set())
+    v = pt.view({"region": "IN", "name": "Ships", "label": "Capital goods (India)", "slug": "ships", "at": None}, payload)
+    assert [c["symbol"] for c in v["layers"][0]["companies"]] == ["BIG", "SMALL", "NONE"]
+    assert [c["name"] for c in v["layers"][0]["companies"]][:2] == ["Bank of Montreal", "Small Ships Inc"]
+    page = pt.render(v)
+    assert "<table" in page and '<th scope="col">Market value</th>' in page
+    assert "<h1>Capital goods <span" in page and "Listed companies in India" in page and "(India) companies" not in page
+    assert "market values at the 16 Nov 2026 close" in page
+    assert page.index("data-layer") < page.index("About the theme")               # companies before the paragraph
+    assert pt.short_label("Utilities (Indian power, gas and water-linked infrastructure)") == "Utilities"
+    assert pt.short_label("FMCG (Fast Moving Consumer Goods)") == "FMCG"
+    assert pt.short_label("Defence (India)") == "Defence" and pt.short_label("Private banks") == "Private banks"
+
+
+def test_the_directory_cards_say_market_count_and_date(monkeypatch):
+    from app import public_themes as pt
+    monkeypatch.setattr(pt, "payload", lambda x: {"value_chain": [{"layer": "A", "companies": [{"ticker": "X", "name": "X", "verified": True, "what": "w"},
+                                                                                              {"ticker": "Y", "name": "Y", "verified": True, "what": "w"}]}]})
+    line = pt.card_line({"region": "IN", "at": 1763251200})
+    assert line.startswith("India · 2 companies · ") and "Nov" in line

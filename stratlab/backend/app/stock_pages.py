@@ -2407,10 +2407,14 @@ th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:
 
 .card>h2:first-child{margin-top:0}.surv{margin:2px 0}.surv summary{cursor:pointer;min-height:44px;display:flex;align-items:center;flex-wrap:wrap;gap:2px 10px}.surv p{margin:0 0 8px}
 .badge{display:inline-block;border:1px solid var(--orange-ink);color:var(--orange-ink);background:var(--orange-soft);border-radius:999px;padding:2px 10px;font-size:13px;font-weight:600}
+/* LIVE9A-011: a public theme layer's companies as a table: names and tickers left, figures right, the name wrapping, sideways scroll on a phone */
+.cotbl{overflow-x:auto}.cotbl th.l,.cotbl td.l{text-align:left}.cotbl td:first-child{white-space:normal;min-width:150px;position:static}
+.cotbl th:first-child{position:static}
 ul.plain{list-style:none;padding:0;margin:0}ul.plain li{padding:10px 0;border-bottom:1px solid var(--line)}ul.plain li:last-child{border-bottom:0}
 .ctas{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
 ul.dir{list-style:none;padding:0;margin:16px 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));gap:8px}
 ul.dir li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 14px;background:var(--card);border:1px solid var(--line);border-radius:12px}
+ul.dir li:has(a+.muted){flex-wrap:wrap;row-gap:0}
 ul.dir li:hover{border-color:var(--line-2)}ul.dir a{display:flex;align-items:center;flex:1;min-width:0;min-height:48px;line-height:1.3;color:var(--ink);text-decoration:none}
 ul.dir a:hover{color:var(--blue)}ul.dir .muted{flex:none;font-size:13px}nav.links{margin:12px 0 6px}
 .links{display:flex;flex-wrap:wrap;gap:8px}.links a{display:inline-flex;align-items:center;min-height:40px;padding:4px 14px;border:1px solid var(--line);border-radius:999px;text-decoration:none;background:var(--card);color:var(--ink-2)}
