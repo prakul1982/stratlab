@@ -66,7 +66,7 @@ def get(slug: str) -> dict | None:
 
 # a theme post that sorted its companies into no layer (or one) says so in its summary: one written before the guard that keeps such
 # posts out (blog_research.theme_problem) is left out of every list until the next run hides it (LIVE6-003)
-_EMPTY_THEME = re.compile(r"sorted into [01] layers?\b")
+_EMPTY_THEME = re.compile(r"(?:sorted|sorts them) into [01] layers?\b")
 
 
 def shown(row: dict) -> bool:
@@ -143,6 +143,18 @@ def set_published(slug: str, on: bool, now: datetime | None = None) -> dict | No
     if not valid_slug(slug) or not get(slug):
         return None
     _t().update({"published": bool(on), "updated_at": now_iso(now)}).eq("slug", slug).execute()
+    return get(slug)
+
+
+def publish_now(slug: str, now: datetime | None = None) -> dict | None:
+    """Show a post that was hidden as published today (blog2: a theme post drafted hidden days before and published by a release is dated the
+    day it went up, so it isn't listed behind posts already on the site). A post already shown is left as it is."""
+    old = get(slug) if valid_slug(slug) else None
+    if not old:
+        return None
+    if not old.get("published"):
+        at = now_iso(now)
+        _t().update({"published": True, "published_at": at, "updated_at": at}).eq("slug", slug).execute()
     return get(slug)
 
 
@@ -256,6 +268,8 @@ def clean_blocks(blocks: list) -> list[dict]:
                     tbl["widths"] = widths
                 if b.get("wrap") is True:               # a table of names, not figures: its cells wrap and sit on the left (a theme's companies by layer)
                     tbl["wrap"] = True
+                if b.get("names") is True:              # blog2: long row names (a theme's layers) wrap, so every figure column fits the page's width
+                    tbl["names"] = True
                 # every row on a wide screen; on a phone the first `page` rows, the rest one tap away (LIVE4-019 partial: "the latest 50 of 85")
                 pg = b.get("page")
                 if isinstance(pg, int) and not isinstance(pg, bool) and 5 <= pg < len(rows):
@@ -352,6 +366,7 @@ def blocks_html(blocks: list) -> str:
             cols = "<colgroup>" + "".join(f'<col style="width:{w}%">' for w in b["widths"]) + "</colgroup>" if b.get("widths") else ""
             wide = (" wide" + (" w4" if len(b["head"]) == 5 else "")) if len(b["head"]) >= 5 else ""
             wide += " wrap" if b.get("wrap") else ""
+            wide += " nw" if b.get("names") else ""
             box = btn = ""
             if pg:
                 key = "pg" + hashlib.sha1((b.get("caption") or b["head"][0]).encode(), usedforsecurity=False).hexdigest()[:8]

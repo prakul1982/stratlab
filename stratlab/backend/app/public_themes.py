@@ -96,7 +96,16 @@ def find(region: str, s: str) -> tuple[dict | None, str | None]:
     if hit:
         return hit, None
     alias = [x for x in rows if s in x["aliases"]]
-    return (None, alias[0]["slug"]) if len(alias) == 1 else (None, None)
+    if len(alias) == 1:
+        return None, alias[0]["slug"]
+    # blog2: the theme as people write it ("it-services", "private-banks", "medical-devices") is the library's normalised name
+    # ("it-service", ...): it answers 301 to that page, never "No theme at this address"
+    try:
+        norm = slug(theme_library.normalise(s.replace("-", " "), region))
+    except Exception:
+        norm = ""
+    hit = next((x for x in rows if norm and x["slug"] == norm), None)
+    return (None, hit["slug"]) if hit and hit["slug"] != s else (None, None)
 
 
 def payload(entry: dict) -> dict | None:

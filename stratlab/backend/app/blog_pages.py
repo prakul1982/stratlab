@@ -82,6 +82,7 @@ article .kpis small{font-size:12.5px;line-height:1.35;color:var(--muted)}
 .hb .n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:600}.hb .n.none{font-weight:400;color:var(--muted)}
 .hb .hb-note{margin:8px 0 0;font-size:13px;color:var(--muted)}
 .btbl.wrap td,.btbl.wrap th{white-space:normal;text-align:left;line-height:1.45}.btbl.wrap th[scope=row]{white-space:normal;min-width:9em}
+.btbl.nw th[scope=row]{white-space:normal;min-width:11em;line-height:1.35}
 article details.how{margin:22px 0 8px}article details.how ul{margin:4px 0 8px}
 /* VR5-007: on a phone the four columns of a results table fit the screen (the rule set's name wraps, the figures are a size down and
    closer): at 390px the 140px name column pushed "Difference" and its figures past the edge, cut off */

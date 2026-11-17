@@ -1,0 +1,1189 @@
+{
+ "adjacent_n": 0,
+ "as_of": "2026-11-16",
+ "basis": "Each company's latest full financial year ended March, in ₹ crore. Revenue, EBITDA margin (operating profit before depreciation as a share of revenue) and net margin (net profit as a share of revenue) are that year's; return on capital employed (ROCE) is the latest reported. Consolidated accounts where the company files them. Banks and lenders have no EBITDA margin or ROCE.",
+ "chain": {
+  "compared": [
+   "Export-focused generic formulation makers",
+   "Domestic branded formulation companies"
+  ],
+  "highest": null,
+  "line": "The median EBITDA margins of the 2 layers with at least 5 companies are within 0.3 points of each other: no layer stands apart.",
+  "lowest": null,
+  "measure": "ebitda",
+  "unranked": []
+ },
+ "lender": false,
+ "listed": 103,
+ "members": 101,
+ "notable": [],
+ "page": "/themes/in/pharmaceutical",
+ "period": {
+  "n": 99,
+  "of": 101,
+  "year": "Mar 2026"
+ },
+ "read_on": "2026-11-16",
+ "region": "IN",
+ "rows": [
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Laurus Labs Limited",
+     "out": "",
+     "symbol": "LAURUSLABS",
+     "unverified": false,
+     "what": "Founded in 2005, Laurus Labs is a research-driven pharmaceutical and biotechnology company having a global leadership position in select Active Pharmaceutical Ingredients (APIs)…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Aarti Drugs Limited",
+     "out": "",
+     "symbol": "AARTIDRUGS",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Granules India Limited",
+     "out": "",
+     "symbol": "GRANULES",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Acutaas Chemicals Ltd",
+     "out": "",
+     "symbol": "ACUTAAS",
+     "unverified": false,
+     "what": "The company manufactures different types of Advanced Pharmaceutical Intermediates and Active Pharmaceutical Ingredients for New Chemical Entities",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Shilpa Medicare Ltd",
+     "out": "",
+     "symbol": "SHILPAMED",
+     "unverified": false,
+     "what": "Shilpa Medicare Incorporated in 1987 manufactures niche APIs, intermediates, and formulations and also undertakes contract research and manufacturing service for some of its…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Alivus Life Sciences Ltd",
+     "out": "",
+     "symbol": "ALIVUS",
+     "unverified": false,
+     "what": "It is a leading developer and manufacturer of select, high-value, non-commoditized, active pharmaceutical ingredients in chronic therapeutic areas",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Concord Biotech Ltd",
+     "out": "",
+     "symbol": "CONCORDBIO",
+     "unverified": false,
+     "what": "Concord Biotech Limited is an India-based R&D-driven biopharma company and manufacturer of fermentation-based APIs across immunosuppressants and oncology",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Symbiotec Pharmalab Ltd",
+     "out": "",
+     "symbol": "SYMBIOTEC",
+     "unverified": false,
+     "what": "It has evolved from a Lab-Scale Steroid manufacturer into a fully integrated global platform",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Blue Jet Healthcare Ltd",
+     "out": "",
+     "symbol": "BLUEJET",
+     "unverified": false,
+     "what": "Blue Jet Healthcare (earlier called Jet Chemicals Pvt Ltd) is a pharmaceutical and healthcare ingredient & intermediate company and the first manufacturer of saccharin and its…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "IOL Chemicals & Pharmaceuticals Ltd",
+     "out": "",
+     "symbol": "IOLCP",
+     "unverified": false,
+     "what": "IOL Chemicals & Pharmaceuticals Ltd is a leading pharmaceutical (APIs) company and is a significant player in the specialty chemicals space",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Orchid Pharma Ltd",
+     "out": "",
+     "symbol": "ORCHPHARMA",
+     "unverified": false,
+     "what": "Orchid Pharma is a pharmaceutical company engaged in the development and manufacture of active pharmaceutical ingredients (APIs) and finished dosage forms",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Morepen Laboratories Ltd",
+     "out": "",
+     "symbol": "MOREPENLAB",
+     "unverified": false,
+     "what": "Morepen Laboratories Ltd is engaged in the business of manufacturing, producing, developing and marketing a wide range of Active Pharmaceutical Ingredients (APIs), branded and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Supriya Lifescience Ltd",
+     "out": "",
+     "symbol": "SUPRIYA",
+     "unverified": false,
+     "what": "Supriya Lifescience is engaged in the manufacturing of Active pharmaceutical ingredients (APIs)",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Gujarat Themis Biosyn Ltd",
+     "out": "",
+     "symbol": "GUJTHEM",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "SMS Pharmaceuticals Ltd",
+     "out": "",
+     "symbol": "SMSPHARMA",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Solara Active Pharma Sciences Ltd",
+     "out": "",
+     "symbol": "SOLARA",
+     "unverified": false,
+     "what": "Solara Active Pharma Sciences Ltd is engaged in business of manufacturing, production, processing, formulating, sale, import, export, merchandising, distributing, trading of APIs",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "NGL Fine Chem Ltd",
+     "out": "",
+     "symbol": "NGLFINE",
+     "unverified": false,
+     "what": "NGL Fine-Chem Ltd is a manufacturer and exporter of pharmaceuticals and intermediates for usage in veterinary and human health",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Anlon Healthcare Ltd",
+     "out": "",
+     "symbol": "AHCL",
+     "unverified": false,
+     "what": "Anlon Healthcare Limited is a chemical manufacturing company engaged in the manufacturing of Pharma Intermediates and active pharmaceutical ingredients (APIs)",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Fermenta Biotech Ltd",
+     "out": "",
+     "symbol": "FERMENTA",
+     "unverified": false,
+     "what": "Fermenta Biotech Ltd manufactures Active Pharmaceutical Ingredient, Aqua CHL, Biotechnology and Nutraceutical products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bajaj Healthcare Ltd",
+     "out": "",
+     "symbol": "BAJAJHCARE",
+     "unverified": false,
+     "what": "Bajaj Healthcare Ltd manufactures a wide range of Active Pharmaceutical Ingredients and Formulations",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Neuland Laboratories Limited",
+     "out": "",
+     "symbol": "NEULANDLAB",
+     "unverified": false,
+     "what": "The key molecules in this primary revenue generating segment are Levetiracetam and Mirtazapine",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sudeep Pharma Ltd",
+     "out": "",
+     "symbol": "SUDEEPPHRM",
+     "unverified": false,
+     "what": "Sudeep Pharma Limited is a manufacturer of pharmaceutical excipients, food-grade minerals, and specialty nutrition ingredients serving over 100 countries",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 26.15,
+   "ebitda_n": 22,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Active ingredient and intermediate makers",
+   "listed": 22,
+   "n": 22,
+   "net": 13.7,
+   "net_n": 22,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 5.05,
+   "pb_n": 22,
+   "revenue": 36050.0,
+   "roce": 17.45,
+   "roce_n": 22,
+   "roe": 14.55,
+   "roe_n": 22,
+   "scale": null,
+   "words": "These companies make the chemical and fermentation-based molecules that go into medicines."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Syngene International Limited",
+     "out": "",
+     "symbol": "SYNGENE",
+     "unverified": false,
+     "what": "Syngene (established in 1993) as a Biocon subsidiary is India's first Contract Research Organization (CRO) which expanded later to be an integrated service provider offering…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sai Life Sciences Limited",
+     "out": "way of earning not shown",
+     "symbol": "SAILIFE",
+     "unverified": false,
+     "what": "Sai Life Sciences Ltd carries out contract research and manufacturing activities for customers engaged in pharmaceutical and bio technology industries",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Piramal Pharma Limited",
+     "out": "",
+     "symbol": "PPLPHARMA",
+     "unverified": false,
+     "what": "The company operates through 3 major segments (1) Contract development and manufacturing organisations (CDMO), (2) Complex hospital generics (critical care), and (3) consumer…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "OneSource Specialty Pharma Ltd",
+     "out": "",
+     "symbol": "ONESOURCE",
+     "unverified": false,
+     "what": "OneSource Specialty Pharma Ltd is in the research, development, manufacture and commercialisation of bio logical drug products in various injectable formats",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Cohance Lifesciences Ltd",
+     "out": "",
+     "symbol": "COHANCE",
+     "unverified": false,
+     "what": "Cohance Lifesciences is a Hyderabad-based CDMO operating across pharmaceutical development, manufacturing, APIs, formulations and specialty chemicals",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Akums Drugs & Pharmaceuticals Ltd",
+     "out": "",
+     "symbol": "AKUMS",
+     "unverified": false,
+     "what": "Akums Drugs and Pharmaceuticals Limited is a pharmaceutical contract development and manufacturing organization (CDMO) offering a comprehensive range of pharmaceutical products…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Innova Captab Ltd",
+     "out": "way of earning not shown",
+     "symbol": "INNOVACAP",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Hikal Ltd",
+     "out": "other business",
+     "symbol": "HIKAL",
+     "unverified": false,
+     "what": "The company is in the business of supplying research services, active ingredients and intermediates for its customers",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Dishman Carbogen Amcis Ltd",
+     "out": "",
+     "symbol": "DCAL",
+     "unverified": false,
+     "what": "Dishman Carbogen Amcis Ltd is engaged in Contract Research and Manufacturing Services (CRAMS) and manufacture and supply of marketable molecules such as specialty chemicals…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Windlas Biotech Ltd",
+     "out": "",
+     "symbol": "WINDLAS",
+     "unverified": false,
+     "what": "Windlas Biotech Ltd is a leading domestic pharmaceutical formulations contract development and manufacturing organization (CDMO)",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Anthem Biosciences Ltd",
+     "out": "way of earning not shown",
+     "symbol": "ANTHEM",
+     "unverified": false,
+     "what": "Anthem Biosciences Ltd is in the business of providing CRDMO services and the manufacture and sale of specialty ingredients",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Gland Pharma Ltd",
+     "out": "",
+     "symbol": "GLAND",
+     "unverified": false,
+     "what": "Established in Hyderabad, India in 1978, Gland Pharma has grown over the years from a contract manufacturer of small volume liquid parenteral products, to become one of the…",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 19.05,
+   "ebitda_n": 8,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Contract research and manufacturing services",
+   "listed": 12,
+   "n": 8,
+   "net": 6.25,
+   "net_n": 8,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 3.65,
+   "pb_n": 8,
+   "revenue": 30925.0,
+   "roce": 7.9,
+   "roce_n": 8,
+   "roe": 6.35,
+   "roe_n": 8,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Aurobindo Pharma Limited",
+     "out": "",
+     "symbol": "AUROPHARMA",
+     "unverified": false,
+     "what": "Aurobindo Pharma is principally engaged in manufacturing and marketing of active pharmaceutical ingredients, generic pharmaceuticals and related services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Lupin Limited",
+     "out": "",
+     "symbol": "LUPIN",
+     "unverified": false,
+     "what": "Lupin develops and commercializes a wide range of branded and generic formulations, biotechnology products, and APIs in over 100 markets in the U",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Zydus Lifesciences Limited",
+     "out": "",
+     "symbol": "ZYDUSLIFE",
+     "unverified": false,
+     "what": "Simultaneously it rededicates itself to its mission of creating healthier, happier communities across the globe",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Glenmark Pharmaceuticals Limited",
+     "out": "",
+     "symbol": "GLENMARK",
+     "unverified": false,
+     "what": "by Gracias Saldanha as a generic drug and active pharmaceutical ingredient manufacturer, it is listed on the Bombay Stock Exchange and the National Stock Exchange of India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sun Pharmaceutical Industries Limited",
+     "out": "",
+     "symbol": "SUNPHARMA",
+     "unverified": false,
+     "what": "Sun Pharmaceutical Industries Ltd is engaged in the business of manufacturing, developing and marketing a wide range of branded and generic formulations and Active Pharma…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Dr. Reddy's Laboratories Limited",
+     "out": "",
+     "symbol": "DRREDDY",
+     "unverified": false,
+     "what": "Reddy's Laboratories Ltd is a leading India-based pharmaceutical company which offers a portfolio of products and services, including Active Pharmaceutical Ingredients (APIs)…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Cipla Ltd",
+     "out": "",
+     "symbol": "CIPLA",
+     "unverified": false,
+     "what": "Cipla primarily focuses on developing medication to treat respiratory disease, cardiovascular disease, arthritis, diabetes, depression, paediatric and various other medical…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Rubicon Research Ltd",
+     "out": "",
+     "symbol": "RUBICON",
+     "unverified": false,
+     "what": "Rubicon Research Limited is a pharmaceutical company engaged in the development, manufacturing, & commercialization of differentiated formulations",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Alembic Pharmaceuticals Ltd",
+     "out": "",
+     "symbol": "APLLTD",
+     "unverified": false,
+     "what": "Alembic Pharmaceuticals is in the business of development, manufacturing, and marketing of Pharmaceuticals products i.e",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Caplin Point Laboratories Ltd",
+     "out": "",
+     "symbol": "CAPLIPOINT",
+     "unverified": false,
+     "what": "Caplin Point Laboratories Ltd is engaged in the manufacturing and sourcing of APIs, finished formulations, R&D, clinical research with presence in Latin America, Africa, USA and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Natco Pharma Ltd",
+     "out": "",
+     "symbol": "NATCOPHARM",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Marksans Pharma Ltd",
+     "out": "",
+     "symbol": "MARKSANS",
+     "unverified": false,
+     "what": "Marksans Pharma is engaged in the Business of Formulation of pharmaceutical products Product Portfolio The company offers a portfolio of 350+ products and 2,000+ SKUs",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Strides Pharma Science Ltd",
+     "out": "",
+     "symbol": "STAR",
+     "unverified": false,
+     "what": "Its generic pharma business is driven by IP- based product licensing and global marketing and distribution partnerships",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bliss GVS Pharma Ltd",
+     "out": "",
+     "symbol": "BLISSGVS",
+     "unverified": false,
+     "what": "Bliss GVS Pharma Limited is engaged in manufacturing, marketing, trading and export of pharmaceutical formulations in the form of suppositories, pessaries, capsules, tablets, and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Senores Pharmaceuticals Ltd",
+     "out": "",
+     "symbol": "SENORES",
+     "unverified": false,
+     "what": "Senores Pharmaceuticals Ltd manufactures and develops affordable and high-quality complex generics certified by global food and drugs authorities",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kwality Pharmaceuticals Ltd",
+     "out": "",
+     "symbol": "KPL",
+     "unverified": false,
+     "what": "Kwality Pharma is in the business of manufacturing & trading in Pharmaceuticals & allied products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Unichem Laboratories Ltd",
+     "out": "",
+     "symbol": "UNICHEMLAB",
+     "unverified": false,
+     "what": "Unichem Laboratories Ltd is involved in pharmaceuticals in Generics, APIs and Contract Manufacturing (CMO) areas",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ind-Swift Laboratories Ltd",
+     "out": "",
+     "symbol": "INDSWFTLAB",
+     "unverified": false,
+     "what": "Ind-Swift Laboratories Ltd is a pharmaceutical company focused on finished dosage formulations (FDF)",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Fredun Pharmaceuticals Ltd",
+     "out": "",
+     "symbol": "FREDUN",
+     "unverified": false,
+     "what": "Fredun Pharmaceuticals Ltd manufactures & exports healthcare and pharmaceuticals products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sai Parenterals Ltd",
+     "out": "",
+     "symbol": "SAIPARENT",
+     "unverified": false,
+     "what": "Sai Parenteral's Ltd. is a diversified pharmaceutical formulations company with expertise in research, development, and manufacturing",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Venus Remedies Ltd",
+     "out": "",
+     "symbol": "VENUSREM",
+     "unverified": false,
+     "what": "Venus Remedies Ltd is a research-based pharmaceutical company focused on complex injectable formulations across critical care, oncology, anti-infectives and specialty therapies",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Syncom Formulations (India) Ltd",
+     "out": "",
+     "symbol": "SYNCOMF",
+     "unverified": false,
+     "what": "The company is a generic pharmaceutical player operating in more than 15 countries worldwide having more than 400 products registered",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bharat Parenterals Ltd",
+     "out": "",
+     "symbol": "BPLPHARMA",
+     "unverified": false,
+     "what": "Bharat Parenterals Ltd is in the business of manufacturing and marketing of formulations",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bafna Pharmaceuticals Ltd",
+     "out": "no revenue figure",
+     "symbol": "BAFNAPH",
+     "unverified": false,
+     "what": "Bafna Pharmaceuticals Ltd manufactures finished pharmaceutical formulations Business model and evolution The company began as an institutional supplier and evolved into an…",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Amanta Healthcare Ltd",
+     "out": "",
+     "symbol": "AMANTA",
+     "unverified": false,
+     "what": "Incorporated in December 1994, Amanta Healthcare Limited is a pharmaceutical company that specializes in the development, manufacturing, and marketing of a diverse array of…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Divi's Laboratories Limited",
+     "out": "",
+     "symbol": "DIVISLAB",
+     "unverified": false,
+     "what": "Incorporated in 1990, Divis Laboratories Ltd manufactures and exports API's, Intermediates and Nutraceutical ingredients",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Aarti Pharmalabs Ltd",
+     "out": "",
+     "symbol": "AARTIPHARM",
+     "unverified": false,
+     "what": "Currently, the company is an internationally recognized manufacturer of generic API & Intermediates",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kopran Ltd",
+     "out": "",
+     "symbol": "KOPRAN",
+     "unverified": false,
+     "what": "Kopran Ltd. is a fully integrated pharmaceutical company that manufactures and supplies high-quality formulations and active pharmaceutical ingredients globally",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sakar Healthcare Ltd",
+     "out": "",
+     "symbol": "SAKAR",
+     "unverified": false,
+     "what": "Sakar Healthcare Ltd is in the business of manufacturing Research & Development of Pharmaceutical products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Viyash Scientific Ltd",
+     "out": "",
+     "symbol": "VIYASH",
+     "unverified": false,
+     "what": "Sequent Scientific Limited provides a wide-ranging portfolio of animal health products, including Finished Dose Formulations, APIs, as well as analytical services to the…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Amrutanjan Health Care Ltd",
+     "out": "no revenue figure",
+     "symbol": "AMRUTANJAN",
+     "unverified": false,
+     "what": "AHCL has been manufacturing ayurvedic balm for pain management since 1893, and is currently managed by the third-generation of promoters",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sigachi Industries Ltd",
+     "out": "",
+     "symbol": "SIGACHI",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 20.35,
+   "ebitda_n": 30,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Export-focused generic formulation makers",
+   "listed": 32,
+   "n": 30,
+   "net": 12.15,
+   "net_n": 30,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 4.05,
+   "pb_n": 30,
+   "revenue": 273125.0,
+   "roce": 16.2,
+   "roce_n": 30,
+   "roe": 13.15,
+   "roe_n": 30,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Mankind Pharma Limited",
+     "out": "",
+     "symbol": "MANKIND",
+     "unverified": false,
+     "what": "Incorporated in 1995, Mankind Pharma Limited develops, manufactures, and markets pharmaceutical formulations in various acute and chronic therapeutic areas and several consumer…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Torrent Pharmaceuticals Limited",
+     "out": "",
+     "symbol": "TORNTPHARM",
+     "unverified": false,
+     "what": "Torrent Pharmaceuticals Ltd is one of the leading Indian Pharmaceutical Company engaged in research, development, manufacturing and marketing of generic pharmaceutical formulations",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Alkem Laboratories Limited",
+     "out": "",
+     "symbol": "ALKEM",
+     "unverified": false,
+     "what": "1% market share in the Indian domestic formulation market as of 9M FY25, making it the 5th largest pharmaceutical company in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Abbott India Ltd",
+     "out": "",
+     "symbol": "ABBOTINDIA",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ipca Laboratories Ltd",
+     "out": "",
+     "symbol": "IPCALAB",
+     "unverified": false,
+     "what": "Ipca Laboratories is an integrated pharmaceutical company manufacturing branded and generic formulations, APIs and intermediates",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Glaxosmithkline Pharmaceuticals Ltd",
+     "out": "",
+     "symbol": "GLAXO",
+     "unverified": false,
+     "what": "GlaxoSmithKline Pharmaceuticals research, manufacture and make available a broad range of medicines and vaccines that benefit people.(Source : Company Web-site) Leading Global…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Emcure Pharmaceuticals Ltd",
+     "out": "",
+     "symbol": "EMCURE",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ajanta Pharma Ltd",
+     "out": "",
+     "symbol": "AJANTPHARM",
+     "unverified": false,
+     "what": "Ajanta Pharma is primarily engaged in development, manufacturing and marketing of speciality pharmaceutical quality finished dosages.(Source : 202003-01 Annual Report Page No:70)",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "ERIS Lifesciences Ltd",
+     "out": "",
+     "symbol": "ERIS",
+     "unverified": false,
+     "what": "ERIS Lifesciences Ltd is engaged in the business of manufacture and marketing of pharmaceutical products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Pfizer Ltd",
+     "out": "",
+     "symbol": "PFIZER",
+     "unverified": false,
+     "what": "Pfizer Ltd is engaged in manufacturing, marketing, trading and export of pharmaceutical products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Astrazeneca Pharma India Ltd",
+     "out": "",
+     "symbol": "ASTRAZEN",
+     "unverified": false,
+     "what": "AstraZeneca Pharma India Ltd is engaged in the business of manufacture, distribution and marketing of pharmaceutical products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Corona Remedies Ltd",
+     "out": "",
+     "symbol": "CORONA",
+     "unverified": false,
+     "what": "Incorporated in August 2004, Corona Remedies Limited is a pharmaceutical company developing, manufacturing, and marketing products in women’s healthcare, cardiology, pain…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Procter & Gamble Health Ltd",
+     "out": "",
+     "symbol": "PGHL",
+     "unverified": false,
+     "what": "Procter & Gamble Health Ltd, formerly Merck Ltd, manufactures and markets vitamins, minerals, supplements and other healthcare products under brands including Neurobion, Livogen…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sanofi Consumer Healthcare India Ltd",
+     "out": "",
+     "symbol": "SANOFICONR",
+     "unverified": false,
+     "what": "Sanofi Consumer Healthcare India Ltd manufactures and trading of drugs & pharmaceutical products",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sanofi India Ltd",
+     "out": "",
+     "symbol": "SANOFI",
+     "unverified": false,
+     "what": "It offers a wide array of medicines for therapy areas such as Diabetes, Cardiology, Thrombosis, Central Nervous System and Anti-histamines",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "FDC Ltd",
+     "out": "",
+     "symbol": "FDC",
+     "unverified": false,
+     "what": "The Company is a pioneer in the manufacture of specialized formulations, and among the world’s foremost manufacturers and marketers of Oral Rehydration Salts (ORS)",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Zota Health Care Ltd",
+     "out": "",
+     "symbol": "ZOTA",
+     "unverified": false,
+     "what": "It sources formulations from domestic manufacturers",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Gufic BioSciences Ltd",
+     "out": "",
+     "symbol": "GUFICBIO",
+     "unverified": false,
+     "what": "The company develops pharmaceutical formulations in various forms",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "RPG Life Sciences Ltd",
+     "out": "",
+     "symbol": "RPGLIFE",
+     "unverified": false,
+     "what": "RPG Life Sciences Ltd manufactures and markets Formulations (Finished Dosage Forms) and Active Pharma Ingredients",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Panacea Biotec Ltd",
+     "out": "",
+     "symbol": "PANACEABIO",
+     "unverified": false,
+     "what": "Panacea Biotec Ltd is a research-based biotechnology company",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Indoco Remedies Ltd",
+     "out": "",
+     "symbol": "INDOCO",
+     "unverified": false,
+     "what": "Indoco Remedies (Indoco) is a Mumbai-based pharmaceutical company that focuses on formulations with a presence in contract manufacturing and research",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Beta Drugs Ltd",
+     "out": "",
+     "symbol": "BETA",
+     "unverified": false,
+     "what": "Beta Drugs Ltd is engaged in manufacturing of a wide range of oncology (anti-cancer) drugs in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Jagsonpal Pharmaceuticals Ltd",
+     "out": "",
+     "symbol": "JAGSNPHARM",
+     "unverified": false,
+     "what": "Jagsonpal Pharmaceuticals Ltd manufactures and trades pharmaceutical products and active pharmaceutical ingredients",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Lincoln Pharmaceuticals Ltd",
+     "out": "",
+     "symbol": "LINCOLN",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Themis Medicare Ltd",
+     "out": "",
+     "symbol": "THEMISMED",
+     "unverified": false,
+     "what": "Themis Medicare manufactures Formulation and API pharmaceutical products",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 20.7,
+   "ebitda_n": 25,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Domestic branded formulation companies",
+   "listed": 25,
+   "n": 25,
+   "net": 13.4,
+   "net_n": 25,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 6.2,
+   "pb_n": 25,
+   "revenue": 96314.0,
+   "roce": 21.2,
+   "roce_n": 25,
+   "roe": 18.8,
+   "roe_n": 25,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Biocon Limited",
+     "out": "",
+     "symbol": "BIOCON",
+     "unverified": false,
+     "what": "Biocon Biologics Ltd develops and markets a range of 20 biosimilars including insulins",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Wockhardt Limited",
+     "out": "",
+     "symbol": "WOCKPHARMA",
+     "unverified": false,
+     "what": "It follows a “discovery-to-delivery” approach, advancing first-in-class and differentiated antibiotics from research and clinical development to commercialisation across India…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Natural Capsules Ltd",
+     "out": "",
+     "symbol": "NATCAPSUQ",
+     "unverified": false,
+     "what": "Natural Capsules manufactures Capsules and Steroidal APIs and their Intermediates and Derivatives",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 19.3,
+   "ebitda_n": 3,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Biologics and novel drug developers",
+   "listed": 3,
+   "n": 3,
+   "net": 2.2,
+   "net_n": 3,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 1.7,
+   "pb_n": 3,
+   "revenue": 16748.0,
+   "roce": 3.6,
+   "roce_n": 3,
+   "roe": 1.4,
+   "roe_n": 3,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Hester Biosciences Ltd",
+     "out": "",
+     "symbol": "HESTERBIO",
+     "unverified": false,
+     "what": "Hester Biosciences Ltd is one of India’s leading animal healthcare companies and a major manufacturer of poultry and animal vaccines, including a leading position in PPR and Goat…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Asston Pharmaceuticals Ltd",
+     "out": "",
+     "symbol": "APL",
+     "unverified": false,
+     "what": "Asston Pharmaceuticals Ltd is in the business of manufacturing pharmaceutical products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Fabino Enterprises Ltd",
+     "out": "",
+     "symbol": "FABINO",
+     "unverified": false,
+     "what": "Fabino Enterprises manufactures, markets, trades, and does packing of pharmaceutical and other wellness focused consumer products",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": -2.0,
+   "ebitda_n": 3,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Pharmaceuticals",
+   "listed": 3,
+   "n": 3,
+   "net": 15.2,
+   "net_n": 3,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 2.6,
+   "pb_n": 3,
+   "revenue": 369.89000000000004,
+   "roce": 15.2,
+   "roce_n": 3,
+   "roe": 15.7,
+   "roe_n": 3,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Aptus Pharma Ltd",
+     "out": "",
+     "symbol": "APPL",
+     "unverified": false,
+     "what": "Aptus Pharma Ltd is engaged in the business of marketing and distribution of finished pharmaceutical formulations",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Achyut Healthcare Ltd",
+     "out": "",
+     "symbol": "ACHYUT",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 8.75,
+   "ebitda_n": 2,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Distribution and trading",
+   "listed": 2,
+   "n": 2,
+   "net": 6.35,
+   "net_n": 2,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 17.6,
+   "pb_n": 2,
+   "revenue": 58.150000000000006,
+   "roce": 15.6,
+   "roce_n": 2,
+   "roe": 15.75,
+   "roe_n": 2,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": "rest",
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Sun Pharma Advanced Research Company Ltd",
+     "out": "",
+     "symbol": "SPARC",
+     "unverified": false,
+     "what": "Sun Pharma Advanced Research Company Ltd is engaged in the business of research and development (R&D) of pharmaceutical products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Novartis India Ltd",
+     "out": "",
+     "symbol": "NOVARTIND",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Advanced Enzyme Technologies Ltd",
+     "out": "",
+     "symbol": "ADVENZYMES",
+     "unverified": false,
+     "what": "Advanced Enzyme Technologies Limited is engaged in the business of manufacturing and sales of enzymes",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Jubilant Pharmova Ltd",
+     "out": "way of earning not shown",
+     "symbol": "JUBLPHARMA",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 30.8,
+   "ebitda_n": 3,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Other pharma companies",
+   "listed": 4,
+   "n": 3,
+   "net": 26.3,
+   "net_n": 3,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": true,
+   "pb": 3.25,
+   "pb_n": 2,
+   "revenue": 2979.0,
+   "roce": 16.3,
+   "roce_n": 3,
+   "roe": 11.6,
+   "roe_n": 3,
+   "scale": null,
+   "words": ""
+  }
+ ],
+ "sector": "Indian Pharma",
+ "stamp": [
+  62,
+  32,
+  3
+ ],
+ "theme": "Pharma",
+ "total": 212,
+ "unit": "₹ crore",
+ "unplaced": 0,
+ "v": 2,
+ "whole": false,
+ "window": {
+  "of": 212,
+  "shown": 104
+ }
+}

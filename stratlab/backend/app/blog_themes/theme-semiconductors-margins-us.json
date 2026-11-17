@@ -1,0 +1,1213 @@
+{
+ "adjacent_n": 0,
+ "as_of": "2026-11-16",
+ "basis": "Each company's latest full fiscal year, in $ million. Revenue, EBITDA margin (operating profit before depreciation as a share of revenue) and net margin (net profit as a share of revenue) are that year's; return on capital employed (ROCE) is the latest reported. Consolidated accounts where the company files them. Banks and lenders have no EBITDA margin or ROCE.",
+ "chain": {
+  "compared": [],
+  "highest": null,
+  "line": "Median EBITDA margin by layer: Fabless chip design 7.0% (28 of 37 companies); Semiconductor equipment 18.3% (10 of 11 companies); Analog and power integrated device makers 12.9% (13 of 14 companies). Stock-based pay differs 4.7 times between these layers (Semiconductor equipment 2.1% of revenue, Fabless chip design 10.2%), and an EBITDA margin counts it as a cost, so they are not ranked on it.",
+  "lowest": null,
+  "measure": "ebitda",
+  "unranked": null
+ },
+ "lender": false,
+ "listed": 100,
+ "members": 97,
+ "notable": [],
+ "page": "/themes/us/semiconductor",
+ "period": {
+  "n": 59,
+  "of": 97,
+  "year": "Dec 2025"
+ },
+ "read_on": "2026-11-16",
+ "region": "US",
+ "rows": [
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Synopsys Inc",
+     "out": "",
+     "symbol": "SNPS",
+     "unverified": false,
+     "what": "Synopsys supplies tools and services to the semiconductor design and manufacturing industry",
+     "year": "Oct 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Cadence Design Systems Inc",
+     "out": "",
+     "symbol": "CDNS",
+     "unverified": false,
+     "what": "Initially specialized in electronic design automation (EDA) software for the semiconductor industry, the company currently makes software and hardware for designing products such…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Arteris, Inc.",
+     "out": "",
+     "symbol": "AIP",
+     "unverified": false,
+     "what": "It develops the network-on-chip (NoC) IP, system-on-chip (SoC) integration automation software and semiconductor hardware security assurance that is used to create semiconductor…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Arm Holdings PLC",
+     "out": "",
+     "symbol": "ARM",
+     "unverified": false,
+     "what": "In today’s technology-driven world, semiconductors are the enablers of the devices and infrastructure that facilitate…",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": 22.85,
+   "ebitda_n": 4,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Design software and IP licensing",
+   "listed": 4,
+   "n": 4,
+   "net": 18.65,
+   "net_n": 4,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 16.7,
+   "pb_n": 3,
+   "revenue": 17341.52,
+   "roce": 10.5,
+   "roce_n": 2,
+   "roe": 10.9,
+   "roe_n": 3,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "NVIDIA Corp",
+     "out": "",
+     "symbol": "NVDA",
+     "unverified": false,
+     "what": "NVIDIA has a platform strategy, bringing together hardware, systems, software, algorithms, libraries, AI models and training data sets, and services to create unique value for…",
+     "year": "Jan 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Advanced Micro Devices Inc",
+     "out": "",
+     "symbol": "AMD",
+     "unverified": false,
+     "what": "In client computing, our CPUs, APUs and chipsets for desktops and notebooks deliver performance",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Broadcom Inc.",
+     "out": "",
+     "symbol": "AVGO",
+     "unverified": false,
+     "what": "We are a global technology leader that designs, develops and supplies a broad range of semiconductor and semiconductor-based solutions and infrastructure software solutions",
+     "year": "Nov 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Qualcomm Inc",
+     "out": "",
+     "symbol": "QCOM",
+     "unverified": false,
+     "what": "The company develops and designs technologies for global communications and computing",
+     "year": "Sep 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Marvell Technology, Inc.",
+     "out": "",
+     "symbol": "MRVL",
+     "unverified": false,
+     "what": "We are a fabless supplier of high-performance semiconductor products with core strengths in developing and scaling complex System-on-a-Chip architectures",
+     "year": "Jan 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Monolithic Power Systems, Inc.",
+     "out": "",
+     "symbol": "MPWR",
+     "unverified": false,
+     "what": "Monolithic Power Systems, Inc. is a fabless global company that provides high-performance",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Astera Labs, Inc.",
+     "out": "",
+     "symbol": "ALAB",
+     "unverified": false,
+     "what": "Astera Labs, Inc., headquartered in San Jose, California, is a fabless manufacturing company that develops connectivity technologies and related software that are used in data…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Credo Technology Group Holding Ltd",
+     "out": "",
+     "symbol": "CRDO",
+     "unverified": false,
+     "what": "",
+     "year": "May 2026"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Skyworks Solutions, Inc.",
+     "out": "",
+     "symbol": "SWKS",
+     "unverified": false,
+     "what": "",
+     "year": "Oct 2026"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "MACOM Technology Solutions Holdings, Inc.",
+     "out": "",
+     "symbol": "MTSI",
+     "unverified": false,
+     "what": "",
+     "year": "Oct 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Lattice Semiconductor Corp",
+     "out": "",
+     "symbol": "LSCC",
+     "unverified": false,
+     "what": "Lattice is the low power programmable leader",
+     "year": "Jan 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sitime Corp",
+     "out": "",
+     "symbol": "SITM",
+     "unverified": false,
+     "what": "We are a leading provider of Precision Timing solutions to the global electronics industry",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Semtech Corp",
+     "out": "",
+     "symbol": "SMTC",
+     "unverified": false,
+     "what": "The analog industry relies more heavily than the digital industry on design and applications talent to distinguish its products from one another",
+     "year": "Jan 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Silicon Laboratories Inc.",
+     "out": "",
+     "symbol": "SLAB",
+     "unverified": false,
+     "what": "Our integrated hardware and software platforms, intuitive development tools, industry-leading ecosystem, and robust support help customers build advanced devices for industrial…",
+     "year": "Jan 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Cirrus Logic, Inc.",
+     "out": "",
+     "symbol": "CRUS",
+     "unverified": false,
+     "what": "Cirrus Logic, Inc. (\"Cirrus Logic,\" \"We,\" \"Us,\" \"Our,\" or the \"Company\") is a leader in low-power, high-precision mixed-signal processing solutions that create innovative user…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Silicon Motion Technology CORP",
+     "out": "",
+     "symbol": "SIMO",
+     "unverified": false,
+     "what": "We are a global leader in developing NAND flash controllers for SSDs and other solid state storage devices",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Maxlinear, Inc",
+     "out": "",
+     "symbol": "MXL",
+     "unverified": false,
+     "what": "We are a provider of communications systems-on-chip, or SoCs, used in broadband, mobile and wireline infrastructure, data center, and industrial and multi-market applications",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Synaptics Inc",
+     "out": "",
+     "symbol": "SYNA",
+     "unverified": false,
+     "what": "It develops touchpads and fingerprint biometrics technology for computer laptops",
+     "year": "Jun 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ambarella Inc",
+     "out": "",
+     "symbol": "AMBA",
+     "unverified": false,
+     "what": "Ambarella's system on chips are designed to deliver a combination of video compression",
+     "year": "Jan 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Power Integrations Inc",
+     "out": "",
+     "symbol": "POWI",
+     "unverified": false,
+     "what": "We design, develop and market analog and mixed-signal integrated circuits (“ICs”) and other electronic components and circuitry used in high-voltage power conversion",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Navitas Semiconductor Corp",
+     "out": "",
+     "symbol": "NVTS",
+     "unverified": false,
+     "what": "Navitas Semiconductor Corporation designs, develops and markets next-generation power semiconductors including gallium nitride (GaN) power integrated circuits (ICs), high-voltage…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Himax Technologies, Inc.",
+     "out": "",
+     "symbol": "HIMX",
+     "unverified": false,
+     "what": "",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ambiq Micro, Inc.",
+     "out": "",
+     "symbol": "AMBQ",
+     "unverified": false,
+     "what": "We are a pioneer and leading provider of ultra-low power semiconductor solutions designed to address the significant power consumption challenges of general purpose and AI…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sequans Communications",
+     "out": "",
+     "symbol": "SQNS",
+     "unverified": false,
+     "what": "We are a fabless designer, developer and supplier of semiconductor solutions primarily for the IoT markets",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "indie Semiconductor, Inc.",
+     "out": "",
+     "symbol": "INDI",
+     "unverified": false,
+     "what": "",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Sealsq Corp",
+     "out": "",
+     "symbol": "LAES",
+     "unverified": false,
+     "what": "",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Quicklogic Corp",
+     "out": "",
+     "symbol": "QUIK",
+     "unverified": false,
+     "what": "We are a fabless semiconductor company whose primary offerings include eFPGA IP licensing, discrete FPGA devices, and related development tools and software",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Valens Semiconductor Ltd.",
+     "out": "",
+     "symbol": "VLN",
+     "unverified": false,
+     "what": "Valens provides semiconductor products for the distribution of uncompressed ultra-high-definition (UHD) multimedia content and in-vehicle connectivity applications",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Gsi Technology Inc",
+     "out": "",
+     "symbol": "GSIT",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "GCT Semiconductor Holding, Inc.",
+     "out": "",
+     "symbol": "GCTS",
+     "unverified": false,
+     "what": "GCT Semiconductor Holding, Inc. is a fabless semiconductor company that specializes in the design, manufacturing, and sale of communication semiconductors, including high-speed…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Intchains Group Ltd",
+     "out": "",
+     "symbol": "ICG",
+     "unverified": false,
+     "what": "",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Guerrilla RF, Inc.",
+     "out": "",
+     "symbol": "GUER",
+     "unverified": false,
+     "what": "",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Blaize Holdings, Inc.",
+     "out": "",
+     "symbol": "BZAI",
+     "unverified": false,
+     "what": "Our computing solutions are designed for efficient processing of AI inference workloads across edge and data center environments",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Peraso Inc.",
+     "out": "",
+     "symbol": "PRSO",
+     "unverified": false,
+     "what": "",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Mobix Labs, Inc",
+     "out": "",
+     "symbol": "MOBX",
+     "unverified": false,
+     "what": "",
+     "year": "Sep 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Metalink Ltd",
+     "out": "",
+     "symbol": "MTLK",
+     "unverified": false,
+     "what": "From our inception through the third quarter of 1994, our operating activities related primarily to establishing a research and development organization, developing prototype…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Cerebras Systems Inc.",
+     "out": "no revenue figure",
+     "symbol": "CBRS",
+     "unverified": false,
+     "what": "Cerebras Systems Inc., headquartered in Sunnyvale, California, develops semiconductors, supercomputers, and related software to power artificial intelligence deep-learning…",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Palomino Laboratories Inc.",
+     "out": "",
+     "symbol": "PALX",
+     "unverified": false,
+     "what": "Palomino Laboratories Inc. is a pre-revenue, technology company",
+     "year": "Dec 2025"
+    }
+   ],
+   "ebitda": 6.95,
+   "ebitda_n": 28,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Fabless chip design",
+   "listed": 38,
+   "n": 37,
+   "net": -6.05,
+   "net_n": 24,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 6.8,
+   "pb_n": 34,
+   "revenue": 385552.12691399996,
+   "roce": 1.6,
+   "roce_n": 25,
+   "roe": -4.3,
+   "roe_n": 34,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Qorvo, Inc.",
+     "out": "",
+     "symbol": "QRVO",
+     "unverified": false,
+     "what": "It developed and manufactured radio-frequency (RF), analog, mixed-signal and power-management semiconductor products for wireless communications, automotive, defense and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Micron Technology Inc",
+     "out": "",
+     "symbol": "MU",
+     "unverified": false,
+     "what": "With a relentless focus on our customers, technology and product leadership, and manufacturing and operational excellence, our comprehensive portfolio of high-performance DRAM…",
+     "year": "Sep 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Photronics Inc",
+     "out": "",
+     "symbol": "PLAB",
+     "unverified": false,
+     "what": "Photronics, Inc. is one of the world’s leading manufacturers of photomasks, which are high precision…",
+     "year": "Oct 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kopin Corp",
+     "out": "",
+     "symbol": "KOPN",
+     "unverified": false,
+     "what": "The Kopin Corporation is a Westborough, Massachusetts-based electronics manufacturer, best known for its microdisplay devices and application specific optical solutions for…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Lightpath Technologies Inc",
+     "out": "",
+     "symbol": "LPTH",
+     "unverified": false,
+     "what": "Historically, we operated with a focus on optical component manufacturing, and specifically on our leadership position as a precision molded lens manufacturer for visual light…",
+     "year": "Jun 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Sunhydrogen, Inc.",
+     "out": "",
+     "symbol": "HYSR",
+     "unverified": false,
+     "what": "",
+     "year": "Jun 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Netlist Inc",
+     "out": "",
+     "symbol": "NLST",
+     "unverified": false,
+     "what": "",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Intel Corp",
+     "out": "",
+     "symbol": "INTC",
+     "unverified": false,
+     "what": "Intel was the world's third-largest semiconductor chip manufacturer by revenue in 2024 and has been included in the Fortune 500 list of the largest United States corporations by…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kyocera Corp",
+     "out": "",
+     "symbol": "KYOCF",
+     "unverified": false,
+     "what": "Kyocera is engaged in numerous high-tech fields, from fine ceramic components to electronic devices, equipment, services and networks",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Applied Optoelectronics, Inc.",
+     "out": "",
+     "symbol": "AAOI",
+     "unverified": false,
+     "what": "Applied Optoelectronics, Inc. (the \"Company\" or \"AOI\") is a leading, vertically integrated provider of fiber-optic networking products, primarily for four networking end-markets…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Nlight, Inc.",
+     "out": "",
+     "symbol": "LASR",
+     "unverified": false,
+     "what": "nLIGHT, Inc. is a leading provider of high‑power lasers for mission-critical directed energy, optical sensing, and advanced manufacturing applications",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "SemiLEDs Corp",
+     "out": "",
+     "symbol": "LEDS",
+     "unverified": false,
+     "what": "",
+     "year": "Aug 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Everspin Technologies Inc.",
+     "out": "",
+     "symbol": "MRAM",
+     "unverified": false,
+     "what": "It develops and manufactures discrete magnetoresistive RAM or magnetoresistive random-access memory (MRAM) products, including Toggle MRAM and Spin-Transfer Torque MRAM…",
+     "year": "Dec 2025"
+    }
+   ],
+   "ebitda": -5.4,
+   "ebitda_n": 11,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Makers of their own products",
+   "listed": 13,
+   "n": 13,
+   "net": -1.85,
+   "net_n": 10,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 5.25,
+   "pb_n": 10,
+   "revenue": 191683.73,
+   "roce": -1.4,
+   "roce_n": 7,
+   "roe": -0.9,
+   "roe_n": 11,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "ASML Holding NV",
+     "out": "",
+     "symbol": "ASML",
+     "unverified": false,
+     "what": "It is the largest supplier to the semiconductor industry and",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Applied Materials Inc",
+     "out": "",
+     "symbol": "AMAT",
+     "unverified": false,
+     "what": "",
+     "year": "Oct 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Lam Research Corp",
+     "out": "",
+     "symbol": "LRCX",
+     "unverified": false,
+     "what": "We are a global supplier of innovative wafer fabrication equipment and services to the semiconductor industry",
+     "year": "Jun 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "KLA Corp",
+     "out": "",
+     "symbol": "KLAC",
+     "unverified": false,
+     "what": "It supplies process control and yield management systems for the semiconductor industry and other related nanoelectronics industries",
+     "year": "Jun 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Advantest Corp",
+     "out": "",
+     "symbol": "ATEYY",
+     "unverified": false,
+     "what": "SoC semiconductors are used in a variety of sophisticated products, including wireless communications, fiber optic equipment and digital consumer products",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Formfactor Inc",
+     "out": "",
+     "symbol": "FORM",
+     "unverified": false,
+     "what": "It provides semiconductor companies with products to improve device performance and provide test and measurement technologies for integrated circuits",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kulicke & Soffa Industries Inc",
+     "out": "",
+     "symbol": "KLIC",
+     "unverified": false,
+     "what": "Kulicke and Soffa Industries, Inc. is a global leader in semiconductor assembly technology, advancing device performance across automotive, compute, industrial, memory and…",
+     "year": "Oct 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ultra Clean Holdings, Inc.",
+     "out": "",
+     "symbol": "UCTT",
+     "unverified": false,
+     "what": "Ultra Clean Holdings, Inc., is a leading developer and supplier of critical subsystems, components, parts, and ultra-high purity cleaning and analytical services primarily for…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ichor Holdings, Ltd.",
+     "out": "",
+     "symbol": "ICHR",
+     "unverified": false,
+     "what": "We are a leader in the design, engineering and manufacturing of critical fluid delivery subsystems and components primarily for semiconductor capital equipment, as well as other…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Teradyne, Inc",
+     "out": "",
+     "symbol": "TER",
+     "unverified": false,
+     "what": "Its high-profile customers include Samsung, Qualcomm, Intel, Analog Devices, Texas Instruments and IBM",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Viavi Solutions Inc.",
+     "out": "",
+     "symbol": "VIAV",
+     "unverified": false,
+     "what": "The company manufactures testing and monitoring equipment for networks",
+     "year": "Jun 2026"
+    }
+   ],
+   "ebitda": 18.25,
+   "ebitda_n": 10,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Semiconductor equipment",
+   "listed": 11,
+   "n": 11,
+   "net": 12.15,
+   "net_n": 10,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 10.25,
+   "pb_n": 10,
+   "revenue": 110442.91015,
+   "roce": 21.7,
+   "roce_n": 9,
+   "roe": 12.55,
+   "roe_n": 10,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Taiwan Semiconductor Manufacturing Co Ltd",
+     "out": "",
+     "symbol": "TSM",
+     "unverified": false,
+     "what": "As a foundry, we manufacture semiconductors using our manufacturing processes for our customers based on proprietary integrated circuit designs provided by them",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "United Microelectronics Corp",
+     "out": "",
+     "symbol": "UMC",
+     "unverified": false,
+     "what": "We are one of the world’s largest independent semiconductor foundries and a leader in semiconductor manufacturing process technologies",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Globalfoundries Inc.",
+     "out": "",
+     "symbol": "GFS",
+     "unverified": false,
+     "what": "Created by the divestiture of the manufacturing arm of AMD in March 2009, the company was privately owned by Mubadala Investment Company, a sovereign wealth fund of the United…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Tower Semiconductor Ltd",
+     "out": "",
+     "symbol": "TSEM",
+     "unverified": false,
+     "what": "We are a pure-play independent specialty foundry, and as such we are dedicated to providing high-value, high-quality, processed wafers to our customers for their end products and…",
+     "year": "Dec 2025"
+    }
+   ],
+   "ebitda": 37.2,
+   "ebitda_n": 4,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Contract chip foundries",
+   "listed": 4,
+   "n": 4,
+   "net": 15.55,
+   "net_n": 4,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 4.6,
+   "pb_n": 4,
+   "revenue": 131373.968,
+   "roce": 8.1,
+   "roce_n": 4,
+   "roe": 9.3,
+   "roe_n": 4,
+   "scale": null,
+   "words": "These companies run fabs that manufacture chips to other companies' designs and orders."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Texas Instruments Inc",
+     "out": "",
+     "symbol": "TXN",
+     "unverified": false,
+     "what": "Our two reportable segments are Analog and Embedded Processing",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Analog Devices Inc",
+     "out": "",
+     "symbol": "ADI",
+     "unverified": false,
+     "what": "Analog Devices, Inc. (we, Analog Devices or the Company) is a global semiconductor leader dedicated to solving our customers’ most complex engineering challenges",
+     "year": "Nov 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Microchip Technology Inc",
+     "out": "",
+     "symbol": "MCHP",
+     "unverified": false,
+     "what": "Our strategic focus includes general purpose and specialized mixed-signal microcontrollers, microprocessors, analog, FPGA, data center, networking, and memory products",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "On Semiconductor Corp",
+     "out": "",
+     "symbol": "ON",
+     "unverified": false,
+     "what": "We offer intelligent power and intelligent sensing solutions that drive electrification, energy efficiency, safety, and automation in automotive, industrial, and other…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "NXP Semiconductors N.V.",
+     "out": "",
+     "symbol": "NXPI",
+     "unverified": false,
+     "what": "NXP Semiconductors N.V. is a global semiconductor company and a long-standing supplier in the industry, with over 70 years of innovation and operating history",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "STMicroelectronics N.V.",
+     "out": "",
+     "symbol": "STM",
+     "unverified": false,
+     "what": "We are a global semiconductor company that designs, develops, manufactures and markets a broad range of products used in a wide variety of applications for the four end-markets…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Allegro Microsystems, Inc.",
+     "out": "",
+     "symbol": "ALGM",
+     "unverified": false,
+     "what": "In automotive markets, these trends are accelerating the adoption of electrified powertrains and safety-critical Advanced Driver Assistance Systems",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Diodes Inc /del/",
+     "out": "",
+     "symbol": "DIOD",
+     "unverified": false,
+     "what": "We leverage our expanded product portfolio of analog and power solutions combined with a flexible hybrid manufacturing model that meet customers’ needs",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Wolfspeed, Inc.",
+     "out": "",
+     "symbol": "WOLF",
+     "unverified": false,
+     "what": "Wolfspeed, Inc. (\"Wolfspeed\", the \"Company\", \"we\", \"our\", or \"us\") is an innovator of wide bandgap semiconductors, focused on silicon carbide materials and devices for power…",
+     "year": "Jun 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Alpha & Omega Semiconductor Ltd",
+     "out": "",
+     "symbol": "AOSL",
+     "unverified": false,
+     "what": "We are a designer, developer and global supplier of a broad portfolio of power semiconductors",
+     "year": "Jun 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Nve Corp",
+     "out": "",
+     "symbol": "NVEC",
+     "unverified": false,
+     "what": "These contracts have helped us develop products and build our intellectual property portfolio",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Magnachip Semiconductor Corp",
+     "out": "",
+     "symbol": "MX",
+     "unverified": false,
+     "what": "We are a designer and manufacturer of analog and mixed-signal power semiconductor platform solutions for various applications, including industrial, automotive, communication…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Solitron Devices Inc",
+     "out": "",
+     "symbol": "SODI",
+     "unverified": false,
+     "what": "The Company manufactures a large variety of bipolar and metal oxide semiconductor power transistors",
+     "year": "Feb 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ideal Power Inc.",
+     "out": "",
+     "symbol": "IPWR",
+     "unverified": false,
+     "what": "Upon product launch, we design and build initial prototypes for testing and to solicit customer feedback",
+     "year": "Dec 2025"
+    }
+   ],
+   "ebitda": 12.9,
+   "ebitda_n": 13,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Analog and power integrated device makers",
+   "listed": 14,
+   "n": 14,
+   "net": 4.65,
+   "net_n": 12,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 4.4,
+   "pb_n": 13,
+   "revenue": 67417.61,
+   "roce": 1.2,
+   "roce_n": 14,
+   "roe": 2.55,
+   "roe_n": 14,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Amkor Technology, Inc.",
+     "out": "",
+     "symbol": "AMKR",
+     "unverified": false,
+     "what": "Amkor is the world’s largest U.S. headquartered outsourced semiconductor assembly and test service provider (“OSAT”) and is a global leader in outsourced semiconductor packaging…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "ASE Technology Holding Co., Ltd.",
+     "out": "",
+     "symbol": "ASX",
+     "unverified": false,
+     "what": "ASEH is a leading provider of semiconductor manufacturing services in assembly and testing",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Chipmos Technologies Inc",
+     "out": "",
+     "symbol": "IMOS",
+     "unverified": false,
+     "what": "We are one of the leading independent providers of semiconductor assembly and testing services",
+     "year": "Dec 2025"
+    }
+   ],
+   "ebitda": 18.4,
+   "ebitda_n": 3,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Outsourced packaging and test",
+   "listed": 3,
+   "n": 3,
+   "net": 5.6,
+   "net_n": 3,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 2.4,
+   "pb_n": 3,
+   "revenue": 27055.326544,
+   "roce": 7.9,
+   "roce_n": 3,
+   "roe": 8.4,
+   "roe_n": 3,
+   "scale": null,
+   "words": "These companies assemble finished wafers into packages and test them for chip designers."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Rambus Inc",
+     "out": "",
+     "symbol": "RMBS",
+     "unverified": false,
+     "what": "Rambus is a global semiconductor company providing industry-leading chips and silicon IP for data-intensive computing systems, focusing on data center and artificial intelligence…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Atomera Inc",
+     "out": "",
+     "symbol": "ATOM",
+     "unverified": false,
+     "what": "Atomera Incorporated is a materials engineering company based in Los Gatos, California engaged in the development, commercialization and licensing of processes and technologies…",
+     "year": "Dec 2025"
+    }
+   ],
+   "ebitda": 38.5,
+   "ebitda_n": 1,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Designs licensed for royalties",
+   "listed": 2,
+   "n": 2,
+   "net": 32.6,
+   "net_n": 1,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 6.15,
+   "pb_n": 2,
+   "revenue": 707.7,
+   "roce": null,
+   "roce_n": 0,
+   "roe": -46.4,
+   "roe_n": 2,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Qnity Electronics, Inc.",
+     "out": "",
+     "symbol": "Q",
+     "unverified": false,
+     "what": "Qnity Electronics, Inc. is a major provider of materials for the semiconductor manufacturing and electronics industries headquartered in Wilmington, Delaware",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Entegris Inc",
+     "out": "",
+     "symbol": "ENTG",
+     "unverified": false,
+     "what": "Entegris, Inc. is a supplier of materials for the semiconductor and other high-tech industries",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Axt Inc",
+     "out": "",
+     "symbol": "AXTI",
+     "unverified": false,
+     "what": "AXT is a worldwide materials science company that develops and produces high-performance compound and single element semiconductor substrates, also known as wafers",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "TOYO Co., Ltd",
+     "out": "",
+     "symbol": "TOYO",
+     "unverified": false,
+     "what": "The company owns and operates eight factories in Asia, North America, and Europe and distributes tires and automotive components through fourteen sales companies throughout the…",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Aeluma, Inc.",
+     "out": "",
+     "symbol": "ALMU",
+     "unverified": false,
+     "what": "Aeluma, Inc. develops high-performance photonic and electronic technologies for communications and sensing in telecom, artificial intelligence (“AI”)…",
+     "year": "Jun 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "SmartKem, Inc.",
+     "out": "",
+     "symbol": "SMTK",
+     "unverified": false,
+     "what": "Our TRUFLEX® semiconductor polymers enable low-temperature printing processes that are compatible with existing manufacturing infrastructure to deliver low-cost, high-performance…",
+     "year": "Dec 2025"
+    }
+   ],
+   "ebitda": 21.55,
+   "ebitda_n": 4,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Parts, component and ingredient makers",
+   "listed": 6,
+   "n": 6,
+   "net": 8.35,
+   "net_n": 4,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 3.5,
+   "pb_n": 5,
+   "revenue": 8471.47,
+   "roce": 7.6,
+   "roce_n": 4,
+   "roe": 9.8,
+   "roe_n": 5,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": "rest",
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Penguin Solutions, Inc.",
+     "out": "",
+     "symbol": "PENG",
+     "unverified": false,
+     "what": "The company rebranded to SMART Global Holdings (SGH) and held an initial public offering in 2017, after spending years as a subsidiary of other companies or as its own private…",
+     "year": "Aug 2026"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "Poet Technologies Inc.",
+     "out": "",
+     "symbol": "POET",
+     "unverified": false,
+     "what": "",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "industry_code_supported",
+     "name": "SuperCom Ltd",
+     "out": "",
+     "symbol": "SPCB",
+     "unverified": false,
+     "what": "",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Osi Systems Inc",
+     "out": "",
+     "symbol": "OSIS",
+     "unverified": false,
+     "what": "As of June 2010, the company employs approximately 3,180 personnel globally and includes subsidiary companies Spacelabs Healthcare, Rapiscan Systems and OSI Optoelectronics",
+     "year": "Jun 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Ipg Photonics Corp",
+     "out": "",
+     "symbol": "IPGP",
+     "unverified": false,
+     "what": "IPG Photonics developed and commercialized optical fiber lasers, which are used in a variety of applications including materials processing, medical applications and…",
+     "year": "Dec 2025"
+    }
+   ],
+   "ebitda": 12.55,
+   "ebitda_n": 4,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Other semiconductor companies",
+   "listed": 5,
+   "n": 5,
+   "net": 8.7,
+   "net_n": 3,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": true,
+   "pb": 3.6,
+   "pb_n": 5,
+   "revenue": 4550.2,
+   "roce": 6.25,
+   "roce_n": 4,
+   "roe": 8.6,
+   "roe_n": 5,
+   "scale": null,
+   "words": ""
+  }
+ ],
+ "sector": "Semiconductors",
+ "stamp": [
+  62,
+  32,
+  3
+ ],
+ "theme": "Semiconductors",
+ "total": 103,
+ "unit": "$ million",
+ "unplaced": 0,
+ "v": 2,
+ "whole": false,
+ "window": {
+  "of": 103,
+  "shown": 100
+ }
+}

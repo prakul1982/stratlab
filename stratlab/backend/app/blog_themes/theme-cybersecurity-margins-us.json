@@ -1,0 +1,324 @@
+{
+ "adjacent_n": 0,
+ "as_of": "2026-11-13",
+ "basis": "Each company's latest full fiscal year, in $ million. Revenue, EBITDA margin (operating profit before depreciation as a share of revenue) and net margin (net profit as a share of revenue) are that year's; return on capital employed (ROCE) is the latest reported. Consolidated accounts where the company files them. Banks and lenders have no EBITDA margin or ROCE.",
+ "chain": {
+  "compared": [
+   "Vulnerability and data security software"
+  ],
+  "highest": null,
+  "line": null,
+  "lowest": null,
+  "measure": "ebitda",
+  "unranked": []
+ },
+ "lender": false,
+ "listed": 16,
+ "members": 15,
+ "notable": [],
+ "page": "/themes/us/cybersecurity",
+ "period": {
+  "n": 8,
+  "of": 15,
+  "year": "Dec 2025"
+ },
+ "read_on": "2026-11-16",
+ "region": "US",
+ "rows": [
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Palo Alto Networks Inc",
+     "out": "",
+     "symbol": "PANW",
+     "unverified": false,
+     "what": "The core product is a platform that includes advanced firewalls and cloud-based offerings that extend those firewalls to cover other aspects of security",
+     "year": "Jul 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Check Point Software Technologies Ltd",
+     "out": "",
+     "symbol": "CHKP",
+     "unverified": false,
+     "what": "The Check Point Mission – Securing Our Customers’ AI Transformation We are constantly doing the hard work of getting our solutions ready to enable a secure AI transformation",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Fortinet, Inc.",
+     "out": "",
+     "symbol": "FTNT",
+     "unverified": false,
+     "what": "",
+     "year": "Dec 2025"
+    }
+   ],
+   "ebitda": 31.4,
+   "ebitda_n": 3,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Network security appliances and subscriptions",
+   "listed": 3,
+   "n": 3,
+   "net": 15.0,
+   "net_n": 2,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 9.6,
+   "pb_n": 3,
+   "revenue": 21005.0,
+   "roce": 61.05,
+   "roce_n": 2,
+   "roe": 36.7,
+   "roe_n": 3,
+   "scale": null,
+   "words": "Margin rests on proprietary hardware or software performance and the attach rate of subscriptions."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Zscaler, Inc.",
+     "out": "",
+     "symbol": "ZS",
+     "unverified": false,
+     "what": "The company offers cloud-based services to protect enterprise networks and data",
+     "year": "Jul 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Cloudflare, Inc.",
+     "out": "",
+     "symbol": "NET",
+     "unverified": false,
+     "what": "The company's services act primarily as a reverse proxy between website visitors and a customer's hosting provider, improving performance and protecting against malicious traffic",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Akamai Technologies Inc",
+     "out": "",
+     "symbol": "AKAM",
+     "unverified": false,
+     "what": "As AI is a major focus of corporate initiatives for enterprises across the globe, we are committed to helping our customers seize on its power and potential",
+     "year": "Dec 2025"
+    }
+   ],
+   "ebitda": 0.5,
+   "ebitda_n": 3,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Cloud security and edge delivery networks",
+   "listed": 3,
+   "n": 3,
+   "net": -1.9,
+   "net_n": 3,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 12.1,
+   "pb_n": 3,
+   "revenue": 9728.64,
+   "roce": null,
+   "roce_n": 0,
+   "roe": -2.4,
+   "roe_n": 3,
+   "scale": null,
+   "words": "These companies run global cloud networks that inspect, secure and accelerate customer traffic, earning subscription and usage fees."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "CrowdStrike Holdings, Inc.",
+     "out": "",
+     "symbol": "CRWD",
+     "unverified": false,
+     "what": "It provides endpoint security, threat intelligence, and cyberattack response services",
+     "year": "Jan 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "SentinelOne, Inc.",
+     "out": "",
+     "symbol": "S",
+     "unverified": false,
+     "what": "The company uses machine learning for monitoring personal computers, IoT devices, and cloud workloads",
+     "year": "Jan 2026"
+    }
+   ],
+   "ebitda": -26.6,
+   "ebitda_n": 1,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Endpoint and detection platforms",
+   "listed": 2,
+   "n": 2,
+   "net": -24.2,
+   "net_n": 2,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 9.2,
+   "pb_n": 2,
+   "revenue": 5813.29,
+   "roce": -22.4,
+   "roce_n": 1,
+   "roe": -17.55,
+   "roe_n": 2,
+   "scale": null,
+   "words": "Lightweight agents on devices and workloads send telemetry to a cloud platform that detects and responds to threats."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Okta, Inc.",
+     "out": "",
+     "symbol": "OKTA",
+     "unverified": false,
+     "what": "It provides cloud software that helps companies manage and secure user authentication into applications, and for developers to build identity controls into applications…",
+     "year": "Jan 2026"
+    },
+    {
+     "evidence": "membership_unverified",
+     "name": "Cyberark Software Ltd",
+     "out": "not confirmed",
+     "symbol": "CYBR",
+     "unverified": true,
+     "what": "",
+     "year": null
+    },
+    {
+     "evidence": "description_verified",
+     "name": "SailPoint, Inc.",
+     "out": "",
+     "symbol": "SAIL",
+     "unverified": false,
+     "what": "Delivers solutions to enable adaptive identity security for the enterprise",
+     "year": "Jan 2026"
+    }
+   ],
+   "ebitda": -1.75,
+   "ebitda_n": 2,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Identity and access software",
+   "listed": 3,
+   "n": 2,
+   "net": -25.2,
+   "net_n": 1,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 3.2,
+   "pb_n": 2,
+   "revenue": 3990.42,
+   "roce": -4.5,
+   "roce_n": 1,
+   "roe": -0.25,
+   "roe_n": 2,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Tenable Holdings, Inc.",
+     "out": "",
+     "symbol": "TENB",
+     "unverified": false,
+     "what": "Its vulnerability scanner software Nessus, developed in 1998, is one of the most widely deployed vulnerability assessment solutions in the cybersecurity industry",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Qualys, Inc.",
+     "out": "",
+     "symbol": "QLYS",
+     "unverified": false,
+     "what": "We are a leading provider of a cloud-based platform delivering information technology (IT), security and compliance solutions",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Rapid7, Inc.",
+     "out": "",
+     "symbol": "RPD",
+     "unverified": false,
+     "what": "Rapid7 is a global cybersecurity operations software and service provider on a mission to create a safer digital world by making cybersecurity simpler and more accessible",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Varonis Systems Inc",
+     "out": "",
+     "symbol": "VRNS",
+     "unverified": false,
+     "what": "The company’s Data Security Platform analyzes data",
+     "year": "Dec 2025"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Gen Digital Inc.",
+     "out": "",
+     "symbol": "GEN",
+     "unverified": false,
+     "what": "The company provides cybersecurity software, financial technology, and services",
+     "year": "Apr 2026"
+    }
+   ],
+   "ebitda": 6.6,
+   "ebitda_n": 5,
+   "gnpa": null,
+   "gnpa_n": 0,
+   "layer": "Vulnerability and data security software",
+   "listed": 5,
+   "n": 5,
+   "net": 2.7,
+   "net_n": 5,
+   "nii_assets": null,
+   "nii_assets_n": 0,
+   "official": false,
+   "pb": 9.4,
+   "pb_n": 5,
+   "revenue": 8151.84,
+   "roce": 19.6,
+   "roce_n": 3,
+   "roe": 15.1,
+   "roe_n": 5,
+   "scale": null,
+   "words": "Scanners and data tools identify weaknesses, misconfigurations and exposed sensitive files across IT estates."
+  }
+ ],
+ "sector": "Cybersecurity",
+ "stamp": [
+  62,
+  32,
+  3
+ ],
+ "theme": "Cybersecurity",
+ "total": 16,
+ "unit": "$ million",
+ "unplaced": 0,
+ "v": 2,
+ "whole": false,
+ "window": {
+  "of": 16,
+  "shown": 16
+ }
+}

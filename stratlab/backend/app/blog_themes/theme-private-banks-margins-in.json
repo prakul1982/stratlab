@@ -1,0 +1,343 @@
+{
+ "adjacent_n": 0,
+ "as_of": "2026-11-16",
+ "basis": "Each company's latest full financial year ended March, in ₹ crore. Revenue, EBITDA margin (operating profit before depreciation as a share of revenue) and net margin (net profit as a share of revenue) are that year's; return on capital employed (ROCE) is the latest reported. Consolidated accounts where the company files them. Banks and lenders have no EBITDA margin or ROCE.",
+ "chain": {
+  "compared": [
+   "Large deposit-led universal banks",
+   "Higher-risk growth and turnaround private banks"
+  ],
+  "highest": "Large deposit-led universal banks",
+  "line": "Among the 2 layers with at least 5 companies with the figure, median return on equity is highest in Large deposit-led universal banks (13.6%) and lowest in Higher-risk growth and turnaround private banks (4.9%), a gap of 8.7 points.",
+  "lowest": "Higher-risk growth and turnaround private banks",
+  "measure": "roe",
+  "unranked": [
+   {
+    "layer": "Regional and mid-sized banks (larger)",
+    "why": "one half of a layer split by market value"
+   },
+   {
+    "layer": "Regional and mid-sized banks (smaller)",
+    "why": "one half of a layer split by market value"
+   }
+  ]
+ },
+ "lender": true,
+ "listed": 20,
+ "members": 20,
+ "notable": [],
+ "page": "/themes/in/private-bank",
+ "period": {
+  "n": 20,
+  "of": 20,
+  "year": "Mar 2026"
+ },
+ "read_on": "2026-11-16",
+ "region": "IN",
+ "rows": [
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "HDFC Bank Limited",
+     "out": "",
+     "symbol": "HDFCBANK",
+     "unverified": false,
+     "what": "The company is India's one of the 3 systemically important banks with a 15% market share in the banking sector’s advances and a 37% market share in the private sector banks’…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "ICICI Bank Limited",
+     "out": "",
+     "symbol": "ICICIBANK",
+     "unverified": false,
+     "what": "ICICI Bank is the second-largest private sector bank in India offering a diversified portfolio of financial products and services to retail, SME and corporate customers",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Axis Bank Limited",
+     "out": "",
+     "symbol": "AXISBANK",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Kotak Mahindra Bank Limited",
+     "out": "",
+     "symbol": "KOTAKBANK",
+     "unverified": false,
+     "what": "Kotak Mahindra Bank is a diversified financial services group providing a wide range of banking and financial services including Retail Banking, Treasury and Corporate Banking…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "IDBI Bank Ltd",
+     "out": "",
+     "symbol": "IDBI",
+     "unverified": false,
+     "what": "IDBI Bank is engaged in the business of Monetary intermediation of commercial banks, saving banks, postal savings bank and discount houses",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": null,
+   "ebitda_n": 0,
+   "gnpa": 1.45,
+   "gnpa_n": 1,
+   "layer": "Large deposit-led universal banks",
+   "listed": 5,
+   "n": 5,
+   "net": 27.6,
+   "net_n": 5,
+   "nii_assets": 3.51,
+   "nii_assets_n": 5,
+   "official": false,
+   "pb": 2.1,
+   "pb_n": 5,
+   "revenue": 775172.0,
+   "roce": null,
+   "roce_n": 0,
+   "roe": 13.6,
+   "roe_n": 5,
+   "scale": null,
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "The Federal Bank Limited",
+     "out": "",
+     "symbol": "FEDERALBNK",
+     "unverified": false,
+     "what": "It provides retail and corporate banking, para banking activities such as debit card, third party product distribution etc",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Karur Vysya Bank Limited",
+     "out": "",
+     "symbol": "KARURVYSYA",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "City Union Bank Limited",
+     "out": "",
+     "symbol": "CUB",
+     "unverified": false,
+     "what": "The Bank's segments include Treasury, Corporate and Wholesale Banking, Retail Banking and Other Banking Operations",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "The South Indian Bank Limited",
+     "out": "",
+     "symbol": "SOUTHBANK",
+     "unverified": false,
+     "what": "Established in 1929, South Indian Bank was the first ‘scheduled bank’ amongst the private banks in Kerala",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Jammu and Kashmir Bank Ltd",
+     "out": "",
+     "symbol": "J&KBANK",
+     "unverified": false,
+     "what": "Jammu & Kashmir Bank (J&K Bank), incorporated in Jammu & Kashmir, India, is a publicly held banking company engaged in providing a wide range of banking services including Retail…",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": null,
+   "ebitda_n": 0,
+   "gnpa": 1.44,
+   "gnpa_n": 3,
+   "layer": "Regional and mid-sized banks (larger)",
+   "listed": 5,
+   "n": 5,
+   "net": 17.9,
+   "net_n": 5,
+   "nii_assets": 3.24,
+   "nii_assets_n": 5,
+   "official": false,
+   "pb": 2.1,
+   "pb_n": 5,
+   "revenue": 70615.0,
+   "roce": null,
+   "roce_n": 0,
+   "roe": 13.5,
+   "roe_n": 5,
+   "scale": "larger",
+   "words": "These banks lend to small businesses, gold borrowers, agriculture and retail customers, mostly within home regions."
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "Tamilnad Mercantile Bank Limited",
+     "out": "",
+     "symbol": "TMB",
+     "unverified": false,
+     "what": "Incorporated in 1921, Tamilnad Mercantile Bank (TMB) is one of the oldest private sector banks in India",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Karnataka Bank Ltd",
+     "out": "",
+     "symbol": "KTKBANK",
+     "unverified": false,
+     "what": "Karnataka Bank is engaged in providing a wide range of banking & financial services involving retail, corporate banking and para-banking activities in addition to treasury and…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "DCB Bank Ltd",
+     "out": "",
+     "symbol": "DCBBANK",
+     "unverified": false,
+     "what": "DCB Bank was incorporated in 1995, by reconstituting the Development Co-operative Bank Ltd (DCBL) to Development Credit Bank Ltd as a joint-stock banking company",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "CSB Bank Ltd",
+     "out": "",
+     "symbol": "CSBBANK",
+     "unverified": false,
+     "what": "CSB Bank (formerly The Catholic Syrian Bank Ltd) is engaged in the business of banking Services ,oldest private sector banks in India with a history of over 98 years, and a…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Dhanlaxmi Bank Ltd",
+     "out": "",
+     "symbol": "DHANBANK",
+     "unverified": false,
+     "what": "Dhanlaxmi Bank Ltd is in the business of providing banking services",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": null,
+   "ebitda_n": 0,
+   "gnpa": 1.76,
+   "gnpa_n": 5,
+   "layer": "Regional and mid-sized banks (smaller)",
+   "listed": 5,
+   "n": 5,
+   "net": 14.1,
+   "net_n": 5,
+   "nii_assets": 3.18,
+   "nii_assets_n": 5,
+   "official": false,
+   "pb": 1.0,
+   "pb_n": 5,
+   "revenue": 28247.0,
+   "roce": null,
+   "roce_n": 0,
+   "roe": 12.0,
+   "roe_n": 5,
+   "scale": "smaller",
+   "words": ""
+  },
+  {
+   "adjacent": false,
+   "basis": null,
+   "companies": [
+    {
+     "evidence": "description_verified",
+     "name": "IndusInd Bank Limited",
+     "out": "",
+     "symbol": "INDUSINDBK",
+     "unverified": false,
+     "what": "",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Bandhan Bank Limited",
+     "out": "",
+     "symbol": "BANDHANBNK",
+     "unverified": false,
+     "what": "The company has a PAN-India presence and offers a wide range of banking products & services and asset & liability products and services designed for micro banking and general…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "RBL Bank Limited",
+     "out": "",
+     "symbol": "RBLBANK",
+     "unverified": false,
+     "what": "Incorporated in 1943,RBL Bank is a banking company engaged in providing specialized services under five business verticals namely: Corporate Banking, Commercial Banking, Branch &…",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "Yes Bank Limited",
+     "out": "",
+     "symbol": "YESBANK",
+     "unverified": false,
+     "what": "Yes Bank Ltd is engaged in providing a wide range of banking and financial services",
+     "year": "Mar 2026"
+    },
+    {
+     "evidence": "description_verified",
+     "name": "IDFC First Bank Limited",
+     "out": "",
+     "symbol": "IDFCFIRSTB",
+     "unverified": false,
+     "what": "IDFC First Bank is engaged in the business of Banking Services",
+     "year": "Mar 2026"
+    }
+   ],
+   "ebitda": null,
+   "ebitda_n": 0,
+   "gnpa": 2.73,
+   "gnpa_n": 3,
+   "layer": "Higher-risk growth and turnaround private banks",
+   "listed": 5,
+   "n": 5,
+   "net": 5.6,
+   "net_n": 5,
+   "nii_assets": 3.88,
+   "nii_assets_n": 5,
+   "official": false,
+   "pb": 1.1,
+   "pb_n": 5,
+   "revenue": 153034.0,
+   "roce": null,
+   "roce_n": 0,
+   "roe": 4.9,
+   "roe_n": 5,
+   "scale": null,
+   "words": ""
+  }
+ ],
+ "sector": "Private banks",
+ "stamp": [
+  62,
+  32,
+  3
+ ],
+ "theme": "Private banks",
+ "total": 20,
+ "unit": "₹ crore",
+ "unplaced": 0,
+ "v": 2,
+ "whole": false,
+ "window": {
+  "of": 20,
+  "shown": 20
+ }
+}
