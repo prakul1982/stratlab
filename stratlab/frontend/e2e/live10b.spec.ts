@@ -28,7 +28,7 @@ test("LIVE10B-007: the running P&L of a journal with one closed trade draws that
     user: { id: "u-load-77", aud: "authenticated", email: "load77@example.com", role: "authenticated", app_metadata: {}, user_metadata: {} } };
   const headers = { Authorization: "Bearer load-77" };
   await request.delete(`${API}/trade/journal`, { headers });
-  const r = await request.post(`${API}/trade/journal/trades`, { headers, data: { symbol: "INFY", side: "long", entry_date: "2026-11-10", exit_date: "2026-11-13",
+  const r = await request.post(`${API}/trade/journal/trades`, { headers, data: { symbol: "INFY", side: "long", entry_date: "2026-10-12", exit_date: "2026-10-15",
     qty: 10, entry_price: 1500, exit_price: 1550 } });
   expect(r.ok(), await r.text()).toBeTruthy();
   await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); localStorage.setItem("stratlab.onboarding.v1", "done"); }, who);

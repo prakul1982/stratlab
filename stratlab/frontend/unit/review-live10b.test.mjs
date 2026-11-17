@@ -116,3 +116,9 @@ test("LIVE10B-032: replacing the tax report's trades with a file is asked first,
   assert.match(page, /<ConfirmDialog title="Start again with this file\?" confirmLabel="Replace my trades"/);
   assert.match(page, /This replaces your \{\(rep\?\.trades \?\? 0\)\.toLocaleString\("en-IN"\)\} trade/);
 });
+
+test("LIVE10B-021: deleting a kept scan is asked first, as a screen's is", () => {
+  const page = read("src/pages/ResearchScans.tsx");
+  assert.match(page, /onClick=\{\(\) => setDropping\(m\)\}>Delete<\/button>/);
+  assert.match(page, /<ConfirmDialog title=\{`Delete "\$\{dropping\.name\}"\?`\} confirmLabel="Delete scan"/);
+});

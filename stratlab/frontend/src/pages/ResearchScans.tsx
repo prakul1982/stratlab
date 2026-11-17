@@ -26,7 +26,7 @@ import { unreadLine, unreadSymbols } from "../lib/filingsText";
 import { FilingRow, SummaryLine, type FilingItem, type FilingSummary } from "../components/Filings";
 import { QUADRANTS, QuadrantTag, RotationChart, useAnimate, type Quadrant, type RotationRow } from "../components/Rotation";
 import {
-  Badge, Card, CardHead, ChartFrame, CheckField, ChipBar, DataTable, DateField, Delta, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, PlanNote, Seg,
+  Badge, Card, CardHead, ChartFrame, CheckField, ChipBar, ConfirmDialog, DataTable, DateField, Delta, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, PlanNote, Seg,
   Pager, Range, Select, Skeleton, Stat, StatRow,
 } from "../components/kit";
 
@@ -129,6 +129,7 @@ export function ScanPage() {
   const [mine, setMine] = useState<SavedCustom[]>([]);
   const [mineName, setMineName] = useState("");
   const [mineId, setMineId] = useState<string | null>(null);
+  const [dropping, setDropping] = useState<SavedCustom | null>(null);      // a kept scan's delete, asked first as a screen's is (LIVE10B-021)
   useEffect(() => {
     if (!custom || !pro) return;
     api<{ items: SavedCustom[] }>("/research/scan/custom").then((r) => setMine(r.items)).catch(() => undefined);
@@ -276,7 +277,7 @@ export function ScanPage() {
                   columns={[{ key: "n", header: "Your scans", rowHeader: true, cell: (m) => <button type="button" className="link link-btn" aria-pressed={mineId === m.id} onClick={() => loadMine(m.id)}>{m.name}</button> },
                     { key: "r", header: "Rules", cell: (m) => `${m.rules.length} rule${m.rules.length === 1 ? "" : "s"}, ${m.within === 1 ? "latest candle" : `last ${m.within} candles`}` },
                     { key: "m", header: "Market", cell: (m) => (m.region === "US" ? "US" : "India") },
-                    { key: "x", header: "", action: true, cell: (m) => <button type="button" className="btn quiet sm" aria-label={`Delete ${m.name}`} onClick={() => void dropMine(m.id)}>Delete</button> }]} />
+                    { key: "x", header: "", action: true, cell: (m) => <button type="button" className="btn quiet sm" aria-label={`Delete ${m.name}`} onClick={() => setDropping(m)}>Delete</button> }]} />
               )}
             </div>
           )}
@@ -378,6 +379,10 @@ export function ScanPage() {
         {scan.id === "st_s2" ? "A rising average is one whose 20-day slope is up. " : ""}
         Past signals don't predict future returns, and nothing here is investment advice.
       </p>
+      {dropping && <ConfirmDialog title={`Delete "${dropping.name}"?`} confirmLabel="Delete scan" onClose={() => setDropping(null)}
+        onConfirm={() => { const id = dropping.id; setDropping(null); void dropMine(id); }}>
+        Its rules go with it. This can't be undone.
+      </ConfirmDialog>}
     </div>
   );
 }
