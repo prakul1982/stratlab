@@ -109,8 +109,10 @@ test("DK-014, DK-015: the library says its result once per card, sums the list f
 
 test("DK-001: a card charged in rupees leads with the rupee price on the landing page and on Plans", () => {
   const login = read("src/pages/Login.tsx"), plans = read("src/pages/PlansPage.tsx");
-  // item 34 (owner, 29 Oct) made it every card's rule: the rupee price leads, the dollar figure beside it
-  assert.match(login, /<div className="serif lp-amount">\{rupees\(p, year\)\}/);
-  assert.match(login, /const about = inr > 0 \? aboutUsd\(inr, rate\) : null;/);
-  assert.match(plans, /return \{ shown: `₹\$\{inr\.toLocaleString\("en-IN"\)\}`, inr: p !== "free", about: inr > 0 \? aboutUsd\(inr, rate\) : null \};/);
+  // item 34 (owner, 29 Oct) made it every card's rule: the rupee price leads, the dollar figure beside it; (updated on purpose: owner 16 Nov, US dollars on a visible switch; rupees stay the default outside the US and the charge is said in rupees until dollar checkout is on):
+  // both pages draw the card from one function (lib/priceCurrency cardPrice), whose rupee price leads with "about $" beside it
+  assert.match(login, /<div className="serif lp-amount">\{price \? price\.shown : freePrice\(cur, usd\)\}/);
+  assert.match(login, /cardPrice\(\{ plan: p, period: year \? "year" : "month", cur, inr, usd, checkoutOn: usdOn, aboutUsd: \(v\) => aboutUsd\(v, rate\) \}\)/);
+  assert.match(plans, /cardPrice\(\{ plan: p, period: per === "year" \? "year" : "month", cur, inr: rupees\(p, per\), usd, checkoutOn: usdOn, aboutUsd: \(v\) => aboutUsd\(v, rate\) \}\)/);
+  assert.match(read("src/lib/priceCurrency.ts"), /if \(cur !== "USD" \|\| !usd\) return \{ shown: rupeeText\(inr\), about: inr > 0 \? o\.aboutUsd\(inr\) : null/);
 });

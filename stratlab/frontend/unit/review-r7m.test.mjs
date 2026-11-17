@@ -52,7 +52,8 @@ test("Plans and the confirm step say nothing of GST while the invoice carries no
   assert.match(paymentWindowLine("Pro", "year"), /StratLab · Pro, yearly/);
   const plans = read("src/pages/PlansPage.tsx");
   assert.doesNotMatch(plans, /shows the amount only/);
-  assert.match(plans, /paymentWindowLine\(planName\(switching\), period\)/);          // item 34: always the rupee window
+  // item 34: the rupee window; (updated on purpose: owner 16 Nov) the dollar window only when dollars are really charged
+  assert.match(plans, /paymentWindowLine\(planName\(switching\), period, checkoutCur\(cur, usd, period, usdOn\)\)/);
   assert.match(plans, /const gst = pricing\?\.invoice\?\.gst === true/);
   assert.match(plans, /\{price\.inr && gst && <span className="k-note">incl\. GST<\/span>\}/);
   assert.doesNotMatch(read("src/content/seo.ts"), /include 18% GST/);

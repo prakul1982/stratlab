@@ -16,6 +16,10 @@ How to run StratLab on your own machine for development. What StratLab does is i
 2. Open **SQL Editor**, paste `supabase/schema.sql` and run it. It only adds what is missing, so it is safe to run again.
 3. Under **Authentication > Providers > Google**, enable Google with your own Google Cloud OAuth client.
 4. Under **Authentication > URL Configuration**, add your frontend URL, for example `http://localhost:5500`.
+   Optional, sign-in by email beside Google: enable **Authentication > Providers > Email** (keep "Confirm email" on), set your own
+   SMTP under **Authentication > Emails > SMTP Settings**, put `{{ .Token }}` and the link
+   `{{ .SiteURL }}/?token_hash={{ .TokenHash }}&type=email` in the **Magic Link** and **Confirm signup** templates, then set
+   `EMAIL_SIGNIN: "on"` in `frontend/public/config.js`. Until then the sign-in pages offer Google only.
 5. From **Project settings > API**, put the project URL and the public `anon` key in `frontend/public/config.js`, and the
    `service_role` key in `backend/.env` (it stays on the server only).
 

@@ -13,6 +13,7 @@ import { hasSavedSession } from "../lib/entry";
 import { LoadFailed } from "../components/LoadGuard";
 import { useDocTitle, withBrand } from "../lib/title";
 import { InstallSteps, onPhone } from "../components/InstallSteps";
+import { EmailSignIn } from "../components/EmailSignIn";
 
 /* The pages between a visitor and what they asked for: signed out on an app address ("Sign in to see …") and an address
  * nothing is at ("Page not found"). Each says what happened and offers the way on; none moves anyone somewhere else
@@ -87,6 +88,8 @@ export function SignInGate() {
         <SignInButton />
         <Link className="btn quiet" to="/">What is StratLab?</Link>
       </div>
+      {/* sign-in by email under Google's, while /config.js switches it on (owner, 16 Nov) */}
+      <EmailSignIn />
       {co && (
         <Card label="Public page">
           <CardHead title={`${co.name} without signing in`} level={2} />

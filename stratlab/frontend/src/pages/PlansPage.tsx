@@ -7,7 +7,9 @@ import { LegalLinks } from "../components/LegalLinks";
 import { api, loadRazorpay } from "../lib/api";
 import { useApp } from "../lib/app";
 import { dateOnly } from "../lib/format";
-import { aboutUsd, usdNote, usePricing } from "../lib/currency";
+import { aboutUsd, usdCheckoutOn, usdNote, usePriceCur, usePricing } from "../lib/currency";
+import { cardPrice, checkoutCur, dollarText, freePrice, usdPricesNote, usdRowOf } from "../lib/priceCurrency";
+import { CurrencySwitch } from "../components/CurrencySwitch";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { PlanCompare } from "../components/PlanCompare";
 import { SampleDeckLink } from "../components/SampleDeck";
@@ -26,9 +28,11 @@ export function PlansPage() {
   // buttons from the public prices while /me is still on its way, and they must already be off (R7M-010, again in R8)
   const viewAs = me ? viewAsMe : readViewAs();
   const [busy, setBusy] = useState<string | null>(null);
-  // item 34 (owner, 29 Oct): rupees first, the currency every card is charged in, with "about $" beside each price; no currency
-  // picker and no browser locale that shows dollars alone (LIVE1B-067/078)
+  // rupees with "about $" beside each price (item 34), or US dollars on the "Prices in" switch (owner, 16 Nov): dollars for the US
+  // region until the visitor picks, and a dollar price that checkout still charges in rupees says the rupee amount beside it
   const { pricing, rate } = usePricing();
+  const pc = usePriceCur();
+  const usd = usdRowOf(pricing), cur = usd ? pc.cur : "INR", usdOn = usdCheckoutOn();
   // one answer for what's on sale today (plans.offer_state): /me's, else the public one the landing page reads
   const offer = me?.offer ?? pricing?.offer ?? null;
   const billing = offer ? canBuy(offer) : me?.billing_enabled !== false;
@@ -44,13 +48,18 @@ export function PlansPage() {
     const sp = me?.plans?.[p];
     return sp ? (per === "year" ? sp.price_year : sp.price) : PRICE[p][per === "year" ? 1 : 0];
   };
-  /** A card's price: the rupee amount it is charged, and the dollar figure beside it ("about $8"); Free is "₹0", no dollars. */
+  /** A paid card's price in the currency shown (lib/priceCurrency): the main price, the line beside it, and what the card is charged. */
+  const paidPrice = (p: "basic" | "pro", per: string) =>
+    cardPrice({ plan: p, period: per === "year" ? "year" : "month", cur, inr: rupees(p, per), usd, checkoutOn: usdOn, aboutUsd: (v) => aboutUsd(v, rate) });
+  /** A card's price: Free is "₹0" (or "$0"), with nothing beside it. */
   const priceOf = (p: PlanId, per: string) => {
-    const inr = p === "free" ? 0 : rupees(p, per);
-    return { shown: `₹${inr.toLocaleString("en-IN")}`, inr: p !== "free", about: inr > 0 ? aboutUsd(inr, rate) : null };
+    if (p === "free") return { shown: freePrice(cur, usd), inr: false, about: null };
+    const c = paidPrice(p, per);
+    return { shown: c.shown, inr: c.chargedCur === "INR", about: c.about };
   };
-  /** What a year saves against twelve months, in rupees with its dollar figure. */
+  /** What a year saves against twelve months, in the currency shown (rupees with their dollar figure). */
   const savingOf = (p: "basic" | "pro") => {
+    if (paidPrice(p, "year").usdShown && usd) { const s = yearlySaving(usd[p], usd[`${p}_year`]); return s == null ? null : dollarText(s); }
     const save = yearlySaving(rupees(p, "month"), rupees(p, "year"));
     return save == null ? null : `₹${save.toLocaleString("en-IN")} (${aboutUsd(save, rate)})`;
   };
@@ -59,8 +68,12 @@ export function PlansPage() {
     track("upgrade clicked", { plan, period, source: "plans" });
     setBusy(plan);
     try {
-      // always the rupee plan: Razorpay charges rupees exactly as before (item 34 changed only what the page shows)
-      const d = await api<{ subscription_id: string; key_id: string; email: string; currency: string }>("/billing/subscribe", { method: "POST", body: { plan, period, currency: "INR" } });
+      // the rupee plan, as before, unless dollar checkout is switched on and the server has the USD plans for this period (lib/priceCurrency)
+      const currency = checkoutCur(cur, usd, period, usdOn);
+      const d = await api<{ subscription_id: string; key_id: string; email: string; currency: string }>("/billing/subscribe", { method: "POST", body: { plan, period, currency } });
+      // the server charges another currency than the one this page confirmed (its USD plans changed meanwhile): no payment window
+      // with an amount the page didn't show
+      if (d.currency && d.currency !== currency) { notify("The prices changed just now. Check the amount on the plan again, then subscribe."); setBusy(null); return; }
       await loadRazorpay();
       track("checkout started", { plan, period });
       const rz = new window.Razorpay({
@@ -86,11 +99,16 @@ export function PlansPage() {
   const ask = (plan: "basic" | "pro") => setSwitching(plan);
   const given = !!me?.billing?.given_by_owner;
   const RANK: Record<PlanId, number> = { free: 0, basic: 1, pro: 2 };
-  /** What the card is charged, in words: "₹699 incl. 18% GST (about $8), every month". */
-  const chargeWords = (p: "basic" | "pro") => `${rupeeCharge(rupees(p, period), gst)} (${aboutUsd(rupees(p, period), rate)}), every ${period}`;
+  /** What the card is charged, in words: "₹699 incl. 18% GST (about $8), every month"; with dollars shown and rupees charged,
+   * "₹699 (shown as $8; charged in rupees), every month"; with dollars charged, "$8, every month". */
+  const chargeWords = (p: "basic" | "pro") => {
+    const c = paidPrice(p, period);
+    if (c.chargedCur === "USD") return `${c.charged}, every ${period}`;
+    return `${rupeeCharge(rupees(p, period), gst)} (${c.usdShown ? `shown as ${c.shown}; charged in rupees` : aboutUsd(rupees(p, period), rate)}), every ${period}`;
+  };
 
   /** The amount charged, alone, for the dialog's button (LIVE1B-079: "Continue to payment" did not say what it would charge). */
-  const chargeAmount = (p: "basic" | "pro") => rupeeCharge(rupees(p, period), gst);
+  const chargeAmount = (p: "basic" | "pro") => { const c = paidPrice(p, period); return c.chargedCur === "USD" ? c.charged : rupeeCharge(rupees(p, period), gst); };
 
   /** A card's one button. A plan you have, or one a higher plan you have includes, says so on a quiet button that can't be pressed;
    * the others buy it. */
@@ -124,12 +142,13 @@ export function PlansPage() {
           Press the button and we'll tell you the day they open.
         </Notice>
       )}
-      {billing && yearlyOk && (
+      {((billing && yearlyOk) || usd) && (
         <FormGrid label="Price options">
-          <FieldGroup label="Billed">
+          {billing && yearlyOk && <FieldGroup label="Billed">
             <Seg label="Billing period" value={yearly ? "year" : "month"} onChange={(v) => setYearly(v === "year")}
               options={[{ value: "month", label: "Monthly" }, { value: "year", label: YEARLY_LABEL }]} />
-          </FieldGroup>
+          </FieldGroup>}
+          {usd && <FieldGroup label="Prices in"><CurrencySwitch cur={cur} auto={pc.auto} onChange={pc.choose} /></FieldGroup>}
         </FormGrid>
       )}
       {viewAs && billing && <div id="plans-viewas" data-testid="plans-viewas"><Notice tone="warn" role="status">{viewingPlansNote(planName(viewAs))}</Notice></div>}
@@ -175,7 +194,7 @@ export function PlansPage() {
           </>
         ) : finePrint(offer, { currency: "INR", inRupees: false, inRupeesYear: false,
           charged: { basic: `₹${rupees("basic", "month").toLocaleString("en-IN")}`, pro: `₹${rupees("pro", "month").toLocaleString("en-IN")}` }, gst }).map((t) => <li key={t}>{t}</li>)}
-        <li data-testid="usd-note">{usdNote(rate, pricing?.usd_inr?.fallback)}</li>
+        <li data-testid="usd-note">{cur === "USD" && usd ? usdPricesNote(usd, period, usdOn) : usdNote(rate, pricing?.usd_inr?.fallback)}</li>
         <li>StratLab is a research and paper trading tool: it places no real orders and gives no investment advice, and past results don't predict future returns.</li>
       </ul>
       <LegalLinks blog />
@@ -185,7 +204,7 @@ export function PlansPage() {
           onClose={() => setSwitching(null)} onConfirm={() => { const p = switching; setSwitching(null); void subscribe(p); }}>
           <span data-testid="plan-confirm">
             {planName(switching)} plan, billed {period === "year" ? "yearly" : "monthly"}: {chargeWords(switching)}. It renews automatically
-            each {period} until you cancel, any time from Account. {paymentWindowLine(planName(switching), period)}
+            each {period} until you cancel, any time from Account. {paymentWindowLine(planName(switching), period, checkoutCur(cur, usd, period, usdOn))}
             {paid !== "free" && me && !given ? ` ${switchEndsNote(planName(paid as PlanId))}` : ""}
           </span>
         </ConfirmDialog>

@@ -182,7 +182,7 @@ test("a signed-in visitor of a shared library page sees 'Open StratLab', not a s
   mem.set("sb-abc-auth-token", "{}");
   assert.equal(signedInHere(), true);
   const frame = read("src/components/PublicFrame.tsx");
-  assert.match(frame, /\{action \?\? \(signedInHere\(\) \? <OpenApp \/> : <a className="btn outline sm" href="\/" onPointerEnter=\{warmSignIn\} onFocus=\{warmSignIn\} onTouchStart=\{warmSignIn\} onClick=\{\(e\) => \{ e\.preventDefault\(\); void signIn\(\); \}\}>Sign in<\/a>\)\}/);
+  assert.match(frame, /\{action \?\? \(signedInHere\(\) \? <OpenApp \/> : <a className="btn outline sm" href="\/" onPointerEnter=\{warmSignIn\} onFocus=\{warmSignIn\} onTouchStart=\{warmSignIn\} onClick=\{\(e\) => \{ e\.preventDefault\(\); void startSignIn\(\); \}\}>Sign in<\/a>\)\}/);   // (updated on purpose: owner 16 Nov, startSignIn is Google's sign-in as before unless email sign-in is on, then the sign-in page with both)
   assert.match(frame, /<a className=\{className\} href="\/">Open StratLab<\/a>/);            // a whole page load: the app starts, not the visitor's landing page
   const lib = read("src/pages/PublicLibrary.tsx");
   // (PUB-1: the header's button is the small one, like the landing page's, the card's the full-size one)
