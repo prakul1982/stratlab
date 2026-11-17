@@ -1071,7 +1071,7 @@ def view(region: str, uid: str, scope: str = "mine", q: str = "", today: date | 
             days.append({"date": d, "count": len(on_day), "shown": min(cap, len(on_day)), "session": _session_day(region, d)})
             more += max(0, len(on_day) - cap)
         weeks.append({"label": label, "from": start.isoformat(), "to": end.isoformat(), "days": days, "rows": shown})
-    unknown = sum(1 for r in window if r["band"] is None) if size else 0
+    unknown = sum(1 for r in window if r["band"] is None)       # said whatever the filters (CX2: sizes adding to 9 under "10 companies")
     return {"region": region, "scope": scope, "today": today.isoformat(), "updated_at": cal["at"], "weeks": weeks,
             "more": more, "day_rows": limit, "mine_count": len(mine), "alerts": alerts_on(uid), "note": NOTE,
             "total": len(window), "matching": len(narrowed), "unknown_size": unknown,

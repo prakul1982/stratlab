@@ -68,3 +68,9 @@ test("CX2: /home opens My space, sent to the app by every web server (it was \"P
   assert.ok(APP_ROUTES.includes("/home"));
   for (const f of ["Caddyfile", "vercel.json", "public/sw.js"]) assert.match(read(f), /mine\|all\|home\|features/, f);
 });
+
+test("CX2 / LIVE10A-020: the calendars say how many companies no size counts, whenever there are some", () => {
+  const f = read("src/components/CalendarFilters.tsx");
+  assert.match(f, /\{unknownSize > 0 && <span className="k-note k-muted" data-testid="cal-unsized">/);
+  assert.doesNotMatch(f, /filters\.size\.length > 0 && unknownSize > 0/);
+});

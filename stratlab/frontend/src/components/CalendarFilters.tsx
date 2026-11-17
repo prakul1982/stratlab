@@ -53,7 +53,9 @@ export function CalendarFilters({ region, facets, filters, set, firstSort, sorts
               <Info label="About company size">{region === "IN" ? "By rank in market value among the listed companies the app keeps, as for the screener: large is the 100 largest, mid the 101st to 250th, small the 251st to 500th, micro the rest." : "By market value: large $10 billion and up, mid $2 to 10 billion, small $300 million to 2 billion, micro under $300 million."}</Info></div>
             <ChipSet label="Company size" options={facets.sizes.map((s) => ({ value: s.id, label: `${SIZE_NAME[s.id]} ${s.count}` }))} on={filters.size}
               onToggle={(v) => set({ size: filters.size.includes(v) ? filters.size.filter((x) => x !== v) : [...filters.size, v] })} />
-            {filters.size.length > 0 && unknownSize > 0 && <span className="k-note k-muted">{unknownSize} {unknownSize === 1 ? "company has" : "companies have"} no market value kept yet, so a size can't place {unknownSize === 1 ? "it" : "them"}.</span>}
+            {/* said whenever the size counts fall short of the total, not only once a size is picked (CX2 / LIVE10A-020: "10 companies" over
+                sizes adding to 9) */}
+            {unknownSize > 0 && <span className="k-note k-muted" data-testid="cal-unsized">{unknownSize} {unknownSize === 1 ? "company has" : "companies have"} no market value kept yet, so a size can't place {unknownSize === 1 ? "it" : "them"}.</span>}
           </div>
           <Field label={region === "IN" ? "Sector" : "Industry division"}>
             {(id) => <Select id={id} value={filters.sector} onChange={(v) => set({ sector: v })}
