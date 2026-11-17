@@ -10,19 +10,25 @@ session is served, never written again, and it counts against nobody's daily rea
 
 LIVE9A-001: the job wrote only the AI's headlines read; the Mood card itself (the headline, its lines and every table: intel/mood.py's
 payload) was still read again only when someone opened the page, so at 00:54 IST on Tue 17 Nov India's card said "Read Sat 14 Nov" over
-the 16 Nov index levels. The job now reads that payload too, and a day is done only when both are of the session that closed."""
+the 16 Nov index levels. The job now reads that payload too, and a day is done only when both are of the session that closed.
+
+LIVE10A-001: India's read was first tried at 16:10 IST, 40 minutes after the 15:30 close, so a visit in between (16:05 IST on 17 Nov) got
+the 14:47 intraday read still saying "so far today"; it is now tried from 15:45 IST, once the closing auction (to 15:40) is done. A day
+whose read is still not written an hour after it was first tried is a check in the self-healing sweep (re-run, then Needs your attention)
+and a line in the logs, so a read that stops running is seen before a visitor sees an old session."""
 import json
 import threading
 import time
 from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 
-from . import db, leader
+from . import autofix, db, leader
 
 # market -> (its time zone, when the read is first tried, when the day is given up), local times
-TIMES = {"IN": ("Asia/Kolkata", "16:10", "21:00"), "US": ("America/New_York", "16:40", "21:30")}
+TIMES = {"IN": ("Asia/Kolkata", "15:45", "21:00"), "US": ("America/New_York", "16:40", "21:30")}
 SYSTEM = {"id": "system:mood", "_plan": "pro", "plan": "pro", "email": None}      # the clock, not a person: counts against nobody
 KEY = "moodjob:"                  # moodjob:<market> = the last trading day its read was written for
+LATE_AFTER = 60                   # minutes after READ_AT with no read written: the day is late (LIVE10A-001)
 
 
 class Job:
@@ -57,6 +63,30 @@ class Job:
             return None
         return day
 
+    def late(self, region: str, now: datetime) -> str | None:
+        """LIVE10A-001: what is wrong when the read of today's session is still not written LATE_AFTER minutes after it was first
+        tried (and the day not yet given up), else None."""
+        day = self.due(region, now)
+        if not day:
+            return None
+        tz, at, _ = TIMES[region]
+        local = now.astimezone(ZoneInfo(tz))
+        first = datetime.combine(day, datetime.strptime(at, "%H:%M").time(), ZoneInfo(tz))
+        mins = int((local - first).total_seconds() // 60)
+        if mins < LATE_AFTER:
+            return None
+        last = (self.status.get("last_seen") or {}).get(region) or "no pass of the job yet"
+        return f"The {region} mood read of {day.isoformat()} is not written {mins} min after it was first tried ({last})."
+
+    def checks(self, now: datetime | None = None) -> list:
+        """LIVE10A-001: one self-healing check per market: late when its read isn't written an hour after the close's read time; the
+        remedy runs a pass of the job at once."""
+        now = now or datetime.now(timezone.utc)
+        return [autofix.Check(id=f"job:mood-read:{r}", name=f"Market mood read after the close ({r})", problem=self.late(r, now),
+                              fix=lambda: self.tick(datetime.now(timezone.utc)), fix_text="ran the mood read again",
+                              action="Open Admin → Data and jobs and press Log for the mood read: it says what the read waited on.",
+                              to="/admin/data") for r in TIMES]
+
     def tick(self, now: datetime) -> dict:
         """Each market whose read is due: the read asked for once; written (or already there), the day is done."""
         out = {}
@@ -90,6 +120,11 @@ class Job:
                 out[region] = (got or {}).get("code") or "not yet"
                 print(f"mood read job: {region} {day}: AI read {out[region]}")
         self.status["last_run"] = now.isoformat(timespec="minutes")
+        self.status.setdefault("last_seen", {}).update(out)       # what each market's last pass got (LIVE10A-001: said by the late check)
+        for region in out:
+            why = self.late(region, now)
+            if why:
+                print("mood read job: late:", why)
         return out
 
 
@@ -116,3 +151,4 @@ def _mood_payload(region: str, day: str | None = None) -> str | None:
 
 
 job = Job()
+autofix.source(lambda: job.checks())          # LIVE10A-001: a read not written an hour after its time is re-run, then shown to the owner
