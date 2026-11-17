@@ -64,6 +64,16 @@ test("MONEY-2: a holdings file adds by default; Start again asks first, naming w
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(table.getByText("SBIN", { exact: true })).toBeVisible();
   await expect(table.getByText("BHARTIARTL", { exact: true })).toBeVisible();
+
+  // LIVE10B-024: a file naming stocks already held adds nothing until the user says these are more shares
+  await page.getByLabel("Holdings file").setInputFiles(HOLDINGS_FILES + "icici_direct_portfolio.csv");
+  await expect(page.getByTestId("holdings-mode-note")).toContainText("you're asked before anything is added");
+  const before = imports();
+  await page.getByRole("button", { name: "Read this file" }).click();
+  await expect(page.getByText(/nothing added yet: you already hold ICICIBANK, SBIN/)).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId("holdings-overlap").getByRole("button", { name: "Add these shares too" }).click();
+  await expect(page.getByText(/4 stocks saved/)).toBeVisible({ timeout: 30_000 });
+  expect(imports() - before).toBe(2);
   await sane(page, errors);
 });
 
