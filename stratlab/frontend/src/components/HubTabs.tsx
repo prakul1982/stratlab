@@ -16,9 +16,6 @@ export function HubTabs({ at, path }: { at: Located; path: string }) {
   const { me } = useApp();
   const p = path.split(/[?#]/)[0].replace(/(.)\/$/, "$1");
   if (at.group.pages.length < 2 || (p !== at.page.to && !TAB_VIEWS.includes(p))) return null;
-  // NAV3: More tools' eleven tabs would be two rows above every title on a laptop (ui-lint R17); its tools are listed in the menu and in
-  // the breadcrumb's menu instead
-  if (at.group.apart) return null;
   return (
     <nav className="hub-tabs" aria-label={at.group.label} data-testid="hub-tabs" data-group={at.group.id}>
       {at.group.pages.map((t) => {

@@ -44,6 +44,17 @@ export function startSignIn(next?: string | null) {
   return Promise.resolve();
 }
 
+/** The sign-in page with its email form ready to type in (R61, owner on Release 60: "no option to sign in with email on the homepage"). */
+export const EMAIL_SIGNIN_PATH = "/login#email";
+
+/** "or sign in with email" beside a Continue with Google button: the sign-in page at its email form, the page to come back to kept as for
+ * Google. Only while email sign-in is on (the link isn't drawn otherwise). */
+export function startEmailSignIn(next?: string | null) {
+  clearSignInEnded();
+  keepNext(next);
+  location.assign(EMAIL_SIGNIN_PATH);
+}
+
 /** Email the address a one-time sign-in code with a link (the sign-in service sends it; the same account as Google for the same
  * address, made on first use). The page to open afterwards is kept as for Google. Returns the service's error, if any. */
 export async function sendEmailCode(email: string, next?: string | null): Promise<{ error: unknown }> {

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { eyebrowOf } from "../../lib/eyebrow";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
@@ -317,7 +316,7 @@ export function ReplayPage() {
 
   return (
     <div className="k-page" ref={top}>
-      <PageHeader eyebrow={eyebrowOf("/trade/replay")} title="Chart replay"
+      <PageHeader eyebrow="Trade · Practise" title="Chart replay"
         lede="Step through a past chart one candle at a time with the future hidden, place practice orders, and see the result after charges. Finished replays in rupees (India, MCX and NSE currency) go to your journal as practice; the journal keeps rupees only. A historical simulation: facts, not advice." />
       {failed && !ov ? <ErrorState title="Chart replay couldn't be opened" action={{ label: "Try again", onClick: () => { void load(); } }}>Nothing was changed.</ErrorState>
         : !ov ? <Card><Skeleton label="Opening chart replay" /></Card> : !ov.allowed ? (

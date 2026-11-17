@@ -35,6 +35,7 @@ const PublicAdLazy = lazy(() => import("../components/AdUnit").then((m) => ({ de
 const PublicAd = () => (ADS_HERE ? <Suspense fallback={null}><PublicAdLazy /></Suspense> : null);
 const PlanCompare = lazy(() => importWithRetry(() => import("../components/PlanCompare")).then((m) => ({ default: m.PlanCompare })));
 // sign-in by email (owner, 16 Nov): on the sign-in page only while /config.js switches it on; its code loads only then
+import { EmailWay } from "../components/EmailWay";
 const EmailSignIn = lazy(() => importWithRetry(() => import("../components/EmailSignIn")).then((m) => ({ default: m.EmailSignIn })));
 
 /* The public landing page: what StratLab does, in its three spaces (Trade, the strategy lab it began as, first; then
@@ -346,6 +347,8 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
               {/* NAV3: a real result anyone can open without signing in (the public library: rules, verdict and checks) */}
               {full && <Link className="btn quiet lp-cta-2" to="/library">See real results, no sign-in</Link>}
             </div>
+            {/* R61: beside Continue with Google, the email way in, while email sign-in is on (the sign-in page has the form itself) */}
+            {!login && <EmailWay />}
             {login && emailSignInOn() && <Suspense fallback={null}><EmailSignIn /></Suspense>}
             {error && <p className="banner" role="alert">{error}</p>}
             {login ? <p className="small muted">Signing in only reads your name and email from Google{emailSignInOn() ? ", or only your email address by email" : ""}. By continuing you agree to the <Link className="link" to="/terms">Terms</Link> and <Link className="link" to="/privacy">Privacy policy</Link>.</p> : <p className="small muted">Free to start · No card · No code</p>}
@@ -507,8 +510,9 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
       {!login && <section className="lp-final ruled">
         <div className="lp-wrap stack g20 lp-center">
           <p className="serif lp-h2 lp-final-h">Is your trading idea skill or luck?</p>
-          <p className="lp-p">Sign in with Google, no card needed. Your home page shows the first steps.</p>
+          <p className="lp-p">Sign in with Google{emailSignInOn() ? " or your email" : ""}, no card needed. Your home page shows the first steps.</p>
           {cta("Continue with Google")}
+          <EmailWay />
         </div>
       </section>}
       </>}
@@ -612,7 +616,8 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
                   )}
                 </div>
                 {"note" in act ? <span className="lp-plan-note small muted">{act.note}</span>
-                  : <button type="button" className={`btn ${p === "pro" ? "" : "outline"}`} disabled={loading} onClick={() => void signIn(act.buy ? "/plans" : null)}>{act.label}</button>}
+                  : <><button type="button" className={`btn ${p === "pro" ? "" : "outline"}`} disabled={loading} onClick={() => void signIn(act.buy ? "/plans" : null)}>{act.label}</button>
+                    <EmailWay next={act.buy ? "/plans" : null} className="lp-plan-email" /></>}
                 {/* on a phone the five lines are one fold under the button (LIVE5 partial: three cards of five lines were 2,100 px) */}
                 <PhoneFold label={`What ${PLAN_NAME[p]} includes`}>
                 <ul className="lp-plan-list">
@@ -739,6 +744,7 @@ function ResearchMock() {
         <p className="small">"Enter when the 20-day EMA crosses above the 50-day EMA; exit when it crosses back below; 7% stop loss."</p>
         <span className="small muted">A template for a test, not a suggestion. The test shows how it would have done on past prices.</span>
         <button type="button" className="btn sm lp-idea-btn" onClick={() => void signIn("/new")}>Continue with Google to test it →</button>
+        <EmailWay next="/new" />
       </div>
     </div>
   );

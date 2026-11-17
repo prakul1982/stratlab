@@ -10,24 +10,12 @@ import { register } from "node:module";
 register("data:text/javascript," + encodeURIComponent(`export async function resolve(s, c, next) {
   try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
-const { ALL_PAGES, MENU, locate, locateGroup } = await import("../src/lib/nav.ts");
+const { ALL_PAGES, NAV, SPACE_LIST, locate, locateGroup } = await import("../src/lib/nav.ts");
 const { pickExamples, exampleEyebrow } = await import("../src/lib/landingExamples.ts");
 const { graceLine } = await import("../src/lib/freeChange.ts");
 
-test("the signed-in menu has at most 16 top-level entries, each once, the same on a laptop and in a phone's drawer", () => {
-  // My space, then every section's entries
-  const top = ["My space", ...MENU.flatMap((s) => s.groups.map((g) => g.label))];
-  assert.ok(top.length <= 16, `${top.length}: ${top.join(", ")}`);
-  assert.equal(new Set(top).size, top.length, "an entry is listed twice");
-  assert.equal(top.filter((l) => l === "Calendar").length, 1);
-  assert.equal(top.filter((l) => l === "Themes").length, 1);
-  for (const want of ["Calendar", "Markets", "Screener", "Portfolio", "Tax", "F&O desk", "More tools"]) assert.ok(top.includes(want), want);
-  // one sidebar for both: the drawer is the same <aside>, with no space switch in it
-  const shell = read("src/components/Shell.tsx");
-  assert.doesNotMatch(shell, /space-switch|SpaceSwitch|side-feature/);
-  assert.match(shell, /\{menuList\}\n\s*\{pinned\}/);
-});
-
+// (updated on purpose, R61: the owner asked for the Release 59 sidebar back, "restore it as it was before"; its own tests are back in
+// ia1/ia2/nav/r16-nav/spaces-shared/review-*.test.mjs, so the one-menu test of 16 entries is gone. Every address either menu had still opens.)
 // every address the menu and its old entries ever had (IA-1's map and the old group pages), plus old shared-Calendar links
 const OLD = ["/notebooks", "/library", "/import", "/trade/signals", "/paper", "/options", "/trade/replay", "/trade/positioning", "/trade/positioning/stocks",
   "/trade/fo-changes", "/trade/closing-auction", "/trade/events", "/trade/journal", "/research", "/research/compare", "/invest/business-updates",
@@ -38,14 +26,16 @@ const OLD = ["/notebooks", "/library", "/import", "/trade/signals", "/paper", "/
   "/money/sip-test", "/money/rates", "/money/calendar"];
 const OLD_GROUPS = ["/trade/g/my-trades", "/trade/g/strategies", "/trade/g/build-and-test", "/trade/g/practise", "/trade/g/fo-desk", "/trade/g/calendar",
   "/invest/g/companies", "/invest/g/find-stocks", "/invest/g/themes", "/invest/g/market-today", "/invest/g/market-view", "/invest/g/market-data",
-  "/invest/g/calendar", "/invest/g/company-news", "/invest/g/watch", "/money/g/portfolio", "/money/g/what-you-own", "/money/g/tax", "/money/g/plan", "/money/g/calendar"];
+  "/invest/g/calendar", "/invest/g/company-news", "/invest/g/watch", "/money/g/portfolio", "/money/g/what-you-own", "/money/g/tax", "/money/g/plan", "/money/g/calendar",
+  // R61: Release 60's one menu had a More tools entry page; its address still opens an entry
+  "/invest/g/more", "/trade/g/more", "/money/g/more"];
 
 test("every old address still opens its own page in the menu, and every old entry page opens the entry that has its pages now", () => {
   for (const to of OLD) assert.ok(locate(to), `${to} lost its place`);
   for (const to of OLD) if (!to.startsWith("/research/investor") && to !== "/trade/positioning/stocks") assert.equal(locate(to).page.to, to);
   for (const g of OLD_GROUPS) assert.ok(locateGroup(g), `${g} opens nothing`);
-  // nothing removed: every page of the map is reachable from the one menu
-  const inMenu = new Set(MENU.flatMap((s) => s.groups.flatMap((g) => g.pages.map((p) => p.to))));
+  // nothing removed: every page of the map is reachable from a space's menu (R61: the R59 sidebar)
+  const inMenu = new Set(SPACE_LIST.flatMap((s) => NAV[s].groups.flatMap((g) => g.pages.map((p) => p.to))));
   for (const l of ALL_PAGES) assert.ok(inMenu.has(l.page.to), l.page.to);
   // the routes themselves are unchanged
   const main = read("src/main.tsx");

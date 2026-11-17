@@ -91,11 +91,10 @@ test("named holders: search a name, see each company alphabetically, follow", as
   await sane(page, errors);
   await card.getByRole("button", { name: "Stop following" }).click();
   await expect(page.getByRole("region", { name: "Holders you follow" })).toHaveCount(0);
-  // the page sits in Invest › More tools (updated on purpose, NAV3: the lists across companies are More tools; each company's own holders
-  // stay on its page), in the breadcrumb at the top; More tools has no row of tabs
+  // the page sits in Invest › Companies (IA-1: the list across companies, beside each company's own page), in the breadcrumb at the top
   const crumb = page.getByRole("navigation", { name: "Breadcrumb" });
-  await expect(crumb.getByRole("link", { name: "More tools" })).toHaveAttribute("href", "/invest/g/more");
-  await expect(page.getByTestId("hub-tabs")).toHaveCount(0);
+  await expect(crumb.getByRole("link", { name: "Companies" })).toHaveAttribute("href", "/invest/g/companies");
+  await expect(page.getByTestId("hub-tabs").locator("a", { hasText: "Named holders" })).toHaveAttribute("aria-current", "page");
   await expect(crumb.getByRole("button", { name: /Named holders/ })).toBeVisible();
   // a name nobody holds
   await page.getByLabel("Holder's name").fill("zzzz nobody");

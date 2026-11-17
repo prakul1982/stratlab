@@ -5,8 +5,7 @@
  * map, no step points at a page its plan locks without saying so, no advice words). */
 import { planOf, PLAN_NAME, LIMITS, FLAGS } from "./plans";
 import { gateFor } from "./gates";
-import { spaceOf } from "./spaces";
-import { locate, mixedGroup } from "./nav";
+import { spaceOf, sharedPage } from "./spaces";
 
 export type TourId = "mine" | "trade" | "invest" | "money";
 export const TOUR_IDS: TourId[] = ["mine", "trade", "invest", "money"];
@@ -49,12 +48,12 @@ const SUGGESTED = "main a.btn[href^='/research/IN/'], main a.btn[href^='/researc
 
 export const TOURS: Record<TourId, IntroTour> = {
   mine: {
-    id: "mine", name: "Getting around", line: "My space, the menu, search, Market Watch, the daily brief and your account.",
+    id: "mine", name: "Getting around", line: "My space, the four spaces, search, Market Watch, the daily brief and your account.",
     steps: [
       { id: "mine-home", title: "My space is yours", go: "/mine", at: ["main .mine-slot"], or: "main h1",
         body: "Your net worth, today's gain or loss on your holdings, paper sessions, the markets and what is coming up, on one page. Customise hides cards and sets their order." },
-      { id: "spaces", title: "One menu", at: [".sidebar .side-section"], menu: true,
-        body: "Every page is in this menu, under its space: Trade for testing trading ideas on past prices and paper trading them, Invest for researching companies and the market, Money for what you own and the tax on it. More tools holds the narrower ones." },
+      { id: "spaces", title: "Four spaces", at: [".sidebar .space-switch"], menu: true,
+        body: "Trade is for testing trading ideas on past prices and paper trading them. Invest is for researching companies and the market. Money is what you own and the tax on it. Each has its own menu and home page." },
       { id: "ask", title: "Ask or do anything", at: [".sidebar .search-btn", ".topbar [aria-label='Search or ask anything']"],
         body: "Type a company, a page or a question: \"heatmap\", \"results this week\", \"test RSI below 30 on NIFTY 50\". Ctrl K opens it from any page.",
         phone: "Type a company, a page or a question: \"heatmap\", \"results this week\", \"test RSI below 30 on NIFTY 50\". The magnifier at the top opens it from any page.",
@@ -186,12 +185,11 @@ export const finished = (s: IntroState, t: TourId): IntroState => ({ ...s, done:
 export const stopped = (s: IntroState, t: TourId, step: number): IntroState => ({ ...s, no: add(s.no, t), at: step > 0 ? { tour: t, step } : s.at?.tour === t ? null : s.at });
 export const declined = (s: IntroState, t: TourId): IntroState => ({ ...s, no: add(s.no, t) });
 
-/** The space a page is in, for the offer: a space's own page, or My space's home. A tab of an entry whose tabs span the spaces (the
- * Calendar, More tools) is none of them, nor are Account, Settings and the like. */
+/** The space a page is in, for the offer: a space's own page, or My space's home. A page every space shares (the Calendar) is
+ * none of them, nor are Account, Settings and the like. */
 export function tourOfPath(path: string): TourId | null {
   if (path === "/mine") return "mine";
-  const at = locate(path);
-  if (at && mixedGroup(at.group)) return null;
+  if (sharedPage(path)) return null;
   return spaceOf(path);
 }
 

@@ -102,8 +102,7 @@ test("DI-013, DI-016: `/` and the logo open the home of What you see first; the 
   await expect(page).toHaveURL(/\/mine$/, { timeout: 30_000 });
   // one link is the page you are on (IA-2, item 36: in Invest's menu that is the page under its heading,
   // "Stocks" under Watchlist; My space's own menu names it Watchlist)
-  // (updated on purpose, NAV3: Settings is in the account menu, not the side menu, so on its page nothing in the menu is marked, as on Plans)
-  for (const [path, current] of [["/research/watchlist", /^(Watchlist|Stocks)$/], ["/research/investor", /^(Watchlist|Stocks)$/]] as const) {
+  for (const [path, current] of [["/research/watchlist", /^(Watchlist|Stocks)$/], ["/research/investor", /^(Watchlist|Stocks)$/], ["/settings#notifications", "Settings"]] as const) {
     await page.goto(path);
     await expect(page.locator("main h1")).toBeVisible({ timeout: 30_000 });
     const side = await menu(page, phone);
@@ -112,14 +111,11 @@ test("DI-013, DI-016: `/` and the logo open the home of What you see first; the 
     await expect(marked).toHaveText(current);
     if (phone) await page.getByRole("button", { name: "Close menu" }).click();
   }
-  for (const [path, crumb] of [["/plans", "Plans"], ["/settings#notifications", "Settings"]] as const) {
-    await page.goto(path);
-    await expect(page.locator("main h1")).toBeVisible({ timeout: 30_000 });
-    const side = await menu(page, phone);
-    await expect(side.locator('nav[aria-label="Main"] [aria-current="page"]'), path).toHaveCount(0);
-    await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText(crumb);
-    if (phone) await page.getByRole("button", { name: "Close menu" }).click();
-  }
+  await page.goto("/plans");
+  await expect(page.locator("main h1")).toBeVisible({ timeout: 30_000 });
+  const side = await menu(page, phone);
+  await expect(side.locator('nav[aria-label="Main"] [aria-current="page"]')).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Plans");
   expect(errors).toEqual([]);
 });
 
@@ -189,10 +185,9 @@ test("DI-023: on a phone the tour opens the menu for the steps about it, and clo
   await expect(tour).toContainText("My space is yours", { timeout: 30_000 });
   await expect(page).toHaveURL(/\/mine$/);
   await tour.getByRole("button", { name: "Next" }).click();
-  // (updated on purpose, NAV3: one menu, no space switch; the step rings the menu's first section)
-  await expect(tour).toContainText("One menu");
+  await expect(tour).toContainText("Four spaces");
   await expect(page.locator("aside.sidebar.open")).toHaveCount(1);
-  await expect(page.locator("aside.sidebar .side-section").first()).toBeInViewport();
+  await expect(page.locator("aside.sidebar .space-switch")).toBeInViewport();
   await tour.getByRole("button", { name: "Next" }).click();
   await expect(tour).toContainText("Ask or do anything");
   await expect(page.locator("aside.sidebar.open")).toHaveCount(0);

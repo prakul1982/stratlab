@@ -103,8 +103,7 @@ test("the phone tour's menu steps ring the thing they describe, on screen and cl
   // (updated on purpose, R42 i1: /tour opens the list of tours; Getting around's menu step is its second)
   await page.getByRole("dialog", { name: "Take a tour" }).getByRole("button", { name: /^Getting around/ }).click({ timeout: 30_000 });
   await note.getByRole("button", { name: "Next" }).click({ timeout: 30_000 });
-  // (updated on purpose, NAV3: one menu, no space switch; the step rings the menu's first section)
-  const steps: [string, string][] = [["One menu", ".sidebar .side-section"], ["Ask or do anything", ".topbar [aria-label='Search or ask anything']"]];
+  const steps: [string, string][] = [["Four spaces", ".sidebar .space-switch"], ["Ask or do anything", ".topbar [aria-label='Search or ask anything']"]];
   for (const [title, sel] of steps) {
     await expect(note.getByRole("heading", { name: title })).toBeVisible({ timeout: 30_000 });
     await page.waitForTimeout(600);           // the drawer's slide and the ring's move

@@ -258,8 +258,7 @@ test("Owner 26 Oct: + Custom flows as the last chip where the row wraps; the cos
 
 test("Owner 26 Oct: inside a notebook only the notebook is the selected menu entry; no dots caption", () => {
   const shell = read("src/components/Shell.tsx");
-  // (updated on purpose, NAV3: a pinned shortcut to a page that is in the menu too is never marked, `mark`)
-  assert.match(shell, /const here = mark && at\?\.page\.to === p\.to && !\(p\.to === "\/notebooks" && path\.startsWith\("\/n\/"\)\);/);
+  assert.match(shell, /const here = at\?\.page\.to === p\.to && !\(p\.to === "\/notebooks" && path\.startsWith\("\/n\/"\)\);/);
   assert.doesNotMatch(shell, /Dots: each notebook's last verdict/);
 });
 

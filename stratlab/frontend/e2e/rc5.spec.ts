@@ -38,7 +38,7 @@ test("RC5-002: on a phone the tour's second step rings the magnifier, not the pa
     await expect(tour).toBeVisible({ timeout: 2000 });
   }).toPass({ timeout: 30_000 });
   await tour.getByRole("button", { name: "Next" }).click();
-  await expect(tour).toContainText("One menu");     // (updated on purpose (nav3): the menu step, once "Four spaces", is "One menu")
+  await expect(tour).toContainText("Four spaces");
   await tour.getByRole("button", { name: "Next" }).click();
   await expect(tour).toContainText("Ask or do anything");
   await expect(page.locator("aside.sidebar.open")).toHaveCount(0);
