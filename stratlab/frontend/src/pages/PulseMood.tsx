@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useLiveRefresh } from "../lib/liveRefresh";
-import { fmtDate, fmtTime, marketTz, pct, safeHref } from "../lib/format";
+import { changeDir, fmtDate, fmtTime, marketTz, pct, safeHref } from "../lib/format";
 import { newsWhen } from "../lib/researchFormat";
 import { researchApi, type MoodBreadthRow, type NewsItem, type PulseAI, type PulseMood, type Region } from "../lib/research";
 import { keepMood, keptMood, moodStale } from "../lib/moodCache";
@@ -153,12 +153,20 @@ export function FlowsTable({ f, source }: { f: NonNullable<PulseMood["flows"]>; 
   );
 }
 
+/** A change's text with its ▲/▼ before it (none when it rounds to nothing), for coloured text in a table that has no pills. */
+function arrowed(value: number, text: string): ReactNode {
+  const dir = changeDir(value, text);
+  return dir === "flat" ? text : <><span aria-hidden="true">{dir === "up" ? "▲" : "▼"}</span>{text}</>;
+}
+
 export function RiskTable({ r }: { r: NonNullable<PulseMood["risk"]> }) {
   const cols: Column<(typeof r.rows)[number]>[] = [
     { key: "n", header: "Measure", rowHeader: true, cell: (x) => x.label },
     { key: "p", header: "Level", numeric: true, brief: true, cell: (x) => riskLevel(x) },
     // a yield's move in basis points, the rest in percent (LIVE7A-023)
-    { key: "c", header: "Change", numeric: true, brief: true, cell: (x) => { const mv = quoteMove(x); return mv.value == null ? mv.text : <Delta value={mv.value}>{mv.text}</Delta>; } },
+    // LIVE9A-002 asked for ▲/▼ like the other tables; R15 #16 (owner, 7 Nov) keeps this card and FII/DII beside it in coloured text, no
+    // pills: the arrow is in the coloured text (ci60)
+    { key: "c", header: "Change", numeric: true, brief: true, cell: (x) => { const mv = quoteMove(x); return mv.value == null ? mv.text : <Signed value={mv.value}>{arrowed(mv.value, mv.text)}</Signed>; } },
     // LIVE9A-002: each level's own session, so a level from an earlier day is never read as today's (it had no date at all)
     { key: "s", header: "As of", cell: (x) => sessionWord(x.day, "", day) },
   ];

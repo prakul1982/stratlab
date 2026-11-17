@@ -2706,13 +2706,13 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 @media (prefers-reduced-motion: reduce) { .lp-skel { animation: none; } }
 .lp-head-skel { gap: 12px; }
 .lp-skel-h { height: calc(clamp(32px, 4vw, 50px) * 2.1); width: min(20ch, 100%); max-width: 520px; }
-.lp-skel-p { height: calc(17px * 1.6 * 2); width: min(56ch, 100%); }
+.lp-skel-p { height: calc(17px * 1.6 * 3); width: min(56ch, 100%); }   /* the landing's Plans lede is three lines on a laptop (ci60: the FAQ moved 48-68px when the prices came) */
 .lp-skel-p.lp-skel-p-one, .lp-skel-p.lp-skel-p-one { height: calc(17px * 1.6); }   /* LIVE2-031: the Plans page's one-line lede: a two-line (four on a phone) placeholder moved the cards up 27 to 81px when the prices arrived */
 .lp-period { min-height: 44px; display: flex; align-items: center; flex-wrap: wrap; gap: 12px 20px; }
 .lp-skel-seg { height: 44px; width: 280px; max-width: 100%; }
 .lp-skel-amount { height: calc(46px + 2px + 1.5em); width: 60%; }   /* the price line and the "about $8 at today's rate" line under it (VR1-162 put it on its own line): the page below holds still when prices arrive (R5V-006) */
 .lp-skel-note { height: 1.2em; width: 80%; }
-.lp-skel-fine { height: calc(13.5px * 1.5 * 3); width: min(80ch, 100%); }
+.lp-skel-fine { height: calc(13.5px * 1.5 * 4); width: min(80ch, 100%); }   /* su1's US dollar note makes the fine print four lines (ci60) */
 /* a phone wraps the lede to four lines and the fine print to six, and its switch is a touch-sized 50px: the placeholders keep
    that room so the page below doesn't jump when the prices arrive (the FAQ moved 122px on a 412px phone) */
 @media (max-width: 640px) {
