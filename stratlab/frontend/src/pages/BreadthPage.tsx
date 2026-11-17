@@ -16,8 +16,8 @@ import { BreadthAlertButton } from "../components/BreadthAlert";
 import { change as figChange, figure, liveRows, measureRows, partTone, type MeasureRow, type Part } from "../lib/breadthTable";
 import { Info } from "../components/ui";
 import {
-  Badge, Card, CardHead, ChartFrame, ChipBar, DataTable, Delta, EmptyState, ErrorState, Notice, PageHeader, PlanNote, Skeleton, Stat, StatRow,
-  type Column,
+  Badge, Card, CardHead, ChartFrame, ChipBar, DataTable, Delta, EmptyState, ErrorState, FoldCard, Notice, PageHeader, PlanNote, Skeleton, Stat, StatRow,
+  type Column, usePhone,
 } from "../components/kit";
 
 /* Market breadth: how many stocks in a group take part in the market's moves. Today's numbers for everyone; the
@@ -287,6 +287,7 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
   // one spike (TRIN near 10) flattened every other day: the rare days above the cap are drawn at the top edge (DE-022)
   const trinCap = spikeCap(h.trin);
   const trinOver = trinCap == null ? 0 : h.trin.filter((v) => v != null && v > trinCap).length;
+  const phone = usePhone();
   return (
     <div data-testid="breadth-charts" className="k-page">
       <div className="k-cols">
@@ -308,6 +309,11 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
           <PairBars up={h.highs} down={h.lows} labels={labels} times={h.days} sync="breadth" ranges={false} table={false} upLabel="new highs" downLabel="new lows" upName="New highs" downName="New lows" upColor={A} downColor={B}
             format={fmtInt} ariaLabel="New 52-week highs (up) and lows (down) each day" />
         </Box>
+      </div>
+      {/* LIVE10A-027: on a phone the page ran to 17,313 px; the measures after the first four, the sectors and the last 20 days are each
+          one row under a clear heading there, opened with a tap (the same charts and tables, nothing left out) */}
+      <PhoneFold phone={phone} title="More breadth measures" meta="6 charts" testId="breadth-more">
+      <div className="k-cols">
         <Box title="McClellan oscillator" info={help.mcclellan} h={h} cols={[{ header: "Oscillator", get: (i) => fmt1(h.mcclellan[i]) }]} note={`Last ${last}`}>
           <LineChart lines={[{ values: h.mcclellan, color: A, label: "Oscillator", width: 2 }]} labels={labels} times={h.days} sync="breadth" ranges={false} table={false} height={200}
             baseline={0} format={fmt1} axisFormat={fmtInt} ariaLabel="McClellan oscillator" />
@@ -338,18 +344,31 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
             ariaLabel="TRIN each day, with a line at 1" />
         </Box>
       </div>
-      {data.sectors && data.sectors.rows.length > 0 && (
-        <Card>
-          <CardHead title="Sectors: share above the 50-day average" info={help.sectors} />
+      </PhoneFold>
+      {data.sectors && data.sectors.rows.length > 0 && (phone
+        ? <FoldCard title={SECTORS_FOLD} info={help.sectors} meta={`${data.sectors.rows.length} sectors`} testId="breadth-sectors-fold"><SectorHeat t={data.sectors} /></FoldCard>
+        : <Card>
+          <CardHead title={SECTORS_TITLE} info={help.sectors} />
           <SectorHeat t={data.sectors} />
-        </Card>
-      )}
-      <Card>
-        <CardHead title="The last 20 trading days" info="The counts behind the charts, newest first." />
-        <Recent h={h} />
-      </Card>
+        </Card>)}
+      {phone
+        ? <FoldCard title={RECENT_TITLE} info={RECENT_INFO} meta={`${Math.min(20, h.days.length)} days`} testId="breadth-recent-fold"><Recent h={h} /></FoldCard>
+        : <Card>
+          <CardHead title={RECENT_TITLE} info={RECENT_INFO} />
+          <Recent h={h} />
+        </Card>}
     </div>
   );
+}
+
+const SECTORS_TITLE = "Sectors: share above the 50-day average";
+const SECTORS_FOLD = "Sectors above the 50-day average";       // a phone's fold title is one line (it doesn't wrap: ui-lint R10/R26 at 390)
+const RECENT_TITLE = "The last 20 trading days";
+const RECENT_INFO = "The counts behind the charts, newest first.";
+
+/** On a phone, `children` under one tap-to-open row; elsewhere as they are. */
+function PhoneFold({ phone, title, meta, testId, children }: { phone: boolean; title: string; meta: ReactNode; testId: string; children: ReactNode }) {
+  return phone ? <FoldCard title={title} meta={meta} testId={testId}>{children}</FoldCard> : <>{children}</>;
 }
 
 function SectorHeat({ t }: { t: SectorTable }) {

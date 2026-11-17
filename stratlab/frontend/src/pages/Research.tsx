@@ -42,7 +42,7 @@ import { CompanyLinksCard } from "../components/CompanyLinks";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge, EtfGapDetailView } from "../components/EtfGap";
 import { typingFirst } from "../lib/typingFirst";
-import { companyRows, moodBehindNote, moodDay, PULSE_TITLE, PULSE_AI_RETRY_MS, PULSE_AI_TRIES, pulseBeingWritten } from "../lib/pulseMood";
+import { companyRows, moodBehindNote, moodDay, PULSE_TITLE, PULSE_AI_RETRY_MS, PULSE_AI_TRIES, PULSE_UPDATING_NOTE, pulseAskAgain, pulseBeingWritten } from "../lib/pulseMood";
 import { BreadthTable, CalendarTable, FlowsTable, GlobalTable, HeadlinesTable, HotTable, IndexTable, MoodCard, MoodSkeleton, MoversTable, Pair, RiskTable, SectorsTable, ThemesTable, TopicsTable, usePulseMood } from "./PulseMood";
 import { FoBadges } from "../components/FoBadges";
 import { IndexBadges } from "../components/IndexBadges";
@@ -529,6 +529,7 @@ export function PulsePage() {
   const [aiErr, setAiErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const seq = useRef(0);   // a late answer for the market you left is ignored, and doesn't clear the newer read's busy
+  const again = useRef(0); // fix12: how many times the session's earlier read has been asked again for the newer one
   const rf = useStoredRefresh();
   const refreshAI = () => {
     const mine = seq.current;
@@ -550,9 +551,17 @@ export function PulsePage() {
   };
   useEffect(() => {
     setAi(null);
+    again.current = 0;
     loadAI();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [region]);
+  // fix12 (LIVE10A-010): the session's earlier read is shown while a newer one is written: asked again in a moment for the newer one
+  useEffect(() => {
+    if (!pulseAskAgain(again.current, ai)) return;
+    const t = window.setTimeout(() => { again.current += 1; void loadAI(); }, PULSE_AI_RETRY_MS);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ai]);
   const aiNothing = !!ai && !ai.tone && !ai.hot.length && !ai.flows.length && !ai.themes.length;
   return (
     <div className="k-page">
@@ -581,6 +590,7 @@ export function PulsePage() {
               {ai.tone ? <p className="inv-summary" data-testid="pulse-tone">{ai.tone}</p>
                 // LIVE7A-016: a read with no reason for the day's move left the card with a head and no body: it says so, and where the rest is
                 : <p className="k-small" data-testid="pulse-tone-none">{ai.story_line || "No headline gives a reason for the day's move."} The companies, topics and themes the headlines name are in the tables below.</p>}
+              {ai.updating && <p className="k-note" data-testid="pulse-ai-updating">{PULSE_UPDATING_NOTE}</p>}
               {/* the FII/DII source line goes under the FII table (LIVE4-006); without that table it stays here */}
               {ai.flows_source && !mood?.flows && <p className="k-note" data-testid="pulse-flows-source">{ai.flows_source}</p>}
             </>

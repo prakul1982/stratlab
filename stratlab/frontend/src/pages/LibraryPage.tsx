@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { COPY_ANY_PLAN, copyNeeds } from "../lib/rules";
 import { LIMITS } from "../lib/plans";
+import { VS_HOLD_SAID } from "../lib/termMeanings";
 import { LibraryTable, libMeta, marketChoices, strategyName, trails, VERDICTS, type LibEntry, CHECKS_NOT_HOLD } from "../components/LibraryBits";
 import { Search } from "../components/Icons";
 import { Card, ChipBar, ConfirmDialog, EmptyState, ErrorState, PageHeader, Seg, Select, Skeleton } from "../components/kit";
@@ -111,7 +112,7 @@ export function LibraryPage() {
             <span className="k-small k-muted">{total} strateg{total === 1 ? "y" : "ies"}</span>
             {/* said once for the list, not on every card (DA-037), and why a copy's figures can differ from its card (DA-038) */}
             <p className="k-note" data-testid="lib-list-notes">
-              {rows.some(trails) && <>{CHECKS_NOT_HOLD} </>}{LIBRARY_DATES}{rows.some((e) => needs(e)) && <> {COPY_ANY_PLAN}</>}
+              {rows.some(trails) && <>{CHECKS_NOT_HOLD} </>}{LIBRARY_DATES}{rows.some((e) => needs(e)) && <> {COPY_ANY_PLAN}</>} {VS_HOLD_SAID}
             </p>
             {/* one table on every screen (TABLES EVERYWHERE, owner 4 Nov): the figures in sortable columns, the rules under each row */}
             <LibraryTable key={`${q}|${market}|${verdict}|${sort}|${whose}`} rows={rows}

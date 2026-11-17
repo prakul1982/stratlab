@@ -1906,14 +1906,19 @@ class IndiaFilings:
 
 
 def without_repeats(items: list[dict]) -> list[dict]:
-    """The rows with an exact repeat dropped: the same day, rule and words and the same link (or none), as the exchange lists
-    a general update twice (R26-009). A row with its own link or detail stays."""
-    seen, out = set(), []
+    """The rows with a repeat dropped: the same day, rule and words, as the exchange lists a general update twice (R26-009).
+    A filing sent again with its document attached anew (a new link: CX2, a company's 30 Oct results listed twice) is one
+    row, the first listed (the newest), with `copies`; a row with detail of its own, or a link beside a bare row, stays."""
+    first: dict[tuple, dict] = {}
+    out = []
     for i in items:
-        k = (_same_filing_key(i), i.get("url"))
-        if k not in seen:
-            seen.add(k)
-            out.append(i)
+        k = (_same_filing_key(i), bool(i.get("url")))
+        have = first.get(k)
+        if have is None:
+            first[k] = row = {**i}
+            out.append(row)
+        else:
+            have["copies"] = have.get("copies", 1) + 1
     return out
 
 

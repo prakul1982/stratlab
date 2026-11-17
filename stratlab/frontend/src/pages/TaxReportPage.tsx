@@ -338,6 +338,8 @@ export function TaxReportPage() {
         {has && rep && rep.files.length > 0 && (
           <p className="k-note">
             {rep.trades.toLocaleString("en-IN")} trades{rep.business_lines > 0 && ` and ${rep.business_lines.toLocaleString("en-IN")} F&O lines`} from {rep.files.length} file{rep.files.length === 1 ? "" : "s"}: {rep.files.map((f) => `${f.name} (${f.broker})`).join(", ")}{rep.updated_at ? ` · files updated ${ago(rep.updated_at)}` : ""}
+            {/* LIVE10B-034: the fund sales in the report come from the CAS on Mutual funds, not from these files: said here, with the files */}
+            {fundSalesLine(rep.mf)}
           </p>
         )}
       </Card>
@@ -642,6 +644,11 @@ function InputsPanel({ y, onSave }: { y: Year; onSave: (fy: number, v: Omit<Inpu
 }
 
 /** Mutual fund gains from the Money space: already counted above, summarised here. */
+/** " · and 1 mutual fund sale from your CAS on Mutual funds" when the report counts fund sales (they come from there, not the files). */
+export function fundSalesLine(mf: Report["mf"]): string {
+  return mf?.allowed && mf.count > 0 ? ` · and ${mf.count.toLocaleString("en-IN")} mutual fund sale${mf.count === 1 ? "" : "s"} from your CAS on Mutual funds` : "";
+}
+
 function MutualFundsCard({ y, mf }: { y: Year; mf?: Report["mf"] }) {
   const m = y.mutual_funds;
   return (

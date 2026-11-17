@@ -277,6 +277,29 @@ def _add_part(base: dict, r: dict) -> dict:
     return out
 
 
+def tag(items: list[dict], source: str | None, at: str | None) -> list[dict]:
+    """Each holding with where and when it was imported (`from`, `from_at`), kept where it has them already: a file added to
+    holdings from another keeps each part's own source and day (LIVE10B-026)."""
+    if not source:
+        return items
+    return [i if i.get("from") else {**i, "from": source, "from_at": at} for i in items]
+
+
+def sources(h: dict) -> list[dict]:
+    """[{source, at, count}]: how many holdings came from each source and when (the oldest import of that source), oldest
+    first; holdings saved before sources were kept count under the list's own source and day."""
+    out: dict[str, dict] = {}
+    for i in h.get("items") or []:
+        src, at = i.get("from") or h.get("source"), i.get("from_at") or h.get("updated_at")
+        if not src:
+            continue
+        g = out.setdefault(src, {"source": src, "at": at, "count": 0})
+        g["count"] += 1
+        if at and (not g["at"] or at < g["at"]):
+            g["at"] = at
+    return sorted(out.values(), key=lambda g: g["at"] or "")
+
+
 def merge(rows: list[dict]) -> list[dict]:
     """One holding per company: lines for the same stock (on NSE and on BSE, or split by the broker) add up, and the
     average price is weighted by quantity (none if any line has none). A line from a file or typed in that adds to a

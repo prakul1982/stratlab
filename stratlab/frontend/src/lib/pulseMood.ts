@@ -104,6 +104,14 @@ export const pulseBeingWritten = (message: string | null | undefined): boolean =
 export const PULSE_AI_RETRY_MS = 15_000;
 export const PULSE_AI_TRIES = 8;
 
+/** fix12 (LIVE10A-010): whether to ask again for the headlines read: while another visit writes it ("being written now"), or while the
+ * read shown is the session's earlier one and a newer one is being written (`updating`); never past PULSE_AI_TRIES. */
+export const pulseAskAgain = (tries: number, got: { updating?: boolean } | null, message?: string | null): boolean =>
+  tries < PULSE_AI_TRIES && (!!got?.updating || pulseBeingWritten(message));
+
+/** The line under a read that is the session's earlier one while a newer one is written (fix12). */
+export const PULSE_UPDATING_NOTE = "A newer read of the headlines is being written; this one is from earlier in the session.";
+
 /** LIVE9A-031: one page title for both markets and every hour ("How the market feels today" on the US beside "…felt at the last close" on
  * India); whether the levels are live or the last close is said once, in the line under it (pulseLede) and the "Prices as of" stamp. */
 export const PULSE_TITLE = "Market mood";

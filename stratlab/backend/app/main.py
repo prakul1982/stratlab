@@ -76,7 +76,7 @@ from .guard import UPLOADS, Guard, HeavyGate, Window, address as caller_address
 from . import research
 from .engine import walkforward
 from . import rule_check
-from .engine.verdict import restate_empty, restated as verdict_restated, with_notes
+from .engine.verdict import restate_empty, restated as verdict_restated, with_notes, with_yearly
 from .data import DataError, Registry, split_id
 from .data import calendar as trading_calendar
 from .intel import routes as research_routes
@@ -2014,7 +2014,10 @@ def read_notebook(nid: str, profile=Depends(current_profile)):
     nb = get_notebook(profile, nid)
     # an experiment stored with a claim for a headline ("Likely a real edge.") shows its facts instead (R11C-009)
     # ...and one saved before an account stopped at zero shows its account held to what it had (R18-008: -352.6%)
-    nb["experiments"] = [{**e, "verdict": verdict_restated(e.get("verdict"), e.get("stats"))} for e in map(restate_empty, nb.get("experiments") or [])]
+    # ...and one saved before the yearly rates were said gets its "A year at a time" line (LIVE10B-031)
+    nb["experiments"] = [{**e, "verdict": with_yearly(verdict_restated(e.get("verdict"), e.get("stats")), e.get("stats"),
+                                                    [(e.get("range") or {}).get("from"), (e.get("range") or {}).get("to")])}
+                         for e in map(restate_empty, nb.get("experiments") or [])]
     nb["summary"] = research.summary(nb["experiments"])      # a summary stored before R38-001 is read afresh
     return ok(with_rule_problems(nb))
 
@@ -3839,7 +3842,7 @@ def holdings_view(profile) -> dict:
                     _PRICED.pop(k, None)
             _PRICED[key] = (time.monotonic(), got)
     live, us_quotes = got["live"], got["us_quotes"]
-    return {**holdings.view(_screen_sectors(_named_now(_full_names(_etf_named(h["items"])))), got["quotes"], us_quotes, got["rate"]), "source": h["source"], "updated_at": h["updated_at"],
+    return {**holdings.view(_screen_sectors(_named_now(_full_names(_etf_named(h["items"])))), got["quotes"], us_quotes, got["rate"]), "source": h["source"], "updated_at": h["updated_at"], "sources": holdings.sources(h),
             "prices": live or (not ind and bool(us_quotes)), "prices_at": got["prices_at"], "us_prices_at": got.get("us_prices_at"), "closes": got.get("closes"),
             "us_prices": bool(us_quotes) if us else None, "usd_inr_at": got.get("rate_at") if us and got["rate"] else None,
             "limit": holdings_limit(profile["_plan"]), "facts_max": HOLDINGS_FACTS}
@@ -3929,15 +3932,18 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
                     and abs((held[(holdings.market_of(i), i["symbol"])].get("avg") or 0) - (i.get("avg") or 0)) < 0.01 for i in both)
                 out.update(duplicate=same, overlap=[] if same else sorted({i["symbol"] for i in both}), n=0, saved=False, over=[])
                 return None
-        rows = found
+        # LIVE10B-026: each holding keeps where and when it was imported, so a second broker's file doesn't re-date the first's
+        src = "Zerodha Kite file" if parsed["broker"] == "Zerodha Kite" else parsed["broker"]
+        rows = holdings.tag(found, src, datetime.now(timezone.utc).isoformat(timespec="seconds"))
+        kept = holdings.tag(before["items"], before["source"], before["updated_at"])
         if req.mode == "add":
-            rows = holdings.merge(before["items"] + rows)
+            rows = holdings.merge(kept + rows)
         elif rows:                        # a file replaces only the markets it covers: US holdings stay
             covered = {holdings.market_of(i) for i in rows}
             # a held stock named on a line that didn't match stays as it was (as a sync keeps it)
             names = {str(v).upper() for m in missed for v in (m.get("symbol"), m.get("isin")) if v}
             have = {(holdings.market_of(i), i["symbol"]) for i in rows}
-            rows = rows + [i for i in before["items"] if holdings.market_of(i) not in covered
+            rows = rows + [i for i in kept if holdings.market_of(i) not in covered
                            or ((holdings.market_of(i), i["symbol"]) not in have
                                and (i["symbol"].upper() in names or str(i.get("isin") or "").upper() in names))]
         rows, out["over"] = holdings.cap(rows, before["items"], limit)   # a downgrade deletes nothing
@@ -3951,7 +3957,7 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
         known = {i["symbol"]: i.get("sector") for i in holdings.indian(before["items"])}
         # RC2B-009: Kite's holdings export is a file; "Zerodha Kite" as a stored source means the Kite login's read, and the
         # page said "from your Zerodha login" after an upload
-        return with_sectors(rows, known), "Zerodha Kite file" if parsed["broker"] == "Zerodha Kite" else parsed["broker"]
+        return with_sectors(rows, known), src
     holdings.update(profile["id"], merged)
     if out["saved"]:
         holdings.file_remember(profile["id"], digest, req.mode == "replace")
@@ -4079,6 +4085,10 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
             return None                   # nothing changed (a stock that matched nothing, or one already removed)
         if found:
             known = {i["symbol"]: i.get("sector") for i in holdings.indian(before["items"])}
+            # LIVE10B-026: a stock typed in is "your own entries" of today; the ones already held keep where and when they came from
+            now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            found = [i if i.get("from") else {**i, "from": before["source"], "from_at": before["updated_at"]}
+                     if (holdings.market_of(i), i["symbol"]) in saved and before["source"] else {**i, "from": "Manual", "from_at": now} for i in found]
             return with_sectors(found, known), before["source"] or "Manual"
         return None if out["missed"] else db.REMOVE      # every row removed
     holdings.update(profile["id"], edited)
@@ -4872,7 +4882,8 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
                 # build knows it isn't a fund (R12-013: GSMT, listed from such a build, answered "GSMT is a fund" when next built)
                 checks["type_unread"] = True
             items = [{"at": d["at"], "title": d["title"], "url": d.get("url")} for d in p.get("documents") or []]
-            exchange, red = "Listed in the US", None
+            # the exchange the SEC names for this ticker ("Nasdaq"), as an Indian page names NSE (CX2: Apple's page named none)
+            exchange, red = p.get("listed_on") or "Listed in the US", None
         else:
             p = with_industry(sym, research_hub.screener.company(co["bse"] or sym))
             if (p or {}).get("about"):

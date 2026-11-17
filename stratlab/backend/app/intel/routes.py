@@ -870,9 +870,30 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
         # never refused for it (R8O-002: India's mood blocked by the cap in market hours); "Ask again" on a read under five
         # minutes old gives that read
         # "mood": reads kept from before the mood line and main story were added are written again (DD-001)
-        return ok(ai_call(profile, "pulse", (r, f.lower(), hour, mood_key(indices, is_open), cash_day, "mood2"),
-                          3600 if is_open else settle_ttl or CLOSED_MOOD_TTL, refresh, build, counted=False,
-                          min_age=300 if is_open else settle_ttl or CLOSED_MOOD_TTL, wait_for_other=False))
+        key = (r, f.lower(), hour, mood_key(indices, is_open), cash_day, "mood2")
+        ttl = 3600 if is_open else settle_ttl or CLOSED_MOOD_TTL
+
+        def write(again: bool = False):
+            return ai_call(profile, "pulse", key, ttl, refresh and not again, build, counted=False,
+                           min_age=300 if is_open else settle_ttl or CLOSED_MOOD_TTL, wait_for_other=False)
+        # fix12 (LIVE10A-010): while the market trades a read is written for each hour and each half-percent turn, and the
+        # first visit after either waited for the AI ("Reading the headlines…" for as long as the writing took, an hour when
+        # it was held up). The session's latest read is shown at once, marked as being brought up to date, while the new one
+        # is written in the background; only a session's very first read is waited for.
+        session = pulse_session(indices) if is_open else None
+        latest_key = (r, f.lower(), PULSE_LATEST)
+        if session is not None and not refresh and not A.peek("pulse", key):
+            last = A.get("pulse", latest_key)
+            if last is not None and last.get("session") == session:
+                pulse_behind(repr(key), write)
+                return ok({**last, "updating": True})
+        out = write()
+        if session is not None and out.get("generated_at"):
+            last = A.get("pulse", latest_key)
+            if last is None or (last.get("generated_at") or 0) < out["generated_at"]:
+                A.keep("pulse", latest_key, {**{k: v for k, v in out.items() if k not in ("refresh_state", "updating")}, "session": session},
+                       CLOSED_MOOD_TTL)
+        return ok(out)
     except HTTPException as e:
         # like a company's AI read: no read right now is an answer ("unavailable", and why), not a failed request on
         # every opening of the page; the levels and headlines don't depend on it
@@ -880,6 +901,37 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
         if d.get("code") in ("ai_failed", "ai_busy", "research_ai_limit"):
             return ok({"unavailable": True, "code": d["code"], "message": d.get("message") or "No AI read right now."})
         raise
+
+
+PULSE_LATEST = "latest-open"     # the store's key for each market's latest read written during a session (fix12)
+_pulse_running: set[str] = set()
+_pulse_running_lock = threading.Lock()
+
+
+def pulse_session(indices: list[dict]) -> list:
+    """The session a read during market hours is of: each index's name and trading day, as JSON keeps it (lists, not
+    tuples), so a read kept in the store compares equal to the one asked for."""
+    return [[i.get("name"), i.get("day")] for i in indices]
+
+
+def pulse_behind(key: str, write) -> bool:
+    """Write the market's newer read in a background thread, once per key at a time (a second visit while it is being
+    written starts nothing). False when it is already being written."""
+    with _pulse_running_lock:
+        if key in _pulse_running or len(_pulse_running) >= 8:
+            return False
+        _pulse_running.add(key)
+
+    def run():
+        try:
+            write(True)
+        except Exception as e:  # noqa: BLE001  (a failed background read leaves the shown one; the next visit asks again)
+            print("pulse read: background write failed:", str(e)[:160])
+        finally:
+            with _pulse_running_lock:
+                _pulse_running.discard(key)
+    threading.Thread(target=run, daemon=True, name="pulse-read").start()
+    return True
 
 
 def before_close_at(region: str, indices: list[dict]) -> str | None:
