@@ -206,7 +206,7 @@ export interface LiveSnapshot {
   id: string; name: string; status: "running" | "stopped" | "paused"; stop_reason?: string | null; notice?: string | null;
   instrument: Instrument; strategy: Strategy; started_at: string; stopped_at?: string | null;
   last_price?: number | null; last_tick_at?: string | null; feed_connected?: boolean;
-  bars: { t: string; o: number; h: number; l: number; c: number }[]; forming?: { t: string; c: number } | null;
+  bars: { t: string; o: number; h: number; l: number; c: number }[]; forming?: { t: string; o?: number; h?: number; l?: number; c: number } | null;
   overlays: Record<string, (number | null)[]>; events: LiveEvent[]; equity_curve: { t: string; eq: number }[];
   account: { capital: number; equity: number; cash: number; qty: number; entry?: number | null; stop?: number | null;
     target?: number | null; unrealised: number; realised: number; trades: number; wins: number;

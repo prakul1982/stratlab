@@ -29,3 +29,9 @@ test("LIVE10B-001: the rupee note names StratLab's US prices and says only rupee
 test("LIVE10B-002: the dollar view's yearly small print is in dollars", () => {
   assert.match(read("src/pages/Login.tsx"), /const yearly = \(p: "basic" \| "pro"\) => \(cur === "USD" && usd \? dollarText\(usd\[`\$\{p\}_year`\]\) : rupees\(p, true\)\);/);
 });
+
+test("LIVE10B-013: the paper chart's forming candle takes the server's open, high and low", () => {
+  const page = read("src/pages/PaperPage.tsx");
+  assert.match(page, /forming\.current = \{ t: f\.t, o: f\.o \?\? f\.c, h: f\.h \?\? f\.c, l: f\.l \?\? f\.c \}/);
+  assert.match(page, /if \(f\.o != null\) forming\.current\.o = f\.o;/);
+});
