@@ -133,3 +133,9 @@ test("LIVE10B-017: the options builder says when the expiry priced is today", ()
   const page = read("src/pages/OptionsPage.tsx");
   assert.match(page, /\(preview\?\.expiry \?\? exp\)\?\.slice\(0, 10\) === dayIn\(new Date\(\), IST\) && <span className="k-note" data-testid="opt-expiry-today">This expiry is today\{s\.exchange === "NFO" \|\| s\.exchange === "BFO" \? ": the contracts end at 15:30 IST" : ""\}\.<\/span>/);
 });
+
+test("LIVE10B-042: on a phone the email button is full width and the footer's links sit in two columns", () => {
+  const css = read("src/styles.css");
+  assert.match(css, /\.email-signin-row \.btn \{ flex: 1 1 100%; justify-content: center; \}/);
+  assert.match(css, /\.legal-links\[aria-label="Policies"\], \.legal-links\[aria-label="Explore"\] \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+});

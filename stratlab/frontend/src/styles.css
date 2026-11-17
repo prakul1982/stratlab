@@ -2690,6 +2690,12 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .email-signin-row { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
 .email-signin-row .k-input { flex: 1 1 220px; min-height: 44px; font-size: 16px; }   /* 16px: a phone doesn't zoom into the box */
 .email-signin-row .btn { min-height: 44px; }
+/* LIVE10B-042: on a phone "Email me a code" is as wide as the Google button above it, and the footer's links sit in two columns, never one
+   link alone on a row with a wide gap */
+@media (max-width: 640px) {
+  .email-signin-row .btn { flex: 1 1 100%; justify-content: center; }
+  .legal-links[aria-label="Policies"], .legal-links[aria-label="Explore"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; row-gap: 0; }
+}
 .email-signin-code { letter-spacing: .2em; font-family: var(--mono); max-width: 220px; }
 .email-signin .banner { margin-bottom: 0; }
 /* the plans' currency switch (components/CurrencySwitch.tsx) */
