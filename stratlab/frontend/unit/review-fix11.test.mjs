@@ -25,3 +25,20 @@ test("LIVE10A-036: Briefs reads the other market's list ahead and paints a list 
   assert.match(page, /setList\(had \? \{ tab, rows: had \} : null\);/);
   assert.match(page, /if \(tab !== "mine" && !seen\.has\(other\)\) readList\(other\)/);
 });
+
+test("LIVE10A-031/014: the Markets panel fades a price still from this device's earlier read; a shut market's row says Closed, not Delayed", () => {
+  const panel = read("src/components/watch/WatchPanel.tsx");
+  assert.match(panel, /setReadNow\(\(o\) => \(o\.has\(k\) \? o : new Set\(o\)\.add\(k\)\)\)/);
+  assert.match(panel, /old=\{!readNow\.has\(it\.id\) && ticks\[it\.id\] == null && quotes\[it\.id\] != null && open\[it\.market\] !== false\}/);
+  assert.match(panel, /open\[it\.market\] === false \? \(allShut \? null : "Closed"\) : quotes\[it\.id\]\?\.delayed \? "Delayed" : null/);
+  assert.match(read("src/components/watch/WatchRow.tsx"), /\$\{p\.old \? " old" : ""\}/);
+  assert.match(read("src/components/watch/watch.css"), /\.mw-row\.old \.mw-num \{ opacity: \.5;/);
+});
+
+test("LIVE10A-014: the Watchlist page names the lists made in the Markets panel, each opening the panel on that list", () => {
+  const page = read("src/pages/Research.tsx");
+  assert.match(page, /getLists\(\)\.then\(\(a\) => \{ if \(live\) setOthers\(a\.lists\.filter\(\(l\) => !l\.default\)\); \}\)/);
+  assert.match(page, /<Card testId="watch-other-lists">/);
+  assert.match(page, /onClick=\{\(\) => openMarkets\(\{ open: true, list: l\.id \}\)\}>Open in the Markets panel<\/button>/);
+  assert.match(read("src/components/watch/Launcher.tsx"), /d\.list \? \{ list: d\.list, chart: null \} : \{\}/);
+});

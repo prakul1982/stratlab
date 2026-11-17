@@ -2967,6 +2967,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 @media (max-width: 420px) { .h-filing { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--s3); } .h-filing > :first-child { min-width: 7.5em; } .h-filing > :nth-child(3) { flex: 1 1 100%; } }
 
 .watch-add .k-field, .watch-add .k-field > * { max-width: none; width: 100%; }
+/* LIVE10A-014: the Markets panel's other lists, one line each */
+.watch-lists { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 
 /* RC2B-043: the add-a-trade form's six boxes in one row where the page is wide (they wrapped 4 + 2, or 5 + 1 with "Fees" alone),
    three and three on a tablet, two on a phone */
