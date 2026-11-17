@@ -43,3 +43,25 @@ def test_the_briefs_list_reads_its_issues_in_one_call(monkeypatch):
     got = job.recent("market", "US", 20)
     assert [i["id"] for i in got] == ["market.US.2026-11-16", "market.US.2026-11-13"]
     assert asked == [["news:market:US:2026-11-16", "news:market:US:2026-11-13"]]
+
+
+# ---------- LIVE10A-010: the Mood card is read once soon after each open, so a session's first visit gets that session ----------
+def test_the_mood_card_is_read_once_after_each_open(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from app import mood_job
+    from app.data import calendar
+    IST = timezone(timedelta(hours=5, minutes=30))
+    monkeypatch.setattr(calendar, "is_trading_day", lambda region, d: d.weekday() < 5)
+    store = {}
+    monkeypatch.setattr(mood_job, "db", type("D", (), {"get_setting": staticmethod(store.get),
+                                                       "set_setting": staticmethod(lambda k, v: store.__setitem__(k, v))}))
+    calls = []
+    job = mood_job.Job(lambda region: {"mood": "x"}, lambda region, day: day,
+                       opening=lambda region: calls.append(region) or "2026-11-17")
+    at = lambda h, m: datetime(2026, 11, 17, h, m, tzinfo=IST).astimezone(timezone.utc)  # noqa: E731
+    assert job.tick_open(at(9, 20)) == {}                                   # before 09:30 IST nothing
+    assert job.tick_open(at(9, 35)) == {"IN": "written"}
+    assert job.tick_open(at(9, 40)) == {} and calls == ["IN"]               # once a session
+    assert store["moodjob-open:IN"] == "2026-11-17"
+    assert mood_job.job.opening is mood_job._mood_open                      # the clock's own job reads it
+    assert mood_job.Job().opening is None                                   # a job made without it (tests) reads nothing

@@ -28,13 +28,19 @@ from . import autofix, db, leader
 TIMES = {"IN": ("Asia/Kolkata", "15:45", "21:00"), "US": ("America/New_York", "16:40", "21:30")}
 SYSTEM = {"id": "system:mood", "_plan": "pro", "plan": "pro", "email": None}      # the clock, not a person: counts against nobody
 KEY = "moodjob:"                  # moodjob:<market> = the last trading day its read was written for
+# fix11 (LIVE10A-010): the Mood card read once soon after each open too, so the first visit of a session is answered with that session's
+# figures, not the read kept from the night before ("16 Nov session · the 17 Nov session's are being read" at 13:28 IST). One read per
+# market per trading day, the card's tables only (no AI read).
+OPEN_TIMES = {"IN": ("Asia/Kolkata", "09:30", "15:00"), "US": ("America/New_York", "09:45", "15:30")}
+OPEN_KEY = "moodjob-open:"
 LATE_AFTER = 60                   # minutes after READ_AT with no read written: the day is late (LIVE10A-001)
 
 
 class Job:
-    def __init__(self, read=None, mood=None):
+    def __init__(self, read=None, mood=None, opening=None):
         self.read = read or _pulse_read
         self.mood = mood or _mood_payload        # LIVE9A-001: the Mood card's own payload, of the session that closed
+        self.opening = opening                   # fix11: the card's payload read once after the open (the clock's job sets it)
         self.status = {"last_run": None, "last_error": None, "written": {}}
 
     def start(self):
@@ -87,8 +93,42 @@ class Job:
                               action="Open Admin → Data and jobs and press Log for the mood read: it says what the read waited on.",
                               to="/admin/data") for r in TIMES]
 
+    def open_due(self, region: str, now: datetime) -> date | None:
+        """The trading day whose after-the-open read is due now in `region`, or None."""
+        from .data.calendar import is_trading_day
+        tz, at, until = OPEN_TIMES[region]
+        local = now.astimezone(ZoneInfo(tz))
+        day, hhmm = local.date(), local.strftime("%H:%M")
+        if hhmm < at or hhmm > until or not is_trading_day(region, day) or db.get_setting(OPEN_KEY + region) == day.isoformat():
+            return None
+        return day
+
+    def tick_open(self, now: datetime) -> dict:
+        """Each market just opened: its Mood card read once for the session; done when the read is of today's session."""
+        out = {}
+        for region in OPEN_TIMES if self.opening else ():
+            day = self.open_due(region, now)
+            if not day:
+                continue
+            try:
+                session = self.opening(region)
+            except Exception as e:
+                out[region] = f"failed: {str(e)[:80]}"
+                print(f"mood read job: {region} {day} open: {out[region]}")
+                continue
+            if session == day.isoformat():
+                db.set_setting(OPEN_KEY + region, day.isoformat())
+                out[region] = "written"
+            else:
+                out[region] = f"tables of {session or 'no session'}"
+        return out
+
     def tick(self, now: datetime) -> dict:
         """Each market whose read is due: the read asked for once; written (or already there), the day is done."""
+        try:
+            self.tick_open(now)
+        except Exception as e:
+            print("mood read job: open read:", str(e)[:120])
         out = {}
         for region in TIMES:
             day = self.due(region, now)
@@ -150,5 +190,11 @@ def _mood_payload(region: str, day: str | None = None) -> str | None:
     return (value or {}).get("session")
 
 
-job = Job()
+def _mood_open(region: str) -> str | None:
+    """fix11: the Mood card's payload read now, during the session, and kept for everyone; the session it is of."""
+    from .intel import routes
+    return (routes.mood_hub().refresh_now(region) or {}).get("session")
+
+
+job = Job(opening=_mood_open)
 autofix.source(lambda: job.checks())          # LIVE10A-001: a read not written an hour after its time is re-run, then shown to the owner
