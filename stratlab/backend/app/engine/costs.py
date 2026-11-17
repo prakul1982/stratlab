@@ -207,7 +207,8 @@ def tax_estimate(kind: str, trades: list[dict]) -> dict:
         lost_short, lost_long = max(0.0, -short), max(0.0, -long_)
     return {"amount": round(amount, 2),
             "note": ("Rough estimate: 20% on short-term gains, 12.5% on long-term gains above ₹1.25 lakh in each financial year, "
-                     "on gains before STT (STT isn't deductible from capital gains). Losses and your other income can change it.")}
+                     "on gains before STT (STT isn't deductible from capital gains). A year's net loss is set off against the next years' "
+                     "gains; your other income can change it.")}
 
 
 def floor_to(q: float, step: float) -> float:
