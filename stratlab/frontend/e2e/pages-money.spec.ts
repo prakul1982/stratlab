@@ -35,6 +35,9 @@ test("my holdings: positions, sectors and facts per stock, then a broker file ad
   await page.getByRole("radio", { name: "Add to my holdings" }).click();
   await page.getByRole("button", { name: "Read this file" }).click();
   await expect(page.getByText("Read as a Groww file")).toBeVisible({ timeout: 30_000 });   // matching a first file reads the stock lists
+  // (updated on purpose: LIVE10B-024, the Groww file names stocks the Zerodha file holds, so adding waits for the user's word)
+  await page.getByTestId("holdings-overlap").getByRole("button", { name: "Add these shares too" }).click();
+  await expect(page.getByText(/Read as a Groww file: \d+ stocks? saved/)).toBeVisible({ timeout: 30_000 });
   const missed = page.getByRole("table", { name: "Lines that couldn't be matched" });
   await expect(missed.getByText(/INE000X01000/)).toBeVisible();
   await expect(table.getByText("INFY", { exact: true })).toBeVisible();

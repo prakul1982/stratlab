@@ -214,6 +214,8 @@ test("trend scan: build your own rules, run them over a group, and keep the scan
   const mine = page.getByRole("table", { name: "Your scans" });
   await expect(mine).toContainText(name);
   await mine.getByRole("row").filter({ hasText: name }).getByRole("button", { name: `Delete ${name}` }).click();
+  // (updated on purpose: LIVE10B-021, a kept scan's delete is asked first, as a screen's is)
+  await page.getByRole("dialog", { name: `Delete "${name}"?` }).getByRole("button", { name: "Delete scan" }).click();
   await expect(mine).toHaveCount(0, { timeout: 15_000 }).catch(() => undefined);
   await sane(page, errors);
 });

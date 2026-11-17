@@ -6,6 +6,7 @@ import { fmtDate, money, price, tzLabel, when } from "../lib/format";
 import { dayStat, upDown } from "../lib/tradeUi";
 import { HELP } from "../lib/help";
 import type { HeldGreeks, OptionSnapshot } from "../lib/types";
+import { OPTIONS_STOP_DIALOG } from "../lib/paperText";
 import { atExpiry, costsLine, flatLine, STT_NOTE, legName, legWords, levelText, priceGrid, type HeldLeg } from "../lib/options";
 import { ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
 import { ChartEmpty, LineChart } from "../components/Charts";
@@ -208,7 +209,7 @@ export function OptionsSession() {
         ) : <ChartEmpty height={170}>Fills in minute by minute while the market is open.</ChartEmpty>}
       </Card>
       {ask === "stop" && <ConfirmDialog title="Stop this session?" confirmLabel="Stop session" onConfirm={stop} onClose={() => setAsk(null)}>
-        Any open paper position is left as it is, and it can't be restarted.</ConfirmDialog>}
+        {OPTIONS_STOP_DIALOG}</ConfirmDialog>}
       {ask === "delete" && <ConfirmDialog title={`Delete "${snap.name}"?`} confirmLabel="Delete session" onConfirm={remove} onClose={() => setAsk(null)}>
         Its orders go with it. This can't be undone.</ConfirmDialog>}
     </div>

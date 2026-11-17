@@ -141,6 +141,18 @@ class OptionSession:
         if new:       # one alert for the step's orders: a structure's legs open or close together
             self.mgr.on_orders(self, new, closed[-1]["pnl"] if closed else None)
 
+    def final_state(self, now: datetime | None = None) -> dict:
+        """The state kept when the session stops: an open structure is squared off at the last prices read (each leg at its
+        quote, else its last mark), and the trade is booked. A stopped session is never read again, so a short straddle left
+        open was "Open since 14:05" for good, marked at the stop's prices though its contracts expired that day (LIVE10B-028)."""
+        e = self.engine
+        if e.pos:
+            now = (now or datetime.now(IST)).astimezone(IST)
+            out: list[dict] = []
+            e._exit(now, self.quotes or {}, "Session stopped", out)
+            self.equity_curve.append({"t": now.replace(second=0, microsecond=0).isoformat(), "eq": round(e.equity({}), 2)})
+        return self.state()
+
     def state(self) -> dict:
         d = self.engine.dump()
         d["equity_curve"] = self.equity_curve

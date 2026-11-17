@@ -371,7 +371,8 @@ def free_change_notice(profile: dict | None, now: datetime | None = None) -> dic
             "moves": [REFRESH_MOVES, "The tax report's CSV and PDF downloads move to Basic (the report on screen stays free)"],
             # what happens to what is over a new count on the day (LIVE8B-008: nothing said what became of alerts 4 and 5): the alert check
             # and the event alerts take the oldest active alerts up to the plan's count (stock_alerts.Job, fire_events_counted)
-            "over": [f"Stock alerts on beyond {PLANS['free']['stock_alerts']} stay saved and on; from then the "
+            # LIVE10B-046: "stay saved and on" yet not checked read as a contradiction
+            "over": [f"Stock alerts beyond {PLANS['free']['stock_alerts']} stay saved but are not checked; from then the "
                      f"{PLANS['free']['stock_alerts']} made first are the ones checked"]}
 
 

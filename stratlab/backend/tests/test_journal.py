@@ -76,7 +76,9 @@ def test_intraday_short_and_an_unmatched_sale():
 
 def test_open_position_keeps_what_its_closed_part_made():
     got, open_, _ = pair([fill("2026-01-01", "B", 100, 400, sym="ITC"), fill("2026-02-01", "S", 40, 450, sym="ITC")])
-    assert not got and open_ == [{"symbol": "ITC", "side": "long", "qty": 60, "since": "2026-01-01", "avg": 400.0, "realised": 2000.0}]
+    # (updated on purpose: LIVE10B-011, the part sold is a closed trade of its own; the rest stays open with nothing realised on it)
+    assert len(got) == 1 and got[0]["qty"] == 40 and got[0]["gross"] == pytest.approx(2000.0)
+    assert open_ == [{"symbol": "ITC", "side": "long", "qty": 60, "since": "2026-01-01", "avg": 400.0, "realised": 0}]
 
 
 SPLIT = {"ABC": [{"kind": "split", "factor": 10.0, "ex_date": "2024-06-01", "id": "s1"}]}

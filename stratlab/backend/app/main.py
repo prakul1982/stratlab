@@ -3869,6 +3869,17 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
             # LIVE1B-065: the same file again would double every quantity; nothing is added, and the page says so
             out.update(duplicate=True, n=0, saved=False, over=[])
             return None
+        if req.mode == "add" and not req.overlap_ok:
+            # LIVE10B-024: a newer copy of a file already read (held before its digest was remembered, or a fresh download of
+            # the same account) would add every quantity again; adding to a stock already held waits for the user's word
+            held = {(holdings.market_of(i), i["symbol"]): i for i in before["items"]}
+            both = [i for i in found if (holdings.market_of(i), i["symbol"]) in held]
+            if both:
+                same = len(both) == len(found) and all(
+                    held[(holdings.market_of(i), i["symbol"])]["qty"] == i["qty"]
+                    and abs((held[(holdings.market_of(i), i["symbol"])].get("avg") or 0) - (i.get("avg") or 0)) < 0.01 for i in both)
+                out.update(duplicate=same, overlap=[] if same else sorted({i["symbol"] for i in both}), n=0, saved=False, over=[])
+                return None
         rows = found
         if req.mode == "add":
             rows = holdings.merge(before["items"] + rows)
@@ -3898,7 +3909,7 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
         invite_rewards.safe_touch(profile, "holdings")
     over = out["over"]
     return ok({"broker": parsed["broker"], "imported": out["n"], "saved": out["saved"], "duplicate": bool(out.get("duplicate")),
-               "saved_lines": out.get("lines", [])[:500] if out["saved"] else [], "unmatched": missed[:200],
+               "overlap": out.get("overlap", []), "saved_lines": out.get("lines", [])[:500] if out["saved"] else [], "unmatched": missed[:200],
                "unmatched_count": len(missed), "over_limit": over, "limit": limit, "holdings": holdings_view(profile)})
 
 

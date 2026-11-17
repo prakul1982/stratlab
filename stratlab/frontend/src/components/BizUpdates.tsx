@@ -17,6 +17,8 @@ export interface BizMetric {
   key: string; metric: string; segment: string | null; unit: string; basis: string; span: "month" | "quarter"; headline: boolean;
   latest: BizPoint; prev: BizPoint | null; year_ago: BizPoint | null; step: "month" | "quarter";
   change_prev: number | null; change_year: number | null; points: BizPoint[];
+  /** the newest filing does not hold this figure: its month is an earlier filing's (LIVE10B-040) */
+  older?: boolean;
 }
 export interface BizFiling { id: string; at: string; title: string; url: string; read: boolean; period: string | null; problem: string | null; exchange?: Exchange }
 export interface BizView {
@@ -114,7 +116,7 @@ export function BizUpdatesPanel({ symbol, wrap }: { symbol: string; wrap: (body:
                 <><button className="link-btn" onClick={() => setPick(m.key)} aria-pressed={chosen?.key === m.key}>{m.metric}</button>
                   {m.segment && <span className="k-note"> {m.segment}</span>}
                   <span className="k-sub-line">{m.basis === "period end" ? "at the period's end" : m.basis === "quarter" ? "for the quarter" : "for the month"}</span></>) },
-              { key: "l", header: "Latest", numeric: true, cell: (m) => <>{bizValue(m.latest.value, m.unit)}<span className="k-sub-line">{periodName(m.latest.period, m.span)}</span></> },
+              { key: "l", header: "Latest", numeric: true, cell: (m) => <>{bizValue(m.latest.value, m.unit)}<span className="k-sub-line">{periodName(m.latest.period, m.span)}{m.older ? ", an earlier filing" : ""}</span></> },
               { key: "p", header: "On the previous", numeric: true, cell: (m) => <>{bizChange(m.change_prev, m.unit)}{m.prev && <span className="k-sub-line">vs {periodName(m.prev.period, m.span)}</span>}</> },
               { key: "y", header: "On the year", numeric: true, cell: (m) => <>{bizChange(m.change_year, m.unit)}{m.year_ago && <span className="k-sub-line">vs {periodName(m.year_ago.period, m.span)}</span>}</> },
               { key: "s", header: "Source", wrap: true, cell: (m) => (

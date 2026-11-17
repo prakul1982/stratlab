@@ -195,6 +195,7 @@ class HoldingsImportReq(BaseModel):
     filename: str = Field("", max_length=200)
     data: str = Field(..., min_length=1)        # the file, base64 (a data: URL is fine): 2 MB at most, checked once decoded
     mode: Literal["replace", "add"] = "replace"                    # replace the saved holdings, or add to them
+    overlap_ok: bool = False      # LIVE10B-024: "add" to stocks already held only once the user said these are more shares
 
 
 class HoldingItem(BaseModel):

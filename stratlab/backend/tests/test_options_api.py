@@ -88,7 +88,9 @@ def test_session_trades_on_live_quotes_and_survives_a_restart(monkeypatch):
         assert main.manager.sessions[sid].engine.pos["legs"][0]["qty"] == 75
         c.post(f"/live/sessions/{sid}/stop")
         snap = c.get(f"/live/sessions/{sid}").json()
-        assert snap["status"] == "stopped" and snap["kind"] == "options" and snap["legs"]
+        assert snap["status"] == "stopped" and snap["kind"] == "options"
+        # (updated on purpose: LIVE10B-028, the stop squares off the open legs, so the stopped page has the booked trade, not open legs)
+        assert snap["position"] is None and snap["legs"] == [] and snap["trades"][-1]["why"] == "Session stopped"
     finally:
         main.manager.sessions.clear()
         app.dependency_overrides.clear()

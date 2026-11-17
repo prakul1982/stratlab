@@ -78,7 +78,8 @@ type GRow = { row: ModelRow | null; label: string };
 
 /** Each leg's IV (per option) and its Greeks for the position: the option's Greeks × the leg's quantity, negative for a
  * sold leg, so the legs add up to the net. */
-function GreeksTable({ rows, spot, w, r, net }: { rows: ModelRow[]; spot: number; w: WhatIf; r: number; net: NetGreeks | null }) {
+function GreeksTable({ rows, spot, w, r, net, hourly = false }: { rows: ModelRow[]; spot: number; w: WhatIf; r: number; net: NetGreeks | null; hourly?: boolean }) {
+  const th = (v: number) => inr(hourly ? v / 24 : v);
   const data: GRow[] = [...rows.map((row) => ({ row, label: row.label })), ...(net ? [{ row: null, label: "Net" }] : [])];
   const leg = (x: GRow) => {
     const row = x.row;
@@ -96,7 +97,7 @@ function GreeksTable({ rows, spot, w, r, net }: { rows: ModelRow[]; spot: number
     { key: "qty", header: "Units held", numeric: true, cell: (x) => (x.row ? signed((x.row.held.side === "sell" ? -1 : 1) * x.row.held.qty, 0) : "") },
     { key: "delta", header: "Delta", numeric: true, cell: (x) => { const l = leg(x); return x.row ? (l?.pos ? signed(l.pos.delta, 1) : "") : <b data-testid="net-delta">{net ? signed(net.delta, 1) : ""}</b>; } },
     { key: "gamma", header: "Gamma", numeric: true, cell: (x) => { const l = leg(x); return x.row ? (l?.pos ? sig(l.pos.gamma) : "") : <b data-testid="net-gamma">{net ? sig(net.gamma) : ""}</b>; } },
-    { key: "theta", header: "Theta / day", numeric: true, cell: (x) => { const l = leg(x); return x.row ? (l?.pos ? inr(l.pos.theta) : "") : <b data-testid="net-theta">{net ? inr(net.theta) : ""}</b>; } },
+    { key: "theta", header: hourly ? "Theta / hour" : "Theta / day", numeric: true, cell: (x) => { const l = leg(x); return x.row ? (l?.pos ? th(l.pos.theta) : "") : <b data-testid="net-theta">{net ? th(net.theta) : ""}</b>; } },
     { key: "vega", header: "Vega / vol pt", numeric: true, cell: (x) => { const l = leg(x); return x.row ? (l?.pos ? inr(l.pos.vega) : "") : <b data-testid="net-vega">{net ? inr(net.vega) : ""}</b>; } },
   ];
   return (
@@ -128,6 +129,9 @@ export function ModelPanel({ model, rows, xs, expiry, markers, base = 0, charges
   const sc = useMemo(() => (legs.length ? scenario(legs, spotW, days, w.ivShift, r) : null), [legs, spotW, days, w.ivShift, r]);
   const moved = w.spotPct !== 0 || w.ivShift !== 0 || days > 0;
   const atExpiry = days >= maxDays - 1e-9;
+  // under a day to expiry a day's theta is more than the position can still make or lose (LIVE10B-016: "₹33,093 a day" on a
+  // ₹4,553 premium with 1.5 hours left), so theta is said per hour
+  const hourly = maxDays - days < 1;
   const todayLabel = !moved || days === 0 ? "Today" : atExpiry ? "At expiry, with the what-if" : `In ${dayWord(days)}`;
   const curves: PayoffCurve[] = [...expiry];
   if (todayYs) {
@@ -167,7 +171,7 @@ export function ModelPanel({ model, rows, xs, expiry, markers, base = 0, charges
             <Stat label={`Model P&L${moved ? ", what-if" : " now"}`} value={inr(sc.pnl + base)} tone={sc.pnl + base >= 0 ? "up" : "down"}
               note={charges != null ? `${inr(sc.pnl + base - charges)} after ${chargesLabel}` : "before charges"} />
             <Stat label="Net delta" value={signed(sc.delta, 1)} note="₹ per point" />
-            <Stat label="Net theta" value={inr(sc.theta)} note="a day" />
+            <Stat label="Net theta" value={inr(hourly ? sc.theta / 24 : sc.theta)} note={hourly ? "an hour: under a day to expiry" : "a day"} />
             <Stat label="Net vega" value={inr(sc.vega)} note="per vol point" />
           </StatRow>
         </div>
@@ -176,7 +180,7 @@ export function ModelPanel({ model, rows, xs, expiry, markers, base = 0, charges
         format={(v) => inr(v)} axisFormat={axisInrFor(span)} xFormat={(x) => pts(x, tick)} />
       <div className="k-stack k-tight">
         <span className="k-eyebrow">Greeks, model estimate{settings ? ` (${settings})` : ""}</span>
-        <GreeksTable rows={rows} spot={model.spot} w={{ ...w, days }} r={r} net={complete && sc ? sc : null} />
+        <GreeksTable rows={rows} spot={model.spot} w={{ ...w, days }} r={r} net={complete && sc ? sc : null} hourly={hourly} />
         {!complete && <p className="k-note">{missing.join(", ")}: no price right now, so the model can't value {missing.length === 1 ? "it" : "them"} and the net Greeks and the today curve wait for one.</p>}
         {rows.some((x) => x.g?.iv_from === "atm") && <p className="k-note">* IV of the at-the-money strike: this option's own price gives none.</p>}
         {/* the explanations come after the figures, behind one line (LIVE1A-016: two grey paragraphs sat between the chart and the numbers) */}

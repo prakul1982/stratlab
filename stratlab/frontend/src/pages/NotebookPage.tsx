@@ -483,7 +483,8 @@ function NotebookView() {
         <CardHead title="Experiments" info={HELP.experiments} infoLabel="About experiments"
           actions={nb.experiments.length >= 2 ? <Link className="link" to={`/n/${nb.id}/compare`}>Compare experiments →</Link> : undefined} />
         {!isUpload && (
-          <div className="k-field">
+          // the card's full width (LIVE10B-005: held to a lone field's 420px, "10 years" and "+ Custom" wrapped onto a second row)
+          <div className="k-field wide">
             <div className="k-label-row"><span className="k-lbl">Test period</span><Info label="About the test period">{HELP.period} Add your own with + Custom: any whole number of days, weeks, months or years up to the {maxDays.toLocaleString("en-IN")} days stored for {TF_NAME[s.tf].toLowerCase()} candles here.</Info></div>
             <ChipBar label="Test period" wrap value={periodValue} onChange={setDays}
               options={periods.map((d) => ({ value: String(d), label: periodName(d) }))}
@@ -528,7 +529,8 @@ function NotebookView() {
         <ConfirmDialog title={`Paper trade on ${inst.symbol}?`} confirmLabel="Start paper trading" danger={false} onConfirm={() => void startSingle()} onClose={() => setPaperAsk(false)}>
           {/* three short lines, not four paragraphs of small print (LIVE1A-014): fake money, fills and costs, stopping */}
           <ul className="k-list paper-ask" data-testid="paper-ask">
-            <li>The rules of "{nb.name}" on {TF_NAME[s.tf]} candles, live, with {money(s.risk.capital, currency)} of fake money. Nothing real is ever placed.</li>
+            {/* a backtest's open position is not carried in (LIVE10B-014) */}
+            <li>The rules of "{nb.name}" on {TF_NAME[s.tf]} candles, live, with {money(s.risk.capital, currency)} of fake money. Nothing real is ever placed. It starts with no position: the first trade comes at the next signal.</li>
             {/* how fills and fees really work, not "at live prices" (DB-021) */}
             <li data-testid="paper-fills">{fillsLine(s.risk, markets.find((m) => m.id === inst.market)?.costs, money(s.risk.brokerage, currency, 2))}</li>
             {/* Free's session is a trial of 5 market days: said here, not "It runs until you stop it" (DP1-013) */}
