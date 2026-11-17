@@ -181,3 +181,12 @@ def test_a_rotation_copy_a_close_behind_is_served_at_once(monkeypatch):
     finally:
         main.app.dependency_overrides.clear()
         main._results.clear()
+
+
+# ---------- LIVE10A-020: each results day says whether it is a session of the market ----------
+def test_results_days_say_whether_they_are_sessions(monkeypatch):
+    from app import results
+    from app.data import calendar
+    monkeypatch.setattr(calendar, "is_trading_day", lambda region, d: d.weekday() < 5 and d.isoformat() != "2026-11-26")
+    assert results._session_day("US", "2026-11-19") is True
+    assert results._session_day("US", "2026-11-22") is False and results._session_day("US", "2026-11-26") is False

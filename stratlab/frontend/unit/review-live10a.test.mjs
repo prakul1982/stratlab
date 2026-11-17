@@ -44,3 +44,13 @@ test("LIVE10A-008: a dive being read again behind the page is asked for quietly,
   assert.match(page, /if \(!tries\) setPricesBusy\(true\);/);
   assert.match(page, /setPrices\(p\);\n\s+setPricesBusy\(false\);\n\s+if \(p\.pending > 0 && \+\+tries < PRICE_TRIES\)/);
 });
+
+test("LIVE10A-020: a US day that is no session gets no chip; India keeps Saturday's; an empty Usual move column is dropped", async () => {
+  const R = await import("../src/lib/resultsRows.ts");
+  const days = [{ date: "2026-11-19", count: 3, session: true }, { date: "2026-11-22", count: 1, session: false }, { date: "2026-11-26", count: 2, session: false }];
+  assert.deepEqual(R.laterDays(days, "2026-11-17", "US"), ["2026-11-19"]);
+  assert.deepEqual(R.laterDays(days, "2026-11-17", "IN"), ["2026-11-19", "2026-11-22", "2026-11-26"]);
+  const page = read("src/pages/ResultsPage.tsx");
+  assert.match(page, /laterDays\(\(data\?\.weeks \?\? \[\]\)\.flatMap\(\(w\) => w\.days \?\? \[\]\), todayIn\(region\), region\)/);
+  assert.match(page, /\.\.\.\(mvEmpty \? \[\] : \[\{ key: "mv", header: "Usual move"/);
+});

@@ -201,6 +201,7 @@ export function ResultsPage() {
   const pricesLine = pricesNote({ live: isLive, asOf: quoteAt ? fmtTime(quoteAt, { tz, zone: true }) : null, rows: symbols.length, cap: LIVE_ROWS, closeDay,
     older: olderRows.length, olderDay: olderRows.map((r) => r.last_at!.slice(0, 10)).sort()[0] ?? null, reading: quotesReading }, resultDay);
 
+  const mvEmpty = shown.length > 0 && shown.every((r) => { const a = moves[r.symbol]; return a !== undefined && !(a?.moves ?? r.moves) && !a?.since; });
   const columns: Column<ResultRow>[] = [
     // two lines a row (owner, 5 Nov: "still shit ui", rows stacked company, name, purpose and filing link four lines high): the symbol and
     // its tags with the name beside it, then the meeting and a small link to the filing; a long line ends in "…" with the whole of it on hover
@@ -250,7 +251,8 @@ export function ResultsPage() {
       <span className="res-q"><span><span className="k-muted">Rev </span><Growth v={r.q?.sales} of={r.q?.of} /></span><span><span className="k-muted">Profit </span><Growth v={r.q?.profit} of={r.q?.of} /></span></span>) },
     { key: "rev", header: "Revenue", csvHeader: "Revenue YoY", csvOnly: true, cell: (r) => <Growth v={r.q?.sales} of={r.q?.of} />, csv: (r) => r.q?.sales ?? null },
     { key: "pat", header: "Profit", csvHeader: "Profit YoY", csvOnly: true, cell: (r) => <Growth v={r.q?.profit} of={r.q?.of} />, csv: (r) => r.q?.profit ?? null },
-    { key: "mv", header: "Usual move", cardLabel: "Usual move", csvHeader: "Past results-day moves", wrap: true, info: "Past results-day moves: the change in the close from the session before a results day to the session after it, for this company's earlier results days the app has kept (up to six), from its daily prices. The figure is their average size; the arrows under it are the latest four, newest first, in percent.", cell: (r) => {
+    // LIVE10A-020: no row with a past results-day move once every row's read is back (US: "–" on every row): no column for it
+    ...(mvEmpty ? [] : [{ key: "mv", header: "Usual move", cardLabel: "Usual move", csvHeader: "Past results-day moves", wrap: true, info: "Past results-day moves: the change in the close from the session before a results day to the session after it, for this company's earlier results days the app has kept (up to six), from its daily prices. The figure is their average size; the arrows under it are the latest four, newest first, in percent.", cell: (r) => {
       const a = moves[r.symbol], m = a?.moves ?? r.moves;
       const since = a?.since;
       if (!m && !since) return a === undefined ? <Working inline label="Reading earlier results days" /> : <span className="k-muted">–</span>;
@@ -263,7 +265,7 @@ export function ResultsPage() {
           {/* LIVE9A-028: a space between the latest moves, so two flat ones never read as "0.00.0" */}
           {m && <span className="k-note res-moves k-tight-hide" title="The latest four, newest first, in %">{m.last.map((v, i) => <span key={i}>{i > 0 ? " " : ""}<Move v={v} bare /></span>)}</span>}
         </span>);
-    } },
+    } } as Column<ResultRow>]),
     ...(showImplied ? [{ key: "im", header: "Implied", cardLabel: "Implied", csvHeader: "Options imply", numeric: true, info: "For stocks with futures and options: the price of the at-the-money call and put together, as a share of the stock's price, for the first expiry on or after the results day. Read from the broker's option prices while it is connected.", cell: (r: ResultRow) => {
       // R15 #11 (owner, 7 Nov: "there is still no implied vols"): implied moves exist only for F&O stocks, so a row that has none says why
       if (!r.fo) return <span className="k-muted" title="Implied moves are read from futures and options; this stock has none">Not F&O</span>;
@@ -289,7 +291,7 @@ export function ResultsPage() {
           days={[{ value: "", label: "Every day" }, { value: "today", label: "Today" }, { value: "tomorrow", label: "Tomorrow" },
             // today is the "Today" chip above, not again by its date (LIVE8A-025: "Today" and "Sat 14 Nov" both)
             // one chip per later day with companies on it: no day gone by, no "Tomorrow" again by its date, no empty holiday (LIVE9A-014)
-            ...laterDays((data?.weeks ?? []).flatMap((w) => w.days ?? []), todayIn(region)).map((d) => ({ value: d, label: resultDay(d) }))]}
+            ...laterDays((data?.weeks ?? []).flatMap((w) => w.days ?? []), todayIn(region), region).map((d) => ({ value: d, label: resultDay(d) }))]}
           search={<>
             {scope === "all" && (
               <Field key={region} label="Find a company">

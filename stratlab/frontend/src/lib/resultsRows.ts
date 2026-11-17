@@ -10,9 +10,10 @@ export function nextDay(iso: string): string {
 /** The day chips after "Today" and "Tomorrow": one per later day that has companies on it. A day gone by, today and tomorrow again by
  * their dates, and a day with nobody reporting (a weekend, an exchange holiday) are left out (LIVE9A-014: "Today, Tomorrow, Mon 16 Nov,
  * Wed 18 Nov" listed a past day and tomorrow twice; Thu 26 Nov, a US holiday, had a chip). */
-export function laterDays(days: { date: string; count: number }[], today: string | null): string[] {
+export function laterDays(days: { date: string; count: number; session?: boolean }[], today: string | null, region?: string): string[] {
   const after = today ? nextDay(today) : "";
-  return [...new Set(days.filter((d) => d.count > 0 && d.date > after).map((d) => d.date))].sort();
+  // LIVE10A-020: a US day that is no session (a Sunday, Thanksgiving) gets no chip: its dates are the source's estimates
+  return [...new Set(days.filter((d) => d.count > 0 && d.date > after && !(region === "US" && d.session === false)).map((d) => d.date))].sort();
 }
 
 /** The market value at the price shown beside it: the stored value scaled by the live price against the stored close it was worked out
