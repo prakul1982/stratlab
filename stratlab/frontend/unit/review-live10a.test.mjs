@@ -90,3 +90,12 @@ test("LIVE10A-021: the theme ideas are a row of their own under Map it", () => {
   assert.match(page, /<div className="k-row theme-ideas" data-testid="theme-ideas">/);
   assert.match(read("src/styles.css"), /\.theme-ideas \{ grid-column: 1 \/ -1;/);
 });
+
+test("LIVE10A-012: a heatmap group head too narrow for its name shows the short one", async () => {
+  const { groupWords } = await import("../src/lib/heatmap.ts");
+  const w = (t) => t.length * 6;                // 6px a letter at 10px
+  assert.equal(groupWords("Fast Moving Consumer Goods", 90, w), "FMCG");
+  assert.equal(groupWords("Fast Moving Consumer Goods", 400, w), "Fast Moving Consumer Goods");
+  assert.equal(groupWords("Power", 20, w), "Power");                                   // no short name: as it is (the CSS cuts it)
+  assert.match(read("src/components/chart/Treemap.tsx"), /<span className="hm-group-name">\{groupWords\(g\.name,/);
+});
