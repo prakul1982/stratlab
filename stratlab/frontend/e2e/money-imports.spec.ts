@@ -72,7 +72,7 @@ test("MONEY-2: a holdings file adds by default; Start again asks first, naming w
   await page.getByRole("button", { name: "Read this file" }).click();
   await expect(page.getByText(/nothing added yet: you already hold ICICIBANK, SBIN/)).toBeVisible({ timeout: 30_000 });
   await page.getByTestId("holdings-overlap").getByRole("button", { name: "Add these shares too" }).click();
-  await expect(page.getByText(/4 stocks saved/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Read as an ICICI Direct file: 4 stocks saved.")).toBeVisible({ timeout: 30_000 });
   expect(imports() - before).toBe(2);
   await sane(page, errors);
 });

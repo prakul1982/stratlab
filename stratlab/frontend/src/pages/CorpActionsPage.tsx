@@ -114,7 +114,8 @@ export function CorpActionsPage() {
     { key: "yld", header: "Yield of this payment", numeric: true, info: "A dividend's amount over the price now (the last close when no live price is in): what this one payment is, as a share of the price. It is not the year's dividend yield. Only dividends have one.", cell: (r) => {
       const x = quotes[r.symbol]?.price ?? r.last;
       const y = r.kind === "dividend" && r.amount && x ? (r.amount / x) * 100 : null;
-      return y == null ? <span className="k-muted">–</span> : <>{pctPlain(y, 2)}</>;
+      // a payment under 0.005% of the price is "<0.01%", not a yield of "0.00%" (LIVE10B-045: MRF's ₹3 on ₹1,28,750)
+      return y == null ? <span className="k-muted">–</span> : <>{y > 0 && y < 0.005 ? "<0.01%" : pctPlain(y, 2)}</>;
     } },
     { key: "cap", header: "Market value", numeric: true, cell: (r) => (r.cap == null ? <span className="k-muted">–</span> : <span title={r.band ? `${SIZE_NAME[r.band]} company` : undefined}>{screenCap(r.cap, r.region)}</span>) },
   ];

@@ -273,6 +273,7 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
   // LIVE7B-008: /login and /signup are one sign-in panel: the heading, one line, one Google button and what signing in reads (a dialog
   // with the same heading and button over the page, and a second band with a third button, said it all three times)
   const login = slim === "login";
+  const signup = login && location.pathname === "/signup";   // LIVE10B-003: "Sign up for StratLab" over "Sign in with…" lines
   useLayoutEffect(() => {
     if (!section) return;
     const go = () => document.getElementById(section)?.scrollIntoView({ behavior: "instant" });
@@ -341,7 +342,7 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
             {heading
               ? <h1 className="serif lp-h1 lp-own-h1">{heading}</h1>
               : <h1 className="serif lp-h1">Is your trading idea <em>skill</em> or luck?</h1>}
-            <p className="serif lp-lede">{login && emailSignInOn() ? "Sign in with your Google account or your email address: no password to set up." : heading && intro ? intro : "Write it in plain words. StratLab tests it on years of real prices after every charge, then checks four ways whether the result could be luck. Company research, your holdings and your tax sit beside it."}</p>
+            <p className="serif lp-lede">{login && emailSignInOn() ? `${signup ? "Sign up" : "Sign in"} with your Google account or your email address: no password to set up.` : heading && intro ? intro : "Write it in plain words. StratLab tests it on years of real prices after every charge, then checks four ways whether the result could be luck. Company research, your holdings and your tax sit beside it."}</p>
             <div className="row wrap g12">
               {cta()}
               {/* NAV3: a real result anyone can open without signing in (the public library: rules, verdict and checks) */}
@@ -349,7 +350,7 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
             </div>
             {/* R61: beside Continue with Google, the email way in, while email sign-in is on (the sign-in page has the form itself) */}
             {!login && <EmailWay />}
-            {login && emailSignInOn() && <Suspense fallback={null}><EmailSignIn /></Suspense>}
+            {login && emailSignInOn() && <Suspense fallback={null}><EmailSignIn signup={signup} /></Suspense>}
             {error && <p className="banner" role="alert">{error}</p>}
             {login ? <p className="small muted">Signing in only reads your name and email from Google{emailSignInOn() ? ", or only your email address by email" : ""}. By continuing you agree to the <Link className="link" to="/terms">Terms</Link> and <Link className="link" to="/privacy">Privacy policy</Link>.</p> : <p className="small muted">Free to start · No card · No code</p>}
           </div>

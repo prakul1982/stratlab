@@ -74,3 +74,22 @@ test("LIVE10B-005: the notebook's test-period chips take the card's width, not a
   assert.match(read("src/pages/NotebookPage.tsx"), /<div className="k-field wide">\s*<div className="k-label-row"><span className="k-lbl">Test period<\/span>/);
   assert.match(read("src/styles.css"), /\.k-card > \.k-field\.wide \{ max-width: none; \}/);
 });
+
+test("LIVE10B-009/012: zero or missing journal figures are neutral; deleting a trade says it can't be undone", () => {
+  const page = read("src/pages/trade/JournalPage.tsx");
+  assert.match(page, /label="Average loss" value=\{m\(s\.avg_loss\)\} tone=\{s\.avg_loss \? "down" : undefined\}/);
+  assert.match(page, /value=\{m\(-s\.max_dd\)\} tone=\{s\.max_dd \? "down" : undefined\}/);
+  assert.match(page, /\{own \? "Its journal entry goes with it\. This can't be undone\." :/);
+});
+
+test("LIVE10B-014/033/045/003: paper start says it starts flat; one minus and grouped days; a tiny yield; Sign up on /signup", () => {
+  assert.match(read("src/pages/NotebookPage.tsx"), /It starts with no position: the first trade comes at the next signal\./);
+  const tax = read("src/pages/TaxReportPage.tsx");
+  assert.match(tax, /r\.loss_pct\.toFixed\(1\)\.replace\("-", "\\u2212"\)/);
+  assert.match(tax, /\$\{r\.days\.toLocaleString\("en-IN"\)\} day\$\{r\.days === 1 \? "" : "s"\}/);
+  assert.match(read("src/pages/CorpActionsPage.tsx"), /y > 0 && y < 0\.005 \? "<0\.01%" : pctPlain\(y, 2\)/);
+  const login = read("src/pages/Login.tsx");
+  assert.match(login, /const signup = login && location\.pathname === "\/signup";/);
+  assert.match(login, /\$\{signup \? "Sign up" : "Sign in"\} with your Google account or your email address/);
+  assert.match(read("src/components/EmailSignIn.tsx"), /\{signup \? "Sign up" : "Sign in"\} with email<\/label>/);
+});

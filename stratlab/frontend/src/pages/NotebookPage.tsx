@@ -529,7 +529,8 @@ function NotebookView() {
         <ConfirmDialog title={`Paper trade on ${inst.symbol}?`} confirmLabel="Start paper trading" danger={false} onConfirm={() => void startSingle()} onClose={() => setPaperAsk(false)}>
           {/* three short lines, not four paragraphs of small print (LIVE1A-014): fake money, fills and costs, stopping */}
           <ul className="k-list paper-ask" data-testid="paper-ask">
-            <li>The rules of "{nb.name}" on {TF_NAME[s.tf]} candles, live, with {money(s.risk.capital, currency)} of fake money. Nothing real is ever placed.</li>
+            {/* a backtest's open position is not carried in (LIVE10B-014) */}
+            <li>The rules of "{nb.name}" on {TF_NAME[s.tf]} candles, live, with {money(s.risk.capital, currency)} of fake money. Nothing real is ever placed. It starts with no position: the first trade comes at the next signal.</li>
             {/* how fills and fees really work, not "at live prices" (DB-021) */}
             <li data-testid="paper-fills">{fillsLine(s.risk, markets.find((m) => m.id === inst.market)?.costs, money(s.risk.brokerage, currency, 2))}</li>
             {/* Free's session is a trial of 5 market days: said here, not "It runs until you stop it" (DP1-013) */}

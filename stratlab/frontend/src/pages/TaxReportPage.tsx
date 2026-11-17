@@ -243,8 +243,9 @@ export function TaxReportPage() {
   ];
   const lotCols: Column<Lot & { i: number }>[] = [
     { key: "stock", header: "Stock", rowHeader: true, cell: (r) => <><Link className="link" to={`/research/IN/${encodeURIComponent(r.key)}`}><b>{name(r.key)}</b></Link>{r.bonus && <span className="k-note"> bonus</span>}</> },
-    { key: "loss", header: "Below cost by", numeric: true, cell: (r) => <span className="k-down">{inr(r.loss)}{r.loss_pct != null && <span className="k-note"> {r.loss_pct.toFixed(1)}%</span>}</span> },
-    { key: "held", header: "Held", numeric: true, cell: (r) => `${r.days} days` },
+    { key: "loss", header: "Below cost by", numeric: true, cell: (r) => <span className="k-down">{inr(r.loss)}{r.loss_pct != null && <span className="k-note"> {r.loss_pct.toFixed(1).replace("-", "\u2212")}%</span>}</span> },
+    // one minus sign with the rupees, and a separator in the days (LIVE10B-033: "-19.5%" beside "−₹1,168", "1042 days")
+    { key: "held", header: "Held", numeric: true, cell: (r) => `${r.days.toLocaleString("en-IN")} day${r.days === 1 ? "" : "s"}` },
     { key: "term", header: "Term today", cell: (r) => (r.term === "LT" ? "Long-term" : <>Short-term<span className="k-sub-line">long-term from {dateOnly(r.long_from)}</span></>) },
     { key: "bought", header: "Bought", numeric: true, cell: (r) => dateOnly(r.bought) },
     ...(lotsMore.on ? [

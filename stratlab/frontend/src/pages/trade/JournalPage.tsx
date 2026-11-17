@@ -357,12 +357,13 @@ function Stats({ s }: { s: Summary }) {
       <StatRow label="Stats">
         <Stat item label="P&L after charges" value={signed(s.net)} tone={tone(s.net)} />
         <Stat item label="Win rate" value={s.win_rate == null ? "–" : `${s.win_rate}%`} note={`${s.wins}W · ${s.losses}L`} />
-        <Stat item label="Average win" value={m(s.avg_win)} tone="up" />
-        <Stat item label="Average loss" value={m(s.avg_loss)} tone="down" />
+        {/* a missing average (no wins, no losses) and a fall of nothing are neutral, not red (LIVE10B-009) */}
+        <Stat item label="Average win" value={m(s.avg_win)} tone={s.avg_win ? "up" : undefined} />
+        <Stat item label="Average loss" value={m(s.avg_loss)} tone={s.avg_loss ? "down" : undefined} />
         <Stat item label={k("Expectancy", "The average result per trade after charges: the total P&L divided by the number of trades.")} value={signed(s.expectancy)} tone={tone(s.expectancy)} />
         <Stat item label={k("Profit factor", "Money made on winning trades divided by money lost on losing ones. Above 1 means the wins added up to more than the losses.")} value={s.profit_factor ?? (s.wins ? "No losses" : "–")} />
         <Stat item label={k("Deepest fall", "The biggest drop of the running P&L from a high, after charges. As a % of your capital plus the P&L at that high, when you've entered your capital.")}
-          value={m(-s.max_dd)} tone="down" note={s.max_dd_pct != null ? `${s.max_dd_pct}% of capital` : undefined} />
+          value={m(-s.max_dd)} tone={s.max_dd ? "down" : undefined} note={s.max_dd_pct != null ? `${s.max_dd_pct}% of capital` : undefined} />
         <Stat item label="Longest streaks" value={`${st.longest_win}W · ${st.longest_loss}L`}
           note={st.current.kind ? `now ${st.current.n} ${st.current.kind === "win" ? "win" : "loss"}${st.current.n === 1 ? "" : st.current.kind === "win" ? "s" : "es"}` : undefined} />
         <Stat item label={k("Charges", "STT/CTT, exchange and SEBI fees, stamp duty, GST and brokerage in India, as a share of the P&L before charges. For US stocks and crypto, the charges you entered.")}
@@ -702,7 +703,7 @@ function NoteEditor({ j, t, onClose, onSaved }: { j: Journal; t: Trade; onClose:
       </div>
       {asking && (
         <ConfirmDialog title={own ? "Delete this trade?" : "Leave this trade out of the journal?"} confirmLabel={own ? "Delete trade" : "Remove trade"} onConfirm={del} onClose={() => setAsking(false)}>
-          {own ? "The trade is deleted from your journal." : "You can show removed trades again at the foot of the page."}
+          {own ? "Its journal entry goes with it. This can't be undone." : "You can show removed trades again at the foot of the page."}
         </ConfirmDialog>
       )}
     </Modal>
