@@ -31,6 +31,8 @@ export function keepMood(region: Region, m: PulseMood): void {
 export function moodStale(m: PulseMood | null, now = Date.now()): boolean {
   if (!m) return false;
   if (m.refreshing) return true;
+  // LIVE11A-001: a closed session's final read is not read again until the next session ("Reading the market again" sat under a 12-h-old read)
+  if (m.final && !m.is_open) return false;
   if (!m.read_at) return false;
   return now - Date.parse(m.read_at) > (m.is_open ? MOOD_STALE_OPEN : MOOD_STALE_SHUT) * 1000;
 }

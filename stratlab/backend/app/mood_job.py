@@ -15,7 +15,9 @@ the 16 Nov index levels. The job now reads that payload too, and a day is done o
 LIVE10A-001: India's read was first tried at 16:10 IST, 40 minutes after the 15:30 close, so a visit in between (16:05 IST on 17 Nov) got
 the 14:47 intraday read still saying "so far today"; it is now tried from 15:45 IST, once the closing auction (to 15:40) is done. A day
 whose read is still not written an hour after it was first tried is a check in the self-healing sweep (re-run, then Needs your attention)
-and a line in the logs, so a read that stops running is seen before a visitor sees an old session."""
+and a line in the logs, so a read that stops running is seen before a visitor sees an old session.
+
+LIVE11A-002: a day is done only when the card's tables carry the breadth count of the session that closed (see intel/mood.tables_of)."""
 import json
 import threading
 import time
@@ -181,13 +183,15 @@ def _pulse_read(region: str) -> dict:
 def _mood_payload(region: str, day: str | None = None) -> str | None:
     """LIVE9A-001: the Mood card's payload read now and kept (memory and the database) for everyone; the session it is of. One kept since
     the close for `day` is not read again (a pass that waits only on the AI read)."""
+    from .intel import mood as mood_mod
     from .intel import routes
     hub = routes.mood_hub()
     hit = hub.payloads.kept(region)
-    if day and hit and (hit[1] or {}).get("session") == day and not (hit[1] or {}).get("is_open"):
+    # LIVE11A-002: the day is done only once the tables carry that session's breadth count too; until the evening count lands each pass
+    # reads again (the US read of 16:47 ET carried the previous session's count under the day's index moves)
+    if day and hit and not (hit[1] or {}).get("is_open") and mood_mod.tables_of(hit[1]) == day:
         return day
-    value = hub.refresh_now(region)
-    return (value or {}).get("session")
+    return mood_mod.tables_of(hub.refresh_now(region))
 
 
 def _mood_open(region: str) -> str | None:
