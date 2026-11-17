@@ -239,8 +239,9 @@
   .res-co { max-width: none; }
   /* LIVE4-010: a compact phone row: the usual move without its four arrows (the company page has them), no plain "Financial Results" line */
   .k-tbl-wrap.compact .res-moves, .k-tbl-wrap.compact .res-plain { display: none; }
-  /* LIVE10A-027: the company's name under its symbol on a phone too, on one line ending in "…" (a phone row showed tickers only) */
-  .k-tbl-wrap.compact .res-name { white-space: nowrap; }
+  /* LIVE10A-027: the company's name under its symbol on a phone too, wrapping if it is long (a phone row showed tickers only; on one line
+     its clipped end ran under the row's report flag) */
+  .k-tbl-wrap.compact .res-name { white-space: normal; }
   .k-tbl-wrap.compact .res-purpose::before { content: none; }
   .k-tbl-wrap.compact .res-sub { white-space: normal; }   /* a meeting about more than results says so in full, under the symbol */
   .k-tbl-wrap.compact .res-mv { display: inline-flex; gap: 6px; }

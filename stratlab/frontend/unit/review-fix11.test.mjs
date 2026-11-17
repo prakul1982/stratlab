@@ -56,10 +56,10 @@ test("LIVE10A-028: /new holds the market chips' row and the search box while the
   assert.match(read("src/styles.css"), /\.k-where-wait \.lp-skel \+ \.lp-skel \{ height: 44px; \}/);
 });
 
-test("LIVE10A-027: a phone's results row names the company under its symbol, on one line", () => {
+test("LIVE10A-027: a phone's results row names the company under its symbol", () => {
   const css = read("src/styles-invest.css");
   assert.doesNotMatch(css, /\.k-tbl-wrap\.compact \.res-name \{ display: none; \}|\.k-tbl-wrap\.compact \.res-plain, \.k-tbl-wrap\.compact \.res-name/);
-  assert.match(css, /\.k-tbl-wrap\.compact \.res-name \{ white-space: nowrap; \}/);
+  assert.match(css, /\.k-tbl-wrap\.compact \.res-name \{ white-space: normal; \}/);
 });
 
 test("CX2: /home opens My space, sent to the app by every web server (it was \"Page not found\")", async () => {
