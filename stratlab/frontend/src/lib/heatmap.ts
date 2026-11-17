@@ -203,3 +203,15 @@ export function tileWords(symbol: string, figure: string, w: number, h: number, 
   const fig = px > 0 && h >= (px === 15 ? 46 : px === 12 ? 34 : 28) && (width(figure, 400) * px * 0.92) / 10 <= room;
   return { px, fig };
 }
+
+/** LIVE10A-012: a group's short name for a head too narrow for its full one ("Fast Moving Con…" was cut); the full name stays its label. */
+const GROUP_SHORT: Record<string, string> = {
+  "Fast Moving Consumer Goods": "FMCG", "Automobile and Auto Components": "Autos", "Oil Gas & Consumable Fuels": "Oil and gas",
+  "Information Technology": "IT", "Media Entertainment & Publication": "Media", "Consumer Discretionary": "Cons. discretionary",
+  "Consumer Staples": "Cons. staples", "Communication Services": "Communication", "Construction Materials": "Building materials",
+  "Financial Services": "Financials", "Telecommunication": "Telecom", "Metals & Mining": "Metals",
+};
+export function groupWords(name: string, room: number, width: (text: string, weight: number) => number, px = 11.5): string {
+  const fits = (t: string) => (width(t, 600) * px) / 10 <= room;
+  return fits(name) || !GROUP_SHORT[name] ? name : GROUP_SHORT[name];
+}

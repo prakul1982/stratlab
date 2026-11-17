@@ -224,7 +224,9 @@
 /* LIVE5-002: the name is the second line's start, never squeezed beside the symbol and its tags to 1-3 letters at 1280; a plain
    "Financial Results" meeting leaves the line to the name; any other meeting follows it after a dot */
 .res-sub { display: block; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.res-name + .res-purpose::before { content: " · "; }
+/* LIVE10A-037: a meeting about more than results has its purpose on a line of its own under the name, never cut mid-word after it
+   ("Libas Consumer Products Limited · Financial Resul…"); a plain results meeting keeps the two-line row */
+.res-sub > .res-name, .res-sub > .res-purpose { display: block; overflow: hidden; text-overflow: ellipsis; }
 .res-name + .res-purpose.res-plain { display: none; }
 .res-filed { font-size: inherit; }
 .res-mv { display: grid; gap: 0; line-height: 1.4; }

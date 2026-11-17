@@ -1066,7 +1066,9 @@ def view(region: str, uid: str, scope: str = "mine", q: str = "", today: date | 
             else:
                 cap = max(1, limit)
             shown += on_day[:cap]
-            days.append({"date": d, "count": len(on_day), "shown": min(cap, len(on_day))})
+            # LIVE10A-020: a US company dated on a Sunday or an exchange holiday (Thu 26 Nov, Thanksgiving) is a date the source estimates,
+            # not a session: the page gives such a day no chip (India's boards do meet and file on a Saturday: every day keeps its chip)
+            days.append({"date": d, "count": len(on_day), "shown": min(cap, len(on_day)), "session": _session_day(region, d)})
             more += max(0, len(on_day) - cap)
         weeks.append({"label": label, "from": start.isoformat(), "to": end.isoformat(), "days": days, "rows": shown})
     unknown = sum(1 for r in window if r["band"] is None) if size else 0
@@ -1075,6 +1077,15 @@ def view(region: str, uid: str, scope: str = "mine", q: str = "", today: date | 
             "total": len(window), "matching": len(narrowed), "unknown_size": unknown,
             "filters": {"size": size, "sector": sector, "index": index, "fo": bool(fo), "purpose": purpose if purpose in ("results", "more") else "", "on": on if only else "", "sort": sort},
             "facets": ctx.facets(window)}
+
+
+def _session_day(region: str, iso: str) -> bool:
+    """LIVE10A-020: whether `iso` is a trading day of the market (True when the calendar can't say)."""
+    try:
+        from .data.calendar import is_trading_day
+        return bool(is_trading_day(region, date.fromisoformat(iso)))
+    except Exception:
+        return True
 
 
 def facets(region: str, rows: list[dict], sets: dict, has_fo: bool) -> dict:

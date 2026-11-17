@@ -10,6 +10,7 @@
 No job of its own: everything is read when a page asks, through the caches the app already keeps. Memory: see DIVE_CACHE, PRICE_CACHE,
 EVIDENCE_CACHE and VERDICTS below."""
 import json
+import os
 import re
 import threading
 import time
@@ -1429,7 +1430,7 @@ def theme_dive(q: str, region: str = "IN", refresh: bool = False, profile=Depend
             return R.ok(theme_changes.served(r, m.get("_library") or theme, {**kept["value"]["dive"], "refresh_state": state}, profile,
                                              **removal_words(r)))
         by = computed.plan_word(profile)
-    out = theme_changes.served(r, m.get("_library") or theme, dive_of(r, theme, m, refresh, by=by), profile, **removal_words(r))
+    out = theme_changes.served(r, m.get("_library") or theme, dive_of(r, theme, m, refresh, by=by, behind=not refresh), profile, **removal_words(r))
     return R.ok({**out, "refresh_state": "done"} if refresh else out)
 
 
@@ -1568,19 +1569,59 @@ def membership_check(theme: str, m: dict, fm: dict, dive: dict, before: dict | N
             "rechecked": sum(1 for s_, x in again.items() if x != kept.get(s_))}
 
 
-def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None = None) -> dict:
+# LIVE10A-008: a kept dive behind a newer close or a rebuilt page was worked out again inside the page's request (Semiconductors 44 s,
+# Automotive 65 s, Private banks 67 s: the first visit after each close paid for the whole theme); the page now gets the kept dive at once,
+# marked "updating", and one worker reads the new one behind it, one theme at a time in the memory guard's turn
+_BEHIND = ThreadPoolExecutor(max_workers=1, thread_name_prefix="theme-dive-behind")
+_behind_keys: set = set()
+_behind_lock = threading.Lock()
+BEHIND_MAX = 8                    # themes waiting for the worker at once; past it the page works the dive out itself, as before
+# the test suite turns it off (a worker thread outliving its test would write into the next one's world); tests that want it set it
+BEHIND_ON = os.environ.get("READ_BEHIND", "1").strip().lower() not in ("0", "false", "no", "off")
+
+
+def _rebuild_behind(r: str, theme: str, m: dict, key: list) -> bool:
+    """LIVE10A-008: the dive worked out again on the worker (once per key at a time); False when the queue is full."""
+    k = json.dumps(key, default=str)
+    with _behind_lock:
+        if k in _behind_keys:
+            return True
+        if len(_behind_keys) >= BEHIND_MAX:
+            return False
+        _behind_keys.add(k)
+
+    def run():
+        try:
+            from .. import memguard
+            with memguard.heavy("theme dive"):
+                dive_of(r, theme, m, rebuild=True)
+        except Exception as e:
+            print("theme dive: not read again behind the page:", theme, type(e).__name__, str(e)[:120])
+        finally:
+            with _behind_lock:
+                _behind_keys.discard(k)
+    _BEHIND.submit(run)
+    return True
+
+
+def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None = None, behind: bool = False, rebuild: bool = False) -> dict:
     """The dive for a checked map with its descriptions (the page's tables and sections): kept once for everyone in the shared store
     (kind "theme:dive") and served from there, however old, until a Refresh (owner, 7 Nov); worked out again from the stored company
-    pieces (no AI) when one of them was refreshed by another theme (pieces_moved)."""
+    pieces (no AI) when one of them was refreshed by another theme (pieces_moved). `behind` (the page's own request, LIVE10A-008): a kept
+    dive that is behind is served at once ("updating") and worked out again on the worker; `rebuild`: that worker's read."""
     fm, figures = theme_base.for_figures(m)
     key = dive_key(r, theme, m)
-    if not refresh:
+    if not refresh and not rebuild:
         kept = computed.get(theme_library.DIVE, key)
-        if kept is not None and isinstance((kept.get("value") or {}).get("dive"), dict) and not pieces_moved(r, kept["value"].get("pieces") or {}) \
-                and not sector_metrics.any_stored(r, kept["value"]["dive"].get("metrics_pending") or []) and not prices_moved(r, kept) \
-                and not pages_rebuilt(r, kept["value"]["dive"]):          # ex49: a page rebuilt with the lines a checked figure waits for
-            requeue(r, kept["value"]["dive"])
-            return kept["value"]["dive"]
+        if kept is not None and isinstance((kept.get("value") or {}).get("dive"), dict):
+            stale = pieces_moved(r, kept["value"].get("pieces") or {}) \
+                or sector_metrics.any_stored(r, kept["value"]["dive"].get("metrics_pending") or []) or prices_moved(r, kept) \
+                or bool(pages_rebuilt(r, kept["value"]["dive"]))          # ex49: a page rebuilt with the lines a checked figure waits for
+            if not stale:
+                requeue(r, kept["value"]["dive"])
+                return kept["value"]["dive"]
+            if behind and BEHIND_ON and _rebuild_behind(r, theme, m, key):
+                return {**kept["value"]["dive"], "updating": True}
     src = sources(r, theme, fresh=True) if refresh else sources(r, theme)
     hit = theme_data.build(r, theme, fm, src)
     hit["placements"], hit["figures"] = m.get("placements"), figures

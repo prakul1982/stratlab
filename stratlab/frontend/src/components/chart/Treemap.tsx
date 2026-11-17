@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { watchSize } from "../../lib/resize";
-import { layout, legend, matches, step, stepClass, tileWords, type ColorBy, type GroupBy, type Period, type Placed, type SizeBy, type Tile } from "../../lib/heatmap";
+import { groupWords, layout, legend, matches, step, stepClass, tileWords, type ColorBy, type GroupBy, type Period, type Placed, type SizeBy, type Tile } from "../../lib/heatmap";
 import "./treemap.css";
 
 /* The heatmap's drawing: a treemap of tiles, each a link to its company's page, sized and coloured by the figures the page picks
@@ -83,7 +83,7 @@ export function Treemap({ tiles, size, color, period, group, index, query = "", 
         <div key={g.name || "all"} className="hm-group" role="group" aria-label={g.name ? `${g.name}${g.value != null ? `, ${figure(g.value)}` : ""}` : undefined}>
           {g.head > 0 && (
             <div className="hm-group-head" aria-hidden="true" style={{ left: g.box.x + GAP / 2, top: g.box.y + GAP / 2, width: Math.max(0, g.box.w - GAP), height: g.head - GAP / 2 }}>
-              <span className="hm-group-name">{g.name}</span>
+              <span className="hm-group-name">{groupWords(g.name, Math.max(0, g.box.w - GAP) - 12 - (g.value != null && g.box.w >= 150 ? (textWidth(figure(g.value), 500) * 11.5) / 10 + 8 : 0), textWidth)}</span>
               {g.value != null && g.box.w >= 150 && <span className="hm-group-fig">{figure(g.value)}</span>}
             </div>
           )}

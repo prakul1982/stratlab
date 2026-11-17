@@ -79,11 +79,13 @@ export function moodDay(m: Pick<PulseMood, "session" | "behind"> | null | undefi
 }
 
 /** The line that says a read is of an earlier session than the index levels above it, or null. */
-export function moodBehindNote(m: Pick<PulseMood, "session" | "behind"> | null | undefined, closedDay: string | null, dayText: (iso: string) => string): string | null {
+export function moodBehindNote(m: (Pick<PulseMood, "session" | "behind"> & { is_open?: boolean }) | null | undefined, closedDay: string | null, dayText: (iso: string) => string): string | null {
   const own = moodDay(m, closedDay);
   if (!m?.session || own !== m.session || own === closedDay) return null;
   const newer = m.behind ?? closedDay;
-  return `These figures are of the ${dayText(m.session)} session${newer ? `; the ${dayText(newer)} session's are being read` : ""}.`;
+  // LIVE10A-010: while the newer session still trades, what is read is its figures so far, never its (not yet existing) closing read
+  const what = m.is_open ? `the ${newer ? dayText(newer) : ""} session's figures so far are being read` : `the ${newer ? dayText(newer) : ""} session's are being read`;
+  return `These figures are of the ${dayText(m.session)} session${newer ? `; ${what}` : ""}.`;
 }
 
 /** A row's move: a yield's in basis points ("+12 bp"), every other one in percent (LIVE7A-023: "4.98% +2.45%" was a 12 bp rise). */

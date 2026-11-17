@@ -215,6 +215,8 @@ export interface PulseMood {
   pending?: boolean; region: Region; is_open: boolean; today: string; levels_at: string | null; read_at?: string | null;
   /** a copy from before the open or close, answered while the fresh read goes on (LIVE4-024) */
   refreshing?: boolean;
+  /** a copy read while the market traded, served after the close while the closing read is written (LIVE10A-001) */
+  during?: boolean;
   /** the session the figures are of (the index's own day), and, on a copy behind the levels, the newer session being read (LIVE7A-001) */
   session?: string | null; behind?: string | null;
   headline: string; lines: string[];

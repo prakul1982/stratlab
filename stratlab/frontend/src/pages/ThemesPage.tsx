@@ -26,6 +26,8 @@ const PRICE_TRIES = 6;
 export const emptyNames = (names: string[]): string => `the ${names.length === 1 ? "layer" : "layers"} ${names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`}`;
 const PRICE_EVERY_MS = 8000;
 const LISTING_TRIES = 8;
+const DIVE_TRIES = 6;              // LIVE10A-008: asks for a dive being read again behind the page, 20 s apart
+const DIVE_EVERY_MS = 20_000;
 // a map whose AI parts are still being written behind it is asked again on its own, every 5 s for 90 s, then the page stops asking
 // (THEMES item 6; LIVE3-001: the base shows at once, the AI's layers, explanations and checks fill in after)
 const CHECK_TRIES = 18;
@@ -83,7 +85,15 @@ export function ThemesPage() {
     // all back"); a new theme or market clears them in run()
     setDiveError(null);
     const again = refreshed.current; refreshed.current = false;
-    themeApi.dive(region, q, again).then((d) => live && setDive(d)).catch((e) => live && setDiveError((e as Error).message));
+    // LIVE10A-008: a kept dive behind a newer close comes at once marked "updating" while the server reads the new one; the page asks
+    // again a few times, quietly, and takes the new one when it is in
+    let diveTimer: ReturnType<typeof setTimeout> | undefined, diveTries = 0;
+    const getDive = (fresh: boolean) => themeApi.dive(region, q, fresh).then((d) => {
+      if (!live) return;
+      setDive(d);
+      if (d.updating && ++diveTries <= DIVE_TRIES) diveTimer = setTimeout(() => getDive(false), DIVE_EVERY_MS);
+    }).catch((e) => { if (live && !diveTries) setDiveError((e as Error).message); });
+    getDive(again);
     setNewsBusy(true); themeApi.news(region, q).then((n) => live && setNews(n.items)).catch(() => live && setNews(null)).finally(() => live && setNewsBusy(false));
     themeApi.business(region, q).then((b) => live && setBiz(b)).catch(() => live && setBiz(null));
     // LIVE7A-007: the server matches new listings beside the request and answers "pending" meanwhile; the page asks again a few times
@@ -96,7 +106,7 @@ export function ThemesPage() {
       if (l.pending && ++ipoTries < LISTING_TRIES) ipoTimer = setTimeout(listings, PRICE_EVERY_MS);
     }).catch(() => live && setIpos({ items: [], checked: false }));
     listings();
-    return () => { live = false; if (ipoTimer) clearTimeout(ipoTimer); setNewsBusy(false); };
+    return () => { live = false; if (ipoTimer) clearTimeout(ipoTimer); if (diveTimer) clearTimeout(diveTimer); setNewsBusy(false); };
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [key]);
   // prices: read at a gentle pace on the server; asked again while some companies are still waiting
@@ -105,13 +115,15 @@ export function ThemesPage() {
     let live = true, tries = 0, timer: ReturnType<typeof setTimeout> | undefined;
     // busy while a read is out or another is coming: the bar stops when the page stops asking, even with some prices still not read
     // (owner, 7 Nov: "after finishing it's still loading")
+    // LIVE10A-008: the bar shows for the first read only; the companies still waiting are asked for again quietly and the note under the
+    // table says how many are not read yet ("Reading the rest of the companies' price histories…" stayed on Semiconductors and Automotive)
     const go = () => {
-      setPricesBusy(true);
+      if (!tries) setPricesBusy(true);
       themeApi.prices(region, q).then((p) => {
         if (!live) return;
         setPrices(p);
+        setPricesBusy(false);
         if (p.pending > 0 && ++tries < PRICE_TRIES) timer = setTimeout(go, PRICE_EVERY_MS);
-        else setPricesBusy(false);
       }).catch(() => { if (live) setPricesBusy(false); });
     };
     go();
@@ -156,9 +168,12 @@ export function ThemesPage() {
           <AlreadyRead region={region} typed={text} current={q} onPick={go} />
           <FormActions>
             <button className="btn" disabled={busy}>{busy ? "Mapping…" : "Map it"}</button>
+          </FormActions>
+          {/* LIVE10A-021: the ideas are their own row under the button ("Map it" sat inside the chip row, one idea alone on a second line) */}
+          <div className="k-row theme-ideas" data-testid="theme-ideas">
             <span className="k-small k-muted">Or try</span>
             {THEME_IDEAS[region].map((t) => <button key={t} type="button" className="btn quiet sm" onClick={() => go(t)}>{t}</button>)}
-          </FormActions>
+          </div>
         </FormGrid>
       </Card>
       {/* R19: the themes the person saved, each with when it was last read, Open, Update (what changed since), Rename and Remove */}

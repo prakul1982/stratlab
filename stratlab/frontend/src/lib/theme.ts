@@ -41,6 +41,8 @@ export interface Dive {
   region: Region; sector: string; as_of: string | null; /** how many companies are at an earlier close than `as_of` (LIVE7A-003) */ as_of_older?: number; unit: string | null; basis: string; members: number; company_wide: string[];
   /** the theme's EBITDA margins are mostly filed in whole points: its medians print whole (LIVE7A-009) */
   ebitda_whole?: boolean;
+  /** a kept dive served while the newer one is read behind the page (LIVE10A-008) */
+  updating?: boolean;
   layers: Layer[]; chain: { rows: ChainRow[]; line: string | null; highest: string | null; lowest: string | null };
   subs: { name: string; detail: string; companies: SubCompany[] }[];
   placements?: { checked: boolean; pending: number; left_out: number; placed: number; unconfirmed?: number } | null;

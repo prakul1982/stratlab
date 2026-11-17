@@ -1090,9 +1090,14 @@ def performance(row: dict, yahoo, today: date | None = None, now: datetime | Non
                     "change_pct": pct(lt) if lt else None, "listed": listed, "basis": "exchange"}
         return None
     last = bars[-1]
-    return {"issue_price": issue, "listing_price": first["o"], "listing_change_pct": pct(first["o"]), "day_close": first["c"],
-            "day_change_pct": pct(first["c"]), "latest": last["c"], "latest_date": last["t"][:10], "change_pct": pct(last["c"]),
-            "listed": first["t"][:10], "basis": "prices"}
+    # LIVE10A-016: the listing price is the listing day's own opening price; a first candle days after the listing (an SME issue whose early
+    # sessions the daily prices lack: VPFL "₹76.65", its 13 Nov close, for a 9 Nov listing that opened at ₹94.00) is no listing price
+    on_day = first["t"][:10] == listed and first.get("o") is not None
+    lp = first["o"] if on_day else None
+    return {"issue_price": issue, "listing_price": lp, "listing_change_pct": pct(lp) if lp else None,
+            "day_close": first["c"] if on_day else None, "day_change_pct": pct(first["c"]) if on_day else None,
+            "latest": last["c"], "latest_date": last["t"][:10], "change_pct": pct(last["c"]),
+            "listed": first["t"][:10] if on_day else listed, "basis": "prices"}
 
 
 US_CLOSE_SETTLED = (16, 15)            # New York time: after the 16:00 close and the closing print, a US daily candle is the day's close (LIVE1A-060)

@@ -63,7 +63,7 @@ export function MoodCard({ m, region, updating = false, behindNote }: { m: Pulse
   return (
     <Card testId="pulse-mood-card">
       <CardHead title={behind ? `The mood · ${day(m.session)} session` : "The mood"} info="One short headline and a few lines, each worked out from the tables below with one rounding, so a line and its table cannot disagree. Facts about today, not a forecast. The index levels are in the first table."
-        actions={m.read_at ? <span className="k-row k-note" data-testid="pulse-mood-read">Read {readAt}{updating && <Working inline label="Reading the market again" />}</span> : undefined} />   {/* with its zone (LIVE4-007) */}
+        actions={m.read_at ? <span className="k-row k-note" data-testid="pulse-mood-read">Read {readAt}{m.during ? ", during the session" : ""}{updating && <Working inline label="Reading the market again" />}</span> : undefined} />   {/* with its zone (LIVE4-007) */}
       {behindNote && <p className="k-note" data-testid="pulse-mood-behind">{behindNote}</p>}
       {m.headline ? <p className="inv-summary" data-testid="pulse-mood"><b>{behind ? `On ${day(m.session)}: ${m.headline}` : m.headline}</b></p> : <p className="k-small k-muted">The tables below are the day's figures; their summary isn't available right now.</p>}
       {m.lines.length > 0 && <ul className="k-list" data-testid="pulse-mood-lines">{m.lines.map((l) => <li key={l}>{l}</li>)}</ul>}
@@ -87,7 +87,8 @@ export function BreadthTable({ b: given, open = true, behind = false }: { b: Non
     // the live count's own quarter-hour in its header, so Mood's count and Breadth's are each labelled with their round (LIVE4-005)
     { key: "now", header: b.live ? (b.at ? `Today, ${b.at}` : "Today") : day(b.day), numeric: true, brief: true, cell: (r) => (r.now == null ? (b.live ? <span className="k-muted" title="Counted from the exchange's evening price file">{waiting}</span> : "–") : r.kind === "share" ? `${r.now.toFixed(1)}%` : whole(r.now)) },
     { key: "prev", header: day(b.prev_day) || "Day before", numeric: true, cell: (r) => (r.before == null ? "–" : r.kind === "share" ? `${r.before.toFixed(1)}%` : whole(r.before)) },
-    { key: "chg", header: "Change", numeric: true, cell: (r) => (r.change == null ? "–" : <Delta value={r.change}>{r.kind === "share" ? signedPts(r.change) : signedWhole(r.change)}</Delta>) },
+    // LIVE10A-024: more stocks falling or at 52-week lows is no good news: those rows' changes in the plain chip ("New 52-week lows ▲+1" was green)
+    { key: "chg", header: "Change", numeric: true, cell: (r) => (r.change == null ? "–" : <Delta neutral={r.key === "dec" || r.key === "lows"} value={r.change}>{r.kind === "share" ? signedPts(r.change) : signedWhole(r.change)}</Delta>) },
   ];
   return (
     <Card testId="pulse-breadth">

@@ -5,6 +5,7 @@ from contextlib import contextmanager
 import binascii
 from concurrent.futures import ThreadPoolExecutor, wait as wait_all
 import json
+import os
 import math
 import logging
 from html import escape as html_escape
@@ -2468,6 +2469,34 @@ def rotation_after_close(now: datetime | None = None) -> list[str]:
     return done
 
 
+_rotation_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="rotation-behind")
+ROTATION_BEHIND = os.environ.get("READ_BEHIND", "1").strip().lower() not in ("0", "false", "no", "off")    # off in the test suite
+_rotation_busy: set = set()
+_rotation_lock = threading.Lock()
+
+
+def _rotation_behind(region: str, set_id: str, interval: str, tail: int, name: str) -> bool:
+    """LIVE10A-011: a shared rotation chart worked out again on one worker (once per chart at a time, four waiting at most); False when full."""
+    k = (region, set_id, interval, tail)
+    with _rotation_lock:
+        if k in _rotation_busy:
+            return True
+        if len(_rotation_busy) >= 4:
+            return False
+        _rotation_busy.add(k)
+
+    def run():
+        try:
+            rotation_run(region, set_id, None, interval, tail, name)
+        except Exception as e:
+            print("rotation behind the page:", region, set_id, str(e)[:120])
+        finally:
+            with _rotation_lock:
+                _rotation_busy.discard(k)
+    _rotation_pool.submit(run)
+    return True
+
+
 def rotation_kept(region: str, last_key: str, now: datetime | None = None) -> dict | None:
     """The kept rotation chart when it is at the market's latest close and of this version, without its name and market; else None."""
     try:
@@ -2516,6 +2545,13 @@ def sector_rotation(region: str = "IN", set: str = "sectors", interval: str = "w
         out = rotation_kept(region, last_key)
         if out is not None:
             _results.set(key, out, 600)
+        else:
+            # LIVE10A-011: a kept copy a close behind (the after-close copy not made yet, or made before the day's candles were out) is served
+            # at once, dated by its own candles, and the chart is worked out again behind it (03:50 ET, 12 h after the close, the page said
+            # "Still working…" while every member's prices were read again inside the request)
+            older = db.json_value(db.get_setting(last_key), {})
+            if isinstance(older, dict) and older.get("rows") and older.get("v") == rotation.VERSION and ROTATION_BEHIND and _rotation_behind(region, set, interval, tail, name):
+                return ok({**older, "skipped": [public_text(x) for x in older.get("skipped") or []], "updating": True})
     if out is None:
         try:
             out = rotation_run(region, set, members, interval, tail, name if shared else None)

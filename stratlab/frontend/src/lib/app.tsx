@@ -47,12 +47,13 @@ interface AppState {
   /** Indian futures and options (Pro) */
   fno: boolean;
   level: Level | null;
-  setLevel: (l: Level) => Promise<void>;
+  setLevel: (l: Level) => Promise<boolean>;
   /** What the user came for. Orders the menu, the home page and the examples; never hides anything. */
   focus: Focus | null;
-  setFocus: (f: Focus) => Promise<void>;
+  setFocus: (f: Focus) => Promise<boolean>;
   /** Several preferences in one save, like the welcome question's answers. */
-  savePrefs: (p: Prefs, quiet?: boolean) => Promise<void>;
+  /** whether the server kept it (LIVE10A-023: Settings says "Saved" or that it couldn't save) */
+  savePrefs: (p: Prefs, quiet?: boolean) => Promise<boolean>;
   /** The menu showing: one space (Trade, Invest, Money) or all of them. */
   space: SpaceView;
   /** Show another space's menu. `save` keeps it as the account's choice too (the switcher); a deep link into another
@@ -242,7 +243,7 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
     const body = p.space ? { ...p, space: viewToServer(p.space) } : p;
     const sent = prefsQueue.current.then(() => api("/me/prefs", { method: "PUT", body }));
     prefsQueue.current = sent.catch(() => undefined);
-    try { await sent; } catch (e) { if (!quiet) fail(e); }
+    try { await sent; return true; } catch (e) { if (!quiet) fail(e); return false; }
   }, [fail]);
   const setLevel = useCallback((l: Level) => savePrefs({ level: l }), [savePrefs]);
   const setFocus = useCallback((f: Focus) => savePrefs({ focus: f }), [savePrefs]);

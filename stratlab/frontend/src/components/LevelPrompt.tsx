@@ -28,7 +28,7 @@ export const FOCUSES: [Focus, string, string][] = [
  * step. The experience level sits under the choices, left for them to pick (the standard layout if they do not), and so does which companies the
  * calendars and Invest home open on (every company unless they pick their own stocks); picking what you came for answers all of them. None
  * hides anything, and all can be changed in Settings. */
-export function LevelPrompt({ onDone }: { onDone: (saved: Promise<void>, answered: boolean, focus?: Focus) => void }) {
+export function LevelPrompt({ onDone }: { onDone: (saved: Promise<unknown>, answered: boolean, focus?: Focus) => void }) {
   const { me, level, focus, savePrefs } = useApp();
   const [chosen, setChosen] = useState<Level | "">(level ?? "");        // nothing is picked for them
   // which companies the calendars and Invest home open on (owner, 5 Nov: "ask while setting up a new user"): every company unless they say

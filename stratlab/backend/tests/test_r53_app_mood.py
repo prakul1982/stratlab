@@ -27,8 +27,9 @@ def _job(monkeypatch, answers, mood=None):
 
 def test_the_read_is_written_after_the_close_once_a_day(monkeypatch):
     job, calls = _job(monkeypatch, [])
-    fri = datetime(2026, 11, 13, 15, 50, tzinfo=IST)
-    assert job.tick(fri.astimezone(timezone.utc)) == {}                 # before 16:10 IST nothing (the US is before its close too)
+    # (updated on purpose, LIVE10A-001: India's read is first tried at 15:45 IST, after the closing auction, no longer 16:10)
+    fri = datetime(2026, 11, 13, 15, 40, tzinfo=IST)
+    assert job.tick(fri.astimezone(timezone.utc)) == {}                 # before 15:45 IST nothing (the US is before its close too)
     got = job.tick(datetime(2026, 11, 13, 16, 15, tzinfo=IST).astimezone(timezone.utc))
     assert got == {"IN": "written"} and calls == ["IN"]
     job.tick(datetime(2026, 11, 13, 16, 20, tzinfo=IST).astimezone(timezone.utc))
