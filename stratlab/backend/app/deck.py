@@ -168,13 +168,19 @@ def fit_paras(paras: list[str], size: float, width: float, height: float, bold=F
     return out
 
 
+_SENT_END = re.compile(r"(?<![A-Z]\.)(?<!\b[A-Z])(?<!\bInc)(?<!\bINC)(?<!\bCorp)(?<!\bLtd)(?<!\bCo)(?<!\bPvt)(?<!\bNo)(?<!\bSt)(?<!\bDr)"
+                       r"(?<!\bvs)(?<!\bU\.S)[.!?](?= )")
+
+
 def sentences(text: str, limit: int) -> str:
     """Whole sentences up to `limit` characters: never stops mid-sentence."""
     text = re.sub(r"\[\d+\]", "", re.sub(r"\s+", " ", text or "")).strip()
     cut = text[:limit]
     if len(text) <= limit and text[-1:] in ".!?":
         return text
-    end = max(cut.rfind(". "), cut.rfind("? "), cut.rfind("! "))
+    # r63e (the live R62 Railroads deck: C.H. Robinson's line printed as "C.H. Robinson Worldwide, Inc.", its sentence ended at "Inc."): a
+    # full stop after a legal form or an initial ends no sentence
+    end = max((m.start() for m in _SENT_END.finditer(cut)), default=-1)
     if len(text) <= limit:                   # short: drop only a trailing half-sentence ("…East and Africa. It is")
         return text[:end + 1] if end > 0 else text
     if end > 0:                              # R35: the whole sentences that fit, however few (never a second one cut to "…monoclonal…")
@@ -2146,6 +2152,26 @@ def note_h(text: str, w: float = CW) -> float:
 
 READ_NO_LINE = "Description read; no sentence on its work a table can show"          # r60 (LIVE9A-004): description-verified, no line
 NO_WORDS = "No description in its own words yet"          # LIVE6-007: the page's words for a company with none (theme_base.NO_WORDS)
+
+
+def layer_cell(text: str, layer: str, limit: int) -> str:
+    """r63e (the R62 replay of Airlines against the live R60 deck: Adani Enterprises in "Airport operators" as "Adani Enterprises Ltd has
+    business interests in various economic areas such as mining", its words naming airports past the cell's 110 characters): a company's
+    words for a table cell (whole_clause) that say no word of its layer's name where its whole words do keep the item of its list that says
+    it, after an ellipsis ("… airports")."""
+    got = whole_clause(text, limit)
+    if not got or not layer:
+        return got
+    from .intel.theme_base import says_name
+    if says_name(layer, [got]) is not False:
+        return got
+    flat = re.sub(r"\[\d+\]", "", re.sub(r"\s+", " ", text or "")).strip()
+    items = [x.strip(" .") for x in re.split(r"[,;:()]|\s(?:and|or|including|such as)\s", flat[len(got):], flags=re.I)]
+    item = next((x for x in items if x and len(x) <= limit // 2 and says_name(layer, [x])), "")
+    if not item:
+        return got
+    head = whole_clause(text, max(24, limit - len(item) - 3))
+    return f"{head} … {item}" if says_name(layer, [head]) is False else head
 
 
 def _what(text: str, name: str = "") -> str:
@@ -4509,7 +4535,7 @@ def coverage_line(v: dict, cov: dict) -> str:
 
 
 # ---------- R18: one formatter, one scheme of layers, a short core ----------
-THEME_DECK_VERSION = 74                  # r62 (R62, the owner's review of the live R60 decks): members not checked yet said provisional in the layers' counts, NII / assets beyond half of assets n.m., the revenue basis under the tables it is of, FFO / AFFO / P/FFO and loss / expense ratios in their families' columns, the sources of the companies adding up, core / adjacent / outside the core business; r60 (R60): layers of one company whose own words say what they are kept and named as one company on the "Smaller layers" page, with no median, range or ranking; the placement's concepts, format and kind rules; r59 (R59): the placement's listed_out (a layer never mostly left out of its figures, a company moved in on no line of its words back where it was) and the figures' window; r582 (R58.2): a description-verified company whose words hold no line a table shows said apart from one with no description, layers of one company gone, names their companies' lines say; r581 (R58.1): layer names reverted where a rename only added words its companies don't say, the quoted words of a company kept in the theme; r58 (R58, the owner's review of the live R57.2 decks): a row taller than a page carried on in pieces, a coverage fall said in companies new to the theme and core vs adjacent, a removal's quoted words with no bracket of their own, a kept company's reason in words; r572 (R57.2, the live R57.1 decks): a company in its layer's figures as the map placed it marked so, a removal the map no longer names said with its own words; p57 (R56, the owner's review of the live R56 decks): a published member kept through a re-check said so, a company leaving the figures never said to leave the theme, a layer named by what its companies say; t56 (R55, the owner's review of the live R55 decks): a removal for a listing reason under its own heading in the change log, every removal with its business-membership or listing reason, a fall in the informative share said with why and a lost layer with where its companies went; v55 (R55, the owner's review of the live R54 decks): a company not checked yet (no words of its own stored, or a listing line whose issuer was not looked up) said apart from one whose own words describe other work, with what is missing; companies outside the theme's definition screened out with their principal business; the membership check's progress said apart from the companies with figures; c54 (R53 review): scope boundaries (lenders, contractors, laboratories and primary producers as adjacent participants outside a theme whose name states them; a layer of such a business an adjacent layer), a member with no stored figures listed as "figures not available", one company under two symbols merged when its stored description names the other, the change log saying a merged symbol and a restored layer, moves judged on what a layer sells (updated on purpose); d53 (R53): the honest membership row, a partial map said in the headline and on the data-confidence page, the same company twice, core and adjacent, spending ahead of revenue, an adjacent layer said on its page, the figure-sources head counting arithmetic-only figures apart, every addition with its reason, moves between layers and layer changes in the cohort row, exclusions held from an earlier version (updated on purpose); gl52 (R52): exclusion reasons say what happened ("no description found in any source"), no low-confidence model printed, a layer line names a way of earning only for 3 or more, acronyms keep their case, a conglomerate's theme segment or "(whole company)" in Size and shape, halves of a split layer ranked as one, stock pay apart not ranked, the cohort row against the versions stored since (updated on purpose); rv51 (R51): business-model reasons from the layer's own records; principal business keeps a company in the theme; financial companies' other income; gl50 (R50): no layer ranked with no way of earning read, the gate failing a deck that does, "N not checked yet", the coverage's "Moved by what its layer is" row, a parent and listed subsidiary (updated on purpose); ex49 (R49): dive text 19, every exclusion's precise reason on layer pages and rolls, the capital-intensity proxy labelled, the business-model rule in each comparison, one condensed comparison per page (updated on purpose); vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R47): dive text 18, the coverage page's "Coverage flag" row (under 60% in informative layers, or 8 points or more fewer than the previous live placement), layers' lines say who earns another way (updated on purpose); vf46 (R46): dive text 17, each checked figure's source record, net above EBITDA reconciled line by line (updated on purpose); tx2 (R46, the outside review of the live R45 decks): the coverage's "Screening" row (considered = screened out as another business + members, confirmed, with figures, in informative layers, eligible for each metric), the screened-out companies said to be candidates, never members, "Considered" counting them apart from the members, a coverage table taller than a page continued on the next; c1 (R44, the outside review of the live R43 decks): the coverage's "From other industries" row (each company the map names from another industry, why it is in the theme and, apart from that, whether it is in its layer's figures), a layer named by how its companies earn says on its page why it is never ranked, layers of one official industry made from "Other"; R44 (lane v1, the outside review of the live R43 decks): each unusual figure verified against its own filed figures, not reconciled or invalid, one record each, and the data-confidence page's "Verified figures" with the count; the coverage's "In informative layers: N of M (P%)" said once; d1 (the outside review of the live Release 41 decks): the "Other" count split into fit none and not checked yet, one count on every page; every company in a layer or "Other"; no half of a split layer ranked, no comparison on a gap under a point, the peer P/E gap only against named like-for-like peers; layers of two companies or fewer on the "Smaller layers" page, a layer page of at least 5 companies; the coverage on a page of its own when the checks need the room; a company in its layer's figures on its industry said so; LIVE7A (lane t1): the real minus in every range and median, one precision a column, text or chart, layer parts that add up to the change shown, a row's mark its kept reason and a mark's note only with a row that carries it, the tailwinds' contents line in the page's own counts, medians of whole-point margins printed whole; R41: a coloured table cell (the highest and lowest layer, drawn bold) measured bold, so its row holds it whole; a cut paragraph never ends on a joining word; R40: the peer set said as "this theme" (no "the the" on a wrap), a repeated word said once on the finished pages and counted, a layer named only by how its companies earn shown and never ranked, a market-value half with fewer than 3 companies in its figures undone, the coverage table's "In no layer" and "Another business" rows; R38: foreign legal endings left off a label before any of it is cut, no word of a table cell broken inside; LIVE6: calendar price periods, own words only, one market value per company, short charts and empty tables dropped; q1: the appendix counts "with figures" by the dive's rule, a layer's cohort that fell against the run before on the data-confidence page; n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
+THEME_DECK_VERSION = 75                  # r63e (R63): one name for a layer's two halves, one money unit in the operating figures' table, a cell's words keeping the item that says its layer, a sentence never ended at a legal form, the P/E history's other memberships said; r62 (R62, the owner's review of the live R60 decks): members not checked yet said provisional in the layers' counts, NII / assets beyond half of assets n.m., the revenue basis under the tables it is of, FFO / AFFO / P/FFO and loss / expense ratios in their families' columns, the sources of the companies adding up, core / adjacent / outside the core business; r60 (R60): layers of one company whose own words say what they are kept and named as one company on the "Smaller layers" page, with no median, range or ranking; the placement's concepts, format and kind rules; r59 (R59): the placement's listed_out (a layer never mostly left out of its figures, a company moved in on no line of its words back where it was) and the figures' window; r582 (R58.2): a description-verified company whose words hold no line a table shows said apart from one with no description, layers of one company gone, names their companies' lines say; r581 (R58.1): layer names reverted where a rename only added words its companies don't say, the quoted words of a company kept in the theme; r58 (R58, the owner's review of the live R57.2 decks): a row taller than a page carried on in pieces, a coverage fall said in companies new to the theme and core vs adjacent, a removal's quoted words with no bracket of their own, a kept company's reason in words; r572 (R57.2, the live R57.1 decks): a company in its layer's figures as the map placed it marked so, a removal the map no longer names said with its own words; p57 (R56, the owner's review of the live R56 decks): a published member kept through a re-check said so, a company leaving the figures never said to leave the theme, a layer named by what its companies say; t56 (R55, the owner's review of the live R55 decks): a removal for a listing reason under its own heading in the change log, every removal with its business-membership or listing reason, a fall in the informative share said with why and a lost layer with where its companies went; v55 (R55, the owner's review of the live R54 decks): a company not checked yet (no words of its own stored, or a listing line whose issuer was not looked up) said apart from one whose own words describe other work, with what is missing; companies outside the theme's definition screened out with their principal business; the membership check's progress said apart from the companies with figures; c54 (R53 review): scope boundaries (lenders, contractors, laboratories and primary producers as adjacent participants outside a theme whose name states them; a layer of such a business an adjacent layer), a member with no stored figures listed as "figures not available", one company under two symbols merged when its stored description names the other, the change log saying a merged symbol and a restored layer, moves judged on what a layer sells (updated on purpose); d53 (R53): the honest membership row, a partial map said in the headline and on the data-confidence page, the same company twice, core and adjacent, spending ahead of revenue, an adjacent layer said on its page, the figure-sources head counting arithmetic-only figures apart, every addition with its reason, moves between layers and layer changes in the cohort row, exclusions held from an earlier version (updated on purpose); gl52 (R52): exclusion reasons say what happened ("no description found in any source"), no low-confidence model printed, a layer line names a way of earning only for 3 or more, acronyms keep their case, a conglomerate's theme segment or "(whole company)" in Size and shape, halves of a split layer ranked as one, stock pay apart not ranked, the cohort row against the versions stored since (updated on purpose); rv51 (R51): business-model reasons from the layer's own records; principal business keeps a company in the theme; financial companies' other income; gl50 (R50): no layer ranked with no way of earning read, the gate failing a deck that does, "N not checked yet", the coverage's "Moved by what its layer is" row, a parent and listed subsidiary (updated on purpose); ex49 (R49): dive text 19, every exclusion's precise reason on layer pages and rolls, the capital-intensity proxy labelled, the business-model rule in each comparison, one condensed comparison per page (updated on purpose); vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R47): dive text 18, the coverage page's "Coverage flag" row (under 60% in informative layers, or 8 points or more fewer than the previous live placement), layers' lines say who earns another way (updated on purpose); vf46 (R46): dive text 17, each checked figure's source record, net above EBITDA reconciled line by line (updated on purpose); tx2 (R46, the outside review of the live R45 decks): the coverage's "Screening" row (considered = screened out as another business + members, confirmed, with figures, in informative layers, eligible for each metric), the screened-out companies said to be candidates, never members, "Considered" counting them apart from the members, a coverage table taller than a page continued on the next; c1 (R44, the outside review of the live R43 decks): the coverage's "From other industries" row (each company the map names from another industry, why it is in the theme and, apart from that, whether it is in its layer's figures), a layer named by how its companies earn says on its page why it is never ranked, layers of one official industry made from "Other"; R44 (lane v1, the outside review of the live R43 decks): each unusual figure verified against its own filed figures, not reconciled or invalid, one record each, and the data-confidence page's "Verified figures" with the count; the coverage's "In informative layers: N of M (P%)" said once; d1 (the outside review of the live Release 41 decks): the "Other" count split into fit none and not checked yet, one count on every page; every company in a layer or "Other"; no half of a split layer ranked, no comparison on a gap under a point, the peer P/E gap only against named like-for-like peers; layers of two companies or fewer on the "Smaller layers" page, a layer page of at least 5 companies; the coverage on a page of its own when the checks need the room; a company in its layer's figures on its industry said so; LIVE7A (lane t1): the real minus in every range and median, one precision a column, text or chart, layer parts that add up to the change shown, a row's mark its kept reason and a mark's note only with a row that carries it, the tailwinds' contents line in the page's own counts, medians of whole-point margins printed whole; R41: a coloured table cell (the highest and lowest layer, drawn bold) measured bold, so its row holds it whole; a cut paragraph never ends on a joining word; R40: the peer set said as "this theme" (no "the the" on a wrap), a repeated word said once on the finished pages and counted, a layer named only by how its companies earn shown and never ranked, a market-value half with fewer than 3 companies in its figures undone, the coverage table's "In no layer" and "Another business" rows; R38: foreign legal endings left off a label before any of it is cut, no word of a table cell broken inside; LIVE6: calendar price periods, own words only, one market value per company, short charts and empty tables dropped; q1: the appendix counts "with figures" by the dive's rule, a layer's cohort that fell against the run before on the data-confidence page; n1: the appendix roll names every company over continued rows, the completeness gate (no empty table page, declared counts made by the rows), names without filing tokens, unfilled tokens checked, a card line ends on a whole clause, the capital-per-revenue figures behind "not ranked", buy/sell as advice only as a recommendation; R36: ranking headlines say which layers they rank and why a shown layer is not ranked, "Dated company updates" with day, status, source and context, text repaired before the gate; lane m1: a layer's counts from one record of who is in its calculations ("14 of 17" in every table, head and roll), each left-out company's reason before its name, materials suppliers out of equipment layers; R35: a company line never cut at "Inc.", sub-theme members by their whole description, labels said shorter and never cut, the layout gate, a wide table's chart on its own page, the peer P/E's price date on every line, who is in a layer's calculations and why not, the appendix's layer names in full; R34: ranking scope line, shown-companies label; R32: chip designers as fabless, one layer a model-named primary model, an empty market-value half undone; R31: headline floor of 5, commodity sub-basis, metrics not in the sources, partial reads; part of a kept deck's key (theme_routes.DECK_CACHE): a file made before a deploy is made again
 # a figure that is a whole number prints whole: "15.0%" is 15%, "43.0x" is 43x, "0.0 pts" is 0 pts; any other keeps its one decimal. Only a
 # figure followed by its unit, a separator or the end, so a name like "Web 3.0 Ltd" is left as written
 _WHOLE = re.compile(r"(?<![\w.,])(\d[\d,]*)\.0(?![\d.])(?=%|x\b| ?(?:pts|points|bn|m|cr|lakh|crore|billion|million|units)\b|\s*$|[,;:)\]](?!\d)|\s(?![A-Za-z]))")
@@ -7199,7 +7225,7 @@ def _smaller_layers(slides: list, small: list, amt, eyebrow: str) -> None:
                                                   MAP_TAG if c.get("by_map") else "")
             name = (f"{c['name']} ({mark})" if mark else c["name"]) \
                 + (f"; also listed, not confirmed: {', '.join(others)}" if others and i == len(sure) - 1 else "")
-            rows_.append(({**x, "layer": x["layer"] if i == 0 else ""}, c, name))
+            rows_.append(({**x, "layer": x["layer"] if i == 0 else "", "_of": x["layer"]}, c, name))
             cos.append(c)
     lend = is_lender_set(cos)
     keys = ("revenue", "roe", "net") if lend else ("revenue", "ebitda", "net", "roce")
@@ -7208,7 +7234,8 @@ def _smaller_layers(slides: list, small: list, amt, eyebrow: str) -> None:
     widths = [2.3, 2.3, 3.6] + [col[2] for col in cols] + [1.0]
     # r60 (LIVE9A-004, the live R59 decks: a company "Description-verified" beside "No description in its own words yet"): one whose stored
     # description was read and verified its membership, with no sentence on its work a table can show, is said so, never "no description"
-    body = [[x["layer"], name, whole_clause(_what(c.get("what") or "", c.get("name") or ""), 110)
+    body = [[x["layer"], name, layer_cell(_what(c.get("what") or "", c.get("name") or ""),
+                                       re.sub(r" \((?:larger|smaller)\)$", "", str(x.get("_of") or "")), 110)
              or (READ_NO_LINE if c.get("evidence") == "description_verified" else NO_WORDS)]
             + [co_cell(c, k, amt) for k, _, _ in cols] + [c.get("year") or "–"] for x, c, name in rows_]
     head, body, widths, numeric = drop_empty(head, body, widths, [False, False, False] + [True] * len(cols) + [False], keep=(0, 1, 2))
@@ -8052,7 +8079,61 @@ def _bizval(v, unit) -> str:
         return f"{text}%"
     if u.startswith("₹"):
         return f"₹{text} {u[1:].strip()}".strip()
+    if u[:1] in "$€£" and u[1:2] == " ":           # r63e: "$2,000 million", the sign before the amount as "₹" is
+        return f"{u[0]}{text} {u[1:].strip()}".strip()
     return f"{text} {u}".strip()
+
+
+# r63e (LIVE10A-018, the live Private banks theme: operating figures "₹33,275 billion" beside "₹6,51,491 crore"): one money unit in a table.
+# A currency's amounts filed in another scale are put in the one the table prints: rupees in crore, the deck's Indian unit; any other
+# currency in the scale most of its rows file
+_CURRENCY = (("₹", r"₹|rs\.?|inr|rupees?"), ("$", r"us\$|\$|usd"), ("€", r"€|eur"), ("£", r"£|gbp"))
+_SCALE = (("crore", r"crores?|cr", 1e7), ("lakh", r"lakhs?", 1e5), ("billion", r"billions?|bn", 1e9), ("million", r"millions?|mn|mln|m", 1e6),
+          ("thousand", r"thousands?|k", 1e3))
+
+
+def money_unit(unit) -> tuple[str, str, float] | None:
+    """("₹", "crore", 1e7) for "₹ Cr", "Rs crore" or "INR crore"; ("$", "million", 1e6) for "USD million"; None for a unit that is no
+    amount of money (units, %, MW) or names no scale."""
+    u = str(unit or "").strip().lower()
+    for sym, rx in _CURRENCY:
+        m = re.match(rf"^(?:{rx})\s*", u)
+        if m:
+            rest = u[m.end():].strip()
+            for name, srx, f in _SCALE:
+                if re.fullmatch(srx, rest):
+                    return sym, name, f
+            return None
+    return None
+
+
+def one_money_unit(rows: list) -> list:
+    """The operating figures' rows with each currency's amounts in one scale (value, previous and year-ago; the changes are ratios and stay),
+    the unit said as "₹ crore" or "$ million"; rows of a unit that is no money, and headings, as they are. Rows already in one scale are
+    unchanged."""
+    by: dict = {}
+    for r in rows:
+        mu = None if isinstance(r, dict) and "group" in r else money_unit(r.get("unit"))
+        if mu:
+            by.setdefault(mu[0], {}).setdefault((mu[1], mu[2]), 0)
+            by[mu[0]][(mu[1], mu[2])] += 1
+    to = {}
+    for sym, cnt in by.items():
+        if len(cnt) < 2 and not (sym == "₹" and next(iter(cnt))[0] != "crore"):
+            continue
+        to[sym] = ("crore", 1e7) if sym == "₹" else max(cnt.items(), key=lambda kv: (kv[1], kv[0][1] == 1e6))[0]
+    if not to:
+        return rows
+    out = []
+    for r in rows:
+        mu = None if isinstance(r, dict) and "group" in r else money_unit(r.get("unit"))
+        if not mu or mu[0] not in to or mu[1] == to[mu[0]][0]:
+            out.append(r)
+            continue
+        k = mu[2] / to[mu[0]][1]
+        out.append({**r, "unit": f"{mu[0]} {to[mu[0]][0]}", "unit_filed": r.get("unit"),
+                    **{f: round(r[f] * k, 2) for f in ("value", "prev", "year_ago") if isinstance(r.get(f), (int, float))}})
+    return out
 
 
 def _bizchg(c, unit) -> str:
@@ -8092,7 +8173,7 @@ def _biz_slides(slides: list, title: str, rows: list, eyebrow: str, today: date 
     head = ["Company", "Period", "Latest", "Previous", "Year ago", "On previous", "On the year", "Filed"]
     widths = [3.2, 1.35, 1.6, 1.5, 1.5, 1.15, 1.15, 1.3]
     out, held = [], False
-    for r in rows:
+    for r in one_money_unit(rows):
         if isinstance(r, dict) and "group" in r:
             out.append(r)
             continue
@@ -8281,6 +8362,10 @@ def _numbers(slides: list, v: dict, sec: dict, cap, eb, left_out: list, name_of)
         if val.get("ev_missing"):
             notes.append(f"EV/EBITDA is n/a for {_n(val['ev_missing'], 'company', 'companies')} where debt, cash or EBITDA isn't stored; the market's debt and "
                          "cash aren't kept, so it has no comparison.")
+        if val.get("history_apart"):            # r63e: kept weekly points of another membership, out of the line
+            ha = val["history_apart"]
+            notes.append(f"{_n(ha['points'], 'earlier weekly median', 'earlier weekly medians')} of another membership "
+                         f"({', '.join(f'{k:,}' for k in ha['n'])} companies, against its {ha['now']:,} now) left out of the theme's P/E history.")
         if len(hist) < MIN_POINTS:
             notes.append("The theme's own P/E history builds forward from its page: it keeps the median once a week"
                          + (f" ({_n(len(hist), 'week')} so far; a line is drawn from {MIN_POINTS})." if hist else "."))

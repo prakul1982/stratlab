@@ -410,6 +410,23 @@ def diff(was: dict, now: dict) -> dict:
             # record gives it (member_why)
             why = (now.get("why") or {}).get(s_) or (now.get("rest_why") or {}).get(s_) or ""
             added.append({"symbol": s_, "name": str(r[0]), "layer": rest_layer(now, s_) or "", **({"why": why} if why else {})})
+    # r63e (the live R62 Biotech deck: "added 1: InMed Pharmaceuticals Inc. ...; removed 1: InMed Pharmaceuticals Inc." in one change, one
+    # company kept under one of its two symbols): an addition and a removal of one name in one change are that company under another
+    # symbol: no addition or removal, a move only when its layer changed
+    key_ = lambda r: re.sub(r"[^a-z0-9]+", " ", str(r.get("name") or "").lower()).strip()      # noqa: E731
+    gone_ = {}
+    for r in removed:
+        gone_.setdefault(key_(r), []).append(r)
+    for r in list(added):
+        twin = (gone_.get(key_(r)) or [None])[0] if key_(r) else None
+        if twin is None or twin["symbol"] == r["symbol"]:
+            continue
+        gone_[key_(r)].remove(twin)
+        added.remove(r)
+        removed.remove(twin)
+        if twin.get("layer") and r.get("layer") and twin["layer"] != r["layer"] and (twin["layer"], r["layer"]) not in pairs:
+            moved.append({"symbol": r["symbol"], "name": r["name"], "from": twin["layer"], "to": r["layer"],
+                          "why": f"listed under {r['symbol']} now, {twin['symbol']} before"})
     by_name = lambda r: str(r.get("name") or "").lower()          # noqa: E731
     out = {"removed": sorted(removed, key=by_name), "added": sorted(added, key=by_name), "moved": sorted(moved, key=by_name),
            "layers": events, "restated": sorted(restated, key=by_name)}
