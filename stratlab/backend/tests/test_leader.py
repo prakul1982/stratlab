@@ -274,7 +274,8 @@ def test_a_database_error_at_boot_is_retried_on_the_next_pass(monkeypatch):
         if len(tries) == 1:
             raise ConnectionError("Supabase unreachable")
     monkeypatch.setattr(j, "repair_once", repair)
-    for name in ("restyle_once", "headlines_once", "r7_once", "et_once", "facts_once"):
+    # every other boot step stubbed, found by name, so a new one-off step (Release 65: official_once) needs no edit here (updated on purpose)
+    for name in [n for n in dir(news.Job) if n.endswith("_once") and n != "repair_once"]:
         monkeypatch.setattr(j, name, lambda: None)
     monkeypatch.setattr(j, "tick", lambda now: ticks.append(now))
 
