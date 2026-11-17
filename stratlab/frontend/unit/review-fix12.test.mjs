@@ -84,3 +84,9 @@ test("LIVE10B-026: holdings say each source once with its own one date, and the 
   assert.doesNotMatch(page, /\(\$\{ago\(view\.updated_at\)\}\)/);
   assert.match(page, /oldPart\(view\.sources, view\.updated_at, t\.count/);
 });
+
+test("LIVE10B-034: the tax report's sources line names the fund sales it counts from the CAS, beside the files", () => {
+  const page = read("src/pages/TaxReportPage.tsx");
+  assert.match(page, /return mf\?\.allowed && mf\.count > 0 \? ` · and \$\{mf\.count\.toLocaleString\("en-IN"\)\} mutual fund sale\$\{mf\.count === 1 \? "" : "s"\} from your CAS on Mutual funds` : "";/);
+  assert.match(page, /\{fundSalesLine\(rep\.mf\)\}/);
+});
