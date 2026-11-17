@@ -39,17 +39,21 @@ test("a lock's price sentence is rupees first with the dollar beside each amount
   assert.doesNotMatch(planPriceLine("basic", p), /^Basic is \$/);
 });
 
-test("no browser locale or saved choice picks the currency; checkout asks for the rupee plan as before", () => {
+// (updated on purpose: owner 16 Nov, US dollars for US visitors on a visible "Prices in" switch: the region (lib/homeMarket) picks
+// dollars until the visitor chooses, the page says why, the old picker's saved choice stays cleared, and checkout asks for the rupee
+// plan unless dollars are really charged; su1-email-usd.test.mjs checks the new rules)
+test("no browser locale picks the currency; the old saved choice stays cleared; checkout asks for the rupee plan unless dollars are charged", () => {
   const cur = read("src/lib/currency.ts");
   assert.doesNotMatch(cur, /resolvedOptions\(\)\.timeZone|navigator\.languages/);
   assert.match(cur, /try \{ localStorage\.removeItem\(KEY\); \} catch/);
   const plans = read("src/pages/PlansPage.tsx"), land = read("src/pages/Login.tsx");
-  assert.match(plans, /body: \{ plan, period, currency: "INR" \}/);
+  assert.match(plans, /body: \{ plan, period, currency \}/);
+  assert.match(plans, /const currency = checkoutCur\(cur, usd, period, usdOn\);/);
   assert.match(plans, /\{price\.about && <span className="k-note" data-testid=\{`about-\$\{p\}`\}>\{price\.about\}<\/span>\}/);
-  assert.match(plans, /<li data-testid="usd-note">\{usdNote\(rate, pricing\?\.usd_inr\?\.fallback\)\}<\/li>/);      // one line of the small print (R11)
+  assert.match(plans, /<li data-testid="usd-note">\{cur === "USD" && usd \? usdPricesNote\(usd, period, usdOn\) : usdNote\(rate, pricing\?\.usd_inr\?\.fallback\)\}<\/li>/);      // one line of the small print (R11)
   assert.match(land, /\{about && <span className="small muted" data-testid=\{`about-\$\{p\}`\}>\{about\}<\/span>\}/);
-  for (const src of [plans, land]) assert.doesNotMatch(src, /aria-label="Prices in"|label="Prices in"|In India\? Show prices in ₹/);
-  // the paywall sentences come from the same line (usePlanPrice / planPriceFor)
-  assert.match(cur, /return planPriceLine\(plan, p\);/);
-  assert.match(cur, /return shared\.then\(\(r\) => planPriceLine\(plan, r\)\)/);
+  for (const src of [plans, land]) assert.doesNotMatch(src, /In India\? Show prices in ₹/);
+  // the paywall sentences come from the same line (usePlanPrice / planPriceFor), in the currency shown
+  assert.match(cur, /return planPriceLine\(plan, p, shownCur\(\), usdCheckoutOn\(\)\);/);
+  assert.match(cur, /return shared\.then\(\(r\) => planPriceLine\(plan, r, shownCur\(\), usdCheckoutOn\(\)\)\)/);
 });

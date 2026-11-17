@@ -138,9 +138,9 @@ test("O7: every block of the issue page is a table, the risks have one fold, and
 
 test("LIVE2-013: Free is priced in the money the paid cards are charged in", () => {
   const plans = read("src/pages/PlansPage.tsx"), land = read("src/pages/Login.tsx");
-  // item 34: every card is in rupees now, so Free is "₹0" beside "₹699 (about $8)" on both pages
-  assert.match(plans, /const inr = p === "free" \? 0 : rupees\(p, per\);\n\s+return \{ shown: `₹\$\{inr\.toLocaleString\("en-IN"\)\}`/);
-  assert.match(land, /<div className="serif lp-amount">\{rupees\(p, year\)\}/);
+  // item 34: Free is "₹0" beside "₹699 (about $8)" on both pages; (updated on purpose: owner 16 Nov, US dollars on a visible switch; rupees stay the default outside the US and the charge is said in rupees until dollar checkout is on): "$0" beside dollar prices
+  assert.match(plans, /if \(p === "free"\) return \{ shown: freePrice\(cur, usd\), inr: false, about: null \};/);
+  assert.match(land, /<div className="serif lp-amount">\{price \? price\.shown : freePrice\(cur, usd\)\}/);
 });
 
 test("LIVE2-014, 027, 033: no flat equity line for a session with no trades, the whole-market audit above the form, the dividends list asks again by itself", () => {

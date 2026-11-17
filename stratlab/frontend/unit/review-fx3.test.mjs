@@ -80,7 +80,13 @@ test("RC2B-034, item 34: no visitor is shown another currency first, so there is
   const cur = read("src/lib/currency.ts");
   assert.doesNotMatch(cur, /function country\(\)|offerRupees|pickCurrency/);
   assert.match(cur, /return \{ pricing: p, currency: "INR" as const, status, rate: usdRate\(p\) \};/);
-  for (const f of ["src/pages/Login.tsx", "src/pages/PlansPage.tsx"]) assert.doesNotMatch(read(f), /In India\? Show prices in ₹|aria-label="Prices in"|label="Prices in"/, f);
+  // (updated on purpose: owner 16 Nov, US dollars for US visitors: the currency is now on a switch always in view on both pages,
+  // components/CurrencySwitch.tsx, never a hidden guess with a link back to rupees)
+  for (const f of ["src/pages/Login.tsx", "src/pages/PlansPage.tsx"]) {
+    assert.doesNotMatch(read(f), /In India\? Show prices in ₹/, f);
+    assert.match(read(f), /<CurrencySwitch cur=\{cur\} auto=\{pc\.auto\} onChange=\{pc\.choose\} \/>/, f);
+  }
+  assert.match(read("src/components/CurrencySwitch.tsx"), /<Seg label="Prices in" value=\{cur\}/);
 });
 
 test("DF-018: the US tab opens with the holder's name, then one company's filings", () => {

@@ -117,10 +117,11 @@ test.describe("plans: the right currency at once, the charged amount on the card
     await expect(sec).not.toContainText("₹");
     const before = await page.evaluate(() => (document.querySelector("#faq") as HTMLElement).getBoundingClientRect().top + scrollY);
     release();
-    // DK-001, item 34: every card shows the rupee price it is charged as its main price, the dollars only as "about" beside it
-    await expect(sec.locator('.lp-price[data-plan="basic"] .lp-amount')).toContainText("₹699");
-    await expect(sec.locator('.lp-price[data-plan="pro"] .lp-amount')).toContainText("₹1,999");
-    await expect(sec.getByTestId("about-basic")).toHaveText(/^about \$\d+$/);
+    // DK-001, item 34: a card charged in rupees says the rupee charge; (updated on purpose: owner 16 Nov, a US visitor sees the US
+    // dollar price on the "Prices in" switch, with the rupee amount the card is charged beside it while checkout is in rupees)
+    await expect(sec.locator('.lp-price[data-plan="basic"] .lp-amount')).toContainText("$8");
+    await expect(sec.locator('.lp-price[data-plan="pro"] .lp-amount')).toContainText("$20");
+    await expect(sec.getByTestId("about-basic")).toHaveText("Charged as ₹699 in rupees");
     const after = await page.evaluate(() => (document.querySelector("#faq") as HTMLElement).getBoundingClientRect().top + scrollY);
     // (the heading and the lines under the cards wrap differently on a narrow screen, and a touch screen's switch is 44px
     // tall (R13S-011), so a phone gets more room than a laptop)
@@ -131,8 +132,8 @@ test.describe("plans: the right currency at once, the charged amount on the card
     expect(size, "the charged amount is in readable type").toBeGreaterThanOrEqual(13);
     // the yearly choice says "about" and each card states its exact saving
     await sec.getByRole("radio", { name: "Yearly · about 2 months free" }).click();
-    await expect(sec.locator('.lp-price[data-plan="pro"] .lp-amount')).toContainText("₹19,999");
-    await expect(sec.getByTestId("about-pro")).toHaveText(/^about \$\d+$/);
+    await expect(sec.locator('.lp-price[data-plan="pro"] .lp-amount')).toContainText("$200");
+    await expect(sec.getByTestId("about-pro")).toHaveText("Charged as ₹19,999 in rupees");          // (updated on purpose: owner 16 Nov, as above)
     await expect(sec.locator('.lp-price[data-plan="basic"] .lp-save')).toContainText("Saves");
     await expect(sec.locator('.lp-price[data-plan="free"] .lp-save')).toHaveCount(0);
     await expect(sec.locator('.lp-price[data-plan="basic"] button')).toHaveText("Continue with Google to get Basic");
