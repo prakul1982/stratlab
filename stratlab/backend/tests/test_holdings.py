@@ -24,12 +24,12 @@ def w(monkeypatch):
     built["close"]()
 
 
-def upload(c, name: str, data: bytes | None = None, headers=PRO, mode="replace", data_url=False):
+def upload(c, name: str, data: bytes | None = None, headers=PRO, mode="replace", data_url=False, overlap_ok=False):
     raw = data if data is not None else (FIX / name).read_bytes()
     b64 = base64.b64encode(raw).decode()
     if data_url:
         b64 = "data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64," + b64
-    return c.post("/holdings/import", headers=headers, json={"filename": name, "data": b64, "mode": mode})
+    return c.post("/holdings/import", headers=headers, json={"filename": name, "data": b64, "mode": mode, "overlap_ok": overlap_ok})
 
 
 def held(r) -> dict:
@@ -189,7 +189,8 @@ def test_each_other_broker(w):
 def test_add_mode_keeps_what_was_there(w):
     c = w["client"]
     upload(c, "upstox_holdings.csv")
-    rows = held(upload(c, "generic.csv", mode="add"))
+    # (updated on purpose: LIVE10B-024, adding to a stock already held waits for the user's word, overlap_ok)
+    rows = held(upload(c, "generic.csv", mode="add", overlap_ok=True))
     assert {"BHARTIARTL", "LT", "RELIANCE"} <= set(rows) and rows["TINYCO"]["qty"] == 140
 
 
@@ -551,7 +552,8 @@ def test_a_file_added_to_a_brokers_holdings_keeps_its_shares_through_the_next_sy
     sync sets only the broker's part, and a stock the broker no longer has keeps the file's shares as a plain holding."""
     c = w["client"]
     kite_sync([INFY_KITE])
-    assert upload(c, "x.csv", b"Symbol,Quantity,Average Price\nINFY,4,1500\nTCS,2,3000\n", mode="add").status_code == 200
+    # (updated on purpose: LIVE10B-024, adding to a stock already held waits for the user's word, overlap_ok)
+    assert upload(c, "x.csv", b"Symbol,Quantity,Average Price\nINFY,4,1500\nTCS,2,3000\n", mode="add", overlap_ok=True).status_code == 200
     assert stored()["INFY"]["qty"] == 14 and stored()["TCS"]["qty"] == 2
     kite_sync([INFY_KITE])
     rows = stored()
@@ -572,7 +574,8 @@ def test_a_quantity_typed_over_a_brokers_holding_keeps_the_total_through_the_nex
     with the cost that keeps the average shown (typed or not): the next sync keeps the total and that average."""
     c = w["client"]
     kite_sync([INFY_KITE])
-    upload(c, "x.csv", b"Symbol,Quantity,Average Price\nINFY,4,1500\n", mode="add")
+    # (updated on purpose: LIVE10B-024, adding to a stock already held waits for the user's word, overlap_ok)
+    upload(c, "x.csv", b"Symbol,Quantity,Average Price\nINFY,4,1500\n", mode="add", overlap_ok=True)
     assert stored()["INFY"]["accts"] == {"kite": 10, "added": 4}
     shown = stored()["INFY"]["avg"]
     r = c.put("/holdings", headers=PRO, json={"changes": [{"op": "set", "symbol": "INFY", "qty": 20}]})
@@ -607,7 +610,8 @@ def test_a_quantity_typed_on_a_plain_synced_row_and_through_the_whole_list(w):
 def test_a_quantity_typed_below_the_brokers_part_says_the_next_sync_sets_it_back(w):
     c = w["client"]
     kite_sync([INFY_KITE])
-    upload(c, "x.csv", b"Symbol,Quantity,Average Price\nINFY,4,1500\n", mode="add")
+    # (updated on purpose: LIVE10B-024, adding to a stock already held waits for the user's word, overlap_ok)
+    upload(c, "x.csv", b"Symbol,Quantity,Average Price\nINFY,4,1500\n", mode="add", overlap_ok=True)
     r = c.put("/holdings", headers=PRO, json={"changes": [{"op": "set", "symbol": "INFY", "qty": 6}]})
     assert r.status_code == 200
     assert r.json()["notes"] == ["INFY: 6 is below the 10 Kite holds, so the next Kite read sets it back to 10. "
@@ -620,7 +624,8 @@ def test_a_quantity_typed_below_the_brokers_part_says_the_next_sync_sets_it_back
 def test_an_average_alone_typed_over_a_synced_row_follows_the_brokers_on_the_next_sync(w):
     c = w["client"]
     kite_sync([INFY_KITE])
-    upload(c, "x.csv", b"Symbol,Quantity,Average Price\nINFY,4,1500\n", mode="add")
+    # (updated on purpose: LIVE10B-024, adding to a stock already held waits for the user's word, overlap_ok)
+    upload(c, "x.csv", b"Symbol,Quantity,Average Price\nINFY,4,1500\n", mode="add", overlap_ok=True)
     c.put("/holdings", headers=PRO, json={"changes": [{"op": "set", "symbol": "INFY", "avg": 1000}]})
     assert stored()["INFY"]["avg"] == 1000 and stored()["INFY"]["accts"] == {"kite": 10, "added": 4}
     kite_sync([INFY_KITE])
