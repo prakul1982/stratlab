@@ -31,12 +31,16 @@ import "./trade/paper.css";
 
 const statusTone = (s: string) => (s === "running" ? "ok" : s === "paused" ? "warn" : "plain") as "ok" | "warn" | "plain";
 
-/** The session's candles, updated in place every few seconds: the forming candle grows from the ticks seen so far. */
+/** The session's candles, updated in place every few seconds: the forming candle is the server's (its open, high and low from the
+ * day's real figures, LIVE10B-013), else it grows from the prices seen so far (an older server sent the close alone). */
 function LiveChart({ snap, cur, note }: { snap: LiveSnapshot; cur: string; note?: string }) {
   const forming = useRef<{ t: string; o: number; h: number; l: number } | null>(null);
   const f = snap.forming;
-  if (f && (!forming.current || forming.current.t !== f.t)) forming.current = { t: f.t, o: f.c, h: f.c, l: f.c };
-  if (f && forming.current) { forming.current.h = Math.max(forming.current.h, f.c); forming.current.l = Math.min(forming.current.l, f.c); }
+  if (f && (!forming.current || forming.current.t !== f.t)) forming.current = { t: f.t, o: f.o ?? f.c, h: f.h ?? f.c, l: f.l ?? f.c };
+  if (f && forming.current) {
+    if (f.o != null) forming.current.o = f.o;
+    forming.current.h = Math.max(forming.current.h, f.h ?? f.c, f.c); forming.current.l = Math.min(forming.current.l, f.l ?? f.c, f.c);
+  }
   const bars = useMemo(() => {
     const out: { t: string; o: number; h: number; l: number; c: number }[] = snap.bars.slice();
     const fm = forming.current;

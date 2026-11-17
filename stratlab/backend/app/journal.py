@@ -585,6 +585,16 @@ def _dp(kind: str, intraday: bool = False) -> float:
     return C.dp_charge() if kind in C.DP_KINDS and not intraday else 0.0
 
 
+def no_stt(kind: str, bv: float, sv: float, charges: float) -> bool:
+    """A delivery trade whose charges, as its file listed them, are less than the STT alone that it paid (0.1% of the purchase
+    and of the sale): the file left STT out (LIVE10B-039: "₹2.00" on an ₹87,000 round trip whose STT is ₹87). The
+    figures stay the file's, as the tax report's do (R9R-001); the page says they leave STT out."""
+    if kind != "in_eq":
+        return False
+    due = C.order_costs(kind, "buy", 1.0, bv, 0.0)["stt"] + C.order_costs(kind, "sell", 1.0, sv, 0.0)["stt"]
+    return due > 0 and charges < due - 0.005
+
+
 def _cost(kind: str, side: str, qty: float, price: float, brokerage: float) -> float:
     return C.total(C.order_costs(kind, side, qty, price, brokerage))
 
@@ -607,6 +617,24 @@ class _Episode:
         self.entries = [(one(f), round(q * k, 6)) for f, q in self.entries]
         self.exits = [(one(f), round(q * k, 6)) for f, q in self.exits]
         self.pos = round(self.pos * k, 6)
+
+    def split_closed(self) -> "_Episode | None":
+        """A position still open after part of it was closed: the closed part as its own episode, its entries the earliest
+        (first in, first out) up to the quantity closed; this one keeps the rest. None when nothing was closed."""
+        done = sum(q for _, q in self.exits)
+        if done <= EPS:
+            return None
+        part = _Episode(self.key, self.sign, self.entries[0][0], self.info)
+        left, keep = done, []
+        for f, q in self.entries:
+            take = min(q, left)
+            if take > EPS:
+                part.entries.append((f, round(take, 6)))
+                left -= take
+            if q - take > EPS:
+                keep.append((f, round(q - take, 6)))
+        part.exits, self.entries, self.exits = self.exits, keep, []
+        return part
 
     def trade(self, s: dict) -> dict:
         first, last = self.entries[0][0], self.exits[-1][0]
@@ -644,7 +672,8 @@ class _Episode:
                 "exit_t": _at(last["d"], last.get("t") or ""), "qty": round(qty, 6), "entry": entry, "exit": exit_,
                 "gross": gross, "charges": charges, "net": gross - charges, "hold_s": hold_s, "hold_days": days,
                 "fills": len(self.entries) + len(self.exits), "src": "tradebook", "expired": self.expired,
-                "charges_from": "file" if srcs == {"file"} else "mixed" if len(srcs) > 1 else "rates"}
+                "charges_from": "file" if srcs == {"file"} else "mixed" if len(srcs) > 1 else "rates",
+                "no_stt": srcs == {"file"} and no_stt(kind, bv, sv, charges)}
 
 
 def _fill_order(f: dict) -> tuple:
@@ -732,12 +761,19 @@ def pair_fills(fills: list[dict], s: dict, today: date, actions: dict[str, list[
             ep.expired = True
             trades.append(ep.trade(s))
             continue
+        had_exits = bool(ep.exits)
+        if ep.exits and ep.entries:
+            # LIVE10B-011: the part already sold is a closed round trip of its own (the tax report counts that sale), so the
+            # journal no longer leaves ₹2,20,500 of realised partial exits out of its trades and checks
+            part = ep.split_closed()
+            if part is not None:
+                trades.append(part.trade(s))
         avg = sum(f["price"] * q for f, q in ep.entries) / max(sum(q for _, q in ep.entries), EPS)
         row = {"symbol": ep.symbol, "side": "long" if ep.sign > 0 else "short", "qty": round(ep.pos, 6),
                "since": _at(ep.entries[0][0]["d"], ep.entries[0][0].get("t") or ""), "avg": round(avg, 4),
                # what the part already closed made before charges (the trade counts once it's flat)
                "realised": round(sum(ep.sign * (f["price"] - avg) * q for f, q in ep.exits), 2)}
-        if info["group"] == "eq" and ep.sign < 0 and not ep.exits:
+        if info["group"] == "eq" and ep.sign < 0 and not had_exits:
             unmatched.append(row)              # shares sold that were bought before the earliest file
         else:
             open_.append(row)
@@ -779,7 +815,8 @@ def line_trades(lines: list[dict], s: dict) -> list[dict]:
                     "entry_t": _at(x["ed"], x.get("et") or ""), "exit_t": _at(x["xd"], x.get("xt") or ""), "qty": round(qty, 6),
                     "entry": sp if side == "short" else bp, "exit": bp if side == "short" else sp, "buy": bp, "sell": sp,
                     "gross": x["sv"] - x["bv"], "charges": charges, "net": x["sv"] - x["bv"] - charges, "hold_s": hold_s,
-                    "hold_days": days, "fills": x["n"], "src": "pnl", "expired": False, "charges_from": src})
+                    "hold_days": days, "fills": x["n"], "src": "pnl", "expired": False, "charges_from": src,
+                    "no_stt": src == "file" and no_stt(kind, x["bv"], x["sv"], charges)})
     return out
 
 

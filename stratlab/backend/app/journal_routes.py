@@ -3,7 +3,7 @@
 Everything here is the signed-in user's own trades. Free keeps the last 50 closed trades with the trade list, the
 journal fields and the basic stats; Basic and up keep every trade and add the honesty checks, the breakdowns, the
 R-multiples and paper vs real. Facts about past trades only: nothing here says what to do next."""
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -84,6 +84,8 @@ def _row(t: dict) -> dict:
     """One trade as the page shows it, rounded."""
     out = {k: t.get(k) for k in ("id", "symbol", "u", "segment", "side", "entry_t", "exit_t", "hold_s", "hold_days", "fills",
                                  "src", "expired", "charges_from", "note")}
+    if t.get("no_stt"):
+        out["no_stt"] = True              # its file's charges leave STT out (LIVE10B-039)
     for k, dp in (("qty", 6), ("entry", 4), ("exit", 4), ("gross", 2), ("charges", 2), ("net", 2), ("r", 2)):
         out[k] = J._r(t.get(k), dp)
     out["segment_label"] = J.SEGMENTS.get(t["segment"], t["segment"])
@@ -144,6 +146,14 @@ def sync_tax_charges(uid: str, data: dict) -> dict:
     return J.save(uid, data) if changed else data
 
 
+def tax_new(uid: str, data: dict) -> int:
+    """How many of the tax report's trade lines "Bring them in" would add: the page offers the newer ones only while there
+    are some (LIVE10B-011: the offer stayed after the press, as the report's newest line was a buy or F&O, which the journal
+    doesn't take line by line)."""
+    got = J.from_tax(tax_lots.load(uid)["trades"])
+    return J._merge(data["fills"], got["fills"], J._fill_key)[1] + J._merge(data["lines"], got["lines"], J._line_key)[1]
+
+
 def view(profile, data: dict | None = None, segment: str = "all", market: str = "") -> dict:
     """The journal page: the trades (newest first), open positions, the stats, and on Basic and up the checks, the
     breakdowns, R-multiples and the paper sessions to compare with."""
@@ -177,6 +187,7 @@ def view(profile, data: dict | None = None, segment: str = "all", market: str = 
             "market": market, "markets": [{"id": m, **J.MARKETS[m], "n": n} for m, n in held.items()],
             "currency": J.MARKETS[market]["currency"], "segment": segment, "segment_counts": {k: n for k, n in seg_count.items() if n},
             "tax_totals": tax_totals(uid, segment) if market == "in" else [],
+            "tax_new": tax_new(uid, data) if market == "in" else 0,
             "emotions": J.EMOTIONS, "mistakes": J.MISTAKES, "segments": J.SEGMENTS, "assumptions": J.ASSUMPTIONS,
             "plan_name": PLANS[FEATURE_PLAN["journal"]]["name"]}
 
@@ -280,6 +291,8 @@ def add_trade(req: ManualReq, profile=Depends(current_profile)):
     et, xt = _clock(req.entry_time), _clock(req.exit_time)
     if (xd, xt or "99") < (ed, et or "00"):
         M.err(400, "bad_dates", "The exit is before the entry. Check the dates and times.")
+    if xd > (today() + timedelta(days=1)).isoformat():       # a day's slack for a reader whose day is ahead of India's (LIVE10B-008)
+        M.err(400, "bad_dates", "That exit is on a day that hasn't come yet. Check the dates.")
     j = J.load(profile["id"])
     if len(j["manual"]) >= J.MAX_MANUAL:
         M.err(400, "too_many", f"The journal keeps up to {J.MAX_MANUAL:,} trades added by hand. Import your tradebook instead.")

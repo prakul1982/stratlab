@@ -98,7 +98,7 @@ class Member:
             if bid and ask:
                 self.bid, self.ask, self.quote_at = float(bid), float(ask), time.time()
             self.s.last_tick_at = tick_time(ts)
-            for c in self.builder.on_tick(float(px), ts, tick.get("volume_traded")):
+            for c in self.builder.on_tick(float(px), ts, tick.get("volume_traded"), tick.get("ohlc")):
                 self.s._on_candle(self, c)
             if self.s.fast.get("ticks"):
                 self.enter_early()

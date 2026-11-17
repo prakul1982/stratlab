@@ -50,7 +50,7 @@ test("no browser locale picks the currency; the old saved choice stays cleared; 
   assert.match(plans, /body: \{ plan, period, currency \}/);
   assert.match(plans, /const currency = checkoutCur\(cur, usd, period, usdOn\);/);
   assert.match(plans, /\{price\.about && <span className="k-note" data-testid=\{`about-\$\{p\}`\}>\{price\.about\}<\/span>\}/);
-  assert.match(plans, /<li data-testid="usd-note">\{cur === "USD" && usd \? usdPricesNote\(usd, period, usdOn\) : usdNote\(rate, pricing\?\.usd_inr\?\.fallback\)\}<\/li>/);      // one line of the small print (R11)
+  assert.match(plans, /<li data-testid="usd-note">\{cur === "USD" && usd \? usdPricesNote\(usd, period, usdOn\) : usdNote\(rate, pricing\?\.usd_inr\?\.fallback, usd\)\}<\/li>/);      // one line of the small print (R11) (updated on purpose: LIVE10B-001 names the US prices)
   assert.match(land, /\{about && <span className="small muted" data-testid=\{`about-\$\{p\}`\}>\{about\}<\/span>\}/);
   for (const src of [plans, land]) assert.doesNotMatch(src, /In India\? Show prices in ₹/);
   // the paywall sentences come from the same line (usePlanPrice / planPriceFor), in the currency shown

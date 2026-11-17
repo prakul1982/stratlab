@@ -194,7 +194,7 @@ export function PlansPage() {
           </>
         ) : finePrint(offer, { currency: "INR", inRupees: false, inRupeesYear: false,
           charged: { basic: `₹${rupees("basic", "month").toLocaleString("en-IN")}`, pro: `₹${rupees("pro", "month").toLocaleString("en-IN")}` }, gst }).map((t) => <li key={t}>{t}</li>)}
-        <li data-testid="usd-note">{cur === "USD" && usd ? usdPricesNote(usd, period, usdOn) : usdNote(rate, pricing?.usd_inr?.fallback)}</li>
+        <li data-testid="usd-note">{cur === "USD" && usd ? usdPricesNote(usd, period, usdOn) : usdNote(rate, pricing?.usd_inr?.fallback, usd)}</li>
         <li>StratLab is a research and paper trading tool: it places no real orders and gives no investment advice, and past results don't predict future returns.</li>
       </ul>
       <LegalLinks blog />

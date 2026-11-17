@@ -9,7 +9,7 @@ export const RESEND_WAIT = 60;
  * typed here (it works whichever app opens the email, on a phone too), or the link is opened on this device. The same address is the
  * same account as with Google (the service links them by address), and a new address makes a new account. Drawn only while
  * /config.js switches email sign-in on (EMAIL_SIGNIN), so nothing shows before the sign-in service's email provider is set up. */
-export function EmailSignIn({ next }: { next?: string | null }) {
+export function EmailSignIn({ next, signup = false }: { next?: string | null; signup?: boolean }) {
   const id = useId();
   const [email, setEmail] = useState("");
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -62,7 +62,7 @@ export function EmailSignIn({ next }: { next?: string | null }) {
       <p className="email-signin-or" aria-hidden="true"><span>or</span></p>
       {!sentTo ? (
         <form className="email-signin-form" onSubmit={onSend} noValidate>
-          <label htmlFor={`${id}-email`} className="email-signin-label">Sign in with email</label>
+          <label htmlFor={`${id}-email`} className="email-signin-label">{signup ? "Sign up" : "Sign in"} with email</label>
           <div className="email-signin-row">
             <input ref={box} id={`${id}-email`} className="k-input" type="email" name="email" autoComplete="email" inputMode="email" placeholder="you@example.com"
               value={email} onChange={(e) => setEmail(e.target.value)} aria-describedby={`${id}-help`} aria-invalid={!!error || undefined} />

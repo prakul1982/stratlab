@@ -781,6 +781,10 @@ def series(reads: dict) -> list[dict]:
     newest = max((r for r in reads.values() if r.get("period") and r.get("figures")), key=lambda r: r.get("at") or "", default=None)
     if newest:
         order = [metric_key(g["metric"], g.get("segment"), g["unit"], g["basis"]) for g in (tidy_figure(as_read_now(newest, f)) for f in newest.get("figures") or [])]
+    # LIVE10B-040: a company that files month by month (two of its filings a month apart, whatever they hold) has no "previous
+    # quarter" for a figure some months leave out: VST's power weeder, read in Jun and Sep, was "+0.3% vs Jun 2026"
+    filed = sorted({r["period"] for r in reads.values() if r.get("period") and (r.get("span") or "month") == "month"})
+    monthly_filer = any(shift(a, 1) == b for a, b in zip(filed, filed[1:]))
     out = []
     for k, m in metrics.items():
         pts = sorted(m["points"].values(), key=lambda x: x["period"])
@@ -801,7 +805,7 @@ def series(reads: dict) -> list[dict]:
         # a figure filed month by month (two of its own points a month apart) has no "previous quarter": a three-month gap there is months
         # not read, not a quarter (LIVE7B-001: a monthly count's "+0.3% vs Jun 2026" on the previous)
         own_months = [x["period"] for x in pts if not x["filed_later"]]
-        monthly = any(shift(a, 1) == b for a, b in zip(own_months, own_months[1:]))
+        monthly = monthly_filer or any(shift(a, 1) == b for a, b in zip(own_months, own_months[1:]))
         step = "quarter" if m["span"] == "quarter" or (prev and shift(prev["period"], 3) == latest["period"] and not monthly) else "month"
         # "the previous" is the period just before (last month, or last quarter for a quarterly figure). A point further back, such as
         # the year-ago figure a filing states, is not it: with no previous period there is no change on it
@@ -824,6 +828,9 @@ def series(reads: dict) -> list[dict]:
     newest_period = settled(n.get("period"), n.get("at") or "", n.get("span")) or ""
     out.sort(key=lambda m: (not m["headline"] or m["key"] not in rank, rank.get(m["key"], 999), m["latest"]["period"] < newest_period,
                             m["metric"].lower()))
+    for m in out:                 # a figure the newest filing doesn't hold: its month is said as an earlier one (LIVE10B-040)
+        if newest_period and m["latest"]["period"] < newest_period:
+            m["older"] = True
     return out[:MAX_FIGURES * 2]
 
 
