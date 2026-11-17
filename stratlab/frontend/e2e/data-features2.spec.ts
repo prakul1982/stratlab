@@ -104,7 +104,8 @@ test("business updates: my stocks first, more sectors, month by month with the c
   await expect(rows.nth(1)).toHaveAttribute("data-company", "TVSMOTOR");            // then the watchlist
   await expect(rows.nth(1)).toContainText("Watchlist");
   await expect(rows.nth(2)).toHaveAttribute("data-company", "JSWSTEEL");
-  await expect(mine.getByText(/Not read yet: TCS/)).toBeVisible();                   // a holding with nothing read is named
+  // a holding with nothing read is named (updated on purpose (fix9b, LIVE9B-007): by the name the stock screens give it, not its symbol)
+  await expect(mine.getByText(/Not read yet: Tata Consultancy Services/)).toBeVisible();
   await expect(rows.nth(0).getByRole("link", { name: /NSE/ })).toHaveAttribute("href", /nsearchives\.nseindia\.com/);   // each figure links to its filing
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/business-updates-mine-${info.project.name}.png`, fullPage: true });
 

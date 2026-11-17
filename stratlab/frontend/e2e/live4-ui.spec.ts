@@ -62,7 +62,8 @@ test("LIVE4-010: a results day is two short lines a company on a phone, one line
 
 test("LIVE4-007/010: Mood's index levels and the Invest breadth card are short rows on a phone; their columns fit on a desktop", async ({ page }, info) => {
   const phone = info.project.name === "phone";
-  const errors = await open(page, "/research/pulse", "How the market", pro);
+  // (updated on purpose (fix9, LIVE9A-031): one page title, "Market mood", for both markets and every hour)
+  const errors = await open(page, "/research/pulse", "Market mood", pro);
   const levels = page.getByRole("table", { name: "Index levels" });
   await expect(levels.locator("tbody tr").first()).toBeVisible({ timeout: 30_000 });
   const hs = await levels.locator("tbody tr").evaluateAll((trs) => trs.map((t) => t.getBoundingClientRect().height));

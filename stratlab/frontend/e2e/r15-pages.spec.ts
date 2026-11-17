@@ -83,7 +83,8 @@ test("R15 #12: the breadth table is in the kit's colours on the Invest home and 
   await sane(page, errors);
   errors = await open(page, "/invest/breadth", "Above 50-day average");
   const row = page.getByRole("row").filter({ hasText: "Above 50-day average" }).first();
-  await expect(row.locator(".k-up, .k-down").first()).toBeVisible({ timeout: 30_000 });
+  // (updated on purpose (fix9, LIVE9A-016): on the Breadth page a share is a level drawn plain and its change carries the kit's ▲/▼ pill)
+  await expect(row.locator(".k-up, .k-down, .k-delta.up, .k-delta.down").first()).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("row").filter({ hasText: "Rose / fell" }).first().locator(".k-up").first()).toBeVisible();
   await sane(page, errors);
 });

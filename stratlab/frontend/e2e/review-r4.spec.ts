@@ -38,7 +38,9 @@ test("R4-006: the menu locks only a page that is locked whole; a part-paid page 
   await expect(tabs.getByRole("link", { name: /^Net worth/ })).toBeVisible({ timeout: 30_000 });
   await expect(tabs.getByRole("link", { name: /^Net worth/ }).locator(".side-lock"), "Net worth is free in the main").toHaveCount(0);
   await expect(tabs.getByRole("link", { name: /^Mutual funds/ }).locator(".side-lock")).toHaveCount(0);
-  await expect(side.locator(".side-entries .side-lock")).toHaveCount(0);
+  // (updated on purpose (nav3): the one menu holds every space's pages, the folded sections' locked pages (Screener's Chart rules...) in
+  // it too, hidden: none shows in the menu as drawn)
+  await expect(side.locator(".side-entries .side-lock").filter({ visible: true })).toHaveCount(0);
   await expect(page.locator("main")).toContainText(/\d+ of 5 free entries used/, { timeout: 30_000 });
   await page.goto("/money/mutual-funds");
   await expect(page.locator("main").getByRole("heading", { level: 1 })).toBeVisible({ timeout: 30_000 });
