@@ -11,7 +11,8 @@
 .k-cal-dot.c3 { background: var(--q-lagging); }
 .k-cal-dot.c4 { background: var(--q-weakening); }
 .k-cal-dot.c5 { background: var(--muted); }
-.k-cal-grid { display: flex; flex-direction: column; gap: 4px; }
+/* every week row as tall as the tallest (LIVE9B-032: the first week, six empty cells and the 1st, sat shorter than the rest) */
+.k-cal-grid { display: grid; grid-template-rows: auto; grid-auto-rows: 1fr; gap: 4px; }
 .k-cal-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
 .k-cal-wd { font-family: var(--mono); font-size: 11.5px; text-transform: uppercase; color: var(--muted); text-align: center; padding: 2px 0; }
 .k-cal-cellwrap { min-width: 0; display: flex; }

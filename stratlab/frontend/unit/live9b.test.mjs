@@ -204,3 +204,11 @@ test("LIVE9B-033: an industry's name inside a sentence keeps its acronyms", asyn
   assert.equal(lowerKeepAcronyms("Auto Components"), "auto components");
   assert.match(read("src/pages/DeepDive.tsx"), /the \$\{lowerKeepAcronyms\(v\.industry_measures\.label\)\} measures/);
 });
+
+test("LIVE9B-032: market events' week is a table, the index changes one card, every calendar week row one height", () => {
+  const ev = read("src/pages/trade/EventsPage.tsx");
+  assert.match(ev, /<DataTable label="The next seven days"/);
+  assert.match(ev, /<Card label="Index changes">/);
+  assert.match(ev, /<CardHead level=\{2\} title=\{<span id="ev-idx-h">Index changes<\/span>\} \/>/);
+  assert.match(read("src/components/kit/calendar.css"), /\.k-cal-grid \{ display: grid; grid-template-rows: auto; grid-auto-rows: 1fr; gap: 4px; \}/);
+});

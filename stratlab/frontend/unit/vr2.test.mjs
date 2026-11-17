@@ -28,7 +28,8 @@ test("VR2-004, VR2-005: the watchlist says its day once; an Open button stays at
 });
 
 test("VR2-006, VR2-007: market events are two to a row; Key numbers' last row fills its width", () => {
-  assert.match(read("src/pages/trade/events.css"), /\.ev-weekgrid > \.ev-week \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(260px, 1fr\)\);/);
+  // (updated on purpose, LIVE9B-032: the week's events are rows of one table now, not two columns of lines)
+  assert.match(read("src/pages/trade/EventsPage.tsx"), /<DataTable label="The next seven days"/);
   const inv = read("src/styles-invest.css");
   // (UI-CO item 2: each group is a table; two columns of them balanced by CSS columns, so no last row is left half empty)
   assert.match(inv, /\.inv-metrics \{ columns: 2; column-gap: var\(--s6\); \}/);
