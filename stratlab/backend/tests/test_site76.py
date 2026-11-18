@@ -152,8 +152,8 @@ def test_live14a_008_a_public_theme_tables_membership_and_revenue_cells_wrap_so_
          "evidence": {"description_verified": 2, "industry_code_supported": 2}, "older": False, "rechecking": False, "summary": "",
          "prices": None, "day": None, "indexable": True, "layers": [{"name": "Auto components", "companies": rows, "evidence": {}}]}
     html = P.render(v)
-    assert '.cotbl td[data-label="Membership"]{white-space:normal;min-width:8em}' in html
-    assert '.cotbl td[data-label="Revenue"]{white-space:normal}' in html
+    assert '.cotbl td[data-label=Membership]{white-space:normal;min-width:8em}' in html
+    assert '.cotbl td[data-label=Revenue]{white-space:normal}' in html
     assert 'data-label="Membership">industry-supported (official industry only)</td>' in html
 
 
