@@ -12,7 +12,10 @@ let held = "";
 export function startupHtml(root: Pick<Element, "querySelector"> | null): string {
   const block = root?.querySelector("[data-boot]") as (Element & { closest?: (s: string) => Element | null }) | null;
   if (!block || /\bboot-now\b/.test(block.getAttribute("class") ?? "")) return "";
-  const outer = (block.closest?.("main") ?? block).outerHTML;
+  const main = (block.closest?.("main") ?? block) as Element;
+  // the start-up header above it too (LIVE12B-001): the page kept its logo and links while the code downloads, not lost them for seconds
+  const head = main.previousElementSibling;
+  const outer = (head && /\bboot-head\b/.test(head.getAttribute("class") ?? "") ? head.outerHTML : "") + main.outerHTML;
   return outer.replace(/\bboot-wait\b\s*/g, "").replace(/class="boot\s+"/g, 'class="boot"');
 }
 

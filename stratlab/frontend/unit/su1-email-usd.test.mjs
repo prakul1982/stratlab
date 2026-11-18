@@ -150,7 +150,8 @@ test("email sign-in is drawn only while config.js switches it on, and ships swit
   // the sign-in page and the sign-in gate draw it under Continue with Google
   const land = read("src/pages/Login.tsx");
   // (updated on purpose, R61: the sign-in page's form knows whether the visitor came to sign up)
-  assert.ok(land.indexOf("{login && emailSignInOn() && <Suspense fallback={null}><EmailSignIn signup={signup} /></Suspense>}") > land.indexOf("{cta()}"));
+  // (updated on purpose, LIVE12B-008: the form sits in a slot that holds its place from the first frame)
+  assert.ok(land.indexOf("{login && emailSignInOn() && <div className=\"email-slot\"><Suspense fallback={null}><EmailSignIn signup={signup} /></Suspense></div>}") > land.indexOf("{cta()}"));
   const gate = read("src/pages/Gate.tsx");
   assert.ok(gate.indexOf("<EmailSignIn />") > gate.indexOf("<SignInButton />"));
   // a send can't be repeated for a minute (the sign-in service's own limit per address, and its hourly limit, still apply)

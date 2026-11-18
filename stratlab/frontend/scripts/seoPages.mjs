@@ -75,7 +75,7 @@ export function legalBody(path, heading) {
 export const NOT_FOUND_LINKS = `\n<ul class="boot-links">\n<li><a href="/">Home</a></li>\n<li><a href="/stocks">Company pages</a></li>\n<li><a href="/library">Strategy library</a></li>\n</ul>`;
 
 /** The template (index.html as built) with one page's own tags, and its own heading and words in the plain block. */
-export function pageHtml(template, { title, description, canonical, index, jsonld = "", heading, summary, faq = false, body = "", after = "", readable = !!body }) {
+export function pageHtml(template, { title, description, canonical, index, jsonld = "", heading, summary, faq = false, body = "", after = "", readable = !!body, hero = false }) {
   const swap = (re, to) => {
     if (!re.test(template)) throw new Error(`index.html has no ${re}`);
     template = template.replace(re, () => to);
@@ -96,7 +96,9 @@ export function pageHtml(template, { title, description, canonical, index, jsonl
     // the page's one heading and its words, where index.html has the home page's (the app replaces the block when it draws)
     const boot = /(<div class="boot[^"]*" data-boot>\n)<h1>[^<]*<\/h1>\n<p>[^<]*<\/p>/;
     if (!boot.test(template)) throw new Error(`index.html has no ${boot}`);
-    template = template.replace(boot, (_, open) => (readable ? open.replace("data-boot>", "data-boot data-readable>") : open)
+    // the landing's frame while the code downloads (LIVE12B-001) is the home page's alone: another page keeps the plain block
+    template = template.replace(boot, (_, open) => (hero ? open : open.replace(/ boot-hero\b/, ""))
+      .replace("data-boot>", readable ? "data-boot data-readable>" : "data-boot>")
       + (body || bootBody({ heading, summary: summary?.length ? summary : [description], faq }) + after));
   }
   return template;
@@ -117,7 +119,7 @@ export function pageFiles(template) {
       jsonld: p.path === "/" ? homeJsonLd() : p.path === "/faq" ? faqJsonLd() : p.path === "/plans" ? plansJsonLd() : "", heading: p.heading, summary: p.summary,
       body: LEGAL_BLOCKS[p.path] ? legalBody(p.path, p.heading) : "",
       after: p.path === "/library" ? LIBRARY_LINKS : p.path === "/" ? HOME_LINKS : p.path === "/plans" ? plansList() : "",
-      faq: p.path === "/faq" })]);
+      faq: p.path === "/faq", hero: p.path === "/" })]);
   files.push(["404.html", pageHtml(template, { title: "Page not found · StratLab", description: NOT_FOUND_DESCRIPTION, canonical: null, index: false,
     heading: "Page not found", summary: [NOT_FOUND_DESCRIPTION], after: NOT_FOUND_LINKS, readable: true })]);
   return files;

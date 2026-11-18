@@ -11,12 +11,14 @@ const Mail = () => (
   </svg>
 );
 
-export function EmailWay({ next, className, small = false }: { next?: string | null; className?: string; small?: boolean }) {
+/** `label`: a plan card's own words ("Continue with email to get Basic", LIVE12B-024: beside "Continue with Google to get Basic" a plain
+ * "Sign in with email" read as a sign-in, not the start of that plan). */
+export function EmailWay({ next, className, small = false, label = "Sign in with email" }: { next?: string | null; className?: string; small?: boolean; label?: string }) {
   if (!emailSignInOn()) return null;
   return (
     <a className={`btn outline${small ? " sm" : ""} email-way${className ? ` ${className}` : ""}`} href={EMAIL_SIGNIN_PATH} data-testid="email-way"
       onClick={(e) => { e.preventDefault(); startEmailSignIn(next); }}>
-      <Mail />Sign in with email
+      <Mail />{label}
     </a>
   );
 }

@@ -350,9 +350,10 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
               {/* NAV3: a real result anyone can open without signing in (the public library: rules, verdict and checks) */}
               {full && <Link className="btn quiet lp-cta-2" to="/library">See real results, no sign-in</Link>}
             </div>
-            {login && emailSignInOn() && <Suspense fallback={null}><EmailSignIn signup={signup} /></Suspense>}
+            {/* its place held from the first frame (LIVE12B-008: the form arrived after it and pushed the small print 208 px down on a phone) */}
+            {login && emailSignInOn() && <div className="email-slot"><Suspense fallback={null}><EmailSignIn signup={signup} /></Suspense></div>}
             {error && <p className="banner" role="alert">{error}</p>}
-            {login ? <p className="small muted">Signing in only reads your name and email from Google{emailSignInOn() ? ", or only your email address by email" : ""}. By continuing you agree to the <Link className="link" to="/terms">Terms</Link> and <Link className="link" to="/privacy">Privacy policy</Link>.</p> : <p className="small muted">Free to start · No card · No code</p>}
+            {login ? <p className="small muted">{signup ? "Signing up" : "Signing in"} only reads your name and email from Google{emailSignInOn() ? ", or only your email address by email" : ""}. By continuing you agree to the <Link className="link" to="/terms">Terms</Link> and <Link className="link" to="/privacy">Privacy policy</Link>.</p> : <p className="small muted">Free to start · No card · No coding</p>}
           </div>
           {full && <HeroDemo />}
         </div>
@@ -623,7 +624,7 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
                   // LIVE11B-001: the Google and email buttons are ONE row of the card's four-row subgrid (name, price, ways in, list): as two
                   // children the email button took the list's row and the list ran under it, its ticks boxed under "Sign in with email"
                   : <div className="lp-plan-ways"><button type="button" className={`btn ${p === "pro" ? "" : "outline"}`} disabled={loading} onClick={() => void signIn(act.buy ? "/plans" : null)}>{act.label}</button>
-                    <EmailWay next={act.buy ? "/plans" : null} className="lp-plan-email" /></div>}
+                    <EmailWay next={act.buy ? "/plans" : null} className="lp-plan-email" label={act.label.replace("Google", "email")} /></div>}
                 {/* on a phone the five lines are one fold under the button (LIVE5 partial: three cards of five lines were 2,100 px) */}
                 <PhoneFold label={`What ${PLAN_NAME[p]} includes`}>
                 <ul className="lp-plan-list">
