@@ -94,3 +94,88 @@ async function expectNeverCovered(page: Page, nav: ReturnType<Page["locator"]>) 
   await nav.evaluate((el) => { el.scrollTop = 0; });
   await expect(page.locator("aside.sidebar .side-more")).toBeVisible();
 }
+
+// owner (18 Nov): the analytics question in the app is one small card in the page's flow, after the page's content, never a band over
+// it; it can be closed; once answered it is gone on every page; nothing moves when it comes or goes.
+const BASIC = { ...PRO, access_token: "basic-token", user: { ...PRO.user, id: "u-basic", email: "basic@example.com" } };
+const TRACK = { META_PIXEL_ID: "1234567890", CLARITY_PROJECT_ID: "abc123def4" };
+
+/** The question switched on (a fake config) for every tab of the browser, signed in on Basic. */
+async function withQuestion(page: Page) {
+  const ctx = page.context();
+  await ctx.route(/connect\.facebook\.net|clarity\.ms/, (r) => r.fulfill({ status: 200, contentType: "text/javascript", body: "" }));
+  await ctx.route(/\/config\.js(\?|$)/, async (r) => {
+    const real = await (await r.fetch()).text();
+    await r.fulfill({ status: 200, contentType: "text/javascript", body: `${real}\nObject.assign(window.STRATLAB_CONFIG, ${JSON.stringify(TRACK)});\n` });
+  });
+  await ctx.addInitScript((x) => {
+    try { localStorage.setItem("sb-demo-auth-token", JSON.stringify(x)); localStorage.setItem("stratlab.tour.v1", "1"); } catch { /* none */ }
+    // the layout shifts that moved the question itself (the page's own cards filling in are other checks' business)
+    const w = window as unknown as { __askMoves: number };
+    w.__askMoves = 0;
+    new PerformanceObserver((l) => {
+      for (const e of l.getEntries() as unknown as { value: number; hadRecentInput: boolean; sources?: { node?: Node }[] }[])
+        if (!e.hadRecentInput && (e.sources ?? []).some((x) => (x.node as HTMLElement | undefined)?.closest?.("[data-testid=consent]"))) w.__askMoves += e.value;
+    }).observe({ type: "layout-shift", buffered: true });
+  }, BASIC);
+  await ctx.route(`${API}/me`, async (r) => { const res = await r.fetch(); await r.fulfill({ response: res, json: { ...(await res.json()), established: true } }); });
+}
+
+/** Whatever shows through the card: elements at a grid of points over it that are neither it, inside it, nor what it sits in. */
+const under = (page: Page) => page.evaluate(() => {
+  const c = document.querySelector("[data-testid=consent]")!;
+  const r = c.getBoundingClientRect();
+  const hits = new Set<string>();
+  for (let i = 1; i < 12; i++) for (let j = 1; j < 4; j++)
+    for (const e of document.elementsFromPoint(r.left + (r.width * i) / 12, r.top + (r.height * j) / 4)) if (!c.contains(e) && !e.contains(c)) hits.add(`${e.tagName}.${e.className}`);
+  return [...hits];
+});
+
+test("the analytics question is one small card after the page, and closing it hides it on every page for the visit, moving nothing", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  await withQuestion(page);
+  await page.goto("/trade");
+  const ask = page.getByTestId("consent");
+  await expect(ask).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(800);
+  // in the page's flow, after the page's content, covering nothing; a small card, not a band the page's width
+  expect(await ask.evaluate((e) => getComputedStyle(e).position)).not.toBe("fixed");
+  const [qTop, mainEnd] = await page.evaluate(() => [document.querySelector("[data-testid=consent]")!.getBoundingClientRect().top, document.querySelector("#main")!.getBoundingClientRect().bottom]);
+  expect(qTop, "after the page").toBeGreaterThanOrEqual(mainEnd - 1);
+  await ask.scrollIntoViewIfNeeded();
+  expect(await under(page)).toEqual([]);
+  const box = (await ask.boundingBox())!;
+  if (!phone) expect(box.width, "a small card, not the page's width").toBeLessThanOrEqual(641);
+  expect(box.height, "a small card").toBeLessThanOrEqual(160);
+  // closing it: "Not now" takes it away and nothing above it moves
+  const top = () => page.locator("h1").filter({ visible: true }).first().evaluate((e) => Math.round(e.getBoundingClientRect().top + window.scrollY));
+  const before = await top();
+  await ask.getByRole("button", { name: "Not now" }).click();
+  await expect(ask).toHaveCount(0);
+  expect(await top()).toBe(before);
+  expect(await page.evaluate(() => (window as unknown as { __askMoves: number }).__askMoves), "layout shifts that moved the question").toBeLessThan(0.01);
+  // no answer was saved (so nothing loads), and no other page asks again in this visit, opened in the app or loaded afresh
+  expect(await page.evaluate(() => localStorage.getItem("stratlab.ads"))).toBeNull();
+  for (const path of ["/research/IN/RELIANCE", "/invest"]) {
+    await page.goto(path);
+    await expect(page.locator("main h1").filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
+    await page.waitForTimeout(2000);
+    await expect(ask, path).toHaveCount(0);
+  }
+});
+
+test("once answered, the analytics question is gone everywhere: other app pages, a public page and another tab", async ({ page, context }) => {
+  await withQuestion(page);
+  await page.goto("/trade");
+  const ask = page.getByTestId("consent");
+  await expect(ask).toBeVisible({ timeout: 30_000 });
+  await ask.getByRole("button", { name: "No thanks" }).click();
+  await expect(ask).toHaveCount(0);
+  const other = await context.newPage();
+  for (const [p, path] of [[page, "/research/IN/RELIANCE"], [page, "/about"], [other, "/invest"]] as const) {
+    await p.goto(path);
+    await expect(p.locator("h1").filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
+    await p.waitForTimeout(2000);
+    await expect(p.getByTestId("consent"), path).toHaveCount(0);
+  }
+});

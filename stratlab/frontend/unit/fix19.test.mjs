@@ -77,3 +77,18 @@ test("the sidebar's More below pill has a row of its own under the menu's edge l
   assert.match(shell, /<div className="side-more-row">\s*<button type="button" className="side-more"/);
   assert.match(shell, /const below = last \? last\.getBoundingClientRect\(\)\.bottom - el\.getBoundingClientRect\(\)\.bottom > 1/);
 });
+
+test("the analytics question is one small card in the page's flow that can be closed for the visit (owner, 18 Nov)", () => {
+  const css = read("src/styles.css"), card = read("src/components/Tracking.tsx");
+  const rule = css.match(/\n\.consent \{[^}]*\}/)[0];
+  assert.match(rule, /position: relative/);
+  assert.doesNotMatch(rule, /position: (fixed|sticky)|z-index/);
+  assert.match(rule, /max-width: 640px/);
+  assert.match(css, /\.shell > \.consent \{ grid-column: -2 \/ -1; grid-row: 2;[^}]*width: min\(640px,/);
+  assert.match(card, /className="consent-x" aria-label="Not now"/);
+  // closed, no answer is saved (nothing loads) and it stays away for the visit
+  assert.match(card, /if \(guiding \|\| !settled \|\| later\) return null;/);
+  assert.match(card, /sessionStorage\.setItem\(LATER_KEY, "1"\)/);
+  const later = card.slice(card.indexOf("function askLater"));
+  assert.doesNotMatch(later.slice(0, later.indexOf("\n}\n")), /writeChoice/);
+});
