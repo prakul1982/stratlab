@@ -84,12 +84,21 @@ def test_a_theme_already_current_is_skipped_and_one_not_finished_is_tried_again_
 
     def never(region, name):
         called.append(name)
-        raise theme_recheck.NotDone("its checks are not finished yet")
+        raise theme_recheck.NotDone("its checks are not finished yet", later=True)
     outcomes = []
-    while (x := theme_recheck.step(never)) is not None:
+    # r69e (updated on purpose: the live R68 logs had "US restaurant: failed (its checks are not finished yet)" every ~4 min): a theme whose
+    # checks are not finished waits for them (WAIT_FIRST, doubling) instead of being tried again at once, WAIT_TRIES times, then is left
+    now = 1000.0
+    for _ in range(40):
+        x = theme_recheck.step(never, now=now)
+        if x is None:
+            if not theme_recheck._load().get("todo"):
+                break
+            now += theme_recheck.WAIT_MAX                  # nothing due: time passes
+            continue
         outcomes.append((x["theme"][1], x["outcome"]))
     assert ("ship", "current") in outcomes and "ship" not in called          # current: skipped, nothing worked out
-    assert called == ["rail"] * theme_recheck.TRIES                            # tried again at the end of the queue, then left
+    assert called == ["rail"] * theme_recheck.WAIT_TRIES                       # waited for each time, then left
     assert theme_recheck.state()["left"] == {"IN|rail": "its checks are not finished yet"}
 
 
