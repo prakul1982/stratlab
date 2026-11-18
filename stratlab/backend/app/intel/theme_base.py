@@ -5582,7 +5582,9 @@ _MARKUP = re.compile(r"\*+|#+")
 # (Release 63 CI: SPEL Semiconductor's profile glues "Holding Company: Natronix ..." onto its first sentence with no full stop, so its line ran
 # on and was cut at "has its", no own words left; a holding-company or registered-office label a profile glues on ends the sentence before it)
 _HEADING = re.compile(r"\s*\b(?:company|business|corporate)\s+(?:overview|profile|description)\s*:?|\s*\babout\s+(?:us|the\s+company)\s*:"
-                      r"|\s+\b(?:(?:ultimate\s+)?holding|parent)\s+company\s*:|\s+\bregistered\s+office\s*:", re.I)
+                      r"|\s+\b(?:(?:ultimate\s+)?holding|parent)\s+company\s*:|\s+\bregistered\s+office\s*:"
+                      # r64e (LIVE11A-003: Deccan Cements "... wind sources Product Profile: a) Ordinary Portland Cement (OPC): ...")
+                      r"|\s+\b(?:product|products|key\s+products?)\s+(?:profile|portfolio|range|mix)\s*:", re.I)
 _GLUED = re.compile(r"(?i)\b(incorporated|established|founded|set up|formed)(in)(\d{4})")
 _HISTORY = re.compile(r"^(?:originally\s+)?(?:incorporated|established|founded|set up|formed|promoted)\b[^,.;]*?\b(?:in|on)\s+\d{4}\s*(?:,|as\b[^,]*,|and\b)?\s*", re.I)
 # a results or sales line, not what the company does: "reported total dispatches of 7,34,403 units in October 2026"
@@ -5761,6 +5763,9 @@ def listing_line(name: str) -> str:
     return f"listed as {kind} of {issuer_name(t)}"
 
 
+OWN_LINE_MAX = 300              # r64e (LIVE11A-003): a sentence of a company's own words quoted whole up to this many characters
+
+
 def own_line(about, name: str = "") -> str:
     """gl52 (R52, the rotating review of Release 51: Visa, Mastercard, Fortinet and Trade Desk shown with "No description in its own words
     yet", their stored words an encyclopedia's opening line): the first sentence of a description that is the company's own words about its
@@ -5768,11 +5773,22 @@ def own_line(about, name: str = "") -> str:
     first = one_line(about)
     if not first or own_words(first, name) or str(about or "").startswith("From its own filings:"):
         return first
-    for x in _sentences(" ".join(str(about or "").split())):
+    # r64e (LIVE11A-003: Micron's "…deliver the speed, efficiency, and scal", its sentence cut at 240 characters mid-word): a sentence
+    # is quoted whole up to OWN_LINE_MAX characters; a longer one ends at its last clause within them (a comma or semicolon), else at a word, with an ellipsis; one the
+    # stored description's own cut ends loses its cut word (whole_words)
+    flat = " ".join(str(about or "").split())
+    sents = _sentences(flat)
+    for i, x in enumerate(sents):
         x = _HISTORY.sub("", x).strip(" ,;:-–—")
         if len(x) >= 15 and not _PRESS.search(x) and own_words(x, name):
             m = _FIRST.match(x + " ")
-            return (m.group(1) if m else x[:240]).rstrip(" .;")
+            one = (m.group(1) if m else x).rstrip(" .;")
+            if i == len(sents) - 1 and not re.search(r"[.!?;”\")]$", flat):
+                one = whole_words(one, flat) or one
+            if len(one) <= OWN_LINE_MAX:
+                return one
+            at = max(one.rfind(", ", 0, OWN_LINE_MAX), one.rfind("; ", 0, OWN_LINE_MAX))
+            return (one[:at] if at > 120 else one[:one.rfind(" ", 0, 238)]).rstrip(" ,;:") + "…"
     return first
 
 
@@ -6037,6 +6053,16 @@ def layer_line(line: str, about, name: str, layer: str, description: str = "") -
             if hit is None:
                 continue
             one = upto.rstrip(" ,;:")
+            # r64e (LIVE11A-003: Credo's line "We design", of "We design, market and sell both product, software and IP solutions";
+            # Monolithic Power's "... a fabless global company that provides high-performance", its sentence going on ", semiconductor-
+            # based power electronics solutions"): the whole sentence when it fits, or when what follows the clause is one more phrase
+            # with no clause of its own (the noun the clause's words describe); a line is never a clause of under four words
+            rest_ = sent[len(upto):].strip(" ,;:")
+            # (only where the clause itself is a line of its own words: the sentence never lets in a clause the rules leave out)
+            if one != sent and own_words(one, name) and own_words(sent, name) and (len(sent) <= LINE_MAX or (len(rest_) <= 60 and not re.search(r"[,;:]|\s(?:and|or|which|while|including)\s", rest_))):
+                return sent[:1].upper() + sent[1:]
+            if len(one.split()) < 4 and one != sent:
+                continue
             at = len(upto) - len(clause) + clause.lower().find(hit.group(0))
             if len(one) <= LINE_MAX or at + len(hit.group(0)) <= LINE_MAX - 10:
                 if own_words(one, name):

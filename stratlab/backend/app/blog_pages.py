@@ -408,7 +408,7 @@ def admin_blog_theme(req: ThemeDraft, profile=Depends(admin.admin_profile)):
     m = theme_routes.checked(r, theme, m, wait=True)
     from .intel import theme_data
     dive = theme_data.build(r, theme, m, theme_routes.sources(r, theme))
-    return ok(blog_research.draft_theme_post(dive, theme, r, notable_only=False))
+    return ok(blog_research.draft_theme_post({**dive, "map_at": m.get("generated_at")}, theme, r, notable_only=False))
 
 
 class Note(BaseModel):

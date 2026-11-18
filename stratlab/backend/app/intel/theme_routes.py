@@ -1657,7 +1657,7 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
                              everyone=everyone)   # f4: "What changed"
         theme_changes.flag(r, m.get("_library") or theme, hit.get("coverage"))          # cl48: the admins' alert (coverage_checks)
         flag_gaps(r, m.get("_library") or theme, hit.get("data_gaps"))                  # e57: the admins' alert (data_gap_checks)
-        auto_post(r, theme, hit)
+        auto_post(r, theme, {**hit, "map_at": m.get("generated_at")})          # r64e (LIVE11A-020): the map's day, for the post
     return hit
 
 

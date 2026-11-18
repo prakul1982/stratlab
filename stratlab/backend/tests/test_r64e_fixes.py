@@ -209,3 +209,123 @@ def test_3d_a_map_pick_of_the_layer_s_own_way_of_earning_whose_short_words_say_n
     got = _rows(B.sold_what(out, {t: "Network equipment makers" for t in "ECO"}, lambda v: False, lambda cos: "making", fam,
                             lambda c: words.get(c.get("ticker"), ""), B.kind_stems("Telecom"), "Telecom", {"O": "Gone layer"}, None, {}))
     assert got["O"][0] == "Network equipment makers", got["O"]
+
+
+# ---------- LIVE11A-005: a sub-theme beside its obvious members ----------
+def test_11_005_a_sub_theme_takes_the_layer_it_was_named_for_and_the_makers_its_name_says():
+    """Fails before: the live Semiconductors page "No listed company is shown for this sub-theme: Foundry and memory manufacturing" beside
+    "Contract chip foundries" (the map's "Foundry and memory manufacturing"); Automotive "Vehicle assembly" beside "Passenger and utility
+    vehicle makers" and "Commercial vehicle makers"; Private banks' "Retail and microfinance-focused lenders" beside the layer the map
+    first named "High-yield retail and microfinance lenders"."""
+    from app.intel.theme_data import sub_picked
+    semis = [{"layer": "Contract chip foundries", "was": "Foundry and memory manufacturing", "aka": ["Foundry and memory manufacturing"],
+              "companies": [{"ticker": "TSM"}, {"ticker": "GFS"}]},
+             {"layer": "Makers of their own products", "companies": [{"ticker": "MU"}]}, {"layer": "Fabless chip design", "companies": [{"ticker": "NVDA"}]}]
+    auto = [{"layer": "Passenger and utility vehicle makers", "companies": [{"ticker": "MARUTI"}]},
+            {"layer": "Commercial vehicle makers", "aka": ["Commercial and three-wheeler vehicle makers"], "companies": [{"ticker": "ASHOK"}]},
+            {"layer": "Vehicle financiers", "companies": [{"ticker": "MMFS"}]}, {"layer": "Two-wheeler makers", "companies": [{"ticker": "BAJAJ"}]}]
+    banks = [{"layer": "Large deposit-led universal banks", "companies": [{"ticker": "HDFC"}]},
+             {"layer": "Higher-risk growth and turnaround private banks", "was": "High-yield retail and microfinance lenders",
+              "aka": ["High-yield retail and microfinance lenders"], "companies": [{"ticker": "BANDHAN"}]}]
+    pick = lambda n, lay: [c["ticker"] for c in sub_picked({"name": n, "companies": []}, lay, lambda s: "its own words")]      # noqa: E731
+    assert pick("Foundry and memory manufacturing", semis) == ["TSM", "GFS"]
+    assert pick("Vehicle assembly", auto) == ["MARUTI", "ASHOK"]
+    assert pick("Retail and microfinance-focused lenders", banks) == ["BANDHAN"]
+    assert pick("Contract foundries", [{"layer": "Contract chip foundries", "companies": [{"ticker": "TSM"}]}]) == ["TSM"]
+    # (guard) a word every layer shares picks none of them
+    assert pick("Packaged cement sold through dealers", [{"layer": "Cement integrated producers (larger)", "companies": [{"ticker": "A"}]},
+                                                         {"layer": "Ready-mix concrete and cement", "companies": [{"ticker": "B"}]},
+                                                         {"layer": "Branded cement with specialty products", "companies": [{"ticker": "C"}]}]) == []
+
+
+# ---------- LIVE11A-003: one whole quote of a company's own words ----------
+MU_WORDS = ("We are a global leader in semiconductor memory and storage, powering AI and compute-intensive applications from cloud to edge. "
+            "With a relentless focus on our customers, technology and product leadership, and manufacturing and operational excellence, our "
+            "comprehensive portfolio of high-performance DRAM, NAND, and NOR solutions deliver the speed, efficiency, and scale today’s workloads "
+            "demand, accelerating intelligence and transforming industries worldwide. We manufacture our products at wholly-owned facilities and "
+            "also utilize subcontractors for certain manufacturing processes.")
+
+
+def test_11_003_a_quote_is_a_whole_sentence_never_cut_mid_word_or_a_bare_clause():
+    """Fails before: the live Semiconductors page quoted Micron "…deliver the speed, efficiency, and scal" (its sentence cut at 240
+    characters), Credo "We design" (a clause of "We design, market and sell both product, software and IP solutions"), Monolithic Power
+    "... a fabless global company that provides high-performance" and Deccan Cements "... wind sources Product Profile: a) Ordinary
+    Portland Cement (OPC): Company manufactures 3 grades namely, OPC 33…"."""
+    from app.intel import theme_data as D
+    mu = B.own_line(MU_WORDS, "Micron Technology Inc")
+    assert mu.endswith("deliver the speed, efficiency, and scale today’s workloads demand…") and "scal”" not in mu, mu
+    credo = ("The demands for increased bandwidth have grown as AI model sizes have increased. We design, market and sell both product, software "
+             "and IP solutions. We help define industry conventions.")
+    assert B.layer_line("", credo, "Credo Technology Group Holding Ltd", "Fabless chip design") == \
+        "We design, market and sell both product, software and IP solutions"
+    mpwr = ("Monolithic Power Systems, Inc. is an American, publicly traded company headquartered in West Palm Beach, Florida. It operates in "
+            "more than 15 locations worldwide. Monolithic Power Systems, Inc. is a fabless global company that provides high-performance, "
+            "semiconductor-based power electronics solutions.")
+    got = B.layer_line("It operates in more than 15 locations worldwide", mpwr, "Monolithic Power Systems, Inc.", "Fabless chip design")
+    assert got.endswith("high-performance, semiconductor-based power electronics solutions"), got
+    deccan = ("Incorporated in 1979, Deccan Cements Ltd manufactures and sells Cement and does generation and selling of power from hydel and wind "
+              "sources Product Profile: a) Ordinary Portland Cement (OPC): Company manufactures 3 grades namely, OPC 33 Grade, OPC 43 Grade")
+    got = D.shown_words({"name": "Deccan Cements Ltd"}, deccan)
+    assert got == "Deccan Cements Ltd manufactures and sells Cement and does generation and selling of power from hydel and wind sources", got
+
+
+# ---------- LIVE11A-009: a headline figure on no row says what it is of ----------
+def test_11_009_a_layer_ranked_as_its_two_halves_says_so_beside_its_figure():
+    """Fails before: the live Cement deck p.8 "lowest in Cement integrated producers (8.2%, 26 of 27 companies)" while the table under it
+    has only the "(larger)" and "(smaller)" rows: the 8.2% was on no row."""
+    from tests.test_gl52_fixes import _block
+    from tests.test_r48_reconcile import co
+    from app.intel import theme_data as D
+    make = {"id": "manufacturing", "family": "making"}
+    rows = [{**D.company_row("IN", f"R{i}", co(f"R{i}", f"Regional {i} Ltd", 1000.0 + 10 * i, 14.0 + (i % 3), 80.0)),
+             "model": "manufacturing", "model_confidence": "high", "status": "core"} for i in range(12)]
+    big, small = D.layer_block("Regional cement makers (larger)", rows[:6], set()), D.layer_block("Regional cement makers (smaller)", rows[6:], set())
+    big.update(scale="larger", sibling=small["layer"], model={**make, "known": 6, "of": 6})
+    small.update(scale="smaller", sibling=big["layer"], model={**make, "known": 6, "of": 6})
+    ch = D._chain_table([_block("Pan-India cement makers", 22.0, model={**make, "known": 6, "of": 6}), big, small])
+    assert "lowest in Regional cement makers (its larger and smaller halves together, " in ch["line"], ch["line"]
+    assert "highest in Pan-India cement makers (22" in ch["line"], ch["line"]
+
+
+# ---------- LIVE11A-008: one n.m. rule on every surface ----------
+def test_11_008_a_margin_beyond_revenue_is_named_on_the_dive_row_the_app_prints():
+    """Fails before: the dive's company row carried Atomera's "−32423.1" with nothing saying it is no margin, so the app printed it while
+    the deck printed n.m. (theme_routes' members rows already said "nm"): the row names it, as every surface reads it."""
+    from tests.test_r48_reconcile import co
+    from app.intel import theme_data as D
+    r = D.company_row("US", "ATOM", co("ATOM", "Atomera Inc", 0.07, -300.0, -22.7))
+    assert r is not None and "ebitda" in (r.get("nm") or []), r and {k: r.get(k) for k in ("ebitda", "net", "nm")}
+    ok = D.company_row("US", "GOOD", co("GOOD", "Good Inc", 1000.0, 20.0, 100.0))
+    assert "nm" not in ok
+
+
+# ---------- LIVE11A-015: the public page's count against the app's ----------
+def test_11_015_the_public_page_says_the_members_it_does_not_list(monkeypatch):
+    """Fails before: the public Semiconductors page said "102 companies" while the app, deck and blog said 104, with no word of the 2 it
+    leaves out (a company placed by the map and not confirmed yet is never listed publicly)."""
+    from app import public_themes
+    payload = {"value_chain": [{"layer": "Ships", "companies": [{"ticker": "A", "name": "A Ltd", "verified": True},
+                                                                {"ticker": "B", "name": "B Ltd", "base": True, "basis": "industry"},
+                                                                {"ticker": "C", "name": "C Ltd", "placed": "ai"}]}]}
+    monkeypatch.setattr(public_themes, "_dive", lambda r, n, p: {})
+    monkeypatch.setattr(public_themes, "_index_caps", lambda r: {})
+    monkeypatch.setattr(public_themes, "_index_sales", lambda r: {})
+    monkeypatch.setattr(public_themes.stock_pages, "companies", lambda r: set())
+    v = public_themes.view({"region": "IN", "name": "Ships", "label": "Ships", "slug": "ships", "at": None}, payload)
+    page = public_themes.render(v)
+    assert "2 companies in 1 layer (1 more of the theme's 3 not listed: not confirmed by their own words or official industry yet)" in page
+
+
+# ---------- LIVE11A-020: a theme post says the day its map was made ----------
+def test_11_020_a_theme_post_says_its_map_s_day_beside_the_day_its_figures_were_worked_out():
+    """Fails before: the live Semiconductors post said "Published 17 Nov ... read of the theme on 17 Nov 2026" for a map made 7 Nov."""
+    import json
+    from datetime import datetime, timezone
+    from app import blog_research as BR
+    src = json.loads(next(BR.__file__ and __import__("pathlib").Path(BR.__file__).with_name("blog_themes").glob("*semiconductors*.json")).read_text())
+    src = {**src, "read_on": "2026-11-17", "map_on": "2026-11-07"}
+    post = BR.theme_post_from(src, datetime(2026, 11, 17, 12, tzinfo=timezone.utc))
+    text = json.dumps(post, ensure_ascii=False)
+    assert "Worked out on 17 Nov 2026 from StratLab's map of the theme made 7 Nov 2026" in text, text[:600]
+    dive = {"chain": {}, "layers": [], "map_at": datetime(2026, 11, 7, 16, tzinfo=timezone.utc).timestamp()}
+    assert BR.theme_source(dive, "Semiconductors", "US")["map_on"] == "2026-11-07"
