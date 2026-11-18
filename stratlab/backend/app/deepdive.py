@@ -37,6 +37,10 @@ def money(v: float, unit: str | None = None, digits: int = 0) -> str:
     sign = "-" if v < 0 else ""
     sym = _millions_of(unit)
     if sym:
+        # r66e (LIVE12A-009: a theme's total "Their market value $12,265 bn"): from a trillion up in trillions ("$12.3 tn"), as from a billion
+        # up in billions
+        if round(abs(v) / 1000, 1) >= 1000:
+            return f"{sign}{sym}{abs(v) / 1e6:,.{1 if abs(v) >= 1e7 else 2}f} tn"
         if round(abs(v), digits) >= 1000:     # to within 1%: one decimal from $10 billion, two below (and $999.6 m is $1.00 bn, not $1,000 m)
             return f"{sign}{sym}{abs(v) / 1000:,.{1 if abs(v) >= 10000 else 2}f} bn"
         return f"{sign}{sym}{abs(v):,.{digits}f} m"

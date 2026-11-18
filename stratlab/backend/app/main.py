@@ -412,6 +412,11 @@ def start_failed_jobs() -> None:
         _start(name, fn)
 
 
+def _theme_recheck_start():
+    from .intel import theme_recheck
+    theme_recheck.job.start()
+
+
 def start_jobs():
     try:
         manager.resume()  # crypto sessions always; India ones once Kite is logged in
@@ -449,6 +454,7 @@ def start_jobs():
     _start("stock-list", lambda: threading.Thread(target=stock_list_job, daemon=True, name="stock-list").start())
     _start("screens-index", lambda: threading.Thread(target=screen_indexer.loop, daemon=True, name="screens-index").start())
     _start("stock-prices", lambda: threading.Thread(target=stock_price_refresh_job, daemon=True, name="stock-prices").start())   # pages follow each close
+    _start("rotation", lambda: threading.Thread(target=rotation_job, daemon=True, name="rotation").start())   # sector charts at each close
     _start("screen_job", screen_job.start)
     _start("breadth_job", breadth_job.start)
     _start("library-seed-once", lambda: threading.Thread(target=library_seed_once, daemon=True, name="library-seed-once").start())
@@ -464,6 +470,7 @@ def start_jobs():
     _start("ipo.job", ipo.job.start)                    # IPOs: the exchanges' and regulators' pages, the bids through the day, the alerts
     _start("ai_providers.job", ai_providers.job.start)          # measures the AI models every 6 hours
     _start("memory-janitor", lambda: threading.Thread(target=memguard.janitor, daemon=True, name="memory-janitor").start())   # expired cache entries out, the heap trimmed (MEM-001)
+    _start("theme_recheck.job", _theme_recheck_start)     # r66e: every stored theme checked again after a version change, one at a time
     _start("autofix", lambda: threading.Thread(target=autofix.loop, daemon=True, name="autofix").start())   # self-healing: retries what failed, emails the owner only when that fails (owner, 4 Nov)
 
 
@@ -2515,6 +2522,25 @@ def rotation_after_close(now: datetime | None = None) -> list[str]:
             except Exception as e:                # the next pass tries again
                 print("rotation after close:", region, interval, str(e)[:120])
     return done
+
+
+ROTATION_START = 45               # seconds after startup of the first look for a sector chart behind its close (LIVE12A-003)
+ROTATION_EVERY = 5 * 60           # ...and between looks
+
+
+def rotation_job(sleep=time.sleep):
+    """LIVE12A-003: the kept sector charts brought to each close by a job of their own, a few minutes after the close and after a restart.
+    They were brought up at the end of the company pages' price pass, which waits 7 minutes after a start and then reads hundreds of
+    pages first, so after a morning deploy the India page showed "Closes up to 16 Nov" at 09:40 IST until a visit made the chart.
+    A look with nothing behind reads four stored copies and nothing else."""
+    sleep(ROTATION_START)
+    while True:
+        try:
+            if leader.leading():          # another container leads: it runs this look
+                rotation_after_close()
+        except Exception as e:
+            print("rotation after close:", str(e)[:120])
+        sleep(ROTATION_EVERY)
 
 
 _rotation_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="rotation-behind")
@@ -5667,10 +5693,6 @@ def stock_price_refresh_once(sleep=time.sleep) -> dict:
         # source not answering for a moment, cleared by the next pass a few minutes later; Admin calls it a Problem from the second
         # (owner, 13 Nov: "Company pages' prices" opened a check that cleared by itself)
         price_refresh_status[region]["failed_passes"] = (int(before.get("failed_passes") or 0) + 1) if price_pass_failed(price_refresh_status[region]) else 0
-    try:
-        rotation_after_close()
-    except Exception as e:
-        print("rotation after close:", str(e)[:120])
     price_refresh_status["last_run"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     from . import job_status
     job_status.kept("page-prices", dict(price_refresh_status))       # so Admin has it after a restart (R94-001)

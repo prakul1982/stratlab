@@ -156,4 +156,4 @@ export const themeApi = {
 };
 
 
-export { amount, pc, pcw, times, points, span, layerLines, medCell, calcOf, calcWords, CALC_WORDS, MIN_BASE, NO_WORDS, NOT_QUOTED, noWords, ownWords, libraryLabel, LIBRARY_HEAD, bizFor, plainIndustry, type LayerLine } from "./themeFormat";
+export { amount, pc, pcw, times, points, span, layerLines, medCell, calcOf, calcWords, CALC_WORDS, MIN_BASE, NO_WORDS, NOT_QUOTED, noWords, olderNote, DIVE_UPDATING, unquotedLine, ownWords, libraryLabel, LIBRARY_HEAD, bizFor, plainIndustry, type LayerLine } from "./themeFormat";

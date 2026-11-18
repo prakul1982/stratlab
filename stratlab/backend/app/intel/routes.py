@@ -1056,6 +1056,13 @@ def theme_map(profile, region: str, q: str):
     hit = theme_library.stored(r, q)
     if hit is not None:
         return r, " ".join(q.split())[:80], {**hit["payload"], "_library": hit["name"]}, index_rows(r)
+    # r66e (LIVE12A-002): a theme stored only under older rules is served from that read at once ("_older": never kept again from it) while
+    # the re-check job checks it again, this theme first (theme_recheck.ask)
+    old = theme_library.older(r, q)
+    if old is not None:
+        from . import theme_recheck
+        theme_recheck.ask(r, old["name"])
+        return r, " ".join(q.split())[:80], {**old["payload"], "_library": old["name"], "_older": True}, index_rows(r)
     return sector_map(profile, region, q, False)
 
 
@@ -1087,6 +1094,14 @@ def sector(q: str, region: str = "IN", refresh: bool = False, profile=Depends(cu
     r = region_of(region)
     hit = theme_library.stored(r, q)
     state = None
+    if hit is None and not refresh:
+        # r66e (LIVE12A-002: Semiconductors' first visit after a rules bump waited on "Checking each company against its own description…"
+        # for 90 s): the read stored under older rules is served at once, saying so, and the re-check job checks it again, this theme first
+        old = theme_library.older(r, q)
+        if old is not None:
+            from . import theme_recheck
+            return ok({**sector_served(r, old["payload"]),
+                       "older": {"at": computed._iso(old["at"]) if old.get("at") else None, "rechecking": theme_recheck.ask(r, old["name"])}})
     if hit is not None:
         if not refresh:
             return ok(sector_served(r, hit["payload"]))

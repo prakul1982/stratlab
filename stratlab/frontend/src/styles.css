@@ -1902,6 +1902,8 @@ a.k-chip { display: inline-flex; align-items: center; text-decoration: none; }
    (R5O-017: hundreds of targets under 32px on ETF vs NAV, Market events and the screener) */
 @media (max-width: 640px) {
   .k-table td a, .k-table th a, .k-table td .btn.sm, .k-table td button, .k-cal-ev a, .k-cal-evs button { min-height: 32px; display: inline-flex; align-items: center; }
+  /* LIVE12A-005: a flex box drops the space between a link's parts, so a symbol ran into its name ("FIXComfort Systems"): the gap stands for it */
+  .k-table td a, .k-table th a, .k-cal-ev a { column-gap: 0.3em; }
   .k-table td .info-btn { display: grid; min-height: 40px; }   /* VR1-163: an (i) in a row's name keeps its own 40px box and circle, not the 32px inline-flex of other table buttons */
   .k-table td input[type="checkbox"], .k-table th input[type="checkbox"] { min-width: 24px; min-height: 24px; margin: 4px; }
   /* R6O-024: the screener's sort headers, the chart's icon buttons, a card's small header links and the reminder ticks
@@ -3124,6 +3126,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 }
 
 /* ---- themes: the deep dive (THEME-1) ---- */
+/* LIVE12A-007: a company's own words are the widest column of its layer's table, never squeezed narrower than its labels beside it */
+@media (min-width: 901px) { #theme-members .k-table td.k-lead { min-width: 18rem; } }
 .k-section-title { font-family: var(--serif); font-size: var(--t-card); font-weight: 600; margin: var(--s5) 0 0; }
 .k-table tr[data-kind="median"] > * { border-top: 2px solid var(--line-2); font-weight: 600; }
 .k-table tr[data-kind="range"] > * { color: var(--muted); font-size: var(--t-note); }

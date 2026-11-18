@@ -19,7 +19,7 @@ import { filedOn } from "./BizUpdates";
 import { fmtDate, pct, ratio, safeHref } from "../lib/format";
 import type { Co, Region, SectorAI } from "../lib/research";
 import {
-  amount, calcOf, calcWords, layerLines, medCell, MIN_BASE, NO_WORDS, noWords, ownWords, pc, pcw, plainIndustry, points, span, times,
+  amount, calcOf, calcWords, layerLines, medCell, MIN_BASE, NO_WORDS, noWords, ownWords, unquotedLine, pc, pcw, plainIndustry, points, span, times,
   themeApi, EVIDENCE_ONE, evidenceLine, evidenceOf, membershipLine,
   type BizRow, type Business, type Dive, type DiveRow, type Layer, type LayerLine, type Listing, type NewsRow, type Prices, type Stat,
 } from "../lib/theme";
@@ -118,16 +118,23 @@ export function MembersCard({ r, region, dive }: { r: SectorAI; region: Region; 
   const byOf = (c: Co) => (c.base ? `${c.basis === "list" ? "list" : "official"}|${ev ? ev(c.ticker) : ""}` : `added|${c.verified ? 1 : 0}`);
   const allRows = groups.flatMap((g) => g.rows);
   const sameBy = allRows.length > 1 && new Set(allRows.map(byOf)).size === 1;
-  const byOnce = sameBy && allRows[0] ? (allRows[0].base ? `${allRows[0].basis === "list" ? "Named in the theme's list" : "Official industry"}${ev ? ` · ${EVIDENCE_ONE[ev(allRows[0].ticker)]}` : ""}`
-    : allRows[0].verified ? "Added · Description-verified" : "Added · Not yet description-verified") : null;
+  const byWords = (c: Co) => (c.base ? `${c.basis === "list" ? "Named in the theme's list" : "Official industry"}${ev ? ` · ${EVIDENCE_ONE[ev(c.ticker)]}` : ""}`
+    : c.verified ? "Added · Description-verified" : "Added · Not yet description-verified");
+  const byOnce = sameBy && allRows[0] ? byWords(allRows[0]) : null;
+  const checkedOf = (c: Co) => (c.base ? ev?.(c.ticker) === "description_verified" : !!c.verified);
+  const unquoted = allRows.filter((c) => !ownWords(c.what, c.name));
+  const unquotedNote = unquotedLine(unquoted.filter(checkedOf).length, unquoted.filter((c) => !checkedOf(c)).length);
   const cols: Column<Co>[] = [
     { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (c) => <><Name r={region} sym={c.ticker} name={c.name} /><span className="k-sub-line k-muted">{c.ticker}</span></> },
     ...(oneIndustry ? [] : [{ key: "i", header: "Industry", wrap: true, cell: (c: Co) => indOf(c) || dash } as Column<Co>]),
     { key: "m", header: "Market value", numeric: true, cell: (c) => amount(caps.get(c.ticker) ?? c.cap ?? null, region) },
     // LIVE11A-010: on a phone the quote runs across the card under the name, not squeezed into a half column beside an empty one
+    // r66e (LIVE12A-001): a company with no line quoted has an empty cell; how many and why is said once above the tables (unquotedLine)
     { key: "w", header: "What it does, in its own words", wrap: true, lead: true, cell: (c) => { const w = ownWords(c.what, c.name);
-      return w ? <>“{w}”</> : <span className="k-muted">{noWords(c.base ? ev?.(c.ticker) === "description_verified" : !!c.verified)}</span>; } },
-    ...(sameBy ? [] : [{ key: "f", header: "In the theme by", cell: (c: Co) => (c.base ? <>{c.basis === "list" ? "Named in the theme's list" : "Official industry"}
+      return w ? <>“{w}”</> : <span className="k-muted" aria-label={noWords(c.base ? ev?.(c.ticker) === "description_verified" : !!c.verified)}>–</span>; } },
+    // LIVE12A-007: the column wraps (its longest words, "Industry-supported (official industry only)", held Semiconductors' table at 1,077 px in
+    // a 1,004 px card)
+    ...(sameBy ? [] : [{ key: "f", header: "In the theme by", wrap: true, cell: (c: Co) => (c.base ? <>{c.basis === "list" ? "Named in the theme's list" : "Official industry"}
       {ev && <span className="k-sub-line k-muted" data-testid="member-evidence">{EVIDENCE_ONE[ev(c.ticker)]}</span>}</>
       : <><Badge tone="plain" dot={false}>Added</Badge><span className="k-sub-line">{c.verified ? "Description-verified" : "Not yet description-verified"}</span></>) } as Column<Co>]),
   ];
@@ -142,6 +149,7 @@ export function MembersCard({ r, region, dive }: { r: SectorAI; region: Region; 
         <b>{total.toLocaleString("en-IN")} compan{total === 1 ? "y" : "ies"}</b>: {base.toLocaleString("en-IN")} from the official industry list, {named > 0 && `${named.toLocaleString("en-IN")} named in the theme's list, `}{added.toLocaleString("en-IN")} added
         {added > 0 && ` (${p?.confirmed ?? 0} description-verified)`}.
       </p>
+      {unquotedNote && <p className="k-small k-muted" data-testid="theme-unquoted">{unquotedNote}</p>}
       {byOnce && <p className="k-small k-muted" data-testid="theme-by-once">Every company here is in the theme by: {byOnce}.</p>}
       {evLine && <p className="k-small k-muted" data-testid="theme-evidence">{evLine}.{withFigures != null && <> With figures: {withFigures.toLocaleString("en-IN")} (the membership check reads no figures).</>}</p>}
       {inds.length > 0
@@ -149,12 +157,17 @@ export function MembersCard({ r, region, dive }: { r: SectorAI; region: Region; 
         : named > 0 ? <p className="k-small k-muted">No official industry is this theme's core on its own, so its companies are the theme's named list and the ones the map names.</p>
         : <p className="k-small k-muted">{p?.industries_by === "pending" ? "Until the theme's official industries are picked, its companies are the ones the map names." : "No official industry is this theme's core, so every company here is one the map names, checked against its own description."}</p>}
       {(p?.unclassified ?? 0) > 0 && <p className="k-note">{p!.unclassified!.toLocaleString("en-IN")} US-listed companies have no industry on file yet, so they can't join a theme by industry until their SEC record is read; a few are read each time a theme is checked.</p>}
-      {groups.map((g) => <MemberGroup key={g.name} name={g.name} official={g.official} rows={g.rows} cols={cols} evidence={evidenceLine(dive, g.rows.map((c) => c.ticker))} />)}
+      {groups.map((g) => {
+        // LIVE12A-007: a layer whose companies are all in the theme the same way says it once over its table, not on every row
+        const same = !sameBy && g.rows.length > 1 && new Set(g.rows.map(byOf)).size === 1;
+        return <MemberGroup key={g.name} name={g.name} official={g.official} rows={g.rows} cols={same ? cols.filter((c) => c.key !== "f") : cols}
+          evidence={evidenceLine(dive, g.rows.map((c) => c.ticker))} byOnce={same ? byWords(g.rows[0]) : null} />;
+      })}
     </Card>
   );
 }
 
-function MemberGroup({ name, official, rows, cols, evidence }: { name: string; official: boolean; rows: Co[]; cols: Column<Co>[]; evidence: string }) {
+function MemberGroup({ name, official, rows, cols, evidence, byOnce }: { name: string; official: boolean; rows: Co[]; cols: Column<Co>[]; evidence: string; byOnce?: string | null }) {
   const [all, setAll] = useState(false);
   const first = usePhone() ? PHONE_FOLD : MEMBERS_SHOWN;
   const shown = all ? rows : rows.slice(0, first);
@@ -162,6 +175,7 @@ function MemberGroup({ name, official, rows, cols, evidence }: { name: string; o
     <section className="k-stack">
       <h3 className="k-sub">{name}{official && <span className="k-muted"> · official industry</span>}</h3>
       {evidence && <p className="k-small k-muted" data-testid="layer-evidence">{evidence}</p>}
+      {byOnce && <p className="k-small k-muted" data-testid="layer-by-once">Every company in this layer is in the theme by: {byOnce}.</p>}
       <DataTable label={`${name}: companies in the theme`} columns={cols} rows={shown} rowKey={(c) => c.ticker} />
       {rows.length > first && (all ? <ShowLess onLess={() => setAll(false)} /> : <button type="button" className="btn quiet sm" onClick={() => setAll(true)}>{`Show all ${rows.length} companies`}</button>)}
     </section>

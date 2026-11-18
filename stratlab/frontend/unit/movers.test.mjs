@@ -46,7 +46,8 @@ test("the page is a lazy route in Market today beside the Heatmap, with a deep l
   const { PAGE_GATES } = await import("../src/lib/gates.ts");
   assert.deepEqual(PAGE_GATES["/invest/movers"], { feature: "movers", whole: false });
   const page = read("src/pages/MoversPage.tsx");
-  assert.match(page, /csv=\{locked \? undefined :/);                                // no CSV on the teaser
+  // (updated on purpose, LIVE12A-005: the CSV button moved from over the list into the card's head; still none on the teaser)
+  assert.match(page, /actions=\{!locked && rows\.length > 0 \? <CsvButton /);       // no CSV on the teaser
   assert.match(page, /disabled=\{locked\}/);                                         // nor the filters
   assert.match(page, /<PlanNote plan="basic">/);
   assert.match(page, /<Working /);

@@ -196,7 +196,7 @@ export function layout(tiles: Tile[], o: { size: SizeBy; color: ColorBy; period:
 /** The words a tile of `w` × `h` px has room for: the font size (15, 12 or 10px; 0 for none) and whether the figure goes under the
  * symbol. `width(text, weight)` is the text's width at 10px in the page's font; a width grows with the size. Nothing is shown
  * that its tile would cut. */
-export function tileWords(symbol: string, figure: string, w: number, h: number, width: (text: string, weight: number) => number): { px: number; fig: boolean; vert?: boolean } {
+export function tileWords(symbol: string, figure: string, w: number, h: number, width: (text: string, weight: number) => number): { px: number; fig: boolean; vert?: boolean; split?: number } {
   const room = w - 7;                                                    // the tile's padding and a pixel to spare
   const along = (px: number, r: number) => (width(symbol, 600) * px) / 10 + symbol.length * 0.01 * px <= r;
   const fits = (px: number) => along(px, room);
@@ -208,6 +208,17 @@ export function tileWords(symbol: string, figure: string, w: number, h: number, 
   if (!px && h > w) {
     const v = w >= 20 && along(12, h - 7) ? 12 : w >= 15 && along(10, h - 7) ? 10 : 0;
     if (v) return { px: v, fig: false, vert: true };
+  }
+  // LIVE12A-010: a tile tall enough for two lines (about 57 × 53 px) but too narrow for a long symbol in one names it over two, split at
+  // its middle (or at a hyphen or "&" near it), rather than not at all
+  if (!px && h >= 44 && w >= 30 && symbol.length >= 4) {
+    const mid = Math.ceil(symbol.length / 2);
+    const mark = [mid, mid - 1, mid + 1].find((k) => k > 0 && k < symbol.length && /[-&]/.test(symbol[k - 1]));
+    const k = mark ?? mid;
+    const fitsPart = (part: string, q: number) => (width(part, 600) * q) / 10 + part.length * 0.01 * q <= room;
+    const two = (q: number) => fitsPart(symbol.slice(0, k), q) && fitsPart(symbol.slice(k), q);
+    const v = two(10) ? 10 : two(9) ? 9 : 0;
+    if (v) return { px: v, fig: false, split: k };
   }
   return { px, fig };
 }

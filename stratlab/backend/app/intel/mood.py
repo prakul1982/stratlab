@@ -196,8 +196,9 @@ def breadth_block(view_today: dict | None, live: dict | None, group_name: str, s
                      "change": round(now - before, 1 if unit == "%" else 0) if now is not None and before is not None else None})
     # live: each count against the last close's, the last close's figure in its own column
     before = v if lv else prev
-    row("adv", "Stocks that rose", adv, before("adv"), "count", "Stocks closing above the previous close.")
-    row("dec", "Stocks that fell", dec, before("dec"), "count", "Stocks closing below the previous close.")
+    # LIVE12A-017: a live count is of stocks above the previous close so far, not closing above it
+    row("adv", "Stocks that rose", adv, before("adv"), "count", "Stocks above the previous close at the latest count." if lv else "Stocks closing above the previous close.")
+    row("dec", "Stocks that fell", dec, before("dec"), "count", "Stocks below the previous close at the latest count." if lv else "Stocks closing below the previous close.")
     row("unch", "Unchanged", unch, before("unch"), "count", "Stocks closing at the previous close.")
     # LIVE5-003: the live rounds count today's new 52-week highs and lows too (a day's high past the last 251 sessions' highest), so
     # after the close the day's figure is in its own column, not "At the close" for the hours until the evening run
@@ -363,6 +364,9 @@ def headline_of(indices: list[dict], sectors: dict | None, cmp: dict | None, bre
     return out + "."
 
 
+ZONE = {"IN": "IST", "US": "ET"}           # the clock a market's live counts are timed in
+
+
 def lines_of(p: dict) -> list[str]:
     """Three to five plain lines, each from one table of the payload, in this order of importance. No advice, no forecast."""
     out: list[tuple[str, str]] = []
@@ -374,7 +378,10 @@ def lines_of(p: dict) -> list[str]:
     b = p.get("breadth")
     if b and b.get("adv") is not None and b.get("dec") is not None:
         # after the close the live round is the day's final count: "on 6 Nov", never "so far today" (LIVE5-009)
-        when = ("so far today" if p.get("is_open", True) else f"on {day_words(b.get('day'))}" if b.get("day") else "") if b.get("live") \
+        # LIVE12A-012: in session the count says its own quarter-hour, so a card read at 09:36 with the 09:30 count is never taken for the
+        # table's later figures beside it ("118 … rose and 382 fell so far today" at 09:54 while Breadth showed 77/422 at 09:45)
+        at = f" (the {b['at']} {ZONE.get(p.get('region'), '')} count)".replace(" )", ")") if b.get("at") else ""
+        when = (f"so far today{at}" if p.get("is_open", True) else f"on {day_words(b.get('day'))}" if b.get("day") else "") if b.get("live") \
             else f"on {day_words(b.get('day'))}" if b.get("day") else ""
         tail = f"; {fpct(b['pct50'], 1, sign=False)} are above their 50-day average" if b.get("pct50") is not None else ""
         out.append(("breadth", f"{fnum(b['adv'])} of {fnum(b['stocks'])} {b['group']} stocks rose and {fnum(b['dec'])} fell {when}{tail}.".replace("  ", " ")))

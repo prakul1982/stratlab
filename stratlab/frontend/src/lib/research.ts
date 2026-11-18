@@ -96,6 +96,8 @@ export interface SectorAI {
   /** `official`: one official industry's companies that the AI didn't place in a layer of its own */
   value_chain: { layer: string; description: string; companies: Co[]; official?: boolean; basis?: "industry" | "list" }[];
   tailwinds: SectorClaim[]; risks: SectorClaim[]; generated_at: number; refresh_state?: RefreshState;
+  /** r66e (LIVE12A-002): the read stored under an earlier version of the checks, served at once; `rechecking` while it is checked again */
+  older?: { at: string | null; rechecking: boolean } | null;
   /** the placement check: `checked` false while some companies' descriptions are still being read (they are not shown until checked) */
   placements?: {
     checked: boolean; pending: number; left_out: number; placed: number;

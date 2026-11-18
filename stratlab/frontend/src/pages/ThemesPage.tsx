@@ -4,7 +4,7 @@ import { useApp } from "../lib/app";
 import { fmtDate, marketTz } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { THEME_IDEAS, researchApi, useRegion, type SectorAI } from "../lib/research";
-import { bizFor, LIBRARY_HEAD, libraryLabel, themeApi, type Business, type Dive, type LibraryTheme, type Listing, type NewsRow, type Prices } from "../lib/theme";
+import { bizFor, DIVE_UPDATING, LIBRARY_HEAD, libraryLabel, olderNote, themeApi, type Business, type Dive, type LibraryTheme, type Listing, type NewsRow, type Prices } from "../lib/theme";
 import { StoredNote, StoredStamp, useStoredRefresh } from "../components/StoredStamp";
 import { RegionSwitch } from "../components/Research";
 import { ShareResearchButton } from "../components/ShareResearch";
@@ -32,6 +32,9 @@ const DIVE_EVERY_MS = 20_000;
 // (THEMES item 6; LIVE3-001: the base shows at once, the AI's layers, explanations and checks fill in after)
 const CHECK_TRIES = 18;
 const CHECK_EVERY_MS = 5000;
+// r66e (LIVE12A-002): a theme served from its read under an earlier version of the checks is asked for again, gently, while it is checked again
+const OLDER_TRIES = 12;
+const OLDER_EVERY_MS = 30_000;
 
 export function ThemesPage() {
   const [region, setRegion] = useRegion();
@@ -77,7 +80,7 @@ export function ThemesPage() {
   }, [q, region]);
 
   // the numbers load beside the map: each card fills when its own read is in
-  const key = r ? `${q}|${region}|${r.generated_at}|${r.placements?.placed ?? 0}|${r.placements?.pending ?? 0}` : "";
+  const key = r ? `${q}|${region}|${r.generated_at}|${r.placements?.placed ?? 0}|${r.placements?.pending ?? 0}|${r.older ? "older" : ""}` : "";
   useEffect(() => {
     if (!r || !q) return;
     let live = true;
@@ -145,6 +148,14 @@ export function ThemesPage() {
     return () => clearTimeout(t);
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [pending, r]);
+  const olderTries = useRef(0);
+  useEffect(() => { olderTries.current = 0; }, [q, region]);
+  useEffect(() => {
+    if (!r?.older?.rechecking || olderTries.current >= OLDER_TRIES) return;
+    const t = setTimeout(() => { olderTries.current++; run(q, { keep: true }); }, OLDER_EVERY_MS);
+    return () => clearTimeout(t);
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [r]);
   const draftIt = async () => {
     setDraft("Drafting…");
     try { const d = await themeApi.draft(region, q); setDraft(d.result === "nothing notable" || d.result === "too few figures" ? "The theme needs two layers with margin figures for a post." : d.slug ? `Draft saved (${d.result}). It is hidden: read it under Admin, Blog, and publish it there if it is right.` : `Not drafted: ${d.problem ?? d.result}.`); }
@@ -187,6 +198,7 @@ export function ThemesPage() {
               <SaveButton kind="theme" label="Save theme" name={r.sector || q} params={{ q, region }} snap={() => (themeReady(r) ? themeSnap(r) : null)} />
               {themeReady(r) && <ShareResearchButton kind="theme" region={region} target={q} label="this theme" />}</>} />
             <StoredNote busy={rf.busy} state={rf.state} at={r.generated_at > 0 ? r.generated_at : null} tz={marketTz(region)} />
+            {olderNote(r.older, fmtDate) && <p className="k-note" data-testid="theme-older">{olderNote(r.older, fmtDate)}</p>}
             {r.summary && <p className="k-lede">{r.summary}</p>}
             {r.core && <p className="k-small">Everything converges on <b>{r.core}</b>.</p>}
             <ThemeDownloads r={r} dive={dive} region={region} theme={q} />
@@ -224,6 +236,7 @@ export function ThemesPage() {
           {!dive && !diveError && <Card><Skeleton label="Working out the theme's figures" lines={5} /></Card>}
           {dive && (
             <>
+              {dive.updating && <p className="k-note" data-testid="theme-dive-updating">{DIVE_UPDATING}</p>}
               {/* on every theme with figures (owner, 7 Nov: "did you remove the blog button for me too?": it showed only when the figures were notable) */}
               {me?.is_admin && dive.members > 0 && (
                 <div className="k-row" data-testid="theme-blog">

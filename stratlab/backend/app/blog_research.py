@@ -932,7 +932,7 @@ def theme_post_from(src: dict, now: datetime | None = None) -> dict:
         {"t": "p", "text": ["Read about any listed company on its ", {"a": "company page", "href": "/stocks"}, "."]},
     ]
     title = f"{sector}: where the {'return on equity' if key == 'roe' else 'margin'} sits along the chain"
-    summary = (lines[0] if lines and chain.get("line") else intro)
+    summary = (td.finding_first(lines[0]) if lines and chain.get("line") else intro)      # r66e (LIVE12A-009): the finding first
     return {"slug": f"{THEME_PREFIX}{td.slug(src.get('theme') or sector)}-margins-{region.lower()}", "kind": "research",
             "market": region if region in ("IN", "US") else None, "title": title, "summary": summary[:380], "blocks": blocks,
             "published_at": blog.now_iso(now), "indexable": True, "published": False, "day": blog.now_iso(now)[:10], "src": src}

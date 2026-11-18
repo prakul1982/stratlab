@@ -71,6 +71,23 @@ export const NO_WORDS = "No description in its own words yet";
  *  sentence): said as that, never "No description in its own words yet" beside its "Description-verified". */
 export const NOT_QUOTED = "Checked against its own description; no line of it is quoted here";
 export const noWords = (checked: boolean) => (checked ? NOT_QUOTED : NO_WORDS);
+/** r66e (LIVE12A-002): a theme shown from its read under an earlier version of the checks, and its figures from the last stored read while
+ *  the new one is worked out, say so once (the page asks again on its own). */
+export function olderNote(o: { at: string | null; rechecking: boolean } | null | undefined, fmtDay: (iso: string) => string): string | null {
+  if (!o) return null;
+  return `This is the theme as it was checked${o.at ? ` on ${fmtDay(o.at.slice(0, 10))}` : ""}, under an earlier version of StratLab's checks.`
+    + (o.rechecking ? " It is being checked again now and fills in here when that is done." : "");
+}
+/** r66e (LIVE12A-001: "Checked against its own description; no line of it is quoted here" on 30 rows of one table, "No description in its own
+ *  words yet" on 20 more): the companies with no line quoted are counted in one line above the table, their cells left empty. */
+export function unquotedLine(checked: number, none: number): string | null {
+  const n = checked + none;
+  if (n === 0) return null;
+  const parts = [checked > 0 ? `${checked} checked against their own description, none of whose sentences is one this page quotes (a history, a ranking, an encyclopedia's opening)` : "",
+    none > 0 ? `${none} with no description in their own words yet` : ""].filter(Boolean);
+  return `No line of their own words is quoted for ${n} ${n === 1 ? "company" : "companies"} here: ${parts.join("; ")}.`;
+}
+export const DIVE_UPDATING = "These figures are from the theme's last stored read; the new read is being worked out and takes their place here when it is done.";
 const WORK = /\b(?:provid\w*|produc(?:es|ers?|ing|ts?|tion)|manufactur\w*|makes?|making|makers?|sells?|selling|suppl(?:y|ies|ying|iers?)|designs?|designing|develop(?:s|ing|ers?)|operat(?:es|ing|ors?)|offers?|offering|distribut\w*|retail\w*|services?|servic(?:es|ing)|foundr(?:y|ies)|licens\w*|leases?|leasing|lend(?:s|ing|ers?)|insur\w*|earns?|revenues?|customers?|clients?|subscri\w*|platforms?|stores?|brands?|engag(?:ed|es)|build(?:s|ing|ers?)|construct\w*|mines?|mining|miners?|refin\w*|generat(?:es|ing|ors?)|transmi\w*|explor(?:es|ing|ation)|invest(?:s|ing|ments?)|manag(?:es|ing)|deliver\w*|software|hardware|solutions?|products?|systems?|equipment|devices?|vehicles?|drugs?|medicines?|banking|bank|loans?|chemicals?|steel|cement|power|electricity|specializ\w*|specialis\w*|focus(?:es|ed) on|helps?|enables?|protect\w*|secur(?:es|ing))\b/i;
 const FILING_TITLE = /^(?:annual|quarterly|current|interim|half[- ]yearly)\s+report\b|^(?:form\s+)?(?:10-[kq]|20-f|40-f|8-k|6-k|def\s*14a)\b|^(?:press release|investor presentation|board meeting|outcome of board meeting|shareholding pattern|financial results)\b/i;
 const LEGAL_WORDS = /\b(?:inc|incorporated|corp|corporation|co|company|ltd|limited|plc|llc|lp|nv|sa|ag|the|holdings?|group)\b\.?/gi;
