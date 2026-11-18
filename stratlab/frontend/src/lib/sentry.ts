@@ -43,31 +43,23 @@ function listen() {
 /** Error alerts: only when a Sentry DSN is in config.js, and the SDK is only downloaded then. With `lazy` (a visitor's
  * page: the policies, the library), it isn't downloaded at all until something actually goes wrong, so a page of
  * text doesn't carry the error reporter's weight (R6V-018); the error that woke it is reported once it has loaded. */
-/** LIVE12A-002: without `lazy` (a signed-in app), the SDK (about 140 kB compressed) is downloaded once the first page has drawn and the
- * browser is idle, not beside the app's own code on the first load, where it slowed the first app page of a session; an error before
- * then wakes it at once and is reported, as with `lazy`. */
-export const SENTRY_AFTER_MS = 4000;
+/** LIVE12A-002: without `lazy` (a signed-in app), the SDK (about 140 kB compressed) is downloaded a few seconds after the page has
+ * loaded, not beside the app's own code on the first load, where it slowed the first app page of a session; an error before then wakes
+ * it at once and is reported, as with `lazy`. Once it is loaded its own handlers report, and the early ones stop (nothing twice). */
+const SENTRY_AFTER_MS = 4000;
 
 export function startErrorReports({ lazy = false }: { lazy?: boolean } = {}) {
   listen();
   if (!CFG.SENTRY_DSN) return;
-  const off = () => {
-    window.removeEventListener("error", onError);
-    window.removeEventListener("unhandledrejection", onRejection);
-  };
   const first = (err: unknown) => {
-    off();
+    removeEventListener("error", onError);
+    removeEventListener("unhandledrejection", onRejection);
     void load().then((S) => { if (S && err) S.captureException(err); });
   };
   const onError = (e: ErrorEvent) => { if (e.error) first(e.error); };                 // a script error, not a failed image
   const onRejection = (e: PromiseRejectionEvent) => first(e.reason);
-  window.addEventListener("error", onError);
-  window.addEventListener("unhandledrejection", onRejection);
-  if (lazy) return;
-  // once loaded, the SDK's own handlers report errors: the early ones above stop, so nothing is reported twice
-  const now = () => { off(); void load(); };
-  const later = () => { const w = window as Window & { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => number };
-    if (w.requestIdleCallback) w.requestIdleCallback(now, { timeout: SENTRY_AFTER_MS }); else now(); };
-  if (document.readyState === "complete") window.setTimeout(later, SENTRY_AFTER_MS);
-  else window.addEventListener("load", () => window.setTimeout(later, SENTRY_AFTER_MS), { once: true });
+  addEventListener("error", onError);
+  addEventListener("unhandledrejection", onRejection);
+  const go = () => setTimeout(first, SENTRY_AFTER_MS);
+  if (!lazy) { if (document.readyState == "complete") go(); else addEventListener("load", go, { once: true }); }
 }

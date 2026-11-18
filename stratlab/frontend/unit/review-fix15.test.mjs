@@ -28,8 +28,8 @@ test("LIVE12A-008: the Usual move column goes when no row has a usual move (a 's
   assert.equal(movesEmpty(rows, back), true);
   assert.equal(movesEmpty(rows, { ...back, S1: { moves: { avg: 3, last: [1] } } }), false);
   const f = read("src/components/CalendarFilters.tsx");
-  assert.match(f, /export const sizeChoices = \(sizes: Facets\["sizes"\], picked: string\[\]\) => sizes\.filter\(\(s\) => s\.count > 0 \|\| picked\.includes\(s\.id\)\);/);
-  assert.match(f, /options=\{sizeChoices\(facets\.sizes, filters\.size\)\.map/);
+  assert.match(f, /export const sizeChoices = \(sizes: Facets\["sizes"\], picked: string\[\], narrowed = false\) => sizes\.filter\(\(s\) => narrowed \|\| s\.count > 0 \|\| picked\.includes\(s\.id\)\);/);
+  assert.match(f, /options=\{sizeChoices\(facets\.sizes, filters\.size, active > 0\)\.map/);
 });
 
 test("LIVE12A-005: Movers on a phone: the Stocks field is drawn while the lists load, the loading card holds the list's place, the CSV is in the card's head, and a symbol never runs into its name", () => {
@@ -65,7 +65,8 @@ test("LIVE12A-010: a mid-size heatmap tile (about 57 × 53 px) names a long symb
   assert.deepEqual(tileWords("HINDUNILVR", "+1.2%", 57, 53, width), { px: 10, fig: false, split: 5 });
   assert.deepEqual(tileWords("BAJAJ-AUTO", "+1.2%", 46, 50, width), { px: 9, fig: false, split: 6 });       // split after the hyphen
   assert.deepEqual(tileWords("HINDUNILVR", "+1.2%", 60, 40, width), { px: 0, fig: false });                   // one line's height: none
-  assert.match(read("src/components/chart/Treemap.tsx"), /\{split \? <>\{p\.tile\.s\.slice\(0, split\)\}<br \/>\{p\.tile\.s\.slice\(split\)\}<\/> : p\.tile\.s\}/);
+  assert.match(read("src/components/chart/Treemap.tsx"), /\{split \? <>\{p\.tile\.s\.slice\(0, split\)\}<wbr \/>\{p\.tile\.s\.slice\(split\)\}<\/> : p\.tile\.s\}/);
+  assert.match(read("src/components/chart/treemap.css"), /\.hm-sym\.two \{ white-space: normal; width: min-content;/);
   const h = read("src/pages/HeatmapPage.tsx");
   assert.match(h, /data-testid="hm-count"/);
   assert.match(h, /onMap\.toLocaleString\("en-IN"\)\}<\/b> of \{tiles\.length\.toLocaleString\("en-IN"\)\} companies on the map/);
@@ -91,11 +92,11 @@ test("LIVE12A-013: a visitor's page code and the visitor half are asked for besi
 
 test("LIVE12A-002: a signed-in app's first load doesn't download the error reporter beside its own code: it comes after the page has drawn", () => {
   const s = read("src/lib/sentry.ts");
-  assert.match(s, /export const SENTRY_AFTER_MS = 4000;/);
+  assert.match(s, /const SENTRY_AFTER_MS = 4000;/);
   assert.doesNotMatch(s, /if \(!lazy\) \{ void load\(\); return; \}/);
-  assert.match(s, /if \(lazy\) return;\n/);
-  assert.match(s, /window\.addEventListener\("load", \(\) => window\.setTimeout\(later, SENTRY_AFTER_MS\), \{ once: true \}\);/);
-  assert.match(s, /const now = \(\) => \{ off\(\); void load\(\); \};/);          // once loaded, the early listeners stop: nothing twice
+  assert.match(s, /const go = \(\) => setTimeout\(first, SENTRY_AFTER_MS\);/);
+  assert.match(s, /if \(!lazy\) \{ if \(document\.readyState == "complete"\) go\(\); else addEventListener\("load", go, \{ once: true \}\); \}/);
+  assert.match(s, /removeEventListener\("error", onError\);/);             // once loaded, the early listeners stop: nothing twice
 });
 
 test("LIVE12A-013/002: the bundler's preload helper rides in the start-up file, so the entry never waits for React before asking for a page's code", () => {

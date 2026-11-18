@@ -105,6 +105,7 @@
 @media (max-width: 640px) { .hm-legend-step { min-width: 44px; padding: 0 5px; font-size: 11px; } }
 
 /* LIVE10A-012: a tall, narrow tile names its symbol down its length */
-.hm-sym:has(br) { line-height: 1.15; text-align: center; }   /* LIVE12A-010: a long symbol over two lines in a mid-size tile */
+/* LIVE12A-010: a long symbol over two lines in a mid-size tile, broken only where the tile's words put a break (one word still when copied) */
+.hm-sym.two { white-space: normal; width: min-content; line-height: 1.15; text-align: center; }
 .hm-tile.vert { justify-content: center; align-items: center; }
 .hm-tile.vert .hm-sym { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; }

@@ -102,7 +102,7 @@ export function Treemap({ tiles, size, color, period, group, index, query = "", 
                 style={{ left: p.box.x + GAP / 2, top: p.box.y + GAP / 2, width: w, height: h }}
                 aria-label={`${p.tile.n}, ${text}`} onMouseEnter={move(p)} onMouseMove={move(p)}>
                 {/* the link's name says both in words; the tile's own letters are the picture */}
-                {px > 0 && <span className="hm-sym" aria-hidden="true">{split ? <>{p.tile.s.slice(0, split)}<br />{p.tile.s.slice(split)}</> : p.tile.s}</span>}
+                {px > 0 && <span className={split ? "hm-sym two" : "hm-sym"} aria-hidden="true">{split ? <>{p.tile.s.slice(0, split)}<wbr />{p.tile.s.slice(split)}</> : p.tile.s}</span>}
                 {fig && <span className="hm-fig" aria-hidden="true">{text}</span>}
               </Link>
             );
