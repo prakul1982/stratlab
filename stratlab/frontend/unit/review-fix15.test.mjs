@@ -64,7 +64,8 @@ test("LIVE12A-010: a mid-size heatmap tile (about 57 × 53 px) names a long symb
   const width = (text) => text.length * 6.5;
   assert.deepEqual(tileWords("HINDUNILVR", "+1.2%", 57, 53, width), { px: 10, fig: false, split: 5 });
   assert.deepEqual(tileWords("BAJAJ-AUTO", "+1.2%", 46, 50, width), { px: 9, fig: false, split: 6 });       // split after the hyphen
-  assert.deepEqual(tileWords("HINDUNILVR", "+1.2%", 60, 40, width), { px: 0, fig: false });                   // one line's height: none
+  // (updated on purpose, fix18 LIVE13A-012: ten letters don't fit one line at 60px, and a 40px-tall tile now names them over two lines)
+  assert.deepEqual(tileWords("HINDUNILVR", "+1.2%", 60, 40, width), { px: 10, fig: false, split: 5 });
   assert.match(read("src/components/chart/Treemap.tsx"), /\{split \? <>\{p\.tile\.s\.slice\(0, split\)\}<wbr \/>\{p\.tile\.s\.slice\(split\)\}<\/> : p\.tile\.s\}/);
   assert.match(read("src/components/chart/treemap.css"), /\.hm-sym\.two \{ white-space: normal; width: min-content;/);
   const h = read("src/pages/HeatmapPage.tsx");

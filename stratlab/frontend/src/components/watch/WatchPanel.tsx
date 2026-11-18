@@ -69,7 +69,8 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
   const [quotes, setQuotes] = useState<Record<string, WatchQuote | null>>(() => keptQuotes(me?.id ?? "guest", Date.now(), undefined, (k) => {
     const m = markets.find((x) => x.id === k.split(":")[0]);
     return m ? lastTradingDay(m) : null;
-  }, (k, at) => { const m = markets.find((x) => x.id === k.split(":")[0]); return !!m && readInSession(m, at); }));
+  }, (k, at) => { const m = markets.find((x) => x.id === k.split(":")[0]); return !!m && readInSession(m, at); },
+  (k) => { const m = markets.find((x) => x.id === k.split(":")[0]); return !!m && marketState(m).open; }));
   useEffect(() => {
     const t = window.setTimeout(() => keepQuotes(me?.id ?? "guest", quotes), 1000);
     return () => window.clearTimeout(t);

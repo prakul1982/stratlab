@@ -69,9 +69,13 @@ test("LIVE10A-026: My space's market tiles go six across by the card's width and
   assert.match(mine, /<Link className="btn quiet sm" to="\/paper">Open paper sessions<\/Link>/);
 });
 
-test("LIVE10A-030/041: Movers says the market is open beside the last close, and a Free plan line is drawn before the first read", () => {
+test("LIVE10A-030/041: Movers says the market is open beside the last close, and a Free plan line is drawn before the first read", async () => {
+  const { dayLine } = await import("../src/lib/heatmap.ts");
+  const l = dayLine({ as_of: "2026-11-17" }, true, "lists", (d) => d, "IST");
+  assert.equal(`${l.lead}${l.day}${l.tail}`, "Closes of 2026-11-17, the last close · the market is open; the lists are redrawn after today's close");
   const page = read("src/pages/MoversPage.tsx");
-  assert.match(page, /\{open \? ", the last close · the market is open; the lists are redrawn after today's close" : ""\}/);
+  // (updated on purpose, fix18 LIVE13A-012/-029: the line comes from dayLine, which keeps this wording when no live prices are in)
+  assert.match(page, /dayLine\(view, open, "lists"/);
   assert.match(page, /const locked = !!view\?\.locked \|\| \(!view && \(me\?\.paid_plan \?\? me\?\.plan\) === "free"\);/);
 });
 
