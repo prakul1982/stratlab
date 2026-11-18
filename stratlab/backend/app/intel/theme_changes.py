@@ -146,7 +146,11 @@ def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None, everyon
             rest_why[s_] = clip_words(x[2], 200)
         if len(x) > 3 and x[3]:
             rest_mwhy[s_] = clip_words(x[3], 240)          # r67e: the placement's reason for its layer
-    return {"layers": layers, "cos": cos, "off": off, "map": sorted({s_ for s_ in members if s_}), "stamp": int(_num(stamp) or 0),
+    # r68e (R68): the core-and-adjacent split and the rules' version it is of, so a company that joins or leaves the core members is named
+    # (population_change); a dive of an older engine keeps none
+    adj = {str(x["symbol"]): str(x.get("kind") or "") for x in dive.get("adjacent") or [] if isinstance(x, dict) and x.get("symbol")}
+    pop = {"pop": dive["population_rule"], "adj": adj} if isinstance(dive.get("population_rule"), int) else {}
+    return {"layers": layers, "cos": cos, "off": off, "map": sorted({s_ for s_ in members if s_}), "stamp": int(_num(stamp) or 0), **pop,
             **({"rest": rest, "rest_layers": rest_layers} if everyone is not None else {}), **({"rest_why": rest_why} if rest_why else {}),
             **({"rest_mwhy": rest_mwhy} if rest_mwhy else {}),
             "rules": rules, "unit": dive.get("unit"), **({"cover": cover} if cover else {}), **({"back": back} if back else {}),
@@ -535,6 +539,12 @@ def apply(cur: dict | None, now: dict, refresh: bool = False, at: datetime | Non
             now = {**now, "cover_was": list(was["cover"])}
         elif was.get("cover_was"):
             now = {**now, "cover_was": list(was["cover_was"])}
+    if isinstance(was, dict) and isinstance(was.get("pop"), int) and isinstance(now.get("pop"), int):
+        # r68e: the split before the last change of it, kept until it changes again (a read stored again unchanged keeps the change said)
+        if dict(was.get("adj") or {}) != dict(now.get("adj") or {}):
+            now = {**now, "adj_was": [was["pop"], dict(was.get("adj") or {})]}
+        elif was.get("adj_was"):
+            now = {**now, "adj_was": was["adj_was"]}
     now = {k: v for k, v in now.items() if k not in ("rest_why", "rest_mwhy")}           # r62, r67e: read for this entry's reasons, never stored
     return {"snap": now, "log": log, "since": since or at.date().isoformat()}
 
@@ -827,6 +837,49 @@ def fall_why(snap: dict | None, dive: dict | None, everyone: dict | None = None)
         if s_ in rows and rows[s_].get("adjacent") and isinstance(c, list) and len(c) > 1:
             out["now an adjacent participant (another kind of business), shown apart from the core members"] += 1
     return dict(out)
+
+
+def population_change(snap: dict | None, dive: dict | None) -> dict | None:
+    """r68e (R68, the owner's review of the live R66 Payments deck: 16 -> 21 core members with figures, the card issuers, consumer lenders
+    and digital banks folded into the core, none named): the companies that joined or left the theme's core members against the stored read
+    before (its snapshot's split, or the split before its last change when the read is the same as it), each with why: {"rule": [was, now]
+    when the core-and-adjacent rules' version changed, "left": [{"symbol", "name", "kind", "why"}] (now adjacent participants), "joined":
+    [{"symbol", "name", "was", "why"}] (now core members)}; None when nothing moved or the stored read keeps no split (an older engine's)."""
+    from .theme_data import ADJACENT_WHERE, POPULATION_RULE
+    if not isinstance(snap, dict) or not isinstance(dive, dict) or not isinstance(snap.get("pop"), int) or not isinstance(dive.get("population_rule"), int):
+        return None
+    now_adj = {str(x["symbol"]): x for x in dive.get("adjacent") or [] if isinstance(x, dict) and x.get("symbol")}
+    was_pop, was_adj = snap["pop"], dict(snap.get("adj") or {})
+    if {k: str(v.get("kind") or "") for k, v in now_adj.items()} == was_adj and isinstance(snap.get("adj_was"), list) and len(snap["adj_was"]) == 2:
+        was_pop, was_adj = snap["adj_was"][0], dict(snap["adj_was"][1] or {})
+    rows = {}
+    for b in dive.get("layers") or []:
+        for c in b.get("companies") or []:
+            if c.get("symbol"):
+                rows.setdefault(str(c["symbol"]), c)
+    members_was = set(snap.get("cos") or {}) | set(snap.get("rest") or {}) if isinstance(snap.get("rest"), dict) else set(snap.get("cos") or {})
+    rule = [was_pop, dive["population_rule"]] if was_pop != dive["population_rule"] else None
+    ruled = (f"; the core-and-adjacent rules changed (version {was_pop} to {dive['population_rule']}: "
+             f"{POPULATION_RULE.get(dive['population_rule'], '')})") if rule else ""
+    left, joined = [], []
+    for s_, x in sorted(now_adj.items(), key=lambda kv: str(kv[1].get("name") or "")):
+        if s_ in was_adj or s_ not in members_was:          # (a company new to the theme is an addition, not a move out of the core)
+            continue
+        left.append({"symbol": s_, "name": str(x.get("name") or s_), "kind": str(x.get("kind") or ""),
+                     "why": f"its principal business ({ADJACENT_WHERE.get(x.get('where'), 'its official industry')}, “{x.get('text') or ''}”) is "
+                            f"of {x.get('kind')}" + ruled})
+    for s_, kind in sorted(was_adj.items()):
+        if s_ in now_adj or s_ not in rows:
+            continue
+        c = rows[s_]
+        ind = str(c.get("official_industry") or c.get("map_industry") or "").strip()
+        why = c.get("core_kept") or ("its official industry" + (f" ({ind})" if ind else "") + " and its principal business, as read now, "
+                                     "name no other kind of business than the theme's")
+        joined.append({"symbol": s_, "name": str(c.get("name") or s_), "was": kind, "why": why + ruled})
+    joined.sort(key=lambda r: r["name"].lower())
+    if not left and not joined:
+        return None
+    return {**({"rule": rule} if rule else {}), "left": left, "joined": joined}
 
 
 def moved_out_why(dive: dict | None) -> dict:

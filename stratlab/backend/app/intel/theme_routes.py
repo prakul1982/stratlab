@@ -1618,7 +1618,7 @@ def membership_check(theme: str, m: dict, fm: dict, dive: dict, before: dict | N
     step = theme_data.membership_step(theme_data.checked_tally(counts, kept, total)["total"])
     new, again = {}, {}
     try:
-        words = theme_data.theme_words(fm, theme)
+        words = theme_data.theme_words(fm, theme_data.theme_name(theme, fm))      # r68e: the map's own name, whatever search reached it
         again = theme_data.membership_recheck(m, kept, words, about, step)
         new = theme_data.membership_round(m, set(window) | set(kept), words, about, step)
     except Exception as e:
@@ -1732,6 +1732,9 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
     now_all = {c["ticker"]: {"layer": v.get("layer") or "", "refit": c.get("refit"), "unread": c.get("unread")}
                for v in m.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}
     ctl = theme_changes.coverage_control(hit["coverage"], before, hit, now_all)   # d53: layers lost too
+    pc = theme_changes.population_change(before, hit)      # r68e: each company that joined or left the core members, with why
+    if pc:
+        hit["population_change"] = pc
     if ctl:
         hit["coverage"] = {**hit["coverage"], "control": ctl}
     late = {x["symbol"]: x["filed_unread"] for x in ((hit.get("sections") or {}).get("quarter") or {}).get("earlier") or [] if x.get("filed_unread")}
@@ -2064,6 +2067,8 @@ def deck_view(r: str, m: dict, dive: dict, extra: dict | None = None) -> dict:
             # ahead of their revenue counted apart from the margin medians
             "duplicates": dive.get("duplicates") or [], "adjacent": dive.get("adjacent") or [], "core_kind": dive.get("core_kind") or "",
             "developers": dive.get("developers") or 0,
+            # r68e (R68): the core-and-adjacent rules' version and each company that joined or left the core members, with why
+            "population_rule": dive.get("population_rule"), "population_change": dive.get("population_change"),
             "distress": dive.get("distress") or [],          # y57 (R57): companies in distress, out of every median and range, with why
             # e54 (R54): each checked company's evidence state and the membership check's progress outside the figures' window
             "evidence": dive.get("evidence") or {}, "membership_evidence": dive.get("membership_evidence"),
