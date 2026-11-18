@@ -3689,18 +3689,51 @@ def ffo_words(v: dict) -> str:
     worked out from the SEC's company facts only)."""
     if str(v.get("region") or "") != "US":
         return ""
-    cos = {c.get("symbol"): c for b in v.get("layers") or [] if (b.get("model") or {}).get("family") == "property"
-           for c in b.get("companies") or [] if c.get("status") != "unverified" and (c.get("revenue") is not None or c.get("profit") is not None)}
-    if not cos:
+    st = ffo_states(v)
+    if not st["available"] and not st["missing"]:
         return ""
-    have = sum(1 for c in cos.values() if c.get("ffo_share") is not None or c.get("p_ffo") is not None)
-    m = len(cos)
-    if have == m:
-        return f"; FFO (NAREIT) and P/FFO for all {m:,} property owners with figures"
+    have, m = len(st["available"]), len(st["available"]) + len(st["missing"])
     why = "the filed gains on property sales, which NAREIT FFO deducts, are not among the lines stored for them"
-    if not have:
-        return f"; FFO (NAREIT) and P/FFO: not available for the {m:,} property owners with figures ({why})"
-    return f"; FFO (NAREIT) and P/FFO for {have:,} of the {m:,} property owners with figures, not available for {m - have:,} ({why})"
+    # r68e (R68, the owner's review of the live R66 REITs deck, P1 "REIT metric completeness": FFO/AFFO available, missing or not
+    # applicable for each REIT): each company of the theme said by its state, by name
+    named = lambda xs: ", ".join(xs[:FFO_NAMED]) + (f" and {len(xs) - FFO_NAMED} more" if len(xs) > FFO_NAMED else "")      # noqa: E731
+    parts = []
+    if have:
+        parts.append(f"worked out for {have:,} of the {m:,} property owners with figures" + (" (AFFO too for " + f"{st['affo']:,})" if st["affo"] else "")
+                     + f": {named(st['available'])}")
+    if st["missing"]:
+        parts.append(f"missing in the stored data for {len(st['missing']):,}" + ("" if have else f" of the {m:,} property owners with figures")
+                     + f" ({why}): {named(st['missing'])}")
+    if st["na"]:
+        parts.append(f"not applicable to the {len(st['na']):,} mortgage REITs and other lenders with figures, which earn on loans, not on property "
+                     f"they own: {named(st['na'])}")
+    return "; FFO (NAREIT) and P/FFO, by company: " + "; ".join(parts)
+
+
+FFO_NAMED = 12                  # r68e: the companies named for each FFO state (the rest counted)
+
+
+def ffo_states(v: dict) -> dict:
+    """r68e: the theme's companies with figures by their FFO state: "available" (FFO / revenue or P/FFO worked out), "missing" (a property
+    owner whose stored lines don't give it), "na" (a lender of the theme, a mortgage REIT: FFO is a property owner's measure), each a list of
+    names; "affo": how many have AFFO too."""
+    out = {"available": [], "missing": [], "na": [], "affo": 0}
+    seen = set()
+    for b in v.get("layers") or []:
+        fam = (b.get("model") or {}).get("family")
+        for c in b.get("companies") or []:
+            if c.get("symbol") in seen or c.get("status") == "unverified" or (c.get("revenue") is None and c.get("profit") is None):
+                continue
+            seen.add(c.get("symbol"))
+            name = clean_name(c.get("name") or c.get("symbol") or "")
+            if fam == "property":
+                ok = c.get("ffo_share") is not None or c.get("p_ffo") is not None
+                out["available" if ok else "missing"].append(name)
+                out["affo"] += 1 if ok and c.get("affo_share") is not None else 0
+            elif fam == "lending" and re.search(r"real estate investment trust|\breits?\b|mortgage", f"{b.get('layer') or ''} "
+                                                f"{c.get('official_industry') or c.get('map_industry') or ''}", re.I):
+                out["na"].append(name)
+    return out
 
 
 def coverage_table(v: dict, cov: dict, today: date | None = None) -> list[list[str]]:

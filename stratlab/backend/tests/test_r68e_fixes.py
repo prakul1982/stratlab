@@ -280,3 +280,21 @@ def test_moves_into_other_say_what_they_take_from_the_informative_layers():
     assert deck_check_.check_text(deck.cohort_row(v)[2])["counts"]["move unexplained"]
     v["members"] = []
     assert "moved into “Other textile companies” 2 (2 companies fewer in its informative layers): " in deck.cohort_row(v)[2]
+
+
+# ---------- P1-2 REIT metric completeness, company by company ----------
+def test_each_reit_is_said_by_its_ffo_state():
+    """Fails before: the REITs deck said only how many property owners had FFO ("not available for the N"), naming none, and said nothing of
+    its mortgage REITs. Now each company with figures is named by its state: FFO worked out (AFFO too where filed), missing in the stored
+    data (with why), or not applicable (a mortgage REIT earns on loans)."""
+    own = lambda s, **k: {"symbol": s, "name": f"{s} Trust", "revenue": 900.0, "profit": 90.0, **k}      # noqa: E731
+    v = {"region": "US", "layers": [
+        {"layer": "Office landlords", "model": {"family": "property"},
+         "companies": [own("BXP", ffo_share=50.0, p_ffo=12.0, affo_share=40.0), own("SLG", ffo_share=44.0), own("VNO")]},
+        {"layer": "Mortgage REITs", "model": {"family": "lending"}, "companies": [own("AGNC", official_industry="Real Estate Investment Trusts")]}]}
+    st = deck.ffo_states(v)
+    assert st == {"available": ["BXP Trust", "SLG Trust"], "missing": ["VNO Trust"], "na": ["AGNC Trust"], "affo": 1}
+    got = deck.not_in_sources(v)
+    assert "worked out for 2 of the 3 property owners with figures (AFFO too for 1): BXP Trust, SLG Trust" in got
+    assert "missing in the stored data for 1 (the filed gains on property sales" in got and "): VNO Trust" in got
+    assert "not applicable to the 1 mortgage REITs and other lenders with figures, which earn on loans, not on property they own: AGNC Trust" in got
