@@ -124,7 +124,7 @@ def exchange_list(out: dict, rows: list[dict], cap: int = 40) -> dict:
         return {}
     found = sorted((r for r in rows if r.get("industry") in keep and r.get("symbol")), key=lambda r: str(r.get("name") or r["symbol"]).lower())
     return {"industries": keep, "total": len(found),
-            "companies": [{"ticker": r["symbol"], "name": listed_name(r.get("name"), r["symbol"]), "industry": r["industry"],
+            "companies": [{"ticker": r["symbol"], "name": listed_name(r.get("name"), r["symbol"], r["symbol"]), "industry": r["industry"],
                            "named": r["symbol"] in mapped} for r in found[:cap]]}
 
 
@@ -180,10 +180,11 @@ def listed_only(out: dict) -> dict:
     return out
 
 
-def listed_name(name: str | None, fallback: str | None = None) -> str:
-    """A company's name as the exchange's list writes it, in title case when the list has it in capitals."""
+def listed_name(name: str | None, fallback: str | None = None, symbol: str | None = None) -> str:
+    """A company's name as the exchange's list writes it, in title case when the list has it in capitals; with its `symbol`, a short word
+    that is the symbol kept as its letters (fix20: "ATI Inc", never "Ati Inc": stock_pages.proper_name)."""
     from ..stock_pages import proper_name
-    return proper_name(str(name or fallback or "").strip()) or str(fallback or "")
+    return proper_name(str(name or fallback or "").strip(), symbol) or str(fallback or "")
 
 
 def ground_sector(out: dict, region: str, lookup) -> dict:
@@ -199,7 +200,7 @@ def ground_sector(out: dict, region: str, lookup) -> dict:
 
     def fix(c: dict) -> dict | None:
         got = res.resolve(c.get("name"), c.get("ticker")) if c.get("name") or c.get("ticker") else None
-        return {**c, "ticker": got["symbol"], "name": listed_name(got.get("name"), c.get("name")), "listed": True} if got else None
+        return {**c, "ticker": got["symbol"], "name": listed_name(got.get("name"), c.get("name"), got["symbol"]), "listed": True} if got else None
 
     def fix_all(cos: list[dict]) -> list[dict]:
         seen, keep = set(), []
@@ -215,7 +216,7 @@ def ground_sector(out: dict, region: str, lookup) -> dict:
     for s in out.get("screen") or []:
         got = res.resolve(s.get("name"), s.get("ticker"))
         if got and got["symbol"] not in {x["ticker"] for x in screen}:
-            screen.append({**s, "ticker": got["symbol"], "name": listed_name(got.get("name"), s.get("name"))})
+            screen.append({**s, "ticker": got["symbol"], "name": listed_name(got.get("name"), s.get("name"), got["symbol"])})
     out["screen"] = screen
     out["clusters"] = [{**c, "companies": fix_all(c.get("companies") or [])} for c in out.get("clusters") or []]
     out["value_chain"] = [{**v, "companies": fix_all(v.get("companies") or [])} for v in out.get("value_chain") or []]

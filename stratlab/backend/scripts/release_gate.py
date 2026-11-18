@@ -105,6 +105,23 @@ def text_words(text: str) -> set[str]:
     return {_stem(w) for w in re.findall(r"[a-z0-9]+", str(text or "").lower().replace("&", " and ")) if len(w) > 2}
 
 
+# fix20 (deck_diff on the live R75 Building materials deck: Oriental Trimex, "in the business of supplying premium imported marbles", moved
+# into "Distribution and trading" and failed as "no word of the layer's name"): under the placement contract a company that supplies, sells
+# or distributes goods it imports, or an importer of goods, earns by trading goods others make, so its words state the way of earning of a
+# layer named for distribution or trading (never a power, gas or water grid's distribution, nor trading in securities or commodities)
+TRADE_LAYER = re.compile(r"^(?!.*\b(?:power|electric\w*|gas|water|transmission|grids?|securities|stocks?|shares|equit\w*|broking|brokers?|"
+                         r"derivatives?|commodit\w*|forex|currenc\w*|insurance|financial|funds?)\b).*\b(?:distribut\w*|trad(?:ing|ers?)|wholesal\w*)\b",
+                         re.I)
+TRADE_WORDS = re.compile(r"\b(?:suppl(?:y|ies|ying)|sell(?:s|ing)?|distribut\w*|market(?:s|ing)?|trad(?:es|ing))\b(?:\s+\w+){0,3}?\s+imported\b|"
+                         r"\bimport(?:s|ing)?\b(?:\s+\w+){0,3}?\s+(?:and|&)\s+(?:suppl\w*|sell\w*|distribut\w*|market\w*|trad\w*)\b|"
+                         r"\bimporters?\b", re.I)
+
+
+def trade_said(name: str, text: str) -> bool:
+    """fix20: whether a text says the trading of imported goods for a layer named for distribution or trading (TRADE_LAYER, TRADE_WORDS)."""
+    return bool(TRADE_LAYER.search(str(name or "")) and TRADE_WORDS.search(str(text or "")))
+
+
 def shares(name: str, text: str) -> bool | None:
     """Whether a text says a word of a layer's name; None when the name has no word that says a business."""
     nw = name_words(name)
@@ -114,7 +131,7 @@ def shares(name: str, text: str) -> bool | None:
     # r60 (R60, the owner's review of the live R59 decks: Dish TV's "Direct to Home television" read as no word of "Cable and satellite
     # distribution"): words that say the layer's concept say it (theme_base.concept_said, the placement's own reading)
     return any(a == b or (len(a) >= 4 and len(b) >= 4 and (a.startswith(b) or b.startswith(a))) for a in nw for b in tw) \
-        or bool(B.concept_said(name, text))
+        or bool(B.concept_said(name, text)) or trade_said(name, text)
 
 
 # the words before a model's words that make them the customers' business, not the company's ("shared by the Wireless Telecom Operators",

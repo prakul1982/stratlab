@@ -788,6 +788,7 @@ def fall_why(snap: dict | None, dive: dict | None, everyone: dict | None = None)
     are counted the same way."""
     if not isinstance(snap, dict) or not isinstance(snap.get("cos"), dict) or not isinstance(snap.get("layers"), list) or not isinstance(dive, dict):
         return {}
+    from .theme_data import FOREIGN_KIND
     rows, layer_of = {}, {}
     for b in dive.get("layers") or []:
         for c in b.get("companies") or []:
@@ -836,7 +837,10 @@ def fall_why(snap: dict | None, dive: dict | None, everyone: dict | None = None)
             out["new to the theme, placed in “Other” (the count of companies placed grew; no company left a layer for it)"] += 1
     for s_, c in snap["cos"].items():
         if s_ in rows and rows[s_].get("adjacent") and isinstance(c, list) and len(c) > 1:
-            out["now an adjacent participant (another kind of business), shown apart from the core members"] += 1
+            # fix20: a company based abroad is no other kind of business (theme_data.FOREIGN_KIND)
+            far = isinstance(rows[s_]["adjacent"], dict) and rows[s_]["adjacent"].get("kind") == FOREIGN_KIND
+            out[f"now an adjacent participant ({'listed in the US but based abroad' if far else 'another kind of business'}), shown apart from "
+                "the core members"] += 1
     return dict(out)
 
 
@@ -846,7 +850,7 @@ def population_change(snap: dict | None, dive: dict | None) -> dict | None:
     before (its snapshot's split, or the split before its last change when the read is the same as it), each with why: {"rule": [was, now]
     when the core-and-adjacent rules' version changed, "left": [{"symbol", "name", "kind", "why"}] (now adjacent participants), "joined":
     [{"symbol", "name", "was", "why"}] (now core members)}; None when nothing moved or the stored read keeps no split (an older engine's)."""
-    from .theme_data import ADJACENT_WHERE, POPULATION_RULE
+    from .theme_data import ADJACENT_WHERE, FOREIGN_KIND, HOLDING_KIND, POPULATION_RULE
     if not isinstance(snap, dict) or not isinstance(dive, dict) or not isinstance(snap.get("pop"), int) or not isinstance(dive.get("population_rule"), int):
         return None
     now_adj = {str(x["symbol"]): x for x in dive.get("adjacent") or [] if isinstance(x, dict) and x.get("symbol")}
@@ -866,9 +870,12 @@ def population_change(snap: dict | None, dive: dict | None) -> dict | None:
     for s_, x in sorted(now_adj.items(), key=lambda kv: str(kv[1].get("name") or "")):
         if s_ in was_adj or s_ not in members_was:          # (a company new to the theme is an addition, not a move out of the core)
             continue
-        left.append({"symbol": s_, "name": str(x.get("name") or s_), "kind": str(x.get("kind") or ""),
-                     "why": f"its principal business ({ADJACENT_WHERE.get(x.get('where'), 'its official industry')}, “{x.get('text') or ''}”) is "
-                            f"of {x.get('kind')}" + ruled})
+        # fix20 (the R75 decks: "is of listed in the US, based abroad"): a company based abroad, or a holding company of other members, said
+        # as what it is, never as a principal business "of" it
+        why_ = ("it is listed in the US but based abroad" + (f": it {x['text']}" if x.get("text") else "")) if x.get("kind") == FOREIGN_KIND else \
+            (f"it is a holding company of other members ({ADJACENT_WHERE['holding']}: “{x.get('text') or ''}”)") if x.get("kind") == HOLDING_KIND else \
+            (f"its principal business ({ADJACENT_WHERE.get(x.get('where'), 'its official industry')}, “{x.get('text') or ''}”) is of {x.get('kind')}")
+        left.append({"symbol": s_, "name": str(x.get("name") or s_), "kind": str(x.get("kind") or ""), "why": why_ + ruled})
     for s_, kind in sorted(was_adj.items()):
         if s_ in now_adj or s_ not in rows:
             continue
