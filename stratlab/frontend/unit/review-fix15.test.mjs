@@ -79,3 +79,12 @@ test("LIVE12A-007: a layer whose companies are all in the theme the same way say
   assert.match(s, /data-testid="layer-by-once">Every company in this layer is in the theme by: \{byOnce\}\./);
   assert.match(read("src/styles.css"), /@media \(min-width: 901px\) \{ #theme-members \.k-table td\.k-lead \{ min-width: 18rem; \} \}/);
 });
+
+test("LIVE12A-013: a visitor's page code and the visitor half are asked for beside the two start-up helpers, not after them", () => {
+  const e = read("src/entry.tsx");
+  const helpers = e.indexOf('await Promise.all([import("./lib/share"), import("./lib/sentry")])');
+  assert.ok(helpers > 0);
+  assert.ok(e.indexOf("const early = account ? null : publicPage(path)") < helpers, "the page's code first");
+  assert.ok(e.indexOf('const visitorCode = account ? null : import("./visitor/visitorMain")') < helpers, "the visitor half first");
+  assert.match(e, /const visitor = await visitorCode!;/);
+});

@@ -118,3 +118,16 @@ def test_a_closed_sessions_index_level_is_one_figure_across_reads():
         assert first["day"] == "2026-11-17" and first["price"] == 50759.42
         assert second["price"] == 50759.42 and second["change_pct"] == first["change_pct"]          # the same close, the same figure
         assert dow()["price"] == 50300.0                                                            # a real correction replaces it
+
+
+# ---------- LIVE12A-013: every landing card behind buy and hold in one format ----------
+def test_every_card_behind_buy_and_hold_reads_in_one_format():
+    from app import library
+    from tests.test_review_r6v import SEED
+    edge = library.restated(SEED)["card_headline"]
+    assert edge == "Trailed buy and hold by 117.1 points after costs. Checks of the result itself: 3 of 4 checks run · all 3 passed."
+    lost = {**SEED, "verdict": {**SEED["verdict"], "verdict": "luck", "passed": 2, "total": 3, "checks": [{"id": "unseen", "status": "fail"}]},
+            "stats": {**SEED["stats"], "unseen": -8.4}}
+    card = library.restated(lost)["card_headline"]
+    assert card.startswith("Trailed buy and hold by 117.1 points after costs. Checks of the result itself: 3 of 4 checks run · 2 passed; ")
+    assert library.restated(lost)["fact_headline"].startswith("117.1 points behind")             # the library's own pages keep their words
