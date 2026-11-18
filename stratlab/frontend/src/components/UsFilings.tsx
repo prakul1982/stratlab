@@ -2,7 +2,7 @@ import { DocSearchLink } from "./DocSearchLink";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { asOf, fmtDate, safeHref } from "../lib/format";
-import { Badge, Card, CardHead, DataTable, EmptyState, ErrorState, Skeleton } from "./kit";
+import { Badge, CardNote, Card, CardHead, DataTable, EmptyState, ErrorState, Skeleton } from "./kit";
 
 /* A US company's page: who reported holding more than 5% (Schedule 13D and 13G) and the Form 8-K items worth a look, from the SEC filings
  * read each evening. Facts as filed (RC2A-027: a US page had no owners, filings or red flags section). Free on every plan. */
@@ -42,7 +42,8 @@ export function UsFilingsCards({ symbol }: { symbol: string }) {
               { key: "p", header: "Share of the class", numeric: true, cell: (r) => (r.pct == null ? "–" : <>{`${r.pct.toFixed(2)}%`}{r.pct <= 5 && r.amendment && <span className="k-sub-line">at or below 5%: under the filing level</span>}</>) },
               { key: "f", header: "Filing", wrap: true, cell: (r) => <>{r.label}<span className="k-sub-line">{fmtDate(r.at)} · <a className="link" href={safeHref(r.url)} target="_blank" rel="noopener noreferrer">Open the filing ↗</a></span></> },
             ]} />
-            <p className="k-note">Facts as filed{d.holders.updated_at ? `, read ${asOf(d.holders.updated_at, { tz: ET })}` : ""}. The latest filing of each holder may be older than the list's last read.</p>
+            <p className="k-note">Facts as filed{d.holders.updated_at ? `, read ${asOf(d.holders.updated_at, { tz: ET })}` : ""}.</p>
+            <CardNote><p>The latest filing of each holder may be older than the list's last read.</p></CardNote>
           </>
         )}
       </Card>

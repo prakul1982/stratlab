@@ -132,6 +132,10 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
   },
   invest: {
     label: "Invest", home: "/invest", groups: [
+      // first, above Companies, its own row (owner, 18 Nov: "put it at top like above the companies"): the one Themes entry in the menu
+      { id: "themes", label: "Themes", icon: "compass", blurb: THEMES_LINE, pages: [
+        page("/research/themes", "Themes", "compass", "themes sector industry shortlist ev defence banks trend map listed companies value chain", { line: THEMES_LINE }),
+      ] },
       { id: "companies", label: "Companies", icon: "lens",
         blurb: "Look up any Indian or US company, put two side by side, read the monthly and quarterly updates companies file, or find where a holder is named.", pages: [
         page("/research", "Look up a company", "lens", "company stock fundamentals analysis ai read valuation news research search ticker deep dive business model capex growth margins cash flow management report card concall presentation",
@@ -154,9 +158,6 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
           { was: "Trend scan", line: "Which stocks are in a rising trend (Stage 2) with the Supertrend line also pointing up, or your own chart rules run over a group." }),
         page("/research/filings", "Filings", "bell", "red flags filings announcements qip fund raise preferential rights issue pledge resignation auditor default sebi rating downgrade",
           { was: "Red flags", line: "Fund raises, pledges, resignations and defaults your held and watched companies filed." }),
-      ] },
-      { id: "themes", label: "Themes", icon: "compass", blurb: THEMES_LINE, pages: [
-        page("/research/themes", "Themes", "compass", "themes sector industry shortlist ev defence banks trend map listed companies value chain", { line: THEMES_LINE }),
       ] },
       { id: "market-today", label: "Market today", icon: "pulse", was: ["market-view"],
         blurb: "The market as a whole today: its mood, how many stocks rise and fall, which sectors lead, where the institutions' money went, and today's brief.", pages: [

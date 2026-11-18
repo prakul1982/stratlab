@@ -14,7 +14,7 @@ import { HoldingsActionsPanel } from "../components/HoldingsActions";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge } from "../components/EtfGap";
 import { useMoreColumns } from "../components/MoreColumns";
-import { Badge, Card, CardHead, CsvButton, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FigureTable, FormActions, FormGrid, PageHeader, PageNav, PlanNote, Seg, ShareTable, Signed, Skeleton, StockPicker, UploadButton, type Column, UploadProblem, usePhone, useUploadProblem } from "../components/kit";
+import { Badge, CardNote, Card, CardHead, CsvButton, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FigureTable, FormActions, FormGrid, PageHeader, PageNav, PlanNote, Seg, ShareTable, Signed, Skeleton, StockPicker, UploadButton, type Column, UploadProblem, usePhone, useUploadProblem } from "../components/kit";
 import { PlanInline } from "../components/PlanInterest";
 import { zerodhaEmpty, type ZerodhaRead } from "../lib/zerodha";
 import { orList } from "../lib/brokers";
@@ -558,7 +558,7 @@ export function HoldingsPage() {
 
       {view && rows.length > 0 && actionsReady && (
         <section className="k-stack">
-          <p className="k-note">Your holdings are stored with your account only, used for this page and your My Stocks newsletter, and never shared. Values use the latest prices; P&amp;L is before charges and taxes. Nothing here is investment advice.</p>
+          <CardNote summary="How your holdings are kept"><p>Your holdings are stored with your account only, used for this page and your My Stocks newsletter, and never shared. Values use the latest prices; P&amp;L is before charges and taxes. Nothing here is investment advice.</p></CardNote>
           <button type="button" className="btn danger k-btn-end" onClick={() => setAsking(true)}><Trash size={16} />Delete my holdings</button>
         </section>
       )}

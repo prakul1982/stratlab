@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { safeHref, fmtDate } from "../lib/format";
-import { bizChange, bizValue, periodName, monthIndex, monthOf, tidyTitle } from "../lib/biz";
+import { bizChange, bizValue, foldFilings, periodName, monthIndex, monthOf } from "../lib/biz";
 import { LineChart } from "./Charts";
 import { AlertButton } from "./AlertForm";
-import { DataTable, EmptyState, Notice, ShowLess, Skeleton } from "./kit";
+import { CardNote, DataTable, EmptyState, Notice, ShowLess, Skeleton } from "./kit";
 import { PlanActions } from "./PlanInterest";
 
 /* Monthly and quarterly business updates read into numbers (biz_updates.py): the company's filed figures with the line
@@ -77,6 +77,9 @@ export function BizChart({ m, label }: { m: BizMetric; label?: string }) {
   );
 }
 
+/** Filing rows shown before "Show all N" (owner, 18 Nov: "show 5"). */
+const FILINGS_FIRST = 5;
+
 /** The company page's and the deep dive's panel. Nothing at all for a company that files no business updates. */
 export function BizUpdatesPanel({ symbol, wrap }: { symbol: string; wrap: (body: React.ReactNode, right?: React.ReactNode) => React.ReactNode }) {
   const [v, setV] = useState<BizView | null>(null);
@@ -102,7 +105,9 @@ export function BizUpdatesPanel({ symbol, wrap }: { symbol: string; wrap: (body:
   };
   const chosen = v.metrics.find((m) => m.key === pick) ?? v.metrics[0];
   const right = v.allowed ? <AlertButton region="IN" symbol={symbol} label="Alert on new updates" condition="bizupdate" /> : null;
-  const files = more ? v.filings : v.filings.slice(0, 6);
+  // one row a subject (owner, 18 Nov): a subject filed again is one row with its other days; five rows, then "Show all N"
+  const groups = foldFilings(v.filings);
+  const files = more ? groups : groups.slice(0, FILINGS_FIRST);
 
   return wrap(
     <div className="k-stack biz-updates">
@@ -134,17 +139,23 @@ export function BizUpdatesPanel({ symbol, wrap }: { symbol: string; wrap: (body:
         </div>
       )}
       {files.length > 0 ? (
-        <ul className="k-list plain biz-filings k-small" aria-label="Business update filings">
-          {files.map((f) => (
-            <li key={f.id} className="k-spread">
-              <span><span className="k-note biz-day">{day(f.at)}</span> {tidyTitle(f.title)}</span>
-              <a className="link" href={safeHref(f.url)} target="_blank" rel="noopener noreferrer">{f.exchange ?? "Exchange"} filing ↗</a>
+        // date | subject (two lines at most, the whole of it in its title) | link, the link column the same on every row (owner, 18 Nov)
+        <ul className="biz-filings k-small" aria-label="Business update filings">
+          {files.map(({ title, items: [f, ...again] }) => (
+            <li key={f.id}>
+              <span className="k-note biz-day">{day(f.at)}</span>
+              <span className="biz-subject">
+                <span className="biz-title" title={title}>{title}</span>
+                {again.length > 0 && <span className="k-sub-line" data-testid="biz-also">Also filed {again.map((x, i) => (
+                  <Fragment key={x.id}>{i ? ", " : ""}<a className="link" href={safeHref(x.url)} target="_blank" rel="noopener noreferrer">{day(x.at)}</a></Fragment>))}</span>}
+              </span>
+              <a className="link biz-link" href={safeHref(f.url)} target="_blank" rel="noopener noreferrer">{f.exchange ?? "Exchange"} filing ↗</a>
             </li>))}
         </ul>
       ) : <EmptyState title="No business update filed">They are listed here as the company files them.</EmptyState>}
-      {v.filings.length > files.length && <button className="btn quiet sm k-btn-end" onClick={() => setMore(true)}>Show all {v.filings.length}</button>}
-      {more && v.filings.length > 6 && <ShowLess className="btn quiet sm k-btn-end" onLess={() => setMore(false)} />}
+      {groups.length > files.length && <button className="btn quiet sm k-btn-end" onClick={() => setMore(true)}>Show all {groups.length}</button>}
+      {more && groups.length > FILINGS_FIRST && <ShowLess className="btn quiet sm k-btn-end" onLess={() => setMore(false)} />}
       {v.problems.length > 0 && <p className="k-note">{v.problems.slice(0, 3).join(" · ")}</p>}
-      <p className="k-note">{v.note}</p>
+      {v.note && <CardNote><p>{v.note}</p></CardNote>}
     </div>, right);
 }

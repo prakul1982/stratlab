@@ -17,7 +17,7 @@ import { surpriseShown } from "../lib/surprise";
 import { tinyBase } from "../lib/researchFormat";
 import { Star } from "./Icons";
 import { Info } from "./ui";
-import { Card, CardHead, DataTable, Delta, Disclosure, Meter, Notice, Seg, Signed, Skeleton, type Column } from "./kit";
+import { Card, CardNote, CardHead, DataTable, Delta, Disclosure, Meter, Notice, Seg, Signed, Skeleton, type Column } from "./kit";
 import { SurvBadges } from "./Surveillance";
 import { AiAd } from "./AiAd";
 import { StoredNote, StoredStamp, useStoredRefresh } from "./StoredStamp";
@@ -262,7 +262,7 @@ export function MetricsGrid({ groups, currency, industry }: { groups: MetricGrou
               </div>
         ))}
       </div>
-      {anyBar && <p className="k-note inv-krail-key" data-testid="krail-legend"><span className="inv-krail-demo" aria-hidden="true"><span /><b /></span>Usual range: the shaded part of each bar is the usual span of that measure for large listed companies (StratLab's rule of thumb, not this company's own history){scaledAny ? `; for ${industryWord(industry)} a few measures use that industry's span instead (${scaledAny}), the others the general one` : "; it is the same span for every industry"}. The dark mark is this company. The figures under a bar are the shaded part's ends; hover a bar for its whole scale.</p>}
+      {anyBar && <CardNote summary="How to read the bars"><p className="k-note inv-krail-key" data-testid="krail-legend"><span className="inv-krail-demo" aria-hidden="true"><span /><b /></span>Usual range: the shaded part of each bar is the usual span of that measure for large listed companies (StratLab's rule of thumb, not this company's own history){scaledAny ? `; for ${industryWord(industry)} a few measures use that industry's span instead (${scaledAny}), the others the general one` : "; it is the same span for every industry"}. The dark mark is this company. The figures under a bar are the shaded part's ends; hover a bar for its whole scale.</p></CardNote>}
       {foot.length > 0 && <ul className="k-note cmp-foots" data-testid="metric-notes">{foot.map((f) => <li key={f.n}><sup>{f.n}</sup> {f.label}: {f.text}</li>)}</ul>}
       {used.length > 0 && (
         <Disclosure summary="What these terms mean">

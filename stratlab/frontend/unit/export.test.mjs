@@ -107,7 +107,7 @@ test("the audit as a class: every page whose main content is a table offers its 
     "src/pages/FlowsPage.tsx": 1, "src/pages/HoldersPage.tsx": 2, "src/pages/BizUpdatesPage.tsx": 1, "src/pages/MarginFundingPage.tsx": 1,
     "src/pages/StockLendingPage.tsx": 1, "src/pages/trade/ClosingAuctionPage.tsx": 1, "src/pages/ResearchScans.tsx": 4, "src/pages/CompareExperiments.tsx": 1,
     "src/pages/trade/JournalPage.tsx": 1, "src/pages/money/MutualFundsPage.tsx": 3, "src/pages/money/TaxToolsPage.tsx": 2, "src/pages/HoldingsPage.tsx": 1,
-    "src/pages/PulseMood.tsx": 1, "src/pages/money/UsTaxPage.tsx": 1, "src/pages/DeepDive.tsx": 4, "src/pages/Research.tsx": 1, "src/components/Research.tsx": 2,
+    "src/pages/PulseMood.tsx": 1, "src/pages/money/UsTaxPage.tsx": 1, "src/pages/DeepDive.tsx": 3,      /* (updated on purpose, owner 18 Nov: the last eight quarters are the company page's) */ "src/pages/Research.tsx": 1, "src/components/Research.tsx": 2,
     "src/components/watch/WatchPanel.tsx": 1,
     // (updated on purpose, Release 43) the theme's companies CSV is a server file now (Basic and up), checked with the others below
   };

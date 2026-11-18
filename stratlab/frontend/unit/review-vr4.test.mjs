@@ -13,8 +13,12 @@ test("VR4-001: Account's six data cards share the row (3 + 3), not 4 + 2 with th
 });
 
 test("VR4-005: the business-update filings' titles start at one x, whatever the width of each date", () => {
-  assert.match(read("src/components/BizUpdates.tsx"), /<span className="k-note biz-day">\{day\(f\.at\)\}<\/span> \{tidyTitle\(f\.title\)\}/);
-  assert.match(read("src/styles.css"), /\.biz-day \{ display: inline-block; min-width: 6\.5em; font-variant-numeric: tabular-nums; \}/);
+  // (updated on purpose, owner 18 Nov: date | subject | link is one grid, the rows its subgrid, so each column starts at one x)
+  assert.match(read("src/components/BizUpdates.tsx"), /<span className="k-note biz-day">\{day\(f\.at\)\}<\/span>\n\s*<span className="biz-subject">/);
+  const css = read("src/styles.css");
+  assert.match(css, /\.biz-filings \{ list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: max-content minmax\(0, 1fr\) max-content;/);
+  assert.match(css, /\.biz-filings li \{ display: grid; grid-template-columns: subgrid; grid-column: 1 \/ -1;/);
+  assert.match(css, /\.biz-day \{ font-variant-numeric: tabular-nums;/);
 });
 
 test("VR4-008: the welcome pop-up no longer says the four spaces, which the tour's first step says straight after", () => {

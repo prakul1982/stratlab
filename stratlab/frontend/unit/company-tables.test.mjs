@@ -63,12 +63,15 @@ test("an Indian March year reads as its financial year; a download keeps its bas
   assert.equal(ct.downloadPath("US", "AAPL", "peers.csv"), "/research/company/US/AAPL/peers.csv");
 });
 
-test("the cards sit on the company page and the deep dive, and the page jumps to them", () => {
+// (updated on purpose, owner 18 Nov: "in deep dive why are we putting repeated thing which we already have in the normal stock page?": the
+// cards are the company page's alone; the deep dive says where they are)
+test("the cards sit on the company page, the deep dive points to them, and the page jumps to them", () => {
   const page = read("src/pages/Research.tsx"), dive = read("src/pages/DeepDive.tsx"), all = read("src/components/CompanyTables.tsx");
   assert.match(page, /<CompanyTables region=\{region\} symbol=\{c\.symbol\}/);
   assert.match(page, /id: "co-peers", label: "Peers"/);
   assert.match(page, /id: "co-statements", label: "Statements"/);
-  assert.match(dive, /<CompanyTables region=\{region\} symbol=\{v\.symbol\} ids="dd" \/>/);
+  assert.doesNotMatch(dive, /<CompanyTables /);
+  assert.match(dive, /Price, valuation, peers, the statements, shareholding, business updates and filings are on the\{" "\}/);
   for (const c of ["PeersCard", "StatementsCard", "ShareholdingCard"]) assert.match(all, new RegExp(`<${c} `));
 });
 

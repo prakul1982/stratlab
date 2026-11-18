@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { safeHref, fmtDate } from "../lib/format";
 import { bodyAfter } from "../lib/filingText";
-import { Badge, CheckField, EmptyState, ErrorState, ShowLess, Skeleton } from "./kit";
+import { Badge, CardNote, CheckField, EmptyState, ErrorState, ShowLess, Skeleton } from "./kit";
 
 export type Severity = "red" | "amber" | "info";
 export interface FilingItem { id: string; at: string; category: string; label: string; severity: Severity; subject: string; text: string; url: string | null;
@@ -100,7 +100,7 @@ export function FilingsPanel({ symbol }: { symbol: string }) {
         : <div className="inv-rows">{list.map((i) => <FilingRow key={i.id} i={i} />)}</div>}
       {shown.length > list.length && <button className="btn quiet sm k-btn-end" onClick={() => setMore(true)}>Show all {shown.length}</button>}
       {more && shown.length > 8 && <ShowLess className="btn quiet sm k-btn-end" onLess={() => setMore(false)} />}
-      <p className="k-note">From the company's filings with the exchange. Labels come from fixed keyword rules on each filing's subject; open the filing to read it. Not advice.</p>
+      <CardNote><p>From the company's filings with the exchange. Labels come from fixed keyword rules on each filing's subject; open the filing to read it. Not advice.</p></CardNote>
     </div>
   );
 }
