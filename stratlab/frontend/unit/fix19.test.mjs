@@ -69,3 +69,11 @@ test("no page writes its own ' · StratLab': the app's titles go through withBra
   assert.match(read("index.html"), /<title>StratLab<\/title>/);
   assert.match(read("scripts/seoPages.mjs"), /title: withBrand\("Page not found"\)/);
 });
+
+test("the sidebar's More below pill has a row of its own under the menu's edge line, and 'below' means the last item is not in view", () => {
+  const css = read("src/styles.css"), shell = read("src/components/Shell.tsx");
+  assert.match(css, /\.side-more-row \{[^}]*border-top: 1px solid var\(--line-2\)/);
+  assert.doesNotMatch(css.match(/\n\.side-more \{[^}]*\}/)[0], /z-index|position: (absolute|fixed)/);
+  assert.match(shell, /<div className="side-more-row">\s*<button type="button" className="side-more"/);
+  assert.match(shell, /const below = last \? last\.getBoundingClientRect\(\)\.bottom - el\.getBoundingClientRect\(\)\.bottom > 1/);
+});
