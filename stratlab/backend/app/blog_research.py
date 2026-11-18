@@ -654,7 +654,10 @@ def theme_source(dive: dict, theme: str, region: str) -> dict:
             "chain": {k: chain.get(k) for k in ("line", "highest", "lowest", "measure", "compared", "unranked")},
             "lender": lender, "whole": td.mostly_whole(checks.get("whole_points"), checks.get("with_ebitda")),
             "period": _period(cos), "as_of": dive.get("as_of"), "page": theme_page_path(theme, region),
-            "stamp": theme_stamp(), "read_on": datetime.now(timezone.utc).date().isoformat()}
+            "stamp": theme_stamp(), "read_on": datetime.now(timezone.utc).date().isoformat(),
+            # r64e (LIVE11A-020: "read of the theme on 17 Nov 2026" for a map made 7 Nov): the day the theme's map was made, said beside
+            **({"map_on": datetime.fromtimestamp(float(dive["map_at"]), timezone.utc).date().isoformat()}
+               if isinstance(dive.get("map_at"), (int, float)) and dive["map_at"] > 0 else {})}
 
 
 def theme_page_path(theme: str, region: str) -> str:
@@ -833,7 +836,10 @@ def theme_post_from(src: dict, now: datetime | None = None) -> dict:
     if src.get("read_on"):           # LIVE7A-017: the day of the read, so a post is never taken for the theme's page of another day
         day = _day(src["read_on"])
         if day:
-            intro += (f" Worked out from StratLab's read of the theme on {day}" + (f", prices as of {_day(src['as_of'])}" if src.get("as_of") and _day(src["as_of"]) else "")
+            made = _day(src["map_on"]) if src.get("map_on") else ""
+            intro += ((f" Worked out on {day} from StratLab's map of the theme made {made}" if made and made != day else
+                       f" Worked out from StratLab's read of the theme on {day}")
+                      + (f", prices as of {_day(src['as_of'])}" if src.get("as_of") and _day(src["as_of"]) else "")
                       + "; its companies and figures change as the theme is read again.")
     by = {r["layer"]: r for r in rows}
     hi, lo = by.get(chain.get("highest") or ""), by.get(chain.get("lowest") or "")
@@ -1275,7 +1281,8 @@ def library_dive(region: str, theme: str) -> dict | None:
     if hit is None:
         return None
     m = {**hit["payload"], "_library": hit["name"]}
-    return theme_routes.dive_of(region, theme, theme_routes.with_descriptions(region, theme_routes.checked(region, theme, m)))
+    dive = theme_routes.dive_of(region, theme, theme_routes.with_descriptions(region, theme_routes.checked(region, theme, m)))
+    return {**dive, "map_at": m.get("generated_at")} if isinstance(dive, dict) else dive      # r64e (LIVE11A-020): the map's day
 
 
 def refresh_stale_theme_posts(now: datetime | None = None, limit: int = THEME_REFRESH_RUN, dive_for=None) -> dict:

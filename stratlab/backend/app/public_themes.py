@@ -246,6 +246,10 @@ def view(entry: dict, p: dict) -> dict:
     tally = {k: sum(1 for x in once.values() if x == k) for k in EVIDENCE_PUBLIC} if ev else None
     return {"region": region, "label": entry["label"], "slug": entry["slug"], "name": entry["name"], "evidence": tally,
             "summary": public_words(p.get("summary"), 700), "layers": layers, "members": n,
+            # r64e (LIVE11A-015: Semiconductors "102 companies" here, 104 in the app, deck and blog): the theme's companies, those not
+            # confirmed yet not listed here, so the page says how many it leaves out
+            "all": len({c.get("ticker") for v_ in p.get("value_chain") or [] if isinstance(v_, dict) for c in v_.get("companies") or []
+                        if isinstance(c, dict) and c.get("ticker")}),
             "prices": _price_day(region, {c["symbol"] for v in layers for c in v["companies"] if c.get("cap")}),
             "day": _map_day(region, p, entry),
             "indexable": len(layers) >= MIN_LAYERS and n >= MIN_MEMBERS}
@@ -317,6 +321,8 @@ def render(v: dict) -> str:
     app = _app(r, v["name"])
     body = (crumbs_html + f"<h1>{e(label)} <span class=\"muted\">{e(_where(v))}</span></h1>"
             f'<p class="muted">{v["members"]} {word}compan{"y" if v["members"] == 1 else "ies"} in {len(v["layers"])} layer{"" if len(v["layers"]) == 1 else "s"}'
+            + (f" ({v['all'] - v['members']} more of the theme's {v['all']} not listed: not confirmed by their own words or official industry yet)"
+               if (v.get("all") or 0) > v["members"] else "")
             + (f" · map made {e(day_text(v['day']))}" if v.get("day") else "")
             # LIVE9A-011: the close the market values are at, said once
             + (f" · market values at the {e(day_text(v['prices']))} close" if v.get("prices") else "") + "</p>")
