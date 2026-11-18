@@ -117,3 +117,37 @@ def test_the_public_pages_candles_pass_the_covered_session():
     src = open(main.__file__, encoding="utf-8").read()
     body = src[src.index("def stock_page_bars("):src.index("_class_pages: dict")]
     assert "official_close.report_through(rep)" in body
+
+
+# ---------- LIVE13B-012: the Trade home's India VIX tile reads only what it shows ----------
+def test_the_vix_tile_reads_the_quote_only_not_the_panels_line_history_or_iv(monkeypatch):
+    from datetime import datetime, timezone
+    from app import vix
+    calls = []
+    monkeypatch.setattr(vix, "quote_now", lambda feed=None: calls.append("quote") or {"value": 15.73, "change": 0.21, "as_of": "2026-11-18T14:20:00+05:30"})
+    monkeypatch.setattr(vix, "intraday", lambda feed=None: calls.append("intraday") or [])
+    monkeypatch.setattr(vix, "nifty_iv", lambda *a, **k: calls.append("iv") or {"today": None, "series": []})
+    monkeypatch.setattr(vix, "daily", lambda since=None, today=None: [("2026-11-17", [15.0, 16.0, 15.0, 15.52])])
+    now = datetime(2026, 11, 18, 8, 50, tzinfo=timezone.utc)
+    got = vix.brief_panel(object(), now)
+    assert got["quote"]["value"] == 15.73 and got["value"] == 15.73 and got["value_day"] is None
+    assert calls == ["quote"]
+    # no quote: the newest stored close, with its day
+    monkeypatch.setattr(vix, "quote_now", lambda feed=None: None)
+    monkeypatch.setattr(vix, "feed_quote", lambda o, t: None)
+    got = vix.brief_panel(None, now)
+    assert got["value"] == 15.52 and got["value_day"] == "2026-11-17"
+    # the full panel still has everything
+    calls.clear()
+    monkeypatch.setattr(vix, "quote_now", lambda feed=None: calls.append("quote") or {"value": 15.73, "as_of": "2026-11-18T14:20:00+05:30"})
+    full = vix.panel(object(), now)
+    assert "intraday" in full and "history" in full and calls[:2] == ["quote", "intraday"]
+
+
+# ---------- LIVE13B-007: a fund category with no " - " part is named in the allocation, not left blank ----------
+def test_a_category_without_a_sub_part_names_itself():
+    from app import money_mf
+    assert money_mf.broad_of("Debt Scheme", "debt") == ("Debt", "Debt Scheme")
+    assert money_mf.broad_of("Gilt Fund with 10 year constant duration", "debt") == ("Debt", "Gilt Fund with 10 year constant duration")
+    assert money_mf.broad_of("Debt Scheme - Short Duration Fund", "debt") == ("Debt", "Short Duration Fund")      # as before
+    assert money_mf.broad_of("", "hybrid") == ("Hybrid", "")

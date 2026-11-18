@@ -38,6 +38,8 @@ export function changeRows(fc: FreeChange): [string, string, string][] {
  * Account's table, which the card links to (LIVE9B-009: every limit in one sentence was an 8-line run-on with "aI" for "AI", and made the
  * Free card about 200px taller than Basic's and Pro's). */
 export function graceLine(fc: FreeChange): string {
-  const n = fc.rows.filter((r) => r.before !== r.after).length;
-  return `Until ${changeDay(fc.on)} you keep your earlier ${n === 1 ? "limit" : `limits on ${n} counts`}; the limits above apply from then.`;
+  const moved = fc.rows.filter((r) => r.before !== r.after), n = moved.length;
+  // LIVE13B-006: "your earlier limits on 10 counts" read like ten backtests; it is how many of the card's limits are still the earlier ones
+  const higher = n > 0 && moved.every((r) => r.before == null || (r.after != null && r.before > r.after)) ? "earlier, higher" : "earlier";
+  return `Until ${changeDay(fc.on)}, ${n === 1 ? `one of the limits above stays at your ${higher} level` : `${n} of the limits above stay at your ${higher} levels`}.`;
 }

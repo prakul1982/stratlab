@@ -84,3 +84,109 @@ test("LIVE13B-002: with scripts off the notice comes first, in a card, and the h
   assert.match(home, /<h1 class="serif lp-h1">/);
   assert.match(html, /\.boot-head \.boot-nav \{ display: flex;/);       // the plain header's rules stay on the plain header
 });
+
+// ---------- LIVE12B-009 / LIVE12B-024: /signup's small print says signing up; a plan card's email button names its plan ----------
+test("LIVE12B-009, LIVE12B-024: 'Signing up only reads…' on /signup, and the plan cards' email button says what it starts", async () => {
+  const login = read("src/pages/Login.tsx");
+  assert.match(login, /\{login \? <p className="small muted">\{signup \? "Signing up" : "Signing in"\} only reads your name and email from Google/);
+  assert.match(login, /<EmailWay next=\{act\.buy \? "\/plans" : null\} className="lp-plan-email" label=\{act\.label\.replace\("Continue with Google", "Sign in with email"\)\} \/>/);
+  const { landingAction } = await import("../src/lib/offer.ts");
+  const offer = { payments: true, mode: "paid" };
+  const words = (p) => { const a = landingAction(offer, p); return "label" in a ? a.label.replace("Continue with Google", "Sign in with email") : a.note; };
+  assert.equal(words("free"), "Sign in with email");
+  assert.match(words("basic"), /^Sign in with email to (get Basic|see plans)$/);
+  assert.match(words("pro"), /^Sign in with email to (get Pro|see plans)$/);
+});
+
+test("LIVE13B-001/004: the shipped boot.js leaves out its whole-line comments, and still runs", async () => {
+  const { leanScript } = await import("../scripts/seoPages.mjs");
+  const src = read("public/boot.js");
+  const lean = leanScript(src);
+  assert.ok(lean.length < src.length * 0.8, `${lean.length} of ${src.length}`);
+  assert.doesNotThrow(() => new Function(lean));
+  assert.doesNotMatch(lean, /^\s*\/\//m);
+  assert.match(lean, /document\.documentElement\.setAttribute\("data-home", "1"\)/);
+  assert.match(leanScript("a();\n  // note\n/* block\n more */\nb(); // kept\n"), /^a\(\);\nb\(\); \/\/ kept\n$/);
+  assert.match(read("scripts/seoPages.mjs"), /writeFileSync\(boot, leanScript\(readFileSync\(boot, "utf8"\)\)\);/);
+});
+
+test("LIVE13B-004: a signed-in start asks for the account beside the app's code; the app's first /me takes that answer once", async () => {
+  assert.match(read("src/entry.tsx"), /if \(account\) import\("\.\/lib\/accountEarly"\)\.then\(\(m\) => m\.startAccountReads\(\)\)/);
+  const mem = new Map([["sb-demo-auth-token", JSON.stringify({ access_token: "tok", expires_at: Math.floor(Date.now() / 1000) + 3600 })]]);
+  const calls = [];
+  const saved = { fetch: globalThis.fetch, ls: globalThis.localStorage, win: globalThis.window };
+  globalThis.window = { STRATLAB_CONFIG: { API_BASE: "https://api.test", SUPABASE_URL: "https://demo.supabase.co", SUPABASE_ANON_KEY: "x" } };
+  globalThis.localStorage = { getItem: (k) => mem.get(k) ?? null, setItem() {}, removeItem() {} };
+  globalThis.fetch = (url, init) => { calls.push([url, init.headers.Authorization]); return Promise.resolve({ ok: true }); };
+  try {
+    const m = await import("../src/lib/accountEarly.ts");
+    m.prefetchMe();
+    m.prefetchMe();                                   // once
+    assert.deepEqual(calls, [["https://api.test/me", "Bearer tok"]]);
+    assert.equal(m.takeEarlyMe("/me", "GET", "other"), null, "another token: asked afresh");
+    m.prefetchMe();
+    assert.equal(calls.length, 2);
+    assert.equal(m.takeEarlyMe("/notebooks", "GET", "tok"), null);
+    assert.ok(m.takeEarlyMe("/me", "GET", "tok"), "the same token takes it");
+    assert.equal(m.takeEarlyMe("/me", "GET", "tok"), null, "once");
+    // a token about to end is left to the sign-in library
+    mem.set("sb-demo-auth-token", JSON.stringify({ access_token: "old", expires_at: Math.floor(Date.now() / 1000) + 30 }));
+    m.prefetchMe();
+    assert.equal(calls.length, 2);
+  } finally { globalThis.fetch = saved.fetch; globalThis.localStorage = saved.ls; globalThis.window = saved.win; }
+  // the app's request code reads the same window field (no import of the early file)
+  const api = read("src/lib/api.ts");
+  assert.match(api, /const early = takeEarlyMe\(path, method, token\);\n\s*r = early \? await early : await fetch\(/);
+  assert.doesNotMatch(api, /from "\.\/accountEarly"/);
+  // the homes' file no longer pulls the Research page in for one date line
+  assert.doesNotMatch(read("src/pages/SpaceHomes.tsx"), /from "\.\/Research"/);
+});
+
+// ---------- Lows: 005, 006, 007, 011, 012, LIVE12B-010, LIVE12B-017 ----------
+test("LIVE13B-005: a Coming up row's line drops the sentence that repeats its title and keeps the rest", async () => {
+  const { detailBeyond } = await import("../src/lib/mine.ts");
+  assert.equal(detailBeyond("India GDP: Quarterly Estimates of GDP for Q2, FY 2026-27", "Quarterly Estimates of GDP for Q2, FY 2026-27. Press release at 4:00 pm."), "Press release at 4:00 pm.");
+  assert.equal(detailBeyond("India GDP: Quarterly Estimates of GDP for Q2, FY 2026-27", "Quarterly Estimates of GDP for Q2, FY 2026-27."), "");
+  assert.equal(detailBeyond("RBI policy", "The Monetary Policy Committee's decision. 10:00 IST."), "The Monetary Policy Committee's decision. 10:00 IST.");
+});
+
+test("LIVE13B-006: the Free card's grace line says how many of the card's limits stay at the earlier, higher level", async () => {
+  const { graceLine } = await import("../src/lib/freeChange.ts");
+  const rows = (n) => Array.from({ length: n }, (_, i) => ({ key: `k${i}`, label: `L${i}`, before: 10, after: 5 }));
+  assert.equal(graceLine({ on: "2026-11-27T00:00:00Z", moves: [], rows: rows(10) }), "Until 27 Nov 2026, 10 of the limits above stay at your earlier, higher levels.");
+  assert.equal(graceLine({ on: "2026-11-27T00:00:00Z", moves: [], rows: rows(1) }), "Until 27 Nov 2026, one of the limits above stays at your earlier, higher level.");
+  assert.doesNotMatch(graceLine({ on: "2026-11-27T00:00:00Z", moves: [], rows: rows(10) }), /counts/);
+});
+
+test("LIVE13B-007: the funds' cost card has one plan note for what both parts keep back; a class with no sub-category says so", async () => {
+  const page = read("src/pages/money/MutualFundsPage.tsx");
+  assert.match(page, /<CostNotes q=\{costs\} lock=\{false\} \/>\n\s*<BehaviourNotes q=\{habits\} lock=\{false\} \/>\n\s*<CardLock locks=\{\[costLock\(costs\), behaviourLock\(habits\)\]\} \/>/);
+  assert.match(page, /detail: a\.subs\.map\(\(s\) => s\.sub\)\.join\(", "\) \|\| "–"/);
+  const { lockLines } = await import("../src/lib/lockLines.ts");
+  assert.deepEqual(lockLines([{ what: "each TER's parts", plan: "Basic" }, { what: "your SIP record", plan: "Basic" }]), ["Each TER's parts; and your SIP record are on the Basic plan."]);
+  assert.deepEqual(lockLines([{ what: "the gap in rupees", plan: "Basic" }, null]), ["The gap in rupees are on the Basic plan."]);
+  assert.deepEqual(lockLines([{ what: "a", plan: "Basic" }, { what: "b", plan: "Pro" }]), ["A are on the Basic plan.", "B are on the Pro plan."]);
+  assert.deepEqual(lockLines([null, null]), []);
+});
+
+test("LIVE12B-010: with nothing owed, the class table's total doesn't repeat the net worth a third time", () => {
+  const nw = read("src/pages/money/NetWorthPage.tsx");
+  assert.match(nw, /total=\{view\.totals\.liabilities > 0 \? \{ name: "All assets", value: inr\(view\.totals\.assets\), pct: 100 \} : undefined\}/);
+});
+
+test("LIVE13B-011: the signed-in page's analytics question waits for the page's calls to be back", () => {
+  const shell = read("src/components/Shell.tsx");
+  assert.match(shell, /const ask = useCallsSettled\(\) \? question : null;/);
+  assert.match(shell, /const CALLS_QUIET_MS = 700, CALLS_SETTLE_CAP = 6_000;/);
+  assert.match(shell, /const stop = onIdle\(wait\);/);
+});
+
+test("LIVE12B-017: a phone's statements window drops periods that don't fit its card", () => {
+  const st = read("src/components/CompanyStatements.tsx");
+  assert.match(st, /if \(phone && wrap && per > 2 && wrap\.scrollWidth > wrap\.clientWidth \+ 1\) setPer\(\(n\) => Math\.max\(2, n - 1\)\);/);
+});
+
+test("LIVE13B-013: the journal's bad-luck line says one figure once when the 95% line and the worst are the same", () => {
+  const j = read("src/pages/trade/JournalPage.tsx");
+  assert.match(j, /m\(-d\.p95\) === m\(-d\.worst\)\n\s*\? <p className="k-small">Yours <span className="nowrap">\{m\(-d\.yours\)\}<\/span> · worst reshuffle <span className="nowrap">\{m\(-d\.worst\)\}<\/span>, which is also the level 95% of reshuffles stay at or above<\/p>/);
+});

@@ -567,10 +567,12 @@ export function NetWorthPage() {
             <Card>
               <CardHead title="By asset class" />
               {/* TABLE-SWEEP: a table of the classes, their amount and their share, with the total under them (it was a list of bars) */}
-              <ShareTable label="Assets by class" head="Asset class" footnote="Share of total assets, before loans."
+              {/* LIVE12B-010: with nothing owed, all assets are the net worth the headline says (and "What you own" beside it): no third time */}
+              <ShareTable label="Assets by class" head="Asset class"
+                footnote={view.totals.liabilities > 0 ? "Share of total assets, before loans." : "Share of what you own, which with nothing owed is the net worth above."}
                 // each share rounded on its own (LIVE9B-020: ₹21,000 of ₹22,23,546 is 0.94%, shown "1.0%" when the shares were forced to add to 100)
                 rows={view.allocation.map((a) => ({ key: a.class, name: a.label, value: inr(a.value), pct: view.totals.assets > 0 ? (a.value / view.totals.assets) * 100 : a.pct }))}
-                total={{ name: "All assets", value: inr(view.totals.assets), pct: 100 }} />
+                total={view.totals.liabilities > 0 ? { name: "All assets", value: inr(view.totals.assets), pct: 100 } : undefined} />
             </Card>
           )}
 

@@ -200,8 +200,11 @@ export function useMarketStrip(enabled = true, live = false): Record<string, Ser
  * FY 2026-27" over "Quarterly Estimates of GDP for Q2, FY 2026-27."): "" then. */
 export function detailBeyond(title: string, detail: string): string {
   const core = (s: string) => s.toLowerCase().replace(/[.\s]+$/, "").replace(/\s+/g, " ").trim();
-  const d = core(detail);
-  return d && core(title).includes(d) ? "" : detail;
+  const t = core(title), d = core(detail);
+  if (!d || t.includes(d)) return d ? "" : detail;
+  // LIVE13B-005: a sentence of the detail that only repeats the title goes; the rest stays ("Press release at 4:00 pm.")
+  const kept = detail.split(/(?<=\.)\s+/).filter((p) => { const c = core(p); return !c || !t.includes(c); });
+  return kept.join(" ");
 }
 
 export interface Up { key: string; date: string; title: string; detail: string; to?: string; tag: string; tone: "warn" | "plain" }
