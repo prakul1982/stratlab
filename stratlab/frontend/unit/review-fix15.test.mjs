@@ -88,3 +88,12 @@ test("LIVE12A-013: a visitor's page code and the visitor half are asked for besi
   assert.ok(e.indexOf('const visitorCode = account ? null : import("./visitor/visitorMain")') < helpers, "the visitor half first");
   assert.match(e, /const visitor = await visitorCode!;/);
 });
+
+test("LIVE12A-002: a signed-in app's first load doesn't download the error reporter beside its own code: it comes after the page has drawn", () => {
+  const s = read("src/lib/sentry.ts");
+  assert.match(s, /export const SENTRY_AFTER_MS = 4000;/);
+  assert.doesNotMatch(s, /if \(!lazy\) \{ void load\(\); return; \}/);
+  assert.match(s, /if \(lazy\) return;\n/);
+  assert.match(s, /window\.addEventListener\("load", \(\) => window\.setTimeout\(later, SENTRY_AFTER_MS\), \{ once: true \}\);/);
+  assert.match(s, /const now = \(\) => \{ off\(\); void load\(\); \};/);          // once loaded, the early listeners stop: nothing twice
+});
