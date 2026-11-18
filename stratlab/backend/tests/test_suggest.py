@@ -137,7 +137,7 @@ def test_add_a_us_stock_by_hand(w, monkeypatch):
     v = r.json()["holdings"]
     aapl = next(x for x in v["rows"] if x["symbol"] == "AAPL")
     q = main.research_hub.quotes("US", ["AAPL"])["AAPL"]
-    assert aapl["market"] == "US" and aapl["currency"] == "USD" and aapl["name"] == "Apple Inc." and aapl["exchange"] == "US"
+    assert aapl["market"] == "US" and aapl["currency"] == "USD" and aapl["name"] == "Apple Inc" and aapl["exchange"] == "US"     # (updated on purpose, LIVE11A-023: US names in one style, no closing full stop)
     assert aapl["price"] == round(q["price"], 2) and aapl["value"] == round(3 * q["price"], 2)
     assert v["usd_inr"] == 85 and v["us"]["count"] == 1 and v["us"]["in_total"] is True
     rel = next(x for x in v["rows"] if x["symbol"] == "RELIANCE")

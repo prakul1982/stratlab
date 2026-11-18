@@ -16,7 +16,7 @@ import { BreadthAlertButton } from "../components/BreadthAlert";
 import { change as figChange, figure, liveRows, measureRows, partTone, type MeasureRow, type Part } from "../lib/breadthTable";
 import { Info } from "../components/ui";
 import {
-  Badge, Card, CardHead, ChartFrame, ChipBar, DataTable, Delta, EmptyState, ErrorState, FoldCard, Notice, PageHeader, PlanNote, Skeleton, Stat, StatRow,
+  Badge, Card, CardHead, ChartFrame, ChipBar, CsvButton, DataTable, Delta, EmptyState, ErrorState, FoldCard, Notice, PageHeader, PlanNote, Skeleton, Stat, StatRow,
   type Column, usePhone,
 } from "../components/kit";
 
@@ -251,8 +251,11 @@ function Headline({ t, h, group, help, live, pending, revised, locked }: { t: To
   return (
     <Card label={`Breadth on ${shortDay(t.day)}`} testId="breadth-today">
       {/* LIVE9A-016: the alert on the share above the 50-day average sits in the card's head, not inside one row (it made that row taller) */}
-      <CardHead title={latestDue(t.day, pending) ?? dailyTitle(shortDay(t.day), live)} actions={!locked ? <BreadthAlertButton group={group} /> : undefined} />
-      <DataTable csv={`breadth ${t.day}`} stack label={`Breadth on ${shortDay(t.day)} against the day before`} columns={cols} rows={rows} rowKey={(r) => r.key} />
+      {/* LIVE11A-018/024: "Download CSV" beside "Alert me" in the card's head, never alone on a row of its own under it */}
+      <CardHead title={latestDue(t.day, pending) ?? dailyTitle(shortDay(t.day), live)} actions={<span className="k-row" data-testid="breadth-today-tools">
+        {!locked && <BreadthAlertButton group={group} />}
+        {rows.length > 0 && <CsvButton name={`breadth ${t.day}`} label={`Breadth on ${shortDay(t.day)} against the day before`} columns={cols} rows={rows} />}</span>} />
+      <DataTable stack label={`Breadth on ${shortDay(t.day)} against the day before`} columns={cols} rows={rows} rowKey={(r) => r.key} />
       <p className="k-note" data-testid="breadth-counted">{count(t.stocks.value)} stocks counted · {count(t.unch.value)} unchanged.</p>
       {/* DE-023: the correction is one short line with its details behind the (i), not a paragraph in the headline card */}
       {changed.length > 0 && <p className="k-note" data-testid="breadth-revised">{changed.length === 1 ? "An earlier day's count was revised" : `${changed.length} earlier counts were revised`}

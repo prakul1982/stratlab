@@ -179,7 +179,8 @@ function DataBanner({ note, market }: { note: { closed: "weekend" | "holiday" | 
       </div>
     );
   }
-  if (back) return <div className="banner data-banner" role="status"><span>Indian price data reconnects on {back}, before the market opens.</span></div>;
+  // LIVE11A-028: the normal overnight state in a quiet note, not the alarm colour (the orange stays for a login that didn't complete)
+  if (back) return <div className="banner data-banner calm" role="status"><span>Indian price data reconnects on {back}, before the market opens.</span></div>;
   return (
     <div className="banner data-banner" role="status">
       <span>Indian market data is offline: today's data login hasn't completed.</span>

@@ -22,7 +22,7 @@ import { downloadCsv } from "../../lib/csvDownload";
 import { csvName } from "../../lib/csv";
 import { istToday } from "../../lib/format";
 import { useApp } from "../../lib/app";
-import { lastTradingDay } from "../../lib/marketDay";
+import { lastTradingDay, readInSession } from "../../lib/marketDay";
 import { marketState } from "../../lib/marketHours";
 import { signCls, currencySymbol } from "../../lib/format";
 import { getSparks, live } from "../../lib/watchApi";
@@ -69,7 +69,7 @@ export default function WatchPanel({ layout, patch, vw, vh, onClose }: { layout:
   const [quotes, setQuotes] = useState<Record<string, WatchQuote | null>>(() => keptQuotes(me?.id ?? "guest", Date.now(), undefined, (k) => {
     const m = markets.find((x) => x.id === k.split(":")[0]);
     return m ? lastTradingDay(m) : null;
-  }));
+  }, (k, at) => { const m = markets.find((x) => x.id === k.split(":")[0]); return !!m && readInSession(m, at); }));
   useEffect(() => {
     const t = window.setTimeout(() => keepQuotes(me?.id ?? "guest", quotes), 1000);
     return () => window.clearTimeout(t);

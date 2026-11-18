@@ -112,7 +112,7 @@ def rows_of(text: str) -> list[dict]:
 
 
 def cash_rows(text: str) -> dict[str, dict]:
-    """The cash market's common bhavcopy: {symbol: {"close", "prev", "series"}} for the equity series (EQ, BE, BZ, SM,
+    """The cash market's common bhavcopy: {symbol: {"close", "prev", "series", "open"}} for the equity series (EQ, BE, BZ, SM,
     ST) and the units of REITs and InvITs (RR, IV), which trade like shares (LIVE9B-025: an InvIT's dividend row had no price or
     yield). A file without that shape is an error."""
     out: dict[str, dict] = {}
@@ -128,7 +128,7 @@ def cash_rows(text: str) -> dict[str, dict]:
             continue
         if sym in out and out[sym]["series"] == "EQ":
             continue                                    # a stock's main line wins over its other series
-        out[sym] = {"close": close, "prev": num(r.get("PrvsClsgPric")), "series": series}
+        out[sym] = {"close": close, "prev": num(r.get("PrvsClsgPric")), "series": series, "open": num(r.get("OpnPric"))}
     return out
 
 

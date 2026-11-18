@@ -22,3 +22,15 @@ export function lastTradingDay(m: Market, now = new Date()): string | null {
   while (!trades(n) && n > -30) n--;
   return w.iso(n);
 }
+
+/** LIVE11A-029: whether a price read at `at` is from during the session of the market's last trading day while the market is shut now:
+ * the Markets panel showed this device's 14:20 IST read (RELIANCE ₹1,369.90) for 1.2 s under "Closed · last close Tue 17 Nov". */
+export function readInSession(m: Market, at: string | null | undefined, now = new Date()): boolean {
+  if (!at || !m.hours?.close || !m.hours?.open || m.id === "FX" || m.id === "CRYPTO") return false;
+  const day = lastTradingDay(m, now);
+  const t = new Date(at);
+  if (!day || Number.isNaN(t.getTime())) return false;
+  const n = wall(now, m.tz), r = wall(t, m.tz);
+  const shutNow = n.iso(0) !== day || n.min >= hm(m.hours.close);
+  return shutNow && r.iso(0) === day && r.min < hm(m.hours.close);
+}

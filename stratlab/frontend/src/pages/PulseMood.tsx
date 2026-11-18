@@ -238,7 +238,7 @@ export function IndexTable({ indices, missing, dayText, whenOf }: { indices: { n
     { key: "c", header: "Change", numeric: true, brief: true, cell: (i) => (i.change_pct == null ? "–" : <Delta value={i.change_pct}>{pct(i.change_pct, 2)}</Delta>) },
     // LIVE9A-027: the brief's own rule, so the two never differ ("near its high" here, "0.3% below" in the brief, for one level)
     { key: "h", header: "Against 52-week high", numeric: true, cell: (i) => (i.from_high_pct == null ? "–" : fromHighText(i.from_high_pct)) },
-    { key: "w", header: "As of", cell: (i) => <span data-testid="index-when" data-stale={i.stale ? "1" : undefined}>{whenOf(i)}</span> },
+    { key: "w", header: "When", cell: (i) => <span data-testid="index-when" data-stale={i.stale ? "1" : undefined}>{whenOf(i)}</span> },
   ];
   void dayText;
   return (

@@ -278,6 +278,10 @@ def restated(e: dict) -> dict:
                            .get(s, f"{n} trades, too few to tell skill from luck."))
     # the engine's own headline and summary stay as they were stored; pages show these instead
     v.update(label=lab, fact_headline=head + ".", fact_summary=" ".join(out), checks=checks_of(e))
+    if hold and hold["gap"] <= -1 and kind == "edge":
+        # LIVE11A-022: a card's one line leads with the verdict, then what the checks test ("84.0 points behind … · all 3 passed" read as a pass)
+        v["card_headline"] = (f"Trailed buy and hold by {abs(hold['gap']):.1f} points after costs. "
+                              f"Checks of the result itself: {lab[:1].lower() + lab[1:]}.")
     return v
 
 

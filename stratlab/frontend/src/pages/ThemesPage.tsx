@@ -14,7 +14,7 @@ import { ChangesCard } from "../components/ThemeChanges";
 import { SaveButton, SavedList } from "../components/SavedSearches";
 import { themeReady, themeSnap } from "../lib/savedSnap";
 import { Card, CardHead, DataTable, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PageNav, Skeleton, Working } from "../components/kit";
-import { fundName } from "../lib/themeFormat";
+import { fundName, themeFunds } from "../lib/themeFormat";
 
 /* ================= Themes: a theme deep dive =================
  * Who is in the theme: every company the exchange classifies in its official industries, sorted into layers by AI, with the AI's additions
@@ -197,11 +197,13 @@ export function ThemesPage() {
                 <Link className="btn quiet sm" to={`/invest/heatmap?theme=${encodeURIComponent(q)}&region=${region}`}>Heatmap of this theme</Link>
               </div>
             )}
-            {r.etfs.length > 0 && (
+            {themeFunds(r.etfs).funds.length > 0 && (
               <DataTable label="Funds that track the theme" columns={[
                 { key: "t", header: "Fund", rowHeader: true, cell: (e: (typeof r.etfs)[number]) => <Link className="link" to={`/research/${region}/${encodeURIComponent(e.ticker)}`}><b>{e.ticker}</b></Link> },
-                { key: "n", header: "Name", wrap: true, cell: (e) => fundName(e.name) }]} rows={r.etfs} rowKey={(e) => e.ticker} />
+                { key: "n", header: "Name", wrap: true, cell: (e) => fundName(e.name) }]} rows={themeFunds(r.etfs).funds} rowKey={(e) => e.ticker} />
             )}
+            {/* LIVE11A-011: a whole-market index fund is not offered as a theme's fund; said once */}
+            {themeFunds(r.etfs).broad > 0 && <p className="k-note" data-testid="theme-funds-broad">{themeFunds(r.etfs).broad === 1 ? "A fund that tracks the whole market is left out: it holds far more than this theme." : `${themeFunds(r.etfs).broad} funds that track the whole market are left out: they hold far more than this theme.`}</p>}
           </Card>
           {/* still being prepared: a moving bar and one short line; the page asks again on its own (owner, 5 Nov: no warnings for work in progress) */}
           {pending && stopped && <p className="k-note" data-testid="theme-still-checking">Some of this theme's checks are still running. Refresh to see them.</p>}
@@ -264,6 +266,8 @@ export function ThemesPage() {
 /** The shared library: themes StratLab has mapped and kept once for everyone that match what's typed, so a search for one of them opens
  *  at once (R19). Not this account's reading history, so it is headed "Ready to open" with the date the map was updated (LIVE6-012).
  *  Signed-in only, as the page is; nothing shows until there is one. */
+const LIBRARY_FIRST = 12;            // stored themes shown before "All N themes"
+
 function AlreadyRead({ region, typed, current, onPick }: { region: "IN" | "US"; typed: string; current: string; onPick: (t: string) => void }) {
   const [items, setItems] = useState<LibraryTheme[]>([]);
   useEffect(() => {
@@ -273,16 +277,22 @@ function AlreadyRead({ region, typed, current, onPick }: { region: "IN" | "US"; 
     }, 250);
     return () => { live = false; clearTimeout(t); };
   }, [region, typed]);
-  const shown = items.filter((i) => i.name.toLowerCase() !== current.trim().toLowerCase()).slice(0, 4);
+  const [all, setAll] = useState(false);
+  // LIVE11A-013: every theme StratLab keeps for this market (4 were listed beside 29 public India theme pages); the first LIBRARY_FIRST
+  // with the rest one press away, each without the market the tab already names
+  const matching = items.filter((i) => i.name.toLowerCase() !== current.trim().toLowerCase());
+  const shown = all ? matching : matching.slice(0, LIBRARY_FIRST);
   if (!shown.length) return null;
   return (
     <div className="k-row theme-already" data-testid="theme-already">
       <span className="k-small k-muted" title="Themes already mapped on StratLab, kept for everyone">{LIBRARY_HEAD}</span>
       {shown.map((i) => (
         <button key={i.q} type="button" className="btn quiet sm" onClick={() => onPick(i.name)}>
-          {libraryLabel(i, (d) => fmtDate(d, { year: false }))}
+          {libraryLabel(i, (d) => fmtDate(d, { year: false }), false)}
         </button>
       ))}
+      {matching.length > shown.length && <button type="button" className="btn quiet sm" data-testid="theme-already-all" onClick={() => setAll(true)}>
+        All {matching.length} themes</button>}
     </div>
   );
 }

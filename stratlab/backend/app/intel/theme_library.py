@@ -167,16 +167,29 @@ def keep(region: str, q: str, payload: dict, by: str | None = None) -> bool:
     return kept is not None
 
 
-def suggest(region: str, q: str, limit: int = 5) -> list[dict]:
-    """Stored themes for the search box: the one this search is for first, then names starting with or containing what's typed."""
+ALL_LIMIT = 120                    # nothing typed: every stored theme of the market (a list, read from the index in memory)
+
+
+def suggest(region: str, q: str, limit: int | None = None) -> list[dict]:
+    """Stored themes for the search box: the one this search is for first, then names starting with or containing what's typed; with
+    nothing typed, every stored theme of the market, most searched first."""
+    limit = limit or (8 if (q or "").strip() else ALL_LIMIT)
     n = normalise(q, region)
     ix = computed.index(KIND)["entries"]
-    rows = []
+    rows, seen = [], {}
     hit = find(region, q) if n else None
     for hk, e in ix.items():
         m = e.get("meta") or {}
-        if e.get("region") != region or m.get("rules") != theme_base.RULES:
+        # LIVE11A-013: every stored theme the public pages list, the newest entry of each (a theme not read again since a rules bump keeps
+        # its newest stored map, as public_themes.entries does): the app listed 4 "Ready to open" beside 29 public India theme pages
+        if e.get("region") != region or not isinstance(m.get("rules"), int) or m["rules"] > theme_base.RULES:
             continue
+        key = str(m.get("q") or "").lower()
+        if key in seen and seen[key] >= m["rules"]:
+            continue
+        if key in seen:
+            rows = [r for r in rows if str(r[2].get("q") or "").lower() != key]
+        seen[key] = m["rules"]
         names = [m.get("q") or ""] + list(m.get("aliases") or []) + [str(e.get("label") or "").lower()]
         rank = 0 if hit and hit["id"] == hk else 1 if n and any(x.startswith(n) for x in names) else 2 if n and any(n in x for x in names) else 3 if not n else None
         if rank is None:

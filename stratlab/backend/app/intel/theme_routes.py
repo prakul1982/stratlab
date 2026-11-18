@@ -56,7 +56,15 @@ PLACE_READS = 60                                                          # R28:
 PLACE_READS_MAX = 150                                                     # h56: ...for a large theme, as many as its companies without one over
 DESCRIBE_CHECKS_TO_FINISH = 3                                             # ...this many checks (describe_reads), at most this many
 PRICE_READS_PER_MINUTE = 20                                               # companies' candles read from the sources a minute, across every theme
-PRICE_BUDGET = 45.0                                                       # seconds a request may spend reading candles
+# LIVE11A-004: a request read candles for up to 45 s and held one of two gates up to 30 s more, so Semiconductors' prices answered in 35 s
+# with 53 of 58 companies still pending (a theme page 47-65 s to settle). A request now spends at most PRICE_BUDGET reading and the rest are
+# read behind it by one worker at the same allowance; the page asks again and fills as they come.
+PRICE_BUDGET = 2.0                                                        # seconds a request may spend reading candles
+PRICE_BEHIND_MAX = 600                                                    # companies waiting for the worker, at most
+PRICE_BEHIND = os.environ.get("READ_BEHIND", "1").strip().lower() not in ("0", "false", "no", "off")    # off in the test suite
+_behind: dict = {}                                                        # "<region>:<symbol>" -> its loader, in the order queued
+_behind_lock = threading.Lock()
+_behind_running = [False]
 price_reads = Window()
 filing_reads = Window()
 _price_gate = threading.BoundedSemaphore(2)
@@ -2399,6 +2407,48 @@ def bench_bars(region: str, bench) -> tuple[str | None, list]:
     return name, bars
 
 
+def price_behind(region: str, syms: list[str], load) -> int:
+    """Queue companies whose candles a request had no time for; one worker reads them at PRICE_READS_PER_MINUTE (bounded queue). The
+    number queued now."""
+    if not PRICE_BEHIND or not syms:
+        return 0
+    with _behind_lock:
+        for sym in syms:
+            k = f"{region}:{sym}"
+            if k not in _behind and len(_behind) < PRICE_BEHIND_MAX and PRICE_CACHE.get(k) is None:
+                _behind[k] = load
+        n, start = len(_behind), not _behind_running[0] and bool(_behind)
+        if start:
+            _behind_running[0] = True
+    if start:
+        threading.Thread(target=_price_worker, daemon=True, name="theme-prices-behind").start()
+    return n
+
+
+def _price_worker():
+    try:
+        while True:
+            with _behind_lock:
+                if not _behind:
+                    _behind_running[0] = False
+                    return
+                k = next(iter(_behind))
+                load = _behind.pop(k)
+            if PRICE_CACHE.get(k) is not None:
+                continue
+            while not price_reads.hit("all", PRICE_READS_PER_MINUTE):
+                time.sleep(3)
+            region, sym = k.split(":", 1)
+            try:
+                PRICE_CACHE.set(k, theme_prices.reduce_bars(load(sym)) or {}, _price_ttl(region))
+            except Exception as e:
+                print("theme prices behind: candles not read:", sym, type(e).__name__, str(e)[:100])
+    except Exception as e:                       # the next request starts it again
+        print("theme prices behind:", str(e)[:120])
+        with _behind_lock:
+            _behind_running[0] = False
+
+
 def gather_prices(region: str, members: list[tuple[str, str]], load, bench, budget: float = PRICE_BUDGET, daily=None) -> dict:
     """The price section for the members, reading each company's candles that isn't already reduced and kept; a company whose read has
     to wait (the minute's allowance is used, or the time is up) is counted as pending and read on a later request, shown meanwhile from its
@@ -2429,6 +2479,8 @@ def gather_prices(region: str, members: list[tuple[str, str]], load, bench, budg
                 PRICE_CACHE.set(f"{region}:{sym}", red or {}, _price_ttl(region))
                 reduced[sym] = red
     pending = sum(1 for s, _ in members if s not in reduced)
+    if pending and budget > 0:
+        price_behind(region, [s for s, _ in members if s not in reduced], load)
     stocks, day, _ = daily if daily is not None else ({}, None, {})
     for s, _ in members:
         if s not in reduced:
@@ -2452,7 +2504,7 @@ def theme_dive_prices(q: str, region: str = "IN", profile=Depends(current_profil
     members = sorted(placed.items())
     if not members:
         return R.ok({"companies": [], "pending": 0, "line": None, "returns": None, "median": {}, "benchmark": ""})
-    if not _price_gate.acquire(timeout=30):
+    if not _price_gate.acquire(timeout=PRICE_BUDGET + 3):
         err(503, "busy", "Prices are busy right now. Try again in a minute.")
     try:
         out = gather_prices(r, members, bars_loader(r), bench_loader(r), daily=daily_rows(r))

@@ -1106,12 +1106,65 @@ PERF_DAYS = 75                         # issues listed within this many days hav
 PERF_RETRY_DAYS = 7                    # an older listed issue with no figures yet is tried again after this long
 
 
+LISTING_DAY_READS = 6                  # listing days' bhavcopies read at most per pass (the first pass after a deploy has a backlog)
+
+
+def listing_day_prices(row: dict, now: datetime, budget: list | None = None) -> dict | None:
+    """LIVE11A-006: an NSE issue's listing-day open and close from that day's cash bhavcopy, the exchange's own figures ({"day", "open",
+    "close"}), read once and kept on the row; None while the file can't be read (tried again the next day). The daily candles had no
+    listing-day session for some issues (VPFL showed its 13 Nov close, ₹76.65, as the price it listed at on 9 Nov)."""
+    if row.get("market") != "IN" or not row.get("symbol") or not row.get("listing"):
+        return None
+    got = row.get("listing_px")
+    if isinstance(got, dict) and got.get("day") == row["listing"] and got.get("open"):
+        return got
+    today = now.astimezone(IST).date()
+    try:
+        day = date.fromisoformat(row["listing"])
+        if day > today or (day == today and now < official_close.out_at(day.isoformat(), "cash")) or row.get("listing_px_tried") == today.isoformat():
+            return None
+    except ValueError:
+        return None
+    files_fn = official_close._src.get("files")
+    if not files_fn or (budget is not None and budget[0] <= 0):
+        return None
+    if budget is not None:
+        budget[0] -= 1
+    row["listing_px_tried"] = today.isoformat()
+    try:
+        from . import exchange_days
+        r = (exchange_days.cash_closes(files_fn(), day) or {}).get(str(row["symbol"]).upper())
+    except Exception as e:
+        print("ipo listing day prices:", row["symbol"], str(e)[:100])
+        return None
+    if not r or not r.get("open") or not r.get("close"):
+        return None
+    row["listing_px"] = {"day": day.isoformat(), "open": round(float(r["open"]), 2), "close": round(float(r["close"]), 2)}
+    return row["listing_px"]
+
+
+def with_listing_day(row: dict, perf: dict | None) -> dict | None:
+    """A performance with the listing-day figures the exchange gives (row["listing_px"]) laid in, or, without them, none from a stored
+    read whose first candle was not the listing day's (a read kept from before LIVE10A-016: its "listing price" was a later close)."""
+    px, listed = row.get("listing_px"), row.get("listing") if row.get("market") == "IN" else row.get("priced")
+    issue = (perf or {}).get("issue_price") or row.get("price") or (row.get("bse_perf") or {}).get("issue_price")
+    if isinstance(px, dict) and px.get("day") == listed and px.get("open"):
+        pct = (lambda v: round((v / issue - 1) * 100, 2)) if issue else (lambda v: None)      # noqa: E731
+        return {**(perf or {"latest": None, "latest_date": None, "change_pct": None, "basis": "exchange"}), "issue_price": issue,
+                "listing_price": px["open"], "listing_change_pct": pct(px["open"]), "day_close": px.get("close"),
+                "day_change_pct": pct(px["close"]) if px.get("close") else None, "listed": listed, "listing_basis": "exchange"}
+    if perf and perf.get("listing_price") is not None and perf.get("listed") and listed and perf["listed"] != listed:
+        return {**perf, "listing_price": None, "listing_change_pct": None, "day_close": None, "day_change_pct": None, "listed": listed}
+    return perf
+
+
 def attach_perf(rows: list[dict], now: datetime) -> int:
     """Store each recently listed issue's trading since its listing on its row (the lists show it without a price call each).
     An issue listed longer ago than PERF_DAYS, which the list still holds (KEEP_LISTED_DAYS is 120), is not read again at every read:
     its listing-day figures never change, so it is read once when it has none (the blog's IPO post counted 62 of 115 issues, the rest
     being those past the window), and again only after PERF_RETRY_DAYS if that read found nothing (RC4-003)."""
     n, today = 0, now.astimezone(IST).date() if rows and rows[0]["market"] == "IN" else now.astimezone(NY).date()
+    budget = [LISTING_DAY_READS]
     for r in rows:
         listed = r.get("listing") if r["market"] == "IN" else r.get("priced")
         if stage_of(r, now) != "listed" or not listed:
@@ -1121,15 +1174,38 @@ def attach_perf(rows: list[dict], now: datetime) -> int:
                 continue
             r["perf_tried"] = today.isoformat()
         got = performance(r, _wire["yahoo"](), today, now) if _wire["yahoo"] else None
+        if r["market"] == "IN" and listing_day_prices(r, now, budget):            # LIVE11A-006: the exchange's own listing-day open and close
+            got = with_listing_day(r, got or r.get("perf"))
         if got:
             r["perf"] = {**got, "at": now.isoformat(timespec="seconds")}
             n += 1
     return n
 
 
+NEWEST_BACK = 10                       # days back the stored bhavcopies are looked through for an issue's newest official close
+
+
+def newest_official(row: dict, perf: dict, now: datetime) -> dict:
+    """LIVE11A-006: a performance from BSE's table of listed issues (no daily prices read) with the newest official close the stored cash
+    bhavcopies hold, dated: its "latest" was an undated, days-old figure (BCSSL "₹89.88" where the 17 Nov close was ₹83.41). Nothing is
+    read; a close far off the issue price (another listing under that symbol) is left out."""
+    today = now.astimezone(IST).date()
+    for back in range(NEWEST_BACK + 1):
+        d = (today - timedelta(days=back)).isoformat()
+        if d < str(row.get("listing") or ""):
+            break
+        c = _official(row["symbol"], d, now, False)
+        if c and 0.2 <= c / perf["issue_price"] <= 5:
+            return {**perf, "latest": c, "latest_date": d, "change_pct": round((c / perf["issue_price"] - 1) * 100, 2)}
+    return perf
+
+
 def official_perf(row: dict, perf: dict | None, now: datetime | None = None) -> dict | None:
     """A stored performance with the exchange's official closes put in where its bhavcopy is stored now (the figures kept at 20:10 may have
     been worked out before the file was out): the latest close and the listing day's, each against the issue price. Nothing is read."""
+    perf = with_listing_day(row, perf)
+    if perf and row.get("market") == "IN" and row.get("symbol") and perf.get("basis") == "exchange" and perf.get("issue_price"):
+        perf = newest_official(row, perf, now or _now())
     if not perf or row.get("market") != "IN" or not row.get("symbol") or perf.get("basis") != "prices" or not perf.get("issue_price"):
         return perf
     now, out = now or _now(), dict(perf)

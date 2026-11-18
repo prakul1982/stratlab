@@ -68,6 +68,8 @@ def test_the_sector_chart_is_served_from_the_copy_kept_at_the_close(monkeypatch)
             return True
     monkeypatch.setattr(main.markets, "provider", lambda r: Prov())
     monkeypatch.setattr(main.stock_pages, "last_close", lambda r, now=None: (_date(2026, 11, 16), None))
+    # (updated on purpose, fix13 LIVE11A-007: the sector chart's session is its own day, a quarter hour after the close)
+    monkeypatch.setattr(main.stock_pages, "last_session", lambda r, now=None, after=0: (_date(2026, 11, 16), None))
     monkeypatch.setattr(main, "heavy_read_throttle", lambda p: None)
     ran = []
     monkeypatch.setattr(main.rotation, "run", lambda *a, **k: ran.append(a) or {"rows": [{"points": [{"t": "2026-11-16"}]}], "skipped": [],

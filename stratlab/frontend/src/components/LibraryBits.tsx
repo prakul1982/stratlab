@@ -22,7 +22,9 @@ export interface LibEntry {
   tf: string; side: string; range: { from: string; to: string } | null; strategy: Strategy;
   verdict: { verdict: VerdictKind; headline: string; summary: string; passed: number; total: number; checks?: { id: string; status: string }[];
     /** the server's words for the result, from the checks themselves (R6V-005): the same on the card and the page */
-    label?: string; fact_headline?: string; fact_summary?: string };
+    label?: string; fact_headline?: string; fact_summary?: string;
+    /** a landing card's line, verdict first (LIVE11A-022) */
+    card_headline?: string };
   /** the return after costs beside buy and hold over the same period, in percent (gap < 0: behind buy and hold) */
   vs_hold?: { ret: number; hold: number; gap: number } | null;
   stats: { ret: number | null; buy_hold: number | null; mdd: number | null; trades: number | null; unseen: number | null };

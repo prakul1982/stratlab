@@ -27,7 +27,7 @@ import { CONFIG } from "../lib/adsConfig";
 
 /** A landing card's checks line, unless its headline already gives the count (R61-007). */
 const cardChecks = (e: LibEntry) => underHeadline(lostMoney(e.verdict.verdict, e.stats?.ret) ? LOST_CHECKS : checksLine(e.verdict.passed, e.verdict.total),
-  e.verdict.fact_headline ?? e.verdict.headline);
+  e.verdict.card_headline ?? e.verdict.fact_headline ?? e.verdict.headline);
 // asked for again when its download fails, like every other lazy piece (R64-005: a 502 on a chunk just after a deploy)
 // ADS-1, AS1: the ad slot's code loads only when ads can draw here; with ads off (the default) the landing page asks for no extra file
 const ADS_HERE = adsLive(CONFIG, "public");
@@ -620,8 +620,10 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
                   )}
                 </div>
                 {"note" in act ? <span className="lp-plan-note small muted">{act.note}</span>
-                  : <><button type="button" className={`btn ${p === "pro" ? "" : "outline"}`} disabled={loading} onClick={() => void signIn(act.buy ? "/plans" : null)}>{act.label}</button>
-                    <EmailWay next={act.buy ? "/plans" : null} className="lp-plan-email" /></>}
+                  // LIVE11B-001: the Google and email buttons are ONE row of the card's four-row subgrid (name, price, ways in, list): as two
+                  // children the email button took the list's row and the list ran under it, its ticks boxed under "Sign in with email"
+                  : <div className="lp-plan-ways"><button type="button" className={`btn ${p === "pro" ? "" : "outline"}`} disabled={loading} onClick={() => void signIn(act.buy ? "/plans" : null)}>{act.label}</button>
+                    <EmailWay next={act.buy ? "/plans" : null} className="lp-plan-email" /></div>}
                 {/* on a phone the five lines are one fold under the button (LIVE5 partial: three cards of five lines were 2,100 px) */}
                 <PhoneFold label={`What ${PLAN_NAME[p]} includes`}>
                 <ul className="lp-plan-list">
@@ -781,7 +783,7 @@ function LibraryExamples() {
               <Link key={e.id} to={`/library/${encodeURIComponent(e.id)}`} className="lp-card lp-example">
                 {eyebrow && <span className="eyebrow">{eyebrow}</span>}
                 <b className="serif">{title}</b>
-                <span className="small">{e.verdict.fact_headline ?? e.verdict.headline}</span>
+                <span className="small">{e.verdict.card_headline ?? e.verdict.fact_headline ?? e.verdict.headline}</span>
                 {/* the count once: most headlines already end with it */}
                 {cardChecks(e) && <span className="small muted">{cardChecks(e)}</span>}
                 <span className="small lp-space-go">Open the verdict and rules →</span>

@@ -173,11 +173,12 @@ def test_the_default_job_reads_the_mood_hub_payload(monkeypatch):
 
         def refresh_now(self, region):
             built.append(region)
-            return {"session": "2026-11-16"}
+            # (updated on purpose, fix13 LIVE11A-002: a day is done only with that session's breadth count in the tables)
+            return {"session": "2026-11-16", "breadth": {"day": "2026-11-16"}}
     monkeypatch.setattr(routes, "mood_hub", lambda: Hub())
     assert mood_job._mood_payload("IN", "2026-11-16") == "2026-11-16" and built == ["IN"]
     # a payload already of the session that closed is not read again
-    Hub.payloads.kept = staticmethod(lambda region: (0.0, {"session": "2026-11-16", "is_open": False}))
+    Hub.payloads.kept = staticmethod(lambda region: (0.0, {"session": "2026-11-16", "is_open": False, "breadth": {"day": "2026-11-16"}}))
     assert mood_job._mood_payload("IN", "2026-11-16") == "2026-11-16" and built == ["IN"]
 
 

@@ -219,6 +219,8 @@ export interface PulseMood {
   refreshing?: boolean;
   /** a copy read while the market traded, served after the close while the closing read is written (LIVE10A-001) */
   during?: boolean;
+  /** the closed session's final read (sectors, that session's breadth count and, for India, its flows all in): not read again (LIVE11A-001) */
+  final?: boolean;
   /** the session the figures are of (the index's own day), and, on a copy behind the levels, the newer session being read (LIVE7A-001) */
   session?: string | null; behind?: string | null;
   headline: string; lines: string[];

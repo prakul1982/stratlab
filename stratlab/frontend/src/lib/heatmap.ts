@@ -200,8 +200,9 @@ export function tileWords(symbol: string, figure: string, w: number, h: number, 
   const room = w - 7;                                                    // the tile's padding and a pixel to spare
   const along = (px: number, r: number) => (width(symbol, 600) * px) / 10 + symbol.length * 0.01 * px <= r;
   const fits = (px: number) => along(px, room);
-  const px = w >= 120 && h >= 72 && fits(15) ? 15 : w >= 56 && h >= 28 && fits(12) ? 12 : h >= 15 && fits(10) ? 10 : 0;
-  const fig = px > 0 && h >= (px === 15 ? 46 : px === 12 ? 34 : 28) && (width(figure, 400) * px * 0.92) / 10 <= room;
+  // LIVE11A-023: a mid-size tile (about 70 × 50 px) too narrow for a long symbol at 10px names it at 9px rather than not at all
+  const px = w >= 120 && h >= 72 && fits(15) ? 15 : w >= 56 && h >= 28 && fits(12) ? 12 : h >= 15 && fits(10) ? 10 : w >= 44 && h >= 15 && fits(9) ? 9 : 0;
+  const fig = px > 0 && h >= (px === 15 ? 46 : px === 12 ? 34 : px === 10 ? 28 : 26) && (width(figure, 400) * px * 0.92) / 10 <= room;
   // LIVE10A-012: a tall, narrow tile too thin for its symbol across (a large Commodities or Industrials tile was left unlabelled) names it
   // down its length
   if (!px && h > w) {
