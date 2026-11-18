@@ -59,23 +59,28 @@ async function start() {
   const path = location.pathname;
   if (!(await readConfig()) && !isPublicForAll(path)) { window.__stratlabShowLoadError?.(); return; }
   const account = !isPublicForAll(path) && wantsAccount({ supabaseUrl: window.STRATLAB_CONFIG?.SUPABASE_URL, search: location.search, hash: location.hash, storage: localStorage });
+  if (!account) holdStartup(root);    // the page's own words, drawn again until its code is here (R10V-006); not for a saved sign-in (R29B-019)
   const appCode = account ? import("./main") : null;      // the app's code downloads beside the small helpers below, not after them
   appCode?.catch(() => undefined);
   // LIVE11B-004: whether Indian data is offline, asked now beside the app's code and the sign-in check, so the first page frame carries the line
   if (account) import("./lib/http").then((m) => m.prefetchPublic("/public/data-online")).catch(() => undefined);
+  // LIVE12A-013: a visitor's page questions, its page code and the visitor half are asked for now, beside the two small helpers below,
+  // not after them: the landing's chunks waited a round trip for the helpers first (LCP 3.7 s desktop, 3.2 s phone)
+  if (!account) {
+    const reads = publicReads(path);
+    if (reads.length) import("./lib/http").then((m) => reads.forEach((r) => m.prefetchPublic(r))).catch(() => undefined);
+  }
+  const early = account ? null : publicPage(path).catch(() => undefined);
+  const visitorCode = account ? null : import("./visitor/visitorMain");
+  visitorCode?.catch(() => undefined);
   const [{ captureRef }, { startErrorReports }] = await Promise.all([import("./lib/share"), import("./lib/sentry")]);
-  if (!account) holdStartup(root);    // the page's own words, drawn again until its code is here (R10V-006); not for a saved sign-in (R29B-019)
   captureRef();                       // a friend's invite link: kept until sign-in
   startErrorReports({ lazy: !account });   // a visitor's page downloads the error reporter only if something breaks
   if (account) {
     const app = await appCode!;
     app.startApp(root);
   } else {
-    // the page's questions to the server first (lib/http is in the start-up file already), then its code, alongside the half itself
-    const reads = publicReads(path);
-    if (reads.length) import("./lib/http").then((m) => reads.forEach((r) => m.prefetchPublic(r))).catch(() => undefined);
-    const early = publicPage(path).catch(() => undefined);
-    const visitor = await import("./visitor/visitorMain");
+    const visitor = await visitorCode!;
     visitor.startVisitor(root);
     void early;
   }

@@ -170,11 +170,13 @@ test("corporate actions: a table a day with the price now, the payment's yield a
   // narrowed by the kind of action, by sector, and the count says how many
   if (phone) await page.getByRole("button", { name: /^Filters/ }).click();
   const filters = page.getByRole("region", { name: "Filters" });
+  // (updated on purpose, fix15 LIVE12A-008: with no filter on, a size no company has is not offered; once the table is narrowed every
+  // size is, and picking one with none says so)
+  await expect(filters.getByRole("button", { name: /^Micro 0$/ })).toHaveCount(0);
   await filters.getByLabel("Kind of action").selectOption("split");
   await expect(page.getByRole("row", { name: /VEDL/ }).first()).toBeVisible();
   await expect(page.getByRole("row", { name: /ICICIBANK/ })).toHaveCount(0);
   await expect(count).toContainText("shown");
-  await filters.getByLabel("Kind of action").selectOption("");
   await filters.getByRole("button", { name: /^Micro/ }).click();
   await expect(page.getByText("No action matches these filters")).toBeVisible();
   await page.getByRole("button", { name: "Clear filters" }).first().click();

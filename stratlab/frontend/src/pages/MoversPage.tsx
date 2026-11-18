@@ -8,7 +8,7 @@ import { LISTS, LIST_META, countLine, figureOf, isList, times, type ListId, type
 import "./movers.css";
 import { useApp } from "../lib/app";
 import { marketState } from "../lib/marketHours";
-import { Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, Field, FieldGroup, PageHeader, PlanNote, Seg, Select, Signed, Working, type Column } from "../components/kit";
+import { Card, CardHead, ChipBar, CsvButton, DataTable, EmptyState, ErrorState, Field, FieldGroup, PageHeader, PlanNote, Seg, Select, Signed, Working, type Column } from "../components/kit";
 
 /* /invest/movers: a group's biggest gainers and losers at the last close, the most traded by value, the volume spikes and the 52-week
  * highs and lows, India and the US. The figures are the daily closes the heatmap already stores (one read gives every list; the tabs
@@ -78,6 +78,7 @@ export function MoversPage() {
   ];
   const name = view?.universe_name ?? "";
   const counted = lst ? countLine(rows.length, lst.total) : "";
+  const tableLabel = `${name}: ${meta.label}, close of ${asOf ?? "the last day"}`;
   return (
     <div className="k-page mv-page">
       <PageHeader eyebrow={eyebrowOf("/invest/movers")} title="Movers"
@@ -86,20 +87,25 @@ export function MoversPage() {
       <Card label="Movers settings">
         <div className="k-row mv-controls" data-testid="mv-controls">
           <FieldGroup label="Market"><Seg label="Market" value={region} onChange={(v) => { setRegion(v as Region); set({ region: v, u: null, min: null }); }} options={[{ value: "IN", label: "₹ India" }, { value: "US", label: "$ United States" }]} /></FieldGroup>
-          {view && view.universes.length > 0 && (
-            <Field label="Stocks">{(id) => <Select id={id} value={view.universe} disabled={locked} onChange={(v) => set({ u: v })} options={view.universes.map((u) => ({ value: u.id, label: u.name }))} />}</Field>
+          {/* LIVE12A-005: the field is drawn while the first read is out (disabled), so the list doesn't jump down when it comes (phone CLS 0.35) */}
+          {(!view || view.universes.length > 0) && (
+            <Field label="Stocks">{(id) => view
+              ? <Select id={id} value={view.universe} disabled={locked} onChange={(v) => set({ u: v })} options={view.universes.map((u) => ({ value: u.id, label: u.name }))} />
+              : <Select id={id} value="" disabled onChange={() => undefined} options={[{ value: "", label: "Reading…" }]} />}</Field>
           )}
           <Field label="Smallest market value">{(id) => <Select id={id} value={locked ? "" : minCap} disabled={locked} onChange={(v) => set({ min: v || null })} options={MIN_CAPS[region]} />}</Field>
         </div>
       </Card>
       {error ? <ErrorState title="The movers couldn't be read" action={{ label: "Try again", onClick: () => setAgain((x) => x + 1) }}>{error}</ErrorState>
-        : !view ? <Card><Working label="Reading the market's closes" /></Card>
+        : !view ? <Card className="mv-wait"><Working label="Reading the market's closes" /></Card>
         : view.pending ? (
           <Card><EmptyState title="The movers fill in after the next market close">Each stock's day is worked out once a day from its daily close, after the market shuts. The lists appear here on their own once that has run.</EmptyState></Card>
         ) : (
           <Card label="The movers" testId="movers">
+            {/* LIVE12A-005: "Download CSV" in the card's head, never alone on a row over the list (a phone showed "CSV" by itself) */}
             <CardHead title={`${name}: ${meta.label.toLowerCase()}`} infoLabel="About the movers"
-              info={`From each stock's daily close${asOf ? ` of ${asOf}` : ""}. A stock with no trade on that day is left out. ${meta.what}`} />
+              info={`From each stock's daily close${asOf ? ` of ${asOf}` : ""}. A stock with no trade on that day is left out. ${meta.what}`}
+              actions={!locked && rows.length > 0 ? <CsvButton name={`movers ${name} ${meta.label}`} label={tableLabel} columns={cols} rows={rows} /> : undefined} />
             <ChipBar label="List" wrap value={list} onChange={(v) => set({ list: v === "gainers" ? null : v })}
               options={LISTS.map((k) => ({ value: k, label: LIST_META[k].label }))} />
             <p className="mv-facts" data-testid="mv-facts">
@@ -108,7 +114,7 @@ export function MoversPage() {
               <span><b>{view.matching.toLocaleString("en-IN")}</b> {view.matching === 1 ? "company" : "companies"} with a close that day</span>
             </p>
             {busy && <Working small label="Reading the new settings" />}
-            <DataTable csv={locked ? undefined : `movers ${name} ${meta.label}`} label={`${name}: ${meta.label}, close of ${asOf ?? "the last day"}`} columns={cols} rows={rows}
+            <DataTable label={tableLabel} columns={cols} rows={rows}
               rowKey={(r) => r.s} stack compact phonePage={20}
               empty={(list === "highs" || list === "lows") && !view.marks ? "The 52-week highs and lows appear after the next daily close run." : "None at this close."} />
             <p className="k-note">{meta.what}{locked && lst && lst.total > rows.length ? ` ${(lst.total - rows.length).toLocaleString("en-IN")} more on the ${view.plan ?? "Basic"} plan.` : ""}</p>

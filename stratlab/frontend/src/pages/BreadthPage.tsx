@@ -188,6 +188,7 @@ function LiveCard({ live, group, today, lastLevel, help }: { live: LiveView; gro
   const at = (i: number) => `${group.name}, ${s.times[i]}`;
   const final = live.state === "final";
   const rows = today ? liveRows(l, today, group.index_name, lastLevel, final) : [];
+  const liveLabel = final ? "Breadth on the day against the last close" : "Breadth so far today against the last close";
   const cols: Column<MeasureRow>[] = [
     { key: "m", header: "Measure", rowHeader: true, wrap: true, cell: (r) => <MeasureName r={r} help={help} /> },
     // after the bell the column is the day's count, never "Now" (LIVE7A-015)
@@ -198,10 +199,13 @@ function LiveCard({ live, group, today, lastLevel, help }: { live: LiveView; gro
   return (
     <div className="k-page" data-testid="breadth-live">
       <Card label="Breadth today, live">
-        <CardHead title={liveTitle(live)} info={LIVE_INFO} infoLabel="About the live numbers" actions={<span data-testid="breadth-live-tag"><Badge tone={tag.tone}>{tag.text}</Badge></span>} />
+        {/* LIVE12A-011: "Download CSV" beside the Live tag in the card's head, as on the last-close card, never alone on a row under it */}
+        <CardHead title={liveTitle(live)} info={LIVE_INFO} infoLabel="About the live numbers" actions={<span className="k-row" data-testid="breadth-live-tools">
+          <span data-testid="breadth-live-tag"><Badge tone={tag.tone}>{tag.text}</Badge></span>
+          {rows.length > 0 && <CsvButton name="breadth today" label={liveLabel} columns={cols} rows={rows} />}</span>} />
         {live.late && <Notice tone="warn" role="status">The newest live point is {live.age_minutes} minutes old. A point is added every {live.every_minutes} minutes while the market is open; the next one comes when live prices are read again.</Notice>}
         {rows.length > 0
-          ? <DataTable csv="breadth today" stack label={final ? "Breadth on the day against the last close" : "Breadth so far today against the last close"} columns={cols} rows={rows} rowKey={(r) => r.key} />
+          ? <DataTable stack label={liveLabel} columns={cols} rows={rows} rowKey={(r) => r.key} />
           : <StatRow>
               <Stat label="Rose / fell" value={<><span className="k-up">{count(l.adv)}</span> <span className="k-muted">/</span> <span className="k-down">{count(l.dec)}</span></>} note={`${count(l.unch)} unchanged · against the previous close`} />
               <Stat label="Above 20-day average" value={share(l.pct20)} />

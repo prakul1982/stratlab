@@ -90,6 +90,7 @@ def waiting(line: str) -> bool:
 
 
 TIMETABLE_DAYS = 14                   # days after SEBI's timetable listing day that its dates still show for an issue not confirmed listed
+LISTING_DAYS_EVERY = 10 * 60          # seconds between looks for recently listed issues still without their listing-day figures (LIVE12A-004)
 LISTINGS_EVERY = 30 * 60              # seconds between looks for closed issues' stocks in the broker's list, through the day (LIVE4-003)
 LISTING_CHECK_DAYS = 30               # days after its timetable listing day that a closed issue is looked for in the broker's list
 CATCH_LISTED_DAYS = 60                # an issue BSE's table says listed, that no issue list gave, becomes a row for this many days
@@ -1053,6 +1054,23 @@ def later_closes(row: dict, after: str, now: datetime, fetch_today: bool = True)
     return out
 
 
+US_FIRST_SESSION_DAYS = 4             # a US issue prices after a close and trades from the next session (a Friday pricing: the Monday)
+
+
+def first_session(row: dict, day: str, listed: str | None) -> bool:
+    """Whether a daily candle of `day` is the issue's first session: an Indian issue's listing day itself; a US issue's first session on
+    or within US_FIRST_SESSION_DAYS after the day it priced (LIVE12B-020: the calendar's date is the pricing, the stock trades from the
+    next session, so no US issue had a listing price)."""
+    if not day or not listed:
+        return False
+    if row.get("market") != "US":
+        return day == listed
+    try:
+        return 0 <= (date.fromisoformat(day[:10]) - date.fromisoformat(listed[:10])).days <= US_FIRST_SESSION_DAYS
+    except ValueError:
+        return False
+
+
 def performance(row: dict, yahoo, today: date | None = None, now: datetime | None = None) -> dict | None:
     """A listed issue against its issue price, from the daily prices: the listing price (the first session's opening price), that
     session's close, and the latest close, each against the issue price. None until it has traded. An Indian issue's closes are the
@@ -1074,7 +1092,7 @@ def performance(row: dict, yahoo, today: date | None = None, now: datetime | Non
     # LIVE7A-020: an issue whose final price no list has given yet (a BSE SME issue shown with its band) still has its listing price and
     # closes, each without a change against an issue price it doesn't have (it showed "– · – · –" though its stock had traded two days)
     pct = (lambda v: round((v / issue - 1) * 100, 2)) if issue else (lambda v: None)      # noqa: E731
-    if first is None and opening is not None and opening["t"][:10] == listed and opening.get("o"):
+    if first is None and opening is not None and first_session(row, opening["t"][:10], listed) and opening.get("o"):
         # its listing day, the session still going on (LIVE6-010: Antala Industries traded from 11 Nov's open while the list kept it in a
         # fold of issues with no prices): the listing price is a fact from the open; the day's close and the latest wait for the close
         if not bars or bars[-1]["t"][:10] < opening["t"][:10]:
@@ -1092,7 +1110,7 @@ def performance(row: dict, yahoo, today: date | None = None, now: datetime | Non
     last = bars[-1]
     # LIVE10A-016: the listing price is the listing day's own opening price; a first candle days after the listing (an SME issue whose early
     # sessions the daily prices lack: VPFL "₹76.65", its 13 Nov close, for a 9 Nov listing that opened at ₹94.00) is no listing price
-    on_day = first["t"][:10] == listed and first.get("o") is not None
+    on_day = first_session(row, first["t"][:10], listed) and first.get("o") is not None
     lp = first["o"] if on_day else None
     return {"issue_price": issue, "listing_price": lp, "listing_change_pct": pct(lp) if lp else None,
             "day_close": first["c"] if on_day else None, "day_change_pct": pct(first["c"]) if on_day else None,
@@ -1153,7 +1171,7 @@ def with_listing_day(row: dict, perf: dict | None) -> dict | None:
         return {**(perf or {"latest": None, "latest_date": None, "change_pct": None, "basis": "exchange"}), "issue_price": issue,
                 "listing_price": px["open"], "listing_change_pct": pct(px["open"]), "day_close": px.get("close"),
                 "day_change_pct": pct(px["close"]) if px.get("close") else None, "listed": listed, "listing_basis": "exchange"}
-    if perf and perf.get("listing_price") is not None and perf.get("listed") and listed and perf["listed"] != listed:
+    if perf and perf.get("listing_price") is not None and perf.get("listed") and listed and not first_session(row, perf["listed"], listed):
         return {**perf, "listing_price": None, "listing_change_pct": None, "day_close": None, "day_change_pct": None, "listed": listed}
     return perf
 
@@ -1178,6 +1196,37 @@ def attach_perf(rows: list[dict], now: datetime) -> int:
             got = with_listing_day(r, got or r.get("perf"))
         if got:
             r["perf"] = {**got, "at": now.isoformat(timespec="seconds")}
+            n += 1
+    return n
+
+
+def wants_listing_day(r: dict, now: datetime) -> bool:
+    """LIVE12A-004: a listed NSE issue of the last PERF_DAYS with no listing-day figures from its bhavcopy yet, not tried today."""
+    if r.get("market") != "IN" or not r.get("symbol") or not r.get("listing") or stage_of(r, now) != "listed":
+        return False
+    px, today = r.get("listing_px"), now.astimezone(IST).date()
+    if isinstance(px, dict) and px.get("day") == r["listing"] and px.get("open"):
+        return False
+    try:
+        age = (today - date.fromisoformat(r["listing"])).days
+    except ValueError:
+        return False
+    return 0 <= age <= PERF_DAYS and r.get("listing_px_tried") != today.isoformat()
+
+
+def backfill_listing_days(rows: list[dict], now: datetime, budget: int = LISTING_DAY_READS) -> int:
+    """LIVE12A-004: the listing-day open and close of every stored recently listed NSE issue that has none, from the listing day's
+    bhavcopy, between the list reads: the read that takes them (attach_perf) runs only after the close, so the issues listed before a
+    deploy showed "Listing price –" the next morning though the exchange's file of each listing day had the open (5 of 6 recent issues).
+    Returns how many rows took figures; the rows are changed in place (their tries too)."""
+    left, n = [budget], 0
+    for r in rows:
+        if left[0] <= 0:
+            break
+        if not wants_listing_day(r, now):
+            continue
+        if listing_day_prices(r, now, left):
+            r["perf"] = {**with_listing_day(r, r.get("perf")), "at": now.isoformat(timespec="seconds")}
             n += 1
     return n
 
@@ -1502,6 +1551,7 @@ class Job:
         self._live_at = 0.0
         self._docs_at = 0.0
         self._listings_at = 0.0
+        self._listing_days_at = 0.0
         self.busy = threading.Lock()
 
     def start(self):
@@ -1558,6 +1608,9 @@ class Job:
             if not ran and self.listings_due(now):
                 if self.check_listings(now):
                     ran.append("listings")
+            if not ran and time.time() - self._listing_days_at >= LISTING_DAYS_EVERY:
+                if self.fill_listing_days(now):
+                    ran.append("listing-days")
             if self.live_due(now):
                 self.read_open(now)
                 ran.append("live")
@@ -1592,6 +1645,18 @@ class Job:
         if not ("08:15" <= local.strftime("%H:%M") <= "22:00") or time.time() - self._listings_at < LISTINGS_EVERY:
             return False
         return any(awaiting_listing(r, now) for r in load("IN")["rows"])
+
+    def fill_listing_days(self, now: datetime) -> int:
+        """backfill_listing_days over the stored Indian rows, kept again when any was tried (LIVE12A-004). Returns how many took figures."""
+        self._listing_days_at = time.time()
+        got = load("IN")
+        if not any(wants_listing_day(r, now) for r in got["rows"]):
+            return 0
+        rows = [dict(r) for r in got["rows"]]
+        n = backfill_listing_days(rows, now)
+        if rows != got["rows"]:                  # a row tried (or filled): kept, so a try is made once a day
+            save("IN", rows, got["checked"], as_of=got["as_of"])
+        return n
 
     def check_listings(self, now: datetime) -> int:
         """confirm_listings over the stored rows; the rows are kept again when one moved. Returns how many moved."""

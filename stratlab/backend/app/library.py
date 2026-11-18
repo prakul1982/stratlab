@@ -282,7 +282,23 @@ def restated(e: dict) -> dict:
         # LIVE11A-022: a card's one line leads with the verdict, then what the checks test ("84.0 points behind … · all 3 passed" read as a pass)
         v["card_headline"] = (f"Trailed buy and hold by {abs(hold['gap']):.1f} points after costs. "
                               f"Checks of the result itself: {lab[:1].lower() + lab[1:]}.")
+    elif hold and hold["gap"] <= -1 and (count := checks_count(v)):
+        # LIVE12A-013: every card behind buy and hold in that one format, its checks' count in the same line, so two cards side by side never
+        # read "Trailed buy and hold by 84.0 points … Checks of the result itself: …" beside "120.3 points behind …; lost money …" over a
+        # count of its own
+        gap = f"{abs(hold['gap']):.1f}"
+        v["card_headline"] = (f"Lost money after costs and trailed buy and hold by {gap} points. Checks of the result itself: {count}."
+                              if lab == "Lost money after costs" else
+                              f"Trailed buy and hold by {gap} points after costs. Checks of the result itself: {count}; {lab[:1].lower() + lab[1:]}.")
     return v
+
+
+def checks_count(v: dict) -> str | None:
+    """The checks as the cards count them ("3 of 4 checks run · 2 passed", the app's checksLine), or None without the counts."""
+    passed, run = v.get("passed"), v.get("total")
+    if not isinstance(passed, int) or not isinstance(run, int) or run <= 0:
+        return None
+    return f"{run} of 4 checks run · " + (f"all {run} passed" if passed >= run else f"{passed} passed")
 
 
 _A_NUMBER = re.compile(r"\b([Aa]) (?=(?:8|11|18|8\d|8\d\d)(?:[.,]\d+)?\s?(?:%|-))")

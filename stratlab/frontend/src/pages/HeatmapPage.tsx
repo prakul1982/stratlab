@@ -101,6 +101,7 @@ export function HeatmapPage() {
   }, [region, universe, minCap, theme, again]);
 
   const tiles: Tile[] = useMemo(() => (view?.tiles ?? []).map((t) => (cos ? { ...t, layer: cos.layers.get(t.s) ?? "Other" } : t)), [view, cos]);
+  const onMap = Math.max(0, tiles.length - leftOut);
   const index = view?.index.r ?? null;
   const pi = PERIODS.indexOf(period);
   const noIndex = color === "vs" && (index?.[pi] == null);
@@ -204,7 +205,11 @@ export function HeatmapPage() {
               {asOf && <span data-testid="hm-day">Closes of <b>{asOf}</b>{closesTail(open)}</span>}
               {!cos && index?.[pi] != null && <span>{view.index.name} <b><Signed value={index[pi]} fmt={(v) => pct(v, 2)} /></b></span>}
               <span><b>{counts.up}</b> up, <b>{counts.down}</b> down{counts.flat ? <>, <b>{counts.flat}</b> unchanged</> : null}</span>
-              <span><b>{tiles.length.toLocaleString("en-IN")}</b> {tiles.length === 1 ? "company" : "companies"}</span>
+              {/* LIVE12A-010: with companies left out of the map (no value on record), the count says how many are on it ("500 companies" sat
+                  over "5 companies … are left out of the map") */}
+              <span data-testid="hm-count">{!table && leftOut > 0
+                ? <><b>{onMap.toLocaleString("en-IN")}</b> of {tiles.length.toLocaleString("en-IN")} companies on the map</>
+                : <><b>{tiles.length.toLocaleString("en-IN")}</b> {tiles.length === 1 ? "company" : "companies"}</>}</span>
             </p>
             {busy && <Working small label="Reading the new settings" />}
             {noIndex && <p className="k-note">The index has no figure for this period yet, so there is nothing to set the changes against. Pick Change, or another period.</p>}

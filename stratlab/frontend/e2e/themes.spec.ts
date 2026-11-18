@@ -45,7 +45,10 @@ test("the theme page is a deep dive made of tables, with each company only where
   await expect(members).toContainText("Official industries: Iron & Steel");
   // e54: what each company's place rests on, the deck's states and counts (never an official-industry record said confirmed by its words)
   await expect(members.getByTestId("theme-evidence")).toHaveText(/^Membership checked \d+ of \d+: \d+ description-verified · \d+ industry-supported · (\d+ [a-z' -]+ · )*\d+ not checked\./);
-  await expect(members.getByTestId("member-evidence").first()).toHaveText(/^(Description-verified|Industry-supported \(official industry only\)|Not checked)$/);
+  // (updated on purpose, fix15 LIVE12A-007: a layer whose companies are all in the theme the same way says it once over its table, so the
+  // state is on its row or in that line)
+  await expect(members.getByTestId("member-evidence").or(members.getByTestId("layer-by-once")).first())
+    .toHaveText(/^((Every company in this layer is in the theme by: )?(Official industry|Named in the theme's list) · )?(Description-verified|Industry-supported \(official industry only\)|Not checked)\.?$/);
   await expect(members.getByTestId("layer-evidence").first()).toHaveText(/^\d+ description-verified · \d+ industry-supported · (\d+ [a-z' -]+ · )*\d+ not checked$/);
   // R21: Vedanta, which the map doesn't name, is placed in the map's own layer that fits it (mining), never in an exchange-industry layer
   // beside the map's
