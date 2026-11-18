@@ -87,3 +87,7 @@ test("LIVE11A-027/028: the overnight data note is a quiet one; the sign-in gate 
   assert.match(read("src/styles.css"), /\.banner\.data-banner\.calm \{ background: var\(--chip\); color: var\(--muted\); \}/);
   assert.doesNotMatch(read("src/pages/Gate.tsx"), /Sign in with Google and this page opens/);
 });
+
+test("LIVE11A-011: the theme's member tables share one column grid on a desktop", () => {
+  assert.match(read("src/styles.css"), /#theme-members table\.k-table \{ table-layout: fixed; width: 100%; \}/);
+});

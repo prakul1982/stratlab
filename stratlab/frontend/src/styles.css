@@ -3236,3 +3236,10 @@ th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
 .email-way.sm { gap: 8px; }
 .lp-plan-email { width: 100%; }
 .lp-final-ways { justify-content: center; }
+/* LIVE11A-011: the theme's member tables share one column grid, so "Market value" and the quote sit at the same x in every layer's table
+   (each sized its own columns: x 1075 in one, 1205 in the next); a phone reads them as cards */
+@media (min-width: 641px) {
+  #theme-members table.k-table { table-layout: fixed; width: 100%; }
+  #theme-members table.k-table th[scope="col"]:first-child { width: 26%; }
+  #theme-members table.k-table th[scope="col"].k-num { width: 15%; }
+}
