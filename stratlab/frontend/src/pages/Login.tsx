@@ -17,7 +17,7 @@ import { PUBLIC_MENU, SiteLinks } from "../components/PublicFrame";
 import { SkipLink } from "../components/SkipLink";
 import { Seg } from "../components/kit/Seg";
 import { publicGet } from "../lib/http";
-import { plainTerms } from "../lib/plainTerms";
+import { plainTerms } from "../content/seo";
 import { checksLine, LOST_CHECKS, lostMoney, underHeadline } from "../lib/tradeUi";
 import type { LibEntry } from "../components/LibraryBits";
 import { exampleEyebrow, pickExamples } from "../lib/landingExamples";
