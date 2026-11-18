@@ -12,6 +12,8 @@ export interface DiveRow {
   sales_1y: number | null; sales_3y: number | null; profit_1y: number | null; stage: number | null; from_high: number | null;
   pb: number | null; interest_cover: number | null; ev_ebitda: number | null; quarter: { of: string; sales: number | null; profit: number | null } | null;
   what?: string | null; company_wide?: boolean; years?: YearRow[];
+  /** the margins beyond ±100% of revenue, printed "n.m." on every surface (R64 theme_data.company_row, LIVE11A-008) */
+  nm?: ("ebitda" | "net")[];
   /** 0 when its EBITDA margin is filed in whole points (LIVE7A-009: printed 12%, not 12.0%) */
   ebitda_dp?: number;
   /** its place in its layer's calculations, kept by the server (theme_data.calc_record; LIVE6-001: the page says what the deck says) */
@@ -34,7 +36,7 @@ export interface Layer {
   ebitda_whole?: boolean;
 }
 export interface ChainRow { layer: string; n: number; listed?: number; revenue: number | null; ebitda: number | null; net: number | null; roce: number | null; ebitda_n: number; net_n?: number; roce_n?: number }
-export interface SubCompany { symbol: string; name: string; what: string | null; cap: number | null; sales_1y: number | null; ebitda: number | null; ebitda_dp?: number; company_wide: boolean; year: string | null }
+export interface SubCompany { symbol: string; name: string; what: string | null; cap: number | null; sales_1y: number | null; ebitda: number | null; ebitda_dp?: number; company_wide: boolean; year: string | null; nm?: ("ebitda" | "net")[] }
 export interface Holding { symbol: string; name: string; quarter: string; promoter: number | null; institutions: number | null; promoter_change: number | null; institutions_change: number | null }
 export interface Flag { symbol: string; name: string; at: string; label: string; severity?: string; subject?: string; url?: string | null }
 export interface Dive {

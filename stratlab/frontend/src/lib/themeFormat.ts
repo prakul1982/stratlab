@@ -146,3 +146,7 @@ export function themeFunds<T extends { ticker: string; name: string }>(etfs: T[]
   const funds = etfs.filter((e) => !BROAD_FUND.test(`${e.name} ${e.ticker}`));
   return { funds, broad: etfs.length - funds.length };
 }
+
+/** LIVE11A-008: a company's EBITDA or net margin as the deck prints it: "n.m." when the server marks it beyond ±100% of revenue (Atomera
+ * "−32423.1%" on the app beside "n.m." in the deck), else `shown`. */
+export const marginCell = (row: { nm?: string[] } | null | undefined, k: "ebitda" | "net", shown: string): string => (row?.nm?.includes(k) ? "n.m." : shown);

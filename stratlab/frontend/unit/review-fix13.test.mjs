@@ -91,3 +91,13 @@ test("LIVE11A-027/028: the overnight data note is a quiet one; the sign-in gate 
 test("LIVE11A-011: the theme's member tables share one column grid on a desktop", () => {
   assert.match(read("src/styles.css"), /#theme-members table\.k-table \{ table-layout: fixed; width: 100%; \}/);
 });
+
+test("LIVE11A-008 (page part): a margin the server marks beyond ±100% of revenue prints n.m., as the deck does", async () => {
+  const { marginCell } = await import("../src/lib/themeFormat.ts");
+  assert.equal(marginCell({ nm: ["net"] }, "net", "−32423.1%"), "n.m.");
+  assert.equal(marginCell({ nm: ["net"] }, "ebitda", "−12.0%"), "−12.0%");
+  assert.equal(marginCell({}, "net", "4.0%"), "4.0%");
+  const dive = read("src/components/ThemeDive.tsx");
+  assert.match(dive, /if \(x\.kind === "company" && k !== "roce" && x\.row!\.nm\?\.includes\(k\)\) return <span title="Beyond ±100% of revenue: not meaningful">n\.m\.<\/span>;/);
+  assert.match(dive, /cell: \(x\) => marginCell\(x, "net", pc\(x\.net\)\)/);
+});

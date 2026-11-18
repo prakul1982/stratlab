@@ -10,7 +10,7 @@ import { ThemeCsvButton, WorkbookButton } from "./ThemeChanges";
 import { useApp } from "../lib/app";
 import { download } from "../lib/share";
 import { deckLock } from "../lib/account";
-import { quarterText } from "../lib/themeFormat";
+import { marginCell, quarterText } from "../lib/themeFormat";
 import { decksWord, useUsage } from "../lib/usage";
 import { SampleDeckLink } from "./SampleDeck";
 import { LineChart } from "./Charts";
@@ -255,6 +255,7 @@ function layerColumns(r: Region, wide: Set<string>, wideOut: boolean, whole = fa
   // LIVE7A-009: an EBITDA margin filed in whole points prints as 12%, and a median or range built mostly on them in whole points too
   const fmt = (k: "ebitda" | "net" | "roce") => (v: number) => (k === "ebitda" ? pcw(v, whole) : pc(v));
   const f = (k: "ebitda" | "net" | "roce") => (x: LayerLine) => {
+    if (x.kind === "company" && k !== "roce" && x.row!.nm?.includes(k)) return <span title="Beyond ±100% of revenue: not meaningful">n.m.</span>;
     if (x.kind === "company") return <>{k === "ebitda" ? pcw(x.row![k], x.row!.ebitda_dp === 0) : pc(x.row![k])}{k === "net" && x.row!.one_off && x.row![k] != null ? " †" : ""}</>;
     if (x.kind === "median") return <MedianCell c={medCell(x.stats?.[k], x.of ?? 0, fmt(k))} />;
     return (x.stats?.[k]?.n ?? 0) >= MIN_BASE ? span(x.stats?.[k], fmt(k)) : "";
@@ -333,7 +334,7 @@ export function SubThemesCard({ dive, business }: { dive: Dive; business?: Busin
     { key: "w", header: "What it does here, in its own words", wrap: true, cell: (x) => { const w = ownWords(x.what, x.name); return w ? <>“{w}”</> : <span className="k-muted">{NO_WORDS}</span>; } },
     { key: "m", header: "Market value", numeric: true, cell: (x) => amount(x.cap, r) },
     { key: "g", header: "Revenue growth", numeric: true, info: "Latest full year against the year before.", cell: (x) => chg(x.sales_1y) },
-    { key: "e", header: "EBITDA margin", numeric: true, cell: (x) => pcw(x.ebitda, x.ebitda_dp === 0) },
+    { key: "e", header: "EBITDA margin", numeric: true, cell: (x) => marginCell(x, "ebitda", pcw(x.ebitda, x.ebitda_dp === 0)) },
   ];
   return (
     <Card id="theme-subs" label="Sub-themes">
@@ -642,8 +643,8 @@ function LeadersCard({ dive, prices }: { dive: Dive; prices: Prices | null }) {
     { key: "name", header: "Company", rowHeader: true, wrap: true, sortable: true, cell: (x) => <Name r={r} sym={x.symbol} name={x.name} wide={dive.company_wide.includes(x.symbol)} /> },
     { key: "cap", header: "Market value", numeric: true, sortable: true, cell: (x) => amount(x.cap, r) },
     { key: "sales_1y", header: "Revenue growth", numeric: true, sortable: true, info: "Latest full year against the year before.", cell: (x) => chg(x.sales_1y) },
-    { key: "ebitda", header: "EBITDA margin", numeric: true, sortable: true, cell: (x) => pcw(x.ebitda, x.ebitda_dp === 0) },
-    { key: "net", header: "Net margin", numeric: true, sortable: true, cell: (x) => pc(x.net) },
+    { key: "ebitda", header: "EBITDA margin", numeric: true, sortable: true, cell: (x) => marginCell(x, "ebitda", pcw(x.ebitda, x.ebitda_dp === 0)) },
+    { key: "net", header: "Net margin", numeric: true, sortable: true, cell: (x) => marginCell(x, "net", pc(x.net)) },
     { key: "roce", header: "ROCE", numeric: true, sortable: true, cell: (x) => pc(x.roce) },
     { key: "pe", header: "P/E", numeric: true, sortable: true, cell: (x) => times(x.pe) },
     { key: "pb", header: "P/B", numeric: true, sortable: true, cell: (x) => times(x.pb) },
