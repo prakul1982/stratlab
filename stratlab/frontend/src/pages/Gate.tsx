@@ -101,7 +101,8 @@ export function SignInGate() {
           <a className="link" href={co.page}>Open the public page for {co.name}</a>
         </Card>
       )}
-      <p className="small muted">Signing in only reads your name and email from Google{email ? ", or only your email address by email" : ""}. No card needed. <Link className="link" to="/">What is StratLab?</Link></p>
+      {/* LIVE12B-004: the same consent line as /login's: this block makes an account the same way */}
+      <p className="small muted">Signing in only reads your name and email from Google{email ? ", or only your email address by email" : ""}. By continuing you agree to the <Link className="link" to="/terms">Terms</Link> and <Link className="link" to="/privacy">Privacy policy</Link>. No card needed. <Link className="link" to="/">What is StratLab?</Link></p>
     </SignInFrame>
   );
 }

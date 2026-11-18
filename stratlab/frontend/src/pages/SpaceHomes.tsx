@@ -29,6 +29,7 @@ import { resultDay, type ResultRow } from "./Research";
 import { fyLink, movedYearNote, openFy, taxHasData, yearHasTrades } from "../lib/fy";
 import { investStrip, withRegion } from "../lib/investUi";
 import { notRunning } from "../lib/tradeUi";
+import { nextExpiry } from "../lib/expiry";
 import { PLAN_NAME, planOf } from "../lib/plans";
 
 /* The three spaces' home pages: /trade, /invest and /money. `/` opens the one whose menu shows. Each reuses the
@@ -153,7 +154,7 @@ function MarketStrip() {
   useMarketRefresh(["IN"], () => { api<VixBrief>("/trade/vix").then(setVix).catch(() => undefined); }, vix !== null && vix !== "none" && vix !== "slow");
   const ev = useEvents();
   const today = istToday();
-  const expiry = ev?.events.find((e) => e.kind === "expiry" && e.date >= today && !e.title.startsWith("SENSEX"));
+  const expiry = nextExpiry(ev?.events, today);
   const fii = b && b !== "none" ? b.cash?.fii?.net ?? null : null;
   const ban = b && b !== "none" ? b.fo_ban ?? [] : null;
   const crore = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}₹${Math.abs(v).toLocaleString("en-IN", { maximumFractionDigits: 0 })} cr`;
@@ -187,13 +188,21 @@ function MarketStrip() {
   );
 }
 
+const HAD_KEY = "stratlab.notebooks.had";
+
 /** Trade's next step: for a new account, how a test goes and the button to start one; after that, the latest
  * notebooks to pick up again. */
 function NextIdea({ count = 3, hideStart = false }: { count?: number; hideStart?: boolean }) {
-  const { notebooks } = useApp();
-  if (notebooks === null) return <Card className="space-next"><PanelSkel lines={3} label="Opening your notebooks" /></Card>;
-  if (!notebooks.length && hideStart) return null;
-  if (!notebooks.length) return (
+  const { notebooks, me, session } = useApp();
+  // LIVE12B-012: whether this person had any notebook last time on this device, so a new account isn't shown a 250 px "Opening your
+  // notebooks" card that then goes (the start card is the same words for everyone, and with the first steps showing there is none)
+  const key = `${HAD_KEY}.${session?.user?.id ?? me?.id ?? "guest"}`;
+  const [had] = useState(() => { try { return localStorage.getItem(key); } catch { return null; } });
+  useEffect(() => { if (notebooks) try { localStorage.setItem(key, notebooks.length ? "1" : "0"); } catch { /* storage blocked */ } }, [notebooks, key]);
+  const none = notebooks ? !notebooks.length : had === "0";
+  if (notebooks === null && !none) return <Card className="space-next"><PanelSkel lines={3} label="Opening your notebooks" /></Card>;
+  if (none && hideStart) return null;
+  if (none || !notebooks) return (
     <Card className="space-next" label="Start here">
       <CardHead title="Start here: your first notebook" actions={<Link to="/new" className="btn">Test your first idea</Link>} />
       <ol className="how" aria-label="How a test goes">

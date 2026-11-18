@@ -102,7 +102,7 @@ test("every page has a breadcrumb: space, entry and tab; the entry's tabs are th
   const menu = page.getByRole("menu", { name: /Pages near Margin funding/ });
   // IA-1: on a laptop the neighbours are the row of tabs beside the trail, so the menu holds the pin alone (said once, not twice);
   // on a phone, where that row is folded away, the menu lists the entry's tabs, as it listed a group's pages before
-  await expect(menu.getByRole("menuitem")).toHaveText(phone ? ["ETF vs NAV", "Margin funding", "Stock lending fees", "Pin to sidebar"] : ["Pin to sidebar"]);
+  await expect(menu.getByRole("menuitem")).toHaveText(phone ? ["ETF vs NAV", "Margin funding", "Stock lending fees", "Pin to My space"] : ["Pin to My space"]);
   await expect(menu.getByRole("menuitem").first()).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);

@@ -71,6 +71,11 @@ async function start() {
     if (reads.length) import("./lib/http").then((m) => reads.forEach((r) => m.prefetchPublic(r))).catch(() => undefined);
   }
   const early = account ? null : publicPage(path).catch(() => undefined);
+  // R71: a visitor's page draws once its fonts are here (asked for now, beside its code; at most 1.5 s), not in the fallback fonts
+  // and then again in its own: the swap moved /library's chips and cards sideways (0.106) whenever its list arrived first
+  const fonts = account ? null : Promise.race([new Promise((ok) => window.setTimeout(ok, 1500)),
+    Promise.all(["300 1em Montserrat", "800 1em Montserrat", "1em Fraunces", "600 1em Fraunces", "1em IBM Plex Sans", "500 1em IBM Plex Sans", "600 1em IBM Plex Sans"]
+      .map((f) => document.fonts.load(f)))]).catch(() => undefined);
   const visitorCode = account ? null : import("./visitor/visitorMain");
   visitorCode?.catch(() => undefined);
   const [{ captureRef }, { startErrorReports }] = await Promise.all([import("./lib/share"), import("./lib/sentry")]);
@@ -81,10 +86,18 @@ async function start() {
     app.startApp(root);
   } else {
     const visitor = await visitorCode!;
+    await fonts;
     visitor.startVisitor(root);
     void early;
   }
-  if (import.meta.env.PROD) import("./lib/pwa").then((m) => m.registerPwa({ later: !account })).catch(() => undefined);
+  // Release 71: a visitor's page downloads the install and offline helper only after it has loaded (it registered later anyway, and
+  // an install offer that comes first is kept by the start-up script), so the landing's first download stays under its budget
+  const pwa = () => import("./lib/pwa").then((m) => m.registerPwa({ later: !account })).catch(() => undefined);
+  if (import.meta.env.PROD) {
+    if (account) pwa();
+    else if (document.readyState === "complete") window.setTimeout(pwa, 4000);
+    else window.addEventListener("load", () => window.setTimeout(pwa, 4000), { once: true });
+  }
 }
 
 /* A failed download of the app's own chunk on the first load (a dropped connection; seen once on Safari as an "Unhandled Promise

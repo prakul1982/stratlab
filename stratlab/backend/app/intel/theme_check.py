@@ -1155,6 +1155,11 @@ def off_scope(about, theme_text: str, name: str = "") -> dict | None:
     theme's own and the theme's definition (`theme_text`: its name and its map's own layers' names and descriptions) states none of that
     kind; None else (no words of its own, or a kind of the theme's scope)."""
     from .theme_data import _stems, business_sentence, does_the_work
+    if name:
+        # r67e (the owner's review of the live R65 Fertilizers deck, P0: "descriptions checked before use"): a reason that screens a company
+        # out quotes its own words only, never the opening sentences of another company sharing its first word (theme_base.own_part)
+        from .theme_base import own_part
+        about = own_part(str(about or ""), name)
     shown = said = business_sentence(str(about or ""))
     if not said:
         return None
@@ -1166,13 +1171,15 @@ def off_scope(about, theme_text: str, name: str = "") -> dict | None:
         if re.search(scope, theme_text or "", re.I):
             continue
         txt = said
-        m = re.search(products, txt, re.I)
+        m = _kind_named(products, txt)
         if m is None and said is not shown:
             # r60: words of its work its own name shares ("ship breaking" of "Hariyana Ship Breakers") are read in the sentence as written,
             # never the name itself
-            m2 = re.search(products, shown, re.I)
+            m2 = _kind_named(products, shown)
             if m2 and m2.group(0).lower() not in str(name or "").lower():
                 txt, m = shown, m2
+        if m is not None and _listed_after(txt[:m.start()]):
+            continue                     # r67e: a kind named after another product of its list is not its principal business
         # (a kind said of its parent or group, "a subsidiary of another company, a conglomerate with interest in ... cement", is not its own)
         # (r60: "another company is in the business of ship breaking", the company's own name taken off its own sentence, is its own work)
         lead = re.sub(r"\banother company (?=(?:is|was|has|operates|engages)\b)", "", txt[:m.start()]) if m else ""
@@ -1181,8 +1188,51 @@ def off_scope(about, theme_text: str, name: str = "") -> dict | None:
         if m and not for_ and not does_the_work(txt[:m.start()], own) and not _OF_ANOTHER.search(lead):
             # (r60: the quote says the company's own name where the reading put "another company" in its place)
             quote = shown.replace("another company", name, 1) if name and name.split()[0] in str(about or "") else shown
-            return {"kind": kind, "said": m.group(0), "text": quote[:200]}
+            return {"kind": kind, "said": m.group(0), "text": quote[:200], "quote": _kind_clause(txt, m)}
     return None
+
+
+# r67e (the owner's review of the live R65 Fertilizers deck: Tatva Chintan, "a manufacturer of a diverse portfolio of structure Directing
+# Agents, Phase Transfer Catalysts, electrolyte salts for batteries, and Pharmaceutical and Agrochemical Intermediates", screened out as a
+# maker of "batteries, torches and electrical goods"): a kind of product named as what the company's product is for ("electrolyte salts for
+# batteries", "used in batteries") is not a product of that kind, and one named after another product of the same list ("carbon, cement and
+# advanced materials") is not the first product its principal business is of
+_FOR_USE = re.compile(r"\b(?:for|used (?:in|for|by)|for use (?:in|by|with)|serving)\s+(?:[\w-]+\s+){0,2}$", re.I)
+_LIST_OPEN = re.compile(r"\b(?:of|makes?|manufactures?|produces?|sells?|supplies|offers?|in the business of|engaged in|deals? in)\b", re.I)
+_NOT_ITEM = {"the", "a", "an", "its", "our", "their", "all", "kinds", "types", "range", "wide", "various", "high", "quality", "premium",
+             "durable", "reliable", "diverse", "portfolio", "leading", "integrated", "vertically", "other", "and", "also"}
+
+
+def _kind_named(products: str, txt: str):
+    """r67e: the first match of a kind's products in a sentence that is not named as what another product is for, or None."""
+    for m in re.finditer(products, txt, re.I):
+        if not _FOR_USE.search(txt[max(0, m.start() - 40):m.start()]):
+            return m
+    return None
+
+
+def _listed_after(lead: str) -> bool:
+    """r67e: whether the words before a kind, after the last word that opens what the company makes or does ("a producer of"), name
+    another product of the same list first ("carbon, " of "a producer of carbon, cement"; "Adhesives and " of "Adhesives and Plywood")."""
+    parts = _LIST_OPEN.split(lead)
+    if len(parts) < 2:
+        return False
+    m = re.search(r"^(.*?)(?:,\s*(?:[\w-]+\s+)?|\s(?:and|&)\s+)$", parts[-1], re.S)
+    return bool(m) and any(w.lower() not in _NOT_ITEM for w in re.findall(r"[A-Za-z][\w-]{2,}", m.group(1)))
+
+
+def _kind_clause(txt: str, m) -> str:
+    """r67e: the words of a company's own sentence that name the kind, from the list item it is in to the next comma ("electrolyte salts for
+    batteries", "dry cell batteries and torches"), for the reason that screens it out to quote; at most 80 characters."""
+    cut = max(txt.rfind(",", 0, m.start()), txt.rfind(";", 0, m.start()))
+    # (a verb that opens it is quoted with it, "manufactures and markets batteries"; "of", "engaged in" are not)
+    opens = [x.start() if re.match(r"(?:make|manufacture|produce|sell|suppl|offer)", x.group(0), re.I) else x.end()
+             for x in _LIST_OPEN.finditer(txt, 0, m.start())]
+    start = max([cut + 1] + opens)
+    end_m = re.search(r"[,;.]|\s+(?:which|that|with|at|across)\s", txt[m.end():])
+    end = m.end() + (end_m.start() if end_m else len(txt) - m.end())
+    out = " ".join(txt[start:end].split()).strip(" ,;.")
+    return out if len(out) <= 80 else out[:80].rsplit(" ", 1)[0]
 
 
 def off_scope_listed(name: str, industry: str, theme_text: str) -> dict | None:

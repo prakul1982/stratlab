@@ -350,9 +350,10 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
               {/* NAV3: a real result anyone can open without signing in (the public library: rules, verdict and checks) */}
               {full && <Link className="btn quiet lp-cta-2" to="/library">See real results, no sign-in</Link>}
             </div>
-            {login && emailSignInOn() && <Suspense fallback={null}><EmailSignIn signup={signup} /></Suspense>}
+            {/* its place held from the first frame (LIVE12B-008: the form arrived after it and pushed the small print 208 px down on a phone) */}
+            {login && emailSignInOn() && <Suspense fallback={<i className="email-slot" />}><EmailSignIn signup={signup} /></Suspense>}
             {error && <p className="banner" role="alert">{error}</p>}
-            {login ? <p className="small muted">Signing in only reads your name and email from Google{emailSignInOn() ? ", or only your email address by email" : ""}. By continuing you agree to the <Link className="link" to="/terms">Terms</Link> and <Link className="link" to="/privacy">Privacy policy</Link>.</p> : <p className="small muted">Free to start · No card · No code</p>}
+            {login ? <p className="small muted">Signing in only reads your name and email from Google{emailSignInOn() ? ", or only your email address by email" : ""}. By continuing you agree to the <Link className="link" to="/terms">Terms</Link> and <Link className="link" to="/privacy">Privacy policy</Link>.</p> : <p className="small muted">Free to start · No card · No coding</p>}
           </div>
           {full && <HeroDemo />}
         </div>

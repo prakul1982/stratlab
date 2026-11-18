@@ -110,7 +110,7 @@ test("LIVE11B-014: the VIX tile's day takes its own line on a phone, with no '·
 test("LIVE11B-009: the first steps are one slim row across the page with the whole list on a click", () => {
   const fs = read("src/components/FirstSteps.tsx");
   assert.match(fs, /aria-expanded=\{open\} aria-controls="fs-steps" onClick=\{\(\) => setOpen\(\(o\) => !o\)\}>\{open \? "Fewer" : `All \$\{total\} steps`\}<\/button>/);
-  assert.match(fs, /\{open && list\}/);
+  assert.match(fs, /\{!hold && open && list\(v\)\}/);   // (updated on purpose, LIVE12B-022: a held row never opens its list)
   const css = read("src/styles.css");
   assert.doesNotMatch(css, /\.fs-compact \{ width: fit-content; max-width: 100%; \}/);
   assert.match(css, /\.fs-line \{ display: grid; grid-template-columns: auto minmax\(80px, 1fr\) auto auto;/);

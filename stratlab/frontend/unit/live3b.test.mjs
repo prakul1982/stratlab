@@ -135,3 +135,13 @@ test("the whole-market check says 'every company checked' only when every listed
   assert.equal(runningLine({ due: 0, listed: 4970, checked: 4970 }), "Running · every company checked");
   assert.equal(runningLine({ due: 12, listed: 4970, checked: 4900 }), "Running · 12 to check");
 });
+
+test("LIVE3-012 (R71): a visitor's page draws once its fonts are here (asked for beside its code, at most 1.5 s), not before them and again after", () => {
+  const e = read("src/entry.tsx");
+  assert.match(e, /const fonts = account \? null : Promise\.race\(\[new Promise\(\(ok\) => window\.setTimeout\(ok, 1500\)\),/);
+  for (const f of ["300 1em Montserrat", "800 1em Montserrat", "1em Fraunces", "600 1em Fraunces", "1em IBM Plex Sans", "500 1em IBM Plex Sans", "600 1em IBM Plex Sans"]) assert.ok(e.includes(`"${f}"`), f);
+  assert.match(e, /\.map\(\(f\) => document\.fonts\.load\(f\)\)/);
+  // asked for before the start-up helpers (beside the page's code), awaited just before the visitor half draws
+  assert.ok(e.indexOf("const fonts = ") < e.indexOf('await Promise.all([import("./lib/share")'));
+  assert.match(e, /const visitor = await visitorCode!;\s*await fonts;\s*visitor\.startVisitor\(root\);/);
+});

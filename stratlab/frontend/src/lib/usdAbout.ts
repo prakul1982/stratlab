@@ -35,6 +35,6 @@ export function usdNote(rate: number, fallback = false, us?: { basic: number; pr
   const r = `₹${rate.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
   const usd = (v: number) => `$${v.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
   // with US prices of its own, the cards show those beside the rupees (LIVE11B); the rate is for the other dollar figures (a year's saving)
-  if (us) return `Prices in ₹ are charged in rupees. The US price beside each is StratLab's own price in dollars (Basic ${usd(us.basic)} and Pro ${usd(us.pro)} a month; Prices in: $ USD); other dollar figures are rounded, at ${fallback ? `about ${r}` : r} to the dollar${fallback ? "" : " (today's rate)"}; a card from abroad is converted by its bank, which may add a fee.`;
+  if (us) return `Prices in ₹ are charged in rupees. The US price beside each is StratLab's own price in dollars (Basic ${usd(us.basic)} and Pro ${usd(us.pro)} a month); other dollar figures are rounded, at ${fallback ? `about ${r}` : r} to the dollar${fallback ? "" : " (today's rate)"}; a card from abroad is converted by its bank, which may add a fee.`;
   return `Prices in ₹ are charged in rupees. The dollar figures beside them are rounded, at ${fallback ? `about ${r}` : r} to the dollar${fallback ? "" : " (today's rate)"}; a card from abroad is converted by its bank, which may add a fee.`;
 }

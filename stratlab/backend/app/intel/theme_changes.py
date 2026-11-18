@@ -134,7 +134,7 @@ def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None, everyon
     # h56 (R56): only the points with the evidence tally's counts ([day, checked, total, description-verified]) are kept
     from .theme_data import tally_points
     hist = tally_points(mc.get("history"))
-    rest, rest_layers, rest_why = {}, [], {}
+    rest, rest_layers, rest_why, rest_mwhy = {}, [], {}, {}
     for s_, x in (everyone or {}).items():
         if not s_ or s_ in cos or not isinstance(x, (list, tuple)) or len(x) < 2:
             continue
@@ -144,8 +144,11 @@ def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None, everyon
         rest[s_] = [str(x[0] or s_), rest_layers.index(lay)]
         if len(x) > 2 and x[2]:
             rest_why[s_] = clip_words(x[2], 200)
+        if len(x) > 3 and x[3]:
+            rest_mwhy[s_] = clip_words(x[3], 240)          # r67e: the placement's reason for its layer
     return {"layers": layers, "cos": cos, "off": off, "map": sorted({s_ for s_ in members if s_}), "stamp": int(_num(stamp) or 0),
             **({"rest": rest, "rest_layers": rest_layers} if everyone is not None else {}), **({"rest_why": rest_why} if rest_why else {}),
+            **({"rest_mwhy": rest_mwhy} if rest_mwhy else {}),
             "rules": rules, "unit": dive.get("unit"), **({"cover": cover} if cover else {}), **({"back": back} if back else {}),
             **({"why": why} if why else {}), **({"gone": gone} if gone else {}), **({"dups": dups} if dups else {}),
             **({"mwhy": mwhy} if mwhy else {}), **({"ev": ev} if ev else {}), **({"ev_hist": hist} if hist else {}),
@@ -283,11 +286,21 @@ def moved_why(layer: str, syms, now: dict) -> str:
 
 def _layer_events(was: dict, now: dict) -> tuple[list[dict], set]:
     """(the layers renamed, split, merged, added or removed, the (from, to) pairs those events explain)."""
-    old_names, new_names = was["layers"], now["layers"]
+    # r67e (P0-3, "pure renames not reported as moves"): a layer whose members are all past the figures is a layer too, renamed or not
+    # ("Other" past the figures: only its rename pairs its members' moves away, below)
+    rest_of = lambda snap: [str(x) for x in snap.get("rest_layers") or [] if str(x) not in snap["layers"]]      # noqa: E731
+    old_names = list(was["layers"]) + [x for x in rest_of(was) if not _no_business(x)]
+    new_names = list(now["layers"]) + [x for x in rest_of(now) if not _no_business(x)]
+    o_gone = [x for x in rest_of(was) if _no_business(x) and x not in now["layers"] and x not in rest_of(now)]
+    o_new = [x for x in rest_of(now) if _no_business(x) and x not in was["layers"] and x not in rest_of(was)]
     gone = [x for x in old_names if x not in new_names]
     fresh = [x for x in new_names if x not in old_names]
+    if len(o_gone) == 1 and len(o_new) == 1 and o_gone[0].startswith("Other") and o_new[0].startswith("Other"):
+        o_pair = {(o_gone[0], o_new[0])}                 # r67e: the "Other" group past the figures renamed: its members not moved
+    else:
+        o_pair = set()
     if not gone and not fresh:
-        return [], set()
+        return [], o_pair
     # p57 (R56 audit: "added (0 companies)"): a layer's members past the figures count too
     members = lambda snap, name: ({s_ for s_, c in snap["cos"].items() if snap["layers"][c[1]] == name}      # noqa: E731
                                   | {s_ for s_ in (snap.get("rest") or {}) if rest_layer(snap, s_) == name})
@@ -348,7 +361,7 @@ def _layer_events(was: dict, now: dict) -> tuple[list[dict], set]:
     kept_l = now.get("kept_layers") if isinstance(now.get("kept_layers"), dict) else {}
     out += [{"kind": "added", "from": [], "to": [d], "n": len(dst[d]), **({"back": str(kept_l[d])} if kept_l.get(d) else {})}
             for d in fresh if d not in used_d and dst[d]]
-    return out, pairs
+    return out, pairs | o_pair
 
 
 def _why_removed(s_: str, now: dict, was: dict | None = None) -> str:
@@ -387,6 +400,14 @@ def rest_layer(snap: dict, s_: str):
 OUTSIDE_FIGURES = "still in the theme, outside the largest companies whose figures are worked out"
 
 
+def _rest_move(now: dict, s_: str, name: str, a: str, b: str) -> dict:
+    """r67e (the owner's review of the live R65 decks, P0: "every move between informative layers and Other has an auditable reason"; Biotech's
+    106 moves out of "Other" said only OUTSIDE_FIGURES): a move of a member past the figures with the placement's own reason for where it is
+    (its map record's, snapshot "rest_mwhy"), else none here (the log's reader says what its own words say, reasoned); "outside" marks it."""
+    mw = (now.get("rest_mwhy") or {}).get(s_) or (now.get("mwhy") or {}).get(s_)
+    return {"symbol": s_, "name": name, "from": a, "to": b, "outside": True, **({"why": mw} if mw else {})}
+
+
 def diff(was: dict, now: dict) -> dict:
     """What differs between two snapshots: {"counts": {kind: n}, kind: [rows]} for KINDS. Empty lists when nothing differs.
     p57: a member of either version kept outside the dive's companies ("rest") counts as a member: a company entering or leaving the
@@ -399,7 +420,8 @@ def diff(was: dict, now: dict) -> dict:
         if old is None and rest_layer(was, s_) is not None:          # p57: a member before, outside the figures then
             a, b = rest_layer(was, s_), lay_n[c[1]]
             if a != b and (a, b) not in pairs:
-                moved.append({"symbol": s_, "name": c[0], "from": a, "to": b})
+                mw = (now.get("mwhy") or {}).get(s_)
+                moved.append({"symbol": s_, "name": c[0], "from": a, "to": b, **({"why": mw} if mw else {})})
             continue
         if old is None:
             # d53 (R53): every addition with why it is in the theme, and one an earlier version dropped as another business said so
@@ -423,7 +445,7 @@ def diff(was: dict, now: dict) -> dict:
         if s_ not in now["cos"] and rest_layer(now, s_) is not None:      # p57: still a member, outside the figures now
             a, b = lay_w[c[1]], rest_layer(now, s_)
             if a != b and (a, b) not in pairs:
-                moved.append({"symbol": s_, "name": c[0], "from": a, "to": b, "why": OUTSIDE_FIGURES})
+                moved.append(_rest_move(now, s_, c[0], a, b))
             continue
         if s_ not in now["cos"]:
             removed.append({"symbol": s_, "name": c[0], "layer": lay_w[c[1]], "why": _why_removed(s_, now, was)})
@@ -437,7 +459,7 @@ def diff(was: dict, now: dict) -> dict:
             if b is None:
                 removed.append({"symbol": s_, "name": str(r[0]), "layer": a or "", "why": _why_removed(s_, now, was)})
             elif a != b and (a, b) not in pairs and a in names_now:
-                moved.append({"symbol": s_, "name": str(r[0]), "from": a, "to": b, "why": OUTSIDE_FIGURES})
+                moved.append(_rest_move(now, s_, str(r[0]), a, b))
         for s_, r in now["rest"].items():
             if s_ in was["cos"] or s_ in was["rest"] or not isinstance(r, list) or not r:
                 continue
@@ -513,7 +535,7 @@ def apply(cur: dict | None, now: dict, refresh: bool = False, at: datetime | Non
             now = {**now, "cover_was": list(was["cover"])}
         elif was.get("cover_was"):
             now = {**now, "cover_was": list(was["cover_was"])}
-    now = {k: v for k, v in now.items() if k != "rest_why"}           # r62: read for this entry's reasons, never stored
+    now = {k: v for k, v in now.items() if k not in ("rest_why", "rest_mwhy")}           # r62, r67e: read for this entry's reasons, never stored
     return {"snap": now, "log": log, "since": since or at.date().isoformat()}
 
 
@@ -618,11 +640,9 @@ def unnamed_why(why: str, words=None, industry: str = "", theme_words: set | Non
 
 def reasoned(entries: list, words_of=None, industry_of=None, theme_words: set | None = None) -> list:
     """r572: the log's entries with each removal whose only reason is the map's no longer naming it said with its own words (unnamed_why)."""
-    if words_of is None and industry_of is None:
-        return entries
-
+    # (r67e: with no reader of its words, each move still gets a reason, below; a removal's stands as kept)
     def why(r):
-        if not isinstance(r, dict) or r.get("why") not in UNNAMED or not r.get("symbol"):
+        if (words_of is None and industry_of is None) or not isinstance(r, dict) or r.get("why") not in UNNAMED or not r.get("symbol"):
             return r
         try:
             w = words_of(r["symbol"]) if words_of is not None else None
@@ -635,7 +655,11 @@ def reasoned(entries: list, words_of=None, industry_of=None, theme_words: set | 
         # round 2 (the live R57.1 decks: General Dynamics, Bilibili, Sphere and Creative Eye moved between layers with no reason printed):
         # a move with no reason of the placement's says what its own words or filings say; a move between two halves of one layer is that
         # layer's split by market value
-        if not isinstance(r, dict) or r.get("why") or not r.get("symbol"):
+        if not isinstance(r, dict) or not r.get("symbol"):
+            return r
+        if r.get("why") == OUTSIDE_FIGURES:            # r67e: a log kept before: where it sits is no reason for its move
+            r = {**{k: x for k, x in r.items() if k != "why"}, "outside": True}
+        if r.get("why"):
             return r
         a, b = _HALF_NAME.sub("", str(r.get("from") or "")), _HALF_NAME.sub("", str(r.get("to") or ""))
         if a == b:
@@ -647,7 +671,11 @@ def reasoned(entries: list, words_of=None, industry_of=None, theme_words: set | 
             w, ind = None, ""
         q = first_sentence(w)
         said = f"its own words say “{q}”" if q else f"filed under {ind}" if ind else ""
-        return {**r, "why": said} if said else r
+        if not said:
+            # r67e (P0-3): never a move with no reason: one with no words of its own stored and no industry says so
+            said = ("no words of its own are stored, so none says a named layer's work" if str(b).startswith("Other ") else
+                    f"no words of its own are stored; the theme's map places it in “{b}”")
+        return {**r, "why": said}
     return [{**e, **({"removed": [why(r) for r in e.get("removed") or []]} if e.get("removed") else {}),
              **({"moved": [move_why(r) for r in e.get("moved") or []]} if e.get("moved") else {})} for e in entries]
 
@@ -658,11 +686,12 @@ def view(region: str, name: str, full: bool, words_of=None, industry_of=None) ->
     words and official industry, say why a company the map no longer names left (reasoned)."""
     got = stored(region, name)
     log = [e for e in got.get("log") or [] if isinstance(e, dict)][::-1]
+    tw = None
     if words_of is not None or industry_of is not None:
         from .theme_base import kind_stems
         snap = got.get("snap") if isinstance(got.get("snap"), dict) else {}
         tw = kind_stems(" ".join([str(name)] + [str(x) for x in snap.get("layers") or [] if not str(x).startswith("Other ")]))
-        log = reasoned(log, words_of, industry_of, tw)
+    log = reasoned(log, words_of, industry_of, tw)          # r67e: every move with its reason, whatever reads its words
     if full:
         return {"full": True, "since": got.get("since"), "entries": log, "older": 0}
     return {"full": False, "since": got.get("since"), "entries": [_short(log[0], FREE_ROWS)] if log else [], "older": max(0, len(log) - 1)}

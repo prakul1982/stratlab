@@ -469,3 +469,15 @@ export const STARTER_TICKERS: Record<Region, string[]> = {
   IN: ["RELIANCE", "TCS", "HDFCBANK", "INFY", "BHARTIARTL", "LT"],
   US: ["NVDA", "AAPL", "MSFT", "VRT", "CEG", "ASML"],
 };
+
+/** Key numbers' numbered notes: each note a figure points to, once. Two figures with the same label and the same note (Sales growth's and
+ * Profit growth's "Latest YoY: Sep 2026 vs Sep 2025") share one number; a note no figure points to never stands in the list
+ * (LIVE12B-016: notes 2 and 3 said the same and nothing pointed to 3). `foots(m)`: whether a figure's note is a numbered one. */
+export function metricFoots<M extends { label: string; note?: string | null }>(items: M[], foots: (m: M) => boolean): { n: number; label: string; text: string }[] {
+  const out: { n: number; label: string; text: string }[] = [];
+  for (const m of items) {
+    if (!m.note || !foots(m) || out.some((f) => f.label === m.label && f.text === m.note)) continue;
+    out.push({ n: out.length + 1, label: m.label, text: m.note });
+  }
+  return out;
+}

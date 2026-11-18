@@ -143,7 +143,8 @@ test("LIVE9B-021: holdings say when they were imported, and that they are old af
   assert.match(h, /importedLine\(view\.sources, \{ source: view\.source, at: view\.updated_at \}/);
   assert.match(read("src/lib/holdingsEdit.ts"), /return s\.source \? ` · imported from \$\{words\(s\.source\)\}\$\{when\(s\.at\)\}`/);
   assert.match(h, /data-testid="holdings-old">\{old\.words\} \{old\.days\} days old/);
-  assert.match(read("src/pages/SettingsPage.tsx"), /`Imported from \$\{sourceWords\(h\.source\)\}/);
+  // (updated on purpose, LIVE12B-019: "Imported once from", so a one-time import beside "Not connected" isn't read as a live link)
+  assert.match(read("src/pages/SettingsPage.tsx"), /`Imported once from \$\{sourceWords\(h\.source\)\}/);
 });
 
 test("LIVE9B-022: a leg to fix reads 'Buy CE (distance to fix)', and the market's hours are said once", async () => {

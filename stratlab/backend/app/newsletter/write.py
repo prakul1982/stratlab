@@ -93,7 +93,8 @@ def without_moves(text: str | None, indices: list[dict] | None) -> str | None:
         got = _MOVE.match(p)
         if not got or moves.get(got.group(1)) != got.group(2).replace("-", "\u2212"):
             return text
-    return text[m.end():].strip()
+    # a summary that is only the moves keeps them: the list's line is never empty under one day while every other day has one (LIVE12B-025)
+    return text[m.end():].strip() or text
 
 
 def _num(x) -> str:

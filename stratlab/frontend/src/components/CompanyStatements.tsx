@@ -44,7 +44,7 @@ export function StatementsCard({ region, symbol, id = "co-statements" }: { regio
     } catch (e) { fail(e); } finally { setGetting(null); }
   };
 
-  const info = "The company's reported figures by financial year and by quarter, as filed. Ratios marked with a dot are worked out from two figures of the same year (net margin is net profit over sales). A figure a period doesn't have shows as –.";
+  const info = "The company's reported figures by financial year and by quarter, as filed. Ratios marked * are worked out from two figures of the same year (net margin is net profit over sales). A figure a period doesn't have shows as –.";
   if (error && !v) return <Card id={id}><CardHead title="Financial statements" info={info} /><ErrorState title="The statements couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState></Card>;
   if (!v) return <Card id={id}><CardHead title="Financial statements" info={info} /><Skeleton label="Reading the statements" lines={6} /></Card>;
   if (!v.sections.length) return <Card id={id}><CardHead title="Financial statements" info={info} /><p className="k-small k-muted">No statements are stored for this company yet.</p></Card>;
@@ -58,7 +58,8 @@ export function StatementsCard({ region, symbol, id = "co-statements" }: { regio
   const win = periodWindow(cols.length, phone ? 3 : cols.length, back);
   const columns: Column<StatementRow>[] = [
     { key: "label", header: quarters ? "Quarter" : "Year", rowHeader: true, wrap: true,
-      cell: (r) => <>{r.label}{r.worked && <span className="ct-worked" title="Worked out from the figures above">{" "}·<span className="sr-only"> worked out from the figures above</span></span>}</> },
+      // LIVE12B-017 (owner pattern 9): a star with its note under the table, never a "·" left at the label's end with its meaning out of sight
+      cell: (r) => <>{r.label}{r.worked && <sup className="ct-worked" title="Worked out from the figures above">*<span className="sr-only"> worked out from the figures above</span></sup>}</> },
     ...cols.map((c, i): Column<StatementRow> => ({ key: `c${i}`, header: quarters ? c : yearLabel(c, region), numeric: true,
       cell: (r) => cellText(r.values[i], r.kind, region, r.kind === "pct" && wholeOnly(r.values)), csvHeader: c })).slice(win.from, win.to),
   ];
@@ -85,6 +86,7 @@ export function StatementsCard({ region, symbol, id = "co-statements" }: { regio
       <div className="ct-statement" data-view={shown}>
         <DataTable label={`${v.name}: ${options.find((o) => o.value === shown)?.label ?? ""}`} rows={rows} rowKey={(r) => r.label} columns={columns} stack={false} scrollEnd />
       </div>
+      {rows.some((r) => r.worked) && <p className="k-note" data-testid="ct-worked-note">* Worked out from two figures of the same period, not a figure the company reports.</p>}
       {/* the "–" note only under a table that has one */}
       {rows.some((r) => r.values.some((x) => x == null)) && v.notes.map((n) => <p key={n} className="k-note">{n}</p>)}
       {v.locked && <PlanNote plan={v.locked.plan}>{v.locked.message}</PlanNote>}

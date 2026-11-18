@@ -37,7 +37,8 @@ test("item 2: Key numbers are small tables (name | Value | Basis | Range), one w
   // (updated on purpose, LIVE8B-015: a group with no range bar, or no basis, has no column for it, so the header is plain)
   for (const h of ['header: "Value"', 'header: "Basis"', 'header: "Usual range"', 'className="inv-krange-txt"']) assert.ok(r.includes(h), h);
   // a long qualifier is a numbered note under the tables (updated on purpose, LIVE9B-012: and so is a basis only a few of the group's rows have)
-  assert.match(r, /if \(m\.note && \(m\.note\.length > LONG_NOTE \|\| sparse\(g\)\)\) foot\.push/);
+  // (updated on purpose, LIVE12B-016: the same rule, through metricFoots, which numbers a repeated note once)
+  assert.match(r, /g\.items\.filter\(\(m\) => m\.note && \(m\.note\.length > LONG_NOTE \|\| sparse\(g\)\)\)/);
   assert.match(r, /\{mark\(m\) && <sup className="cmp-foot-mark"/);                                               // marked next to the value
   assert.match(r, /m\.note && !mark\(m\) \? m\.note : ""/);                                                      // and never inside the row
   const css = read("src/styles-invest.css");

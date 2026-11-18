@@ -61,11 +61,30 @@ def _from_quote(meta: dict, tz, day: datetime, ohl: tuple, prev_close: float | N
     return o, max(h, o, c), min(l, o, c), c
 
 
+def _session_day(meta: dict, tz, ts: float):
+    """The trading day a moment belongs to, in the exchange's zone: its calendar day, except inside a session that opens the evening
+    before its day (CME gold and oil: the session of Wed 18 Nov opens at 18:00 New York time on Tue 17 Nov), whose moments are of the
+    session's own day. LIVE12B-005: at 23:00 New York time the live gold price was written into 17 Nov's settled candle and its change
+    measured from 16 Nov's close, under a "17 Nov" label. The current session is the answer's currentTradingPeriod; a period that runs
+    midnight to midnight (a coin) is a calendar day."""
+    day = datetime.fromtimestamp(ts, tz).date()
+    try:
+        p = meta["currentTradingPeriod"]["regular"]
+        start, end = float(p.get("start") or 0), float(p["end"])
+    except (KeyError, TypeError, ValueError):
+        return day
+    if meta.get("instrumentType") == "CRYPTOCURRENCY" or not start <= ts < end:
+        return day
+    s, e = datetime.fromtimestamp(start, tz), datetime.fromtimestamp(end, tz)
+    evening = s.date() < e.date() and (e.hour, e.minute) != (0, 0)
+    return e.date() if evening and e.date() > day else day
+
+
 def _meta_day(meta: dict) -> str | None:
-    """The exchange day of the quote's last trade."""
+    """The exchange day of the quote's last trade (its session's day: `_session_day`)."""
     last = meta.get("regularMarketTime")
     try:
-        return datetime.fromtimestamp(last, ZoneInfo(meta.get("exchangeTimezoneName") or "UTC")).date().isoformat() \
+        return _session_day(meta, ZoneInfo(meta.get("exchangeTimezoneName") or "UTC"), last).isoformat() \
             if isinstance(last, (int, float)) else None
     except (OverflowError, OSError, ValueError):
         return None
@@ -96,7 +115,7 @@ def _previous_close(meta: dict, candles: list[dict]) -> float | None:
     window (about a week back for a 7-day window), so a "day's change" read from it is really the week's."""
     last = meta.get("regularMarketTime")
     try:
-        day = datetime.fromtimestamp(last, ZoneInfo(meta.get("exchangeTimezoneName") or "UTC")).date().isoformat() \
+        day = _session_day(meta, ZoneInfo(meta.get("exchangeTimezoneName") or "UTC"), last).isoformat() \
             if isinstance(last, (int, float)) else (candles[-1]["t"][:10] if candles else None)
     except (OverflowError, OSError, ValueError):
         day = candles[-1]["t"][:10] if candles else None
@@ -150,7 +169,8 @@ def _partial(out: dict, now: float | None = None) -> bool:
     try:
         meta = out["meta"]
         tz = ZoneInfo(meta.get("exchangeTimezoneName") or "UTC")
-        today = datetime.fromtimestamp(now, tz).date()
+        # the session trading now's day: a futures session that opened last evening is of the day after (LIVE12B-005)
+        today = _session_day(meta, tz, now)
         if out["candles"][-1]["t"][:10] != today.isoformat():
             return False
         if meta.get("instrumentType") == "CRYPTOCURRENCY":
@@ -243,8 +263,9 @@ class Yahoo(Source):
                 if tf == "1d":
                     blank.append(t.date().isoformat())
                 continue
-            if tf == "1d":   # daily candles are stamped at the session open; keep the date only
-                t = t.replace(hour=0, minute=0, second=0, microsecond=0)
+            if tf == "1d":   # daily candles are stamped at the session open; keep the date only (the session's own day: LIVE12B-005)
+                day = _session_day(meta, tz, ts)
+                t = t.replace(year=day.year, month=day.month, day=day.day, hour=0, minute=0, second=0, microsecond=0)
             v = (q.get("volume") or [None] * (i + 1))[i]
             if filled and not v:
                 v = meta.get("regularMarketVolume")
