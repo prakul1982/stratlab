@@ -69,7 +69,7 @@ export const TOURS: Record<TourId, IntroTour> = {
   trade: {
     id: "trade", name: "Trade", line: "Test an idea on years of real prices, read its verdict, paper trade it, price options.",
     steps: [
-      { id: "idea", title: "Describe an idea, get a test", go: "/new", at: ["main #idea"],
+      { id: "idea", title: "Describe an idea, get a test", go: "/new", at: ["main #idea"], or: "main h1",   // R71: like every other step, the heading if the box is slow to draw (a tour never stalls)
         body: "Write a trading idea in plain words, like “the 20-day average crossing above the 50-day on NIFTY 50”. StratLab turns it into rules you can read and edit, then tests them on years of real prices after costs." },
       { id: "verdict", title: "A verdict, with four checks for luck", go: "/library", at: ["main tbody tr .badge", "main tbody tr"], or: "main h1",
         body: "Every test ends in a verdict with four checks: data the rules never saw, nearby settings, a bad-luck drawdown and enough trades. The library shows published rules with the verdict each earned, good or bad; Copy re-tests one in a notebook of your own." },
@@ -84,7 +84,7 @@ export const TOURS: Record<TourId, IntroTour> = {
   invest: {
     id: "invest", name: "Invest", line: "Any company in depth, Themes with slides, the Heatmap and every date ahead.",
     steps: [
-      { id: "lookup", title: "Look up any company", go: "/research", at: ["main input.k-input"],
+      { id: "lookup", title: "Look up any company", go: "/research", at: ["main input.k-input"], or: "main h1",
         body: "Type any Indian or US company by its name or symbol, or open one of the suggestions under the box.",
         act: { label: "Open one", kind: "follow", sel: SUGGESTED } },
       { id: "company", title: "One company, in depth", via: { page: "/research", sel: SUGGESTED }, here: COMPANY, at: ["main a.btn[href$='/deep']"], or: "main h1",

@@ -42,7 +42,11 @@ async function signIn(page: Page, path: string, who: typeof session = session, o
   return errors;
 }
 
-const openTour = (page: Page, tour?: TourId) => page.evaluate((t) => window.dispatchEvent(new CustomEvent("stratlab:tour", { detail: { tour: t } })), tour);
+// R71: asked again until a tour's note or the list shows: a page still drawing its first frame (CI under load) may not be listening yet
+const openTour = (page: Page, tour?: TourId) => expect(async () => {
+  await page.evaluate((t) => window.dispatchEvent(new CustomEvent("stratlab:tour", { detail: { tour: t } })), tour);
+  await expect(page.getByRole("dialog", { name: /^(Tour: |Take a tour)/ })).toBeVisible({ timeout: 5000 });
+}).toPass({ timeout: 30_000 });
 const note = (page: Page) => page.locator(".k-coach[data-placed] .k-coach-note");
 const box = (page: Page, sel: string) => page.locator(sel).first().evaluate((e) => { const r = e.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
 
