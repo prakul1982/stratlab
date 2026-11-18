@@ -53,3 +53,29 @@ def test_a_us_issue_has_its_listing_price_from_its_first_session_after_the_prici
     # a first candle long after the pricing (the early sessions missing) is still no listing price
     late = {**row, "priced": "2026-11-02"}
     assert ipo.performance(late, Yahoo(), now=datetime(2026, 11, 18, 4, 0, tzinfo=timezone.utc)) is None
+
+
+# ---------- LIVE12A-003: the sector charts are brought to each close by their own job, soon after a start ----------
+def test_the_sector_charts_are_brought_to_the_close_by_their_own_job_soon_after_a_start(monkeypatch):
+    import pytest
+    from app import main as M
+    ran, slept = [], []
+
+    class Stop(Exception):
+        pass
+
+    def sleep(s):
+        slept.append(s)
+        if len(slept) > 2:
+            raise Stop
+
+    monkeypatch.setattr(M, "rotation_after_close", lambda now=None: ran.append(len(slept)) or [])
+    monkeypatch.setattr(M.leader, "leading", lambda: True)
+    with pytest.raises(Stop):
+        M.rotation_job(sleep=sleep)
+    assert slept[0] <= 60 and ran[:2] == [1, 2] and slept[1] <= 5 * 60
+    # the company pages' price pass no longer carries it (it waits minutes after a start and reads hundreds of pages first)
+    monkeypatch.setattr(M.stock_page_store, "refresh_prices", lambda region, *a, **k: {"refreshed": 0, "left": 0})
+    monkeypatch.setattr(M, "rotation_after_close", lambda now=None: ran.append("price pass"))
+    M.stock_price_refresh_once(sleep=lambda s: None)
+    assert "price pass" not in ran
