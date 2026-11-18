@@ -27,6 +27,14 @@ FIRST_WAIT = 180.0         # seconds after the start before the first theme (the
 GAP = 60.0                 # seconds between two themes while the queue holds more
 IDLE = 900.0               # seconds between two looks at an empty queue (a version bump is a deploy, so a start looks at once)
 ASK_EVERY = 60.0           # a page asking for the same theme again within this long is not written down again
+# r69e (live R68 logs, 10:50-11:30 UTC: "US restaurant: failed (its checks are not finished yet)" every ~4 min, each page view moving it to
+# the front; nine themes "failed (its dive was not kept)" put back on the queue again and again, the queue staying at 25-27): a theme whose
+# checks are not finished waits for them, WAIT_FIRST seconds and twice as long each time after (at most WAIT_MAX), never retried at once,
+# WAIT_TRIES times; a theme that fails the same way twice is left, with why, until the next version change
+WAIT_FIRST = 600.0
+WAIT_MAX = 3600.0
+WAIT_TRIES = 6
+YIELD_WAIT = 30.0          # r69e: seconds a phase of a rebuild waits for the memory guard's turn to be free of every other job, else it yields
 SYSTEM = {"id": "", "_plan": "pro", "plan": "pro", "email": None}      # the job, not a person: counts against nobody, never starts an AI map
 _lock = threading.Lock()
 _asked: dict = {}          # (market, name) -> when a page last asked for it
@@ -107,34 +115,68 @@ def ask(region: str, name: str, now: float | None = None) -> bool:
         st = _load()
         if st.get("mark") != mark():
             st = {"mark": mark(), "todo": stored_themes(), "done": 0, "current": 0, "failed": {}, "left": {}, "queued_at": now, "from": st.get("mark")}
+        k = f"{region}|{name}"
+        # r69e: a theme left after its tries (failed the same way twice, or its checks never finished) or waiting for its checks is not
+        # moved by a page's view: each view put it first and it was tried again at once, every few minutes
+        if k in (st.get("left") or {}):
+            return False
+        if float((st.get("wait") or {}).get(k) or 0) > now:
+            return True
         todo = [x for x in st.get("todo") or [] if x != [region, name]]
         st["todo"] = [[region, name]] + todo
-        st.get("left", {}).pop(f"{region}|{name}", None)
         _save(st)
     job.wake.set()
     return True
 
 
-def current(region: str, name: str) -> bool:
-    """Whether a theme's read is stored under today's rules and its dive under today's versions."""
+def page_key(region: str, name: str) -> list | None:
+    """r69e (live R68: nine themes "failed (its dive was not kept)" each pass, rebuilt and kept every time): the key a theme's dive is kept
+    and read under, worked out as the page and the rebuild work it out: the library's stored read (by its own name) with today's market
+    values (theme_routes.checked: the figures' window, and so the key's count of described companies, follows them). The re-check read the
+    key off the stored read without them, a key no dive was ever kept under. None when no read is stored under today's rules."""
     from . import theme_library, theme_routes
-    got = computed.get(theme_library.KIND, theme_library.key_of(region, name), count=False)
-    p = ((got or {}).get("value") or {}).get("payload")
-    if not isinstance(p, dict):
-        return False
+    hit = theme_library.stored(region, name)
+    if hit is None or not isinstance(hit.get("payload"), dict):
+        return None
+    theme = " ".join(str(name).split())[:80]
     try:
-        key = theme_routes.dive_key(region, name, {**p, "_library": name})
+        m = theme_routes.with_descriptions(region, theme_routes.checked(region, theme, {**hit["payload"], "_library": hit["name"]}))
+        return theme_routes.dive_key(region, theme, m)
     except Exception:
-        return False
-    return computed.get(theme_library.DIVE, key, count=False) is not None
+        return None
+
+
+def current(region: str, name: str) -> bool:
+    """Whether a theme's read is stored under today's rules and its dive under today's versions (under the key its page reads)."""
+    from . import theme_library
+    key = page_key(region, name)
+    return key is not None and computed.get(theme_library.DIVE, key, count=False) is not None
 
 
 class NotDone(Exception):
-    """The theme could not be made current on this try (its checks still running, its map not stored)."""
+    """The theme could not be made current on this try (its checks still running, its map not stored). `later`: its checks are not
+    finished, so it waits for them (r69e)."""
 
-    def __init__(self, why: str, final: bool = False):
+    def __init__(self, why: str, final: bool = False, later: bool = False):
         super().__init__(why)
         self.final = final
+        self.later = later
+
+
+class Yielded(Exception):
+    """r69e: a phase of the rebuild gave the memory guard's turn to the jobs waiting for it (the user-facing price jobs first); the theme
+    stays at the front of the queue, its tries not counted."""
+
+
+@__import__("contextlib").contextmanager
+def _turn(phase: str):
+    """r69e: one phase of a rebuild in the memory guard's turn, taken only when no other job holds or waits for it (memguard.heavy_idle),
+    so the background re-check never stands in front of a page's price job; Yielded when the turn stayed busy for YIELD_WAIT seconds."""
+    from .. import memguard
+    with memguard.heavy_idle(f"theme re-check: {phase}", YIELD_WAIT) as got:
+        if not got:
+            raise Yielded(f"the {phase} gave way to other jobs")
+        yield
 
 
 def _queries(region: str, name: str) -> list[str]:
@@ -167,24 +209,38 @@ def rebuild(region: str, name: str) -> None:
     if cur is None:
         if q is None:
             raise NotDone("its AI map is not stored, so it is checked again when someone opens it", final=True)
-        payload = R.sector_payload(SYSTEM, region, q, False, wait=True)
-        if not theme_library.keep(region, q, payload):
-            raise NotDone("its checks are not finished yet")
+        with _turn("check"):
+            payload = R.sector_payload(SYSTEM, region, q, False, wait=True)
+            if not theme_library.keep(region, q, payload):
+                raise NotDone("its checks are not finished yet", later=True)
     r, theme, m, _ = R.theme_map(SYSTEM, region, name)
     if not m.get("_library") or m.get("_older"):
         raise NotDone("its read is not kept under today's rules")
     m = theme_routes.with_descriptions(r, theme_routes.checked(r, theme, m))
-    theme_routes.dive_of(r, theme, m, rebuild=True)
+    if not (m.get("placements") or {}).get("checked"):
+        raise NotDone("its checks are not finished yet", later=True)          # a dive is kept only for a checked map
+    with _turn("dive"):
+        theme_routes.dive_of(r, theme, m, rebuild=True)
+    return theme_routes.dive_key(r, theme, m)
 
 
-def step(work=None) -> dict | None:
-    """The theme at the front of the queue made current (or skipped when it is), taken off the queue; one not finished goes to the end, at
-    most TRIES times. {"theme", "outcome", "why"}, or None when the queue is empty."""
+def _due(st: dict, now: float) -> list | None:
+    """The first theme of the queue not waiting for its checks (r69e), or None."""
+    wait = st.get("wait") or {}
+    return next((x for x in st.get("todo") or [] if float(wait.get(f"{x[0]}|{x[1]}") or 0) <= now), None)
+
+
+def step(work=None, now: float | None = None) -> dict | None:
+    """The first theme of the queue that is due made current (or skipped when it is), taken off the queue. r69e: one whose checks are not
+    finished waits for them (WAIT_FIRST, doubling, WAIT_TRIES times, then left); one that fails the same way twice is left with why; one
+    whose rebuild gave the memory guard's turn to other jobs stays first, not counted. {"theme", "outcome", "why"}, or None when no theme
+    of the queue is due (an empty queue, or every one waiting)."""
+    now = time.time() if now is None else now
     st = _load()
-    todo = st.get("todo") or []
-    if not todo:
+    due = _due(st, now)
+    if due is None:
         return None
-    region, name = todo[0]
+    region, name = due
     k = f"{region}|{name}"
     why = ""
     _running["theme"] = [region, name]
@@ -192,11 +248,15 @@ def step(work=None) -> dict | None:
         if current(region, name):
             outcome = "current"
         else:
-            (work or rebuild)(region, name)
-            outcome = "rebuilt" if current(region, name) else "failed"
+            key = (work or rebuild)(region, name)
+            from . import theme_library
+            kept = isinstance(key, list) and computed.get(theme_library.DIVE, key, count=False) is not None
+            outcome = "rebuilt" if kept or current(region, name) else "failed"
             why = "" if outcome == "rebuilt" else "its dive was not kept"
+    except Yielded as e:
+        outcome, why = "yielded", str(e)
     except NotDone as e:
-        outcome, why = ("left" if e.final else "failed"), str(e)
+        outcome, why = ("left" if e.final else "waiting" if e.later else "failed"), str(e)
     except Exception as e:
         outcome, why = "failed", f"{type(e).__name__}: {str(e)[:120]}"
         print("theme re-check:", region, name, why)
@@ -204,20 +264,31 @@ def step(work=None) -> dict | None:
         _running.pop("theme", None)
     with _lock:
         st = _load()                 # a page may have asked meanwhile
-        st["todo"] = [x for x in st.get("todo") or [] if x != [region, name]]
+        if outcome == "yielded":     # its place kept at the front, nothing counted
+            st["todo"] = [[region, name]] + [x for x in st.get("todo") or [] if x != [region, name]]
+        else:
+            st["todo"] = [x for x in st.get("todo") or [] if x != [region, name]]
+        st.setdefault("wait", {}).pop(k, None)
         if outcome == "current":
             st["current"] = int(st.get("current") or 0) + 1
         elif outcome == "rebuilt":
             st["done"] = int(st.get("done") or 0) + 1
             st.get("failed", {}).pop(k, None)
-        else:
-            tries = int((st.get("failed") or {}).get(k, {}).get("n") or 0) + 1
+        elif outcome != "yielded":
+            before = (st.get("failed") or {}).get(k) or {}
+            tries = int(before.get("n") or 0) + 1
             st.setdefault("failed", {})[k] = {"n": tries, "why": why}
-            if outcome == "failed" and tries < TRIES:
+            if outcome == "waiting" and tries < WAIT_TRIES:
+                st["todo"].append([region, name])
+                st["wait"][k] = now + min(WAIT_MAX, WAIT_FIRST * 2 ** (tries - 1))
+            elif outcome == "failed" and tries < TRIES and before.get("why") != why:
                 st["todo"].append([region, name])
             else:
+                if outcome == "failed" and before.get("why") == why:
+                    why = f"failed the same way twice: {why}"
+                    print(f"theme re-check: {region} {name}: stopped, {why}")
                 st.setdefault("left", {})[k] = why
-        st["last"] = {"theme": [region, name], "outcome": outcome, "why": why, "at": time.time()}
+        st["last"] = {"theme": [region, name], "outcome": outcome, "why": why, "at": now}
         _save(st)
     print(f"theme re-check: {region} {name}: {outcome}{(' (' + why + ')') if why else ''}; {len(st['todo'])} left")
     return {"theme": [region, name], "outcome": outcome, "why": why}
@@ -240,9 +311,9 @@ class Job:
         queue()
         if not _load().get("todo"):
             return None
-        from .. import memguard
-        with memguard.heavy("theme re-check", force_release=True):
-            out = step(self.work)
+        # r69e: no turn held around the whole theme: each phase of the rebuild takes the memory guard's turn only when no other job holds
+        # or waits for it (_turn), so a page's price job never waits behind the re-check
+        out = step(self.work)
         self.status["last_run"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         return out
 
