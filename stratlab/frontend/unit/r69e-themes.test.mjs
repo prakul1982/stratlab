@@ -40,3 +40,10 @@ test("LIVE13A-002: 'Membership checked N of M' is followed by states that add up
   const [, n, rest] = line.match(/checked (\d+) of \d+: (.*);/);
   assert.equal(rest.match(/\d+/g).map(Number).reduce((a, b) => a + b, 0), Number(n));
 });
+
+test("LIVE13A-013: on a phone a layer's tables are a press away (the Cement page was 52,041 px)", () => {
+  const src = read("src/components/ThemeDive.tsx");
+  assert.match(src, /function PhoneFold\(\{ label, children \}/);
+  assert.match(src, /if \(!usePhone\(\)\) return <>\{children\}<\/>;/);
+  assert.equal((src.match(/<PhoneFold label=/g) || []).length, 3);       // the companies' table, margins by year, business updates
+});
