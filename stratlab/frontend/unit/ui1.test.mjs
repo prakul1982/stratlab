@@ -90,3 +90,16 @@ test("a card's method and source notes are one closed fold at its foot (kit/Card
   // the deep dive's valuation note no longer repeats its (i)
   assert.doesNotMatch(read("src/pages/DeepDive.tsx"), /<p className="k-note">\{v\.valuation\.why\}/);
 });
+
+// item 1 (owner, 18 Nov: "center align everything properly")
+test("figure rows centred, a head's top control on its title's line, table cells vertically centred, and the checker's R28", () => {
+  const css = read("src/styles.css");
+  assert.match(css, /\.k-stats > \.k-stat \{ display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 0; align-content: start; text-align: center; \}/);
+  assert.match(css, /\.mine-mkt \{ display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: var\(--s3\); border: 1px solid var\(--line\); border-radius: 12px; text-align: center; \}/);
+  assert.match(css, /\.k-chart-plain > \.k-card-head > \.k-card-actions \{ height: calc\(var\(--t-card\) \* 1\.5\); \}/);
+  assert.match(css, /\.ai-table \.k-table :is\(th, td\) \{ white-space: normal; vertical-align: middle;/);
+  assert.doesNotMatch(css, /\.ca-table \.k-table td \{[^}]*vertical-align: top/);
+  const rules = read("e2e/ui-lint-rules.ts");
+  assert.match(rules, /add\("R28", th, `the header/);
+  assert.match(rules, /add\("R28", act, `the head's controls sit/);
+});

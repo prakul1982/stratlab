@@ -278,10 +278,10 @@ test("DOC-2: the landing page names the newer tools, its lists keep full grid ro
   // (updated on purpose, NAV3: the hero's eyebrow says who it is for, not the three spaces)
   assert.match(login, /"For traders and investors in India and the US"/);       // ("Ten markets" is in the intro's sentence only: VR5-owner-2)
   assert.doesNotMatch(login, /Yahoo|Screener|Finnhub|Kite|Zerodha Kite/);        // no data vendor named on the page
-  // docs/UI_CHECKER.md names every rule the checker has, R1 to R27 (VR7 added R26, LIVE5 R27)
+  // docs/UI_CHECKER.md names every rule the checker has, R1 to R28 (VR7 added R26, LIVE5 R27, the owner's alignment sweep of 18 Nov R28)
   const rules = read("e2e/ui-lint.spec.ts").match(/^  R\d+: /gm) ?? [];
   const doc = readFileSync(new URL("../../../docs/UI_CHECKER.md", import.meta.url), "utf8");
-  assert.equal(rules.length, 27);
+  assert.equal(rules.length, 28);     // (updated on purpose, owner 18 Nov: R28 off-centre)
   for (let i = 1; i <= rules.length; i++) assert.match(doc, new RegExp(`\\| R${i} \\|`), `R${i}`);
 });
 

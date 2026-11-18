@@ -651,7 +651,8 @@ td.num, .num { font-family: var(--sans); }
 /* AI read */
 .ai-read { border-color: var(--ink); }
 
-.ai-table .k-table :is(th, td) { white-space: normal; vertical-align: top; max-width: none; }
+/* owner (18 Nov, "center align everything properly"): each cell vertically centred in its row */
+.ai-table .k-table :is(th, td) { white-space: normal; vertical-align: middle; max-width: none; }
 .ai-table .k-table tbody th, .ai-table .k-table thead th:first-child { width: 11rem; min-width: 0; }
 .ai-table .k-table .k-list { margin: 0; }
 /* the area names its row: the header row is for screen readers only (LIVE7B-004: "The numbers / The figures" read as a stray row) */
@@ -1050,7 +1051,7 @@ body:has(.k-coach) .consent { visibility: hidden; }
 
 /* company deep dive */
 
-@media (max-width: 640px) { .ca-table .k-table { font-size: 13px; } .ca-table .k-table th, .ca-table .k-table td { padding: 9px 6px; white-space: normal; min-width: 0; vertical-align: top; } .ca-table .k-badge { white-space: normal; } .ca-table .k-table :is(th, td):first-child { min-width: 0 !important; max-width: none !important; } }
+@media (max-width: 640px) { .ca-table .k-table { font-size: 13px; } .ca-table .k-table th, .ca-table .k-table td { padding: 9px 6px; white-space: normal; min-width: 0; vertical-align: middle; } .ca-table .k-badge { white-space: normal; } .ca-table .k-table :is(th, td):first-child { min-width: 0 !important; max-width: none !important; } }
 [data-testid="scan-custom"] .add-rule { align-self: flex-start; }
 .ts-words { align-items: flex-start; } .ts-words .k-input { flex: 1 1 260px; width: auto; }
 .ca-type { font-weight: 600; font-size: var(--t-label); }
@@ -1631,6 +1632,11 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-chart-plain > .k-card-head { flex-wrap: nowrap; align-items: flex-start; }
 .k-chart-plain > .k-card-head > .k-card-actions { flex: none; }
 .k-card-actions { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; min-width: 0; max-width: 100%; }
+/* owner (18 Nov, "center align everything properly"): a head that keeps its one control at the top beside a title that may wrap centres
+   that control on the title's first line (a box the line's height, the control centred in it), not 2-7px above or below it */
+.space-home .k-card-head:has(> .k-card-actions > a.link:only-child) > .k-card-actions,
+.mine-slot .k-card-head:has(> .k-card-actions > a:only-child) > .k-card-actions,
+.k-chart-plain > .k-card-head > .k-card-actions { height: calc(var(--t-card) * 1.5); }
 .k-card-actions > .k-chipwrap { max-width: 100%; }
 .k-card-actions .btn[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
 .k-card.compact { flex-direction: row; align-items: center; flex-wrap: wrap; gap: var(--s2) var(--s4); padding-block: var(--s3); }
@@ -1656,7 +1662,8 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 /* VR2-020: the funds' cost and behaviour card holds seven figures: four across (4 + 3), not five (5 + 2, a second row of two) */
 .mf-stats .k-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }   /* never 3 across: seven made 3 + 3 + 1 at 1280 (UI checker R9) */
 @media (min-width: 1000px) { .mf-stats .k-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-.k-stats > .k-stat { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 0; align-content: start; }
+/* each figure, its label and its note centred in its column (owner, 18 Nov: "center align everything properly", after Holdings' totals) */
+.k-stats > .k-stat { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 0; align-content: start; text-align: center; }
 .k-stats > .k-stat > * + * { margin-top: 2px; }
 .k-stats > .k-stat > .k-stat-k { align-self: end; }
 .k-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -2455,7 +2462,8 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .mine-mkt > .k-stat-k { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 [data-testid="mine-paper"] .k-card-title { white-space: nowrap; }
 @media (max-width: 520px) { .mine-markets { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.mine-mkt { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: var(--s3); border: 1px solid var(--line); border-radius: 12px; }
+.mine-mkt { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: var(--s3); border: 1px solid var(--line); border-radius: 12px; text-align: center; }
+/* each market tile's name, level, change and day centred in the tile (owner, 18 Nov: "center align everything properly": a row of figures) */
 .mine-mkt-v { font-size: 20px; font-weight: 600; letter-spacing: -.01em; }
 .mine-mkt-when { display: block; }   /* LIVE12B-007: the day on its own line under the change in every tile ("today" sat beside USD/INR's) */
 /* LIVE7B-012: a tile still being read is as tall as a read one: the value's line (a bar in it), the change line's space, the month line's space */
@@ -2464,7 +2472,7 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .mine-mkt-old { display: flex; flex-direction: column; gap: 4px; flex: 1; }
 .mine-mkt-old .mine-mkt-v { color: var(--muted); font-weight: 500; }
 .mine-mkt-old .k-spark { opacity: .45; }
-.mine-mkt-hold .mine-mkt-v { display: flex; align-items: center; min-height: 30px; }
+.mine-mkt-hold .mine-mkt-v { display: flex; align-items: center; justify-content: center; min-height: 30px; }
 .mine-hold-ghost .k-note { display: block; }   /* the day under the change, as it wraps in a tile a sixth of the card wide */
 .mine-hold-ghost { visibility: hidden; }
 .mine-spark-hold { display: block; height: 36px; margin-top: auto; }

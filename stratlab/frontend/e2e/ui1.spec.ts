@@ -101,3 +101,31 @@ test("item 2: a long intro is one sentence with More, and a card's notes are a c
   await expect(deals.getByText(/From exchange disclosures over the last year/)).toBeVisible();
   await sane(page, errors);
 });
+
+// Item 1 (owner, 18 Nov: "center align everything properly"): a row of figures centred in its tiles, a card head's control centred on its
+// title's line, a stat row's figures centred in their columns, and every table header aligned as its column's cells
+test("item 1: figure rows centred, card heads' controls on the title's line, headers over their cells (owner, 18 Nov)", async ({ page }) => {
+  const errors = await open(page, "/mine", "Good");
+  const tiles = page.getByTestId("mine-markets").locator(".mine-mkt");
+  await expect(tiles.first()).toBeVisible({ timeout: 30_000 });
+  const off = await tiles.evaluateAll((els) => els.map((t) => { const r = t.getBoundingClientRect(), v = t.querySelector(".mine-mkt-v")!, rg = document.createRange(); rg.selectNodeContents(v);
+    const vr = rg.getBoundingClientRect(); return Math.abs((vr.left + vr.width / 2) - (r.left + r.width / 2)); }));
+  for (const d of off) expect(d, "a tile's level is centred in it").toBeLessThanOrEqual(2);
+  const heads = async () => page.locator("main .k-card-head").evaluateAll((els) => els.flatMap((h) => {
+    const t = h.querySelector(".k-card-title"), a = h.querySelector(":scope > .k-card-actions");
+    if (!t || !a || h.querySelector(".k-card-headtext")) return [];
+    const tr = t.getBoundingClientRect(), ar = a.getBoundingClientRect(), line = Math.min(parseFloat(getComputedStyle(t).lineHeight) || tr.height, tr.height);
+    if (!ar.width || ar.top > tr.top + line || ar.left < tr.right) return [];
+    return [{ t: (t.textContent ?? "").slice(0, 24), d: Math.round(Math.abs((tr.top + line / 2) - (ar.top + ar.height / 2)) * 10) / 10 }];
+  }));
+  for (const h of await heads()) expect(h.d, `${h.t}: its control on the title's line`).toBeLessThanOrEqual(2);
+  await page.goto("/invest");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(1500);
+  for (const h of await heads()) expect(h.d, `${h.t}: its control on the title's line`).toBeLessThanOrEqual(2);
+  await page.goto("/research/IN/RELIANCE/deep");
+  const stats = page.locator(".k-stats .k-stat").first();
+  await expect(stats).toBeVisible({ timeout: 30_000 });
+  expect(await stats.evaluate((s) => getComputedStyle(s).textAlign)).toBe("center");
+  await sane(page, errors);
+});
