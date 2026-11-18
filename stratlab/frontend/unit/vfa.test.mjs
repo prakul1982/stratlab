@@ -60,7 +60,8 @@ test("VR1-010, VR1-011, VR1-012, VR1-013, VR1-014: Invest home's panels, tiles, 
   assert.doesNotMatch(css, /\.space-panels \.inv-tiles \{ align-items: start; \}/);   // VR2-002: the tiles of a row are as tall as each other
   assert.match(css, /\.space-home \.k-card-head:has\(> \.k-card-actions > a\.link:only-child\) \{ flex-wrap: nowrap;/);
   assert.doesNotMatch(css, /\.space-card-lead \.space-card-foot:not\(\.live\) \{/);       // the lead's link has the colour of the others
-  assert.match(css, /\.trade-market \.space-card-line \{ min-height: 0; \}/);
+  // (updated on purpose, R73: one line held, not two (VR1-020), so a late note never grows a Trade tile: CI CLS 0.066 on /trade)
+  assert.match(css, /\.trade-market \.space-card-line \{ min-height: 1\.4em; \}/);
 });
 
 test("VR1-021, VR1-022, VR1-031: the 'more you can do' tools keep one name and whole lines on a phone", () => {
