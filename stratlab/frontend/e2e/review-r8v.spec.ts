@@ -21,7 +21,8 @@ const h1 = (page: Page) => page.getByRole("heading", { level: 1 });
 // the drawn landing page's own h1, told apart from the start-up block's (which has the same words: that is the point)
 const appH1 = (page: Page) => page.locator(".lp").getByRole("heading", { level: 1 });
 const built = (file: string) => readFileSync(new URL(`../dist/${file}`, import.meta.url), "utf8");
-const rawH1 = (file: string) => [...built(file).matchAll(/<h1[^>]*>([^<]*)<\/h1>/g)].map((m) => m[1].replace(/&amp;/g, "&"));
+// (updated on purpose, LIVE13B-001: the landing's start-up frame now carries the hero's own heading markup, "<em>skill</em>" in it)
+const rawH1 = (file: string) => [...built(file).matchAll(/<h1[^>]*>([\s\S]*?)<\/h1>/g)].map((m) => m[1].replace(/<[^>]+>/g, "").replace(/&amp;/g, "&"));
 
 test("each landing address draws the h1 its own HTML carries, with the tagline beside it (R8V-008)", async ({ page }) => {
   const { errors } = await open(page, "/pricing");
