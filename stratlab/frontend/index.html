@@ -70,8 +70,9 @@ html, body { margin: 0; background: var(--b-paper); }
 /* the notice itself (couldn't load, taking longer): a card on the paper with the logo, the way the app's own messages look */
 .boot.boot-now { box-sizing: border-box; max-width: min(520px, calc(100% - 32px)); margin: 18vh auto 0; padding: 24px; background: var(--b-card); border: 1px solid var(--b-line); border-radius: 14px; }
 .boot.boot-now.boot-above { margin-top: 16px; }
-/* scripts off: why nothing works, said first, above the page's words (LIVE13B-002: it came last, after six paragraphs) */
-.boot[data-js-off] { box-sizing: border-box; max-width: min(720px, calc(100% - 32px)); margin: 16px auto; padding: 16px 20px; gap: 8px; background: var(--b-card); border: 1px solid var(--b-line); border-radius: 14px; }
+/* scripts off: why nothing works, said first, above the page's words (LIVE13B-002: it came last, after six paragraphs), on the page's own
+ * column (LIVE14A-022 / LIVE14B-004: centred at 720 px, its edges matched nothing under it) */
+.boot[data-js-off] { box-sizing: border-box; max-width: min(1100px, calc(100% - 2 * clamp(16px, 4vw, 40px))); margin: 16px auto; padding: 16px 20px; gap: 8px; background: var(--b-card); border: 1px solid var(--b-line); border-radius: 14px; }
 .boot-now .boot-brand { display: inline-flex; align-items: center; gap: 10px; font: 600 17px/1 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--b-muted); }
 .boot-now .boot-brand img { width: 24px; height: 24px; }
 .boot-now p { color: var(--b-muted); }

@@ -74,7 +74,8 @@ test("LIVE13B-002: with scripts off the notice comes first, in a card, and the h
   const html = read("index.html");
   assert.ok(html.indexOf("StratLab needs JavaScript.") < html.indexOf('<div id="root">'), "the notice is before the page");
   assert.match(html, /<body>\n<noscript>\n<div class="boot" data-js-off>/);
-  assert.match(html, /\.boot\[data-js-off\] \{ box-sizing: border-box; max-width: min\(720px, calc\(100% - 32px\)\); margin: 16px auto;/);
+  // (updated on purpose, site76 LIVE14A-022: the notice on the page's column, the landing's 1,100 px and its gutters)
+  assert.match(html, /\.boot\[data-js-off\] \{ box-sizing: border-box; max-width: min\(1100px, calc\(100% - 2 \* clamp\(16px, 4vw, 40px\)\)\); margin: 16px auto;/);
   // the page's links as one row of buttons, not four stacked boxes of four widths
   assert.match(html, /\.boot-hero ul\.boot-links \{ display: flex; flex-wrap: wrap; gap: 12px;/);
   // the home page's header and heading take the landing's classes, which the stylesheet in the head styles with scripts off too
