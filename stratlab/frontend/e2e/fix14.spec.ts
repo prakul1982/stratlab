@@ -87,6 +87,8 @@ test("a signed-out app page is drawn in /login's frame and names both ways in wi
   const gate = (await page.locator("header.lp-nav").boundingBox())!;
   await page.goto("/login");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 30_000 });
+  // R73: the start-up frame shows a heading before the app draws, so wait for /login's own header before measuring it
+  await expect(page.locator("header.lp-nav")).toBeVisible({ timeout: 30_000 });
   const login = (await page.locator("header.lp-nav").boundingBox())!;
   expect(Math.abs(gate.height - login.height)).toBeLessThan(2);
   const { scroll, width } = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, width: window.innerWidth }));
