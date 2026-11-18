@@ -2788,7 +2788,7 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
         also = also_earn(known, f)
         if also:
             n_, t_ = also
-            line += f" {n_} of the {len(known)} also earn from {MODELS[t_][2]}."
+            line += f" {n_} of the {len(known)} also earn{'s' if n_ == 1 else ''} from {MODELS[t_][2]}."      # r69e: "1 of the 5 also earns"
         if part_:
             pm_ = every[sorted(part_)[0]]
             line += (f" {len(part_)} of them earn{'s' if len(part_) == 1 else ''} from {MODELS[pm_][2]}, a way of earning the layer's own name "
@@ -2923,7 +2923,7 @@ def shown_model(model: dict | None, rows: list[dict]) -> dict | None:
         line = f"They earn mainly from {what}." + (" " + out_line(rest, f"of {n}") if rest else "")
     also = also_earn(known, f)
     if also:
-        line += f" {also[0]} of the {len(known)} also earn from {MODELS[also[1]][2]}."
+        line += f" {also[0]} of the {len(known)} also earn{'s' if also[0] == 1 else ''} from {MODELS[also[1]][2]}."      # r69e
     # r64e (the US Steel and metals replay: "Metals distributors and mining developers" with Reliance and Ryerson in its figures by the way
     # of earning its name states, its page's line saying only the miners' way): the sentence on a way the layer's own name states (by_model,
     # NAME_PART_MODEL) stays, counted over the companies shown

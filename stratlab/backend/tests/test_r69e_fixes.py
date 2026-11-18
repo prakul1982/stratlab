@@ -276,3 +276,28 @@ def test_a_us_listed_company_based_abroad_is_shown_beside_the_core_and_counted_i
     assert "SEC0" in adj and adj["SEC0"]["kind"] == D.FOREIGN_KIND and "20-F" in adj["SEC0"]["text"], adj
     assert "SEC1" not in adj
     assert v.get("population_rule") == D.POPULATION == 2
+
+
+# ---------- LIVE13B-009 / next-engine: the deck's own sentences ----------
+def test_the_decks_own_sentences_read_as_english():
+    """Fails before: "Property developers, property developers: fewer than half ...", "1 company with figures have no description in their
+    own words yet", "1 of the 5 also earn from ...", "the 1 adjacent participants"."""
+    import inspect
+    from app import deck
+    got = deck.profile_summary([], [("Property developers", "property developers"), ("Hotels", "hotel operators")])
+    assert "Property developers: fewer than half" in got and "Property developers, property developers" not in got
+    assert "Hotels, hotel operators: fewer than half" in got
+    src = inspect.getsource(deck)
+    assert "{'has' if len(names_) == 1 else 'have'}" in src and "the 1 adjacent participant'" in src
+    from app.intel import theme_base as TB
+    assert "also earn{'s' if n_ == 1 else ''}" in inspect.getsource(TB)
+
+
+def test_a_layer_whose_companies_are_beyond_the_figures_window_is_not_said_to_have_none():
+    """Fails before: the live R67 Fertilizers deck said "No listed company is shown for Distribution and trading, Property developers: no
+    member of the theme is placed there" beside a change log moving companies into both (their members were beyond the companies whose
+    figures are worked out)."""
+    import inspect
+    from app import deck
+    src = inspect.getsource(deck)
+    assert "listed in it, none among the companies whose figures are" in src and "none_ = [x for x in none_ if x not in beyond]" in src

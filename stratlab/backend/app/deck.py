@@ -3365,7 +3365,7 @@ def described_said(names_: list) -> str:
 
 def wordless_said(names_: list) -> str:
     shown = ", ".join(names_[:5]) + (f" and {len(names_) - 5} more" if len(names_) > 5 else "")
-    return f"{_n(len(names_), 'company', 'companies')} with figures have no description in their own words yet: {shown}."
+    return f"{_n(len(names_), 'company', 'companies')} with figures {'has' if len(names_) == 1 else 'have'} no description in {'its' if len(names_) == 1 else 'their'} own words yet: {shown}."      # r69e: one company has
 
 
 PARTIAL_SHARE = 50          # d53: a theme whose checked companies are under this share of its list has a partial map, said wherever the map is
@@ -3811,7 +3811,7 @@ def coverage_table(v: dict, cov: dict, today: date | None = None) -> list[list[s
     fsplit = figures_split(v, n)
     rows = [screening_row(v, cov)] + [[COVERAGE_KINDS[0], f"{n:,} of {total:,}",
                                     "companies with figures, of every company the deck lists" + (f": {fsplit}" if fsplit else ", members in the theme")
-                                    + (f"; the theme's core members only, the {pop['adjacent']:,} adjacent participants with figures apart" if pop["adjacent"] else "")]]
+                                    + (f"; the theme's core members only, {_n(pop['adjacent'], 'adjacent participant', 'adjacent participants').replace('1 adjacent participant', 'the 1 adjacent participant') if pop['adjacent'] == 1 else 'the ' + format(pop['adjacent'], ',') + ' adjacent participants'} with figures apart" if pop["adjacent"] else "")]]
     if cov.get("share") is not None:
         rows.append([COVERAGE_KINDS[1], f"{cov['share']}%", f"of {cov['of_what']}, held by the companies with figures (a share of value, not of companies)"])
     if prog:                       # e54: how many of the theme's companies have had their membership checked, and after each version
@@ -6698,6 +6698,17 @@ def theme_plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         # y57 (R57, the audit of the live R56 decks, SW-6: "No listed company is shown for ... Payment networks and processors: none of the
         # companies the map named has a description that shows it does the work" while a member in "Other" says it processes payments): the
         # sentence only after no member's own words name the layer's work; a member whose words do is named, with the layer it sits in
+        # r69e (the live R67 Fertilizers deck: "No listed company is shown for Distribution and trading, Property developers: no member of the
+        # theme is placed there" beside a change log moving companies into both): a layer whose members are all beyond the companies whose
+        # figures are worked out is said as that, with how many it lists, never as a layer nobody is placed in
+        beyond = {}
+        for mb in v.get("members") or []:
+            if mb.get("layer") in none_ and mb.get("symbol"):
+                beyond.setdefault(mb["layer"], set()).add(mb["symbol"])
+        if beyond:
+            foot.append("; ".join(f"{x}: {_n(len(beyond[x]), 'company', 'companies')} listed in it, none among the companies whose figures are "
+                                  "worked out, so no figure of it is shown" for x in none_ if x in beyond) + ".")
+        none_ = [x for x in none_ if x not in beyond]
         named_by = {x: words_naming(x, v) for x in none_}
         quiet = [x for x in none_ if not named_by[x]]
         if quiet:
@@ -8157,16 +8168,19 @@ def profile_summary(rows_: list, short: list | None = None) -> str:
     stated, 1 by half or more of its companies."."""
     from .intel import sector_ops
     items = []
+    # r69e (LIVE13B-009, the live Fertilizers deck: "Property developers, property developers: ..."): a layer named as its profile's companies
+    # is said once
+    who = lambda layer, many: layer if str(layer).strip().lower() == str(many).strip().lower() else f"{layer}, {many}"      # noqa: E731
     for r in rows_:
         o = r["ops"]
         k = len(o["measures"]) + len(o["none"])
         many = sector_ops.BY_PROFILE[o["profile"]].many
         if not o["measures"]:
-            items.append(f"{r['layer']}, {many}: none of its {k} measures stated")
+            items.append(f"{who(r['layer'], many)}: none of its {k} measures stated")
         else:
             ok = sum(1 for m in o["measures"] if m["ok"])
-            items.append(f"{r['layer']}, {many}: {len(o['measures'])} of {k} stated, {ok} by half or more of its companies")
-    items += [f"{layer}, {many}: fewer than half of its companies are {many}, so no measures of theirs are shown" for layer, many in short or []]
+            items.append(f"{who(r['layer'], many)}: {len(o['measures'])} of {k} stated, {ok} by half or more of its companies")
+    items += [f"{who(layer, many)}: fewer than half of its companies are {many}, so no measures of theirs are shown" for layer, many in short or []]
     return f"{PROFILES_SAID}: " + "; ".join(items) + "."
 
 
