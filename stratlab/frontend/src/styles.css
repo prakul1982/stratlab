@@ -3214,7 +3214,7 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 /* r69e (LIVE13A-013: Arteris's quote a ~165 px column 290 px tall, the 18rem not reaching the layer tables, which hold the words under the
    name): in a layer's table the company cell, which carries its own words, keeps a reading width beside the figures */
 /* (R75: only the cell that carries the company's words; the layer's other tables, operating figures of 9 columns, keep their own widths, R27) */
-@media (min-width: 901px) { [id^="layer-"] .k-tbl-wrap .k-table tbody th.k-wrap:has(.k-sub-line) { min-width: 18rem; } }
+@media (min-width: 901px) { [id^="layer-"] .k-tbl-wrap .k-table tbody th.k-wrap:has(.k-words) { min-width: 18rem; } }
 .k-section-title { font-family: var(--serif); font-size: var(--t-card); font-weight: 600; margin: var(--s5) 0 0; }
 .k-table tr[data-kind="median"] > * { border-top: 2px solid var(--line-2); font-weight: 600; }
 .k-table tr[data-kind="range"] > * { color: var(--muted); font-size: var(--t-note); }

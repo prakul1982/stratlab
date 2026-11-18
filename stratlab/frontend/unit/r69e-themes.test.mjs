@@ -26,12 +26,12 @@ test("LIVE13A-003: the map's date and the check's date are each said as what the
 });
 
 // (updated on purpose, R75: a sort button's words never wrap (ui-lint R4: the wrap reached /library and /admin's tables), so the sortable
-// table keeps its accepted sideways scroll at 1280 (ui-lint.allow.json R27); the reading width is only the cell that carries the company's words,
+// table keeps its accepted sideways scroll at 1280 (ui-lint.allow.json R27); the reading width is only the cell that carries the company's words (.k-words),
 // so a layer's 9-column operating figures table fits (R27))
 test("LIVE13A-013/014: sort buttons keep one line; a layer's company-words cell keeps a reading width; an empty layer is no chain row", () => {
   const css = read("src/styles.css");
   assert.doesNotMatch(css, /th button\.k-th-sort \{ white-space: normal;/);
-  assert.match(css, /\[id\^="layer-"\] \.k-tbl-wrap \.k-table tbody th\.k-wrap:has\(\.k-sub-line\) \{ min-width: 18rem; \}/);
+  assert.match(css, /\[id\^="layer-"\] \.k-tbl-wrap \.k-table tbody th\.k-wrap:has\(\.k-words\) \{ min-width: 18rem; \}/);
   assert.match(read("src/components/ThemeDive.tsx"), /rows=\{dive\.chain\.rows\.filter\(\(x\) => x\.n > 0 \|\| \(x\.listed \?\? 0\) > 0\)\}/);
 });
 

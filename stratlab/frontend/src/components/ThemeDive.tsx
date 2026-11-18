@@ -291,7 +291,7 @@ function layerColumns(r: Region, wide: Set<string>, wideOut: boolean, whole = fa
   };
   return [
     { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (x) => x.kind !== "company" ? <b>{x.label}</b>
-      : <><Name r={r} sym={x.row!.symbol} name={x.row!.name} wide={wide.has(x.row!.symbol)} />{mark(x.row!)}{ownWords(x.row!.what, x.row!.name) ? <span className="k-sub-line">In its own words: “{ownWords(x.row!.what, x.row!.name)}”</span> : <span className="k-sub-line k-muted">{NO_WORDS}</span>}</> },
+      : <><Name r={r} sym={x.row!.symbol} name={x.row!.name} wide={wide.has(x.row!.symbol)} />{mark(x.row!)}{ownWords(x.row!.what, x.row!.name) ? <span className="k-sub-line k-words">In its own words: “{ownWords(x.row!.what, x.row!.name)}”</span> : <span className="k-sub-line k-words k-muted">{NO_WORDS}</span>}</> },
     { key: "rev", header: "Revenue", numeric: true, cell: (x) => x.kind === "company" ? amount(x.row!.revenue, r) : "" },
     { key: "e", header: "EBITDA margin", numeric: true, cell: f("ebitda") },
     { key: "n", header: "Net margin", numeric: true, cell: f("net") },
