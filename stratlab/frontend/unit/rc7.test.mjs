@@ -82,7 +82,8 @@ test("RC7-005: a P/E, a dividend yield and an EBITDA margin are written the same
   assert.equal(marginText(-3), "−3%");
   const screens = read("src/pages/Screens.tsx"), deep = read("src/pages/DeepDive.tsx");
   assert.match(screens, /\{ id: "opm", label: "EBITDA margin", cell: \(r\) => marginText\(r\.opm\) \}/);
-  assert.match(deep, /cell: \(q: \(typeof n\.quarters\)\[number\]\) => marginText\(q\.opm\)/);
+  // (updated on purpose, owner 18 Nov: the deep dive's quarters table is gone, the company page's quarters are the one place)
+  assert.doesNotMatch(deep, /label="The last eight quarters"/);
 });
 
 test("RC7-007: a price read again moves the market value, the P/E and the range with it, so the header never disagrees with itself", async () => {

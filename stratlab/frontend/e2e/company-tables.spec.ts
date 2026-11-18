@@ -180,15 +180,19 @@ test("a US company: its SEC statements, and a note in place of a shareholding pa
   await sane(page, errors, "#co-holding-history");
 });
 
-test("the deep dive has the same three cards", async ({ page }, info) => {
+// (updated on purpose, owner 18 Nov: "in deep dive why are we putting repeated thing which we already have in the normal stock page?": the
+// three cards are the company page's; the deep dive keeps none of them and points to the company page)
+test("the deep dive leaves the three cards to the company page and points there", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   const errors = await open(page, "/research/IN/RELIANCE/deep", "business, capex and growth", who(10, phone));
-  for (const id of ["#dd-peers", "#dd-statements", "#dd-holding-history"]) {
-    const card = page.locator(id);
-    await card.scrollIntoViewIfNeeded();
-    await expect(card.getByRole("table").first()).toBeVisible({ timeout: 30_000 });
-  }
-  await sane(page, errors, "#dd-statements");
+  await expect(page.getByRole("heading", { name: "Growth and margins" })).toBeVisible({ timeout: 30_000 });
+  for (const id of ["#dd-peers", "#dd-statements", "#dd-holding-history"]) await expect(page.locator(id)).toHaveCount(0);
+  for (const h of ["Peers", "Shareholding history", "Business updates", "How it's valued"]) await expect(page.getByRole("heading", { name: h, exact: true })).toHaveCount(0);
+  await expect(page.getByRole("table", { name: "The last eight quarters" })).toHaveCount(0);
+  const pointer = page.getByTestId("dd-elsewhere");
+  await expect(pointer).toContainText("Price, valuation, peers, the statements, shareholding, business updates and filings are on the company page.");
+  await expect(pointer.getByRole("link", { name: "company page" })).toHaveAttribute("href", "/research/IN/RELIANCE");
+  await sane(page, errors, "[data-testid=dd-elsewhere]");
 });
 
 test("LIVE8B-003: a statements table wider than its card opens on the latest years with the row names in view", async ({ page }, info) => {

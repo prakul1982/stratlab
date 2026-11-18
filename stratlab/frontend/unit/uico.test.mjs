@@ -92,7 +92,7 @@ test("item 6: the documents read, the business model, the measures, the plans an
   assert.doesNotMatch(dd, /className="rs-grid"/);
   assert.doesNotMatch(dd, /className="promises"/);
   assert.match(dd, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label="Growth a year"/);                                              // the growth tiles are a table too
-  assert.match(dd, /<DataTable label="How it's valued"/);
+  assert.doesNotMatch(dd, /How it's valued/);     // (updated on purpose, owner 18 Nov: valuation is the company page's Key numbers)
 });
 
 test("item 8 (LIVE1A-048): a long note on a compared figure is a numbered note under its table, with its mark beside the value", () => {

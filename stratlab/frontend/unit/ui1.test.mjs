@@ -103,3 +103,11 @@ test("figure rows centred, a head's top control on its title's line, table cells
   assert.match(rules, /add\("R28", th, `the header/);
   assert.match(rules, /add\("R28", act, `the head's controls sit/);
 });
+
+// item 4 (owner, 18 Nov: "in deep dive why are we putting repeated thing which we already have in the normal stock page?")
+test("the deep dive keeps what it adds and points to the company page for price, valuation, peers, statements, shareholding, updates and filings", () => {
+  const dd = read("src/pages/DeepDive.tsx");
+  for (const gone of [/<CompanyTables /, /<BizUpdatesPanel /, /How it's valued/, /label="The last eight quarters"/, /<Badge tone="live">/]) assert.doesNotMatch(dd, gone);
+  assert.match(dd, /data-testid="dd-elsewhere">Price, valuation, peers, the statements, shareholding, business updates and filings are on the/);
+  for (const kept of [/<Panel title="Growth and margins"/, /<Panel title="Investor checklist"/, /<Panel title="Capex and cash"/, /title="Management report card"/, /<Panel title="Business model">/]) assert.match(dd, kept);
+});
