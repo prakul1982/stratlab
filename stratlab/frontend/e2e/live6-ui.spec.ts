@@ -151,7 +151,8 @@ test("the Themes search box offers the shared library as Ready to open, never Al
   await expect(list).toContainText("Ready to open:");
   await expect(list).not.toContainText(/Already read|, read \d/);
   // (updated on purpose, fix13 LIVE11A-013: under the India tab a chip no longer repeats "· India")
-  await expect(list.getByRole("button", { name: /· updated \d{1,2} [A-Z][a-z]{2}/ }).first()).toBeVisible();
+  // (updated on purpose, owner 18 Nov: a chip says the theme's short name; its full name and the day it was updated are its title)
+  await expect(list.getByRole("button").first()).toHaveAttribute("title", /· updated \d{1,2} [A-Z][a-z]{2}/);
   await shot(other, "themes-library", info);
   await sane(other, errors);
 });

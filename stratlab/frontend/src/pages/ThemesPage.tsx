@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { fmtDate, marketTz } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { THEME_IDEAS, researchApi, useRegion, type SectorAI } from "../lib/research";
-import { bizFor, DIVE_UPDATING, LIBRARY_HEAD, libraryLabel, olderNote, themeApi, type Business, type Dive, type LibraryTheme, type Listing, type NewsRow, type Prices } from "../lib/theme";
+import { bizFor, DIVE_UPDATING, LIBRARY_HEAD, libraryLabel, olderNote, shortTheme, themeApi, type Business, type Dive, type LibraryTheme, type Listing, type NewsRow, type Prices } from "../lib/theme";
 import { StoredNote, StoredStamp, useStoredRefresh } from "../components/StoredStamp";
 import { RegionSwitch } from "../components/Research";
 import { ShareResearchButton } from "../components/ShareResearch";
@@ -13,7 +13,8 @@ import { ChainCard, ClaimsCard, LayerCard, ListingsCard, MembersCard, NewsCard, 
 import { ChangesCard } from "../components/ThemeChanges";
 import { SaveButton, SavedList } from "../components/SavedSearches";
 import { themeReady, themeSnap } from "../lib/savedSnap";
-import { Card, CardHead, DataTable, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PageNav, Skeleton, Working } from "../components/kit";
+import { Card, CardHead, DataTable, Disclosure, ErrorState, Notice, PageHeader, PageNav, ShowLess, Skeleton, Working } from "../components/kit";
+import { watchSize } from "../lib/resize";
 import { fundName, themeFunds } from "../lib/themeFormat";
 
 /* ================= Themes: a theme deep dive =================
@@ -170,23 +171,11 @@ export function ThemesPage() {
   ] : [];
   return (
     <div className="k-page">
+      {/* owner, 18 Nov ("fix ui dude"): one line under the title; how a theme is mapped is behind the (i) */}
       <PageHeader eyebrow={eyebrowOf("/research/themes")} title="Map a theme, find the companies in it"
-        lede="Type a sector or trend. Every listed company the exchange classifies in its industries is in it; the AI maps them along the chain and adds companies from other industries, each checked against its own description. The margins, growth and prices beside them are worked out from reported figures." />
-      <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
-      <Card>
-        <FormGrid label="Map a theme" onSubmit={(e) => { e.preventDefault(); go(text); }}>
-          <Field label="Theme" wide value={text} onChange={(e) => setText(e.target.value)} placeholder={region === "IN" ? "India defence, railways capex…" : "AI data centers, grid electrification…"} />
-          <AlreadyRead region={region} typed={text} current={q} onPick={go} />
-          <FormActions>
-            <button className="btn" disabled={busy}>{busy ? "Mapping…" : "Map it"}</button>
-          </FormActions>
-          {/* LIVE10A-021: the ideas are their own row under the button ("Map it" sat inside the chip row, one idea alone on a second line) */}
-          <div className="k-row theme-ideas" data-testid="theme-ideas">
-            <span className="k-small k-muted">Or try</span>
-            {THEME_IDEAS[region].map((t) => <button key={t} type="button" className="btn quiet sm" onClick={() => go(t)}>{t}</button>)}
-          </div>
-        </FormGrid>
-      </Card>
+        lede="Type a sector or trend to see the listed companies along its chain." infoLabel="How a theme is mapped"
+        info="Every listed company the exchange classifies in the theme's industries is in it; the AI maps them along the chain and adds companies from other industries, each checked against its own description. The margins, growth and prices beside them are worked out from reported figures." />
+      <ThemeBox region={region} setRegion={setRegion} text={text} setText={setText} current={q} busy={busy} onGo={go} />
       {/* R19: the themes the person saved, each with when it was last read, Open, Update (what changed since), Rename and Remove */}
       <SavedList kind="theme" id="saved-themes" title="Your saved themes" />
       {error && <ErrorState title="The theme couldn't be mapped" action={{ label: "Try again", onClick: () => run(q, { refresh: true }) }}>{error}</ErrorState>}
@@ -276,12 +265,36 @@ export function ThemesPage() {
   );
 }
 
+/** The theme box (owner, 18 Nov: "fix ui dude"): the market switch, the box and "Map it" on one row; under it the shared library as a grid
+ *  of equal chips with short names, at most two rows before "All N themes"; the ideas folded under "More ideas" once the library shows. */
+function ThemeBox({ region, setRegion, text, setText, current, busy, onGo }: { region: "IN" | "US"; setRegion: (r: "IN" | "US") => void; text: string;
+  setText: (t: string) => void; current: string; busy: boolean; onGo: (t: string) => void }) {
+  const items = useLibrary(region, text);
+  const matching = items.filter((i) => i.name.toLowerCase() !== current.trim().toLowerCase());
+  const ideas = THEME_IDEAS[region].map((t) => <button key={t} type="button" className="btn quiet sm" onClick={() => onGo(t)}>{t}</button>);
+  return (
+    <Card className="theme-box">
+      <form className="theme-map" aria-label="Map a theme" onSubmit={(e) => { e.preventDefault(); onGo(text); }}>
+        <RegionSwitch region={region} setRegion={setRegion} />
+        <div className="theme-field">
+          <label htmlFor="theme-q" className="sr-only">Theme</label>
+          <input id="theme-q" className="k-input" value={text} onChange={(e) => setText(e.target.value)}
+            placeholder={region === "IN" ? "India defence, railways capex…" : "AI data centers, grid electrification…"} />
+          <button className="btn" disabled={busy}>{busy ? "Mapping…" : "Map it"}</button>
+        </div>
+      </form>
+      <ReadyGrid items={matching} onPick={onGo} />
+      {matching.length > 0
+        ? <Disclosure summary="More ideas" className="theme-more" testId="theme-ideas"><div className="k-row theme-ideas">{ideas}</div></Disclosure>
+        : <div className="k-row theme-ideas" data-testid="theme-ideas"><span className="k-small k-muted">Or try</span>{ideas}</div>}
+    </Card>
+  );
+}
+
 /** The shared library: themes StratLab has mapped and kept once for everyone that match what's typed, so a search for one of them opens
  *  at once (R19). Not this account's reading history, so it is headed "Ready to open" with the date the map was updated (LIVE6-012).
  *  Signed-in only, as the page is; nothing shows until there is one. */
-const LIBRARY_FIRST = 12;            // stored themes shown before "All N themes"
-
-function AlreadyRead({ region, typed, current, onPick }: { region: "IN" | "US"; typed: string; current: string; onPick: (t: string) => void }) {
+function useLibrary(region: "IN" | "US", typed: string): LibraryTheme[] {
   const [items, setItems] = useState<LibraryTheme[]>([]);
   useEffect(() => {
     let live = true;
@@ -290,22 +303,38 @@ function AlreadyRead({ region, typed, current, onPick }: { region: "IN" | "US"; 
     }, 250);
     return () => { live = false; clearTimeout(t); };
   }, [region, typed]);
+  return items;
+}
+
+/** Ready to open: equal chips, each the theme's short name (its full name and the day its map was updated in the title), at most two
+ *  rows of the grid's own columns, the last cell "All N themes" (LIVE11A-013: every theme StratLab keeps for this market, one press away). */
+function ReadyGrid({ items, onPick }: { items: LibraryTheme[]; onPick: (t: string) => void }) {
+  const grid = useRef<HTMLDivElement>(null);
+  const [cols, setCols] = useState(4);
   const [all, setAll] = useState(false);
-  // LIVE11A-013: every theme StratLab keeps for this market (4 were listed beside 29 public India theme pages); the first LIBRARY_FIRST
-  // with the rest one press away, each without the market the tab already names
-  const matching = items.filter((i) => i.name.toLowerCase() !== current.trim().toLowerCase());
-  const shown = all ? matching : matching.slice(0, LIBRARY_FIRST);
-  if (!shown.length) return null;
+  useLayoutEffect(() => {
+    const el = grid.current;
+    if (!el) return;
+    const look = () => setCols(Math.max(1, getComputedStyle(el).gridTemplateColumns.split(" ").filter(Boolean).length));
+    look();
+    return watchSize(el, look);
+  }, [items.length > 0]);   // eslint-disable-line react-hooks/exhaustive-deps
+  if (!items.length) return null;
+  const room = cols * 2;
+  const more = !all && items.length > room;
+  const shown = more ? items.slice(0, room - 1) : items;
   return (
-    <div className="k-row theme-already" data-testid="theme-already">
+    <div className="theme-already" data-testid="theme-already">
       <span className="k-small k-muted" title="Themes already mapped on StratLab, kept for everyone">{LIBRARY_HEAD}</span>
-      {shown.map((i) => (
-        <button key={i.q} type="button" className="btn quiet sm" onClick={() => onPick(i.name)}>
-          {libraryLabel(i, (d) => fmtDate(d, { year: false }), false)}
-        </button>
-      ))}
-      {matching.length > shown.length && <button type="button" className="btn quiet sm" data-testid="theme-already-all" onClick={() => setAll(true)}>
-        All {matching.length} themes</button>}
+      <div className="theme-ready" ref={grid}>
+        {shown.map((i) => (
+          <button key={i.q} type="button" className="btn quiet sm" title={libraryLabel(i, (d) => fmtDate(d, { year: false }), false)} onClick={() => onPick(i.name)}>
+            <span>{shortTheme(i.name)}</span>
+          </button>
+        ))}
+        {more && <button type="button" className="btn quiet sm theme-ready-all" data-testid="theme-already-all" onClick={() => setAll(true)}>All {items.length} themes</button>}
+      </div>
+      {all && items.length > room && <ShowLess onLess={() => setAll(false)} label="Fewer themes" />}
     </div>
   );
 }

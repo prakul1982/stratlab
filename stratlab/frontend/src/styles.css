@@ -2009,8 +2009,28 @@ a.k-chip { display: inline-flex; align-items: center; text-decoration: none; }
 .stored-stamp { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--s1) var(--s2); }
 @media (max-width: 640px) { .stored-stamp { justify-content: flex-start; } }
 .stored-note { margin: 0 0 var(--s2); }
-.theme-already { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
-.theme-ideas { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }   /* LIVE10A-021 */
+/* the Themes box (owner, 18 Nov: "fix ui dude"): the market switch, the box and "Map it" on one row (the switch on its own row on a phone);
+   the shared library as equal chips, at most two rows; the ideas one row, or folded under "More ideas" */
+.theme-box { display: flex; flex-direction: column; gap: var(--s3); }
+.theme-map { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
+.theme-map > .k-seg { flex: none; align-self: center; }
+.theme-field { flex: 1 1 320px; display: flex; align-items: center; gap: var(--s2); min-width: 0; }
+.theme-field > .k-input { flex: 1; min-width: 0; }
+.theme-field > .btn { flex: none; }
+.theme-already { display: flex; flex-direction: column; gap: var(--s1); }
+.theme-ready { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--s2); }
+.theme-ready > .btn { width: 100%; min-width: 0; justify-content: center; padding-inline: 8px; }
+.theme-ready > .btn > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.theme-ready > .theme-ready-all { font-weight: 600; }
+.theme-already > [data-show-less] { align-self: flex-start; }
+.theme-ideas { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }   /* LIVE10A-021 */
+.theme-more .k-disclosure-body { padding-left: 0; }
+@media (max-width: 560px) {
+  .theme-ready { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* on a phone the ideas stay one line that swipes sideways, not four wrapped rows */
+  .theme-ideas { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .theme-ideas > * { flex: none; }
+}
 .k-note.k-down, .k-small.k-down { color: var(--down); }
 .k-sub { font-size: var(--t-body); font-weight: 600; }
 .k-list { margin: 0; padding-left: var(--s5); display: flex; flex-direction: column; gap: var(--s1); font-size: var(--t-label); }
