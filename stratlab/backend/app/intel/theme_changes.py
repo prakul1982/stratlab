@@ -704,10 +704,14 @@ def lost_layers(snap: dict | None, dive: dict | None) -> list[dict]:
     return out
 
 
-def fall_why(snap: dict | None, dive: dict | None) -> dict:
+def fall_why(snap: dict | None, dive: dict | None, everyone: dict | None = None) -> dict:
     """t56 (R55 review: "a theme whose informative-layer share falls" said with no reason): why the companies of an informative layer of the
     previous live read (the snapshot) are not in one now: {reason: count}, each company once: its layer gone, a rule moved it to "Other" by
-    what its layer is (its "refit"), nothing of its own read yet, else it fit none of this read's layers; one no longer in the theme apart."""
+    what its layer is (its "refit"), nothing of its own read yet, else it fit none of this read's layers; one no longer in the theme apart.
+    r65e (the live R64 Biotech deck: "400 of 821 ... against 459 of 821 ...: 7 points fewer ... Why: moved to “Other” by what its layer is
+    ...: 4; no longer in the theme: 1", 5 companies said of a fall of 59, the others past the figures' window): with `everyone` ({symbol:
+    {"layer", "refit", "unread"}} of every member of this read's map), the members the snapshot keeps outside its figures' window ("rest")
+    are counted the same way."""
     if not isinstance(snap, dict) or not isinstance(snap.get("cos"), dict) or not isinstance(snap.get("layers"), list) or not isinstance(dive, dict):
         return {}
     rows, layer_of = {}, {}
@@ -715,12 +719,22 @@ def fall_why(snap: dict | None, dive: dict | None) -> dict:
         for c in b.get("companies") or []:
             if c.get("symbol") and c["symbol"] not in rows:
                 rows[c["symbol"]], layer_of[c["symbol"]] = c, str(b.get("layer") or "")
+    # (only against a snapshot that keeps its members past the window: one that doesn't would read each of them as new to the theme)
+    everyone = everyone if isinstance(everyone, dict) and isinstance(snap.get("rest"), dict) else None
+    for s_, x in (everyone or {}).items():
+        if s_ not in rows and isinstance(x, dict):
+            rows[s_], layer_of[s_] = x, str(x.get("layer") or "")
     names = set(layer_of.values())
     out: Counter = Counter()
+    was_of = {}
     for s_, c in snap["cos"].items():
-        if not (isinstance(c, list) and len(c) > 1 and isinstance(c[1], int) and 0 <= c[1] < len(snap["layers"])):
-            continue
-        was = snap["layers"][c[1]]
+        if isinstance(c, list) and len(c) > 1 and isinstance(c[1], int) and 0 <= c[1] < len(snap["layers"]):
+            was_of[s_] = snap["layers"][c[1]]
+    if everyone is not None:
+        for s_ in snap["rest"]:
+            if s_ not in was_of and rest_layer(snap, s_):
+                was_of[s_] = rest_layer(snap, s_)
+    for s_, was in was_of.items():
         if _no_business(was):
             continue
         if s_ not in rows:
@@ -768,7 +782,7 @@ def moved_out_why(dive: dict | None) -> dict:
     return dict(out)
 
 
-def coverage_control(cov: dict | None, snap: dict | None, dive: dict | None = None) -> dict | None:
+def coverage_control(cov: dict | None, snap: dict | None, dive: dict | None = None, everyone: dict | None = None) -> dict | None:
     """cl48 (R47): the coverage control of a theme's read: {"low": share under COVER_MIN, "fell": {"informative", "placed", "share", "why"}
     of the previous live placement when the share now is COVER_FALL points or more under it (t56: "why", fall_why), "lost" (lost_layers),
     "restored", "guard" (theme_base.share_guard's row)}; None when none. `cov`: the read's coverage (theme_data.layer_coverage); `snap`: the
@@ -786,7 +800,7 @@ def coverage_control(cov: dict | None, snap: dict | None, dive: dict | None = No
         out["low"] = True
     if isinstance(base, list) and len(base) == 2 and base[1] and _share(*base) - share >= COVER_FALL:
         out["fell"] = {"informative": int(base[0]), "placed": int(base[1]), "share": _share(*base)}
-        why = fall_why(snap, dive) or moved_out_why(dive)
+        why = fall_why(snap, dive, everyone) or moved_out_why(dive)
         if why:
             out["fell"]["why"] = why
     found = lost_layers(snap, dive)
