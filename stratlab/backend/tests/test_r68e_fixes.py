@@ -110,3 +110,77 @@ def test_the_deck_names_the_companies_that_joined_or_left_the_core_members():
     row = deck.adjacent_row(v)
     assert "lenders and financiers 1 (Capital One Financial Corp)" in row[1] and "1 company left the core members" in row[1]
     assert deck.population_said(None) == ""
+
+
+# ---------- P0-2 a property owner's layer by the kind of property its own words name ----------
+CAMDEN = ("As of December 31, 2025, we owned interests in, operated, or were developing 175 multifamily properties comprised of 59,921 "
+          "apartment homes across the United States.")
+R66 = pathlib.Path(__file__).parent / "fixtures" / "themes_live" / "r66"
+
+
+def test_a_property_owners_layer_is_said_by_the_kind_of_property_its_words_name():
+    """Fails before: Camden's words ("multifamily properties ... apartment homes") said "Manufactured housing and RV communities" by the word
+    they share ("communities" of "multifamily communities") and, in R65, "Healthcare property owners" by the words they share most. Now a
+    property owner's layer is said by the kinds of property its name and the company's words name."""
+    from app.intel import theme_base as B
+    assert B.property_fit("Manufactured housing and RV communities", CAMDEN + " We own apartment communities.") is False
+    assert B.property_fit("Healthcare property owners", CAMDEN) is False
+    assert B.property_fit("Residential landlords", CAMDEN) is True
+    assert B.name_says("Manufactured housing and RV communities", CAMDEN.lower() + " apartment communities", set()) == (True, False)
+    assert B.name_says("Residential landlords", CAMDEN.lower(), set())[1]
+    cases = {"Office landlords": "We own 12 office properties in Manhattan.",
+             "Healthcare property owners": "We invest in skilled nursing facilities and senior housing communities.",
+             "Industrial, cold storage and self-storage": "We own and lease industrial and logistics properties throughout the United States.",
+             "Retail and net lease landlords": "We own sixty-two retail shopping centers leased to grocers.",
+             "Towers, data centres and niche property": "In addition, we own and operate towers in South America.",
+             "Manufactured housing and RV communities": "We own manufactured housing and recreational vehicle communities."}
+    for name, text in cases.items():
+        assert B.property_fit(name, text) is True, (name, text)
+        assert all(B.property_fit(other, text) is False for other in cases if other != name and B.layer_property_types(other)
+                   and not (B.layer_property_types(other) & B.company_property_types(text))), name
+    # a list of kinds before what is owned: an office, retail and apartment owner is of the office layer too
+    mixed = "a REIT that owns and operates a portfolio of well-located office, retail, and multifamily assets"
+    assert B.company_property_types(mixed) == {"office", "retail", "multifamily"} and B.property_fit("Office landlords", mixed)
+    # (guard) a name that states no property owner's business judges nothing; words of no property owned judge nothing
+    assert B.property_fit("Office products", "We own office properties.") is None
+    assert B.property_fit("Hotel operators", "We own select-service hotel properties.") is None
+    assert B.property_fit("Office landlords", "We make office chairs and desks.") is None
+    assert B.property_fit("Mortgage REITs", CAMDEN) is None
+
+
+def _reits(evidence: dict | None = None):
+    import release_gate as G
+    d = G.load(R66 / "reits.json")
+    d["evidence"] = {**d["evidence"], **(evidence or {})}
+    with G.offline():
+        out, _ = G.engine(d)
+    return d, out
+
+
+def test_camden_is_with_the_apartment_owners_on_the_live_r66_reits_input():
+    """Fails before: the replay of the live R66 REITs placement input put Camden, Mid-America, UDR and Independence Realty, apartment owners,
+    in "Manufactured housing and RV communities" (the map's "Residential landlords" renamed for its three manufactured-housing members), SBA
+    Communications, a tower owner, in "Healthcare property owners", and office, retail, hotel, apartment and nursing-home owners in "Towers,
+    data centres and niche property". Now the layer keeps its name, and every company whose own words name a kind of property is in a layer
+    whose name names it, or in "Other"; each move quotes its words."""
+    from app.intel import theme_base as B
+    d, out = _reits()
+    where = {c["ticker"]: (v["layer"], c) for v in out["value_chain"] for c in v["companies"]}
+    assert where["CPT"][0] == "Residential landlords" and {"MAA", "UDR", "SUI", "ELS"} <= {s for s, x in where.items() if x[0] == "Residential landlords"}
+    assert where["SBAC"][0] == "Towers, data centres and niche property"
+    assert where["STRW"][0] == "Healthcare property owners" and "“skilled nursing”" in where["STRW"][1]["refit"]["why"]
+    assert where["NYC"][0] == "Office landlords" and where["PRXA"][0] == "Hotel and leisure property owners"
+    for s_, (layer, c) in where.items():
+        assert B.property_fit(B._HALF_RX.sub("", layer), B.own_text(d["evidence"].get(s_) or "")) is not False, (s_, layer)
+    assert any("name property of “Residential landlords”" in str(r.get("why")) for r in out["placements"].get("renames") or []) or \
+        "Manufactured housing and RV communities" not in {v["layer"] for v in out["value_chain"]}
+
+
+def test_vornado_with_its_10k_list_is_an_office_landlord_on_the_live_r66_reits_input():
+    """Fails before: R67's Vornado fix (its 10-K's list of what it owns read as its opening) did not hold on the live R66 REITs input:
+    with that opening Vornado stayed in "Other" (its words say "office space", which no rule read as the office layer's work once the
+    published memory held it out). Now its words name office property, and it is in "Office landlords"."""
+    vno = ("We currently own all or portions of: 51 Manhattan operating properties consisting of: 19.2 million square feet of office space "
+           "in 26 of the properties; 2.3 million square feet of street retail space in 60 of the properties.")
+    _, out = _reits({"VNO": vno})
+    assert next(v["layer"] for v in out["value_chain"] for c in v["companies"] if c["ticker"] == "VNO") == "Office landlords"
