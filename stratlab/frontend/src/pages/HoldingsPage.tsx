@@ -14,7 +14,7 @@ import { HoldingsActionsPanel } from "../components/HoldingsActions";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge } from "../components/EtfGap";
 import { useMoreColumns } from "../components/MoreColumns";
-import { Badge, Card, CardHead, CsvButton, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FigureTable, FormActions, FormGrid, PageHeader, PageNav, PlanNote, Seg, ShareTable, Signed, Skeleton, StockPicker, UploadButton, type Column, UploadProblem, useUploadProblem } from "../components/kit";
+import { Badge, Card, CardHead, CsvButton, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FigureTable, FormActions, FormGrid, PageHeader, PageNav, PlanNote, Seg, ShareTable, Signed, Skeleton, StockPicker, UploadButton, type Column, UploadProblem, usePhone, useUploadProblem } from "../components/kit";
 import { PlanInline } from "../components/PlanInterest";
 import { zerodhaEmpty, type ZerodhaRead } from "../lib/zerodha";
 import { orList } from "../lib/brokers";
@@ -85,6 +85,7 @@ const QTY: Limits = { min: 0, above: true, max: 1e9 };
 const AVG: Limits = { min: 0, max: 1e8, optional: true };
 
 export function HoldingsPage() {
+  const phone = usePhone();
   const { fail, notify, markets } = useApp();
   const [view, setView] = useState<View | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -406,17 +407,20 @@ export function HoldingsPage() {
           <PageNav items={[{ id: "h-summary", label: "Where you stand" }, { id: "h-positions", label: "Positions" }, { id: "h-import", label: "Import a file" }, { id: "h-add", label: "Add a stock" }, ...(withFilings.length > 0 ? [{ id: "h-filings", label: "Filings" }] : [])]} />
           <Card id="h-summary">
             <CardHead title="Where your stocks stand" />
-            {/* TABLE-SWEEP: the totals as a table (the figure, the amount and its change), not four tiles with their changes under them.
-                LIVE9B-012: a compact table on the left with its notes beside it, not four figures across a 1,030px table, each far from its label */}
-            <div className="h-sum">
-            <FigureTable label="Where your stocks stand" header="Total" valueHeader="Amount" noteHeader="Change" rows={[
-              { key: "value", label: "Current value", value: inr(t.value) },
-              { key: "invested", label: "Invested", value: inr(t.invested) },
-              { key: "pnl", label: pnlLabel("Unrealised P&L", t.pnl_partial), value: t.pnl == null ? "–" : inr(t.pnl), tone: signTone(t.pnl),
-                note: t.pnl == null ? undefined : <><Delta value={t.pnl}>{pct(t.pnl_pct)}</Delta>{t.pnl_partial ? ` on the ${t.pnl_partial.priced} with a price; the rest are at cost` : ""}</> },
-              { key: "day", label: dayLabel(t.session, istToday(), (d) => fmtDate(d, { weekday: true, year: false })), value: t.day == null ? "–" : inr(t.day), tone: signTone(t.day),
-                note: t.day == null ? undefined : <Delta value={t.day}>{pct(t.day_pct, 2)}</Delta> },
-            ]} />
+            {/* TABLE-SWEEP: the totals as a table (the figure, the amount and its change), not four tiles.
+                Owner (18 Nov, "what ui is this"): on a laptop the four totals are one row across the card, each amount under its own
+                heading with its change under it, and the notes under the table; the half-width table with an empty half beside it is gone.
+                A phone keeps the stacked table (four columns do not fit 390 px). */}
+            {(() => {
+              const figs = [
+                { key: "value", label: "Current value", value: inr(t.value) },
+                { key: "invested", label: "Invested", value: inr(t.invested) },
+                { key: "pnl", label: pnlLabel("Unrealised P&L", t.pnl_partial), value: t.pnl == null ? "–" : inr(t.pnl), tone: signTone(t.pnl),
+                  note: t.pnl == null ? undefined : <><Delta value={t.pnl}>{pct(t.pnl_pct)}</Delta>{t.pnl_partial ? ` on the ${t.pnl_partial.priced} with a price; the rest are at cost` : ""}</> },
+                { key: "day", label: dayLabel(t.session, istToday(), (d) => fmtDate(d, { weekday: true, year: false })), value: t.day == null ? "–" : inr(t.day), tone: signTone(t.day),
+                  note: t.day == null ? undefined : <Delta value={t.day}>{pct(t.day_pct, 2)}</Delta> },
+              ];
+              const notes = (
             <div className="h-sum-notes">
             <p className="k-note">
               {/* "imported from … on 25 Oct": a login's holdings are as of when they were read, not a live connection (LIVE9B-021) */}
@@ -449,7 +453,21 @@ export function HoldingsPage() {
               </p>
             )}
             </div>
-            </div>
+              );
+              if (phone) return (
+            <div className="h-sum">
+            <FigureTable label="Where your stocks stand" header="Total" valueHeader="Amount" noteHeader="Change" rows={figs} />
+              {notes}
+            </div>);
+              const cols: Column<typeof t>[] = figs.map((f) => ({ key: f.key, header: f.label, cell: () => <>
+                <span className={`h-total${f.tone && /up|pos/.test(f.tone) ? " k-up" : f.tone && /down|neg/.test(f.tone) ? " k-down" : ""}`}>{f.value}</span>
+                {f.note && <span className="k-sub-line">{f.note}</span>}</> }));
+              return (
+            <div className="h-sum wide">
+              <DataTable label="Where your stocks stand" rows={[t]} rowKey={() => "totals"} columns={cols} />
+              {notes}
+            </div>);
+            })()}
           </Card>
           <HoldingsActionsPanel<View> version={actionsAt} onHoldings={put} onLoaded={() => setActionsReady(true)} />
           {!actionsReady && <Card><Skeleton label="Opening your sectors and positions" /></Card>}

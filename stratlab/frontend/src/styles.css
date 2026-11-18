@@ -3274,3 +3274,10 @@ th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
   #theme-members table.k-table th[scope="col"]:first-child { width: 26%; }
   #theme-members table.k-table th[scope="col"].k-num { width: 15%; }
 }
+/* Owner (18 Nov): Holdings' totals on a laptop are one row across the card (each amount under its heading, its change under it), the notes under */
+@media (min-width: 900px) { .h-sum.wide { grid-template-columns: minmax(0, 1fr); } }
+.h-sum.wide .k-table td { vertical-align: top; }
+.h-total { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* Owner (18 Nov, "center align everything properly"): each total, its heading and its change centred in its column */
+.h-sum.wide .k-table th, .h-sum.wide .k-table td { text-align: center; }
+.h-sum.wide .k-table td .k-sub-line { display: flex; justify-content: center; margin-top: 4px; }
