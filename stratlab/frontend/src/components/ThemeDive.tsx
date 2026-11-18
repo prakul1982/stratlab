@@ -56,7 +56,9 @@ export function ChainCard({ dive }: { dive: Dive }) {
     <ReportScope section="The whole chain in one table" source="The companies' reported annual results">
     <Card id="theme-chain" label="The whole chain in one table">
       <CardHead title="The whole chain in one table" info={basisWords(dive.basis)} />
-      <DataTable label="The value chain by layer: companies, revenue and median margins" columns={cols} rows={dive.chain.rows} rowKey={(x) => x.layer} />
+      {/* r69e (LIVE13A-014: "Small finance banks 0 – – –" a row of the chain beside the line naming it as a layer with no listed company):
+          a layer with no company is folded into that one line, never a row of dashes */}
+      <DataTable label="The value chain by layer: companies, revenue and median margins" columns={cols} rows={dive.chain.rows.filter((x) => x.n > 0 || (x.listed ?? 0) > 0)} rowKey={(x) => x.layer} />
       {dive.chain.line && <p className="k-small">{dive.chain.line}</p>}
       {dive.chain.rows.some((x) => x.ebitda_n > 0 && x.ebitda_n < MIN_BASE) && <p className="k-note">A median is shown on {MIN_BASE} companies or more in a layer's calculations; each company's own figures are on its layer's table.</p>}
       <p className="k-note">{basisWords(dive.basis)}</p>
@@ -80,6 +82,12 @@ function Fold<T>({ rows, n: wide = 10, what = "rows", children }: { rows: T[]; n
       {rows.length > n + 2 && (all ? <ShowLess onLess={() => setAll(false)} /> : <button type="button" className="btn quiet sm" data-testid="show-all" onClick={() => setAll(true)}>{`Show all ${rows.length} ${what}`}</button>)}
     </>
   );
+}
+/** r69e (LIVE13A-013: the phone Cement page 52,041 px, every layer's table, margins by year and business updates open one after another): on a
+ *  phone a layer's tables are a press away under its description and count; a desktop shows them as before. */
+function PhoneFold({ label, children }: { label: string; children: ReactNode }) {
+  if (!usePhone()) return <>{children}</>;
+  return <details className="k-phone-fold" data-testid="phone-fold"><summary className="btn quiet sm">{label}</summary>{children}</details>;
 }
 /** a row whose every figure is a dash says nothing: it is left out (LIVE6-017) */
 const isDash = (v: ReactNode) => v == null || v === "–" || v === "" || (typeof v === "object" && v !== null && (v as { props?: { children?: unknown } }).props?.children === "–");
@@ -283,7 +291,7 @@ function layerColumns(r: Region, wide: Set<string>, wideOut: boolean, whole = fa
   };
   return [
     { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (x) => x.kind !== "company" ? <b>{x.label}</b>
-      : <><Name r={r} sym={x.row!.symbol} name={x.row!.name} wide={wide.has(x.row!.symbol)} />{mark(x.row!)}{ownWords(x.row!.what, x.row!.name) ? <span className="k-sub-line">In its own words: “{ownWords(x.row!.what, x.row!.name)}”</span> : <span className="k-sub-line k-muted">{NO_WORDS}</span>}</> },
+      : <><Name r={r} sym={x.row!.symbol} name={x.row!.name} wide={wide.has(x.row!.symbol)} />{mark(x.row!)}{ownWords(x.row!.what, x.row!.name) ? <span className="k-sub-line k-words">In its own words: “{ownWords(x.row!.what, x.row!.name)}”</span> : <span className="k-sub-line k-words k-muted">{NO_WORDS}</span>}</> },
     { key: "rev", header: "Revenue", numeric: true, cell: (x) => x.kind === "company" ? amount(x.row!.revenue, r) : "" },
     { key: "e", header: "EBITDA margin", numeric: true, cell: f("ebitda") },
     { key: "n", header: "Net margin", numeric: true, cell: f("net") },
@@ -308,28 +316,30 @@ export function LayerCard({ layer, i, region, business }: { layer: Layer; i: num
         ? <p className="k-small">No listed company is shown for this layer: none of the companies the map named has a description that shows it does this work.</p>
         : <>
           <p className="k-small k-muted" data-testid="layer-count">{listed} compan{listed === 1 ? "y" : "ies"} listed, {inCalc} in the layer's calculations{inCalc < MIN_BASE ? `: a median needs ${MIN_BASE}, so each company's own figures are shown` : ""}.</p>
+          <PhoneFold label={`Show its ${listed} compan${listed === 1 ? "y" : "ies"} and figures`}>
           <Fold rows={lines.filter((x) => x.kind === "company")} n={10} what="companies">{(shown) => (
             <DataTable label={`${layer.layer}: companies, revenue and margins`} columns={layerColumns(region, wide, layer.left_out > 0, !!layer.ebitda_whole)} rows={[...shown, ...lines.filter((x) => x.kind !== "company")]} rowKey={(x) => x.key} rowAttrs={(x) => ({ "data-kind": x.kind })} />
           )}</Fold>
+          </PhoneFold>
           {layer.line && <p className="k-small">{layer.line}</p>}
           {wide.size > 0 && <p className="k-note">"Whole-company figures": the company runs other businesses too, so its figures are the whole company's, not this layer's own.</p>}
           {layer.companies.some((c) => c.one_off && c.net != null) && <p className="k-note">†: net margin above the EBITDA margin, or unusual, that the company's own filed figures don't give; left out of the net margin's median.</p>}
         </>}
       {hist && hist.years.length >= 2 && hist.n >= MIN_BASE && (
-        <>
+        <PhoneFold label="Show its margins by year">
         <h3 className="k-sub">Margins by year, the same {hist.n} companies added together</h3>
         <DataTable label={`${layer.layer}: margin by year`} columns={[
           { key: "y", header: "Year", rowHeader: true, cell: (h: { y: string; e: number | null; n: number | null }) => h.y },
           { key: "e", header: "EBITDA margin", numeric: true, info: `The ${hist.n} companies that report every year here, added together.`, cell: (h) => pc(h.e) },
           { key: "n", header: "Net margin", numeric: true, cell: (h) => pc(h.n) },
         ]} rows={hist.years.map((y, k) => ({ y, e: hist.ebitda[k], n: hist.net[k] }))} rowKey={(h) => h.y} />
-        </>
+        </PhoneFold>
       )}
       {business && business.length > 0 && (
-        <>
+        <PhoneFold label="Show its operating figures filed between results">
           <h3 className="k-sub">Operating figures filed between results</h3>
           <BusinessTable rows={business} label={`${layer.layer}: operating figures from business updates`} />
-        </>
+        </PhoneFold>
       )}
     </Card>
     </ReportScope>

@@ -7021,6 +7021,9 @@ def parse_holidays(text: str) -> list[str]:
 OVERVIEW_FOR = 45                     # seconds Overview's counts are kept (the server's status is read each time)
 _overview = {"at": None, "client": None, "stats": None, "test": None}
 _overview_lock = threading.Lock()
+# R75: bumped by forget_overview; a read that began before a forget keeps its counts to itself instead of storing them over the
+# forget (a "Tell me when plans open" made while another Admin read was under way showed 0 for 45 seconds)
+_overview_gen = 0
 
 
 def revenue_since(days: int = 30) -> dict:
@@ -7044,6 +7047,7 @@ def overview_stats(fresh: bool = False, include_test: bool = False) -> dict:
     accounts too (DJ-001: Admin's "Show test accounts")."""
     with _overview_lock:
         o = dict(_overview)
+        gen = _overview_gen
     if (not fresh and o["stats"] is not None and o["client"] == id(db.sb()) and o["test"] == include_test
             and time.monotonic() - o["at"] < OVERVIEW_FOR):
         return o["stats"]
@@ -7059,12 +7063,15 @@ def overview_stats(fresh: bool = False, include_test: bool = False) -> dict:
                      extra={"plan_interest": plan_interest.count, "revenue_30d": safe(revenue_since),
                             "active_7d": safe(lambda: admin.active_users(7, include_test))})
     with _overview_lock:
-        _overview.update(at=time.monotonic(), client=id(db.sb()), stats=st, test=include_test)
+        if gen == _overview_gen:            # nothing was forgotten while these were read: keep them
+            _overview.update(at=time.monotonic(), client=id(db.sb()), stats=st, test=include_test)
     return st
 
 
 def forget_overview() -> None:
+    global _overview_gen
     with _overview_lock:
+        _overview_gen += 1
         _overview.update(at=None, client=None, stats=None, test=None)
 
 

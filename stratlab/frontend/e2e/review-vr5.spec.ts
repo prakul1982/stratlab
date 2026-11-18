@@ -108,7 +108,8 @@ test("VR5-013: the cookie question takes under a quarter of a 360x800 phone scre
   await expect(ask).toBeVisible({ timeout: 30_000 });
   const box = await ask.boundingBox();
   expect(box!.height, "the question's height").toBeLessThan(200);
-  const w = await ask.getByRole("button").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().width)));
+  // (updated on purpose, R75: the card's own "Not now" close button is not one of the two answers)
+  const w = await ask.locator(".consent-btns").getByRole("button").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().width)));
   expect(new Set(w).size, `answer widths ${w}`).toBe(1);
 });
 

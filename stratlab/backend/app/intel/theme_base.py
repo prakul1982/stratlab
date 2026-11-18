@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 
 # the version of the membership rules (who is in a theme, which industries, which layers): part of every cached read's key, so a read kept
 # from before a deploy never keeps the old rules' companies or figures (R18: "Private banks" kept the public banks after the fix)
-RULES = 70                       # R68 (lane r68e, the owner's review of the live R66 decks: a property owner's layer said by the kind of property its name and the company's own words name (theme_base.PROPERTY_TYPES, property_fit), never by a word they share; a rename of a property owner's layer to kinds most of its companies don't name not made (property_rename); a company whose own words name only kinds of property its layer's name doesn't moved to the layer that names its kind, else "Other", its words quoted (property_moves)); R67 (lane r67e, the owner's review of the live R65 decks: a kind of product a company's sentence names as what another product is for ("electrolyte salts for batteries") or after another product of its list is not its principal business, and the reason that screens it out quotes its own words, never another company's; a 10-K's sentences of how the company is held passed over and its list of what it owns read, a description of them alone read again); R66 (lane r66e, the LIVE12A theme findings: a stored description's opening sentences that speak of another company sharing the company's first word are not its words (theme_base.own_part, read by every reader of the stored descriptions); a dated head count, a rebranding or a listing line not a company's own words about its work; recycled, pre-owned or second-hand consumer goods say a resale layer); R65 (lane r65e, the live R64 decks' flags: a layer of one official industry none of whose companies' own words say its name not made, its companies in "Other"; a member whose own words say its layer never sent to "Other" for a figure it does not have; freight brokerage words (a logistics provider, third-party logistics, arranging shipments) say a layer of asset-light or freight brokers); R64 (lane r64e, the live R63 decks' flags: a layer whose name states distributors takes its distributors in its figures, a map pick whose own words, industry and name say no word of its layer not kept there on the map's pick alone); R63 (lane r63e, the R62 deck items and the live R62 decks' flags: a half of a layer split by market value renamed with its other half, a word put in place of one not plural singular, a member beyond the figures' window, no figure read for it, whose own words say its layer kept in it); R62 (lane r62, the owner's review of the live R60 decks: a company this placement puts into a named layer whose own words, industry and name say no word of it stays where it is published; a domestic filer never in a layer of foreign companies; an industry most of a layer's read companies share decides beside the company's words of the layer; members with no figure or description folded out of a layer mostly left out; "retail customers" names whom a company sells to; chips and semiconductors one concept); R60 (lane r60a, the owner's outside review of the live R59 decks: a layer the map named whose one company's own words say what it is kept with it, said to be one company and given no statistic; a company's words matched to a layer by its concept (LAYER_CONCEPTS: "direct-to-home" says satellite distribution) as well as its name's words; a way of earning never takes a company out of a layer its words name; a retail format apart from brand ownership; an established pharmaceutical company among biotechs in a layer of its own); R59 (lane r59, the flags left on the live R58.2 decks: a layer of four or more never mostly listed and left out of its figures, a company left out whose words print the layer's work counted on them and one whose words say none of its name not listed in it; a company moved in on no line of its words back where it was; a groups layer of two or fewer not made after every rule; the figures' window adds the companies whose lines say the layer first; a line's word the first the clause says); R58.2 (lane r582, the flags left on the live R58.1 decks: a layer of one company gains the companies whose words say its name or its company goes where its words say; the figures' window never prints a layer alone; a layer named by a way of earning none of its companies say not made; a name none of its companies' lines say gives way to one it had that they say; a company the words placement left in no layer before its words were stored placed by them; a map pick whose words name no other layer's business no longer "another business"; a name saying contract research read as project fees); R58.1 (lane r581, the open items after R58: a company the last re-check moved out of a layer new to it again; a rename that only adds words most of its largest companies don't say not made; a name none of whose words would stay kept with the word in brackets; a company kept in the theme on its words against one layer's answer quotes the words); R58 (lane r58, the owner's review of the live R57.2 decks: a layer an earlier published version had counts as published and keeps its name; a one-company layer of the published version stays when its member's words say its name; a layer joining a large and a small scale split by scale; a computing layer made by how companies earn not made in a theme that names no computing; a name none of its companies say takes their word in place); R57.2 (lane r572, the live R57.1 decks: a member the map placed in a layer whose own words don't contradict it in the layer's figures, the largest never left out on insufficient evidence alone, a layer whose name states its way of earning read that way, a removal on one layer's answer decided by the company's own words); R57.1 (lane r571, the live R57 decks: the peer pull off, a check's "verified" never vouching for a layer it wasn't asked about, a renamed published layer kept, a published member outside the map's groups kept, 3M out, no thin groups layer, the audit's old quote read like a stable placement); R56 (lane p57, the owner's review of the live R56 decks: the placement contract, theme_base.keep_published, hold_published, truthful_layers, best_layer_moves; theme_check.check_placements `held`); R55 (lane t56, the owner's review of the live R55 decks, proven on exact replays of the live R55 placement inputs): the taxonomy guard is the last step of the placement, after every rule that moves companies: against the previous published version (previous_published: the stored snapshot, and for a layer it already lost the moves of the one re-check that removed it, theme_changes.lost_moves; c54 read every logged move back, so the R54 restore's own moves into "Aluminium" counted its companies as of "Other" and the layer was lost again), a named layer of five or more companies that is gone comes back with its companies whose own words or official industry still say what it sells, from "Other" or from a layer a later rule put them in without a recorded reason (restore_vanished: Metals "Aluminium" 13, Manaksia Aluminium back from the steel pipe makers; Consumer retail "Catalog and mail-order houses" 6), a layer whose companies went to layers new to this version is renamed, not lost, and a fall of five points or more in the informative share sends back to their layer the companies of "Other" whose own words still say what it sells (share_guard); R54 (lane v55, the owner's review of the live R54 decks, proven on exact replays of the live R54 placement inputs): theme membership decided before any layer: a company the theme's official industry brought in whose principal business is a kind of product the theme's definition doesn't include is screened out with that reason, never kept in "Other" (theme_check.off_scope, without_off_industry `scope`: Indo National out of FMCG); a commercial-stage company is displayed in the map's commercial layer, never in one named by a development stage, and the other way round (stage_moves: Merck and Novartis out of "Pipeline-stage and royalty-funded drug developers"); a contract manufacturer or component supplier of the theme's products left in "Other" goes to a layer of that kind named from the theme's words, two or more, else is said to be one (fallback_layer: UFP Technologies and Integer Holdings in "Medical device contract manufacturers"); R53 (lane c54, the owner's review of the live R53 decks, proven on exact replays of the live R53 placement inputs): a company new to a layer named by what it sells (its previous live layer another, or the stored change log says a re-check moved it there) joins it only on evidence that it sells what the name defines, read in the sentences of its own words that say what it does or in its official industry's name (sells_layer, sold_what: Intel out of "Chip equipment and subsystem suppliers", Indo National out of "Branded packaged foods manufacturing", UFP Technologies out of "Surgical robotics systems"), else back where it came from; a named layer of five or more companies the previous live version had is restored with those of its companies that still fit when a re-check would leave it with none (restore_vanished: Metals "Aluminium"); R52 (lane d53, the owner's review of the live R52 decks, proven on the exact replay of the live R52 Consumer retail placement inputs): a company an earlier stored version of the theme dropped as another business stays out while no words of its own are read (without_off_industry `before`, theme_changes.off_memory), and one its words now keep in is named ("back"); every name a layer had is kept ("aka", theme_data.same_names); R51 (lane gl52, the rotating review of Release 51, proven on exact replays of its live placement inputs): a company with words that state no way of earning, or none, is in its layer's figures on its industry when that is the industry most of the layer's companies shown to earn its way share (its own other half by market value is no other layer) or the one the layer's own name names (by_model on_ind); a medical laboratory's or hospital's industry states its way of earning over an answer of a service, seller or software family or of low confidence (industry_model); a company read only weakly whose own words say the layer's name and its way of earning is in its figures on its words; a payments processor's model (payments); a layer whose name states EPC takes an EPC contractor in its figures (NAME_PART_MODEL); an AI placement or map pick whose words and industry are of another layer and not its own is listed but left out of its figures (definition_fit "unfit"); words any company uses and the customers a description names are no fit to a layer (GENERIC_FIT, _CUSTOMERS, _CONTRAST); the walk back for an earlier answer of the same map reads every carried version (theme_routes.kept_placement, fill_earlier); R50 (lane rv51, the outside review of the live Release 49 decks: the IT services placement asked for 2 new companies replaced the kept answer's layer names and its two extra layers, 139 companies in informative layers became 132; proven on the exact replay of the live Release 49 placement inputs): an answer for companies a kept answer didn't place only adds names and extra layers (with_earlier), and the kept answer takes those an earlier answer of the same map gave and it lacks (theme_routes.kept_placement); R49 (lane gl50, the rotating review of six unseen themes): a company whose own words and official industry fit neither what its layer is (its name and description) moves to the one layer its words say, else the one its industry is named by, else "Other", with the reason (definition_fit); every company still without a model is asked in batches on each check (reask_unknown, any placement version) and one whose words state it takes it (stated_for_rest); one with no words of a layer's majority industry is in its figures on its industry when no other layer has that industry as its majority (by_model on_ind); R48 (lane ex49, the outside review of the live Release 48 Consumer retail deck: lululemon in "Apparel and consumer brand owners" by its own words, left out of its figures as "another business"; proven on the exact replay of the live Release 46 placement inputs, where it is the one company of the 14 themes whose place in its layer's figures changes): a company read as a retailer whose own words say it designs the goods it sells (or makes them under its own brand), that the answer also read as a maker, and whose words say its layer's name, is in a layer of makers' figures (by_model `own_goods`); each company left out of a layer's figures carries why, precisely (by_model `out_why`: another business than its industry, another way of earning, how it earns read only weakly, no description of its own, words that don't state how it earns); R47 (lane cl48, the outside review of the live Release 46 Consumer retail deck: a designer of branded athletic apparel in "Off-price, dollar and discount store chains"; proven on the exact replay of the live Release 46 placement inputs): a company leaving a map layer by how it earns joins the largest layer of its family by default only when its own words say that layer's name or the name states no kind of business; else the map's layer it is in when its words say that layer's name (out of its figures), else a layer of its family sharing two of its words, else "Other" (by_model.home_of); a compound of a short word ("off-price") is one word in a layer's words, so "branched off" says nothing of it (whole_stems, says_most_of); a company listed in a layer as another way of earning is said to earn another way, never to have evidence that doesn't show how it earns (out_line); an industry of a replaced AI pick most of whose companies were in informative layers stays in the new pick (industries_for `held`); R46 (lane cv47, the live Release 46 Utilities deck: the cable and electrical equipment makers' layers formed on every replay but never on live, proven on the exact replay of the live Release 46 placement inputs, which carry each company's stored facts): the titles of a company's filings ("From its own filings: ...") are no words of its own (own_text), so their "own" no longer says "Makers of their own products" and keeps a cable maker out of its industry's layer (from_other 3); R45 (lane tx2, the outside review of the live Release 45 decks: Bosch and Asahi India Glass out of the component suppliers' layer; proven on the exact replay of the live Release 45 Automotive placement inputs): a company leaves a map layer mostly of its industry for another layer of its industry only on evidence of that layer (its own words say its name, or it holds a larger share of its industry: by_model evidence_for); the previous live placement of the same map (theme_changes' snapshot, place_rest `previous`) is kept by a company the split would move out of it with no evidence of the new layer, and by an unchecked map pick with no evidence of the layer it is in (held_to_previous); R44 (lane c1, the outside review of the live Release 43 decks, proven on the exact replay of its placement inputs): the companies left in "Other" placed only by their own words or official industry (theme_base.from_other: a layer whose name says all their industry says, the one layer of their way of earning whose name their words say two or more and half of the words of, a layer of one official industry made of them and of those the split moved by how they earn alone: ferro alloy, aluminium product, cable and electrical equipment makers), a map pick from another industry whose words say its layer's name is confirmed by them (confirmed_by_words: PB Fintech), a sportsbook, broadcast network, enterprise software house, VR concert producer and diversified holding company filed as retail are another business; R43 (lane d1, the outside review of the live Release 41 decks, proven on the exact replay of its placement inputs): a company the map named in a layer whose way of earning no layer of the map has stays in that layer, out of its figures (Arm, Fortinet); the largest layer of a family whose name states a kind of business the company's words don't say takes it by industry only as the family's catch-all, and such companies of one official industry with the like of them in "Other" make a layer of that industry (the apparel chains); a company named in a sub-theme only is placed like the theme's own; a company in no layer with no words of its own is "not checked yet" ("unread"); a weak-evidence company of the layer's industry is in its figures on its industry (Mahindra & Mahindra); pawnbrokers, IT resellers to business, blank-check companies, banks, payments and travel firms filed as retail are another business; "real estate development" is a developer's words; a maker read as a telecom operator makes its own products; R40 (lane s3-r40, the owner's review of the live Release 39 decks, proven on the exact replay of its placement inputs): a layer whose shown name states two ways of earning takes a company of either that holds its industry and whose words say what its name says (online sellers into "Online retailers and marketplaces"); a company the theme's industry brought in whose own words describe another business is dropped from the theme and named on its coverage (propane distributors under retail, solar makers under semiconductors: theme_base.without_off_industry); in a layer of one official industry a company of the layer's kin of making is in its figures (Bosch, Asahi India Glass: by_model KIN_FAMILIES); a layer the split named only by how its companies earn is never ranked ("by_how"); R41 (lane s2-exact, exact replays of the live Release 38.1 placement from its placement inputs): a company leaving a map layer by how it earns stays in it, out of its figures, when that layer is mostly of its industry and no layer of its family is (Bosch, Asahi India Glass); a layer whose name states another way of earning is not the map's layer of a company's industry, and the largest stands by default only as its family's catch-all (online sellers in "Off-price"); a company the split by model moved joins a map layer in 3b only when it fits (Qorvo in "Semiconductor equipment"); a model asked apart from the placement moves no company out of the map layer the placement put it in, and an answer carried from earlier rules sticks: nothing it answered is asked again (place_rest `carried`; Hikal and Brooks); R38.1: a kept placement carried back through every version that kept none of its own (theme_routes.placed), past 39's placements asked again from nothing; R38 (lane s1-fit, the outside review of the live R37 decks: 34 companies moved into "Off-price, dollar and value-format retailers", Micron, Intel and SK Hynix into "Semiconductor equipment"): a company leaving "Other" that the largest layer of its family neither holds by industry nor by words goes to the layer of its family that fits it, else stays in "Other", never the largest by default; a split-made layer joins a map layer of the same model only with the companies whose words fit it (by_model.home_of, fits). R37 (lane r2, the owner: misclassifications across all themes): a company no answer gave a model takes the one its own words state in so many words, read since (theme_check.stated_model, refine_kept), a bank's or lender's industry is lending, a landlord's own words make it one whatever its industry, OSAT and ESDM words are contract making, own-fab words read in an annual report make a chip maker no fabless one, a company leaving "Other" joins the largest layer of its family only when that holds its industry or words, else a layer all of its industry sharing its words, else stays in "Other" when no layer holds either (by_model.home_of), a contract maker joins only a contract layer of its kind (theme_check.contract_kind), a company the map placed whose model only its words state stays in its layer (by_model settled); R36 (GPT review of the live R35 decks): foundry words with products of its own named are no contract maker's and a chip maker naming its own products given contract manufacturing is a maker (theme_check.chip_idm), chips made using specialty process technologies are a foundry's, a seller of its own goods given platform is a retailer, a company of another business filed under the theme's industry (solar under semiconductors) stays in "Other" (theme_check.off_industry), a company leaving a map layer for its family goes to the family's layer of its own industry (by_model); q1: a network operator given software or capacity is telecom_services (theme_check.telecom_operator), a rule-made model of another family not held at the answer's "low" (said_for), foundry words read in a 10-K/20-F as contract making; lane n2: a kept model of low confidence read again from the evidence as it is now (refine_kept), foundry words as contract making, family words (theme_check.model_confidence), retail vs platform (refine_model); R34: the model rules that changed after R33 (a chip materials supplier is an ingredient maker; a model-named layer joins a map layer only when one layer has its model) apply to every kept check, placement and dive: whenever refine_model, by_model or a model rule changes, bump this; R33: a company with no model takes the one its map layer's name states (models_from_layer); R32: chip designers without fabs as fabless (theme_check.chip_designer), a layer named by how it earns joins the map's layer of its primary model, a market-value half with no shown company undone (unsplit_unshown); R31: lenders apart from developers and landlords, fabless vs IDM by owned fabs (theme_check.refine_model), a metals family's commodity as its sub-basis, a split-made layer of one primary model joins the map's (by_model 3b); R30: a kept placement's unknown models asked again once the companies' descriptions are kept (reask_unknown); R29: kinds of utility and of metals business as their own models (theme_check.refine_model); R21: every confirmed company in one of the map's layers (place_rest); R22: layer names fit, currencies, extra layers; R25: one revenue model a layer; R26: models from more evidence and checked by it, names after the split; R27: primary model, tags and confidence, comparable segments, no one-company layer; R28: the companies to place carry their own descriptions (theme_routes.describe_unplaced)
+RULES = 71                       # R69 (lane r69e, the LIVE13A theme findings: a head naming an act any trade does ("design", "testing") said only with what it is done to, "vertically integrated" never the "integrated" of a name (sells_layer, ACT_HEADS); a company whose own words say it runs no business now in no layer of a business (business_moves); a former business no word of what it sells now (sold_text); a half of a layer split by market value judged as that layer for a company it takes from "Other", by the theme's own product named as what it makes where few of its companies say its name (sold_what, says_theme_product); an earlier re-check's move out of a layer undone only by words that say it; a move out judged by what it sells kept against its published layer under that layer's later name (hold_published)); R68 (lane r68e, the owner's review of the live R66 decks: a property owner's layer said by the kind of property its name and the company's own words name (theme_base.PROPERTY_TYPES, property_fit), never by a word they share; a rename of a property owner's layer to kinds most of its companies don't name not made (property_rename); a company whose own words name only kinds of property its layer's name doesn't moved to the layer that names its kind, else "Other", its words quoted (property_moves)); R67 (lane r67e, the owner's review of the live R65 decks: a kind of product a company's sentence names as what another product is for ("electrolyte salts for batteries") or after another product of its list is not its principal business, and the reason that screens it out quotes its own words, never another company's; a 10-K's sentences of how the company is held passed over and its list of what it owns read, a description of them alone read again); R66 (lane r66e, the LIVE12A theme findings: a stored description's opening sentences that speak of another company sharing the company's first word are not its words (theme_base.own_part, read by every reader of the stored descriptions); a dated head count, a rebranding or a listing line not a company's own words about its work; recycled, pre-owned or second-hand consumer goods say a resale layer); R65 (lane r65e, the live R64 decks' flags: a layer of one official industry none of whose companies' own words say its name not made, its companies in "Other"; a member whose own words say its layer never sent to "Other" for a figure it does not have; freight brokerage words (a logistics provider, third-party logistics, arranging shipments) say a layer of asset-light or freight brokers); R64 (lane r64e, the live R63 decks' flags: a layer whose name states distributors takes its distributors in its figures, a map pick whose own words, industry and name say no word of its layer not kept there on the map's pick alone); R63 (lane r63e, the R62 deck items and the live R62 decks' flags: a half of a layer split by market value renamed with its other half, a word put in place of one not plural singular, a member beyond the figures' window, no figure read for it, whose own words say its layer kept in it); R62 (lane r62, the owner's review of the live R60 decks: a company this placement puts into a named layer whose own words, industry and name say no word of it stays where it is published; a domestic filer never in a layer of foreign companies; an industry most of a layer's read companies share decides beside the company's words of the layer; members with no figure or description folded out of a layer mostly left out; "retail customers" names whom a company sells to; chips and semiconductors one concept); R60 (lane r60a, the owner's outside review of the live R59 decks: a layer the map named whose one company's own words say what it is kept with it, said to be one company and given no statistic; a company's words matched to a layer by its concept (LAYER_CONCEPTS: "direct-to-home" says satellite distribution) as well as its name's words; a way of earning never takes a company out of a layer its words name; a retail format apart from brand ownership; an established pharmaceutical company among biotechs in a layer of its own); R59 (lane r59, the flags left on the live R58.2 decks: a layer of four or more never mostly listed and left out of its figures, a company left out whose words print the layer's work counted on them and one whose words say none of its name not listed in it; a company moved in on no line of its words back where it was; a groups layer of two or fewer not made after every rule; the figures' window adds the companies whose lines say the layer first; a line's word the first the clause says); R58.2 (lane r582, the flags left on the live R58.1 decks: a layer of one company gains the companies whose words say its name or its company goes where its words say; the figures' window never prints a layer alone; a layer named by a way of earning none of its companies say not made; a name none of its companies' lines say gives way to one it had that they say; a company the words placement left in no layer before its words were stored placed by them; a map pick whose words name no other layer's business no longer "another business"; a name saying contract research read as project fees); R58.1 (lane r581, the open items after R58: a company the last re-check moved out of a layer new to it again; a rename that only adds words most of its largest companies don't say not made; a name none of whose words would stay kept with the word in brackets; a company kept in the theme on its words against one layer's answer quotes the words); R58 (lane r58, the owner's review of the live R57.2 decks: a layer an earlier published version had counts as published and keeps its name; a one-company layer of the published version stays when its member's words say its name; a layer joining a large and a small scale split by scale; a computing layer made by how companies earn not made in a theme that names no computing; a name none of its companies say takes their word in place); R57.2 (lane r572, the live R57.1 decks: a member the map placed in a layer whose own words don't contradict it in the layer's figures, the largest never left out on insufficient evidence alone, a layer whose name states its way of earning read that way, a removal on one layer's answer decided by the company's own words); R57.1 (lane r571, the live R57 decks: the peer pull off, a check's "verified" never vouching for a layer it wasn't asked about, a renamed published layer kept, a published member outside the map's groups kept, 3M out, no thin groups layer, the audit's old quote read like a stable placement); R56 (lane p57, the owner's review of the live R56 decks: the placement contract, theme_base.keep_published, hold_published, truthful_layers, best_layer_moves; theme_check.check_placements `held`); R55 (lane t56, the owner's review of the live R55 decks, proven on exact replays of the live R55 placement inputs): the taxonomy guard is the last step of the placement, after every rule that moves companies: against the previous published version (previous_published: the stored snapshot, and for a layer it already lost the moves of the one re-check that removed it, theme_changes.lost_moves; c54 read every logged move back, so the R54 restore's own moves into "Aluminium" counted its companies as of "Other" and the layer was lost again), a named layer of five or more companies that is gone comes back with its companies whose own words or official industry still say what it sells, from "Other" or from a layer a later rule put them in without a recorded reason (restore_vanished: Metals "Aluminium" 13, Manaksia Aluminium back from the steel pipe makers; Consumer retail "Catalog and mail-order houses" 6), a layer whose companies went to layers new to this version is renamed, not lost, and a fall of five points or more in the informative share sends back to their layer the companies of "Other" whose own words still say what it sells (share_guard); R54 (lane v55, the owner's review of the live R54 decks, proven on exact replays of the live R54 placement inputs): theme membership decided before any layer: a company the theme's official industry brought in whose principal business is a kind of product the theme's definition doesn't include is screened out with that reason, never kept in "Other" (theme_check.off_scope, without_off_industry `scope`: Indo National out of FMCG); a commercial-stage company is displayed in the map's commercial layer, never in one named by a development stage, and the other way round (stage_moves: Merck and Novartis out of "Pipeline-stage and royalty-funded drug developers"); a contract manufacturer or component supplier of the theme's products left in "Other" goes to a layer of that kind named from the theme's words, two or more, else is said to be one (fallback_layer: UFP Technologies and Integer Holdings in "Medical device contract manufacturers"); R53 (lane c54, the owner's review of the live R53 decks, proven on exact replays of the live R53 placement inputs): a company new to a layer named by what it sells (its previous live layer another, or the stored change log says a re-check moved it there) joins it only on evidence that it sells what the name defines, read in the sentences of its own words that say what it does or in its official industry's name (sells_layer, sold_what: Intel out of "Chip equipment and subsystem suppliers", Indo National out of "Branded packaged foods manufacturing", UFP Technologies out of "Surgical robotics systems"), else back where it came from; a named layer of five or more companies the previous live version had is restored with those of its companies that still fit when a re-check would leave it with none (restore_vanished: Metals "Aluminium"); R52 (lane d53, the owner's review of the live R52 decks, proven on the exact replay of the live R52 Consumer retail placement inputs): a company an earlier stored version of the theme dropped as another business stays out while no words of its own are read (without_off_industry `before`, theme_changes.off_memory), and one its words now keep in is named ("back"); every name a layer had is kept ("aka", theme_data.same_names); R51 (lane gl52, the rotating review of Release 51, proven on exact replays of its live placement inputs): a company with words that state no way of earning, or none, is in its layer's figures on its industry when that is the industry most of the layer's companies shown to earn its way share (its own other half by market value is no other layer) or the one the layer's own name names (by_model on_ind); a medical laboratory's or hospital's industry states its way of earning over an answer of a service, seller or software family or of low confidence (industry_model); a company read only weakly whose own words say the layer's name and its way of earning is in its figures on its words; a payments processor's model (payments); a layer whose name states EPC takes an EPC contractor in its figures (NAME_PART_MODEL); an AI placement or map pick whose words and industry are of another layer and not its own is listed but left out of its figures (definition_fit "unfit"); words any company uses and the customers a description names are no fit to a layer (GENERIC_FIT, _CUSTOMERS, _CONTRAST); the walk back for an earlier answer of the same map reads every carried version (theme_routes.kept_placement, fill_earlier); R50 (lane rv51, the outside review of the live Release 49 decks: the IT services placement asked for 2 new companies replaced the kept answer's layer names and its two extra layers, 139 companies in informative layers became 132; proven on the exact replay of the live Release 49 placement inputs): an answer for companies a kept answer didn't place only adds names and extra layers (with_earlier), and the kept answer takes those an earlier answer of the same map gave and it lacks (theme_routes.kept_placement); R49 (lane gl50, the rotating review of six unseen themes): a company whose own words and official industry fit neither what its layer is (its name and description) moves to the one layer its words say, else the one its industry is named by, else "Other", with the reason (definition_fit); every company still without a model is asked in batches on each check (reask_unknown, any placement version) and one whose words state it takes it (stated_for_rest); one with no words of a layer's majority industry is in its figures on its industry when no other layer has that industry as its majority (by_model on_ind); R48 (lane ex49, the outside review of the live Release 48 Consumer retail deck: lululemon in "Apparel and consumer brand owners" by its own words, left out of its figures as "another business"; proven on the exact replay of the live Release 46 placement inputs, where it is the one company of the 14 themes whose place in its layer's figures changes): a company read as a retailer whose own words say it designs the goods it sells (or makes them under its own brand), that the answer also read as a maker, and whose words say its layer's name, is in a layer of makers' figures (by_model `own_goods`); each company left out of a layer's figures carries why, precisely (by_model `out_why`: another business than its industry, another way of earning, how it earns read only weakly, no description of its own, words that don't state how it earns); R47 (lane cl48, the outside review of the live Release 46 Consumer retail deck: a designer of branded athletic apparel in "Off-price, dollar and discount store chains"; proven on the exact replay of the live Release 46 placement inputs): a company leaving a map layer by how it earns joins the largest layer of its family by default only when its own words say that layer's name or the name states no kind of business; else the map's layer it is in when its words say that layer's name (out of its figures), else a layer of its family sharing two of its words, else "Other" (by_model.home_of); a compound of a short word ("off-price") is one word in a layer's words, so "branched off" says nothing of it (whole_stems, says_most_of); a company listed in a layer as another way of earning is said to earn another way, never to have evidence that doesn't show how it earns (out_line); an industry of a replaced AI pick most of whose companies were in informative layers stays in the new pick (industries_for `held`); R46 (lane cv47, the live Release 46 Utilities deck: the cable and electrical equipment makers' layers formed on every replay but never on live, proven on the exact replay of the live Release 46 placement inputs, which carry each company's stored facts): the titles of a company's filings ("From its own filings: ...") are no words of its own (own_text), so their "own" no longer says "Makers of their own products" and keeps a cable maker out of its industry's layer (from_other 3); R45 (lane tx2, the outside review of the live Release 45 decks: Bosch and Asahi India Glass out of the component suppliers' layer; proven on the exact replay of the live Release 45 Automotive placement inputs): a company leaves a map layer mostly of its industry for another layer of its industry only on evidence of that layer (its own words say its name, or it holds a larger share of its industry: by_model evidence_for); the previous live placement of the same map (theme_changes' snapshot, place_rest `previous`) is kept by a company the split would move out of it with no evidence of the new layer, and by an unchecked map pick with no evidence of the layer it is in (held_to_previous); R44 (lane c1, the outside review of the live Release 43 decks, proven on the exact replay of its placement inputs): the companies left in "Other" placed only by their own words or official industry (theme_base.from_other: a layer whose name says all their industry says, the one layer of their way of earning whose name their words say two or more and half of the words of, a layer of one official industry made of them and of those the split moved by how they earn alone: ferro alloy, aluminium product, cable and electrical equipment makers), a map pick from another industry whose words say its layer's name is confirmed by them (confirmed_by_words: PB Fintech), a sportsbook, broadcast network, enterprise software house, VR concert producer and diversified holding company filed as retail are another business; R43 (lane d1, the outside review of the live Release 41 decks, proven on the exact replay of its placement inputs): a company the map named in a layer whose way of earning no layer of the map has stays in that layer, out of its figures (Arm, Fortinet); the largest layer of a family whose name states a kind of business the company's words don't say takes it by industry only as the family's catch-all, and such companies of one official industry with the like of them in "Other" make a layer of that industry (the apparel chains); a company named in a sub-theme only is placed like the theme's own; a company in no layer with no words of its own is "not checked yet" ("unread"); a weak-evidence company of the layer's industry is in its figures on its industry (Mahindra & Mahindra); pawnbrokers, IT resellers to business, blank-check companies, banks, payments and travel firms filed as retail are another business; "real estate development" is a developer's words; a maker read as a telecom operator makes its own products; R40 (lane s3-r40, the owner's review of the live Release 39 decks, proven on the exact replay of its placement inputs): a layer whose shown name states two ways of earning takes a company of either that holds its industry and whose words say what its name says (online sellers into "Online retailers and marketplaces"); a company the theme's industry brought in whose own words describe another business is dropped from the theme and named on its coverage (propane distributors under retail, solar makers under semiconductors: theme_base.without_off_industry); in a layer of one official industry a company of the layer's kin of making is in its figures (Bosch, Asahi India Glass: by_model KIN_FAMILIES); a layer the split named only by how its companies earn is never ranked ("by_how"); R41 (lane s2-exact, exact replays of the live Release 38.1 placement from its placement inputs): a company leaving a map layer by how it earns stays in it, out of its figures, when that layer is mostly of its industry and no layer of its family is (Bosch, Asahi India Glass); a layer whose name states another way of earning is not the map's layer of a company's industry, and the largest stands by default only as its family's catch-all (online sellers in "Off-price"); a company the split by model moved joins a map layer in 3b only when it fits (Qorvo in "Semiconductor equipment"); a model asked apart from the placement moves no company out of the map layer the placement put it in, and an answer carried from earlier rules sticks: nothing it answered is asked again (place_rest `carried`; Hikal and Brooks); R38.1: a kept placement carried back through every version that kept none of its own (theme_routes.placed), past 39's placements asked again from nothing; R38 (lane s1-fit, the outside review of the live R37 decks: 34 companies moved into "Off-price, dollar and value-format retailers", Micron, Intel and SK Hynix into "Semiconductor equipment"): a company leaving "Other" that the largest layer of its family neither holds by industry nor by words goes to the layer of its family that fits it, else stays in "Other", never the largest by default; a split-made layer joins a map layer of the same model only with the companies whose words fit it (by_model.home_of, fits). R37 (lane r2, the owner: misclassifications across all themes): a company no answer gave a model takes the one its own words state in so many words, read since (theme_check.stated_model, refine_kept), a bank's or lender's industry is lending, a landlord's own words make it one whatever its industry, OSAT and ESDM words are contract making, own-fab words read in an annual report make a chip maker no fabless one, a company leaving "Other" joins the largest layer of its family only when that holds its industry or words, else a layer all of its industry sharing its words, else stays in "Other" when no layer holds either (by_model.home_of), a contract maker joins only a contract layer of its kind (theme_check.contract_kind), a company the map placed whose model only its words state stays in its layer (by_model settled); R36 (GPT review of the live R35 decks): foundry words with products of its own named are no contract maker's and a chip maker naming its own products given contract manufacturing is a maker (theme_check.chip_idm), chips made using specialty process technologies are a foundry's, a seller of its own goods given platform is a retailer, a company of another business filed under the theme's industry (solar under semiconductors) stays in "Other" (theme_check.off_industry), a company leaving a map layer for its family goes to the family's layer of its own industry (by_model); q1: a network operator given software or capacity is telecom_services (theme_check.telecom_operator), a rule-made model of another family not held at the answer's "low" (said_for), foundry words read in a 10-K/20-F as contract making; lane n2: a kept model of low confidence read again from the evidence as it is now (refine_kept), foundry words as contract making, family words (theme_check.model_confidence), retail vs platform (refine_model); R34: the model rules that changed after R33 (a chip materials supplier is an ingredient maker; a model-named layer joins a map layer only when one layer has its model) apply to every kept check, placement and dive: whenever refine_model, by_model or a model rule changes, bump this; R33: a company with no model takes the one its map layer's name states (models_from_layer); R32: chip designers without fabs as fabless (theme_check.chip_designer), a layer named by how it earns joins the map's layer of its primary model, a market-value half with no shown company undone (unsplit_unshown); R31: lenders apart from developers and landlords, fabless vs IDM by owned fabs (theme_check.refine_model), a metals family's commodity as its sub-basis, a split-made layer of one primary model joins the map's (by_model 3b); R30: a kept placement's unknown models asked again once the companies' descriptions are kept (reask_unknown); R29: kinds of utility and of metals business as their own models (theme_check.refine_model); R21: every confirmed company in one of the map's layers (place_rest); R22: layer names fit, currencies, extra layers; R25: one revenue model a layer; R26: models from more evidence and checked by it, names after the split; R27: primary model, tags and confidence, comparable segments, no one-company layer; R28: the companies to place carry their own descriptions (theme_routes.describe_unplaced)
 INDUSTRIES_DAYS = 30            # the AI's pick of a free-text theme's industries is made again after this long (at most monthly)
 PICK_RULES = 45                 # cv47 (R46): the rules version the AI's industry pick (PICK_SYSTEM, ai_pick) last changed under: a pick kept under it or later rules is kept; bump to RULES only when the pick itself changes
 FIGURES_MAX = 100               # companies the dive works figures out for: every one the AI named, then the largest of the base (R31: 60 -> 100; stored reads only, the deck built in under a second for 100 synthetic companies, the sector-figure worker bounded by its queue)
@@ -1049,6 +1049,8 @@ def place_rest(m: dict, theme: str, about_of, ask=None, kept: dict | None = None
         out_vc, compute_rows = compute_fit(out_vc, words_of, theme)
         out_vc, property_rows = property_moves(out_vc, words_of)          # r68e: a property owner in the layer of the kind its words name
         compute_rows = compute_rows + property_rows
+        out_vc, business_rows = business_moves(out_vc, words_of, theme, published, moved_before)    # r69e: what it sells now, in its words
+        compute_rows = compute_rows + business_rows
         out_vc, off_compute_rows = off_theme_compute(out_vc, theme)
         compute_rows = compute_rows + off_compute_rows
         out_vc, unsaid_rows = unsaid_moves(out_vc, words_of, theme, published)
@@ -1252,12 +1254,24 @@ def sold_text(evidence, name: str = "") -> str:
     picks = []
     for x in _sentences(t):
         x = _HISTORY.sub("", x).strip(" ,;:-–—")
+        if _FORMER.match(x):          # r69e: "Historically, it manufactured cement" is no word of what it sells now
+            continue
         if len(x) >= 15 and not _PRESS.search(x) and _DOES.search(x):
             picks.append(x)
         if len(picks) >= SOLD_SENTENCES:
             break
     lead = " ".join(picks) or one_line(t)
     return _CONTRAST.sub(" ", _CUSTOMERS.sub(" ", _MARKETS.sub(" ", lead)))
+
+
+# r69e: words of a layer's name that say its companies' scale, reach or structure, no kind of product ("Regional integrated producers")
+_STRUCTURE_WORDS = {"regional", "national", "pan", "india", "indian", "integrated", "producers", "producer", "makers", "maker", "manufacturers",
+                    "manufacturer", "companies", "company", "players", "player", "larger", "smaller", "large", "small", "mid", "sized", "and",
+                    "of", "the", "leading", "major", "other", "diversified", "listed", "firms", "groups", "group"}
+
+
+# r69e (LIVE13A-001): a sentence of what a company did before ("Historically, BCL manufactured Portland Slag Cement") says no business it runs
+_FORMER = re.compile(r"\s*(?:historically|formerly|previously|earlier|in the past|until\s+(?:\w+\s+)?\d{4}|prior to\s+(?:\w+\s+)?\d{4})\b", re.I)
 
 
 # the markets a company says it serves are its customers', not what it sells ("The product segments we target include ... surgical")
@@ -1294,6 +1308,16 @@ def _says(mine: set, w: str) -> bool:
 def _alike(a: str, b: str) -> bool:
     """Two stems of one word, a plural of a short one too ("fab", "fabs")."""
     return _near(a, b) or a + "s" == b or b + "s" == a
+
+
+# r69e (LIVE13A-001, the live R67 Semiconductors log: OSI Systems, "a vertically integrated designer and manufacturer of specialized electronic
+# systems" for airport security, moved into "Fabless chip design" because "designer" says the name's last word): a head naming an act any
+# trade does (design, manufacturing, testing, services...) is said only with what it is done to: a word of the part before it ("fabless"), or,
+# where that word is the theme's own ("chip"), a theme word the company's words say ("semiconductor"); and "vertically integrated" says how a
+# company is organised, never the "integrated" of "integrated device makers"
+ACT_HEADS = {"design", "designing", "manufacturing", "manufacture", "making", "production", "service", "servicing", "test", "testing",
+             "assembly", "distribution", "trading", "processing", "engineering"}
+_ORGANISED = re.compile(r"\b(?:vertically|fully|horizontally|backward(?:ly)?|forward)[- ]integrated\b", re.I)
 
 
 def sells_layer(v: dict, layers: list[dict], text: str, industry, theme_words: set, model: str = "", described: bool = True) -> bool | None:
@@ -1338,8 +1362,12 @@ def sells_layer(v: dict, layers: list[dict], text: str, industry, theme_words: s
                 elif _says(mine, head) and any(_alike(a, b) for a in said for b in lay):
                     return True
             elif not own(head) and _says(mine, head):
+                if head in ACT_HEADS and not (any(_says(mine, q) for q in quals)
+                                              or ((not quals or len(quals) < len(p) - 1) and any(own(w) for w in mine))):
+                    continue
                 return True
         return described and len({b for b in lay if any(_alike(a, b) for a in said)}) >= 2
+    text = _ORGANISED.sub(" ", text or "")
     if text and fits(_fit_words(text), whole_stems(text) - theme_words - _FIT_STOP - _SOLD_PLAIN):
         return True
     plain = plain_industry(industry) if industry else ""
@@ -2760,7 +2788,7 @@ def by_model(vc: list[dict], models: dict, theme: str = "", tags: dict | None = 
         also = also_earn(known, f)
         if also:
             n_, t_ = also
-            line += f" {n_} of the {len(known)} also earn from {MODELS[t_][2]}."
+            line += f" {n_} of the {len(known)} also earn{'s' if n_ == 1 else ''} from {MODELS[t_][2]}."      # r69e: "1 of the 5 also earns"
         if part_:
             pm_ = every[sorted(part_)[0]]
             line += (f" {len(part_)} of them earn{'s' if len(part_) == 1 else ''} from {MODELS[pm_][2]}, a way of earning the layer's own name "
@@ -2895,7 +2923,7 @@ def shown_model(model: dict | None, rows: list[dict]) -> dict | None:
         line = f"They earn mainly from {what}." + (" " + out_line(rest, f"of {n}") if rest else "")
     also = also_earn(known, f)
     if also:
-        line += f" {also[0]} of the {len(known)} also earn from {MODELS[also[1]][2]}."
+        line += f" {also[0]} of the {len(known)} also earn{'s' if also[0] == 1 else ''} from {MODELS[also[1]][2]}."      # r69e
     # r64e (the US Steel and metals replay: "Metals distributors and mining developers" with Reliance and Ryerson in its figures by the way
     # of earning its name states, its page's line saying only the miners' way): the sentence on a way the layer's own name states (by_model,
     # NAME_PART_MODEL) stays, counted over the companies shown
@@ -3075,6 +3103,36 @@ def sold_what(out: list[dict], placed_in: dict, by_how, main, fam, ev, theme_wor
     shown = lambda v: _HALF_RX.sub("", v.get("layer") or "")      # noqa: E731
     prev, before = previous or {}, moved_before or {}
     judged: dict = {}
+    # r69e (LIVE13A-001 / LIVE13B-009, the live R67 Cement deck: Kanoria, "A.C. Pressure Pipes ... Asbestos Cement Products", and BigBloc,
+    # "AAC Blocks", moved from "Other" into "Cement integrated producers (smaller)" by their official industry and way of earning, never
+    # judged: a half of a layer split by market value is made by the split (by_model) and was skipped as a layer named by how it earns): a
+    # half is judged as the layer it is a half of, by its name; and where that name is said by fewer than half of its companies' own words
+    # (no test of what they sell), the theme's own product named as what the company makes now (says_theme_product, business_text) is
+    def how_named(v):
+        """Whether a layer is named by how its companies earn (by_how); a half by market value as the layer it is a half of."""
+        if v.get("scale") in ("larger", "smaller"):
+            big = next((w for w in out if w.get("scale") == "larger" and shown(w) == shown(v)), v)
+            return bool(by_how({**big, "by_model": big.get("by_model") if big is not v or v.get("scale") == "larger" else False, "layer": shown(v)}))
+        return bool(by_how(v))
+    said_of: dict = {}
+
+    def name_said(v) -> bool:
+        if id(v) not in said_of:
+            got = [sells_layer(v, named, sold_text(ev(x), x.get("name") or ""), None, theme_words) for x in v["companies"] if not no_words(ev(x))]
+            said_of[id(v)] = bool(got) and sum(1 for g in got if g) * 2 >= len(got)
+        return said_of[id(v)]
+
+    def names_no_kind(v) -> bool:
+        """Whether a layer's name says no kind of its own beyond the theme's product: only its scale, reach or structure ("Regional
+        integrated producers", "Cement integrated producers"); "Branded packaged foods manufacturing" names foods."""
+        words = [w for w in re.findall(r"[a-z]+", shown(v).lower()) if not (kind_stems(w) & theme_words)]
+        return bool(words) and all(w in _STRUCTURE_WORDS for w in words)
+
+    def went_out(c, v) -> bool:
+        """The stored change log's last move took this company out of this layer (an earlier re-check's reason for moving it out)."""
+        mb_ = before.get(c.get("ticker"))
+        return isinstance(mb_, (list, tuple)) and len(mb_) == 2 and _HALF_RX.sub("", str(mb_[0] or "")) in names(v) \
+            and _HALF_RX.sub("", str(mb_[1] or "")) not in names(v)
 
     def judge(c, v):
         k_ = (id(c), id(v))
@@ -3130,11 +3188,19 @@ def sold_what(out: list[dict], placed_in: dict, by_how, main, fam, ev, theme_wor
                 if came_from(c, v) is not None and not isinstance(c.get("refit"), dict):
                     sold[id(c)] = f"of its official industry, the one “{shown(v)}” is made of"
             continue
-        if by_how(v):
+        if by_how(v) and how_named(v):
             continue
+        newly = bool(by_how(v))          # r69e: a half by market value judged as the layer it is a half of (before: never judged)
         for c in v["companies"]:
             src = came_from(c, v)
             if src is None or isinstance(c.get("unfit"), dict) or isinstance(c.get("refit"), dict) or c.get("held"):
+                continue
+            mb_ = before.get(c.get("ticker")) if isinstance(before.get(c.get("ticker")), (list, tuple)) else None
+            from_other = src == "" or str(src).startswith("Other ") or bool(
+                mb_ and len(mb_) == 2 and str(mb_[0] or "Other ").startswith("Other ") and _HALF_RX.sub("", str(mb_[1] or "")) == _HALF_RX.sub("", str(src)))
+            if newly and not went_out(c, v) and (not from_other or name_said(v)):
+                # r69e: a half judges the companies that come to it from "Other" where its name is no test of what they sell (few of its
+                # companies' words say it): the theme's own product named as what they make is (between layers: the rules before)
                 continue
             # each company new to the layer says why it is there, in the change log beside its move
             here = shown(v)
@@ -3151,8 +3217,17 @@ def sold_what(out: list[dict], placed_in: dict, by_how, main, fam, ev, theme_wor
                 sold[id(c)] = f"its own words say what “{here}” is" if c["placed_by"] == "by_words" else f"its official industry is what “{here}” names"
                 continue
             ok = judge(c, v)
+            words_ = sells_layer(v, named, sold_text(ev(c), c.get("name") or ""), None, theme_words) if ok else None
+            if ok and not words_ and went_out(c, v):
+                # r69e (LIVE13A-001: OSI Systems back in "Fabless chip design" a re-check after one moved it out for its words): an earlier
+                # re-check's move out of this layer is undone only by words of its own that say what the layer sells, never its official
+                # industry or way of earning again
+                ok = False
+            if ok is False and v.get("scale") in ("larger", "smaller") and not name_said(v) and names_no_kind(v) \
+                    and says_theme_product(business_text(ev(c), c.get("name") or ""), theme_words) and not went_out(c, v):
+                sold[id(c)] = f"its own words name the theme's own product as what it makes, and “{here}”'s name is said by few of its companies' own words"
+                continue
             if ok:
-                words_ = sells_layer(v, named, sold_text(ev(c), c.get("name") or ""), None, theme_words)
                 sold[id(c)] = f"its own words say it sells what “{here}” is" if words_ else \
                     f"its official industry or way of earning says it sells what “{here}” is"
             elif ok is None:
@@ -3177,6 +3252,14 @@ def sold_what(out: list[dict], placed_in: dict, by_how, main, fam, ev, theme_wor
                          and judge(c, w) is not False), None)
         why = (f"its own words don't say it sells what “{shown(v)}” is ({defined(v)}), nor does its official industry"
                + (f" ({plain_industry(c.get('industry'))})" if c.get("industry") else ""))
+        if v.get("scale") in ("larger", "smaller") and not name_said(v) and names_no_kind(v):
+            # r69e: where few of the layer's companies say its name, the test was the theme's own product: its words quoted
+            from .theme_changes import first_sentence
+            q_ = _quote(first_sentence(own_text(ev(c))))
+            why += ", nor do its own words name the theme's own product as what it makes" + (f" (“{q_}”)" if q_ else "")
+        elif went_out(c, v) and judge(c, v):
+            why = (f"an earlier re-check moved it out of “{shown(v)}”, and its own words still don't say what that layer sells ({defined(v)}); "
+                   "its official industry or way of earning alone doesn't bring it back")
         if dest is None and placed_in.get(s_, "") in names(v):          # the map's or the answer's own placement, nowhere to go back to
             # r582 (R58.2, the live R58.1 Consumer retail and Software decks: 1-800-Flowers, Boqii and Leslie's left out of "Single-category
             # specialty retailers", Pinterest, Snap and Reddit out of "Ad-funded consumer platforms and games", each as "another business"
@@ -3622,7 +3705,20 @@ def hold_published(vc: list[dict], published: dict, evidence, theme: str) -> tup
                 continue                     # between two layers of the published version: the previous-layer rules judge it on evidence
                                              # (by_model `previous`, held_to_previous, sold_what), each move said with its reason
             ref = c.get("refit") if isinstance(c.get("refit"), dict) else None
-            if ref is not None and _HALF_RX.sub("", str(ref.get("from") or "")) not in ({lay} | ({other_label(theme)} if lay.startswith("Other ") else set())):
+            # (r69e: the same layer by a name it had in this placement, before a later rule renamed it, is that layer: Kanoria's move out of
+            # "Regional integrated producers (smaller)", renamed "Cement integrated producers" after, is evidence against its published layer)
+            same_ = {lay} | {nm for x in by_name.get(lay) or [] for nm in _names(x)}
+            ref_from = _HALF_RX.sub("", str(ref.get("from") or "")) if ref is not None else ""
+            if ref is not None and ref_from != lay and ref_from in same_ and not lay.startswith("Other ") and not ref.get("sold"):
+                ref = None                   # (only a judgment of what it sells, sold_what's, carries over a rename)
+            if ref is not None and ref_from != lay and ref_from in same_ and not lay.startswith("Other "):
+                # ...only where its own words don't say what the layer sells under the name it has now ("Custom synthesis and export
+                # agrochemicals" renamed "Small specialty chemicals and additives makers" for the chemical makers it holds keeps them)
+                dest_ = (by_name.get(lay) or [None])[0]
+                if dest_ is not None and sells_layer({"layer": lay, "description": dest_.get("description") or ""}, [],
+                                                     sold_text(evidence(s_) if evidence else "", c.get("name") or ""), None, kind_stems(theme)) is not False:
+                    ref = None
+            if ref is not None and ref_from not in (same_ | ({other_label(theme)} if lay.startswith("Other ") else set())):
                 ref = None                   # a rule's reason against another layer than its published one is no evidence against that one
             if ref is not None or any(c.get(k) for k in HOLD_EVIDENCE if k != "refit") or \
                     (c.get("verified") is True and not c.get("moved") and not v.get("official")):
@@ -4076,6 +4172,12 @@ def audit_moves(vc: list[dict], evidence, theme: str, words_of=None, ask=None, k
         # three core words): the old quote is read by the same measure as a stable placement, half the core or more
         if not verbatim(qo, text) or names_core(words(c), v, theme) or (qo_core and len(qo_core) * 2 >= len(core)):
             continue                         # a quote not in its words, or its own words name its present layer's work: it stays
+        # r69e (the live R67 Hotels deck: TBO Tek moved out of "Platforms and marketplaces" on its words "operating multiple online technology
+        # platforms", the reason printing them as "not what “Platforms and marketplaces” names"): a quote that says a word of its present
+        # layer's own name, as written, is no evidence against that layer, whatever word any company may use
+        said_name = [w for w in re.findall(r"[a-z]+", shown(v).lower()) if len(w) >= 4 and w not in _JOINING]
+        if any(_word_near(a, w) for w in said_name for a in re.findall(r"[a-z]+", qo.lower())):
+            continue
         if sizes[id(v)] <= 2 or to == shown(v):
             continue
         if to:
@@ -4759,6 +4861,123 @@ def property_moves(vc: list[dict], words_of) -> tuple[list[dict], list[dict]]:
                                                                   "refit": {"from": name, "to": "" if to is rest_v else shown, "why": why}}]
             rows.append({"ticker": c.get("ticker"), "name": c.get("name"), "from": name, "to": shown, "why": why})
         v["companies"] = keep
+    return [v for v in vc if v.get("companies") or v.get("official") or not (v.get("by_model") or v.get("scale"))], rows
+
+
+# r69e (LIVE13A-001 / LIVE13B-009, the live R67 Cement deck: Burnpur Cement, "a formerly operating cement manufacturer that is now completely
+# non-operational", moved from "Other" into "Cement integrated producers (smaller)" by its official industry and way of earning, with its
+# words quoted as the reason): words saying the company runs no business now
+NOT_OPERATING = re.compile(
+    r"\b(?:is|are|remains?|has been|became|was declared)\s+(?:now\s+)?(?:completely\s+|entirely\s+|fully\s+|currently\s+)?"
+    r"(?:non[- ]?operational|non[- ]?operating|dormant|defunct|inactive)\b"
+    r"|\bnot\s+a\s+going\s+concern\b"
+    r"|\b(?:has|had)\s+(?:since\s+)?(?:ceased|discontinued|stopped)\s+(?:all\s+)?(?:of\s+)?(?:its\s+)?(?:business\s+|manufacturing\s+|"
+    r"commercial\s+)?(?:operations|production|manufacturing|business)\b(?!\s+(?:of|at|in|from)\b)"
+    r"|\bno\s+(?:current\s+)?(?:products|operations)\s+or\s+customers\b", re.I)
+NOT_OPERATING_SENTENCES = 3          # read in the first sentences of its own words (a later line of a past unit's closure is no such word)
+_NO_BUSINESS_LAYER = re.compile(r"\b(?:shell|dormant|inactive|non[- ]?operat\w*|holding|blank[- ]check)\b", re.I)
+# what is made of the theme's own product ("Asbestos Cement Products", "AAC blocks", "cement bags"): the theme's word before one of these
+# names another product, not the theme's own as what the company makes
+MADE_OF = {"product", "products", "pipe", "pipes", "sheet", "sheets", "block", "blocks", "board", "boards", "brick", "bricks", "tile", "tiles",
+           "panel", "panels", "pole", "poles", "bag", "bags", "paint", "paints", "additive", "additives", "admixture", "admixtures", "machinery",
+           "equipment", "packaging", "sleeper", "sleepers", "roofing", "based", "fibre", "fiber"}
+
+
+def not_operating(words) -> str:
+    """r69e: the sentence of a company's own words (among its first NOT_OPERATING_SENTENCES) that says it runs no business now, "" when none does."""
+    for x in _sentences(" ".join(own_text(words).split()))[:NOT_OPERATING_SENTENCES]:
+        if NOT_OPERATING.search(x):
+            return x.strip()
+    return ""
+
+
+def cut_end(x: str) -> str:
+    """r69e (the live R67 US Steel and metals deck p.8: a quote cut on “the…”; R66 kept a cut off "and…" only): the words before an
+    ellipsis never end on a joining word, an article or a possessive ("the", "of", "its", "&"), nor on a mark."""
+    x = str(x or "").rstrip(" ,;:-–—“\"'(")
+    while " " in x and x.rsplit(" ", 1)[1].lower().strip("“\"'(") in _JOINING | {"&", "its", "their", "our", "his", "her", "this", "these"}:
+        x = x.rsplit(" ", 1)[0].rstrip(" ,;:-–—“\"'(")
+    return x
+
+
+def business_text(words, name: str = "") -> str:
+    """r69e: the sentences of a company's own words that say what it does now (sold_text's reading, no sentence of a former business), its
+    name left out as a whole name only (Shree Digvijay Cement's "manufacture of cement" keeps its "cement"; "Burnpur Cement Ltd is ..." says
+    no word of cement by its name)."""
+    t = sold_text(words, "")
+    nm = [w for w in re.findall(r"[A-Za-z0-9&]+", name or "") if w]
+    while nm and t:
+        t = re.sub(r"\b" + r"[\s.,]+".join(re.escape(w) for w in nm) + r"\b", " ", t, flags=re.I)
+        if nm[-1].lower().strip(".") not in ("ltd", "limited", "inc", "corp", "corporation", "co", "plc", "llc", "company"):
+            break
+        nm = nm[:-1]
+    return " ".join(t.split())
+
+
+def says_theme_product(text: str, theme_words: set) -> bool:
+    """r69e: whether a company's words name the theme's own product as what it makes ("manufacture and sale of cement"), not only what another
+    product is made of ("Asbestos Cement Products", "AAC (Aerated Autoclave Concrete) blocks")."""
+    from .theme_library import WORDS
+    toks = re.findall(r"[A-Za-z]+|[^\sA-Za-z]", re.sub(r"\s*\([^()]*\)", " ", str(text or "")))
+    for i, t in enumerate(toks):
+        lw = t.lower()
+        if not (kind_stems(lw) & theme_words or kind_stems(WORDS.get(lw, "")) & theme_words):
+            continue
+        # the words of its noun phrase after it ("Asbestos Cement Pressure Pipes": "Pressure Pipes"), up to a mark or a joining word
+        after = []
+        for x in toks[i + 1:i + 4]:
+            if not x.isalpha() or x.lower() in _JOINING:
+                break
+            after.append(x.lower())
+        if not any(x in MADE_OF for x in after):
+            return True
+    return False
+
+
+_JOINING = {"and", "or", "of", "in", "for", "to", "with", "at", "by", "the", "a", "an", "from", "through", "under", "as", "is", "are", "which",
+            "that", "across", "since", "into", "on"}
+
+
+def _quote(x: str, n: int = 160) -> str:
+    x = " ".join(str(x or "").split()).strip(" .,;:")
+    if len(x) > n:
+        x = cut_end(x[:x.rfind(" ", 0, n)]) + "…"
+    return x.replace("“", "‘").replace("”", "’")
+
+
+def business_moves(vc: list[dict], words_of, theme: str, published: dict | None = None,
+                   moved_before: dict | None = None) -> tuple[list[dict], list[dict]]:
+    """r69e (LIVE13A-001, the live R67 Cement deck: Burnpur Cement, "a formerly operating cement manufacturer that is now completely
+    non-operational", moved from "Other" into "Cement integrated producers (smaller)" by its official industry and way of earning): after
+    every rule, a company whose own words say it runs no business now (not_operating, read in their first sentences) is in no layer of a
+    business: it goes to the theme's "Other" group, its words quoted (a layer whose name says it holds such companies keeps them). A company
+    with no words of its own is not judged. (the layers, a row for each company moved)."""
+    named = [v for v in vc if not v.get("official") and v.get("layer") and v.get("companies")]
+    if not named:
+        return vc, []
+    rest_v = next((v for v in vc if v.get("official") and v.get("basis") == "rest"), None)
+    rows = []
+    for v in named:
+        name = _HALF_RX.sub("", v.get("layer") or "")
+        if _NO_BUSINESS_LAYER.search(name):
+            continue
+        keep = []
+        for c in v["companies"]:
+            stop = not_operating((words_of(c.get("ticker")) if words_of else None) or "")
+            if not stop:
+                keep.append(c)
+                continue
+            why = f"its own words say it runs no business now (“{_quote(stop)}”), so it is in no layer of a business it runs"
+            rows.append({"ticker": c.get("ticker"), "name": c.get("name"), "from": name, "to": "", "why": why})
+            c_ = {**{k: x for k, x in c.items() if k not in ("sold_by", "placed_by", "fit", "unfit", "single")}, "moved": True,
+                  "refit": {"from": name, "to": "", "why": why}}
+            if rest_v is None:
+                rest_v = {"layer": other_label(theme), "description": "", "official": True, "basis": "rest", "companies": []}
+                vc = vc + [rest_v]
+            rest_v["companies"] = list(rest_v.get("companies") or []) + [c_]
+        v["companies"] = keep
+    if not rows:
+        return vc, []
     return [v for v in vc if v.get("companies") or v.get("official") or not (v.get("by_model") or v.get("scale"))], rows
 
 
@@ -5752,7 +5971,7 @@ def one_line(about: str) -> str:
     if len(best) <= 240:
         return best.rstrip(" .;")
     cut = best[:220]
-    return cut[:cut.rfind(" ")].rstrip(" ,;:") + "…"
+    return cut_end(cut[:cut.rfind(" ")]) + "…"
 
 
 # LIVE6-007 (the live Cybersecurity page: "From its own filings: Annual report (20-F)", "Fortinet, Inc." alone, encyclopedia lead sentences
@@ -6027,7 +6246,7 @@ def own_line(about, name: str = "") -> str:
             if len(one) <= OWN_LINE_MAX:
                 return one
             at = max(one.rfind(", ", 0, OWN_LINE_MAX), one.rfind("; ", 0, OWN_LINE_MAX))
-            return (one[:at] if at > 120 else one[:one.rfind(" ", 0, 238)]).rstrip(" ,;:") + "…"
+            return cut_end(one[:at] if at > 120 else one[:one.rfind(" ", 0, 238)]) + "…"
     return first
 
 

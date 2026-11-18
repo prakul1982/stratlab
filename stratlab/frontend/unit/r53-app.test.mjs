@@ -45,7 +45,7 @@ test("LIVE8B-007 / LIVE8B-025: Account's kept limits are there from the plan bef
 test("LIVE8B-004 / LIVE8A-017: the analytics question comes after the page, once it has drawn; a policy's footer waits for its words", () => {
   const shell = read("src/components/Shell.tsx"), card = read("src/components/Tracking.tsx"), css = read("src/styles.css");
   assert.ok(shell.indexOf("{ask}") > shell.indexOf('<main className="main" id="main"'));
-  assert.match(card, /if \(guiding \|\| !settled\) return null;/);
+  assert.match(card, /if \(guiding \|\| !settled \|\| later\) return null;/);      // (updated on purpose, owner 18 Nov: closed with "Not now", it stays away for the visit)
   assert.match(card, /export const ASK_AFTER_LOAD_MS = 1200;/);
   assert.match(css, /\.shell > \.consent \{ grid-column: -2 \/ -1; grid-row: 2;/);
   assert.match(read("src/components/PublicFrame.tsx"), /\{foot && <footer/);

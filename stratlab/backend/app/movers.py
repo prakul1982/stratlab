@@ -30,6 +30,7 @@ from . import db, heatmap
 from .auth import current_profile
 from .intel.net import TTLCache
 from .responses import err, ok
+from .titles import page_title
 
 KEY = "movers:marks:"                 # movers:marks:<region> = {"day", "at", "stocks": {symbol: [last day, 52w high, 52w low, new high, new low]}}
 LISTS = ("gainers", "losers", "traded", "spikes", "highs", "lows")
@@ -317,7 +318,7 @@ def public_page(region: str) -> str:
     style = ("<style>.mv td[data-dir=up]{color:var(--up)}.mv td[data-dir=down]{color:var(--down)}.mv td:first-child{white-space:normal;min-width:180px}"
              "@media (min-width:641px){.mv table{table-layout:fixed}.mv th:first-child{width:46%}}.mv td:first-child .muted{font-size:13px;margin-left:4px}.links{display:flex;flex-wrap:wrap;gap:8px 18px;margin:12px 0}"
              ".links a{display:inline-flex;align-items:center;min-height:44px}.mv-cta p{margin:0;display:flex;flex-wrap:wrap;gap:12px;align-items:center}</style>")
-    title = f"{where} market movers: gainers, losers, most traded · StratLab"
+    title = page_title(f"{where} market movers: gainers, losers, most traded")
     desc = (f"{group} at the close of {day}: the top gainers and losers, the most traded stocks, volume spikes and 52-week highs and lows."
             if not v["pending"] else f"{where} stocks' gainers, losers, most traded, volume spikes and 52-week highs and lows at the close.")
     return sp._page(sp._head(title, desc, canonical, ld + style), None, "".join(body))

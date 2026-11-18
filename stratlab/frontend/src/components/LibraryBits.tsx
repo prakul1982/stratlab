@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { num, pct } from "../lib/format";
 import { opSay, refName } from "../lib/rules";
 import type { Cond, Strategy, VerdictKind } from "../lib/types";
-import { plainTerms } from "../lib/plainTerms";
+import { plainTerms } from "../content/seo";
 import { termMeanings } from "../lib/termMeanings";
 import { libMeta, strategyName } from "../lib/libraryList";
 import { pricesStop, testedRange } from "../lib/libraryText";

@@ -118,10 +118,16 @@ export function evidenceCounts(dive: Dive | null | undefined, symbols: string[])
 /** l55 (R55): "Membership checked 160 of 211: 97 description-verified · 63 industry-supported · 51 not checked", the membership check's
  * count apart from the count with figures (the check reads no figure); "" with no states kept. */
 export function membershipLine(dive: Dive | null | undefined, symbols: string[]): string {
-  const n = evidenceCounts(dive, symbols);
+  // r69e (LIVE13A-002): the dive's one tally (the deck's and the public page's), when the dive keeps it; else counted over the companies listed
+  const t = (dive as { tally?: Record<string, number> | null } | null | undefined)?.tally;
+  const n = t && t.total ? new Map<EvidenceState, number>(EVIDENCE_MANY.map(([k]) => [k, Number(t[k] ?? 0)])) : evidenceCounts(dive, symbols);
   if (!n) return "";
-  const all = new Set(symbols).size, checked = all - (n.get("membership_unverified") ?? 0);
-  return `Membership checked ${checked.toLocaleString("en-IN")} of ${all.toLocaleString("en-IN")}: ${evidenceLine(dive, symbols)}`;
+  const all = t && t.total ? Number(t.total) : new Set(symbols).size, none = n.get("membership_unverified") ?? 0, checked = all - none;
+  // r69e (LIVE13A-002: "Membership checked 101 of 103: 93 description-verified · 8 industry-supported · 2 not checked", 93 + 8 + 2 = 103):
+  // the states after the colon add up to the companies checked; the ones not checked are said after them
+  const states = EVIDENCE_MANY.filter(([k]) => k !== "membership_unverified" && (n.get(k) || EVIDENCE_ALWAYS.includes(k)))
+    .map(([k, w]) => `${(n.get(k) ?? 0).toLocaleString("en-IN")} ${w}`).join(" · ");
+  return `Membership checked ${checked.toLocaleString("en-IN")} of ${all.toLocaleString("en-IN")}: ${states}; ${none.toLocaleString("en-IN")} not checked`;
 }
 
 export interface PriceRow { symbol: string; name: string; ret: Record<"1M" | "3M" | "1Y" | "3Y", number | null>; date: string; above200: boolean | null; near_high: boolean | null; near_low: boolean | null }
@@ -156,4 +162,4 @@ export const themeApi = {
 };
 
 
-export { amount, pc, pcw, times, points, span, layerLines, medCell, calcOf, calcWords, CALC_WORDS, MIN_BASE, NO_WORDS, NOT_QUOTED, noWords, olderNote, DIVE_UPDATING, unquotedLine, ownWords, libraryLabel, shortTheme, LIBRARY_HEAD, bizFor, plainIndustry, type LayerLine } from "./themeFormat";
+export { amount, pc, pcw, times, points, span, layerLines, medCell, calcOf, calcWords, CALC_WORDS, MIN_BASE, NO_WORDS, NOT_QUOTED, noWords, olderNote, mapStamp, DIVE_UPDATING, unquotedLine, ownWords, libraryLabel, shortTheme, LIBRARY_HEAD, bizFor, plainIndustry, type LayerLine } from "./themeFormat";

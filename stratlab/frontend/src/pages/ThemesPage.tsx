@@ -1,10 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { fmtDate, marketTz } from "../lib/format";
+import { fmtDate, marketTz, writtenAt } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { THEME_IDEAS, researchApi, useRegion, type SectorAI } from "../lib/research";
-import { bizFor, DIVE_UPDATING, LIBRARY_HEAD, libraryLabel, olderNote, shortTheme, themeApi, type Business, type Dive, type LibraryTheme, type Listing, type NewsRow, type Prices } from "../lib/theme";
+import { bizFor, DIVE_UPDATING, LIBRARY_HEAD, libraryLabel, mapStamp, olderNote, shortTheme, themeApi, type Business, type Dive, type LibraryTheme, type Listing, type NewsRow, type Prices } from "../lib/theme";
 import { StoredNote, StoredStamp, useStoredRefresh } from "../components/StoredStamp";
 import { RegionSwitch } from "../components/Research";
 import { ShareResearchButton } from "../components/ShareResearch";
@@ -183,7 +183,8 @@ export function ThemesPage() {
       {r && (
         <>
           <Card>
-            <CardHead title={r.sector} actions={<><StoredStamp at={r.generated_at > 0 ? r.generated_at : null} tz={marketTz(region)} busy={busy || rf.busy} onRefresh={refresh} />
+            <CardHead title={r.sector} actions={<><StoredStamp at={r.generated_at > 0 ? r.generated_at : null} tz={marketTz(region)} busy={busy || rf.busy} onRefresh={refresh}
+              label={mapStamp(r.generated_at > 0 ? r.generated_at : null, r.older?.at ?? r.checked_at, writtenAt(r.generated_at, marketTz(region)), fmtDate)} />
               <SaveButton kind="theme" label="Save theme" name={r.sector || q} params={{ q, region }} snap={() => (themeReady(r) ? themeSnap(r) : null)} />
               {themeReady(r) && <ShareResearchButton kind="theme" region={region} target={q} label="this theme" />}</>} />
             <StoredNote busy={rf.busy} state={rf.state} at={r.generated_at > 0 ? r.generated_at : null} tz={marketTz(region)} />

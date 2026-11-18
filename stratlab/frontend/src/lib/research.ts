@@ -98,6 +98,8 @@ export interface SectorAI {
   tailwinds: SectorClaim[]; risks: SectorClaim[]; generated_at: number; refresh_state?: RefreshState;
   /** r66e (LIVE12A-002): the read stored under an earlier version of the checks, served at once; `rechecking` while it is checked again */
   older?: { at: string | null; rechecking: boolean } | null;
+  /** r69e (LIVE13A-003): when the stored read was checked (its map's own date is `generated_at`) */
+  checked_at?: string | null;
   /** the placement check: `checked` false while some companies' descriptions are still being read (they are not shown until checked) */
   placements?: {
     checked: boolean; pending: number; left_out: number; placed: number;

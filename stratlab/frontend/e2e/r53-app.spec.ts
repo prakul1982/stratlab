@@ -24,12 +24,18 @@ async function withQuestion(page: Page, who: object | null) {
 
 // LIVE8B-004 (/trade 0.50, company pages 0.40: the band drawn above the page after its first paint pushed it down) and LIVE8A-017 (/about at
 // 390, 0.435): the question comes after the page, once it has drawn, so nothing moves under it; "Skip to content" lands on the page
+test.describe("the analytics question", () => {
+// R75: the page is loaded twice below; the offline helper (service worker) would answer the second load's config.js from its cache,
+// past the fake config above, so it is kept out of these tests
+test.use({ serviceWorkers: "block" });
 for (const [width, path, who, ready] of [[1440, "/trade", BASIC, "Trade"], [1440, "/research/IN/RELIANCE", BASIC, "Reliance"], [390, "/about", null, "About"]] as const) {
   test(`the analytics question never moves the page: ${path} at ${width}px (LIVE8B-004, LIVE8A-017)`, async ({ page }) => {
     await page.setViewportSize({ width, height: width < 500 ? 844 : 1000 });
     await withQuestion(page, who);
     await page.goto(path);
-    if (who) await answerWelcome(page);
+    // R75: the welcome answer redraws the page around it (the space's cards open), a shift of the welcome, not of the analytics
+    // question: answer it, then load the page afresh (the counter starts again) and measure that load alone
+    if (who) { await answerWelcome(page); await page.waitForTimeout(500); await page.goto(path); await answerWelcome(page); }
     await expect(page.getByText(ready, { exact: false }).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
     const ask = page.getByTestId("consent");
     await expect(ask).toBeVisible({ timeout: 30_000 });
@@ -47,3 +53,4 @@ for (const [width, path, who, ready] of [[1440, "/trade", BASIC, "Trade"], [1440
     expect(await top()).toBe(before);
   });
 }
+});

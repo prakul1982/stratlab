@@ -106,7 +106,7 @@ test("R8O-007: a company page shows its numbers at once and its AI read when it 
   await expect(page.locator(".ai-read")).toContainText("Reading the numbers");          // the page is up; the read is on its way
   await expect(page.locator(".ai-read")).toContainText("Runs refineries", { timeout: 15_000 });
   expect(asked).toBe(3);
-  await expect(page).toHaveTitle(/^Reliance Industries.* \(RELIANCE\) ₹/);
+  await expect(page).toHaveTitle(/^Reliance Industries.* \(RELIANCE\) · StratLab$/);      // (updated on purpose, owner 18 Nov: one tab-title pattern, "Page · StratLab"): name and symbol, no price
   expect(errors).toEqual([]);
 });
 
@@ -157,7 +157,7 @@ test("R8O-009: a lazy page's tab has its title before its code arrives", async (
   const held = new Promise<void>((ok) => { release = ok; });
   await page.route(/\/assets\/Research-[A-Za-z0-9_-]+\.js$/, async (r) => { await held; return r.fallback(); });
   const errors = await open(page, "/research/rotation");
-  await expect(page).toHaveTitle("Sectors · Market today · StratLab", { timeout: 15_000 });          // IA-1: Market today's Sectors tab (was Sector rotation)
+  await expect(page).toHaveTitle("Sectors · StratLab", { timeout: 15_000 });          // IA-1: Market today's Sectors tab (was Sector rotation) (updated on purpose, owner 18 Nov: one tab-title pattern, "Page · StratLab")
   release();
   expect(errors).toEqual([]);
 });

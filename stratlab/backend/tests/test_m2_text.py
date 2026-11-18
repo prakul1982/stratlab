@@ -56,7 +56,7 @@ def said(slides) -> list[str]:
 def test_a_ranking_headline_says_which_layers_it_ranks_and_why_a_layer_beyond_it_is_not():
     v, slides = steel()
     ch = v["chain"]
-    assert ch["line"].startswith(f"Among the 2 layers with {FLOOR} and one kind of business, median EBITDA margin is highest in Integrated steel (22%)")
+    assert ch["line"].startswith("Median EBITDA margin is highest in Integrated steel (22%)") and f"among the 2 layers with {FLOOR} and one kind of business." in ch["line"]  # r69e (LIVE13A-009, updated on purpose): the finding first, the layers it ranks after it
     assert ch["line"].endswith(f"Shown, not ranked: Aluminium smelting (41%), a different commodity; Sponge iron makers (8%), fewer than {D.HEADLINE_MIN} "
                                "companies with the figure.")
     assert ch["unranked"] == [{"layer": "Aluminium smelting", "why": "a different commodity"},
@@ -95,8 +95,8 @@ def test_a_lenders_headline_names_the_layer_below_its_lowest_and_why():
                         lender_block("Regional banks, smaller", 5, 11.2, 4), lender_block("Microfinance lenders", 3, 4.9),
                         lender_block("Payments banks", 2, 1.0)])
     assert ch["measure"] == "roe" and (ch["highest"], ch["lowest"]) == ("Regional banks, larger", "Large universal banks")
-    assert ch["line"] == (f"Among the 2 layers with {FLOOR}, median return on equity is highest in Regional banks, larger (13.5%) and lowest in "
-                          "Large universal banks (12.1%), a gap of 1.4 points. Shown, not ranked: Regional banks, smaller (11.2%) and "
+    assert ch["line"] == ("Median return on equity is highest in Regional banks, larger (13.5%) and lowest in "  # r69e (LIVE13A-009, updated on purpose): the finding first, the layers it ranks after it
+                          f"Large universal banks (12.1%), a gap of 1.4 points, among the 2 layers with {FLOOR}. Shown, not ranked: Regional banks, smaller (11.2%) and "
                           f"Microfinance lenders (4.9%), fewer than {D.HEADLINE_MIN} companies with the figure.")
     # a median of two companies is not shown in the table or the chart: nothing to explain
     assert [x["layer"] for x in ch["unranked"]] == ["Regional banks, smaller", "Microfinance lenders"]
@@ -105,7 +105,7 @@ def test_a_lenders_headline_names_the_layer_below_its_lowest_and_why():
 
 def test_a_ranking_of_every_shown_layer_adds_no_second_sentence_and_ties_say_no_reason():
     ch = D.chain_table([lender_block("A banks", 6, 15.0), lender_block("B banks", 5, 12.0)])
-    assert ch["line"] == f"Among the 2 layers with {FLOOR}, median return on equity is highest in A banks (15%) and lowest in B banks (12%), a gap of 3 points."
+    assert ch["line"] == f"Median return on equity is highest in A banks (15%) and lowest in B banks (12%), a gap of 3 points, among the 2 layers with {FLOOR}."  # r69e (LIVE13A-009, updated on purpose): the finding first, the layers it ranks after it
     assert ch["unranked"] == []
     inside = D.chain_table([lender_block("A banks", 6, 15.0), lender_block("B banks", 5, 12.0), lender_block("C banks", 3, 13.0)])
     assert "Shown, not ranked" not in inside["line"]                                              # between the two named: the footnote says why

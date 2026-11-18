@@ -63,5 +63,6 @@ test("a form's rows start together, so a hint never lifts a neighbour's label (R
 });
 
 test("a company's tab title is the name its heading shows (R2B-003)", () => {
-  assert.ok(/useDocTitle\(c \? `\$\{c\.name \|\| c\.symbol\}/.test(read("pages/Research.tsx")));
+  // updated on purpose, owner 18 Nov: one tab-title pattern, "Page · StratLab": the name and the symbol, as the first frame gives them, no price
+  assert.ok(/useDocTitle\(c \? companyName\(c\.name, c\.symbol\) : null\)/.test(read("pages/Research.tsx")));
 });

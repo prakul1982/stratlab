@@ -166,8 +166,9 @@ def test_the_other_group_is_never_called_highest_and_a_small_base_says_its_count
     c = D.chain_table(blocks)
     assert (c["highest"], c["lowest"]) == ("A", "B")
     # changed on purpose (m2): the headline says in its own sentence which layers it ranks
-    assert c["line"] == ('Among the 2 layers with at least 3 companies with the figure, median EBITDA margin is highest in A (22.0%, 3 companies) and '
-                         'lowest in B (12.0%), a gap of 10.0 points; among the map\'s layers, the "Other" group left out.')
+    # r69e (LIVE13A-009, updated on purpose): the finding first, the layers it ranks after it
+    assert c["line"] == ('Median EBITDA margin is highest in A (22.0%, 3 companies) and lowest in B (12.0%), a gap of 10.0 points, among the 2 layers '
+                         'with at least 3 companies with the figure; among the map\'s layers, the "Other" group left out.')
     alone = D.chain_table([blocks[0], blocks[2]])                                   # one map layer and the residual: nothing compared
     assert alone["highest"] is None
 

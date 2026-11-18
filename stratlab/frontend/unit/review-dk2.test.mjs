@@ -63,11 +63,12 @@ test("DK-006: /plans is indexed with its own address, listed in the sitemap, and
   assert.deepEqual([seoFor("/plans").index, seoFor("/plans").canonical], [true, "https://stratlab.studio/plans"]);
 });
 
-test("DK-013: the home title carries the words people search, in about 65 characters", async () => {
+test("DK-013: the home page's search words are in its description; its title is the brand alone", async () => {
   const { HOME_TITLE, HOME_DESCRIPTION } = await import("../src/content/seo.ts");
-  assert.match(HOME_TITLE, /backtest/);
-  assert.match(HOME_TITLE, /research stocks/);
-  assert.ok(HOME_TITLE.length <= 65, `${HOME_TITLE.length} characters`);
+  // updated on purpose, owner 18 Nov: one tab-title pattern, "Page · StratLab": the landing page is "StratLab"; the words people search stay in the description
+  assert.equal(HOME_TITLE, "StratLab");
+  assert.match(HOME_DESCRIPTION, /Backtest trading ideas/);
+  assert.match(HOME_DESCRIPTION, /Research companies/);
   assert.ok(HOME_DESCRIPTION.length >= 120);
   const html = read("index.html");
   assert.ok(html.includes(`<title>${HOME_TITLE}</title>`));

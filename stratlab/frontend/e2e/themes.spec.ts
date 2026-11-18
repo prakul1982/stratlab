@@ -44,7 +44,7 @@ test("the theme page is a deep dive made of tables, with each company only where
   await expect(members.getByTestId("theme-counts")).toHaveText(/^6 companies: 5 from the official industry list, 1 added \(1 description-verified\)\.$/);
   await expect(members).toContainText("Official industries: Iron & Steel");
   // e54: what each company's place rests on, the deck's states and counts (never an official-industry record said confirmed by its words)
-  await expect(members.getByTestId("theme-evidence")).toHaveText(/^Membership checked \d+ of \d+: \d+ description-verified · \d+ industry-supported · (\d+ [a-z' -]+ · )*\d+ not checked\./);
+  await expect(members.getByTestId("theme-evidence")).toHaveText(/^Membership checked \d+ of \d+: \d+ description-verified · \d+ industry-supported( · \d+ [a-z' -]+)*; \d+ not checked\./);   // r69e (updated on purpose): the states add up to those checked
   // (updated on purpose, fix15 LIVE12A-007: a layer whose companies are all in the theme the same way says it once over its table, so the
   // state is on its row or in that line)
   await expect(members.getByTestId("member-evidence").or(members.getByTestId("layer-by-once")).first())
@@ -68,6 +68,11 @@ test("the theme page is a deep dive made of tables, with each company only where
   // a layer: its companies in their own words, the median and the range as rows; the wrong placement (ONGC under steel) isn't there
   const steel = page.locator("#layer-1");
   await expect(steel).toContainText("Steel making");
+  // (updated on purpose, r69e LIVE13A-013: on a phone a layer's tables are a press away under its description; the press opens them)
+  if (phone) {
+    await expect(steel.locator("table").first()).toBeHidden();
+    await steel.getByTestId("phone-fold").getByText(/^Show its \d+ compan(y|ies) and figures$/).click();
+  }
   await expect(steel.getByRole("table").first().locator("tbody tr")).toHaveCount(5);        // Tata Steel, JSW Steel, SAIL, Median, Range
   await expect(steel).toContainText("In its own words");
   await expect(steel.locator('tr[data-kind="median"]')).toContainText("Median");

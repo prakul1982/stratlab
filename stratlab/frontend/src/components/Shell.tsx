@@ -321,12 +321,16 @@ export function Shell({ children, ask: question }: { children: ReactNode; ask?: 
         {spaceGroups ?? minePart}
       </nav>
       {/* the menu's faded bottom edge says there is more; this says it in words and scrolls to it (R5O-038). The mouse
-          wheel and the keyboard reach the same items, so it is left out of the Tab order and of screen readers. */}
+          wheel and the keyboard reach the same items, so it is left out of the Tab order and of screen readers. It has a row of its
+          own under the menu's edge line, so it never sits over a menu item, and it goes once the menu's last item is in view (owner,
+          18 Nov: it sat over "ETF vs NAV" at 1440x900) */}
       {(fade === "bottom" || fade === "both") && (
-        <button type="button" className="side-more" tabIndex={-1} aria-hidden="true"
-          onClick={() => sideScroll.current?.scrollBy({ top: Math.round((sideScroll.current?.clientHeight ?? 300) * 0.6), behavior: scrollBehavior() })}>
-          More below <Chevron size={12} />
-        </button>
+        <div className="side-more-row">
+          <button type="button" className="side-more" tabIndex={-1} aria-hidden="true"
+            onClick={() => sideScroll.current?.scrollBy({ top: Math.round((sideScroll.current?.clientHeight ?? 300) * 0.6), behavior: scrollBehavior() })}>
+            More below <Chevron size={12} />
+          </button>
+        </div>
       )}
       <div className="side-foot">
         <MarketsNow markets={markets} />
@@ -383,14 +387,18 @@ export function mainAction(space: SpaceView, focus: string | null | undefined, h
 }
 
 /** Which edges of a scrolling box have more behind them ("top", "bottom", "both" or "none"): kept as the box scrolls, resizes
- * or its content changes (a group opens). The CSS fades those edges. */
+ * or its content changes (a group opens). The CSS fades those edges. "Below" means the last item is not wholly in view: the box's
+ * own padding under it is not "more" (owner, 18 Nov: "More below" stayed up with the last item in view). */
 function useScrollFade(ref: { current: HTMLElement | null }): "top" | "bottom" | "both" | "none" {
   const [fade, setFade] = useState<"top" | "bottom" | "both" | "none">("none");
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const look = () => {
-      const above = el.scrollTop > 2, below = el.scrollHeight - el.clientHeight - el.scrollTop > 2;
+      const above = el.scrollTop > 2;
+      const kids = Array.from(el.children).filter((c) => getComputedStyle(c).position !== "absolute");
+      const last = kids[kids.length - 1];
+      const below = last ? last.getBoundingClientRect().bottom - el.getBoundingClientRect().bottom > 1 : el.scrollHeight - el.clientHeight - el.scrollTop > 2;
       setFade(above && below ? "both" : above ? "top" : below ? "bottom" : "none");
     };
     look();

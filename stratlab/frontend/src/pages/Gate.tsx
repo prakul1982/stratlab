@@ -57,7 +57,7 @@ export function SignInGate() {
   const title = none ? `No company page for ${symbol}` : ended ? "You were signed out" : unfinished ? "That sign-in didn't finish" : d.restricted ? "Sign in to StratLab" : `Sign in to see ${what}`;
   useEffect(() => {
     if (none) document.title = withBrand("Company not found");
-    else if (co) document.title = withBrand(`Sign in · ${co.name}`);
+    else if (co) document.title = withBrand(`Sign in: ${co.name}`);
   }, [none, co]);
   // a saved sign-in, or settings that never loaded: signed out isn't known, so no sign-in prompt (R20-002)
   const unsure = !window.STRATLAB_CONFIG || hasSavedSession(window.STRATLAB_CONFIG.SUPABASE_URL, (() => { try { return localStorage; } catch { return null; } })());
