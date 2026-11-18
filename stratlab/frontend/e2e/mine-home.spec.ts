@@ -180,9 +180,9 @@ test("my space: the menu has My space, Pinned, Briefs, Watchlist, Stock alerts, 
   await crumb.getByRole("button", { name: /Margin funding/ }).click();
   const menu = page.getByRole("menu", { name: /Pages near Margin funding/ });
   // IA-1: on a laptop the neighbours are the row of tabs beside the trail, so its menu is the pin; on a phone it lists the tabs too
-  await expect(menu.getByRole("menuitem")).toHaveText(phone ? ["ETF vs NAV", "Margin funding", "Stock lending fees", "Pin to sidebar"] : ["Pin to sidebar"]);
+  await expect(menu.getByRole("menuitem")).toHaveText(phone ? ["ETF vs NAV", "Margin funding", "Stock lending fees", "Pin to My space"] : ["Pin to My space"]);
   await expect(page.getByTestId("hub-tabs").locator("a", { hasText: "Margin funding" })).toHaveAttribute("aria-current", "page");
-  await menu.getByRole("menuitem", { name: "Pin to sidebar" }).click();
+  await menu.getByRole("menuitem", { name: "Pin to My space" }).click();
   await expect(menu).toHaveCount(0);
   // Mine's menu lists it, and opening it keeps Mine's menu
   await page.goto("/mine");
@@ -198,7 +198,7 @@ test("my space: the menu has My space, Pinned, Briefs, Watchlist, Stock alerts, 
   // kept after a reload; unpin removes it
   await page.reload();
   await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("button", { name: /Margin funding/ }).click();
-  await page.getByRole("menuitem", { name: "Unpin from sidebar" }).click();
+  await page.getByRole("menuitem", { name: "Unpin from My space" }).click();
   await page.goto("/mine");
   if (phone) await page.getByRole("button", { name: "Open menu" }).click();
   await expect(side.locator('[data-group="pinned"]')).toContainText("Nothing pinned yet");

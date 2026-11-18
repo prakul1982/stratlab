@@ -177,3 +177,23 @@ test("VR5-owner-1: a list of six or fewer has no See all", async ({ page, reques
     await request.put(`${API}/research/watchlist`, { headers: head, data: { items: before.items ?? [] } });
   }
 });
+
+// Owner (18 Nov, "what ui is this"): on a laptop Holdings' four totals are one row across the card (each amount under its heading,
+// its change under it), not a half-width table of four rows with an empty half beside it
+test("Holdings' totals on a laptop are one row across the card, nothing empty beside them", async ({ page }) => {
+  await open(page, "/holdings", ADMIN, 1280);
+  const totals = page.locator("#h-summary").getByRole("table", { name: "Where your stocks stand" });
+  await expect(totals).toBeVisible({ timeout: 30_000 });
+  await expect(totals.locator("tbody tr")).toHaveCount(1);
+  await expect(totals.locator("thead th")).toHaveText([/Current value/, /Invested/, /Unrealised P&L/, /Today|Last session|session/i]);
+  const [t, c] = await Promise.all([totals.boundingBox(), page.locator("#h-summary").boundingBox()]);
+  expect(t!.width / c!.width, "the totals fill the card's width").toBeGreaterThan(0.85);
+  // owner: each total, its heading and its change centred in its column
+  const off = await totals.evaluate((tb) => [...tb.querySelectorAll("tbody td")].map((td, i) => {
+    const th = tb.querySelectorAll("thead th")[i] as HTMLElement; const c = (e: Element) => { const r = e.getBoundingClientRect(); return r.left + r.width / 2; };
+    const v = td.querySelector(".h-total")!; const head = document.createRange(); head.selectNodeContents(th);
+    return Math.max(Math.abs(c(v) - c(td)), Math.abs(c(head) - c(th)));
+  }));
+  expect(Math.max(...off), "a total or its heading off its column's centre").toBeLessThan(3);
+  await page.locator("#h-summary").screenshot({ path: "test-results/holdings-totals.png" });
+});
