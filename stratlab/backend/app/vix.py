@@ -198,6 +198,7 @@ def store(rows: dict[str, list]) -> int:
             db.set_setting(_year_key(y), json.dumps(dict(sorted(cur.items())), separators=(",", ":")))
             _cache.set(("y", y), cur, 600)
     _cache.set("closes", None, 0)          # read again on the next use
+    _cache.set("brief", None, 0)           # ...and the tile's answer (LIVE14B-002)
     return len(rows)
 
 
@@ -298,6 +299,7 @@ def last_quote_row(day: date, feed=None) -> dict[str, list] | None:
     the exchange's history carries the day (R28-011). The open is left empty when the list gave no real one. The close
     is the end-of-day file's when it is out (LIVE8B-001)."""
     _cache.set("quote", None, 0)
+    _cache.set("brief", None, 0)
     q = quote_now(feed)
     if not q or q.get("source") != "exchange" or not str(q.get("as_of") or "").startswith(day.isoformat()) \
             or str(q["as_of"])[11:16] < "15:30":
@@ -413,17 +415,45 @@ def panel(options_data=None, now: datetime | None = None, feed=None) -> dict:
             "note": NOTE, "today": today.isoformat(), "session": session_now(now)}
 
 
+BRIEF_DAYS = 20                        # the tile's stored closes: enough for the close before the day's and the last close (not five years)
+BRIEF_OPEN_TTL, BRIEF_SHUT_TTL = 30, 600   # seconds the tile's answer is shared while the market trades, and while it is shut
+
+
 def brief_panel(options_data=None, now: datetime | None = None, feed=None) -> dict:
     """What a tile shows (the Trade home's India VIX): the value now, its change and day, from the one quick read the panel starts with. The
     panel's minute line, a year of history and NIFTY's ATM IV are each a read of their own, and the tile waited for all of them (LIVE13B-012:
-    still a grey bar at 10.8 s on a phone while its three neighbours had their values)."""
+    still a grey bar at 10.8 s on a phone while its three neighbours had their values).
+    LIVE14B-002: the tile's call still took 2.05 s against 0.4-0.7 s for its neighbours: it read five years of stored closes for a value and
+    a change, and the exchange's index list on every minute's first visit even with the market shut. Now it reads BRIEF_DAYS of closes, and
+    its answer is kept for everyone BRIEF_OPEN_TTL seconds in a session and BRIEF_SHUT_TTL once the market is shut (the close doesn't move)."""
+    asked = now
     now = (now or datetime.now(timezone.utc)).astimezone(IST)
     today = now.date()
-    hist = daily((today - timedelta(days=CHART_DAYS)).isoformat(), today)
+    shared = asked is None and feed is None
+    if shared:
+        hit = _cache.get("brief")
+        if hit is not None:
+            return hit
+    hist = daily((today - timedelta(days=BRIEF_DAYS)).isoformat(), today)
     q = settled(quote_now(feed) or feed_quote(options_data, today), now, hist)
     value_day = None if q else (hist[-1][0] if hist else None)
-    return {"quote": q, "value": q["value"] if q else (hist[-1][1][3] if hist else None), "value_day": value_day,
-            "today": today.isoformat(), "session": session_now(now)}
+    out = {"quote": q, "value": q["value"] if q else (hist[-1][1][3] if hist else None), "value_day": value_day,
+           "today": today.isoformat(), "session": session_now(now)}
+    if shared and out["value"] is not None:
+        _cache.set("brief", out, BRIEF_OPEN_TTL if _trading(now) else BRIEF_SHUT_TTL)
+    return out
+
+
+def _trading(now: datetime) -> bool:
+    """Whether India's market trades now (or closed under 20 minutes ago, while its close settles): the tile's answer is kept briefly then."""
+    try:
+        from .intel.company import market_open
+        if market_open("IN", now):
+            return True
+    except Exception:
+        return True
+    hm = now.astimezone(IST).strftime("%H:%M")
+    return "09:00" <= hm <= "15:50" and now.astimezone(IST).weekday() < 5
 
 
 def within_line(q: dict | None, line: list[dict]) -> dict | None:

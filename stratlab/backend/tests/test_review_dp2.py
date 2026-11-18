@@ -162,7 +162,8 @@ def test_my_limits_lists_every_kept_count(w, paid):
     assert got["plan"] == "Free" and list(rows) == ["stock_alerts", "screens", "holdings", "mf_schemes", "networth_items", "journal_trades"]
     assert rows["stock_alerts"] == {"key": "stock_alerts", "used": 1, "limit": 3, "next": "Basic"}      # (updated on purpose, FREE-TIER: 3)
     assert rows["holdings"]["limit"] == 30 and rows["mf_schemes"]["limit"] == 5 and rows["networth_items"]["limit"] == 5
-    assert rows["journal_trades"]["used"] is None and rows["journal_trades"]["limit"] == 50
+    # (updated on purpose, site76 LIVE14B-014: the journal's trades are counted, "–" stood beside a journal of 9 trades; this one has none)
+    assert rows["journal_trades"]["used"] == 0 and rows["journal_trades"]["limit"] == 50
     pro = {r["key"]: r for r in c.get("/me/limits", headers=PRO).json()["rows"]}
     assert pro["networth_items"]["limit"] is None and pro["stock_alerts"]["next"] is None
 

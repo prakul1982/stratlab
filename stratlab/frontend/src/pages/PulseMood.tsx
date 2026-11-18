@@ -228,8 +228,8 @@ export function Pair({ left, right, nl, nr }: { left: ReactNode; right: ReactNod
 }
 
 /** The index levels, as a table (they were four tiles each with its own small line). */
-export function IndexTable({ indices, missing, dayText, whenOf }: { indices: { name: string; price: number; change_pct: number | null; from_high_pct: number | null; stale?: boolean; day?: string | null; live?: boolean; settling?: boolean }[]; missing?: string[];
-  dayText: (iso: string) => string; whenOf: (i: { name: string; price: number; change_pct: number | null; from_high_pct: number | null; stale?: boolean; day?: string | null; live?: boolean; settling?: boolean }) => string }) {
+export function IndexTable({ indices, missing, dayText, whenOf }: { indices: { name: string; price: number; change_pct: number | null; from_high_pct: number | null; stale?: boolean; day?: string | null; live?: boolean; settling?: boolean; delayed?: boolean; at?: string | null }[]; missing?: string[];
+  dayText: (iso: string) => string; whenOf: (i: { name: string; price: number; change_pct: number | null; from_high_pct: number | null; stale?: boolean; day?: string | null; live?: boolean; settling?: boolean; delayed?: boolean; at?: string | null }) => string }) {
   type Row = (typeof indices)[number];
   const level = (i: Row) => i.price.toLocaleString(i.name.includes("NIFTY") || i.name === "SENSEX" ? "en-IN" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const cols: Column<Row>[] = [

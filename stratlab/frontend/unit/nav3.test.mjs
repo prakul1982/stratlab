@@ -94,7 +94,8 @@ test("LIVE9B-009: the Free card's grace line is one short sentence, with AI neve
     { label: "AI strategy builds a month", before: 10, after: 5 }, { label: "Saved screens", before: 3, after: 3 }] };
   const line = graceLine(fc);
   // (updated on purpose, LIVE13B-006: "limits on 3 counts" read like a count of backtests; it says how many of the card's limits stay higher)
-  assert.equal(line, "Until 27 Nov 2026, 3 of the limits above stay at your earlier, higher levels.");
+  // (updated on purpose, site76 LIVE14B-016: "of the limits above" stood under a card of 5 lines with 10 changed: "of your Free limits")
+  assert.equal(line, "Until 27 Nov 2026, 3 of your Free limits stay at your earlier, higher levels.");
   assert.doesNotMatch(line, /aI/);
   assert.ok(line.length < 110);
   assert.match(read("src/pages/PlansPage.tsx"), /\{graceLine\(me\.free_change\)\} <Link className="link" to="\/account#free-change">See what changes<\/Link>/);

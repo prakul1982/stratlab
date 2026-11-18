@@ -17,6 +17,8 @@ export interface IpoRow {
   exchanges?: string[]; exchange?: string; expected?: string; priced?: string; filed?: string; shares?: number; currency: string;
   docs?: string[]; sub_times?: number; sub_as_of?: string; sub_read?: string; perf?: Perf;
   issue_status?: IssueStatus;
+  /** LIVE14A-013 (India, before listing): whether the app has the issue's own NSE page, where its lot and bids are read, and when it read it */
+  page?: boolean; page_at?: string;
   /** A book-built issue with one part in rupees and one in shares: the parts, shown instead of a size until the price band gives a total. */
   size_parts?: { fresh_cr?: number; ofs_cr?: number; fresh?: number; ofs?: number };
 }

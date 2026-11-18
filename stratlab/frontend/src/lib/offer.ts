@@ -73,6 +73,14 @@ export function unlockHint(o: Offer | null | undefined, email = EARLY_ACCESS_EMA
   return [price ?? "", button ? "" : "See the plans to upgrade."].filter(Boolean).join(" ");
 }
 
+/** LIVE14A-016 (LIVE13A-017): a plan's price after words that end on what that plan gives ("…Basic gives 5 a month."): "It is ₹699 a month…",
+ * not "Basic is ₹699 a month…", the plan named twice in a row. Any other price line as it is. */
+export function priceAfterWords(words: string, price: string | null | undefined): string | null {
+  if (!price) return price ?? null;
+  const plan = /\b(Basic|Pro) (?:gives [^.]+|has no limit on [^.]+)\.\s*$/.exec(words)?.[1];
+  return plan && price.startsWith(`${plan} is `) ? `It is ${price.slice(plan.length + 4)}` : price;
+}
+
 /** A paid feature's tag in the app. Locked: "Basic" or "Pro" with a lock. Usable without paying for that plan (the
  * launch offer, free Basic time from invites, a plan the owner granted): "Basic · open now", with why. */
 export function featureTag(plan: PlanId, o: Offer | null | undefined, x: { paid?: PlanId | null; canUse?: boolean; part?: boolean; what?: string }): { label: string; why: string; locked: boolean } {

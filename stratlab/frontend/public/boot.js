@@ -94,6 +94,32 @@
       document.documentElement.setAttribute("data-home", "1");
   } catch (e) {}
 
+  // LIVE14B-001: a saved sign-in's account (/me) asked for the moment /config.js says where the server is, before the page's stylesheet
+  // and its code have arrived: the first signed-in page of a browser asked for it only once a file of the app's code had come (lib/
+  // accountEarly.ts), behind the stylesheet and ~40 other files (the page drew its heading at 7.9 s live). The app's first /me takes this
+  // answer when its token is the same (lib/api.ts), as it took accountEarly's; a token near its end is left to the sign-in library.
+  function earlyMe(cfg) {
+    try {
+      if (!cfg || !cfg.API_BASE || !cfg.SUPABASE_URL || window.__stratlabEarlyMe || typeof fetch !== "function") return;
+      var host = "localhost";
+      try { host = new URL(String(cfg.SUPABASE_URL).replace(/\/?$/, "/")).hostname; } catch (x) {}
+      var saved = JSON.parse(localStorage.getItem("sb-" + host.split(".")[0] + "-auth-token") || "null");
+      var token = saved && saved.access_token, ends = Number((saved && saved.expires_at) || 0) * 1000;
+      if (!token || !ends || ends < Date.now() + 60000) return;
+      var headers = { "Content-Type": "application/json", Authorization: "Bearer " + token };
+      var as = String(localStorage.getItem("stratlab.viewas.v1") || "").trim().toLowerCase();
+      if (as === "free" || as === "basic" || as === "pro") headers["X-View-As"] = as;
+      var got = fetch(cfg.API_BASE + "/me", { headers: headers });
+      got.catch(function () {});
+      window.__stratlabEarlyMe = { token: token, at: Date.now(), got: got };
+    } catch (x) { /* no saved sign-in to read */ }
+  }
+  try {
+    var cfgNow = window.STRATLAB_CONFIG;
+    Object.defineProperty(window, "STRATLAB_CONFIG", { configurable: true, enumerable: true,
+      get: function () { return cfgNow; }, set: function (v) { cfgNow = v; earlyMe(v); } });
+  } catch (e) {}
+
   // the saved light or dark choice, here as well as in theme.js: if that file fails to load the page still draws in the right theme
   try { var saved = localStorage.getItem("stratlab-theme"); if (saved) document.documentElement.dataset.theme = saved; } catch (e) { /* storage off */ }
 

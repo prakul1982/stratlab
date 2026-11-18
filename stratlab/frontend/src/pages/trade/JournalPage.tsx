@@ -10,7 +10,7 @@ import { DrawdownBand, XYChart } from "../../components/Charts";
 import { Pencil, Plus, Trash } from "../../components/Icons";
 import { journalEmpty } from "../../lib/journalEmpty";
 import { JOURNAL_COVERS, JOURNAL_LEDE, journalSavedNote, journalVsTax } from "../../lib/journalTax";
-import { Badge, Card, CardHead, ChipBar, ChipSet, ConfirmDialog, DataTable, ShowLess, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton, Stat, StatRow, TimeInput, UploadButton, type Column, UploadProblem, useUploadProblem } from "../../components/kit";
+import { Badge, Card, CardHead, ChipBar, ChipSet, ConfirmDialog, CsvButton, DataTable, ShowLess, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton, Stat, StatRow, TimeInput, UploadButton, type Column, UploadProblem, useUploadProblem } from "../../components/kit";
 import { Modal } from "../../components/ui";
 import type { CheckStatus, VerdictKind } from "../../lib/types";
 import { moneyCompact } from "../../lib/chartFormat";
@@ -590,10 +590,12 @@ function Trades({ j, onEdit }: { j: Journal; onEdit: (t: Trade) => void }) {
   const noStt = rows.filter((t) => t.no_stt).length;
   return (
     <Card label="Trades">
-      <CardHead title="Trades" actions={
-        <label className="k-search j-search"><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a symbol or setup" aria-label="Find a symbol or setup" /></label>} />
+      {/* LIVE14B-013: the CSV button in the card's head beside the search, not alone on a right-aligned row under it */}
+      <CardHead title="Trades" actions={<>
+        <label className="k-search j-search"><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a symbol or setup" aria-label="Find a symbol or setup" /></label>
+        {rows.length > 0 && <CsvButton name="journal trades" label="Trades" columns={cols} rows={rows} />}</>} />
       {rows.some((t) => t.side !== "long" && t.side !== "short") && <p className="k-note" data-testid="j-no-side">{rows.every((t) => t.side !== "long" && t.side !== "short") ? "Your files don't say whether these trades were long or short" : "Trades with no Long or Short under them: your file doesn't say which they were"}. Add it with Note on a trade.</p>}
-      <DataTable csv={{ name: "journal trades", rows }} stack label="Trades" columns={cols} rows={rows.slice(0, shown)} rowKey={(t) => t.id} empty="No trade matches that." />
+      <DataTable stack label="Trades" columns={cols} rows={rows.slice(0, shown)} rowKey={(t) => t.id} empty="No trade matches that." />
       {noStt > 0 && <p className="k-note" data-testid="j-no-stt">* {noStt === 1 ? "1 delivery trade has" : `${noStt.toLocaleString("en-IN")} delivery trades have`} charges, as your broker's file listed them, below the STT alone (0.1% of the purchase and of the sale): the file leaves STT out, so {noStt === 1 ? "its charges are" : "their charges are"} understated here and in the charges check.</p>}
       {(rows.length > shown || (shown > 50 && rows.length > 50)) && <div className="k-center">
         {rows.length > shown && <button type="button" className="btn quiet sm" onClick={() => setShown((n) => n + 100)}>Show more ({rows.length - shown} left)</button>}

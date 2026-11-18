@@ -36,6 +36,7 @@ const PublicAd = () => (ADS_HERE ? <Suspense fallback={null}><PublicAdLazy /></S
 const PlanCompare = lazy(() => importWithRetry(() => import("../components/PlanCompare")).then((m) => ({ default: m.PlanCompare })));
 // sign-in by email (owner, 16 Nov): on the sign-in page only while /config.js switches it on; its code loads only then
 import { EmailWay } from "../components/EmailWay";
+import { SampleDeckLink } from "../components/SampleDeck";
 const EmailSignIn = lazy(() => importWithRetry(() => import("../components/EmailSignIn")).then((m) => ({ default: m.EmailSignIn })));
 
 /* The public landing page: what StratLab does, in its three spaces (Trade, the strategy lab it began as, first; then
@@ -637,6 +638,8 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
           })}
         </div>
         <AllFeatures />
+        {/* LIVE14B-007 / LIVE14A-012: the table promises Free "a sample deck to download": the signed-out /plans gives the link too */}
+        {top && <p className="small muted" data-testid="sample-deck-line">Slide decks are on Basic and Pro. <SampleDeckLink label="Download a sample deck" /></p>}
         {!loading && top && intro.title !== "Plans" && <p className="small muted k-measure m80">{intro.lede}</p>}
         {loading ? <span className="lp-skel lp-skel-fine" /> : <PhoneFold label="Prices, invoices and renewals"><p className="small muted k-measure m80" data-testid="usd-note">{[...small, cur === "USD" && usd ? usdPricesNote(usd, period, usdOn) : usdNote(rate, pricing?.usd_inr?.fallback, usd)].join(" ")}</p></PhoneFold>}
       </div>

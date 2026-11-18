@@ -1114,7 +1114,7 @@ def me(profile=Depends(current_profile)):
 def my_limits(profile=Depends(current_profile)):
     """Every kept-count limit the Plans page lists, with what the account holds against it, for Account's "Plan and usage"
     (DP2-031: it showed the monthly counts only). Its own call, so /me, which every page opens with, reads no more. A
-    limit of None is none; `used` is None where nothing is counted (the journal keeps the latest trades by itself)."""
+    limit of None is none; `used` is None where a count can't be read."""
     plan, uid = profile["_plan"], profile["id"]
 
     def n(fn):
@@ -1124,11 +1124,20 @@ def my_limits(profile=Depends(current_profile)):
             return None
     jobs = {"stock_alerts": lambda: sum(1 for a in stock_alerts.items(uid) if a.get("status") == "active"),
             "screens": lambda: len(screens.items(uid)), "holdings": lambda: len(holdings.load(uid)["items"]),
-            "mf_schemes": lambda: len(money_mf.load(uid)["schemes"]), "networth_items": lambda: len(money_networth.load(uid)["items"])}
+            "mf_schemes": lambda: len(money_mf.load(uid)["schemes"]), "networth_items": lambda: len(money_networth.load(uid)["items"]),
+            # LIVE14B-014: the journal's closed trades (chart replay practice aside), as its page counts them: "–" stood beside 9 trades
+            "journal_trades": lambda: _journal_count(uid)}
     got = {k: _usage_pool.submit(n, f) for k, f in jobs.items()}
     rows = [{"key": k, "used": got[k].result() if k in got else None, "limit": limit_of(profile, k), "next": bigger_plan(plan, k)}
             for k in ("stock_alerts", "screens", "holdings", "mf_schemes", "networth_items", "journal_trades")]
     return ok({"plan": PLANS[plan]["name"], "rows": rows})
+
+
+def _journal_count(uid: str) -> int:
+    """The closed trades the journal holds (practice trades aside), as Trade: journal counts them against the plan's limit."""
+    from . import journal as J
+    from .journal_routes import today as j_today
+    return sum(1 for t in J.trades(uid, J.load(uid), j_today())["trades"] if t["src"] != "practice")
 
 
 # LIVE7B-002: a Refresh of a stored read is a fresh AI read, held to that one daily count (no separate refresh count)

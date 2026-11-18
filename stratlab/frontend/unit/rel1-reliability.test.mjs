@@ -42,8 +42,10 @@ test("rel1 item 2: a sign-in that ends on its own mid-visit says 'You were signe
 
 test("rel1 item 5: a lot the exchange hasn't given is said in words, never a bare dash", () => {
   const page = read("src/pages/IposPage.tsx");
-  assert.match(page, /export const lotMissing = \(tab: Stage\): string => \(tab === "upcoming" \? "Not announced yet" : "Not on the exchange's page yet"\);/);
-  assert.match(page, /data-testid="ipo-lot-none">\{lotMissing\(tab\)\}/);
+  // (updated on purpose, site76 LIVE14A-013: the words also say whether the issue's page was found and read, and when)
+  assert.match(page, /export const lotMissing = \(tab: Stage, r\?: Pick<IpoRow, "page" \| "page_at">\): string => \{\n  if \(tab === "upcoming"\) return "Not announced yet";/);
+  assert.match(page, /return "Not on the exchange's page yet";/);
+  assert.match(page, /data-testid="ipo-lot-none">\{lotMissing\(tab, r\)\}/);
   assert.doesNotMatch(page, /minText\(r\)\}<\/span><\/> : "–"\)/);
 });
 

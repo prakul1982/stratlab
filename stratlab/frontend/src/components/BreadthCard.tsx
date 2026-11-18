@@ -3,9 +3,8 @@ import { Link } from "react-router-dom";
 import { BROAD_GROUP, breadthApi, cardFigures, cardTable, savedPick, withLive, type BreadthView, type CardRow } from "../lib/breadth";
 import { homeRegion } from "../lib/homeMarket";
 import { Panel } from "./Research";
-import { AsOf, PanelSkel } from "./ui";
+import { PanelSkel } from "./ui";
 import { DataTable, type Column } from "./kit";
-import { marketTz } from "../lib/format";
 import { shareTone } from "../lib/breadthTable";
 import { useMarketRefresh } from "../lib/marketLive";
 
@@ -61,7 +60,8 @@ export function BreadthCard({ region: picked }: { region?: "IN" | "US" }) {
                 count and the close before it each in a column headed with its day, so no figure sits under another day's header */}
             {/* on a phone two short lines a measure (the newest count at the right, the close before under it), not a card each */}
             {table && <DataTable stack compact label={`Market breadth, ${d.group.name}`} columns={columns} rows={table.rows} rowKey={(r) => r.id} />}
-            {!f.live && <AsOf parts={[["Prices", d.as_of]]} tz={marketTz(d.group.region)} />}
+            {/* LIVE14B-015: after the close the eyebrow ("Last close, 18 Nov") and the column ("Close of 18 Nov") say the day: no third
+                "Prices as of 18 Nov 2026" under them */}
           </div>
         )}
     </Panel>

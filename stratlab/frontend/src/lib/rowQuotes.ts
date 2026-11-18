@@ -38,7 +38,7 @@ export function useRowQuotes(region: Region, symbols: string[]) {
       { size: QUOTE_PART, parallel: QUOTE_PARALLEL, deadlineMs: QUOTE_DEADLINE_MS, alive: () => ticket === stamp.current })
       .finally(() => { if (ticket === stamp.current) setReading(false); });
   };
-  useMarketRefresh([region], read, symbols.length > 0);
+  const open = useMarketRefresh([region], read, symbols.length > 0);
   const key = `${region}|${symbols.join(",")}`;
   // another market starts from nothing; more rows of the same market keep the prices read so far while the list is read again
   const [quotesFor, setQuotesFor] = useState(region);
@@ -50,5 +50,6 @@ export function useRowQuotes(region: Region, symbols: string[]) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   const quoteAt = Object.values(quotes).map((x) => x?.at).filter((x): x is string => !!x).sort().pop() ?? null;
-  return { quotes, quoteAt, live: !!quoteAt && liveQuote(quoteAt), reading };
+  return { quotes, quoteAt, live: !!quoteAt && liveQuote(quoteAt), reading, open };
 }
+
