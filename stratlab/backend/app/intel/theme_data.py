@@ -3875,8 +3875,19 @@ def layer_coverage(checked: dict) -> dict | None:
 # SUPPLIER_KINDS, SCOPE_KINDS, nonbank_adjacent, theme_business, own_layer_work, and the theme name they read, theme_name). Bump it, with
 # its name in POPULATION_RULE, whenever a change of them moves any company between the two; a company that moves under the same version
 # moves on its own evidence (its official industry or words as read now), and the deck names it with that evidence either way
-POPULATION = 1
-POPULATION_RULE = {1: "core and adjacent by the kind of business the map's own theme name states (r68e)"}
+POPULATION = 2
+POPULATION_RULE = {1: "core and adjacent by the kind of business the map's own theme name states (r68e)",
+                   2: "core and adjacent by the kind of business the map's own theme name states; a US-listed company based abroad (a "
+                      "Form 20-F or 40-F filer) adjacent in a US theme (r69e)"}
+FOREIGN_KIND = "listed in the US, based abroad"
+_FOREIGN_FORM = re.compile(r"^\s*(20-F|40-F)\b")
+
+
+def foreign_form(row: dict) -> str:
+    """r69e: "20-F" or "40-F" when a company's stored annual report is a foreign issuer's (its figures' source record), else ""."""
+    doc = str(((row or {}).get("source") or {}).get("document") or "")
+    m = _FOREIGN_FORM.match(doc)
+    return m.group(1) if m else ""
 
 
 def theme_name(theme: str, checked: dict | None) -> str:
@@ -3987,6 +3998,16 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
                 continue
             if a:
                 rows[s]["adjacent"] = a
+    # r69e (owner, 18 Nov: HSBC and National Grid in US themes' core figures): a company listed in the US but based abroad, one whose annual
+    # report is a foreign issuer's (Form 20-F or 40-F), is shown as such beside the theme's core and counted in none of its figures
+    if region == "US":
+        for s in rows:
+            if rows[s].get("adjacent"):
+                continue
+            form = foreign_form(rows[s])
+            if form:
+                rows[s]["adjacent"] = {"kind": FOREIGN_KIND, "theme": "companies based in the US", "where": "filing",
+                                       "text": f"files its annual report with the SEC on Form {form}, a foreign issuer's report"}
     # d53 (R53): one company under two symbols with the same filed figures, merged before any median, total or list (same_company)
     dups = same_company(list(rows.values()), about=src.about)
     dup_rows = [{"symbol": s, "name": rows[s]["name"], "kept": k, "kept_name": rows[k]["name"],

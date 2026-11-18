@@ -260,3 +260,19 @@ def test_a_ranking_line_leads_with_its_finding():
     from app import deck
     src = inspect.getsource(deck)
     assert 'f"Among the {len(chain.get(' not in src and 'f"Among layers of at least' not in src
+
+
+# ---------- owner, 18 Nov: a US-listed company based abroad is no core member of a US theme ----------
+def test_a_us_listed_company_based_abroad_is_shown_beside_the_core_and_counted_in_no_figure():
+    """Fails before: HSBC and National Grid, Form 20-F filers, counted in US themes' core figures. Now each is an adjacent row, "listed in the
+    US, based abroad", in no median or total; a 10-K filer stays in the core."""
+    from app.intel import theme_data as D
+    from tests.test_r18_deck import deck_of, us_list_theme
+    region, m, f = us_list_theme()
+    f["SEC0"] = {**f["SEC0"], "annual_form": "20-F", "annual_filed": "2026-03-01"}
+    f["SEC1"] = {**f["SEC1"], "annual_form": "10-K", "annual_filed": "2026-02-01"}
+    v, _ = deck_of(region, m, f)
+    adj = {a["symbol"]: a for a in v.get("adjacent") or []}
+    assert "SEC0" in adj and adj["SEC0"]["kind"] == D.FOREIGN_KIND and "20-F" in adj["SEC0"]["text"], adj
+    assert "SEC1" not in adj
+    assert v.get("population_rule") == D.POPULATION == 2
