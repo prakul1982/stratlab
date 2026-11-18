@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { SCOPE_OPTIONS } from "../lib/companyScope";
 import { useCompanyScope } from "../lib/useCompanyScope";
-import { ago, arrowOf, dayIn, fmtDate, fmtTime, marketTz, pct, price, safeHref } from "../lib/format";
+import { ago, arrowOf, dayIn, fmtTime, marketTz, pct, price, safeHref } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { LIVE_ROWS, useRowQuotes } from "../lib/rowQuotes";
 import { READ_UNTIL_MS, pricesNote, readRows, sessionDayOf, shownOrder } from "../lib/rowReads";
@@ -16,6 +16,7 @@ import { Earlier } from "../components/Earlier";
 import { Card, CardHead, CheckField, DataTable, ShowLess, EmptyState, ErrorState, Field, PageHeader, Seg, Select, Signed, Skeleton, StockPicker, Working, type Column } from "../components/kit";
 import { ReportScope } from "../components/kit/ReportFigure";
 import { capAt, laterDays, movesEmpty, whenShort } from "../lib/resultsRows";
+import { resultDay } from "../lib/resultDay";
 
 /** Today in the market's calendar (ISO), the day the "Today" chip stands for. */
 const todayIn = (region: Region): string | null => dayIn(new Date(), marketTz(region));
@@ -68,9 +69,7 @@ export function dayHeading(iso: string, count: number, today: string) {
 }
 
 /** "Thu 15 Oct", from an ISO date, without the browser's time zone moving it a day. */
-export function resultDay(iso: string) {
-  return fmtDate(iso.slice(0, 10), { weekday: true, year: false });
-}
+export { resultDay };
 
 export const filterCount = (f: Filters) => calCount(f, "cap") + (f.purpose ? 1 : 0);
 

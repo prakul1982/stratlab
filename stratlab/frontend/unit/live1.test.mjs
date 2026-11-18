@@ -119,7 +119,8 @@ test("LIVE-1: breadth's live card is laid over the page for its own group only",
 
 test("LIVE-1: each page with live numbers reads them again on a clock", () => {
   const wired = (file, ...res) => { const src = read(file); for (const re of res) assert.match(src, re, `${file}: ${re}`); };
-  wired("src/pages/SpaceHomes.tsx", /useMarketRefresh\(\["IN"\], \(\) => \{ api<VixBrief>\("\/trade\/vix"\)/, /useMarketRefresh\(\["IN", "US"\], \(\) => \{ api<Holdings>\("\/holdings"\)/);
+  // (updated on purpose, LIVE13B-012: the tile reads the short answer, ?brief=true, on the same clock)
+  wired("src/pages/SpaceHomes.tsx", /useMarketRefresh\(\["IN"\], \(\) => \{ api<VixBrief>\("\/trade\/vix\?brief=true"\)/, /useMarketRefresh\(\["IN", "US"\], \(\) => \{ api<Holdings>\("\/holdings"\)/);
   wired("src/components/Research.tsx", /useLiveRefresh\(!!q && Object\.values\(q\)\.some\(\(x\) => liveQuote\(x\?\.at\)\)/);          // the Invest home's watchlist tiles and similar companies
   wired("src/components/BreadthCard.tsx", /useMarketRefresh\(\["IN"\], \(\) => \{[\s\S]*breadthApi\.live\(group\)/);
   wired("src/pages/BreadthPage.tsx", /useMarketRefresh\(\["IN"\], \(\) => \{[\s\S]*breadthApi\.live\(g\)/);

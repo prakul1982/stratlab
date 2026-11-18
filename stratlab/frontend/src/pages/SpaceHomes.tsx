@@ -25,7 +25,9 @@ import { FirstSteps } from "../components/FirstSteps";
 import { BreadthCard } from "../components/BreadthCard";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { Book, Calendar, Compass, Layers, Library, Pulse, Search } from "../components/Icons";
-import { resultDay, type ResultRow } from "./Research";
+// (from the small rows module, not the Research page: LIVE13B-004, the homes' file downloaded every Research page for this one line)
+import { resultDay } from "../lib/resultDay";
+import type { ResultRow } from "./ResultsPage";
 import { fyLink, movedYearNote, openFy, taxHasData, yearHasTrades } from "../lib/fy";
 import { investStrip, withRegion } from "../lib/investUi";
 import { notRunning } from "../lib/tradeUi";
@@ -143,15 +145,22 @@ type VixBrief = { value: number | null; value_day?: string | null; quote?: VixQu
  * shows its own day; one that can't be read says so and the others stay. */
 function MarketStrip() {
   const [b, setB] = useState<Brief | null | "none">(null);
-  const [vix, setVix] = useState<VixBrief | null | "none" | "slow">(null);
+  const [vix, setVix] = useState<VixBrief | null | "none" | "slow" | "reading">(null);
   useEffect(() => { api<Brief>("/trade/positioning?brief=true&pcr=false").then(setB).catch(() => setB("none")); }, []);
-  useEffect(() => { api<VixBrief>("/trade/vix").then(setVix).catch(() => setVix("none")); }, []);
-  // the one read that goes to a live feed can be slower than its three neighbours: after a few seconds the tile says so instead of a grey bar that
-  // never ends, and takes the figure when it comes (LIVE1C-070)
-  useEffect(() => { const t = window.setTimeout(() => setVix((v) => (v === null ? "slow" : v)), 6000); return () => window.clearTimeout(t); }, []);
+  // LIVE13B-012: the tile's own short read (the value, its change and day), not the whole panel's (its minute line, a year of closes and NIFTY's
+  // IV), which kept it a grey bar for seconds after its neighbours had their values
+  useEffect(() => { api<VixBrief>("/trade/vix?brief=true").then(setVix).catch(() => setVix("none")); }, []);
+  // the one read that goes to a live feed can be slower than its three neighbours: it says it is reading, then after a few seconds that it is
+  // taking longer, instead of a grey bar that never ends, and takes the figure when it comes (LIVE1C-070)
+  useEffect(() => {
+    const a = window.setTimeout(() => setVix((v) => (v === null ? "reading" : v)), 2500);
+    const t = window.setTimeout(() => setVix((v) => (v === null || v === "reading" ? "slow" : v)), 6000);
+    return () => { window.clearTimeout(a); window.clearTimeout(t); };
+  }, []);
   // India VIX is the one live figure here (the rest are the exchange's daily files): read again each minute while India trades,
   // the tile keeping its last value when a read fails (LIVE-1)
-  useMarketRefresh(["IN"], () => { api<VixBrief>("/trade/vix").then(setVix).catch(() => undefined); }, vix !== null && vix !== "none" && vix !== "slow");
+  const vixIn = vix !== null && vix !== "none" && vix !== "slow" && vix !== "reading";
+  useMarketRefresh(["IN"], () => { api<VixBrief>("/trade/vix?brief=true").then(setVix).catch(() => undefined); }, vixIn);
   const ev = useEvents();
   const today = istToday();
   const expiry = nextExpiry(ev?.events, today);
@@ -159,15 +168,15 @@ function MarketStrip() {
   const ban = b && b !== "none" ? b.fo_ban ?? [] : null;
   const crore = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}₹${Math.abs(v).toLocaleString("en-IN", { maximumFractionDigits: 0 })} cr`;
   // LIVE9B-014: the VIX tile as its FII neighbour: the change with ▲/▼ in the up/down colour and the day it is of, not a plain grey "+0.18 (+1.16%)"
-  const vq = vix && vix !== "none" && vix !== "slow" ? vix.quote ?? null : null;
+  const vq = vixIn ? vix.quote ?? null : null;
   const vixDay = vq?.as_of ? fmtDate(vq.as_of, { year: false, tz: "Asia/Kolkata" }) : null;
   const vixNote = vq && vq.change != null
     ? <><span className={signCls(vq.change)}>{vq.change > 0 ? "▲ " : vq.change < 0 ? "▼ " : ""}{vixChange(vq)}</span>{vixDay ? <><span className="vix-sep"> · </span><span className="nowrap vix-day">{vixDay}</span></> : ""}</> : null;   // the day never splits over two lines (LIVE10B-047: "17 / Nov"); on a phone it has a line of its own, no "·" left at a line's end (LIVE11B-014)
   const tiles: { to: string; k: string; v: ReactNode; note: ReactNode; id: string }[] = [
-    { id: "vix", to: "/trade/positioning#india-vix", k: "India VIX", v: vix === null ? null : vix === "none" || vix === "slow" || vix.value == null ? "–" : vix.value.toFixed(2),
+    { id: "vix", to: "/trade/positioning#india-vix", k: "India VIX", v: vix === null || vix === "reading" ? null : !vixIn || vix.value == null ? "–" : vix.value.toFixed(2),
       // a live quote comes with no day (the value is now's): its change stands in the line, so the tile is as tall as its three neighbours (VR2-013)
-      note: vix && vix !== "none" && vix !== "slow" && vix.value_day ? fmtDate(vix.value_day, { year: false }) : vix === "none" ? "couldn't be read" : vix === "slow" ? "taking longer than usual"
-        : vixNote ?? "" },
+      note: vixIn && vix.value_day ? fmtDate(vix.value_day, { year: false }) : vix === "none" ? "couldn't be read" : vix === "slow" ? "taking longer than usual"
+        : vix === "reading" ? "reading…" : vixNote ?? "" },
     { id: "fii", to: "/trade/positioning#pos-cash", k: "FII/FPI cash, net", v: b === null ? null : fii == null ? "–" : <span className={signCls(fii)}>{crore(fii)}</span>,
       note: b && b !== "none" && b.cash?.as_of ? fmtDate(b.cash.as_of, { year: false }) : b === "none" ? "couldn't be read" : "" },
     { id: "expiry", to: "/trade/events", k: "Next F&O expiry", v: ev === null ? null : expiry ? fmtDate(expiry.date, { weekday: true, year: false }) : "–",

@@ -6,6 +6,7 @@ import { viewAsHeaders } from "./viewAs";
 import { hasSavedSession } from "./entry";
 import { callEnded, callStarted } from "./inflight";
 
+
 export { CFG } from "./config";
 export { ApiError } from "./http";
 
@@ -38,6 +39,16 @@ export function setApiHandlers(h: { unauthorized: () => void; offline: () => voi
   onOffline = h.offline;
 }
 
+/** The account asked for while the app's code downloaded (lib/accountEarly.ts, LIVE13B-004), taken once by the first GET of /me with the same
+ * token, and only while fresh; read from the window so this file doesn't depend on that one. */
+function takeEarlyMe(path: string, method: string, token: string | undefined): Promise<Response> | null {
+  const w = window as unknown as { __stratlabEarlyMe?: { token: string; at: number; got: Promise<Response> } | null };
+  const e = w.__stratlabEarlyMe;
+  if (!e || path !== "/me" || method !== "GET") return null;
+  w.__stratlabEarlyMe = null;
+  return e.token === token && Date.now() - e.at < 30_000 ? e.got : null;
+}
+
 /** Every call to the server, counted while it is out (lib/inflight: a page's later cards start once the first screen's are back). */
 export function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
   callStarted();
@@ -61,7 +72,8 @@ async function send<T = any>(path: string, { method = "GET", body, raw = false, 
   }
   let r: Response;
   try {
-    r = await fetch(CFG.API_BASE + path, {
+    const early = takeEarlyMe(path, method, token);
+    r = early ? await early : await fetch(CFG.API_BASE + path, {
       method,
       headers: { "Content-Type": file ? "application/octet-stream" : "application/json", ...(token ? { Authorization: `Bearer ${token}`, ...viewAsHeaders() } : {}) },
       body: file ?? (body === undefined ? undefined : JSON.stringify(body)),

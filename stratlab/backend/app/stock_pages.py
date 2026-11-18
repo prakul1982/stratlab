@@ -709,14 +709,17 @@ def as_traded(bars: list[dict], dividends, reference=None) -> list[dict]:
     return out
 
 
-def fit_to_exchange_range(bars: list[dict], row, report_day: str | None) -> list[dict]:
+def fit_to_exchange_range(bars: list[dict], row, report_day: str | None, through: str | None = None) -> list[dict]:
     """Daily candles held to the exchange's own 52-week high and low for the stock (`row`: [high, its day, low, its day],
     from the report of `report_day`; official_close.ranges). A candle's extreme beyond the exchange's, within the report's
     year, is a stray print the exchange doesn't count (R10V-003: ULTRACEMCO's 10,118.00 low matched no bar of the
     exchange's or any price history, whose lowest was 10,325.00 on 23 Mar 2026): it is brought back to the exchange's
     figure. A candle short of the exchange's high or low on the day the report names is brought out to it (INFY's
     1,728.00 of 3 Feb 2026, which the broker's candle clipped at 1,691.40). A figure further than RANGE_SLACK off is another
-    basis (unadjusted), and left alone. The candles given are not changed."""
+    basis (unadjusted), and left alone. The candles given are not changed. `through`: the newest session the report's own
+    figures cover (official_close.report_through); a candle after it is never brought back, since the report can't know its
+    prints (LIVE12B-015: the report of 17 Nov still ended on 16 Nov, so ETERNAL's 378.00 high of 17 Nov was cut to its own
+    close, 375.05, and "vs 52-week high" read 0.0% instead of -0.8%)."""
     if not bars or not row or not report_day or len(row) < 4:
         return bars
     hi, hi_day, lo, lo_day = row[:4]
@@ -724,11 +727,13 @@ def fit_to_exchange_range(bars: list[dict], row, report_day: str | None) -> list
         start = (date.fromisoformat(report_day) - timedelta(days=RANGE_DAYS + 1)).isoformat()
     except ValueError:
         return bars
+    covered = min(report_day, str(through)[:10]) if through else report_day
     out = None
     for i, b in enumerate(bars):
         d = str(b.get("t") or "")[:10]
         if not d or d > report_day:
             continue
+        stray_ok = d <= covered           # a print beyond the report's figures is called stray only on a session the report covers
         h, l, c = _num(b.get("h")), _num(b.get("l")), _num(b.get("c"))
         # (a candle's extremes are never brought inside its own close: the exchange's figure leaves out a closing auction's print, and
         # a page whose "Last close" is beyond its own 1-year range is wrong, RC4-011)
@@ -738,12 +743,12 @@ def fit_to_exchange_range(bars: list[dict], row, report_day: str | None) -> list
         if hi and h is not None:
             if d == hi_day and h < hi <= h * RANGE_SLACK:
                 nb = {**b, "h": top(hi)}
-            elif d >= start and h > hi and h <= hi * RANGE_SLACK:
+            elif stray_ok and d >= start and h > hi and h <= hi * RANGE_SLACK:
                 nb = {**b, "h": top(hi)}
         if lo and l is not None:
             if d == lo_day and l > lo >= l / RANGE_SLACK:
                 nb = {**(nb or b), "l": bottom(lo)}
-            elif d >= start and l < lo and l >= lo / RANGE_SLACK:
+            elif stray_ok and d >= start and l < lo and l >= lo / RANGE_SLACK:
                 nb = {**(nb or b), "l": bottom(lo)}
         if nb:
             out = out or list(bars)

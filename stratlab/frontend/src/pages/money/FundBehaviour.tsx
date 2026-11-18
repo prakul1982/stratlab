@@ -87,13 +87,17 @@ export function behaviourFigures(q: BehaviourQuery): Figure[] {
 }
 
 /** What the habits need said under their stats: why there are none, what the plan keeps back, how far the SIPs are counted. */
-export function BehaviourNotes({ q }: { q: BehaviourQuery }) {
+/** What the plan keeps back of the habits, or null when nothing is (LIVE13B-007: joined with the costs' into one note on the card). */
+export const behaviourLock = (q: BehaviourQuery): { what: string; plan: string } | null =>
+  q.b && q.b.total && q.b.schemes.length && !q.b.full && !q.failed ? { what: "the gap in rupees, your SIP record, redemptions after a fall and how long you held", plan: q.b.plan } : null;
+
+export function BehaviourNotes({ q, lock = true }: { q: BehaviourQuery; lock?: boolean }) {
   const { b, failed, retry } = q;
   if (failed) return <EmptyState title="This couldn't be loaded" action={{ label: "Try again", onClick: retry }}>This couldn't be loaded just now.</EmptyState>;
   if (!b || !b.total || !b.schemes.length) return null;
   return (
     <>
-      {!b.full && <PlanNote>The gap in rupees, your SIP record, redemptions after a fall and how long you held are on the {b.plan} plan.</PlanNote>}
+      {lock && !b.full && <PlanNote>The gap in rupees, your SIP record, redemptions after a fall and how long you held are on the {b.plan} plan.</PlanNote>}
       {b.full && b.last_txn && b.schemes.some((s) => s.sip) && <p className="k-note">SIPs are counted up to your statement's latest transaction, {dateOnly(b.last_txn)}. Import a newer statement to bring it up to date.</p>}
     </>
   );

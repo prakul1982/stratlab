@@ -315,7 +315,7 @@ def run_preset(registry, market: str, members: list[dict], preset: str, session:
 
     def one(iid):
         try:
-            res = scan_presets.evaluate(_bars(registry, iid), through=through, only=[preset], live=not whole_day, custom=custom)
+            res = scan_presets.evaluate(_bars(registry, iid), through=through, only=[preset], live=not whole_day, custom=custom, market=market)
             inst = (prov.instrument(iid.split(":", 1)[1]) if prov else None) or {}
             return iid, res, inst, None
         except Exception as e:     # one member's data problem mustn't sink the rest

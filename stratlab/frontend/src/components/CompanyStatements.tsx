@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { download as saveFile } from "../lib/share";
@@ -24,6 +24,11 @@ export function StatementsCard({ region, symbol, id = "co-statements" }: { regio
   // scrolling 1,164px sideways in a 322px card
   const phone = usePhone();
   const [back, setBack] = useState(0);
+  // LIVE12B-017: three periods were 402 px in a 322 px card at 390, so the first of them (FY24, named in "FY24 to FY26") was out of view
+  // sideways: a window that doesn't fit drops a period (to two at the least) until it does, and the label names the periods in view
+  const PHONE_PERIODS = 3;
+  const [per, setPer] = useState(PHONE_PERIODS);
+  const box = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let live = true;
@@ -34,7 +39,11 @@ export function StatementsCard({ region, symbol, id = "co-statements" }: { regio
     return () => { live = false; };
   }, [region, symbol, basis, tries]);
   useEffect(() => { setV(null); setBasis(null); setView("pl"); setBack(0); }, [region, symbol]);
-  useEffect(() => { setBack(0); }, [view]);
+  useEffect(() => { setBack(0); setPer(PHONE_PERIODS); }, [view, basis]);
+  useLayoutEffect(() => {
+    const wrap = box.current?.querySelector<HTMLElement>(".k-tbl-wrap");
+    if (phone && wrap && per > 2 && wrap.scrollWidth > wrap.clientWidth + 1) setPer((n) => Math.max(2, n - 1));
+  });
 
   const file = async (what: "statements.xlsx" | "statements.csv") => {
     setGetting(what);
@@ -55,7 +64,7 @@ export function StatementsCard({ region, symbol, id = "co-statements" }: { regio
   const quarters = shown === "quarters" && v.quarters;
   const cols = quarters ? v.quarters!.cols : v.cols;
   const rows: StatementRow[] = quarters ? v.quarters!.rows : (v.sections.find((s) => s.key === shown)?.rows ?? []);
-  const win = periodWindow(cols.length, phone ? 3 : cols.length, back);
+  const win = periodWindow(cols.length, phone ? per : cols.length, back);
   const columns: Column<StatementRow>[] = [
     { key: "label", header: quarters ? "Quarter" : "Year", rowHeader: true, wrap: true,
       // LIVE12B-017 (owner pattern 9): a star with its note under the table, never a "·" left at the label's end with its meaning out of sight
@@ -83,7 +92,7 @@ export function StatementsCard({ region, symbol, id = "co-statements" }: { regio
           <button type="button" className="btn quiet sm" disabled={!win.later} onClick={() => setBack((b) => Math.max(0, b - 1))}>Later →</button>
         </div>
       )}
-      <div className="ct-statement" data-view={shown}>
+      <div className="ct-statement" data-view={shown} ref={box}>
         <DataTable label={`${v.name}: ${options.find((o) => o.value === shown)?.label ?? ""}`} rows={rows} rowKey={(r) => r.label} columns={columns} stack={false} scrollEnd />
       </div>
       {rows.some((r) => r.worked) && <p className="k-note" data-testid="ct-worked-note">* Worked out from two figures of the same period, not a figure the company reports.</p>}

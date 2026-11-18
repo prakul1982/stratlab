@@ -420,6 +420,7 @@ export function firstPage(path: string): (() => Promise<unknown>) | null {
 export function startApp(root: HTMLElement) {
   // without the config the app can't tell who is signed in: never draw it as signed out
   if (!window.STRATLAB_CONFIG?.SUPABASE_URL) { window.__stratlabShowLoadError?.(); return; }
+  // (the account itself was asked for at the start, beside the app's code: entry.tsx, lib/accountEarly.ts, LIVE13B-004)
   void firstPage(location.pathname)?.().catch(() => undefined);
   createRoot(root).render(
     <StrictMode>

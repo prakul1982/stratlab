@@ -175,7 +175,7 @@ def broad_of(category: str, kind: str) -> tuple[str, str]:
     """(broad class, sub-category) for the allocation, from the official category."""
     c = category or ""
     m = re.match(r"\s*(.+?)\s*-\s*(.+)$", c)
-    head, sub = (m.group(1), m.group(2)) if m else (c, "")
+    head, sub = (m.group(1), m.group(2)) if m else (c, c.strip())
     sub = re.sub(r"(\S)-\s+(?=\S)", r"\1 ", sub)      # AMFI writes "ELSS- Tax Saver Fund": the stray hyphen is dropped (LIVE1B-064)
     h = head.lower()
     if h.startswith("equity"):
@@ -199,7 +199,9 @@ def broad_of(category: str, kind: str) -> tuple[str, str]:
         return "Debt", head
     if h in ("growth", "elss"):
         return "Equity", head
-    return {"equity": "Equity", "debt": "Debt", "hybrid": "Hybrid"}.get(kind, "Other"), ""
+    # a category with no " - " part (an older or shorter name): the category as published, so the allocation names it (LIVE13B-007: the
+    # Debt row's "Official categories" cell was blank)
+    return {"equity": "Equity", "debt": "Debt", "hybrid": "Hybrid"}.get(kind, "Other"), c.strip()
 
 
 def is_elss(category: str, name: str) -> bool:
