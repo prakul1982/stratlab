@@ -28,7 +28,9 @@ export default defineConfig({
             { name: "auth", test: /node_modules[\\/](@supabase|tslib)[\\/]/ },
             // small pieces nearly every page uses, in one file instead of many tiny ones
             // what the entry point reads before anything else: no imports, so it stays out of the account code
-            { name: "boot", test: /src[\\/]lib[\\/](entry|config|http|returnTo)\.ts$/ },
+            // ...and the bundler's own helper that preloads a lazy page's files (LIVE12A-013): grouped by default with the first library to
+            // use it, React, so the entry waited for React's 260 kB before it could even ask for the landing's code
+            { name: "boot", priority: 1, test: /src[\\/]lib[\\/](entry|config|http|returnTo)\.ts$|vite[\\/]preload-helper/ },
             // (the public pages use them too: none of them may import the account code below)
             // the consent banner and its settings too (ADS-1): every page draws it, so it rides in this file rather than adding its own
             { name: "common", test: /src[\\/](lib[\\/](brand|format|marketHours|rotating|lazyRetry|ads|adsConfig|track)|components[\\/](Icons|Logo|ui|Tracking|FeedbackOpen))\.tsx?$/ },

@@ -97,3 +97,7 @@ test("LIVE12A-002: a signed-in app's first load doesn't download the error repor
   assert.match(s, /window\.addEventListener\("load", \(\) => window\.setTimeout\(later, SENTRY_AFTER_MS\), \{ once: true \}\);/);
   assert.match(s, /const now = \(\) => \{ off\(\); void load\(\); \};/);          // once loaded, the early listeners stop: nothing twice
 });
+
+test("LIVE12A-013/002: the bundler's preload helper rides in the start-up file, so the entry never waits for React before asking for a page's code", () => {
+  assert.match(read("vite.config.ts"), /\{ name: "boot", priority: 1, test: \/src\[\\\\\/\]lib\[\\\\\/\]\(entry\|config\|http\|returnTo\)\\\.ts\$\|vite\[\\\\\/\]preload-helper\/ \},/);
+});
