@@ -16,7 +16,8 @@ const { pageFiles, libraryFiles, libraryEntries, apiBase } = await import("../sc
 const { publicReads } = await import("../src/lib/entry.ts");
 
 const template = read("index.html");
-const h1s = (html) => [...html.matchAll(/<h1[^>]*>([^<]*)<\/h1>/g)].map((m) => m[1]);
+// (updated on purpose, LIVE13B-001: the home page's start-up h1 is the landing's own, its "skill" in <em>: the heading's words, tags left out)
+const h1s = (html) => [...html.matchAll(/<h1[^>]*>((?:[^<]|<\/?em>)*)<\/h1>/g)].map((m) => m[1].replace(/<\/?em>/g, ""));
 const tag = (html, re) => (html.match(re) ?? [])[1];
 
 // the public library's entry for one strategy, as GET /public/library gives it (the fields the build reads)

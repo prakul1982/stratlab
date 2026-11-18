@@ -18,19 +18,20 @@ const template = read("index.html");
 
 // ---------- LIVE12B-001: the landing's frame while its code downloads, not a plain text page ----------
 test("LIVE12B-001: the home page's start-up block wears the landing's hero frame for a browser that runs scripts; crawlers still read every word", () => {
+  // (updated on purpose, LIVE13B-001: the frame is the landing's own header and hero markup, drawn with the app's stylesheet, not a heading
+  // sized by rules copied into index.html; unit/fix17.test.mjs checks it in full)
   const files = Object.fromEntries(pageFiles(template));
   const home = files["index.html"];
-  assert.match(home, /<div class="boot boot-wait boot-hero" data-boot>\n<h1>Is your trading idea skill or luck\?<\/h1>/);
+  assert.match(home, /<div class="lp-hero ruled boot-hero" data-boot>\n<div class="lp-wrap lp-hero-grid"><div class="stack g22 lp-hero-copy">/);
+  assert.match(home, /<h1 class="serif lp-h1">Is your trading idea <em>skill<\/em> or luck\?<\/h1>/);
   // the crawler's paragraphs and company links are still in the HTML
-  assert.match(home, /<p>Trade, the strategy lab: /);
+  assert.match(home, /<p class="boot-text">Trade, the strategy lab: /);
   assert.match(home, /<li><a href="\/stocks\/in">India A–Z<\/a><\/li>/);
-  // only with scripting on: everything but the heading is hidden, the heading at the landing's hero size, the header on the hero's edges
+  // only with scripting on are the crawler's words hidden; the frame's own lines only then shown
   const css = /@media \(scripting: enabled\) \{([\s\S]*?)\n\}/.exec(home)?.[1] ?? "";
-  assert.match(css, /\.boot\.boot-hero > :not\(h1\) \{ display: none; \}/);
-  assert.match(css, /\.boot\.boot-hero h1 \{[^}]*clamp\(44px, 6\.2vw, 80px\)/);
-  assert.match(css, /\.boot\.boot-hero \{[^}]*max-width: 1180px/);
-  assert.match(css, /html:has\(\.boot-hero\) \.boot-head \{[^}]*max-width: 1180px/);
-  // the landing's hero sizes are the ones written here (styles.css .lp-h1, .lp-wrap)
+  assert.match(css, /\.boot-hero \.boot-text, \.boot-hero ul\.boot-links\.boot-text \{ display: none; \}/);
+  assert.match(home, /@media \(scripting: none\) \{ \.boot-hero \.boot-js \{ display: none; \} \}/);
+  // the landing's hero sizes are the app's own (styles.css .lp-h1, .lp-wrap), which the frame's classes take
   const app = read("src/styles.css");
   assert.match(app, /\.lp-h1 \{ font-size: clamp\(44px, 6\.2vw, 80px\); line-height: 1; font-weight: 400; letter-spacing: -\.035em; max-width: 12ch; \}/);
   assert.match(app, /\.lp-wrap \{ width: 100%; max-width: 1180px;/);
