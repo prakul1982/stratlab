@@ -122,9 +122,12 @@ test("RC7-009: a sign-in the server turns down in the middle of a visit says 'Yo
   await expect(page.locator("main h1")).toBeVisible({ timeout: 30_000 });
   let ended = false;
   await page.route(`${API}/**`, (r) => (ended ? r.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ detail: "Not authenticated" }) }) : r.fallback()));
+  // IA-1: the menu's Calendar entry opens All dates (/calendar), Results being one of its tabs, so that is the in-app link followed here.
+  // R73: the link is found before the sign-in ends: the page's own background reads (the start-up /me ask, the panel's prices) can meet
+  // the ended sign-in first and show the gate, which is what this test checks either way
+  await expect(page.locator('a[href="/calendar"]').first()).toBeAttached({ timeout: 30_000 });
   ended = true;
-  // IA-1: the menu's Calendar entry opens All dates (/calendar), Results being one of its tabs, so that is the in-app link followed here
-  await page.evaluate(() => { const a = document.querySelector('a[href="/calendar"]') as HTMLAnchorElement; a.click(); });
+  await page.evaluate(() => { const a = document.querySelector('a[href="/calendar"]') as HTMLAnchorElement | null; a?.click(); });
   await expect(page.getByRole("heading", { name: "You were signed out" })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Your sign-in ended")).toBeVisible();
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
