@@ -301,3 +301,25 @@ def test_a_layer_whose_companies_are_beyond_the_figures_window_is_not_said_to_ha
     from app import deck
     src = inspect.getsource(deck)
     assert "listed in it, none among the companies whose figures are" in src and "none_ = [x for x in none_ if x not in beyond]" in src
+
+
+# ---------- 002: one tally of the theme's members, of one read, on every surface ----------
+def test_the_deck_and_the_public_page_say_the_dives_one_tally(monkeypatch):
+    """Fails before: one theme at one time had three sets of counts (app 101 of 103: 93 · 8 · 2, deck 103 of 103: 94 · 9 · 0, public 101 companies:
+    91 · 8 · 2). Now the dive keeps one tally (theme_routes.dive_of) and the deck and the public page say it, the public page naming its read."""
+    import inspect
+    from app import deck
+    from app.intel import theme_routes
+    t = {"total": 103, "checked": 101, "description_verified": 93, "industry_code_supported": 8, "list_supported": 0, "not_confirmed": 0,
+         "membership_unverified": 2, "beyond": 0}
+    v = {"membership_evidence": {"description_verified": 90, "industry_code_supported": 9}, "membership_check": {"outside": {}}, "tally": t}
+    assert deck.evidence_tally(v, 103) == t
+    assert 'hit["tally"] = theme_data.checked_tally(' in inspect.getsource(theme_routes.dive_of)
+    from app import public_themes as P
+    monkeypatch.setattr(P, "_dive", lambda *a, **k: {"as_of": "2026-11-13", "tally": t, "tally_at": "2026-11-18",
+                                                     "layers": [{"layer": "Fabless", "companies": [{"symbol": "NVDA", "cap": 4.3e6}]}]})
+    p = {"sector": "Semiconductors", "value_chain": [{"layer": "Fabless", "companies": [{"ticker": "NVDA", "name": "NVIDIA", "verified": True}]}]}
+    got = P.view({"region": "US", "label": "Semiconductors", "slug": "semiconductors", "name": "semiconductors", "rules": None}, p)
+    assert got["all"] == 103 and got["evidence"]["description_verified"] == 93 and got["evidence"]["membership_unverified"] == 2
+    html = P.render(got)
+    assert "Membership of the theme's 103 companies, as checked on" in html

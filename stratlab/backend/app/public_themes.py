@@ -293,6 +293,11 @@ def view(entry: dict, p: dict) -> dict:
     n = len({c["symbol"] for v in layers for c in v["companies"]})
     once = {c["symbol"]: c.get("evidence") for v in layers for c in v["companies"]}
     tally = {k: sum(1 for x in once.values() if x == k) for k in EVIDENCE_PUBLIC} if ev else None
+    # r69e (LIVE13A-002): the theme's members by evidence state as the stored dive's one tally has them (the app's and the deck's), of the
+    # read it names, in place of a count of the companies this page lists
+    dt = dive.get("tally") if isinstance(dive.get("tally"), dict) else None
+    if dt and dt.get("total"):
+        tally = {k: int(dt.get(k) or 0) for k in EVIDENCE_PUBLIC}
     older = isinstance(entry.get("rules"), int) and entry["rules"] < theme_base.RULES
     rechecking = False
     if older:
@@ -307,8 +312,9 @@ def view(entry: dict, p: dict) -> dict:
             "summary": public_words(p.get("summary"), 700), "layers": layers, "members": n,
             # r64e (LIVE11A-015: Semiconductors "102 companies" here, 104 in the app, deck and blog): the theme's companies, those not
             # confirmed yet not listed here, so the page says how many it leaves out
-            "all": len({c.get("ticker") for v_ in p.get("value_chain") or [] if isinstance(v_, dict) for c in v_.get("companies") or []
-                        if isinstance(c, dict) and c.get("ticker")}),
+            "all": int(dt["total"]) if dt and dt.get("total") else len({c.get("ticker") for v_ in p.get("value_chain") or [] if isinstance(v_, dict)
+                                                                       for c in v_.get("companies") or [] if isinstance(c, dict) and c.get("ticker")}),
+            "tally_at": str(dive.get("tally_at") or "")[:10] if dt else None,
             # (the close most of its market values are at: each company's own, the index's later one or the dive's)
             "prices": (Counter(newer[k][1] if k in newer else dive_day for k in once if caps.get(k)).most_common(1)[0][0]
                        if any(k in once for k in newer) else dive_day)
@@ -391,7 +397,9 @@ def render(v: dict) -> str:
     if v.get("older"):             # r66e (LIVE12A-001): a theme shown from its read under an earlier version of the checks says so
         body += ('<p class="note" data-older>' + e(OLDER_LINE + (" " + RECHECKING_LINE if v.get("rechecking") else "")) + "</p>")
     if v.get("evidence"):          # e54: the companies by what their place rests on, adding up to those shown
-        body += '<p class="muted small" data-evidence>Membership: ' + e(evidence_said(v["evidence"])) + ".</p>"
+        # r69e (LIVE13A-002): of the theme's members, from the read the app and the deck say, named by its day
+        body += ('<p class="muted small" data-evidence>Membership' + (f" of the theme's {v['all']} companies, as checked on {e(day_text(v['tally_at']))}"
+                                                                     if v.get("tally_at") else "") + ": " + e(evidence_said(v["evidence"])) + ".</p>")
     # LIVE9A-011 (owner, 29 Oct: "wherever you can, just make a table"): each layer is a table, largest company first; the theme's
     # description comes after the companies, so a phone's first screen holds companies, not a paragraph
     # LIVE10A-007: no company on the page with a revenue: no Revenue column (it was "–" on every row of 29 pages); on a phone each row is a

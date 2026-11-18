@@ -1768,6 +1768,11 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
     # r65e: every member of the map with its layer, so a fall says why for the members past the figures' window too
     now_all = {c["ticker"]: {"layer": v.get("layer") or "", "refit": c.get("refit"), "unread": c.get("unread")}
                for v in m.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}
+    # r69e (LIVE13A-002: Semiconductors "101 of 103: 93 · 8 · 2" in the app, "103 of 103: 94 · 9 · 0" in the deck, "101 companies ... 91 · 8 · 2"
+    # on the public page): the members' tally by evidence state worked out once, with the read it is of, and kept with the dive, so the app,
+    # the deck and the public page say the same counts of the same read
+    hit["tally"] = theme_data.checked_tally(hit.get("membership_evidence"), (hit.get("membership_check") or {}).get("outside"), len(now_all))
+    hit["tally_at"] = str(hit.get("as_of") or datetime.now(timezone.utc).date().isoformat())[:10]
     ctl = theme_changes.coverage_control(hit["coverage"], before, hit, now_all)   # d53: layers lost too
     pc = theme_changes.population_change(before, hit)      # r68e: each company that joined or left the core members, with why
     if pc:
@@ -2110,6 +2115,7 @@ def deck_view(r: str, m: dict, dive: dict, extra: dict | None = None) -> dict:
             # e54 (R54): each checked company's evidence state and the membership check's progress outside the figures' window
             "evidence": dive.get("evidence") or {}, "membership_evidence": dive.get("membership_evidence"),
             "membership_check": dive.get("membership_check") or {},
+            "tally": dive.get("tally"), "tally_at": dive.get("tally_at"),          # r69e (LIVE13A-002): the one count every surface says
             "news": None, "listings": None, "prices": None, "business": None, **(extra or {})}
 
 

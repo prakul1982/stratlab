@@ -47,3 +47,10 @@ test("LIVE13A-013: on a phone a layer's tables are a press away (the Cement page
   assert.match(src, /if \(!usePhone\(\)\) return <>\{children\}<\/>;/);
   assert.equal((src.match(/<PhoneFold label=/g) || []).length, 3);       // the companies' table, margins by year, business updates
 });
+
+test("LIVE13A-002: the app's membership line says the dive's one tally, the deck's and the public page's", async () => {
+  const T = await import("../src/lib/theme.ts");
+  const dive = { evidence: { A: "description_verified" }, membership_check: { outside: {} },
+    tally: { total: 103, checked: 101, description_verified: 93, industry_code_supported: 8, list_supported: 0, not_confirmed: 0, membership_unverified: 2 } };
+  assert.equal(T.membershipLine(dive, ["A", "B"]), "Membership checked 101 of 103: 93 description-verified · 8 industry-supported; 2 not checked");
+});

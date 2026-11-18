@@ -2688,6 +2688,9 @@ def evidence_tally(v: dict, total: int) -> dict | None:
     ev = v.get("membership_evidence")
     if not isinstance(ev, dict) or not any(ev.get(k) for k, _ in EVIDENCE_WORDS):
         return None            # (a map from before the membership checks, every company as it was: no state to say)
+    t = v.get("tally")
+    if isinstance(t, dict) and t.get("total") and int(t["total"]) == int(total or t["total"]):
+        return t               # r69e (LIVE13A-002): the dive's own tally, the one the app and the public page say
     # h56 (R56): the one tally (theme_data.checked_tally) the membership check's history is kept from as well
     from .intel.theme_data import checked_tally
     return checked_tally(ev, (v.get("membership_check") or {}).get("outside") or {}, total)
