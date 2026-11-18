@@ -12,12 +12,6 @@
 .ct-h-public { fill: var(--series-4); background: var(--series-4); }
 .ct-h-government { fill: var(--muted); background: var(--muted); }
 .ct-h-others { fill: var(--line-2); background: var(--line-2); }
-/* LIVE12B-017: on a phone the three periods fit the card (a 402 px table in a 322 px card hid the first period the pager names): the row
-   names wrap in a narrower column and the figures are a size smaller, with less padding */
-@media (max-width: 640px) {
-  .ct-statement table { font-size: 12px; }
-  .ct-statement table th[scope="row"] { min-width: 0; width: 30%; overflow-wrap: anywhere; }
-  .ct-statement table :is(th, td) { padding-left: 4px; padding-right: 4px; }
-}
+@media (max-width: 640px) { .ct-statement table th[scope="row"] { min-width: 8.5rem; } }
 /* LIVE11B: a phone's statements show three periods at a time, stepped with Earlier / Later */
 .ct-window { justify-content: space-between; flex-wrap: nowrap; }

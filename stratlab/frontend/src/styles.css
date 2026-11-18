@@ -2708,9 +2708,9 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .email-signin-row .btn { flex: 1 1 100%; justify-content: center; }
   .legal-links[aria-label="Policies"], .legal-links[aria-label="Explore"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; row-gap: 0; }
 }
-/* LIVE12B-008: /login's form loads after the page's first frame; its place is held at the form's own height, so nothing under it moves */
-.email-slot { min-height: 136px; max-width: 460px; width: 100%; }
-@media (max-width: 640px) { .email-slot { min-height: 188px; } }
+/* LIVE12B-008: /login's form loads after the page's first frame; its place is held at the form's own height (134 and 186 px), so nothing under it moves */
+.email-slot { display: block; min-height: 134px; max-width: 460px; width: 100%; }
+@media (max-width: 640px) { .email-slot { min-height: 186px; } }
 /* LIVE12B-004 (owner pattern 13): beside the email form, the Google button is the form's width, on /login and the sign-in gate alike */
 .lp-hero-login .lp-hero-copy:has(.email-slot, .email-signin) .lp-cta { width: 100%; max-width: 460px; justify-content: center; }
 .email-signin-code { letter-spacing: .2em; font-family: var(--mono); max-width: 220px; }

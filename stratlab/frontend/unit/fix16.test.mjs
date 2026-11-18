@@ -39,7 +39,7 @@ test("LIVE12B-001: the home page's start-up block wears the landing's hero frame
 });
 
 test("LIVE12B-001: the words kept for the app to draw while the page's code downloads include the start-up header", () => {
-  const head = { getAttribute: (n) => (n === "class" ? "boot-head" : null), outerHTML: '<header class="boot-head"><a href="/">StratLab</a></header>' };
+  const head = { className: "boot-head", outerHTML: '<header class="boot-head"><a href="/">StratLab</a></header>' };
   const main = { outerHTML: '<main><div class="boot boot-wait boot-hero" data-boot><h1>Is your trading idea skill or luck?</h1></div></main>', previousElementSibling: head };
   const el = { getAttribute: (n) => (n === "class" ? "boot boot-wait boot-hero" : null), closest: () => main };
   assert.equal(startupHtml({ querySelector: (s) => (s === "[data-boot]" ? el : null) }),
@@ -56,7 +56,7 @@ test("LIVE12B-002: the plans note names the US prices and nothing of the 'Prices
 
 // ---------- LIVE12B-013: the next F&O expiry is either exchange's ----------
 test("LIVE12B-013: Trade home's next F&O expiry is the nearest of NSE's and BSE's, SENSEX's included", async () => {
-  const { nextExpiry } = await import("../src/lib/tradeUi.ts");
+  const { nextExpiry } = await import("../src/lib/expiry.ts");
   const ev = [
     { kind: "expiry", date: "2026-11-17", title: "NIFTY weekly expiry" },
     { kind: "expiry", date: "2026-11-23", title: "Monthly F&O expiry" },

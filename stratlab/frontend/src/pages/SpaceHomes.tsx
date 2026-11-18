@@ -28,7 +28,8 @@ import { Book, Calendar, Compass, Layers, Library, Pulse, Search } from "../comp
 import { resultDay, type ResultRow } from "./Research";
 import { fyLink, movedYearNote, openFy, taxHasData, yearHasTrades } from "../lib/fy";
 import { investStrip, withRegion } from "../lib/investUi";
-import { nextExpiry, notRunning } from "../lib/tradeUi";
+import { notRunning } from "../lib/tradeUi";
+import { nextExpiry } from "../lib/expiry";
 import { PLAN_NAME, planOf } from "../lib/plans";
 
 /* The three spaces' home pages: /trade, /invest and /money. `/` opens the one whose menu shows. Each reuses the
