@@ -666,22 +666,24 @@ function LeadersCard({ dive, prices }: { dive: Dive; prices: Prices | null }) {
   const cols: Column<L>[] = [
     { key: "name", header: "Company", rowHeader: true, wrap: true, sortable: true, cell: (x) => <Name r={r} sym={x.symbol} name={x.name} wide={dive.company_wide.includes(x.symbol)} /> },
     { key: "cap", header: "Market value", numeric: true, sortable: true, cell: (x) => amount(x.cap, r) },
-    { key: "sales_1y", header: "Revenue growth", numeric: true, sortable: true, info: "Latest full year against the year before.", cell: (x) => chg(x.sales_1y) },
+    // LIVE14A-008: short header words, the long name on the phone's card and in the (i), so ten figures fit a 1,004 px card (the table was
+    // 1,065-1,100 px); P/B and EV/EBITDA leave a table narrower than 900 px (a 1280 screen with the menu open), and the company page has them
+    { key: "sales_1y", header: "Growth", cardLabel: "Revenue growth", numeric: true, sortable: true, info: "Revenue growth: the latest full year against the year before.", cell: (x) => chg(x.sales_1y) },
     { key: "ebitda", header: "EBITDA margin", numeric: true, sortable: true, cell: (x) => marginCell(x, "ebitda", pcw(x.ebitda, x.ebitda_dp === 0)) },
     { key: "net", header: "Net margin", numeric: true, sortable: true, cell: (x) => marginCell(x, "net", pc(x.net)) },
     { key: "roce", header: "ROCE", numeric: true, sortable: true, cell: (x) => pc(x.roce) },
     { key: "pe", header: "P/E", numeric: true, sortable: true, cell: (x) => times(x.pe) },
-    { key: "pb", header: "P/B", numeric: true, sortable: true, cell: (x) => times(x.pb) },
-    { key: "ev_ebitda", header: "EV/EBITDA", numeric: true, sortable: true, cell: (x) => times(x.ev_ebitda) },
-    { key: "r1y", header: "Price, 1 year", numeric: true, sortable: true, cell: (x) => chg(x.r1y) },
+    { key: "pb", header: "P/B", numeric: true, sortable: true, narrow: false, cell: (x) => times(x.pb) },
+    { key: "ev_ebitda", header: "EV/EBITDA", numeric: true, sortable: true, narrow: false, cell: (x) => times(x.ev_ebitda) },
+    { key: "r1y", header: "1-yr price", cardLabel: "Price, 1 year", numeric: true, sortable: true, cell: (x) => chg(x.r1y) },
   ];
   const phone = usePhone();
   return (
     <Card id="numbers-leaders" label="Leaders and laggards">
       <CardHead title="Every company, sortable" info="Click a column to sort. Sorted by the figure you pick, not ranked: nothing here says which to own."
-        actions={phone ? <><Select label="Sort by" small value={sort.key} onChange={(v) => setSort({ key: v, desc: v !== "name" })} options={cols.filter((c) => c.sortable).map((c) => ({ value: c.key, label: typeof c.header === "string" ? c.header : c.key }))} />
+        actions={phone ? <><Select label="Sort by" small value={sort.key} onChange={(v) => setSort({ key: v, desc: v !== "name" })} options={cols.filter((c) => c.sortable).map((c) => ({ value: c.key, label: c.cardLabel ?? (typeof c.header === "string" ? c.header : c.key) }))} />
           <button type="button" className="btn quiet sm" onClick={() => setSort((x) => ({ ...x, desc: !x.desc }))}>{sort.desc ? "High to low" : "Low to high"}</button></> : undefined} />
-      <Fold rows={sorted} n={20} what="companies">{(shown) => <DataTable label="Every company in the theme with its figures" columns={cols} rows={shown} rowKey={(x) => x.symbol} sort={{ ...sort, onSort }} />}</Fold>
+      <div className="leaders-tbl"><Fold rows={sorted} n={20} what="companies">{(shown) => <DataTable label="Every company in the theme with its figures" columns={cols} rows={shown} rowKey={(x) => x.symbol} sort={{ ...sort, onSort }} />}</Fold></div>
     </Card>
   );
 }

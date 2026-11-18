@@ -139,3 +139,18 @@ def test_live14b_006_the_share_capital_count_the_latest_quarters_eps_agrees_with
     p = {"quarters": {"cols": ["Jun 2026", "Sep 2026"], "rows": {"Net Profit": [13420.0, 13934.0], "EPS in Rs": [36.9, 38.37]}}}
     assert round(quarter_shares(p), 1) == 363.1
     assert quarter_shares({"quarters": {"cols": ["Sep 2026"], "rows": {"Net Profit": [None], "EPS in Rs": [1.0]}}}) is None
+
+
+def test_live14a_008_a_public_theme_tables_membership_and_revenue_cells_wrap_so_the_table_fits_its_card():
+    """LIVE14A-008: on the public Automotive page at 1280 three layer tables were 876-900 px in 854 px cards ("industry-supported (official
+    industry only)" and "₹1,13,662 crore FY26" kept on one line). Measured on this render at 1280: 871 px before, 854 after."""
+    from app import public_themes as P
+    rows = [{"symbol": f"S{i}", "name": f"Samvardhana Motherson International Ltd {i}", "page": None, "cap": "₹1.23 lakh cr", "cap_v": 1.0,
+             "revenue": "₹1,13,662 crore", "year": "FY26", "evidence": "industry_code_supported" if i % 2 else "description_verified"} for i in range(4)]
+    v = {"region": "IN", "label": "Automotive", "slug": "automotive", "name": "automotive", "members": 4, "all": 4,
+         "evidence": {"description_verified": 2, "industry_code_supported": 2}, "older": False, "rechecking": False, "summary": "",
+         "prices": None, "day": None, "indexable": True, "layers": [{"name": "Auto components", "companies": rows, "evidence": {}}]}
+    html = P.render(v)
+    assert '.cotbl td[data-label="Membership"]{white-space:normal;min-width:8em}' in html
+    assert '.cotbl td[data-label="Revenue"]{white-space:normal}' in html
+    assert 'data-label="Membership">industry-supported (official industry only)</td>' in html

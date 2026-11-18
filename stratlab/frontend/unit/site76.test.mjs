@@ -81,3 +81,20 @@ test("LIVE14B-007 / LIVE14A-012: the signed-out /plans gives the sample deck its
   assert.match(login, /\{top && <p className="small muted" data-testid="sample-deck-line">Slide decks are on Basic and Pro\. <SampleDeckLink label="Download a sample deck" \/><\/p>\}/);
   assert.match(read("src/components/PlanCompare.tsx"), /0 \(a sample deck to download\)/);
 });
+
+test("LIVE14B-008: the tax report holds the year's figure's place and the price pill's while it loads", () => {
+  const page = read("src/pages/TaxReportPage.tsx");
+  assert.match(page, /asOfPending=\{!rep && !error && hold\.pill\}/);
+  assert.match(page, /\{!rep && !error && hold\.head && <Card compact label="The year's tax" className="tax-head-hold">/);
+  assert.match(read("src/styles.css"), /\.tax-head-hold \{ min-height: 85px; \}\n@media \(max-width: 640px\) \{ \.tax-head-hold \{ min-height: 145px; \} \}/);
+});
+
+test("LIVE14A-008: the theme's 'Every company' table: short header words, the long names on the phone's card, closer columns", () => {
+  const dive = read("src/components/ThemeDive.tsx");
+  assert.match(dive, /key: "sales_1y", header: "Growth", cardLabel: "Revenue growth"/);
+  assert.match(dive, /key: "r1y", header: "1-yr price", cardLabel: "Price, 1 year"/);
+  assert.match(dive, /key: "pb", header: "P\/B", numeric: true, sortable: true, narrow: false/);
+  assert.match(dive, /label: c\.cardLabel \?\? \(typeof c\.header === "string" \? c\.header : c\.key\)/);
+  assert.match(read("src/styles.css"), /\.leaders-tbl \.k-table th, \.leaders-tbl \.k-table td \{ padding-left: 6px; padding-right: 6px; \}/);
+  assert.ok(!read("e2e/ui-lint.allow.json").includes("Revenue growthEBIT"));
+});
