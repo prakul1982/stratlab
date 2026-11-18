@@ -175,3 +175,13 @@ def test_live14b_002_the_vix_tile_reads_a_few_weeks_of_closes_and_its_answer_is_
     since = _date.fromisoformat(asked[0])
     assert (_date.today() - since).days <= vix.BRIEF_DAYS + 1                        # weeks of closes, not five years
     vix.forget()
+
+
+def test_live14b_014_the_usage_table_counts_the_journals_trades(monkeypatch):
+    """LIVE14B-014: "Journal trades kept – –" for an account whose journal held 9 trades. The count is the journal's closed trades,
+    practice aside, as its page counts them."""
+    from app import journal as J
+    from app import main as M
+    monkeypatch.setattr(J, "load", lambda uid: {"updated_at": "x"})
+    monkeypatch.setattr(J, "trades", lambda uid, data, today: {"trades": [{"src": "tradebook"}] * 9 + [{"src": "practice"}] * 2})
+    assert M._journal_count("u-1") == 9

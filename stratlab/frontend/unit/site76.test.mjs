@@ -134,3 +134,14 @@ test("LIVE14B-001: boot.js asks for a saved sign-in's account the moment /config
   win.STRATLAB_CONFIG = { API_BASE: "https://api.example", SUPABASE_URL: "https://demo.supabase.co" };        // a second write: asked once
   assert.equal(calls.length, 1);
 });
+
+test("LIVE14A-016 (LIVE13A-017): a lock's price after words naming the same plan doesn't name it again", async () => {
+  const { priceAfterWords } = await import("../src/lib/offer.ts");
+  const price = "Basic is ₹699 a month (US price $8) or ₹6,999 a year (US price $80).";
+  assert.equal(priceAfterWords("You've made 1 slide deck this month. The count starts again on 1 Dec. Basic gives 5 a month.", price),
+    "It is ₹699 a month (US price $8) or ₹6,999 a year (US price $80).");
+  assert.equal(priceAfterWords("Pro has no limit on alerts.", "Pro is ₹1,499 a month."), "It is ₹1,499 a month.");
+  assert.equal(priceAfterWords("Market breadth history is on the Basic plan.", price), price);        // the plan not last: as it is
+  assert.equal(priceAfterWords("Pro gives 50 a month.", price), price);                              // another plan's price: as it is
+  assert.equal(priceAfterWords("x", null), null);
+});

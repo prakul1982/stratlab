@@ -28,7 +28,9 @@ export function AlertSettingsCard() {
   // why "Send a test" is off, in words that name only what this page has (the Telegram and email boxes show only where the
   // server can send by them; the phone is on the Get the app page)
   const edited = (ch.telegram && alerts.tg.trim() !== (me.alerts.telegram_chat_id || "")) || (ch.email && alerts.email.trim() !== (me.alerts.email || ""));
-  const ways = [ch.telegram && "save a Telegram chat ID", ch.email && "save an email address and confirm it", ch.push && "turn on phone notifications"].filter(Boolean) as string[];
+  // LIVE14B-014: an empty box means the sign-in address, which still needs confirming like any other (the hint said it simply worked)
+  const ways = [ch.telegram && "save a Telegram chat ID", ch.email && (!alerts.email.trim() && me.email ? "confirm the email you sign in with, or save another and confirm it" : "save an email address and confirm it"),
+    ch.push && "turn on phone notifications"].filter(Boolean) as string[];
   const testWhy: string | null = !canReport ? "Send a test is part of the Basic plan, with the reports and messages."
     : edited ? "Save your changes first; the test goes to what is saved."
     : routes != null && !routes.length ? `Send a test works once alerts have somewhere to go: ${ways.length > 1 ? `${ways.slice(0, -1).join(", ")} or ${ways[ways.length - 1]}` : ways[0] ?? "turn on phone notifications"}.`
@@ -95,7 +97,7 @@ export function AlertSettingsCard() {
         {/* LIVE1B-040, 070: the box takes the row (the address was cut off at 190px and its hint squeezed beneath it), and its placeholder
             says what an empty box means instead of an address that reads as filled in */}
         {ch.email && <Field label="Email" optional wide type="email" value={alerts.email} disabled={!canReport} maxLength={200} placeholder={me.email ? "Your sign-in email" : ""}
-          hint={!alerts.email.trim() && me.email ? "Empty: alerts go to the email you sign in with." : undefined} error={emailErr}
+          hint={!alerts.email.trim() && me.email ? "Empty: alerts go to the email you sign in with, once it is confirmed." : undefined} error={emailErr}
           onChange={(e) => { setAlerts({ ...alerts, email: e.target.value }); setEmailErr(null); }} />}
         {/* which alerts this card holds and which are chosen elsewhere: an alert email's "Manage emails" opens the page its
             alerts were set on, and the rest land here (R69-002); across the form's width, not squeezed into one column (DP2-030) */}

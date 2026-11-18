@@ -155,8 +155,9 @@ test("LIVE13B-005: a Coming up row's line drops the sentence that repeats its ti
 test("LIVE13B-006: the Free card's grace line says how many of the card's limits stay at the earlier, higher level", async () => {
   const { graceLine } = await import("../src/lib/freeChange.ts");
   const rows = (n) => Array.from({ length: n }, (_, i) => ({ key: `k${i}`, label: `L${i}`, before: 10, after: 5 }));
-  assert.equal(graceLine({ on: "2026-11-27T00:00:00Z", moves: [], rows: rows(10) }), "Until 27 Nov 2026, 10 of the limits above stay at your earlier, higher levels.");
-  assert.equal(graceLine({ on: "2026-11-27T00:00:00Z", moves: [], rows: rows(1) }), "Until 27 Nov 2026, one of the limits above stays at your earlier, higher level.");
+  // (updated on purpose, site76 LIVE14B-016: "of the limits above" stood under a card of 5 lines with 10 changed: "of your Free limits")
+  assert.equal(graceLine({ on: "2026-11-27T00:00:00Z", moves: [], rows: rows(10) }), "Until 27 Nov 2026, 10 of your Free limits stay at your earlier, higher levels.");
+  assert.equal(graceLine({ on: "2026-11-27T00:00:00Z", moves: [], rows: rows(1) }), "Until 27 Nov 2026, one of your Free limits stays at your earlier, higher level.");
   assert.doesNotMatch(graceLine({ on: "2026-11-27T00:00:00Z", moves: [], rows: rows(10) }), /counts/);
 });
 

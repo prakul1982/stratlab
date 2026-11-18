@@ -112,5 +112,6 @@ test("LIVE12B-007: a Coming up row whose line repeats its title shows no line", 
 test("LIVE12B-010: a later plan note with the same price leaves it to the first one on the page", () => {
   const n = read("src/components/kit/Notice.tsx");
   assert.match(n, /querySelectorAll<HTMLElement>\("\[data-plan-price\]"\)\)\.find\(\(e\) => e\.dataset\.planPrice === price\)/);
-  assert.match(n, /<span ref=\{priced\} data-plan-price=\{price \?\? undefined\}>\{unlockHint\(me\?\.offer, CFG\.CONTACT_EMAIL \|\| undefined, again \? null : price\)\}<\/span>/);
+  // (updated on purpose, site76 LIVE14A-016: a price after words naming the same plan reads "It is ₹…", priceAfterWords)
+  assert.match(n, /<span ref=\{priced\} data-plan-price=\{price \?\? undefined\}>\{unlockHint\(me\?\.offer, CFG\.CONTACT_EMAIL \|\| undefined, again \? null : priceAfterWords\(said, price\)\)\}<\/span>/);
 });
