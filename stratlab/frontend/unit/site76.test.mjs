@@ -145,3 +145,19 @@ test("LIVE14A-016 (LIVE13A-017): a lock's price after words naming the same plan
   assert.equal(priceAfterWords("Pro gives 50 a month.", price), price);                              // another plan's price: as it is
   assert.equal(priceAfterWords("x", null), null);
 });
+
+test("LIVE14B-009: the scan's special-sessions bracket is one numbered note under the table, its mark on each row", async () => {
+  const { scanNotes } = await import("../src/lib/scanNotes.ts");
+  const b = " (the averages count the exchange's special sessions of 1 Feb 2026 and 8 Nov 2026, which some price histories leave out)";
+  const got = scanNotes([`50-day average 1,259.03 crossed above the 200-day average 1,256.75${b}`, `50-day average 1,896.29 crossed above 1,892.47${b}`, "Closed at 375.05", null]);
+  assert.deepEqual(got.details, ["50-day average 1,259.03 crossed above the 200-day average 1,256.75¹", "50-day average 1,896.29 crossed above 1,892.47¹", "Closed at 375.05", null]);
+  assert.deepEqual(got.notes, ["The averages count the exchange's special sessions of 1 Feb 2026 and 8 Nov 2026, which some price histories leave out."]);
+  assert.match(read("src/pages/ResearchScans.tsx"), /data-testid="scan-sessions-note">\{MARKS\[i\]\} \{n\}<\/p>/);
+});
+
+test("LIVE14B-015 / LIVE14A: the weekday once in Coming up; /news's heading is its menu name", () => {
+  const mine = read("src/pages/MineHome.tsx");
+  assert.match(mine, /<span className="dt" aria-hidden="true"><span className="dt-w">\{d\.w\}<\/span><b>\{d\.d\}<\/b>\{d\.m\}<\/span>/);
+  assert.doesNotMatch(mine, /<span aria-hidden="true">\{d\.w\}<\/span>\{u\.tone === "warn"/);
+  assert.match(read("src/pages/NewsPage.tsx"), /<PageHeader eyebrow="After each market close" title="Today's brief"/);
+});

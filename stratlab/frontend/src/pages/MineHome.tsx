@@ -353,10 +353,11 @@ function ComingCard({ rows, more = 0 }: { rows: Up[] | null; more?: number }) {
               return (
                 <li key={u.key} className="mine-tl-i">
                   {/* the day and its weekday are read together, ahead of the title (LIVE1C-091: "Fri 3 Nov NIFTY weekly expiry" with the chip's "Tue" read after it) */}
-                  <span className="dt" aria-hidden="true"><b>{d.d}</b>{d.m}</span>
+                  {/* LIVE14B-015: the weekday is in the date block, said once ("Thu 19 Nov"), not again in a chip at the row's end */}
+                  <span className="dt" aria-hidden="true"><span className="dt-w">{d.w}</span><b>{d.d}</b>{d.m}</span>
                   <span className="body"><span className="sr-only">{d.w} {d.d} {d.m}: </span>{u.to ? <Link to={u.to}><b>{u.title}</b></Link> : <b>{u.title}</b>}{u.detail && <span className="k-stat-d" title={u.detail}>{firstSentence(u.detail)}</span>}</span>
-                  {/* every row gives its weekday; a tax date keeps its colour (and says so to a screen reader) (R48-011) */}
-                  <Badge tone={u.tone === "warn" ? "warn" : "plain"} dot={false}><span aria-hidden="true">{d.w}</span>{u.tone === "warn" && <span className="sr-only"> · {u.tag} date</span>}</Badge>
+                  {/* a tax date keeps its colour and its kind, said to a screen reader too (R48-011) */}
+                  {u.tone === "warn" ? <Badge tone="warn" dot={false}>{u.tag}<span className="sr-only"> date</span></Badge> : <span aria-hidden="true" />}
                 </li>
               );
             })}

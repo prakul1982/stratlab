@@ -26,7 +26,7 @@ test("LIVE14A-008: the sortable 'Every company' table fits its card at 1280 and 
   test.skip(info.project.name === "phone", "a phone reads the table as cards");
   for (const width of [1440, 1280]) {
     await page.setViewportSize({ width, height: 900 });
-    await signedIn(page, width === 1280 ? 287 : 286, THEME_URL);
+    await signedIn(page, width === 1280 ? 238 : 235, THEME_URL);
     await expect(page.getByRole("heading", { name: "The whole chain in one table" })).toBeVisible({ timeout: 90_000 });
     const box = page.locator("#numbers-leaders .k-tbl-wrap").first();
     await box.scrollIntoViewIfNeeded();
@@ -51,7 +51,7 @@ const TRADEBOOKS = new URL("../../backend/tests/fixtures/tradebooks/", import.me
 
 test("LIVE14B-008: on a phone the tax report's figure and price pill come in without moving the upload card", async ({ page, request }, info) => {
   test.skip(info.project.name !== "phone", "the shift was measured on a phone");
-  const n = 283;
+  const n = 229;
   const auth = { Authorization: `Bearer load-${n}` };
   await request.delete(`${API}/tax`, { headers: auth });
   const { readFileSync } = await import("node:fs");
@@ -134,7 +134,7 @@ for (const [path, file] of [["/mine", "MineHome"], ["/trade/journal", "JournalPa
     const host = new URL(r.request().url()).hostname;
     return host === "127.0.0.1" || host === "localhost" ? r.fallback() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" });
   });
-  const n = 281;
+  const n = 226;
   await route(page);
   await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, sessionFor(n));
   await page.goto("/mine");                   // the first-visit question answered once, outside the measured load

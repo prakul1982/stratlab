@@ -2506,6 +2506,7 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .mine-tl-i:last-child { border-bottom: 0; }
 .mine-tl-i .dt { display: flex; flex-direction: column; align-items: center; font-size: 12px; color: var(--muted); line-height: 1.2; }
 .mine-tl-i .dt b { font-size: 20px; color: var(--ink); font-weight: 600; }
+.mine-tl-i .dt .dt-w { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
 .mine-tl-i .body { display: flex; flex-direction: column; min-width: 0; }
 /* a long line (the tax date's whole explanation) is two lines at most, the rest is in the tooltip and the calendar: the two cards side by side end near each other (UI-FIX-1, R1) */
 /* VR2-004: one line of explanation on a wide screen (the whole sentence is the hover text and the calendar's): with two, six events stood 160px taller than the six one-line watchlist movers beside them */

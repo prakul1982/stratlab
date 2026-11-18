@@ -89,7 +89,7 @@ export function NewsPage() {
 
   return (
     <div className="k-page">
-      <PageHeader eyebrow="After each market close" title="Briefs"
+      <PageHeader eyebrow="After each market close" title="Today's brief"
         lede={<>A short brief after each market close, for India, the US and the companies you follow. Want it by email? Turn it on in <Link className="link" to="/settings#newsletters">Settings → Notifications</Link>.</>} />
       <div className="k-toolbar">
         <Seg label="Which brief" value={tab} onChange={choose} options={TABS.map(([t, title, short]) => ({ value: t, label: title, short }))} />
