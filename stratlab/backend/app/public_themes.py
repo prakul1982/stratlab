@@ -12,6 +12,7 @@ companies in all; any other is noindex and left out of the sitemap. One page per
 a slug of one of its aliases answers 301 to it. Rendering reads stored entries only (no AI, no source call); the edge keeps a page
 for hours (CACHE)."""
 import html
+from collections import Counter
 import re
 from datetime import datetime, timezone
 from urllib.parse import quote
@@ -49,6 +50,7 @@ EVIDENCE_PUBLIC_MANY = (("description_verified", "description-verified"), ("indu
 EVIDENCE_PUBLIC_ALWAYS = ("description_verified", "industry_code_supported", "membership_unverified")
 
 
+MARK_NOTE = "A company with no Membership mark in a table is description-verified: its own words show the theme's work."
 OLDER_LINE = "This page shows the theme as it was checked under an earlier version of StratLab's checks."
 RECHECKING_LINE = "It is being checked again now, and this page shows the new check once it is done."
 
@@ -136,6 +138,25 @@ def _index_caps(region: str) -> dict:
     try:
         from . import screens
         return {r["symbol"]: r.get("market_cap") for r in screens.load_index(region).get("rows") or [] if r.get("symbol")}
+    except Exception:
+        return {}
+
+
+def _index_newer(region: str, day: str | None) -> dict:
+    """r69e (LIVE13A-004: the US theme pages "market values at the 13 Nov 2026 close", the dive's own, while the app and the heatmap showed
+    the 17 Nov close): {symbol: (market value, price day)} of the screens' index rows priced at a later close than `day` (the stored dive's
+    own), so the page shows each company at the latest completed session as the app does; {} without a day to compare."""
+    if not day:
+        return {}
+    try:
+        from . import screens
+        out = {}
+        for r in screens.load_index(region).get("rows") or []:
+            d_ = str(r.get("price_at") or "")[:10]
+            if r.get("symbol") and isinstance(r.get("market_cap"), (int, float)) and r["market_cap"] > 0 and re.match(r"^\d{4}-\d\d-\d\d$", d_) \
+                    and d_ > day:
+                out[r["symbol"]] = (r["market_cap"], d_)
+        return out
     except Exception:
         return {}
 
@@ -245,7 +266,10 @@ def view(entry: dict, p: dict) -> dict:
     # r66e (LIVE12A-014: Ambuja ₹97,122 cr in the app beside ₹97,008 crore here at the same close): the market values of the theme's stored
     # dive, the ones its app page and deck show, at the dive's own price date; the index's only for a company the dive doesn't hold
     dcaps = dive_caps(dive)
-    caps, revs, ev = {**_index_caps(region), **dcaps}, {**_index_sales(region), **_revenues(region, entry["name"], p, dive)}, _evidence(dive)
+    dive_day = str(dive.get("as_of"))[:10] if dcaps and dive.get("as_of") else None
+    newer = _index_newer(region, dive_day)          # r69e: a company priced at a later close than the dive's: that close's value
+    caps, revs, ev = ({**_index_caps(region), **dcaps, **{k: x[0] for k, x in newer.items()}},
+                      {**_index_sales(region), **_revenues(region, entry["name"], p, dive)}, _evidence(dive))
     known = stock_pages.companies(region)
     layers = []
     for v in theme_layers(p):
@@ -285,7 +309,9 @@ def view(entry: dict, p: dict) -> dict:
             # confirmed yet not listed here, so the page says how many it leaves out
             "all": len({c.get("ticker") for v_ in p.get("value_chain") or [] if isinstance(v_, dict) for c in v_.get("companies") or []
                         if isinstance(c, dict) and c.get("ticker")}),
-            "prices": (str(dive.get("as_of"))[:10] if dcaps and dive.get("as_of") else None)
+            # (the close most of its market values are at: each company's own, the index's later one or the dive's)
+            "prices": (Counter(newer[k][1] if k in newer else dive_day for k in once if caps.get(k)).most_common(1)[0][0]
+                       if any(k in once for k in newer) else dive_day)
             or _price_day(region, {c["symbol"] for v in layers for c in v["companies"] if c.get("cap")}),
             "day": _map_day(region, p, entry),
             "indexable": len(layers) >= MIN_LAYERS and n >= MIN_MEMBERS}
@@ -371,8 +397,14 @@ def render(v: dict) -> str:
     # LIVE10A-007: no company on the page with a revenue: no Revenue column (it was "–" on every row of 29 pages); on a phone each row is a
     # stacked card (name, then ticker, market value, revenue), never a table wider than the screen
     has_rev = any(c.get("revenue") for x in v["layers"] for c in x["companies"])
+    # r69e (LIVE13A-013: Semiconductors' layer tables of 4 and 5 columns, the Ticker edge jumping from x 662 to 555, "description-verified"
+    # on 31 of 39 rows): one set of columns on every layer table of the page, and a Membership cell only for a company that is not
+    # description-verified (the page's line says so once)
+    state_page = any(c.get("evidence") and c["evidence"] != "description_verified" for x in v["layers"] for c in x["companies"])
+    if state_page:
+        body += f'<p class="muted small" data-membership-note>{e(MARK_NOTE)}</p>'
     for x in v["layers"]:
-        state = any(c.get("evidence") and c["evidence"] != "description_verified" for c in x["companies"])
+        state = state_page
         rows = ""
         for c in x["companies"]:
             name = f'<a href="{e(c["page"])}">{e(c["name"])}</a>' if c["page"] else e(c["name"])
@@ -381,7 +413,7 @@ def render(v: dict) -> str:
             rev = ("<span>" + e(c["revenue"]) + (f' <span class="muted small">{e(c["year"])}</span>' if c.get("year") else "") + "</span>") if c["revenue"] else "–"
             ev = ""
             if state:                  # e54: never said confirmed by its own words when it isn't
-                ev = f'<td class="l">{e(EVIDENCE_PUBLIC[c["evidence"]]) if c.get("evidence") and c["evidence"] != "description_verified" else "description-verified" if c.get("evidence") else "–"}</td>'
+                ev = f'<td class="l">{e(EVIDENCE_PUBLIC[c["evidence"]]) if c.get("evidence") and c["evidence"] != "description_verified" else "" if c.get("evidence") else "–"}</td>'
             if ev:
                 ev = ev.replace('<td class="l">', '<td class="l" data-label="Membership">', 1)
             rows += (f'<tr><td>{name}</td><td class="l" data-label="Ticker">{e(c["symbol"])}</td><td data-label="Market value">{e(c["cap"]) if c["cap"] else "–"}</td>'
@@ -389,7 +421,8 @@ def render(v: dict) -> str:
         thead = ('<tr><th scope="col">Company</th><th scope="col" class="l">Ticker</th><th scope="col">Market value</th>'
                 + ('<th scope="col">Revenue</th>' if has_rev else "") + ('<th scope="col" class="l">Membership</th>' if state else "") + "</tr>")
         # the layer's own mix of states only where it isn't every company description-verified (the page's line above says the whole)
-        lev = (f'<p class="muted small" data-layer-evidence>{e(evidence_said(x["evidence"]))}</p>' if x.get("evidence") and state else "")
+        lev = (f'<p class="muted small" data-layer-evidence>{e(evidence_said(x["evidence"]))}</p>'
+               if x.get("evidence") and any(c.get("evidence") and c["evidence"] != "description_verified" for c in x["companies"]) else "")
         body += (f'<section class="card" data-layer><h2>{e(x["name"])}</h2>{lev}<div class="cotbl" data-stack><table aria-label="{e(x["name"])}">'
                  f"<thead>{thead}</thead><tbody>{rows}</tbody></table></div></section>")
     if not v["layers"]:

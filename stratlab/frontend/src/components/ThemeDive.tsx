@@ -56,7 +56,9 @@ export function ChainCard({ dive }: { dive: Dive }) {
     <ReportScope section="The whole chain in one table" source="The companies' reported annual results">
     <Card id="theme-chain" label="The whole chain in one table">
       <CardHead title="The whole chain in one table" info={basisWords(dive.basis)} />
-      <DataTable label="The value chain by layer: companies, revenue and median margins" columns={cols} rows={dive.chain.rows} rowKey={(x) => x.layer} />
+      {/* r69e (LIVE13A-014: "Small finance banks 0 – – –" a row of the chain beside the line naming it as a layer with no listed company):
+          a layer with no company is folded into that one line, never a row of dashes */}
+      <DataTable label="The value chain by layer: companies, revenue and median margins" columns={cols} rows={dive.chain.rows.filter((x) => x.n > 0 || (x.listed ?? 0) > 0)} rowKey={(x) => x.layer} />
       {dive.chain.line && <p className="k-small">{dive.chain.line}</p>}
       {dive.chain.rows.some((x) => x.ebitda_n > 0 && x.ebitda_n < MIN_BASE) && <p className="k-note">A median is shown on {MIN_BASE} companies or more in a layer's calculations; each company's own figures are on its layer's table.</p>}
       <p className="k-note">{basisWords(dive.basis)}</p>

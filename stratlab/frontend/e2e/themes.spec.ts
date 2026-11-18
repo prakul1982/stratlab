@@ -44,7 +44,7 @@ test("the theme page is a deep dive made of tables, with each company only where
   await expect(members.getByTestId("theme-counts")).toHaveText(/^6 companies: 5 from the official industry list, 1 added \(1 description-verified\)\.$/);
   await expect(members).toContainText("Official industries: Iron & Steel");
   // e54: what each company's place rests on, the deck's states and counts (never an official-industry record said confirmed by its words)
-  await expect(members.getByTestId("theme-evidence")).toHaveText(/^Membership checked \d+ of \d+: \d+ description-verified · \d+ industry-supported · (\d+ [a-z' -]+ · )*\d+ not checked\./);
+  await expect(members.getByTestId("theme-evidence")).toHaveText(/^Membership checked \d+ of \d+: \d+ description-verified · \d+ industry-supported( · \d+ [a-z' -]+)*; \d+ not checked\./);   // r69e (updated on purpose): the states add up to those checked
   // (updated on purpose, fix15 LIVE12A-007: a layer whose companies are all in the theme the same way says it once over its table, so the
   // state is on its row or in that line)
   await expect(members.getByTestId("member-evidence").or(members.getByTestId("layer-by-once")).first())

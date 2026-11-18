@@ -42,7 +42,7 @@ test("R19: every stored shared read shows the one stamp and note, never its own 
     assert.doesNotMatch(src, /Written \{/, f);
   }
   const stamp = read("src/components/StoredStamp.tsx");
-  assert.match(stamp, /Last updated \{writtenAt/);
+  assert.match(stamp, /Last updated \$\{writtenAt/);          // r69e (updated on purpose): the stamp may carry a label (a theme: map made · checked), else "Last updated ..."
   assert.match(stamp, /left today/);
   assert.match(stamp, /disabled=\{busy \|\| none\}/);                  // none left: the button is off, with the reason beside it
   assert.match(stamp, /No fresh AI reads left today, back at midnight IST/);       // (updated on purpose, LIVE7B-002: one count)
