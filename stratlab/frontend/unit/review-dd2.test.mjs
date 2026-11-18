@@ -174,7 +174,7 @@ test("DD-046: the indicator menu is short, and the Stage says its 150-day averag
 test("DD-051: the deep dive's tables are cards on a phone", () => {
   assert.match(read("src/components/BizUpdates.tsx"), /<DataTable label=\{`\$\{symbol\} business update figures`\} stack /);
   const deep = read("src/pages/DeepDive.tsx");
-  assert.match(deep, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label="The last eight quarters" stack /);
+  // (updated on purpose, owner 18 Nov: the last eight quarters are the company page's, not repeated here)
   assert.match(deep, /<DataTable (?:csv=(?:"[^"]*"|\{[^\n]*?\}) )?label="Capex and cash by year" stack /);
   assert.match(read("src/styles.css"), /\.biz-updates \.k-tbl-wrap\.stack \.inv-clamp \{ display: none; \}/);
 });

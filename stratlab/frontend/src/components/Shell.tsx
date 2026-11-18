@@ -42,8 +42,6 @@ export const MINE_LINKS = ["/news", "/alerts", "/research/watchlist", "/calendar
 export const MINE_GROUPS = ["watch", "calendar"];
 /** Pages that belong to the person, not to a space (Account, Settings, the assistant, the app, invites): they open Mine's menu. */
 const MINE_PAGES = ["/account", "/settings", "/assistant", "/app", "/invite"];
-/** The page the menu's highlighted shortcut opens, under the search box in every space (R16). */
-export const THEMES = "/research/themes";
 
 /** `ask`: the analytics question (Tracking), in the page column after the page (LIVE8B-004: above it, its arrival after the first paint
  * pushed the page down, CLS 0.19 a time). */
@@ -294,14 +292,10 @@ export function Shell({ children, ask }: { children: ReactNode; ask?: ReactNode 
         </button>
       </div>
       <nav ref={sideScroll} className="side-groups" aria-label="Main" data-fade={fade}>
-        {/* Themes, one of StratLab's best tools (owner, 7 Nov: "buried" in Invest), highlighted on the menu's first row in My space and Invest and
-            in the phone's drawer, beside the space's home: no row of its own, so the menu still fits a 1280x800 laptop unscrolled (IA-2).
-            It stays in Invest's menu too, where its breadcrumb puts it; that entry is the one highlighted item on its page (ui-lint R7), so
-            on the Themes page the pill loses its orange and is a plain link (LIVE6-016: both looked selected) */}
+        {/* Themes is one entry, the first of Invest's menu above Companies (owner, 18 Nov: "put it at top like above the companies"), not a
+            pill beside the space's home: on its page that entry is the one highlighted item (ui-lint R7) */}
         <div className="side-list side-home">
           <NavLink to={homeOf(space)} end><Compass size={16} /><span className="side-home-label">{homeLabel}</span></NavLink>
-          {/* owner, 7 Nov: on My space and Invest only, where people research; Trade and Money stay as they were */}
-          {(space === "invest" || space === "mine") && <Link to={THEMES} className={`side-feature${path.startsWith(THEMES) ? " here" : ""}`} title="Themes: map a sector or trend and see the listed companies linked to it"><Compass size={16} />Themes</Link>}
         </div>
         {spaceGroups ?? minePart}
       </nav>

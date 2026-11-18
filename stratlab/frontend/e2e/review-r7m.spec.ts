@@ -184,6 +184,11 @@ test("Admin: a currency with no exchange rate is flagged, not shown at a default
 
 test("Admin: the email previews say the briefs are real, and Data and jobs has a Newsletters row (R7M-004, R7M-005)", async ({ page }) => {
   let errors = await open(page, "/admin/emails");
+  // owner, 18 Nov (ui1): a long intro shows its first sentence; the rest is one "More" away
+  const lede = page.locator(".k-page-head .k-lede");
+  await expect(lede).toBeVisible({ timeout: 30_000 });
+  const ledeMore = lede.getByRole("button", { name: "More" });
+  if (await ledeMore.count()) await ledeMore.click();
   await expect(page.getByText("The market briefs are the newest real issues; the rest use made-up details.")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("with made-up details. Nothing here is sent.")).toHaveCount(0);
   errors = errors.concat(await open(page, "/admin/data"));

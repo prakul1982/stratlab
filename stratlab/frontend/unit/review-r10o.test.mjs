@@ -70,7 +70,7 @@ test("R10O-012: one stock's old close is named, not made the list's date", async
 test("R10O-011: a bank's financing margin row is left out when none of it can be shown", () => {
   const table = read("src/components/Research.tsx");
   assert.match(table, /r\.name === "Financing margin" && r\.cells\.every\(\(c\) => c === "–"\)/);
-  assert.match(read("src/pages/DeepDive.tsx"), /n\.bank && n\.quarters\.slice\(-8\)\.every\(\(q\) => q\.opm == null\)/);
+  // (updated on purpose, owner 18 Nov: the deep dive no longer repeats the quarters; the company page's rule above is the one)
 });
 
 test("R10O-010: the rotation chart's date label is the last finished session the server sends", () => {

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { fmtDate, safeHref } from "../lib/format";
 import { CSV_HEAD, GROUPS, csvRows, factsLine, inGroup, lockedText, type CompanyLink, type CompanyLinks } from "../lib/companyLinks";
-import { Card, CardHead, ErrorState, PlanNote, Skeleton } from "./kit";
+import { Card, CardNote, CardHead, ErrorState, PlanNote, Skeleton } from "./kit";
 import "./companylinks.css";
 
 /* The customer and supplier map on a company page (lane b2): the customers and suppliers this company's filings name, and
@@ -55,7 +55,7 @@ export function CompanyLinksCard({ region, symbol }: { region: "IN" | "US"; symb
           </div>
           {v.locked > 0 && <PlanNote plan="basic">{lockedText(v.locked, v.plan_for_all)}</PlanNote>}
           {v.full && !v.csv && v.items.length > 0 && <p className="k-note">The links as a CSV, and the links among a theme's companies, are on the {v.plan_for_csv} plan.</p>}
-          <p className="k-note">{v.note}</p>
+          {v.note && <CardNote><p>{v.note}</p></CardNote>}
         </div>
       )}
     </Card>

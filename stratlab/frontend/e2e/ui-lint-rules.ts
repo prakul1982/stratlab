@@ -53,6 +53,9 @@
 //   R27 a table cut on a desktop (LIVE5-002) a list table (not a grid read across on purpose) at a desktop width with a column past its
 //                                            scrolling box's edge (the results day's "Options imply" off a 1280 screen), or a row's name
 //                                            cut by an ellipsis to under 56px ("HINDALCO F&O H…")
+// Owner, 18 Nov ("center align everything properly"):
+//   R28 off-centre                          a table header aligned otherwise than most of its column's cells (left over right-aligned
+//                                            numbers); a card head's control whose middle is > 2px off its title's first line while beside it
 export interface Violation { rule: string; element: string; key: string; detail: string }
 export interface LintOpts { phone: boolean; mark: boolean }
 export interface PageFrame { h1Top: number; h1Left: number; right: number }
@@ -778,6 +781,35 @@ export function lintPage(opts: LintOpts): LintResult {
     }
   }
 
+  // ---- R28 off-centre (owner, 18 Nov: "center align everything properly") -------------------------------------------------------------
+  {
+    const side = (a: string) => (a === "start" || a === "left" || a === "-webkit-left" ? "left" : a === "end" || a === "right" || a === "-webkit-right" ? "right" : a === "-webkit-center" || a === "-internal-center" ? "center" : a);
+    for (const t of Array.from(mainEl.querySelectorAll("table"))) {
+      if (!shown(t) || t.closest(".k-tbl-wrap.stack")) continue;
+      const head = t.querySelector("thead tr");
+      if (!head) continue;
+      const ths = Array.from(head.children);
+      const rows = Array.from(t.querySelectorAll("tbody tr")).filter((r) => r.children.length === ths.length);
+      if (!rows.length) continue;
+      ths.forEach((th, i) => {
+        if (!shown(th) || !textOf(th)) return;
+        const tally = new Map<string, number>();
+        for (const r of rows) { const a = side(S(r.children[i]).textAlign); tally.set(a, (tally.get(a) || 0) + 1); }
+        const [most, n] = [...tally].sort((a, b) => b[1] - a[1])[0];
+        const mine = side(S(th).textAlign);
+        if (mine !== most && n > rows.length / 2) add("R28", th, `the header "${textOf(th).slice(0, 18)}" is aligned ${mine}, its cells ${most}`);
+      });
+    }
+    for (const h of Array.from(mainEl.querySelectorAll(".k-card-head"))) {
+      const title = h.querySelector(".k-card-title"), act = h.querySelector(":scope > .k-card-actions");
+      if (!title || !act || !shown(title) || !shown(act) || h.querySelector(".k-card-headtext")) continue;
+      const tr = R(title), ar = R(act), line = Math.min(px(S(title).lineHeight) || tr.height, tr.height);
+      if (ar.top > tr.top + line || ar.left < tr.right) continue;          // the controls wrapped under the title
+      const off = (tr.top + line / 2) - (ar.top + ar.height / 2);
+      if (Math.abs(off) > 2) add("R28", act, `the head's controls sit ${Math.round(Math.abs(off))}px ${off > 0 ? "above" : "below"} the middle of the title's line`);
+    }
+  }
+
   // ---- R14 overlay on content (G2) --------------------------------------------------------------------------------------------------------------------
   // a fixed/sticky box that is not app chrome: the notebook's "Lab notes" pill sat over a row's delete button, the end of "Edit in words"
   // and the "Testing on" box. Content is measured once on the page, the overlay's own box at the top, middle and bottom of the scroll.
@@ -845,7 +877,7 @@ export function lintPage(opts: LintOpts): LintResult {
     if (counts[f.rule] <= 25) violations.push({ rule: f.rule, element: f.el === document.body ? "body" : labelOf(f.el), key: f.el === document.body ? "body" : keyOf(f.el), detail: f.detail });
   }
   if (opts.mark) {
-    const colour: Record<string, string> = { R1: "#ff2d55", R2: "#ff9500", R3: "#af52de", R4: "#ff3b30", R5: "#ffcc00", R6: "#34c759", R7: "#00c7be", R8: "#5856d6", R9: "#ff2d95", R10: "#ff0000", R11: "#8e8e93", R12: "#a2845e", R13: "#ff6482", R14: "#bf5af2", R15: "#32ade6", R16: "#ffd60a", R17: "#ac8e68", R18: "#64d2ff", R19: "#ff375f", R20: "#30d158", R21: "#0a84ff", R22: "#ff9f0a", R23: "#5e5ce6", R24: "#8e8e93", R25: "#d1d1d6", R26: "#ff4500", R27: "#ff8c00" };
+    const colour: Record<string, string> = { R1: "#ff2d55", R2: "#ff9500", R3: "#af52de", R4: "#ff3b30", R5: "#ffcc00", R6: "#34c759", R7: "#00c7be", R8: "#5856d6", R9: "#ff2d95", R10: "#ff0000", R11: "#8e8e93", R12: "#a2845e", R13: "#ff6482", R14: "#bf5af2", R15: "#32ade6", R16: "#ffd60a", R17: "#ac8e68", R18: "#64d2ff", R19: "#ff375f", R20: "#30d158", R21: "#0a84ff", R22: "#ff9f0a", R23: "#5e5ce6", R24: "#8e8e93", R25: "#d1d1d6", R26: "#ff4500", R27: "#ff8c00", R28: "#00b894" };
     const st = document.createElement("style");
     st.textContent = Object.entries(colour).map(([r, c]) => `[data-uilint~="${r}"]{outline:3px solid ${c} !important;outline-offset:-2px !important}`).join("\n");
     document.head.appendChild(st);

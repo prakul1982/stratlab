@@ -275,19 +275,11 @@ a.link { margin-inline: -2px; }
 .side-list a.active { background: var(--side-on); box-shadow: var(--side-on-ring); color: var(--ink); font-weight: 600; }
 .side-list a.active > svg { color: var(--ink); }
 .side-list a:focus-visible, .side-toggle:focus-visible { outline-offset: -2px; }
-/* R16: Themes, highlighted beside the space's home on the menu's first row: an accent edge and tint, the icon in the accent */
+/* the space's home on the menu's first row; Themes is Invest's first entry below it (owner, 18 Nov), no pill beside the home link */
 .side-home { flex-direction: row; align-items: center; gap: 6px; }
-/* the home link stays on one line beside Themes (owner, 7 Nov: "Invest home" broke onto two lines in its 32px row) */
+/* the home link stays on one line (owner, 7 Nov: "Invest home" broke onto two lines in its 32px row) */
 .side-home > a:first-child { flex: 1; gap: 8px; white-space: nowrap; }
 .side-home-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.side-list a.side-feature { flex: none; gap: 6px; padding: 0 9px 0 7px; white-space: nowrap; border: 1px solid var(--line-2); border-left: 3px solid var(--orange);
-  background: var(--orange-soft); color: var(--ink); font-weight: 600; }
-.side-list a.side-feature > svg { color: var(--orange-ink); }
-.side-list a.side-feature:hover { border-color: var(--orange); background: var(--orange-soft); }
-/* LIVE6-016: on the Themes page the menu's own Themes entry is the one selected item; the pill is a plain outlined link there */
-/* LIVE9A-025: an outlined pill still read as a second selected item beside the menu's entry: on its page it is plain text, no box */
-.side-list a.side-feature.here { border-color: transparent; background: none; font-weight: 500; color: var(--ink-2); }
-.side-list a.side-feature.here > svg { color: var(--ink-2); }
 .nb-dot { width: 16px; display: grid; place-items: center; flex: none; }
 .nb-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; position: relative; }   /* its hidden verdict words stay inside it (a long name put them 84px past the menu's edge) */
 .nb-pin { flex: none; display: inline-flex; color: var(--muted); }
@@ -659,7 +651,8 @@ td.num, .num { font-family: var(--sans); }
 /* AI read */
 .ai-read { border-color: var(--ink); }
 
-.ai-table .k-table :is(th, td) { white-space: normal; vertical-align: top; max-width: none; }
+/* owner (18 Nov, "center align everything properly"): each cell vertically centred in its row */
+.ai-table .k-table :is(th, td) { white-space: normal; vertical-align: middle; max-width: none; }
 .ai-table .k-table tbody th, .ai-table .k-table thead th:first-child { width: 11rem; min-width: 0; }
 .ai-table .k-table .k-list { margin: 0; }
 /* the area names its row: the header row is for screen readers only (LIVE7B-004: "The numbers / The figures" read as a stray row) */
@@ -1058,7 +1051,7 @@ body:has(.k-coach) .consent { visibility: hidden; }
 
 /* company deep dive */
 
-@media (max-width: 640px) { .ca-table .k-table { font-size: 13px; } .ca-table .k-table th, .ca-table .k-table td { padding: 9px 6px; white-space: normal; min-width: 0; vertical-align: top; } .ca-table .k-badge { white-space: normal; } .ca-table .k-table :is(th, td):first-child { min-width: 0 !important; max-width: none !important; } }
+@media (max-width: 640px) { .ca-table .k-table { font-size: 13px; } .ca-table .k-table th, .ca-table .k-table td { padding: 9px 6px; white-space: normal; min-width: 0; vertical-align: middle; } .ca-table .k-badge { white-space: normal; } .ca-table .k-table :is(th, td):first-child { min-width: 0 !important; max-width: none !important; } }
 [data-testid="scan-custom"] .add-rule { align-self: flex-start; }
 .ts-words { align-items: flex-start; } .ts-words .k-input { flex: 1 1 260px; width: auto; }
 .ca-type { font-weight: 600; font-size: var(--t-label); }
@@ -1561,10 +1554,22 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .link-btn { border: 0; background: none; padding: 0; font: inherit; color: var(--blue-ink); cursor: pointer; text-align: left; }
 .link-btn:hover, .link-btn.on, .link-btn[aria-pressed="true"] { text-decoration: underline; }
 
-.biz-filings { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.biz-filings li { border-bottom: 1px solid var(--line); padding-bottom: 6px; }
-/* the titles start at one x: "1 Oct 2026" and "1 May 2026" are not the same width, so each row's title sat a few pixels off its neighbours' (VR4-005) */
-.biz-day { display: inline-block; min-width: 6.5em; font-variant-numeric: tabular-nums; }
+/* date | subject | link (owner, 18 Nov: the link dropped to its own line under a long subject): one grid for every row, so the dates, the
+   subjects and the links each start at one x; a subject is two lines at most (its whole text in its title) */
+.biz-filings { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; column-gap: var(--s3); }
+.biz-filings li { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: center; border-bottom: 1px solid var(--line); padding: 8px 0; }
+.biz-filings li:first-child { padding-top: 0; }
+/* the titles start at one x: "1 Oct 2026" and "1 May 2026" are not the same width (VR4-005); tabular figures keep the dates even */
+.biz-day { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.biz-subject { min-width: 0; }
+.biz-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.biz-link { white-space: nowrap; justify-self: end; }
+/* a phone: the day and the link on the row's first line, the subject the whole width under them */
+@media (max-width: 560px) {
+  .biz-filings { grid-template-columns: minmax(0, 1fr) max-content; }
+  .biz-filings li { grid-template-areas: "day link" "subject subject"; row-gap: 2px; }
+  .biz-day { grid-area: day; } .biz-link { grid-area: link; } .biz-subject { grid-area: subject; }
+}
 
 .holder-names label { align-items: center; }
 
@@ -1607,6 +1612,9 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-page-head:not(:has(> .k-eyebrow)) { padding-top: 26px; }   /* VR1-160: a page with no kicker line (Account, Settings, Plans) keeps its title where the others have it, one line down */
 .k-h1 { font-family: var(--serif); font-size: var(--t-h1); font-weight: 600; letter-spacing: -.02em; line-height: 1.1; text-wrap: balance; }
 .k-lede { font-size: var(--t-lede); color: var(--ink-2); max-width: 64ch; }
+/* a long intro's "More" (owner, 18 Nov): a quiet text button on the intro's line, its tap area 32px tall without making the line taller */
+.k-lede-more { display: inline-block; font: inherit; font-size: var(--t-label); font-weight: 600; line-height: 18px; border: 0; background: none; padding: 7px 4px; margin: -7px -2px; color: var(--blue-ink); cursor: pointer; white-space: nowrap; }
+.k-lede-more:hover { text-decoration: underline; }
 .k-meta { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; min-height: 25px; }   /* a badge's height: the "Data up to" badge that lands later doesn't move the page */
 /* VR1-051: the notebook's "Saving / Saved" text is the only thing in its header's last row, which held a 25px band of nothing under the question line:
    it sits at the header's top right instead, so the row is not there. */
@@ -1624,6 +1632,11 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-chart-plain > .k-card-head { flex-wrap: nowrap; align-items: flex-start; }
 .k-chart-plain > .k-card-head > .k-card-actions { flex: none; }
 .k-card-actions { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; min-width: 0; max-width: 100%; }
+/* owner (18 Nov, "center align everything properly"): a head that keeps its one control at the top beside a title that may wrap centres
+   that control on the title's first line (a box the line's height, the control centred in it), not 2-7px above or below it */
+.space-home .k-card-head:has(> .k-card-actions > a.link:only-child) > .k-card-actions,
+.mine-slot .k-card-head:has(> .k-card-actions > a:only-child) > .k-card-actions,
+.k-chart-plain > .k-card-head > .k-card-actions { height: calc(var(--t-card) * 1.5); }
 .k-card-actions > .k-chipwrap { max-width: 100%; }
 .k-card-actions .btn[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
 .k-card.compact { flex-direction: row; align-items: center; flex-wrap: wrap; gap: var(--s2) var(--s4); padding-block: var(--s3); }
@@ -1649,7 +1662,8 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 /* VR2-020: the funds' cost and behaviour card holds seven figures: four across (4 + 3), not five (5 + 2, a second row of two) */
 .mf-stats .k-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }   /* never 3 across: seven made 3 + 3 + 1 at 1280 (UI checker R9) */
 @media (min-width: 1000px) { .mf-stats .k-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-.k-stats > .k-stat { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 0; align-content: start; }
+/* each figure, its label and its note centred in its column (owner, 18 Nov: "center align everything properly", after Holdings' totals) */
+.k-stats > .k-stat { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 0; align-content: start; text-align: center; }
 .k-stats > .k-stat > * + * { margin-top: 2px; }
 .k-stats > .k-stat > .k-stat-k { align-self: end; }
 .k-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -2017,8 +2031,27 @@ a.k-chip { display: inline-flex; align-items: center; text-decoration: none; }
 .stored-stamp { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--s1) var(--s2); }
 @media (max-width: 640px) { .stored-stamp { justify-content: flex-start; } }
 .stored-note { margin: 0 0 var(--s2); }
-.theme-already { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
-.theme-ideas { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }   /* LIVE10A-021 */
+/* the Themes box (owner, 18 Nov: "fix ui dude"): the market switch, the box and "Map it" on one row (the switch on its own row on a phone);
+   the shared library as equal chips, at most two rows; the ideas one row, or folded under "More ideas" */
+.theme-box { display: flex; flex-direction: column; gap: var(--s3); }
+.theme-map { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
+.theme-map > .k-seg { flex: none; align-self: center; }
+.theme-field { flex: 1 1 320px; display: flex; align-items: center; gap: var(--s2); min-width: 0; }
+.theme-field > .k-input { flex: 1; min-width: 0; }
+.theme-field > .btn { flex: none; }
+.theme-already { display: flex; flex-direction: column; gap: var(--s1); }
+.theme-ready { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--s2); }
+.theme-ready > .btn { width: 100%; min-width: 0; justify-content: center; padding-inline: 8px; }
+.theme-ready > .btn > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.theme-ready > .theme-ready-all { font-weight: 600; }
+.theme-already > [data-show-less] { align-self: flex-start; }
+.theme-ideas { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }   /* LIVE10A-021 */
+.theme-more .k-disclosure-body { padding-left: 0; }
+@media (max-width: 560px) {
+  .theme-ready { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* R72 (ui-lint R18): on a phone the ideas wrap as chips, none cut by the edge of a sideways row */
+  .theme-ideas { row-gap: var(--s2); }
+}
 .k-note.k-down, .k-small.k-down { color: var(--down); }
 .k-sub { font-size: var(--t-body); font-weight: 600; }
 .k-list { margin: 0; padding-left: var(--s5); display: flex; flex-direction: column; gap: var(--s1); font-size: var(--t-label); }
@@ -2089,6 +2122,12 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-disclosure[open] > summary::before { transform: rotate(45deg); }
 .k-disclosure-body { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s1) 0 0 var(--s4); }
 .k-disclosure-body:has(> .k-tbl-wrap) { padding-left: 0; }   /* VR1-122: a table in a fold lines up with the cards around it, not 16px in */
+/* a card's notes behind one fold (kit/CardNote, owner 18 Nov): the summary in the notes' small muted type, the notes as they were inside */
+.k-cardnote > summary { font-size: var(--t-note); font-weight: 500; color: var(--muted); }
+.k-cardnote > summary:hover { color: var(--ink-2); }
+.k-cardnote .k-disclosure-body { padding-left: var(--s4); }
+.k-cardnote-body { display: flex; flex-direction: column; gap: var(--s1); font-size: var(--t-note); color: var(--muted); }
+.k-cardnote-body > p { margin: 0; }
 /* NAV3: the plans' full comparison is one fold of several tables, each under its heading: they line up with the glance table above */
 .k-compare .k-disclosure-body { padding-left: 0; }
 /* FoldCard (owner, 5 Nov: "make it like a dropdown everywhere"): a card that is one row until opened; the title is the button and the
@@ -2422,7 +2461,8 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .mine-mkt > .k-stat-k { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 [data-testid="mine-paper"] .k-card-title { white-space: nowrap; }
 @media (max-width: 520px) { .mine-markets { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.mine-mkt { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: var(--s3); border: 1px solid var(--line); border-radius: 12px; }
+.mine-mkt { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: var(--s3); border: 1px solid var(--line); border-radius: 12px; text-align: center; }
+/* each market tile's name, level, change and day centred in the tile (owner, 18 Nov: "center align everything properly": a row of figures) */
 .mine-mkt-v { font-size: 20px; font-weight: 600; letter-spacing: -.01em; }
 .mine-mkt-when { display: block; }   /* LIVE12B-007: the day on its own line under the change in every tile ("today" sat beside USD/INR's) */
 /* LIVE7B-012: a tile still being read is as tall as a read one: the value's line (a bar in it), the change line's space, the month line's space */
@@ -2431,7 +2471,7 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .mine-mkt-old { display: flex; flex-direction: column; gap: 4px; flex: 1; }
 .mine-mkt-old .mine-mkt-v { color: var(--muted); font-weight: 500; }
 .mine-mkt-old .k-spark { opacity: .45; }
-.mine-mkt-hold .mine-mkt-v { display: flex; align-items: center; min-height: 30px; }
+.mine-mkt-hold .mine-mkt-v { display: flex; align-items: center; justify-content: center; min-height: 30px; }
 .mine-hold-ghost .k-note { display: block; }   /* the day under the change, as it wraps in a tile a sixth of the card wide */
 .mine-hold-ghost { visibility: hidden; }
 .mine-spark-hold { display: block; height: 36px; margin-top: auto; }

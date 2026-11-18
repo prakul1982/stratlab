@@ -93,11 +93,13 @@ test("LIVE10A-024: a rise in stocks that fell, 52-week lows or down 4% moves is 
   assert.match(read("src/pages/PulseMood.tsx"), /<Delta badRise=\{r\.key === "dec" \|\| r\.key === "lows"\}/);
 });
 
-test("LIVE10A-021: the theme ideas are a row of their own under Map it", () => {
+// (owner, 18 Nov) changed on purpose: "Map it" sits on the box's row; the ideas stay a row of their own under it (folded under "More ideas"
+// once the shared library shows)
+test("LIVE10A-021: the theme ideas are a row of their own under the box and Map it", () => {
   const page = read("src/pages/ThemesPage.tsx");
-  assert.match(page, /<FormActions>\n\s+<button className="btn" disabled=\{busy\}>\{busy \? "Mapping…" : "Map it"\}<\/button>\n\s+<\/FormActions>/);
+  assert.match(page, /<div className="theme-field">[\s\S]*?<button className="btn" disabled=\{busy\}>\{busy \? "Mapping…" : "Map it"\}<\/button>\n\s+<\/div>/);
   assert.match(page, /<div className="k-row theme-ideas" data-testid="theme-ideas">/);
-  assert.match(read("src/styles.css"), /\.theme-ideas \{ grid-column: 1 \/ -1;/);
+  assert.match(read("src/styles.css"), /\.theme-ideas \{ display: flex;/);
 });
 
 test("LIVE10A-012: a heatmap group head too narrow for its name shows the short one", async () => {

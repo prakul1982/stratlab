@@ -1,4 +1,5 @@
-import { useRef, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
+import { splitLede } from "../../lib/lede";
 import { lockSlotRef } from "../../lib/lockSlot";
 import { asOf as asOfText } from "../../lib/format";
 import { Info } from "../ui";
@@ -25,7 +26,7 @@ export function PageHeader({ eyebrow, title, lede, asOf, asOfPending = false, as
     <header className="k-page-head">
       {eyebrow && <span className="k-eyebrow">{eyebrow}</span>}
       <h1 className="k-h1">{title}</h1>
-      {lede && (inline ? <div className="k-lede">{lede} <Info label={infoLabel}>{info}</Info></div> : <p className="k-lede">{lede}</p>)}
+      {lede && (inline ? <div className="k-lede"><Lede lede={lede} /> <Info label={infoLabel}>{info}</Info></div> : <p className="k-lede"><Lede lede={lede} /></p>)}
       {(when || (info && !inline) || actions || asOfPending) && (
         <div className="k-meta">
           {when ? <Badge>{asOfLabel} {when}</Badge> : asOfPending && <span className="k-meta-wait" aria-hidden="true"><Badge>{asOfLabel}</Badge></span>}
@@ -36,6 +37,21 @@ export function PageHeader({ eyebrow, title, lede, asOf, asOfPending = false, as
     </header>
     {/* where the page's plan-lock note goes, straight under the title on every page (RC7-003; lib/lockSlot.ts) */}
     <div className="page-lock-slot" ref={(el) => { if (el) { slot.current = el; lockSlotRef(el); } else { lockSlotRef(null, slot.current); slot.current = null; } }} />
+    </>
+  );
+}
+
+/** One short sentence of a long intro, the rest behind "More" (owner, 18 Nov). The rest stays in the page, hidden, so find-in-page and a
+ *  screen reader's "More" reach it. */
+function Lede({ lede }: { lede: ReactNode }) {
+  const [more, setMore] = useState(false);
+  const cut = typeof lede === "string" ? splitLede(lede) : null;
+  if (!cut) return <>{lede}</>;
+  return (
+    <>
+      {cut.first}{cut.joint && !more && <span aria-hidden="true">…</span>}
+      <span hidden={!more} data-testid="lede-rest">{cut.joint}{" "}{cut.rest}</span>{" "}
+      <button type="button" className="k-lede-more" aria-expanded={more} onClick={() => setMore((x) => !x)}>{more ? "Less" : "More"}</button>
     </>
   );
 }

@@ -64,6 +64,7 @@ export const RULES: Record<string, string> = {
   R25: "Same sentence twice: one sentence (30+ characters) said twice in one card (table rows left out)",
   R26: "Content past its card: a table, picture, control or tile whose right edge is > 3px past the right edge of the card that holds it",
   R27: "A table cut on a desktop: a list table with a column past its scrolling box's edge, or a row's name cut by an ellipsis to under 56px",
+  R28: "Off-centre (owner, 18 Nov): a table header aligned otherwise than its column's cells, or a card head's controls > 2px off the middle of the title's line",
 };
 
 interface Row extends Violation { page: string; label: string; width: number; theme: string; shot?: string; allowed?: string }
@@ -301,6 +302,13 @@ test("rules fire on known-bad layouts and stay quiet on good ones", async ({ pag
   expect(await fire(wrap("data-grid", 600)), "R27 a grid scrolls on purpose").not.toContain("R27");
   expect(await fire(`<table><tbody><tr><th><span style="display:block;width:30px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Hindalco Industries</span></th></tr></tbody></table>`), "R27 a name cut to a few letters").toContain("R27");
   expect(await fire(`<table><tbody><tr><th><span style="display:block;width:30px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Hindalco Industries</span></th></tr></tbody></table>`, true), "R27 is for desktops").not.toContain("R27");
+  // R28 (owner, 18 Nov: "center align everything properly") a left header over right-aligned numbers; a head's button 8px under its title's line
+  const numTable = (th: string) => `<table><thead><tr><th style="text-align:left">Stock</th><th style="text-align:${th}">Price</th></tr></thead><tbody><tr><td>TCS</td><td style="text-align:right">3,000</td></tr><tr><td>INFY</td><td style="text-align:right">1,500</td></tr></tbody></table>`;
+  expect(await fire(numTable("left")), "R28 header off its cells").toContain("R28");
+  expect(await fire(numTable("right")), "R28 header over its cells").not.toContain("R28");
+  const head28 = (align: string) => `<div class="k-card-head" style="display:flex;align-items:${align};justify-content:space-between;width:600px"><h2 class="k-card-title" style="margin:0;font-size:20px;line-height:30px">Markets</h2><div class="k-card-actions" style="display:flex"><button style="height:46px">Open</button></div></div>`;
+  expect(await fire(head28("flex-start")), "R28 control off the title's line").toContain("R28");
+  expect(await fire(head28("center")), "R28 control centred on the title").not.toContain("R28");
   // R12 caption under a list
   expect(await fire(`<ul><li>One</li><li>Two</li></ul><p style="font-size:12px">Dots: each notebook's last verdict.</p>`), "R12 caption").toContain("R12");
 });

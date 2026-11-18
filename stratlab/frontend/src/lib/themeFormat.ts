@@ -109,6 +109,12 @@ export function ownWords(text: string | null | undefined, name = ""): string {
  *  everyone, not this person's reading history: it never says "Already read" or "read <date>" (an account that never opened a theme was
  *  shown "Already read: Cybersecurity · US, read 11 Nov"); the date is when the stored map was last updated. */
 export const LIBRARY_HEAD = "Ready to open:";
+/** A theme's short name for its chip (owner, 18 Nov: "Utilities (Indian power, gas and water-linked infrastructure)" → "Utilities"):
+ *  the words before a bracket or a dash that explain it; the full name stays in the chip's title. */
+export function shortTheme(name: string): string {
+  const s = name.replace(/\s*\([^)]*\)\s*$/, "").split(/\s+[–—-]\s+|:\s+/)[0].trim();
+  return s || name;
+}
 export function libraryLabel(i: { name: string; region: string; at: string | null; day?: string | null }, fmtDay: (iso: string) => string, withMarket = true): string {
   const where = ({ IN: "India", US: "US" } as Record<string, string>)[i.region] ?? i.region;
   // LIVE7A-008: the map's own day in the market's time zone, the date its page says "Last updated" (theme_library.updated_at)

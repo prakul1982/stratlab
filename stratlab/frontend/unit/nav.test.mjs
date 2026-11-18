@@ -14,7 +14,7 @@ const { cleanLayout } = await import("../src/lib/mineLayout.ts");
 test("the map has the owner's menu entries, in order (IA-1: 42 entries became 14, each a page of tabs)", () => {
   // the Trade journal first, right under Trade home (owner, 5 Nov)
   assert.deepEqual(NAV.trade.groups.map((g) => g.label), ["Trade journal", "Strategies", "Practise", "F&O desk", "Calendar"]);
-  assert.deepEqual(NAV.invest.groups.map((g) => g.label), ["Companies", "Find stocks", "Themes", "Market today", "Market data", "Calendar", "Watchlist"]);
+  assert.deepEqual(NAV.invest.groups.map((g) => g.label), ["Themes", "Companies", "Find stocks", "Market today", "Market data", "Calendar", "Watchlist"]);   // (owner, 18 Nov) Themes first, above Companies
   assert.deepEqual(NAV.money.groups.map((g) => g.label), ["Portfolio", "Tax", "Plan", "Calendar"]);
   assert.deepEqual(NAV.invest.groups.find((g) => g.id === "find-stocks").pages.map((p) => p.label), ["Figures", "Chart rules", "Filings"]);
   assert.deepEqual(NAV.invest.groups.find((g) => g.id === "market-today").pages.map((p) => p.label), ["Mood", "Breadth", "Heatmap", "Movers", "Sectors", "Flows", "Today's brief"]);
