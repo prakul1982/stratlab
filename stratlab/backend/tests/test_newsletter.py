@@ -149,7 +149,8 @@ def test_ai_failure_falls_back_to_the_template_and_is_asked_once_per_day(w):
     assert w["ai"].calls == 1
     write.summary(f)
     assert w["ai"].calls == 1                           # shared by every reader: built once
-    assert "NIFTY 50 +0.42%" in write.template(f) and "1 stock from the NIFTY 50 stocks newly matched" in write.template(f)
+    # (updated on purpose, site76 LIVE14A-020: "1 stock from the NIFTY 50 stocks" named stocks twice)
+    assert "NIFTY 50 +0.42%" in write.template(f) and "1 stock from the NIFTY 50 newly matched" in write.template(f)
 
 
 def test_my_stocks_never_calls_the_ai(w):

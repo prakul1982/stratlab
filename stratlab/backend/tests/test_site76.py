@@ -185,3 +185,22 @@ def test_live14b_014_the_usage_table_counts_the_journals_trades(monkeypatch):
     monkeypatch.setattr(J, "load", lambda uid: {"updated_at": "x"})
     monkeypatch.setattr(J, "trades", lambda uid, data, today: {"trades": [{"src": "tradebook"}] * 9 + [{"src": "practice"}] * 2})
     assert M._journal_count("u-1") == 9
+
+
+def test_live14a_019_a_us_call_row_with_no_name_takes_the_stored_pages_name(monkeypatch):
+    from datetime import date
+    from app import concalls, results
+    monkeypatch.setattr(results, "between", lambda region, frm, to: [{"symbol": "AGTX", "date": "2026-11-18", "name": None, "when": None},
+                                                                      {"symbol": "ZZZ", "date": "2026-11-18", "name": None, "when": None}])
+    monkeypatch.setattr(results, "_snap", lambda region: {"AGTX": {"name": "Agentix Corp"}})
+    rows = {r["symbol"]: r for r in concalls.us_rows(date(2026, 11, 16), date(2026, 11, 20))}
+    assert rows["AGTX"]["name"] == "Agentix Corp" and rows["ZZZ"]["name"] == "ZZZ"
+
+
+def test_live14a_020_a_briefs_scan_line_names_the_group_once():
+    """LIVE14A-020: "2 stocks from the NIFTY 50 stocks newly matched…" in the Briefs list."""
+    from app.newsletter import write as W
+    assert W.group_words("NIFTY 50 stocks") == "NIFTY 50" and W.group_words("S&P 500") == "S&P 500"
+    assert W.group_words("20 of the largest US companies") == "20 of the largest US companies"
+    src = (__import__("pathlib").Path(W.__file__)).read_text()
+    assert "from the {group_words(scan['group'])} newly matched" in src

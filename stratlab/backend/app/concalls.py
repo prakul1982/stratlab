@@ -547,12 +547,14 @@ def india_rows(frm: date, to: date) -> list[dict]:
 def us_rows(frm: date, to: date) -> list[dict]:
     from . import results
     out = []
+    # LIVE14A-019: a row the calendar gives no name for ("AGTX · AGTX") takes the company's name from the app's stored pages
+    names = {sym: x.get("name") for sym, x in results._snap("US").items() if x.get("name")}
     for r in results.between("US", frm, to):
         links = []
         o = r.get("out") or {}
         if str(o.get("url") or "").startswith("https://"):
             links.append({"kind": "release", "label": LINK_NAME["release"], "url": o["url"], "filed": o.get("at")})
-        out.append({"id": f"{r['symbol']}|{r['date']}|results", "region": "US", "symbol": r["symbol"], "name": r.get("name") or r["symbol"],
+        out.append({"id": f"{r['symbol']}|{r['date']}|results", "region": "US", "symbol": r["symbol"], "name": r.get("name") or names.get(r["symbol"]) or r["symbol"],
                     "date": r["date"], "until": None, "dates": None, "time": None, "tz": "ET" if r.get("when") else None,
                     "session": r.get("when"), "type": "results", "type_label": TYPE_NAME["results"], "links": links, "noticed": True})
     return out

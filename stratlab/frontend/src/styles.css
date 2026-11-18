@@ -2642,6 +2642,13 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
    choices takes two columns of an ordinary form, so it isn't squeezed. */
 .k-form > .k-field > .k-seg { width: max-content; max-width: 100%; min-height: var(--ctl); align-items: stretch; box-sizing: border-box; }
 .k-form > .k-field > .k-seg button { flex: 1 1 auto; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; }
+/* LIVE14B-012: on a phone a switch takes the row like every other one: /plans' "Billed" Monthly/Yearly sat at ~270 px over a full-width
+   "Prices in", and a card head's switch ("Add to my trades / Start again with this file") was stacked in a 165-250 px box at the row's end */
+@media (max-width: 480px) {
+  .k-form > .k-field > .k-seg { width: 100%; }
+  .k-card-head > .k-card-actions:has(> .k-seg:only-child) { flex: 1 1 100%; }
+  .k-card-head > .k-card-actions > .k-seg:only-child { width: 100%; }
+}
 @media (min-width: 640px) { .k-form > .k-field:has(> .k-seg button:nth-child(3)) { grid-column: span 2; } }
 .k-form.k-form-trio > .k-field:has(> .k-seg button:nth-child(3)) { grid-column: auto; }
 /* where the buttons are 44px to tap (a phone), the track has no padding: a padded one was 50px beside 44px boxes */

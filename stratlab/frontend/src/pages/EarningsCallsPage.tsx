@@ -92,7 +92,8 @@ export function EarningsCallsPage() {
         {callTime(r) && <span className="k-sub-line">{callTime(r)}</span>}</span>) },
     { key: "co", header: "Company", wrap: true, cell: (r) => (
       <><Link className="link" to={`/research/${r.region}/${encodeURIComponent(r.symbol)}`}>{r.name}</Link>
-        <span className="k-note k-muted"> · {r.symbol}{r.mine ? " · yours" : ""}</span></>) },
+        {/* LIVE14A-019: a row whose source gives no name ("AGTX · AGTX") says the ticker once */}
+        {(r.name !== r.symbol || r.mine) && <span className="k-note k-muted">{r.name !== r.symbol ? ` · ${r.symbol}` : ""}{r.mine ? " · yours" : ""}</span>}</>) },
     { key: "type", header: "Event", wrap: true, cell: (r) => r.type_label + (r.noticed ? "" : " (from the filing after it)") },
     { key: "links", header: "Links", wrap: true, csv: (r) => r.links.map((x) => `${x.label}: ${x.url}`).join(" | "), cell: (r) => <Links r={r} /> },
   ];
