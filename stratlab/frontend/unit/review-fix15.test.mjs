@@ -58,3 +58,15 @@ test("LIVE12A-011: the one coloured breadth share says its colour rule in its ro
     highs: fig(10), lows: fig(4), up4: fig(3), down4: fig(2), ad_ratio: fig(1.5), mcclellan: fig(10), summation: fig(100), trin: fig(1), stage2: fig(20) };
   assert.equal(measureRows(t, null).find((r) => r.key === "p50").means, HALF_MEANS);
 });
+
+test("LIVE12A-010: a mid-size heatmap tile (about 57 × 53 px) names a long symbol over two lines; the facts line counts the tiles on the map", async () => {
+  const { tileWords } = await import("../src/lib/heatmap.ts");
+  const width = (text) => text.length * 6.5;
+  assert.deepEqual(tileWords("HINDUNILVR", "+1.2%", 57, 53, width), { px: 10, fig: false, split: 5 });
+  assert.deepEqual(tileWords("BAJAJ-AUTO", "+1.2%", 46, 50, width), { px: 9, fig: false, split: 6 });       // split after the hyphen
+  assert.deepEqual(tileWords("HINDUNILVR", "+1.2%", 60, 40, width), { px: 0, fig: false });                   // one line's height: none
+  assert.match(read("src/components/chart/Treemap.tsx"), /\{split \? <>\{p\.tile\.s\.slice\(0, split\)\}<br \/>\{p\.tile\.s\.slice\(split\)\}<\/> : p\.tile\.s\}/);
+  const h = read("src/pages/HeatmapPage.tsx");
+  assert.match(h, /data-testid="hm-count"/);
+  assert.match(h, /onMap\.toLocaleString\("en-IN"\)\}<\/b> of \{tiles\.length\.toLocaleString\("en-IN"\)\} companies on the map/);
+});

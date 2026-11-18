@@ -94,7 +94,7 @@ export function Treemap({ tiles, size, color, period, group, index, query = "", 
             if (w < 1 || h < 1) return null;
             const cls = stepClass(step(p.value, color, period), color);
             const text = figure(p.value);
-            const { px, fig, vert } = tileWords(p.tile.s, text, w, h, textWidth);
+            const { px, fig, vert, split } = tileWords(p.tile.s, text, w, h, textWidth);
             const scale = (px === 15 ? " lg" : px === 10 ? " sm" : px === 9 ? " xs" : "") + (vert ? " vert" : "");
             const off = searching && !matches(p.tile, query);
             return (
@@ -102,7 +102,7 @@ export function Treemap({ tiles, size, color, period, group, index, query = "", 
                 style={{ left: p.box.x + GAP / 2, top: p.box.y + GAP / 2, width: w, height: h }}
                 aria-label={`${p.tile.n}, ${text}`} onMouseEnter={move(p)} onMouseMove={move(p)}>
                 {/* the link's name says both in words; the tile's own letters are the picture */}
-                {px > 0 && <span className="hm-sym" aria-hidden="true">{p.tile.s}</span>}
+                {px > 0 && <span className="hm-sym" aria-hidden="true">{split ? <>{p.tile.s.slice(0, split)}<br />{p.tile.s.slice(split)}</> : p.tile.s}</span>}
                 {fig && <span className="hm-fig" aria-hidden="true">{text}</span>}
               </Link>
             );
