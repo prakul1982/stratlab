@@ -2049,9 +2049,8 @@ a.k-chip { display: inline-flex; align-items: center; text-decoration: none; }
 .theme-more .k-disclosure-body { padding-left: 0; }
 @media (max-width: 560px) {
   .theme-ready { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  /* on a phone the ideas stay one line that swipes sideways, not four wrapped rows */
-  .theme-ideas { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
-  .theme-ideas > * { flex: none; }
+  /* R72 (ui-lint R18): on a phone the ideas wrap as chips, none cut by the edge of a sideways row */
+  .theme-ideas { row-gap: var(--s2); }
 }
 .k-note.k-down, .k-small.k-down { color: var(--down); }
 .k-sub { font-size: var(--t-body); font-weight: 600; }
