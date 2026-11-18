@@ -81,3 +81,9 @@ test("LIVE11A-022: the landing's sample cards show the server's verdict-first li
   assert.match(page, /<span className="small">\{e\.verdict\.card_headline \?\? e\.verdict\.fact_headline \?\? e\.verdict\.headline\}<\/span>/);
   assert.match(page, /e\.verdict\.card_headline \?\? e\.verdict\.fact_headline \?\? e\.verdict\.headline\);/);
 });
+
+test("LIVE11A-027/028: the overnight data note is a quiet one; the sign-in gate doesn't name one way to sign in", () => {
+  assert.match(read("src/main.tsx"), /<div className="banner data-banner calm" role="status"><span>Indian price data reconnects on \{back\}/);
+  assert.match(read("src/styles.css"), /\.banner\.data-banner\.calm \{ background: var\(--chip\); color: var\(--muted\); \}/);
+  assert.doesNotMatch(read("src/pages/Gate.tsx"), /Sign in with Google and this page opens/);
+});

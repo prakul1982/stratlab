@@ -512,6 +512,7 @@ td.num, .num { font-family: var(--sans); }
 /* the offline line: one thin line, not a block above every page (DD-006, DC-002); the phone gets its short form */
 .banner.data-banner { padding: 6px 14px; font-size: 13.5px; margin-bottom: 14px; flex-wrap: nowrap; }
 .banner.data-banner > span { min-width: 0; }
+.banner.data-banner.calm { background: var(--chip); color: var(--muted); }    /* LIVE11A-028: a normal overnight state, not an alarm */
 .data-banner .banner-short { display: none; }
 @media (max-width: 720px) { .data-banner .banner-full { display: none; } .data-banner .banner-short { display: inline; } }
 .results { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 20; background: var(--card); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: var(--shadow); max-height: 360px; overflow-y: auto; }

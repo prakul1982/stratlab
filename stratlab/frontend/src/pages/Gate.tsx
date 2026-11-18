@@ -80,10 +80,10 @@ export function SignInGate() {
       <PageHeader eyebrow="StratLab" title={title}
         lede={none ? "StratLab has no company page at this address. Check the symbol, or sign in with Google to search every listed company."
           : unfinished ? `${UNFINISHED_SIGNIN} This page opens once you're in.`
-          : ended ? `Your sign-in ended, so StratLab can't show ${what} until you sign in again. Sign in with Google and this page opens where you left it. What you saved is still in your account.`
+          : ended ? `Your sign-in ended, so StratLab can't show ${what} until you sign in again. Sign in and this page opens where you left it. What you saved is still in your account.`
           : d.company ? "Company pages, with their numbers, filings, owners and charts, are inside StratLab. It's free to start: sign in with Google and the page opens if StratLab has one for this company."
           : d.restricted ? "Sign in with Google to continue. It's free to start."
-          : `${what.charAt(0).toUpperCase()}${what.slice(1)} ${/s$/.test(what) && !/^this /.test(what) ? "are" : "is"} in your StratLab account. Sign in with Google and this page opens.`} />
+          : `${what.charAt(0).toUpperCase()}${what.slice(1)} ${/s$/.test(what) && !/^this /.test(what) ? "are" : "is"} in your StratLab account. Sign in and this page opens.`} />
       <div className="gate-actions">
         <SignInButton />
         <Link className="btn quiet" to="/">What is StratLab?</Link>
