@@ -97,3 +97,16 @@ export function monthOf(i: number): string {
   const k = Math.round(i);
   return `${Math.floor(k / 12)}-${String((k % 12) + 1).padStart(2, "0")}`;
 }
+
+/** A company's update filings, the same subject filed again and again folded into one row (owner, 18 Nov: the quarterly "Intimation under
+ *  SEBI (LODR) Regulations, 2015" listed four times): groups in the list's own order (latest first), each with every filing of that subject. */
+export function foldFilings<F extends { title: string }>(filings: F[]): { title: string; items: F[] }[] {
+  const by = new Map<string, { title: string; items: F[] }>();
+  for (const f of filings) {
+    const title = tidyTitle(f.title);
+    const key = title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const g = by.get(key);
+    if (g) g.items.push(f); else by.set(key, { title, items: [f] });
+  }
+  return [...by.values()];
+}

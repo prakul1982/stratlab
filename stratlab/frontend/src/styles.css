@@ -1553,10 +1553,22 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .link-btn { border: 0; background: none; padding: 0; font: inherit; color: var(--blue-ink); cursor: pointer; text-align: left; }
 .link-btn:hover, .link-btn.on, .link-btn[aria-pressed="true"] { text-decoration: underline; }
 
-.biz-filings { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.biz-filings li { border-bottom: 1px solid var(--line); padding-bottom: 6px; }
-/* the titles start at one x: "1 Oct 2026" and "1 May 2026" are not the same width, so each row's title sat a few pixels off its neighbours' (VR4-005) */
-.biz-day { display: inline-block; min-width: 6.5em; font-variant-numeric: tabular-nums; }
+/* date | subject | link (owner, 18 Nov: the link dropped to its own line under a long subject): one grid for every row, so the dates, the
+   subjects and the links each start at one x; a subject is two lines at most (its whole text in its title) */
+.biz-filings { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; column-gap: var(--s3); }
+.biz-filings li { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: center; border-bottom: 1px solid var(--line); padding: 8px 0; }
+.biz-filings li:first-child { padding-top: 0; }
+/* the titles start at one x: "1 Oct 2026" and "1 May 2026" are not the same width (VR4-005); tabular figures keep the dates even */
+.biz-day { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.biz-subject { min-width: 0; }
+.biz-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.biz-link { white-space: nowrap; justify-self: end; }
+/* a phone: the day and the link on the row's first line, the subject the whole width under them */
+@media (max-width: 560px) {
+  .biz-filings { grid-template-columns: minmax(0, 1fr) max-content; }
+  .biz-filings li { grid-template-areas: "day link" "subject subject"; row-gap: 2px; }
+  .biz-day { grid-area: day; } .biz-link { grid-area: link; } .biz-subject { grid-area: subject; }
+}
 
 .holder-names label { align-items: center; }
 

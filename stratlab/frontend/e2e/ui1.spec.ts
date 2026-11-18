@@ -45,3 +45,38 @@ test("item 6: the Themes box is one row, the library two rows of equal short chi
   await expect(grid.locator(".theme-ready > button").last()).toHaveText("All 30 themes");
   await sane(page, errors);
 });
+
+// Item 3 (owner, 18 Nov: HDFC Bank's update filings): date | subject | link on every row, the link column fixed and right-aligned, a long
+// subject two lines at most, the same subject filed four times one row with its other days, five rows then "Show all N".
+test("item 3: a company's update filings are one clean list, repeats folded (owner, 18 Nov)", async ({ page }) => {
+  const lodr = "Intimation under SEBI (LODR) Regulations, 2015";
+  const long = "Disclosure under Regulation 30 of the SEBI (Listing Obligations and Disclosure Requirements) Regulations, 2015: business update for the quarter ended September 30, 2026 with advances, deposits and the CASA ratio as at the quarter's end";
+  const f = (id: string, at: string, title: string) => ({ id, at: `${at}T10:00:00Z`, title, url: `https://example.com/${id}`, read: true, period: null, problem: null, exchange: "NSE" });
+  await page.route("**/research/business-updates/**", async (r) => {
+    const res = await r.fetch(); const d = await res.json();
+    d.filings = [f("a1", "2026-10-14", lodr), f("a2", "2026-10-03", long), f("a3", "2026-07-12", lodr), f("a4", "2026-07-03", "Business update for the quarter ended June 30, 2026"),
+      f("a5", "2026-04-15", lodr), f("a6", "2026-04-04", "Business update for the quarter ended March 31, 2026"), f("a7", "2026-01-14", lodr),
+      f("a8", "2026-01-04", "Business update for the quarter ended December 31, 2025"), f("a9", "2025-10-04", "Business update for the quarter ended September 30, 2025")];
+    await r.fulfill({ response: res, json: d });
+  });
+  const errors = await open(page, "/research/IN/RELIANCE", "What they do");
+  const list = page.getByRole("list", { name: "Business update filings" });
+  await expect(list).toBeVisible({ timeout: 30_000 });
+  const rows = list.locator("li");
+  await expect(rows).toHaveCount(5);
+  await expect(rows.filter({ hasText: lodr })).toHaveCount(1);
+  await expect(rows.first().getByTestId("biz-also")).toHaveText("Also filed 12 Jul 2026, 15 Apr 2026, 14 Jan 2026");
+  await expect(rows.first().getByTestId("biz-also").getByRole("link", { name: "15 Apr 2026" })).toHaveAttribute("href", "https://example.com/a5");
+  // every row's link ends at one x, on its row (never on a line of its own under the subject), and the long subject is two lines at most
+  const geo = await rows.evaluateAll((els) => els.map((li) => {
+    const a = li.querySelector(".biz-link")!.getBoundingClientRect(), t = li.querySelector(".biz-title")!.getBoundingClientRect(), r = li.getBoundingClientRect();   // the link never under the subject
+    return { right: Math.round(a.right), inRow: a.top < t.bottom && a.bottom > r.top, lines: Math.round(t.height / parseFloat(getComputedStyle(li.querySelector(".biz-title")!).lineHeight)) };
+  }));
+  expect(new Set(geo.map((g) => g.right)).size, `link ends ${geo.map((g) => g.right)}`).toBe(1);
+  for (const g of geo) { expect(g.inRow).toBe(true); expect(g.lines).toBeLessThanOrEqual(2); }
+  await expect(rows.nth(1).locator(".biz-title")).toHaveAttribute("title", long);
+  const card = page.locator(".k-card", { has: list });
+  await card.getByRole("button", { name: "Show all 6" }).click();
+  await expect(rows).toHaveCount(6);
+  await sane(page, errors);
+});

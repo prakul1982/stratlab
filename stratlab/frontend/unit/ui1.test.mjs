@@ -1,4 +1,4 @@
-// Lane ui1 (owner, 18 Nov: "fix ui dude", the Themes page): one line under the title, the box and "Map it" on one row with the market
+// Lane ui1 (owner, 18 Nov). Item 6 ("fix ui dude", the Themes page): one line under the title, the box and "Map it" on one row with the market
 // switch, the shared library as equal chips with short names (at most two rows, then "All N themes"), the ideas folded under it.
 // Run: npm run test:unit
 import { test } from "node:test";
@@ -40,4 +40,24 @@ test("Ready to open: short names (full name and date in the title), two rows of 
   assert.match(page, /const shown = more \? items\.slice\(0, room - 1\) : items;/);
   assert.match(page, /All \{items\.length\} themes/);
   assert.match(page, /<Disclosure summary="More ideas"/);
+});
+
+// item 3 (owner, 18 Nov: HDFC Bank's update filings, "NSE filing ↗" dropped to its own line under a long subject)
+test("update filings: the same subject filed again is one row with its other days, in the list's order", async () => {
+  const { foldFilings } = await import("../src/lib/biz.ts");
+  const lodr = "Intimation under SEBI (LODR) Regulations, 2015";
+  const rows = [{ id: 1, title: lodr }, { id: 2, title: "Business update Q2" }, { id: 3, title: `${lodr} ` }, { id: 4, title: "INTIMATION UNDER SEBI (LODR) REGULATIONS, 2015" }, { id: 5, title: "Business update Q1" }];
+  const g = foldFilings(rows);
+  assert.deepEqual(g.map((x) => x.items.map((i) => i.id)), [[1, 3, 4], [2], [5]]);
+  assert.equal(g[0].title, lodr);
+});
+
+test("update filings: date | subject (two lines at most) | link on one grid; five rows, then Show all N", () => {
+  const panel = read("src/components/BizUpdates.tsx"), css = read("src/styles.css");
+  assert.match(panel, /const FILINGS_FIRST = 5;/);
+  assert.match(panel, /const groups = foldFilings\(v\.filings\);/);
+  assert.match(panel, /Show all \{groups\.length\}/);
+  assert.match(panel, /<span className="biz-title" title=\{title\}>\{title\}<\/span>/);
+  assert.match(css, /\.biz-title \{ display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; \}/);
+  assert.match(css, /\.biz-link \{ white-space: nowrap; justify-self: end; \}/);
 });
