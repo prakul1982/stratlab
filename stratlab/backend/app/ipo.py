@@ -1920,6 +1920,12 @@ def list_row(row: dict, now: datetime) -> dict:
             out["sub_read"] = row["sub_read"]
     if perf:
         out["perf"] = {k: perf.get(k) for k in ("listing_price", "listing_change_pct", "latest", "change_pct", "latest_date", "at") if perf.get(k) is not None}
+    # LIVE14A-013: where the lot and the bids come from, so a row without them says why: the issue's own NSE page (read every quarter
+    # hour while bidding), whether the app has that page for the issue ("page"), and when it last read it ("page_at")
+    if row.get("market") == "IN" and pub["stage"] in ("upcoming", "open", "closed"):
+        out["page"] = bool(row.get("symbol") and row.get("series"))
+        if row.get("detail_at"):
+            out["page_at"] = row["detail_at"]
     return out
 
 

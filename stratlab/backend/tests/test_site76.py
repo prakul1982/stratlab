@@ -108,3 +108,16 @@ def test_live14a_009_the_days_largest_companies_have_their_release_looked_for_tr
     assert by["TJX"]["told"] is False                                                  # TJX's people are told by follow_up
     src = (__import__("pathlib").Path(R.__file__)).read_text()
     assert "look = symbols | largest_due(region, load(region)[\"rows\"], frm, day.isoformat())" in src
+
+
+def test_live14a_013_an_indian_issue_row_says_whether_its_issue_page_was_found_and_when_it_was_read():
+    from app import ipo
+    now = datetime(2026, 11, 18, 19, 0, tzinfo=timezone.utc)
+    base = {"id": "in-x", "market": "IN", "name": "Crystal Crop Protection Ltd", "open": "2026-11-18", "close": "2026-11-20", "low": 100.0, "high": 110.0,
+            "currency": "INR", "segment": "mainboard"}
+    no_page = ipo.list_row(dict(base), now)
+    assert no_page["stage"] == "open" and no_page["page"] is False and "page_at" not in no_page
+    read = ipo.list_row({**base, "symbol": "CRYSTAL", "series": "EQ", "detail_at": "2026-11-18T18:45:00+00:00"}, now)
+    assert read["page"] is True and read["page_at"] == "2026-11-18T18:45:00+00:00"
+    listed = ipo.list_row({**base, "open": "2026-10-01", "close": "2026-10-03", "listing": "2026-10-08", "symbol": "X", "series": "EQ"}, now)
+    assert "page" not in listed

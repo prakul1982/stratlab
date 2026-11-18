@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { eyebrowOf } from "../lib/eyebrow";
-import { asOf, fmtDate, marketTz, pct, price } from "../lib/format";
+import { IST, asOf, fmtDate, fmtDateTime, marketTz, pct, price } from "../lib/format";
 import { useLiveRefresh } from "../lib/liveRefresh";
 import { ipoApi, type AlertPrefs, type EventKind, type IpoList, type IpoRow, type Market, type Stage } from "../lib/ipo";
 import { TAB_LINE, badgeOf, bandText, clockText, expectedText, minText, partsText, problemNote, segmentWord, sharesText, sizeText, spanText, tabsFor, timesText, unpricedRows } from "../lib/ipoText";
@@ -66,15 +66,30 @@ function bidsAt(stamp: string): string {
   return m ? `${fmtDate(m[1], { year: false })}, ${m[2]}` : stamp;
 }
 
+/** When the app read an issue's page (a UTC moment), in India time: "18 Nov, 19:00 IST". */
+const readAt = (iso: string) => fmtDateTime(iso, { tz: IST, zone: true, year: false });
+
 /** A lot the exchange's pages don't give yet, in words, never a bare dash (rel1, CX1 problem 9: Crystal Crop's lot was "–"). Before
- * bidding opens the lot comes with the price band announcement; once open, it is on the issue's page, read again each day. */
-export const lotMissing = (tab: Stage): string => (tab === "upcoming" ? "Not announced yet" : "Not on the exchange's page yet");
+ * bidding opens the lot comes with the price band announcement; once open, it is on the issue's page, read again each day.
+ * (updated on purpose, site76 LIVE14A-013: the words say why, from where the lot is read: Crystal Crop and Mahanadi Coalfields said
+ * "Not on the exchange's page yet" on a bidding day without saying whether that page had been read at all) */
+export const lotMissing = (tab: Stage, r?: Pick<IpoRow, "page" | "page_at">): string => {
+  if (tab === "upcoming") return "Not announced yet";
+  if (r?.page === false) return "No NSE issue page for it yet (the lot and bids are read there)";
+  if (r?.page && !r.page_at) return "NSE's issue page not read yet";
+  if (r?.page_at) return `Not on NSE's issue page, read ${readAt(r.page_at)}`;
+  return "Not on the exchange's page yet";
+};
+
+/** LIVE14A-013: an open issue's bids that aren't in yet say why, as its lot does ("Bids so far –" on all three open issues). */
+export const bidsMissing = (r: Pick<IpoRow, "page" | "page_at">): string =>
+  r.page === false ? "No NSE issue page for it yet" : !r.page_at ? "NSE's issue page not read yet" : `None on NSE's issue page, read ${readAt(r.page_at)}`;
 
 function columns(m: Market, tab: Stage): Column<IpoRow>[] {
   const name: Column<IpoRow> = { key: "name", header: "Company", rowHeader: true, wrap: true, cell: (r) => <Company r={r} /> };
   const band: Column<IpoRow> = { key: "band", header: "Price band", numeric: true, cell: (r) => bandText(r) };
   const lot: Column<IpoRow> = { key: "lot", header: "Lot and minimum", numeric: true, info: "The lot is the fewest shares one bid can be for. The minimum is the lot at the top of the price band.",
-    cell: (r) => (r.lot ? <>{sharesText(r.lot)} shares<span className="k-sub-line">{minText(r)}</span></> : <span className="k-muted" data-testid="ipo-lot-none">{lotMissing(tab)}</span>) };
+    cell: (r) => (r.lot ? <>{sharesText(r.lot)} shares<span className="k-sub-line">{minText(r)}</span></> : <span className="k-muted" data-testid="ipo-lot-none">{lotMissing(tab, r)}</span>) };
   // the size says whether it is all new shares or new shares plus a sale by existing holders, when the exchange gives the two parts (LIVE1A-030)
   const size: Column<IpoRow> = { key: "size", header: "Issue size", numeric: true,
     info: "The whole issue: the new shares the company issues plus any shares existing holders put up for sale (an offer for sale). The two parts are under the total when the exchange gives both.",
@@ -82,7 +97,8 @@ function columns(m: Market, tab: Stage): Column<IpoRow>[] {
       {/* LIVE9A-015: a US size that includes the underwriters' 15% option says so, with the size without it */}
       {r.size_base != null && <span className="k-sub-line" data-testid="ipo-size-option">{sizeText({ ...r, size: r.size_base })} without the underwriters' 15% option</span>}</> };
   const times: Column<IpoRow> = { key: "times", header: tab === "open" ? "Bids so far" : "Bids received", numeric: true, info: "How many times the shares on offer the bids came to, counting the bids placed on both exchanges (NSE and BSE), as the exchange's issue page totals them. NSE's own count alone is lower. The time of the reading is under each figure.",
-    cell: (r) => (r.sub_times != null ? <>{timesText(r.sub_times)}{tab === "open" && r.sub_as_of && <span className="k-sub-line" data-testid="ipo-sub-at">as of {bidsAt(r.sub_as_of)}</span>}</> : <span className="k-muted">–</span>) };
+    cell: (r) => (r.sub_times != null ? <>{timesText(r.sub_times)}{tab === "open" && r.sub_as_of && <span className="k-sub-line" data-testid="ipo-sub-at">as of {bidsAt(r.sub_as_of)}</span>}</>
+      : tab === "open" && m === "IN" ? <span className="k-muted" data-testid="ipo-bids-none">{bidsMissing(r)}</span> : <span className="k-muted">–</span>) };
   if (m === "US") {
     if (tab === "upcoming") {
       return [name, { key: "d", header: "Expected to price", cell: (r) => (r.expected ? fmtDate(r.expected) : r.filed ? `Filed ${fmtDate(r.filed)}` : "–") }, band,
