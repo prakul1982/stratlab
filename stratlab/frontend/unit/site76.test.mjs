@@ -47,3 +47,22 @@ test("LIVE14A-001: a results row priced long ago in the session carries its time
   const page = read("src/pages/ResultsPage.tsx");
   assert.match(page, /data-testid="res-px-at"/);
 });
+
+test("LIVE14A-009: Usual move per day's table; the quarter before the one being reported says so", async () => {
+  const { movesEmpty, priorQuarter } = await import("../src/lib/resultsRows.ts");
+  // a day table of 12 rows, all answered, one with a usual move: no column for that table
+  const rows = Array.from({ length: 12 }, (_, i) => ({ symbol: `S${i}` }));
+  const back = Object.fromEntries(rows.map((r, i) => [r.symbol, i === 0 ? { moves: { avg: 16.7 } } : null]));
+  assert.equal(movesEmpty(rows, back, rows.length), true);
+  assert.equal(movesEmpty(rows, { ...back, S1: { moves: { avg: 2 } }, S2: { moves: { avg: 3 } } }, rows.length), false);
+  assert.equal(movesEmpty(rows, { S0: { moves: { avg: 1 } } }, rows.length), false);       // still being read: the column stays
+  const page = read("src/pages/ResultsPage.tsx");
+  assert.match(page, /c\.key !== "mv" \|\| !movesEmpty\(on, moves, on\.length\)/);
+  // PANW on 18 Nov: figures to Jul 2026 (110 days before) are the previous quarter's; TJX's to Oct 2026 are the one reported
+  assert.equal(priorQuarter("Jul 2026 vs Jul 2025", "2026-11-18"), "Jul 2026");
+  assert.equal(priorQuarter("Oct 2026 vs Oct 2025", "2026-11-18"), null);
+  assert.equal(priorQuarter("Sep 2026 vs Sep 2025", "2026-11-10"), null);                 // India: 41 days after the quarter
+  assert.equal(priorQuarter("Jun 2026 vs Jun 2025", "2026-11-10"), "Jun 2026");
+  assert.equal(priorQuarter(null, "2026-11-18"), null);
+  assert.match(page, /data-testid="res-q-prior">previous quarter, to \{p\}/);
+});

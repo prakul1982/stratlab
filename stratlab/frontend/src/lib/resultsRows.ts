@@ -50,3 +50,21 @@ export function movesEmpty(rows: { symbol: string; moves?: unknown }[], moves: R
  * "(fiscal Q3 2027)", mixed down one column), so the row says "Quarterly results" and the quarter goes in its hover text. */
 export const purposeShown = (region: string, purpose: string): string =>
   region === "US" ? purpose.replace(/\s*\((?:fiscal Q\d \d{4}|quarter ended [A-Z][a-z]{2} \d{4})\)$/, "") : purpose;
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** Days after a quarter's end within which the results of that quarter fall (companies file within 45 days, 60 for a year's last; a few
+ * late ones to 90): a shown quarter that ended longer before the row's results day is the quarter before the one being reported. */
+export const REPORTED_WITHIN_DAYS = 95;
+
+/** LIVE14A-009: the quarter a row's growth figures are of ("Jul 2026"), when it is the one before the quarter this results day reports
+ * (PANW's row on 18 Nov, results due after the close, showed "Rev +34.5% Profit −211.2%", its quarter to Jul 2026, with no label); null
+ * when the figures are of the quarter being reported, or the quarter can't be read. `of` is the stored "Jul 2026 vs Jul 2025". */
+export function priorQuarter(of: string | null | undefined, resultsDay: string): string | null {
+  const m = /^([A-Z][a-z]{2}) (\d{4})/.exec(String(of ?? "").trim());
+  const mi = m ? MONTHS.indexOf(m[1]) : -1;
+  if (!m || mi < 0) return null;
+  const end = Date.UTC(Number(m[2]), mi + 1, 0);                    // the quarter's last day
+  const day = Date.parse(`${resultsDay}T00:00:00Z`);
+  if (!Number.isFinite(day)) return null;
+  return (day - end) / 86400000 > REPORTED_WITHIN_DAYS ? `${m[1]} ${m[2]}` : null;
+}

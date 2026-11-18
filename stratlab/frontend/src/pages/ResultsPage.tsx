@@ -15,7 +15,7 @@ import { Info } from "../components/ui";
 import { Earlier } from "../components/Earlier";
 import { Card, CardHead, CheckField, DataTable, ShowLess, EmptyState, ErrorState, Field, PageHeader, Seg, Select, Signed, Skeleton, StockPicker, Working, type Column } from "../components/kit";
 import { ReportScope } from "../components/kit/ReportFigure";
-import { capAt, laterDays, movesEmpty, purposeShown, whenShort } from "../lib/resultsRows";
+import { capAt, laterDays, movesEmpty, priorQuarter, purposeShown, whenShort } from "../lib/resultsRows";
 import { resultDay } from "../lib/resultDay";
 
 /** Today in the market's calendar (ISO), the day the "Today" chip stands for. */
@@ -253,7 +253,9 @@ export function ResultsPage() {
     // LIVE5-002: revenue and profit growth share one column, a line each (two columns of one figure each pushed "Options imply" off a 1280 screen);
     // the CSV keeps them apart
     { key: "q", header: "Quarter", cardLabel: "Latest quarter", phone: false, tight: false, csv: null, info: "Year on year (YoY): the latest reported quarter's revenue and net profit against the same quarter a year before, from the company's results as the app keeps them. Hover a figure for the quarters compared. A quarter that came after a loss has no profit growth figure.", cell: (r) => (
-      <span className="res-q"><span><span className="k-muted">Rev </span><Growth v={r.q?.sales} of={r.q?.of} /></span><span><span className="k-muted">Profit </span><Growth v={r.q?.profit} of={r.q?.of} /></span></span>) },
+      <span className="res-q"><span><span className="k-muted">Rev </span><Growth v={r.q?.sales} of={r.q?.of} /></span><span><span className="k-muted">Profit </span><Growth v={r.q?.profit} of={r.q?.of} /></span>
+        {/* LIVE14A-009: the quarter before the one this day reports says so (PANW's figures to Jul 2026 on its 18 Nov row) */}
+        {(() => { const p = r.q && !r.out ? priorQuarter(r.q.of, r.date) : null; return p && <span className="k-note k-muted" data-testid="res-q-prior">previous quarter, to {p}</span>; })()}</span>) },
     { key: "rev", header: "Revenue", csvHeader: "Revenue YoY", csvOnly: true, cell: (r) => <Growth v={r.q?.sales} of={r.q?.of} />, csv: (r) => r.q?.sales ?? null },
     { key: "pat", header: "Profit", csvHeader: "Profit YoY", csvOnly: true, cell: (r) => <Growth v={r.q?.profit} of={r.q?.of} />, csv: (r) => r.q?.profit ?? null },
     // LIVE10A-020: no row with a past results-day move once every row's read is back (US: "–" on every row): no column for it
@@ -341,7 +343,10 @@ export function ResultsPage() {
             <div key={d} className="inv-day" data-testid="results-day">
               <span className="k-eyebrow">{dayHeading(d, info.count, data.today)}</span>
               <ReportScope section={`Results on ${resultDay(d)}`} source="Results filed with the exchange and the day's prices">
-              <DataTable csv={`results ${d}`} label={`Results on ${resultDay(d)}`} rows={on} rowKey={(r) => `${r.symbol}-${r.date}`} columns={on.some((r) => r.fo) ? columns : columns.filter((c) => c.key !== "im")} stack compact phonePage={10} />
+              {/* LIVE14A-009: each day's table keeps "Usual move" only when its own rows have enough of them (one value on the whole US page,
+                  DRCT's, kept the column on every day's table) */}
+              <DataTable csv={`results ${d}`} label={`Results on ${resultDay(d)}`} rows={on} rowKey={(r) => `${r.symbol}-${r.date}`}
+                columns={columns.filter((c) => (c.key !== "im" || on.some((r) => r.fo)) && (c.key !== "mv" || !movesEmpty(on, moves, on.length)))} stack compact phonePage={10} />
               </ReportScope>
               {(info.count > info.shown || (openDay === d && dayRows > 0)) && (
                 <div className="k-row">

@@ -85,3 +85,26 @@ def test_live14a_001_the_mood_headline_rests_only_on_levels_read_in_the_last_min
     src = Path(__file__).resolve().parents[1].joinpath("app/intel/mood.py").read_text()
     assert 'fresh = [i for i in levels if not i.get("delayed")]' in src
     assert 'headline_of(fresh, sectors, cmp' in src
+
+
+def test_live14a_009_the_days_largest_companies_have_their_release_looked_for_tracked_or_not(monkeypatch):
+    """LOW's release, filed before the open on 18 Nov, was not on its row 8 h later: only tracked companies were looked up. The window's
+    largest companies are looked up too; a release found for one nobody tracks has nobody to tell (told=True)."""
+    from app import results as R
+    rows = [{"symbol": s, "date": "2026-11-18", "purpose": "Quarterly results"} for s in ("LOW", "TJX", "TINY", "PANW")]
+    rows.append({"symbol": "OLD", "date": "2026-11-18", "out": {"at": "2026-11-18"}})
+    monkeypatch.setattr(R, "_snap", lambda region: {"LOW": {"market_cap": 120e3}, "TJX": {"market_cap": 160e3}, "TINY": {"market_cap": 5.0},
+                                                    "PANW": {"market_cap": 220e3}, "OLD": {"market_cap": 9e9}})
+    assert R.largest_due("US", rows, "2026-11-16", "2026-11-18", n=3) == {"PANW", "TJX", "LOW"}
+    store = {"rows": [dict(r) for r in rows]}
+    monkeypatch.setattr(R, "load", lambda region: store)
+    monkeypatch.setattr(R, "save", lambda region, rs: store.update(rows=rs))
+    monkeypatch.setattr(R, "us_out", lambda fh, sec, r: {"at": r["date"], "title": "8-K", "url": None, "numbers": []} if r["symbol"] in ("LOW", "TJX") else None)
+    from datetime import date
+    found = R.check_out("US", {}, {"LOW", "TJX"}, date(2026, 11, 18), tracked={"TJX"})
+    assert {r["symbol"] for r in found} == {"LOW", "TJX"}
+    by = {r["symbol"]: r for r in store["rows"]}
+    assert by["LOW"]["out"]["title"] == "8-K" and by["LOW"]["told"] is True           # nobody tracks LOW: nothing to send
+    assert by["TJX"]["told"] is False                                                  # TJX's people are told by follow_up
+    src = (__import__("pathlib").Path(R.__file__)).read_text()
+    assert "look = symbols | largest_due(region, load(region)[\"rows\"], frm, day.isoformat())" in src
