@@ -135,7 +135,8 @@ test("a tile shows its symbol and figure only at a size they fit at, so no word 
   assert.deepEqual(tileWords("TCS", "+1.2%", 80, 40, width), { px: 12, fig: true });
   assert.deepEqual(tileWords("TCS", "+1.2%", 80, 30, width), { px: 12, fig: false });       // room for one line only
   assert.deepEqual(tileWords("TCS", "+1.2%", 40, 40, width), { px: 10, fig: true });
-  assert.deepEqual(tileWords("HINDUNILVR", "+1.2%", 60, 40, width), { px: 0, fig: false }); // ten letters need 66px at the smallest size
+  // (updated on purpose, fix18 LIVE13A-012: ten letters don't fit one line at 60px, and a 40px-tall tile now names them over two lines)
+  assert.deepEqual(tileWords("HINDUNILVR", "+1.2%", 60, 40, width), { px: 10, fig: false, split: 5 });
   assert.deepEqual(tileWords("HINDUNILVR", "+1.2%", 75, 40, width), { px: 10, fig: true });
   assert.deepEqual(tileWords("MAHINDRAHOLIDAYS", "+1.2%", 140, 80, width), { px: 12, fig: true }); // too long for the largest size here
   assert.deepEqual(tileWords("TCS", "+1.2%", 40, 12, width), { px: 0, fig: false });         // too short for a line

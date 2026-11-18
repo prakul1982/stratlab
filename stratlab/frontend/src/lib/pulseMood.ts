@@ -62,8 +62,20 @@ export const signedPoints = (v: number | null | undefined): string => (v == null
  * shares") is not one, and pinning it on one symbol says more than the headline did (LIVE4-006: "Indian IT stocks → INFY"). */
 export const groupPhrase = (name: string): boolean =>
   /\b(stocks|shares|sectors?|companies|firms|names|counters|banks|lenders|majors|makers|pack|index|indices|space)\s*$/i.test(name.trim());
-export function companyRows<T extends { name: string }>(hot: T[]): T[] {
-  return hot.filter((h) => !groupPhrase(h.name));
+export function companyRows<T extends { name: string; ticker?: string | null }>(hot: T[]): T[] {
+  // LIVE13A-007: one row per company: "Titan Company" and "Titan Company (consumer durables)" are one company (a bracketed note is
+  // dropped, and a second row of the same ticker or name is left out)
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const h of hot) {
+    if (groupPhrase(h.name)) continue;
+    const name = h.name.replace(/\s*\([^)]*\)\s*$/, "").trim() || h.name;
+    const keys = [(h.ticker ?? "").trim().toUpperCase(), name.toLowerCase()].filter(Boolean);
+    if (keys.some((k) => seen.has(k))) continue;
+    keys.forEach((k) => seen.add(k));
+    out.push(name === h.name ? h : { ...h, name });
+  }
+  return out;
 }
 
 /** The column over the day's figures: "Today" while the market's session is today's, else that session's day (LIVE4-007: a

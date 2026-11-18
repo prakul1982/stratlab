@@ -873,6 +873,7 @@ def refresh_us(calendar, edgar, today: date, now: datetime | None = None, lookup
     rows = merge_us(old, cal, today)
     finals = _try(problems, "final prospectuses", lambda: edgar.final_prospectuses(today - timedelta(days=FINALS_DAYS), today), [])
     add_final_prospectuses(rows, finals, edgar, today, problems, check)
+    fill_exchanges(rows, edgar, problems)
     n = 0
     for r in rows:
         if n >= lookups:
@@ -903,6 +904,31 @@ def refresh_us(calendar, edgar, today: date, now: datetime | None = None, lookup
 FINALS_DAYS = 30                       # the SEC's final prospectuses are compared with the US rows over this many days
 FIRST_KEY = "ipo:us:first"             # {cik: 1 (its final prospectus was the company's first offering) or 0}: asked of the SEC once per company
 FIRST_LOOKUPS = 30                    # (the first run asks about every company in the month; after it, the day's new ones)
+
+
+EXCHANGE_LOOKUPS = 6                  # US rows without an exchange looked up in one run (their SEC filing list, kept three hours)
+SEC_EXCHANGE = {"nasdaq": "NASDAQ", "nyse": "NYSE", "nyse american": "NYSE American", "nyse arca": "NYSE Arca", "cboe": "Cboe"}
+
+
+def fill_exchanges(rows: list[dict], edgar, problems: list[str], limit: int = EXCHANGE_LOOKUPS) -> int:
+    """LIVE13A-022: a US row with no exchange (one found from its SEC prospectus, not the calendar: two recently listed rows had none beside
+    "NASDAQ Global" and "NYSE") takes the exchange the SEC's filing list names for the company. Returns how many rows it filled."""
+    filled, asked = 0, 0
+    for r in rows:
+        if asked >= limit:
+            break
+        if r.get("market") != "US" or r.get("exchange"):
+            continue
+        cik = r.get("cik") or (str(r.get("id") or "")[len("us-sec-"):] if str(r.get("id") or "").startswith("us-sec-") else None)
+        if not cik or not str(cik).isdigit():
+            continue
+        asked += 1
+        sub = _try(problems, f"SEC filings of {str(r.get('name') or '')[:30]}", lambda cik=cik: edgar.filings(cik))
+        names = [str(x).strip() for x in ((sub or {}).get("exchanges") or []) if str(x or "").strip()]
+        if names:
+            r["exchange"] = SEC_EXCHANGE.get(names[0].lower(), names[0])
+            filled += 1
+    return filled
 
 
 def add_final_prospectuses(rows: list[dict], finals: list[dict], edgar, today: date, problems: list[str], check: list | None = None) -> int:

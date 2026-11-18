@@ -12,6 +12,10 @@ row and were left out). Those are read on demand, the largest first, at most ON_
 for everyone until the next run's day; one still without closes is drawn at its stored last price with no change (grey), so the
 largest companies are never silently dropped.
 
+While a market trades, the live breadth round (breadth_live, India) keeps its prices here too (save_live); until the evening run stores
+the day's closes, the map and the movers are drawn from them and say of when: the session's latest round, or the day's last trades after
+the bell (LIVE13A-012/-029: at 16:05 IST the map still showed the day before's closes beside Mood's day's close).
+
 Facts only: a change is a change, a tile's size is the company's market value. Nothing here ranks or rates a stock."""
 import json
 import math
@@ -28,6 +32,9 @@ from .intel.net import TTLCache
 from .responses import err, ok
 
 KEY = "heatmap:rows:"                 # heatmap:rows:<region> = {"day", "at", "stocks": {symbol: row}, "index": {group: [six changes]}}
+# LIVE13A-012/-029: the live breadth round's prices, kept for the map and the movers while the day's closes aren't stored yet
+LIVE_KEY = "heatmap:live:"            # heatmap:live:<region> = {"day", "time", "close", "at", "q": {symbol: [price, prev close, volume, high, low]}, "idx": {index: [price, prev close]}}
+LIVE_FRESH = 40 * 60                  # a session's prices older than this aren't shown as the day's (the breadth card's STALE_AFTER)
 PERIODS = ("1d", "1w", "1m", "3m", "ytd", "1y")
 PERIOD_DAYS = {"1w": 7, "1m": 30, "3m": 91, "1y": 365}      # calendar days back; a day and the year so far are worked out on their own
 AVG_VOL = 20                          # sessions in the average the last day's volume is set against
@@ -151,6 +158,99 @@ def clear() -> None:
     _read.clear()
 
 
+# ---------- LIVE13A-012/-029: the day's prices before its closes are stored ----------
+def save_live(region: str, day: str, hhmm: str, close: bool, quotes: dict[str, dict], indexes: list[str]) -> int:
+    """Keep a live breadth round's prices for the map and the movers: [price, previous close, volume, high, low] of each stock that has
+    traded on `day`, and each group index's [price, previous close]. `close`: the round after the bell (the day's last trades). The map
+    and the lists draw from these until the evening run stores the day's closes (at 16:05 IST they still showed the day before's).
+    Returns how many stocks were kept."""
+    from .breadth_live import _traded_before
+    q: dict[str, list] = {}
+    for s, v in (quotes or {}).items():
+        v = v or {}
+        px, prev = _num(v.get("price")), _num(v.get("prev_close"))
+        if s in indexes or not px or px <= 0 or not prev or prev <= 0 or _traded_before(v.get("at"), day):
+            continue
+        vol, hi, lo = _num(v.get("volume")), _num(v.get("high")), _num(v.get("low"))
+        q[s] = [round(px, 4), round(prev, 4), vol, hi, lo]
+    idx = {i: [round(_num((quotes.get(i) or {}).get("price")), 4), round(_num((quotes.get(i) or {}).get("prev_close")), 4)]
+           for i in indexes if _num((quotes.get(i) or {}).get("price")) and _num((quotes.get(i) or {}).get("prev_close"))}
+    if not q:
+        return 0
+    db.set_setting(LIVE_KEY + region, json.dumps({"day": day, "time": hhmm, "close": bool(close), "at": int(time.time()), "q": q, "idx": idx},
+                                                 separators=(",", ":")))
+    _views.clear()
+    from . import movers
+    movers.clear()
+    return len(q)
+
+
+def live_for(region: str, day: str | None, now: float | None = None) -> dict | None:
+    """The kept live prices when they are of a later day than the stored closes `day` and still the day's: the round after the bell
+    (until the evening run stores that day), or a session round under LIVE_FRESH old. None otherwise (the page then shows the closes)."""
+    try:
+        snap = db.json_value(db.get_setting(LIVE_KEY + region), {})
+    except Exception:
+        return None
+    if not isinstance(snap, dict) or not isinstance(snap.get("q"), dict) or not snap["q"] or not snap.get("day"):
+        return None
+    if day and str(snap["day"]) <= str(day):
+        return None
+    if not snap.get("close") and (now if now is not None else time.time()) - (_num(snap.get("at")) or 0) > LIVE_FRESH:
+        return None
+    return snap
+
+
+def live_row(row: list, q: list) -> list:
+    """A stored row brought to a live price: the close becomes the price, the day's change runs from the quote's previous close, every
+    longer period's change runs to the price from the same starting close as before (the year so far exactly), and the volume is the
+    day's so far against the same 20-session average."""
+    px, prev = float(q[0]), float(q[1])
+    old = _num(row[0])
+    longer = [round(((1 + r / 100) * px / old - 1) * 100, 2) if r is not None and old else None for r in (_num(x) for x in row[2:1 + len(PERIODS)])]
+    return [px, round((px / prev - 1) * 100, 4), *longer, q[2], row[-1]]
+
+
+def live_index(r: list | None, q: list | None) -> list | None:
+    """A group index's six changes brought to its live level, as live_row does for a stock."""
+    if not q or not r:
+        return r
+    px, prev = float(q[0]), float(q[1])
+    out = [round((px / prev - 1) * 100, 4)]
+    # the level the stored changes ran to is not kept, so each longer change is moved by the day's change (from the same close)
+    out += [round(((1 + x / 100) * (px / prev) - 1) * 100, 2) if x is not None else None for x in (_num(v) for v in r[1:])]
+    return out
+
+
+def live_rows(region: str, doc: dict) -> tuple[dict[str, list], dict | None, dict]:
+    """(stocks, live, index): the stored rows, or with live prices of a later day each stock with a price brought to it (one without a
+    trade that day keeps its stored close and longer changes, with no day's change and no volume), `live` saying of when ({day, time, close}) and the indexes'
+    brought along."""
+    stocks, index = doc.get("stocks") or {}, doc.get("index") or {}
+    snap = live_for(region, doc.get("day")) if stocks else None
+    if not snap:
+        return stocks, None, index
+    q = snap["q"]
+    out = {s: (live_row(r, q[s]) if s in q else [r[0], None, *r[2:1 + len(PERIODS)], None, r[-1]]) for s, r in stocks.items()}
+    from . import breadth
+    idx = {}
+    for g, r in index.items():
+        name = (breadth.GROUPS.get(g) or {}).get("index")
+        idx[g] = live_index(r, (snap.get("idx") or {}).get(name))
+    return out, {"day": snap["day"], "time": snap.get("time"), "close": bool(snap.get("close")), "quoted": q}, idx
+
+
+def behind(region: str, day: str | None, now=None) -> bool:
+    """True when the market's latest session has closed but its closes aren't stored yet (the page says they are being added)."""
+    if not day:
+        return False
+    try:
+        from . import stock_pages
+        return stock_pages.last_session(region, now)[0].isoformat() > str(day)
+    except Exception:
+        return False
+
+
 def read_missing(region: str, symbols: list[str], through: str | None) -> dict[str, list]:
     """Rows for companies the daily run didn't store, from their daily candles: kept rows at once, then at most ON_DEMAND new reads (in
     the order given: the largest first) within ON_DEMAND_SECS. A read that failed or ran out of time isn't kept, so it is tried again."""
@@ -235,11 +335,12 @@ def view(region: str, universe: str | None = None, min_cap: float | None = None,
     from . import breadth
     group = universe if universe in UNIVERSES[region] else DEFAULT[region]
     doc = load(region)
-    stocks = doc.get("stocks") or {}
+    stocks, live, index = live_rows(region, doc)
     g = breadth.GROUPS[group]
     out = {"market": region, "universe": None if symbols is not None else group, "universe_name": None if symbols is not None else g["name"],
            "universes": universes(region), "periods": list(PERIODS), "as_of": doc.get("day"), "cap_unit": CAP_UNIT[region],
-           "index": {"name": g["index_name"], "r": (doc.get("index") or {}).get(group)}, "pending": not stocks,
+           "index": {"name": g["index_name"], "r": index.get(group)}, "pending": not stocks,
+           "live": {k: v for k, v in live.items() if k != "quoted"} if live else None, "behind": not live and behind(region, doc.get("day")),
            "min_cap": min_cap, "tiles": [], "members": 0, "with_prices": 0, "price_only": 0, "matching": 0, "shown": 0}
     if not stocks:
         return out
@@ -253,6 +354,8 @@ def view(region: str, universe: str | None = None, min_cap: float | None = None,
     if symbols is not None:
         missing = sorted((s for s in want if s not in stocks), key=lambda s: -(_num((rows.get(s) or {}).get("market_cap")) or 0))
         extra = read_missing(region, missing, doc.get("day")) if missing else {}
+        if live:                                     # a company read on demand is brought to the same live prices
+            extra = {s: (live_row(r, live["quoted"][s]) if s in live["quoted"] else r) for s, r in extra.items()}
         tiles += [tile(s, extra[s], rows.get(s), sectors.get(s), region) for s in missing if s in extra]
         out["with_prices"] = len(tiles)
         blank = [None] * len(PERIODS)

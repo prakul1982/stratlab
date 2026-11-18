@@ -893,6 +893,10 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
             if last is None or (last.get("generated_at") or 0) < out["generated_at"]:
                 A.keep("pulse", latest_key, {**{k: v for k, v in out.items() if k not in ("refresh_state", "updating")}, "session": session},
                        CLOSED_MOOD_TTL)
+            elif not refresh and last.get("session") == session and (last.get("generated_at") or 0) > out["generated_at"]:
+                # LIVE13A-028: the moves came back to a band an earlier read was written for: the session's newer read is shown, so the
+                # stamp never goes back ("14:34 IST" at 14:36, then "14:12 IST" at 14:50 over the same words)
+                return ok({k: v for k, v in last.items() if k != "session"})
         return ok(out)
     except HTTPException as e:
         # like a company's AI read: no read right now is an answer ("unavailable", and why), not a failed request on

@@ -70,7 +70,7 @@ svg { display: block; }
 .mono { font-family: var(--mono); }
 .muted { color: var(--muted); }
 .small { font-size: 13.5px; }
-.eyebrow { font-family: var(--mono); font-size: 12.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.eyebrow { font-family: var(--mono); font-size: 12.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); text-wrap: balance; }   /* LIVE13A-018: no last word alone on a phone's second line */
 h1.eyebrow { font-weight: 400; }
 .lp-own-h1 { font-size: clamp(40px, 6vw, 64px); }   /* an address's own heading in the hero (DI-033) */     /* a landing address's own heading (/pricing: "Plans and prices"), drawn as the eyebrow */
 .ruled { background-image: linear-gradient(var(--rule) 1px, transparent 1px); background-size: 100% 34px; }
@@ -1628,6 +1628,15 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-card-title { display: inline-flex; align-items: center; gap: var(--s2); font-family: var(--serif); font-size: var(--t-card); font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
 /* a title with its (i): the button sits after the heading element, on the same line */
 .k-card-titlerow { display: inline-flex; align-items: center; gap: var(--s2); min-width: 0; }
+/* LIVE13A-019 (LIVE12A-016): on a phone a title that wraps keeps its (i) after its last word, not floating at the right edge of the title's
+   box; a card whose only control is its CSV button keeps it on the title's line, not alone on a row under it */
+@media (max-width: 640px) {
+  .k-card-titlerow { display: block; }
+  .k-card-titlerow > .k-card-title { display: inline; }
+  .k-card-titlerow > .info { margin-left: var(--s2); }
+  .k-card-head:has(> .k-card-actions > [data-csv]:only-child) { flex-wrap: nowrap; align-items: flex-start; }
+  .k-card-head:has(> .k-card-actions > [data-csv]:only-child) > .k-card-actions { flex: none; height: calc(var(--t-card) * 1.5); }
+}
 /* VR1-110: a chart whose only control is "Table" keeps it top-right beside a long title (the title wraps, the button doesn't drop below it) */
 .k-chart-plain > .k-card-head { flex-wrap: nowrap; align-items: flex-start; }
 .k-chart-plain > .k-card-head > .k-card-actions { flex: none; }
@@ -2625,6 +2634,13 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .k-card-title a:hover { text-decoration: underline; }
 .k-toolbar > select.k-input { width: auto; min-width: 170px; flex: 0 1 220px; }
 .breadth-bar > .k-chipwrap { flex: 1 1 320px; min-width: 0; }             /* the group and the range on one row, the chips taking the rest (MOOD-1) */
+/* LIVE13A-019 (LIVE12A-011): on a phone the range chips and "+ Custom" are two even rows of four, never "+ Custom" alone on a line */
+@media (max-width: 640px) {
+  .breadth-bar .k-chiprow.wrap { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  /* a remembered custom chip keeps its own width beside its × (a full-width chip covered the ×) */
+  .breadth-bar .k-chiprow.wrap > .k-chipbar > .k-chip, .breadth-bar .k-chiprow.wrap > .k-chip.add { width: 100%; padding-inline: 6px; }
+  .breadth-bar .k-chiprow.wrap > .k-chipbar > .k-chip-mine { grid-column: span 2; }
+}
 .k-alert-row { margin-top: 4px; }
 .k-keep { white-space: nowrap; }   /* a label's last word and its (i) never part (LIVE9A-016) */
 /* the rotation table: "was → now" on one line with its mark under it, and a name with its "Stocks →" beside it, so a row is not three lines tall (MOOD-1) */
@@ -2749,12 +2765,17 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 @media (max-width: 640px) {
   .email-signin-row .btn { flex: 1 1 100%; justify-content: center; }
   .legal-links[aria-label="Policies"], .legal-links[aria-label="Explore"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; row-gap: 0; }
+  /* LIVE13A-018: the company directories two to a row under their label ("S&P 500" was left alone on a line) */
+  .legal-links[aria-label="Browse companies"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; row-gap: 0; }
+  .legal-links[aria-label="Browse companies"] > span:first-child { grid-column: 1 / -1; }
 }
 /* LIVE12B-008: /login's form loads after the page's first frame; its place is held at the form's own height (134 and 186 px), so nothing under it moves */
 .email-slot { display: block; min-height: 134px; max-width: 460px; width: 100%; }
 @media (max-width: 640px) { .email-slot { min-height: 186px; } }
 /* LIVE12B-004 (owner pattern 13): beside the email form, the Google button is the form's width, on /login and the sign-in gate alike */
 .lp-hero-login .lp-hero-copy:has(.email-slot, .email-signin) .lp-cta { width: 100%; max-width: 460px; justify-content: center; }
+/* LIVE13A-018: beside the email form the Google button is the form button's height (54 px beside 44 px) */
+.lp-hero-login .lp-hero-copy:has(.email-slot, .email-signin) .lp-cta { min-height: 44px; }
 .email-signin-code { letter-spacing: .2em; font-family: var(--mono); max-width: 220px; }
 .email-signin .banner { margin-bottom: 0; }
 /* the plans' currency switch (components/CurrencySwitch.tsx) */

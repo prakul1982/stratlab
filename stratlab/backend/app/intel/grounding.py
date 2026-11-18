@@ -871,6 +871,21 @@ def grounded_in(text: str, sources: list[str], share: float = 0.75, ignore: str 
     return sum(1 for w in stems if re.search(r"\b" + re.escape(w), src)) / len(stems) >= share
 
 
+def one_row_per_company(hot: list[dict]) -> list[dict]:
+    """LIVE13A-007: "Companies in today's headlines" lists each company once. The read named two companies twice, once with a group in
+    brackets ("Tata Consultancy Services" and "Tata Consultancy Services (IT sector)", the same headline in all four rows): a bracketed
+    note after a name is dropped, and a second row of the same ticker or the same name is left out."""
+    out, seen = [], set()
+    for h in hot or []:
+        name = re.sub(r"\s*\([^)]*\)\s*$", "", str(h.get("name") or "")).strip() or str(h.get("name") or "")
+        keys = {k for k in (str(h.get("ticker") or "").strip().upper(), name.lower()) if k}
+        if keys & seen:
+            continue
+        seen |= keys
+        out.append({**h, "name": name})
+    return out
+
+
 def plain_title(t: str) -> str:
     """A headline as a one-liner: without the " - Source" a news feed adds, at most 160 characters."""
     t = re.sub(r"\s+[-\u2013|]\s+[^-\u2013|]{2,40}$", "", " ".join(str(t or "").split()))
@@ -921,7 +936,7 @@ def ground_pulse(out: dict, indices: list[dict], headlines: list[dict], sectors:
         if not why or not grounded_in(why, mine, 0.8, ignore=f"{h.get('name') or ''} {h.get('ticker') or ''}"):
             why = plain_title(mine[0])
         hot.append({**h, "why": why})
-    res["hot"] = hot
+    res["hot"] = one_row_per_company(hot)
     both = lambda s: claim(s) and stands(s)          # noqa: E731
     res["flows"] = [{**f, "detail": keep_sentences(f.get("detail"), pool, both)} for f in out.get("flows") or []]
     res["flows"] = [f for f in res["flows"] if f["detail"] and _topics_backed(f.get("title") or "", support) and flow_claim_ok(f.get("title") or "", nets)

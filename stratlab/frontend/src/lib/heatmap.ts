@@ -14,7 +14,30 @@ export type HeatView = {
   pending: boolean; min_cap: number | null; tiles: Tile[]; members: number; with_prices: number; matching: number; shown: number;
   /** a theme's companies with no closes drawn grey at their stored last price (LIVE6-005); absent from older answers */
   price_only?: number;
-};
+} & DayOf;
+
+/** LIVE13A-012/-029: when the figures are of. `live`: the tiles are brought to the live round's prices of a later day than `as_of` (in
+ * the session, or the day's last trades after the bell until the evening run stores its closes); `behind`: the latest session has
+ * closed and nothing of it is in yet. Both absent from older answers. */
+export type LiveOf = { day: string; time: string | null; close: boolean };
+export type DayOf = { as_of: string | null; live?: LiveOf | null; behind?: boolean };
+
+/** The facts line's lead, its bold day and its tail, and the source sentence for an info note: "Prices at 14:00 IST, 18 Nov" while
+ * live, "Last trades of 18 Nov" after the bell, "Closes of 17 Nov" with "the latest session's closes are being added" when behind
+ * (at 16:05 IST the map said only "Closes of 17 Nov" beside Mood's 18 Nov close), else closesTail. `day` formats an ISO day; `zone`
+ * is the market's clock (IST, ET). null before the first run. */
+export function dayLine(v: DayOf, open: boolean, what: "map" | "lists", day: (iso: string) => string, zone: string):
+  { lead: string; day: string; tail: string; source: string; price: string } | null {
+  const lv = v.live;
+  if (lv?.day && lv.close) return { lead: "Last trades of ", day: day(lv.day), tail: " · the official closes replace them after the evening run",
+    source: `the last trades of ${day(lv.day)}`, price: "Last price" };
+  if (lv?.day) return { lead: "Prices at ", day: `${lv.time ? `${lv.time} ${zone}, ` : ""}${day(lv.day)}`,
+    tail: ` · the market is open; the ${what} ${what === "map" ? "is" : "are"} redrawn every 15 minutes`,
+    source: `prices at ${lv.time ? `${lv.time} ${zone} on ` : ""}${day(lv.day)}`, price: "Last price" };
+  if (!v.as_of) return null;
+  const tail = v.behind ? " · the latest session's closes are being added" : open ? closesTail(open).replace("the map is", what === "map" ? "the map is" : "the lists are") : "";
+  return { lead: "Closes of ", day: day(v.as_of), tail, source: `daily closes of ${day(v.as_of)}`, price: "Last close" };
+}
 
 /** The note under the map on companies without closes (LIVE6-005): those drawn grey at their last price, and those with neither closes
  *  nor a price, which are left out. null when every company has its closes. */
@@ -210,8 +233,9 @@ export function tileWords(symbol: string, figure: string, w: number, h: number, 
     if (v) return { px: v, fig: false, vert: true };
   }
   // LIVE12A-010: a tile tall enough for two lines (about 57 × 53 px) but too narrow for a long symbol in one names it over two, split at
-  // its middle (or at a hyphen or "&" near it), rather than not at all
-  if (!px && h >= 44 && w >= 30 && symbol.length >= 4) {
+  // its middle (or at a hyphen or "&" near it), rather than not at all. LIVE13A-012: two lines at 10px take about 27px, so a 40-46 px tile
+  // (left blank under the old 44px floor) is named the same way
+  if (!px && h >= 30 && w >= 30 && symbol.length >= 4) {
     const mid = Math.ceil(symbol.length / 2);
     const mark = [mid, mid - 1, mid + 1].find((k) => k > 0 && k < symbol.length && /[-&]/.test(symbol[k - 1]));
     const k = mark ?? mid;

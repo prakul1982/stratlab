@@ -353,7 +353,7 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
             {/* its place held from the first frame (LIVE12B-008: the form arrived after it and pushed the small print 208 px down on a phone) */}
             {login && emailSignInOn() && <Suspense fallback={<i className="email-slot" />}><EmailSignIn signup={signup} /></Suspense>}
             {error && <p className="banner" role="alert">{error}</p>}
-            {login ? <p className="small muted">{signup ? "Signing up" : "Signing in"} only reads your name and email from Google{emailSignInOn() ? ", or only your email address by email" : ""}. By continuing you agree to the <Link className="link" to="/terms">Terms</Link> and <Link className="link" to="/privacy">Privacy policy</Link>.</p> : <p className="small muted">Free to start · No card · No coding</p>}
+            {login ? <p className="small muted">Google sign-in reads only your name and email address{emailSignInOn() ? "; email sign-in reads only your email address" : ""}. By continuing you agree to the <Link className="link" to="/terms">Terms</Link> and <Link className="link" to="/privacy">Privacy policy</Link>.</p> : <p className="small muted">Free to start · No card · No coding</p>}
           </div>
           {full && <HeroDemo />}
         </div>

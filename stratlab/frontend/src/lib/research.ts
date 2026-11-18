@@ -230,7 +230,9 @@ export interface PulseMood {
   breadth: { group: string; live: boolean; day: string | null; close_day: string | null; prev_day: string | null; adv: number | null; dec: number | null; unch: number | null;
     stocks: number | null; highs: number | null; lows: number | null; ratio: number | null; rows: MoodBreadthRow[];
     /** the live count's quarter-hour, "12:15" IST (LIVE4-005) */
-    at?: string | null } | null;
+    at?: string | null;
+    /** LIVE13A-030: the day's last count is the one at the closing prices (absent from older reads) */
+    at_close?: boolean } | null;
   sectors: { rows: MoodSectorRow[]; up: number; down: number; unchanged: number; of: number; leader: string; laggard: string } | null;
   /** One table for each index of the market (NIFTY 50 and SENSEX; the S&P 500); `est_total` and `actual` (India) say what the companies add up to and what the index moved. */
   movers: { index: string; adding: MoodMover[]; taking: MoodMover[]; of: number; note: string; est_total?: number | null; actual?: number | null }[] | null;
