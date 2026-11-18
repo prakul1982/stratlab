@@ -42,6 +42,7 @@ _SECTION = re.compile(r"\b(added|removed(?: for a listing reason)?|moved between
 _FOOT = re.compile(r"^\s*StratLab · ")
 _ADJ = re.compile(r"\s*\(adjacent\)\s*$")
 _COUNT = re.compile(r"^(\d[\d,]*)(?: of (\d[\d,]*))?$")
+_CELL = re.compile(r"\s*(\S+(?: \S+)*)(?:\s{2,}|\s*$)")          # a cell's text: up to a gap of two spaces or the line's end
 _SUFFIX = re.compile(r"[,.]?\s+(?:inc\.?|corp\.?|corporation|co\.?|ltd\.?|limited|plc|holdings?|group|n\.?v\.?|s\.?a\.?|ag|se|lp|llc|"
                      r"company|industries|international|technologies|enterprises?|& co\.?)$", re.I)
 LAYER_ONLY = re.compile(r"don't show the work of|not backed by its own words", re.I)
@@ -141,7 +142,10 @@ def layer_counts(pages: list[str]) -> dict:
                 pending, cur = [], None
                 continue
             left = ln[:max(col - 8, 0)].strip()
-            m = _COUNT.match(ln[max(col - 8, 0):col + 14].strip())
+            # r64e (the live R63 Electric utilities deck: "Competitive power generation   8 of 10" read as a layer of 1, its "10" past the
+            # cell's edge cut to "1"): the count is read whole, up to the gap before the next column, when it starts inside the cell
+            cut = _CELL.match(ln[max(col - 8, 0):])
+            m = _COUNT.match(cut.group(1)) if cut and cut.start(1) < 22 else None
             if m:                    # a row: its name on this line, after a part wrapped onto the line above
                 cur = [pending + ([left] if left else []), int((m.group(2) or m.group(1)).replace(",", ""))]
                 rows.append(cur)
