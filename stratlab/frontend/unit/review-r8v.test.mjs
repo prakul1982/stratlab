@@ -53,7 +53,7 @@ test("a library strategy's raw HTML leads with its result: title, description, o
     factHeadline: supertrend.verdict.fact_headline, headline: supertrend.verdict.headline, reason: null }), desc);
   // a strategy the server didn't give (unreachable at build time): its own words, as before
   const plain = files["library/seed-golden-cross-in/index.html"];
-  assert.match(plain, /<title>Golden cross · NIFTY 50 stocks: rules and verdict · StratLab<\/title>/);
+  assert.match(plain, /<title>Golden cross: rules and verdict · StratLab<\/title>/);      // (updated on purpose, owner 18 Nov: one tab-title pattern, "Page · StratLab"): the short name, one part
   assert.deepEqual(h1s(plain), ["Golden cross · NIFTY 50 stocks"]);
   for (const html of Object.values(files)) assert.doesNotMatch(html, /recommend|buy now|should buy|Yahoo|Finnhub|Screener/i);
 });
@@ -89,7 +89,7 @@ test("every landing address's raw h1 is the h1 the page draws there (R8V-008)", 
   for (const p of ["/upgrade", "/features", "/"]) assert.equal(seo.landingHeading(p), undefined, p);
   assert.equal(seo.landingHeading("/plans"), "Plans and prices");
   assert.deepEqual(h1s(files["plans/index.html"]), ["Plans and prices"]);
-  assert.match(files["plans/index.html"], /<title>Plans and prices · StratLab<\/title>/);
+  assert.match(files["plans/index.html"], /<title>Plans · StratLab<\/title>/);      // (updated on purpose, owner 18 Nov: one tab-title pattern, "Page · StratLab")
   // an address with a page of its own: that page's heading, which the landing page then draws as its h1
   const own = { "/pricing": "Plans and prices", "/faq": "Questions", "/about": "About StratLab", "/help": "Help",
     "/login": "Sign in to StratLab", "/signup": "Sign up for StratLab" };

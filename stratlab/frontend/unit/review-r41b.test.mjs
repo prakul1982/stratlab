@@ -29,8 +29,8 @@ test("the Terms say rupees for now, as the Plans page does, and anything else on
 
 test("a run page and the compare page have their own tab titles, not the notebook's", () => {
   assert.equal(withBrand(notebookTitle("52wkLowVolBuy")), "52wkLowVolBuy · StratLab");
-  assert.equal(withBrand(notebookTitle("52wkLowVolBuy", "Run v2")), "Run v2 · 52wkLowVolBuy · StratLab");
-  assert.equal(withBrand(notebookTitle("52wkLowVolBuy", "Compare runs")), "Compare runs · 52wkLowVolBuy · StratLab");
+  assert.equal(withBrand(notebookTitle("52wkLowVolBuy", "Run v2")), "Run v2: 52wkLowVolBuy · StratLab");
+  assert.equal(withBrand(notebookTitle("52wkLowVolBuy", "Compare runs")), "Compare runs: 52wkLowVolBuy · StratLab");      // (updated on purpose, owner 18 Nov: one tab-title pattern, "Page · StratLab")
   assert.equal(notebookTitle(undefined, "Run v2"), null);          // nothing until the notebook has loaded
   assert.match(read("src/pages/ExperimentPage.tsx"), /useNotebook\(id, `Run v\$\{v\}`\)/);
   assert.match(read("src/pages/CompareExperiments.tsx"), /useNotebook\(id, "Compare runs"\)/);

@@ -14,10 +14,10 @@ test("every page has its own tab title (R1-010)", () => {
   assert.equal(titleFor("/research/IN/reliance"), "RELIANCE · StratLab");
   assert.equal(titleFor("/research/US/AAPL/deep"), "AAPL deep dive · StratLab");
   assert.equal(titleFor("/n/abc/e/2"), "Notebooks · StratLab");
-  assert.equal(titleFor("/trade/g/practise"), "Practise · Trade · StratLab");
-  assert.equal(titleFor("/admin/users"), "Admin · Users and growth · StratLab");
-  assert.equal(titleFor("/admin"), "Admin · Overview · StratLab");
-  assert.equal(titleFor("/admin/emails"), "Admin · Email previews · StratLab");
+  assert.equal(titleFor("/trade/g/practise"), "Practise · StratLab");      // (updated on purpose, owner 18 Nov: one tab-title pattern, "Page · StratLab")
+  assert.equal(titleFor("/admin/users"), "Admin: Users and growth · StratLab");
+  assert.equal(titleFor("/admin"), "Admin: Overview · StratLab");
+  assert.equal(titleFor("/admin/emails"), "Admin: Email previews · StratLab");
   assert.equal(titleFor("/settings"), "Settings · StratLab");
   assert.equal(titleFor("/nowhere"), DEFAULT_TITLE);
   assert.equal(withBrand("RELIANCE ₹1,408"), "RELIANCE ₹1,408 · StratLab");

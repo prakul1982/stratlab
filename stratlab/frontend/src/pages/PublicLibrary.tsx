@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { publicGet, type ApiError } from "../lib/http";
 import { applySeo, seoFor } from "../lib/seo";
-import { absolute } from "../content/seo";
+import { absolute, withBrand } from "../content/seo";
 import { groupLabel, plainTerms } from "../lib/plainTerms";
 import { pct, TF_NAME } from "../lib/format";
 import { emailSignInOn, signedInHere, signIn, startSignIn } from "../lib/signin";
@@ -138,7 +138,7 @@ export function PublicLibraryEntry({ id }: { id: string }) {
       .then((r) => { if (live) setE(r); })
       .catch((x: ApiError) => { if (!live) return;
         // only a 404 is "not in the library"; a failed fetch is a connection problem, said so with a Retry
-        if (x.status === 404) { setGone("That strategy isn't in StratLab's library."); document.title = "Strategy not found · StratLab"; } else setFailed(true); });
+        if (x.status === 404) { setGone("That strategy isn't in StratLab's library."); document.title = withBrand("Strategy not found"); } else setFailed(true); });
     return () => { live = false; };
   }, [id, again]);
   useEffect(() => {

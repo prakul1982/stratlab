@@ -72,7 +72,10 @@ test("/config.js and the boot files have a sane cache header, and the app's own 
 test("every public page has its own title, description and one canonical address; the table matches the sitemap's", () => {
   assert.equal(new Set(seo.PAGES.map((p) => p.path)).size, seo.PAGES.length);
   assert.equal(new Set(seo.PAGES.map((p) => p.description)).size, seo.PAGES.length, "two pages share a description");
-  assert.equal(new Set(seo.PAGES.map((p) => p.title)).size, seo.PAGES.length, "two pages share a title");
+  // updated on purpose, owner 18 Nov: one tab-title pattern, "Page · StratLab": /pricing, whose canonical address is /plans, has the plans page's title; no two other pages share one
+  const own = seo.PAGES.filter((p) => !p.canonical || p.canonical === p.path);
+  assert.equal(new Set(own.map((p) => p.title)).size, own.length, "two pages share a title");
+  for (const p of seo.PAGES.filter((x) => x.canonical && x.canonical !== x.path)) assert.equal(p.title, seo.pageMeta(p.canonical).title, p.path);
   for (const p of seo.PAGES) {
     assert.ok(p.description.length >= 40 && p.description.length <= 260, `${p.path}: ${p.description.length} characters`);
     assert.match(p.title, /StratLab/);
@@ -311,7 +314,7 @@ test("the landing page: one tagline, sample labels, no old pricing variant, no v
   assert.doesNotMatch(login, /Start free|Sign up free/);
   // (updated on purpose, NAV3, CX-1: one promise, not three jobs; it is a question the four checks answer, no promise of a result)
   assert.equal(seo.TAGLINE, "Is your trading idea skill or luck?");
-  assert.match(read("index.html"), /<title>StratLab: backtest trading ideas, research stocks, track money<\/title>/);
+  assert.match(read("index.html"), /<title>StratLab<\/title>/);      // (updated on purpose, owner 18 Nov: one tab-title pattern, "Page · StratLab")
 });
 
 test("the Privacy page lists every AI provider the code can use, says what the browser keeps before sign-in, and no longer says 'such as'", () => {

@@ -13,6 +13,7 @@ import struct
 
 from . import db
 from .config import settings
+from .titles import page_title
 
 TOKEN = re.compile(r"^[A-Za-z0-9_-]{6,24}$")
 MAX_IMAGE = 2_000_000
@@ -150,7 +151,7 @@ def gone_html() -> str:
     site = html.escape(settings.PUBLIC_SITE_URL)
     return ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
             "<meta name=\"color-scheme\" content=\"light dark\"><meta name=\"robots\" content=\"noindex,nofollow\">"
-            "<title>Link not available · StratLab</title></head>"
+            f"<title>{page_title('Link not available')}</title></head>"
             "<body style=\"font-family:system-ui,sans-serif;margin:0;padding:48px 16px;text-align:center\"><main>"
             "<h1 style=\"font-size:22px\">This shared link isn't available</h1>"
             "<p>This shared link isn't available. It may have been turned off.</p>"
@@ -171,7 +172,7 @@ def preview_html(token: str, snap: dict, has_image: bool) -> str:
     img = f"{site}/v/{token}.png" if has_image else f"{site}/og-image.png"
     dest = f"{site}/verdict/{token}"
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
-<title>{e(title)} · StratLab</title>
+<title>{e(page_title(title))}</title>
 <meta name="description" content="{e(desc)}">
 <meta name="robots" content="noindex,follow">
 <meta property="og:type" content="article"><meta property="og:site_name" content="StratLab">

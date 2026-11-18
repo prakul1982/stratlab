@@ -21,7 +21,7 @@ const { signedOutTitle, titleFor } = await import("../src/lib/title.ts");
 const { lostMoney, LOST_CHECKS } = await import("../src/lib/tradeUi.ts");
 
 test("R16-009: /plans and /faq tabs are titled by name, signed in or not", () => {
-  assert.equal(signedOutTitle("/plans"), "Plans and prices · StratLab");        // the page's own title since DK-006
+  assert.equal(signedOutTitle("/plans"), "Plans · StratLab");        // (updated on purpose, owner 18 Nov: one tab-title pattern, "Page · StratLab"): signed in or out, one name
   assert.equal(titleFor("/plans"), "Plans · StratLab");
   assert.equal(signedOutTitle("/faq"), "Questions · StratLab");
 });

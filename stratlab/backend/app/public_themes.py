@@ -24,6 +24,7 @@ from . import computed, stock_pages
 from .config import settings
 from .intel import theme_base, theme_library
 from .share import FACTS_LINE, checked, day_text, public_words, theme_layers
+from .titles import page_title
 
 router = APIRouter(include_in_schema=False)
 
@@ -376,7 +377,7 @@ def render(v: dict) -> str:
     r = v["region"]
     canonical = site + path(r, v["slug"])
     label = short_label(v["label"])
-    title = f"{label}: listed companies in {_market(r)} by layer · StratLab"      # LIVE10A-022: "in India", never "in india"
+    title = page_title(f"{label}: listed companies in {_market(r)} by layer")      # LIVE10A-022: "in India", never "in india"
     word = ""        # LIVE10A-022: one header format on every theme page ("41 companies in 9 layers"; "checked" was on the pages without kept states)
     desc = (f"{label} in {_market(r)}: {v['members']} {word}companies in {len(v['layers'])} layers"
             + (f", from {', '.join(x['name'] for x in v['layers'][:3])}" if v["layers"] else "") + ". Facts from filings, not advice.")
@@ -451,7 +452,7 @@ def directory(region: str | None) -> str:
     rows = entries(region)
     where = f" in {_market(region)}" if region else ""
     canonical = site + ("/themes" + (f"/{region.lower()}" if region else ""))
-    title = f"Investment themes{where}: companies by layer · StratLab"
+    title = page_title(f"Investment themes{where}: companies by layer")
     desc = f"Themes{where} mapped into layers of listed companies, each checked against its own filings. Facts, not advice."
     trail = [("Themes", "/themes")] + ([("India" if region == "IN" else "US", f"/themes/{region.lower()}")] if region else [])
     crumbs_html, crumbs_ld = stock_pages._crumbs(trail)
@@ -494,7 +495,7 @@ def card_line(x: dict) -> str:
 
 def not_found() -> str:
     site = settings.PUBLIC_SITE_URL
-    head = stock_pages._head("Theme not found · StratLab", "No theme at this address.", site + "/themes", robots="noindex,follow")
+    head = stock_pages._head(page_title("Theme not found"), "No theme at this address.", site + "/themes", robots="noindex,follow")
     return stock_pages._page(head, None, '<h1>No theme at this address</h1><p><a href="/themes">See every theme</a></p>')
 
 

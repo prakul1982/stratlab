@@ -18,6 +18,7 @@ from html import escape as e
 from . import db, referrals, stock_pages
 from .config import settings
 from .public import decode_image
+from .titles import page_title
 
 TOKEN = re.compile(r"^[A-Za-z0-9_-]{6,24}\Z")
 FACTS = 4
@@ -146,7 +147,7 @@ def description(c: dict) -> str:
 def preview_html(token: str, c: dict, has_image: bool) -> str:
     """A tiny page for link previews (WhatsApp, X and LinkedIn read these tags); people go on to the company page."""
     site = settings.PUBLIC_SITE_URL
-    title = f"{c.get('name') or c['symbol']} ({c['symbol']}): the facts on StratLab"
+    title = page_title(f"{c.get('name') or c['symbol']} ({c['symbol']}): the facts")       # one tab-title pattern (owner, 18 Nov)
     desc = description(c)
     img = f"{site}/c/{token}.png" if has_image else f"{site}/og-image.png"
     dest = destination(c)
