@@ -70,3 +70,12 @@ test("LIVE12A-010: a mid-size heatmap tile (about 57 × 53 px) names a long symb
   assert.match(h, /data-testid="hm-count"/);
   assert.match(h, /onMap\.toLocaleString\("en-IN"\)\}<\/b> of \{tiles\.length\.toLocaleString\("en-IN"\)\} companies on the map/);
 });
+
+test("LIVE12A-007: a layer whose companies are all in the theme the same way says it once; the column wraps; the own-words column keeps its width", () => {
+  const s = read("src/components/ThemeDive.tsx");
+  assert.match(s, /\{ key: "f", header: "In the theme by", wrap: true, cell:/);
+  assert.match(s, /const same = !sameBy && g\.rows\.length > 1 && new Set\(g\.rows\.map\(byOf\)\)\.size === 1;/);
+  assert.match(s, /cols=\{same \? cols\.filter\(\(c\) => c\.key !== "f"\) : cols\}/);
+  assert.match(s, /data-testid="layer-by-once">Every company in this layer is in the theme by: \{byOnce\}\./);
+  assert.match(read("src/styles.css"), /@media \(min-width: 901px\) \{ #theme-members \.k-table td\.k-lead \{ min-width: 18rem; \} \}/);
+});

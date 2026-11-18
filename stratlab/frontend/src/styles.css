@@ -3126,6 +3126,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 }
 
 /* ---- themes: the deep dive (THEME-1) ---- */
+/* LIVE12A-007: a company's own words are the widest column of its layer's table, never squeezed narrower than its labels beside it */
+@media (min-width: 901px) { #theme-members .k-table td.k-lead { min-width: 18rem; } }
 .k-section-title { font-family: var(--serif); font-size: var(--t-card); font-weight: 600; margin: var(--s5) 0 0; }
 .k-table tr[data-kind="median"] > * { border-top: 2px solid var(--line-2); font-weight: 600; }
 .k-table tr[data-kind="range"] > * { color: var(--muted); font-size: var(--t-note); }
