@@ -172,7 +172,7 @@ def test_on_a_theme_with_companies_that_have_a_market_value_and_no_figures_the_d
     vs = deck.value_share(v)
     assert vs["valued"] > vs["with_value"] and vs["share"] < 100 and vs["share"] == deck.pct_of(vs["value_with"], vs["value_all"])
     cover = {it[0]: it for b in slides[0].blocks if b["kind"] == "stats" for it in b["items"]}
-    assert cover["With figures"][2] == f"{vs['share']}% of the value of the {vs['valued']:,} with one"
+    assert cover["With figures"][2] == f"{vs['share']}% of the market value of the {vs['valued']:,} valued"          # fix20 (LIVE14B-005, updated on purpose)
     assert cover["Their market value"][2].endswith("with figures and a market value")
     assert next(x for x in slides[0].gate["items"] if x["id"] == "reconcile")["ok"]
     every_rule("chemicals, market value without figures", v, slides)

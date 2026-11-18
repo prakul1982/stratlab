@@ -46,8 +46,11 @@ METHOD = ("How companies are chosen: a theme's companies come from its official 
 # l55 (R55, the owner's review of the live R54 decks): the evidence states by the same names as the deck, never one "confirmed" total
 EVIDENCE_PUBLIC = {"description_verified": "description-verified", "industry_code_supported": "industry-supported (official industry only)",
                    "list_supported": "list-supported (the theme's own list only)", "membership_unverified": "not checked"}
+# fix20 (LIVE14A-004: Fertilizers "284 companies ...: 266 description-verified, 12 industry-supported, 0 not checked", 278 of 284): the members
+# whose own words describe other work said too, as the app and the deck say them, so the parts add up to the whole
 EVIDENCE_PUBLIC_MANY = (("description_verified", "description-verified"), ("industry_code_supported", "industry-supported"),
-                        ("list_supported", "list-supported"), ("membership_unverified", "not checked"))
+                        ("list_supported", "list-supported"), ("not_confirmed", "own words describe other work"),
+                        ("membership_unverified", "not checked"))
 EVIDENCE_PUBLIC_ALWAYS = ("description_verified", "industry_code_supported", "membership_unverified")
 
 

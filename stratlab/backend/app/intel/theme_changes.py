@@ -615,9 +615,10 @@ def first_sentence(words) -> str:
     # r66e (LIVE12A-006: BigBloc's move "its own words say “Incorporated in 2015, BigBloc Construction Ltd manufactures”", cut before what it
     # manufactures): a heading a profile glues on ends the sentence before it, its founding-history opening is left off, and a cut never
     # ends on the verb or joining word before what the company makes
-    from .theme_base import _HEADING, _HISTORY
+    from .theme_base import _HEADING, _HISTORY, without_history
     text = " ".join(_HEADING.sub(". ", text).split()).lstrip(". ")
     text = _HISTORY.sub("", text, count=1).strip() or text
+    text = without_history(text)            # fix20 (LIVE14A-003): "... was incorporated in 1992 and is ..." says what it is now
     # r581 (the live R58 Automotive deck: SBI Cards' quote ran past "... registered with the RBI." into "The Company is engaged in issuing
     # credit cards to", and the deck's reader took the full stop inside the quote for the end of the reason): a sentence ends after an
     # acronym of capitals too ("RBI."), never after one letter's ("U.S.")

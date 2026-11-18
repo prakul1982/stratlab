@@ -9,12 +9,14 @@
 """
 import pathlib
 import sys
+import threading
 
 from app import deck, stock_pages
 from app.intel import grounding, sec
 from app.intel import theme_changes as C
 from app.intel import theme_data as D
 from tests.test_sec_live_samples import _xom_transport
+from tests.test_r66e_fixes import keep, payload, w  # noqa: F401 (the stored-library fixture)
 from tests.test_sec_us_audit_oct6 import _facts, _yr
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "scripts"))
@@ -215,3 +217,114 @@ def test_fix20_the_us_deck_says_its_layer_based_abroad_and_its_names_without_art
     assert names["SCCO"] == "Southern Copper Corp" and names["ATI"] == "ATI Inc" and names["FCX"] == "Freeport-McMoRan Inc"
     assert names["BOKF"] == "BOK Financial Corp" and names["AMX"] == "America Movil SAB de CV"
     assert "Corp/" not in flat and "Ati " not in flat and "Mcmoran" not in flat
+
+
+# ---------- LIVE14A-002 / -005: a theme's re-check never yields for ever ----------
+def test_fix20_a_rebuild_that_keeps_yielding_takes_its_turn(w, monkeypatch):  # noqa: F811 (the fixture)
+    """Fails before: on a busy server the memory guard's turn was never free for YIELD_WAIT seconds, so the most-read theme yielded at the front
+    of the queue again and again (Semiconductors, then Software and REITs behind it, "being worked out" for 10 hours). After YIELD_MAX yields
+    in a row its rebuild waits for its turn like any other heavy job."""
+    from app import memguard
+    from app.intel import theme_recheck
+    keep("ships", payload("Ships"))
+    theme_recheck.queue()
+    held, release = threading.Event(), threading.Event()
+
+    def price_job():                       # a job holding the turn the whole time: the idle turn never comes
+        with memguard.heavy("page-prices"):
+            held.set()
+            release.wait(10)
+    t = threading.Thread(target=price_job)
+    t.start()
+    held.wait(5)
+    monkeypatch.setattr(theme_recheck, "YIELD_WAIT", 0.05)
+    phases = []
+
+    def work(region, name):
+        with theme_recheck._turn("dive"):
+            phases.append(theme_recheck._force.get("on", False))
+        return None
+    try:
+        outs = [theme_recheck.step(work)["outcome"] for _ in range(theme_recheck.YIELD_MAX)]
+        assert outs == ["yielded"] * theme_recheck.YIELD_MAX and phases == []
+        threading.Timer(0.3, release.set).start()          # the price job ends; the forced turn waits for it, then runs
+        last = theme_recheck.step(work)
+    finally:
+        release.set()
+        t.join(5)
+    assert phases == [True] and last["outcome"] == "failed"           # (this work keeps no dive: "its dive was not kept")
+    assert not theme_recheck._force and "IN|ship" not in (theme_recheck._load().get("yields") or {})
+
+
+# ---------- LIVE14A-003: a third party's sentences are no company's own words ----------
+def test_fix20_encyclopedia_rankings_history_and_headings_never_pass_as_own_words():
+    """Fails before: Shell "...was the ninth-largest corporate producer of greenhouse gas emissions in the period 1988–2015" as its own words;
+    Andhra Cements' quote running into "Corporate History & Ownership Changes"; Prism Johnson "was incorporated in 1992 and is ..."."""
+    from app.intel.theme_base import own_words
+    from app.intel.theme_changes import first_sentence
+    shell = ("Measured by both its own emissions, and the emissions of all the fossil fuels it sells, Shell was the ninth-largest corporate "
+             "producer of greenhouse gas emissions in the period 1988–2015.")
+    assert own_words(shell, "Shell plc") == ""
+    assert own_words("Exxon was one of the largest oil companies by market value in 2010.", "Exxon Mobil Corporation") == ""
+    andhra = ("Andhra Cements Limited is engaged in manufacturing and selling cement Corporate History & Ownership Changes Andhra Cements "
+              "Limited has undergone multiple ownership changes.")
+    assert own_words(andhra, "Andhra Cements Ltd") == "Andhra Cements Limited is engaged in manufacturing and selling cement"
+    prism = "Prism Johnson Limited was incorporated in 1992 and is amongst the largest integrated building materials companies in India."
+    assert own_words(prism, "Prism Johnson Ltd").startswith("Prism Johnson Limited is amongst the largest integrated building materials")
+    assert "1992" not in first_sentence(prism)
+    # the company's own words about itself, in the present, stay
+    assert own_words("We are the largest cement maker in India, making grey and white cement.", "UltraTech Cement Ltd")
+    assert own_words("The Company manufactures and sells cement under the Birla brand.", "X Ltd")
+
+
+# ---------- LIVE14B-005: the IT services sample deck ----------
+def test_fix20_an_industry_layer_keeps_its_acronym():
+    """Fails before: "It services", a layer named from the official industry "IT Services ..." in sentence case."""
+    from app.intel import theme_base as TB
+    assert TB.industry_label("IT Services & Consulting") == "IT services and consulting"
+    assert TB.industry_label("IT Enabled Services") == "IT-enabled services"
+    assert TB.industry_label("Retail-Apparel & Accessory Stores") == "Apparel and accessory stores"
+
+
+def test_fix20_a_reason_said_of_several_companies_is_plural_and_staying_out_reads_as_one():
+    """Fails before (LIVE14A-007 / LIVE13A-021, LIVE14B-005): "Hypersoft Technologies Ltd and Innovana Thinklabs Ltd: ... as its own words
+    don't say ..."; "the last re-check moved it out, it stays where it was"."""
+    why = "its own words don’t say it sells what “X” is, nor does its official industry"
+    assert deck.reason_for(why, 2) == "their own words don’t say they sell what “X” is, nor do their official industries"
+    assert deck.reason_for(why, 1) == why
+    out = deck.reason_for("its own words hold no line that says what “M” is: the last re-check moved it out, it stays where it was", 1)
+    assert out.endswith("the last re-check moved it out of that layer, and it stays out")
+    v = {"layers": [{"layer": "Engineering R&D services", "companies": [
+        {"name": "Hypersoft Technologies Ltd", "refit": {"from": "Mid-tier digital", "why": why}},
+        {"name": "Innovana Thinklabs Ltd", "refit": {"from": "Mid-tier digital", "why": why}}]}]}
+    n, said = deck.refit_line(v)
+    assert n == 2 and "as their own words don’t say they sell" in said and "as its own words" not in said
+
+
+def test_fix20_the_low_confidence_note_says_its_tag_once():
+    assert deck.LOW_NOTE.count("low confidence") == 2 and "how it earns is read at low confidence" not in deck.LOW_NOTE
+    assert deck.PROFILE_MORE.count("{notes}") == 1
+
+
+def test_fix20_the_public_tally_names_every_state_so_it_adds_up():
+    """Fails before (LIVE14A-004): Fertilizers "284 companies ...: 266 description-verified, 12 industry-supported, 0 not checked" (278)."""
+    from app import public_themes as P
+    said = P.evidence_said({"description_verified": 266, "industry_code_supported": 12, "not_confirmed": 6, "membership_unverified": 0})
+    assert said == "266 description-verified, 12 industry-supported, 6 own words describe other work, 0 not checked"
+    assert "own words" not in P.evidence_said({"description_verified": 3, "industry_code_supported": 1, "membership_unverified": 0})
+
+
+def test_fix20_the_sample_deck_is_one_whose_gate_passed():
+    """Fails before (LIVE14B-005): the sample was the newest kept PDF, whatever its gate said (the IT services deck with engine notes)."""
+    from app import sample_deck as S
+    ok = {"items": [{"id": "a", "ok": True}, {"id": "b", "ok": True}]}
+    bad = {"items": [{"id": "a", "ok": True}, {"id": "b", "ok": False}]}
+    rows = [{"id": "1", "label": "India IT services (PDF, 2026-11-19)", "region": "IN", "meta": {"versions": [1], "gate": bad}},
+            {"id": "2", "label": "India cement (PDF, 2026-11-18)", "region": "IN", "meta": {"versions": [1], "gate": ok}},
+            {"id": "3", "label": "India defence (PDF, 2026-11-17)", "region": "IN", "meta": {"versions": [1], "gate": bad}}]
+    assert S.pick(rows, [1])["id"] == "2"
+    rows[2]["meta"]["gate"] = ok
+    assert S.pick(rows, [1])["id"] == "3"                    # the sample theme, clean, first
+    for r in rows:
+        r["meta"]["gate"] = bad
+    assert S.pick(rows, [1])["id"] == "3"                    # none clean: as before

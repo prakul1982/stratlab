@@ -24,7 +24,7 @@ CONFIRMED_COUNT = re.compile(r"(?<![Nn]ot )\bconfirmed \(?(?:of )?\d|(?<![\d,.])
 
 
 def partial_view():
-    """theme_a's 20 companies (3 description-verified, 15 industry-supported, 2 whose own words describe other work) with 10 more companies
+    """theme_a's 20 companies (3 description-verified, 15 industry-supported, 2 describe other work) with 10 more companies
     of its first layer that the figures' window never reached: 2 of them reached by the membership check (one by its own description, one
     on its industry), 8 not checked. 30 companies, 22 checked."""
     region, m, f = theme_a()
@@ -73,7 +73,7 @@ def test_every_count_of_the_members_says_its_evidence_states_and_none_says_confi
     assert a and int(a.group(2)) + int(a.group(3)) == int(a.group(1))
     # the cover: what isn't in the theme by its state's name
     cover = {it[0]: it[2] for b in slides[0].blocks if b["kind"] == "stats" for it in b["items"] if len(it) > 2}
-    assert cover["Companies"].endswith("; 2 own words: other work")
+    assert cover["Companies"].endswith("; 2 describe other work")          # fix20 (LIVE14B-005): a plain phrase (updated on purpose)
     # what each state means, once, on the notes page
     assert deck.EVIDENCE_KEY in t
     # and the gate finds nothing to fail

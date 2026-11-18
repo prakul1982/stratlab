@@ -35,6 +35,12 @@ WAIT_FIRST = 600.0
 WAIT_MAX = 3600.0
 WAIT_TRIES = 6
 YIELD_WAIT = 30.0          # r69e: seconds a phase of a rebuild waits for the memory guard's turn to be free of every other job, else it yields
+# fix20 (LIVE14A-002/-005: Semiconductors, Software and REITs served "the new read is being worked out" for 10 hours on 12-13 Nov prices while
+# the US market was open): a busy server never left the memory guard's turn free for YIELD_WAIT seconds, so the most-read theme yielded at the
+# front of the queue again and again and no theme behind it moved. After YIELD_MAX yields in a row a theme's rebuild waits for its turn as any
+# other heavy job does (memguard.heavy, as the page's own behind-read does) instead of giving way once more
+YIELD_MAX = 3
+_force: dict = {}          # {"on": True} while a rebuild that yielded YIELD_MAX times runs in the plain turn
 SYSTEM = {"id": "", "_plan": "pro", "plan": "pro", "email": None}      # the job, not a person: counts against nobody, never starts an AI map
 _lock = threading.Lock()
 _asked: dict = {}          # (market, name) -> when a page last asked for it
@@ -173,6 +179,10 @@ def _turn(phase: str):
     """r69e: one phase of a rebuild in the memory guard's turn, taken only when no other job holds or waits for it (memguard.heavy_idle),
     so the background re-check never stands in front of a page's price job; Yielded when the turn stayed busy for YIELD_WAIT seconds."""
     from .. import memguard
+    if _force.get("on"):                  # fix20: yielded YIELD_MAX times in a row: it waits for its turn instead
+        with memguard.heavy(f"theme re-check: {phase}"):
+            yield
+        return
     with memguard.heavy_idle(f"theme re-check: {phase}", YIELD_WAIT) as got:
         if not got:
             raise Yielded(f"the {phase} gave way to other jobs")
@@ -244,6 +254,8 @@ def step(work=None, now: float | None = None) -> dict | None:
     k = f"{region}|{name}"
     why = ""
     _running["theme"] = [region, name]
+    if int((st.get("yields") or {}).get(k) or 0) >= YIELD_MAX:
+        _force["on"] = True
     try:
         if current(region, name):
             outcome = "current"
@@ -262,12 +274,15 @@ def step(work=None, now: float | None = None) -> dict | None:
         print("theme re-check:", region, name, why)
     finally:
         _running.pop("theme", None)
+        _force.pop("on", None)
     with _lock:
         st = _load()                 # a page may have asked meanwhile
-        if outcome == "yielded":     # its place kept at the front, nothing counted
+        if outcome == "yielded":     # its place kept at the front, nothing counted (fix20: its yields in a row counted)
             st["todo"] = [[region, name]] + [x for x in st.get("todo") or [] if x != [region, name]]
+            st.setdefault("yields", {})[k] = int((st.get("yields") or {}).get(k) or 0) + 1
         else:
             st["todo"] = [x for x in st.get("todo") or [] if x != [region, name]]
+            (st.get("yields") or {}).pop(k, None)
         st.setdefault("wait", {}).pop(k, None)
         if outcome == "current":
             st["current"] = int(st.get("current") or 0) + 1

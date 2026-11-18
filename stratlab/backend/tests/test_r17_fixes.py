@@ -148,7 +148,7 @@ def test_membership_reads_the_layers_own_words_and_a_sentence_that_says_nothing_
     assert ("20 in the exchange's industry list; description-verified 3 of 20 (15%); membership checked 20 of 20: 3 description-verified, "
             "15 industry-supported, 2 own words describe other work, 0 not checked") in t       # h56 (R56): the description-verified share first (updated on purpose)       # p2 and data confidence; l55 (R55): by state names (updated on purpose)
     cover = dict((it[0], it[2] if len(it) > 2 else None) for b in slides[0].blocks if b["kind"] == "stats" for it in b["items"])
-    assert cover["Companies"] == "in the exchange's industries; 2 own words: other work"          # l55 (R55): by the state (updated on purpose)          # R20: the universe's one wording, with what isn't confirmed
+    assert cover["Companies"] == "in the exchange's industries; 2 describe other work"          # fix20 (LIVE14B-005): a plain phrase (updated on purpose)          # l55 (R55): by the state (updated on purpose)          # R20: the universe's one wording, with what isn't confirmed
     # US, most companies with no stored figures: the counts are of every company checked, with figures or not
     vb, sb = deck_of(*theme_b())
     assert vb["membership"]["placed"] == 10 and ("10 in the exchange's industry list; description-verified 10 of 10 (100%); membership checked 10 of 10: 10 description-verified, "
