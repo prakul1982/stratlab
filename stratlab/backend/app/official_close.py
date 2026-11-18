@@ -551,6 +551,25 @@ def _read_ranges(d: str, files_fn) -> dict | None:
     return ranges()
 
 
+def report_through(report: dict | None) -> str | None:
+    """The newest session a 52-week report's figures cover: the latest day any of its rows names for a high or a low (every
+    session some stock makes a new 52-week high or low), never after the report's own day. The file of a day can still end on
+    the session before it (LIVE12B-015), and a candle after the covered session is not the report's to correct. None for a
+    report that names no day."""
+    if not isinstance(report, dict) or not isinstance(report.get("rows"), dict):
+        return None
+    key = ("w52through", report.get("day"), len(report["rows"]))
+    hit = _mem.get(key)
+    if hit is not None:
+        return hit or None
+    days = [str(v[i] or "")[:10] for v in report["rows"].values() if isinstance(v, (list, tuple)) and len(v) >= 4 for i in (1, 3)]
+    newest = max((d for d in days if len(d) == 10 and d[4] == "-"), default="")
+    own = str(report.get("day") or "")[:10]
+    got = min(newest, own) if newest and own else newest
+    _mem.set(key, got, 600)
+    return got or None
+
+
 def range_row(symbol: str, report: dict | None, now: datetime | None = None) -> list | None:
     """One stock's row of a 52-week report ([high, its day, low, its day]), or None. A report of a day before a bonus or
     split went ex is on the old basis, while the broker's candles are adjusted back: its row is not used for that stock
