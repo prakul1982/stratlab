@@ -412,6 +412,11 @@ def start_failed_jobs() -> None:
         _start(name, fn)
 
 
+def _theme_recheck_start():
+    from .intel import theme_recheck
+    theme_recheck.job.start()
+
+
 def start_jobs():
     try:
         manager.resume()  # crypto sessions always; India ones once Kite is logged in
@@ -464,6 +469,7 @@ def start_jobs():
     _start("ipo.job", ipo.job.start)                    # IPOs: the exchanges' and regulators' pages, the bids through the day, the alerts
     _start("ai_providers.job", ai_providers.job.start)          # measures the AI models every 6 hours
     _start("memory-janitor", lambda: threading.Thread(target=memguard.janitor, daemon=True, name="memory-janitor").start())   # expired cache entries out, the heap trimmed (MEM-001)
+    _start("theme_recheck.job", _theme_recheck_start)     # r66e: every stored theme checked again after a version change, one at a time
     _start("autofix", lambda: threading.Thread(target=autofix.loop, daemon=True, name="autofix").start())   # self-healing: retries what failed, emails the owner only when that fails (owner, 4 Nov)
 
 

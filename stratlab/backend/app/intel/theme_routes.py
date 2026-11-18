@@ -1619,6 +1619,26 @@ def _rebuild_behind(r: str, theme: str, m: dict, key: list) -> bool:
     return True
 
 
+def latest_dive(r: str, name: str, label: str = "") -> dict | None:
+    """r66e (LIVE12A-002: Private banks ready in 57 s, its dive worked out inside the page's request after a dive text bump, as there was no
+    dive kept under today's versions to serve meanwhile): the newest dive kept for this theme under any versions ({"dive", "at"}), found by
+    the theme's library name kept with it, or (a dive kept before the name was) by its label in the same market; None when none is kept."""
+    best = None
+    for hk, e in (computed.index(theme_library.DIVE).get("entries") or {}).items():
+        if e.get("region") != r:
+            continue
+        q = (e.get("meta") or {}).get("q")
+        if not (q == name if q else (label and str(e.get("label") or "").lower() == label.lower())):
+            continue
+        if best is None or float(e.get("at") or 0) > best[0]:
+            best = (float(e.get("at") or 0), hk)
+    if best is None:
+        return None
+    got = computed.get_hk(theme_library.DIVE, best[1]) or {}
+    dive = (got.get("value") or {}).get("dive")
+    return {"dive": dive, "at": got.get("at")} if isinstance(dive, dict) else None
+
+
 def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None = None, behind: bool = False, rebuild: bool = False) -> dict:
     """The dive for a checked map with its descriptions (the page's tables and sections): kept once for everyone in the shared store
     (kind "theme:dive") and served from there, however old, until a Refresh (owner, 7 Nov); worked out again from the stored company
@@ -1637,6 +1657,18 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
                 return kept["value"]["dive"]
             if behind and BEHIND_ON and _rebuild_behind(r, theme, m, key):
                 return {**kept["value"]["dive"], "updating": True}
+        elif kept is None and behind:
+            # r66e: no dive kept under today's versions (a rules or dive text bump, or a read stored under older rules): the newest kept one
+            # is served at once, marked "updating", and the new one worked out behind the page (the re-check job for an older read)
+            name = m.get("_library") or theme_library.normalise(theme, r)
+            old = latest_dive(r, name, m.get("sector") or "")
+            if old is not None:
+                if m.get("_older"):
+                    from . import theme_recheck
+                    theme_recheck.ask(r, name)
+                    return {**old["dive"], "updating": True}
+                if BEHIND_ON and _rebuild_behind(r, theme, m, key):
+                    return {**old["dive"], "updating": True}
     src = sources(r, theme, fresh=True) if refresh else sources(r, theme)
     hit = theme_data.build(r, theme, fm, src)
     hit["placements"], hit["figures"] = m.get("placements"), figures
@@ -1660,10 +1692,12 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
             stock_pages.mark_due(r, late)
         except Exception as e:
             print("theme: pages behind a filing not marked:", type(e).__name__, str(e)[:100])
-    if (m.get("placements") or {}).get("checked"):
+    # r66e: a dive worked out from a read stored under older rules is never kept (its key is today's: it would stand for the read the re-check
+    # makes) nor logged as a change
+    if (m.get("placements") or {}).get("checked") and not m.get("_older"):
         pieces = getattr(src, "pieces", None) or {}
         computed.put(theme_library.DIVE, key, {"dive": hit, "pieces": pieces, "priced": priced_mark(r, list(pieces))}, label=m.get("sector") or theme,
-                     region=r, by=by)
+                     region=r, by=by, meta={"q": m.get("_library") or theme_library.normalise(theme, r), "rules": theme_base.RULES})
         # p57: every member of the checked map with its layer, so a company leaving the figures is never said to leave the theme
         everyone: dict = {}
         for v in m.get("value_chain") or []:
@@ -2049,6 +2083,11 @@ def map_for_deck(R, profile, region: str, q: str, wait: float = DECK_MAP_WAIT, p
     gets True and the route answers "preparing" instead of making a file without the map. A map or check that failed isn't waited for."""
     t0 = time.time()
     r, theme, m, _ = R.theme_map(profile, region, q)     # R19: the theme library's stored read when there is one (kept across deploys)
+    if m.get("_older") and pending is not None:
+        # r66e: a read stored under older rules is being checked again (theme_recheck, this theme first): no file is made from it, the page
+        # asks again
+        pending.append(True)
+        return r, theme, m
     # R26: a kept map due to be written again under a newer prompt (ai.map_due) is waited for as a missing one is: the live R25 decks of four
     # themes were made on the old map while the new one was being written, and the next pull differed. sector_map has started the rewrite.
     due = lambda m_: not m_.get("_library") and A.map_due(m_)          # noqa: E731
@@ -2100,7 +2139,8 @@ def theme_dive_deck(q: str, region: str = "IN", format: str = "pptx", profile=De
         # R21: the AI map or its checks are still being written: no file without them, and nothing counted; the page asks again
         from fastapi.responses import JSONResponse
         return JSONResponse({"preparing": True, "retry_after": DECK_RETRY,
-                             "message": "Preparing the deck: the AI map is being written."}, status_code=202)
+                             "message": "Preparing the deck: the theme is being checked again under the current rules." if m.get("_older")
+                             else "Preparing the deck: the AI map is being written."}, status_code=202)
     today = datetime.now(R.IST).date()
     biz = r == "IN" and bool(biz_updates._allowed(profile))       # the one part of the deck that depends on the plan
     stamp = int(float(m.get("generated_at") or 0))

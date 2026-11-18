@@ -104,6 +104,34 @@ def find(region: str, q: str) -> dict | None:
     return None
 
 
+def older(region: str, q: str) -> dict | None:
+    """r66e (LIVE12A-001/002: after a rules bump every stored theme missed `find`, so its first visit waited on a whole re-check, "Checking
+    each company against its own description…" for 90 s, and the public pages kept the entry stored under the older rules with nothing saying
+    so): the newest entry stored under rules older than today's for this search, matched as `find` matches, as {"entry", "payload", "at",
+    "name", "rules", "hk"}; None when an entry under today's rules is stored (it is served, or a Refresh of it is under way) or none matches."""
+    n = normalise(q, region)
+    if not n or find(region, q) is not None:
+        return None
+    ix = computed.index(KIND)["entries"]
+    mine = [(hk, e) for hk, e in ix.items() if e.get("region") == region and isinstance((e.get("meta") or {}).get("rules"), int)
+            and (e.get("meta") or {})["rules"] < theme_base.RULES and (e.get("meta") or {}).get("q")]
+    for test in (lambda e: (e.get("meta") or {}).get("q") == n, lambda e: n in ((e.get("meta") or {}).get("aliases") or []),
+                 lambda e: any(close(n, a) for a in [(e.get("meta") or {}).get("q") or ""] + list((e.get("meta") or {}).get("aliases") or []))):
+        got = [(hk, e) for hk, e in mine if test(e)]
+        names = {(e.get("meta") or {}).get("q") for _, e in got}
+        if len(names) > 1:          # two stored themes alike: none is served rather than the wrong one
+            return None
+        if got:
+            hk, e = max(got, key=lambda x: ((x[1].get("meta") or {})["rules"], float(x[1].get("at") or 0)))
+            kept = computed.get_hk(KIND, hk) or {}
+            payload = (kept.get("value") or {}).get("payload")
+            if not isinstance(payload, dict):
+                return None
+            return {"entry": e, "payload": payload, "at": e.get("at"), "name": (e.get("meta") or {})["q"], "rules": (e.get("meta") or {})["rules"],
+                    "hk": hk, "q": (kept.get("value") or {}).get("q") or (e.get("meta") or {})["q"]}
+    return None
+
+
 def refreshing(region: str, name: str) -> dict | None:
     """The Refresh under way for a stored theme ({"at", "by"}), or None."""
     with _lock:
@@ -157,6 +185,10 @@ def keep(region: str, q: str, payload: dict, by: str | None = None) -> bool:
         return False                # the read from before the Refresh: the new one is still being written
     by = by or (busy or {}).get("by")
     aliases = set((e.get("meta") or {}).get("aliases") or []) if e else set()
+    if e is None:                   # r66e: the first entry under new rules keeps the ways the theme was searched for under the older ones
+        for x in computed.index(KIND)["entries"].values():
+            if x.get("region") == region and (x.get("meta") or {}).get("q") == name:
+                aliases |= set((x.get("meta") or {}).get("aliases") or [])
     aliases |= {normalise(q, region), normalise(payload.get("sector") or "", region)}
     aliases.discard("")
     body = {k: v for k, v in payload.items() if k not in ("ai", "refresh_state")}

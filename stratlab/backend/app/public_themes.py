@@ -49,6 +49,10 @@ EVIDENCE_PUBLIC_MANY = (("description_verified", "description-verified"), ("indu
 EVIDENCE_PUBLIC_ALWAYS = ("description_verified", "industry_code_supported", "membership_unverified")
 
 
+OLDER_LINE = "This page shows the theme as it was checked under an earlier version of StratLab's checks."
+RECHECKING_LINE = "It is being checked again now, and this page shows the new check once it is done."
+
+
 def evidence_said(tally: dict) -> str:
     """l55: "97 description-verified, 63 industry-supported, 51 not checked": the three states by name (the theme's own list where it has
     any), each with its count."""
@@ -82,7 +86,8 @@ def entries(region: str | None = None) -> list[dict]:
         # singular key ("/logistic", "/capital-good"); the old address is an alias that answers 301 to it
         own = slug(short_label(label)) or slug(name)
         row = {"region": e["region"], "name": name, "label": label, "slug": own,
-               "aliases": [x for x in dict.fromkeys([slug(name)] + [slug(a) for a in m.get("aliases") or []]) if x and x != own], "at": e.get("at"), "hk": hk}
+               "aliases": [x for x in dict.fromkeys([slug(name)] + [slug(a) for a in m.get("aliases") or []]) if x and x != own], "at": e.get("at"), "hk": hk,
+               "rules": m["rules"]}
         key, rank = (e["region"], slug(name)), (m["rules"], str(e.get("at") or ""))
         if key not in best or rank > best[key][0]:
             best[key] = (rank, row)
@@ -184,6 +189,13 @@ def _dive(region: str, name: str, p: dict) -> dict:
     except Exception:
         return {}
     dive = ((got or {}).get("value") or {}).get("dive")
+    if not isinstance(dive, dict):
+        # r66e: none kept under today's versions yet (a version bump, the theme still to be checked again): the newest one kept
+        try:
+            old = theme_routes.latest_dive(region, name, str(p.get("sector") or ""))
+        except Exception:
+            old = None
+        dive = (old or {}).get("dive")
     return dive if isinstance(dive, dict) else {}
 
 
@@ -244,7 +256,17 @@ def view(entry: dict, p: dict) -> dict:
     n = len({c["symbol"] for v in layers for c in v["companies"]})
     once = {c["symbol"]: c.get("evidence") for v in layers for c in v["companies"]}
     tally = {k: sum(1 for x in once.values() if x == k) for k in EVIDENCE_PUBLIC} if ev else None
+    older = isinstance(entry.get("rules"), int) and entry["rules"] < theme_base.RULES
+    rechecking = False
+    if older:
+        try:
+            from .intel import theme_recheck
+            rechecking = theme_recheck.queued(region, entry["name"])
+        except Exception:
+            rechecking = False
     return {"region": region, "label": entry["label"], "slug": entry["slug"], "name": entry["name"], "evidence": tally,
+            # r66e (LIVE12A-001): a theme stored under older rules says so, and that it is being checked again while it is in the queue
+            "older": older, "rechecking": rechecking,
             "summary": public_words(p.get("summary"), 700), "layers": layers, "members": n,
             # r64e (LIVE11A-015: Semiconductors "102 companies" here, 104 in the app, deck and blog): the theme's companies, those not
             # confirmed yet not listed here, so the page says how many it leaves out
@@ -326,6 +348,8 @@ def render(v: dict) -> str:
             + (f" · map made {e(day_text(v['day']))}" if v.get("day") else "")
             # LIVE9A-011: the close the market values are at, said once
             + (f" · market values at the {e(day_text(v['prices']))} close" if v.get("prices") else "") + "</p>")
+    if v.get("older"):             # r66e (LIVE12A-001): a theme shown from its read under an earlier version of the checks says so
+        body += ('<p class="note" data-older>' + e(OLDER_LINE + (" " + RECHECKING_LINE if v.get("rechecking") else "")) + "</p>")
     if v.get("evidence"):          # e54: the companies by what their place rests on, adding up to those shown
         body += '<p class="muted small" data-evidence>Membership: ' + e(evidence_said(v["evidence"])) + ".</p>"
     # LIVE9A-011 (owner, 29 Oct: "wherever you can, just make a table"): each layer is a table, largest company first; the theme's
