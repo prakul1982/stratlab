@@ -258,3 +258,25 @@ def test_a_company_whose_words_were_read_as_another_companys_says_so_where_it_is
     why = D.unchecked_why({"name": "TOYO Co., Ltd"}, None, "Toyo Tire Corporation is a Japanese tire maker.")
     assert "opens on another company's name (“Toyo Tire Corporation is a Japanese tire maker.”)" in why
     assert D.unchecked_why({"name": "X Ltd"}, None) == "no description of its own is stored yet, so its membership is not checked yet"
+
+
+# ---------- P1-1 the coverage effect of moves into "Other" ----------
+def test_moves_into_other_say_what_they_take_from_the_informative_layers():
+    """Fails before: the live R66 Textiles deck's "moved into “Other textile companies” 10" said neither how many companies its informative
+    layers lost nor what share of the theme's value. Now the change log says both (deck_check still reads each move's reason)."""
+    import importlib
+    deck_check_ = importlib.import_module("deck_check")
+    entry = {"d": "2026-11-18", "cause": "rules", "counts": {"moved": 2},
+             "moved": [{"symbol": "A", "name": "Addi Industries Ltd", "from": "Garment contract manufacturers", "to": "Other textile companies",
+                        "why": "its own words don't say what “Garment contract manufacturers” is"},
+                       {"symbol": "K", "name": "Kizi Apparels Ltd", "from": "Garment contract manufacturers", "to": "Other textile companies",
+                        "why": "no words of its own are stored"}]}
+    v = {"changes": {"entries": [entry]}, "coverage": {"other_name": "Other textile companies"},
+         "members": [{"symbol": "A", "cap": 30.0}, {"symbol": "K", "cap": 10.0}, {"symbol": "B", "cap": 960.0}]}
+    row = deck.cohort_row(v)
+    assert "moved into “Other textile companies” 2 (2 companies fewer in its informative layers, 4.0% of the theme's market value): " in row[2]
+    assert not deck_check_.check_text(row[2])["counts"]["move unexplained"]
+    entry["moved"][1].pop("why")          # (guard) a move with no reason is still flagged in the new form
+    assert deck_check_.check_text(deck.cohort_row(v)[2])["counts"]["move unexplained"]
+    v["members"] = []
+    assert "moved into “Other textile companies” 2 (2 companies fewer in its informative layers): " in deck.cohort_row(v)[2]

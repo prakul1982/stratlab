@@ -555,7 +555,7 @@ _SCOPE_THEME = re.compile(r"bank|lend|loan|credit|financ|nbfc|construct|infrastr
                           r"utilit|power|renewable", re.I)
 _TITLE = re.compile(r"THEME DEEP DIVE\s+(.+?)\s{2,}|THEME DEEP DIVE\s*\n\s*(.+)|^\s*(.+)\n.*· Theme deep dive", re.I)
 _NOT_A_REASON = "still in the theme, outside the largest companies"
-_INTO_OTHER = re.compile(r"moved into “([^”]+)” \d[\d,]*: (.*?)(?=; (?:moved|removed|added)\b|\.\s|$)")
+_INTO_OTHER = re.compile(r"moved into “([^”]+)” \d[\d,]*(?: \([^()]*\))?: (.*?)(?=; (?:moved|removed|added)\b|\.\s|$)")
 _REMOVED = re.compile(r"“([^”]+)” removed \((\d[\d,]*) compan(?:y|ies)([^)]*)\)(, [a-z][^;.]*)?")
 LOST_MIN = 5
 

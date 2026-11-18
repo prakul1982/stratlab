@@ -3907,7 +3907,7 @@ def cohort_row(v: dict, today: date | None = None) -> list[str] | None:
     if into:
         # r67e (the owner's review of the live R65 decks, P0-3: every move between an informative layer and "Other" with an auditable reason):
         # each move into "Other" with the company's own reason, as the log keeps it
-        parts.append(f"moved into “{other}” {len(into)}: " + ", ".join(f"{clean_name(x.get('name') or x.get('symbol') or '')} (from “{x.get('from')}”"
+        parts.append(f"moved into “{other}” {len(into)}{into_effect(v, into)}: " + ", ".join(f"{clean_name(x.get('name') or x.get('symbol') or '')} (from “{x.get('from')}”"
                                                                         + (f": {move_reason(x['why'])}" if x.get("why") else "") + ")"
                                                                         for x in into[:COHORT_SHOWN]) + (f" and {len(into) - COHORT_SHOWN} more" if len(into) > COHORT_SHOWN else ""))
     # d53 (R53, our deck reviewer: moves between layers and new or lost layers were never logged, Retail's 11 companies out of "Other" and
@@ -3951,6 +3951,20 @@ def cohort_row(v: dict, today: date | None = None) -> list[str] | None:
     if not parts:
         return [COVERAGE_KINDS[12], "0", f"Against the version stored before {day}: no company with figures added, removed or moved into “Other”."]
     return [COVERAGE_KINDS[12], str(n_add + n_rem + len(into) + len(between)), f"On {day}, against the version stored before it, after {why}: " + "; ".join(parts) + "."]
+
+
+def into_effect(v: dict, into: list) -> str:
+    """r68e (R68, the owner's review of the live R66 Textiles deck: 10 companies moved into "Other", 9 -> 19, with no coverage effect said):
+    what the moves into "Other" take from the theme's informative layers: " (N fewer companies in its informative layers, X% of the theme's
+    market value)", the share of the members with a market value now; " (N fewer companies in its informative layers)" when none has one."""
+    caps = {x.get("symbol"): x.get("cap") for x in v.get("members") or [] if isinstance(x, dict)}
+    total = sum(c for c in caps.values() if isinstance(c, (int, float)) and c > 0)
+    moved = sum(caps.get(x.get("symbol")) or 0 for x in into if isinstance(caps.get(x.get("symbol")), (int, float)))
+    head = f" ({_n(len(into), 'company', 'companies')} fewer in its informative layers"
+    if not total or not moved:
+        return head + ")"
+    share = 100 * moved / total
+    return head + f", {share:.1f}% of the theme's market value)" if share >= 0.1 else head + ", under 0.1% of the theme's market value)"
 
 
 def refit_line(v: dict) -> tuple[int, str]:
