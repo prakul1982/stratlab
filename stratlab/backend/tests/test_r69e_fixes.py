@@ -323,3 +323,13 @@ def test_the_deck_and_the_public_page_say_the_dives_one_tally(monkeypatch):
     assert got["all"] == 103 and got["evidence"]["description_verified"] == 93 and got["evidence"]["membership_unverified"] == 2
     html = P.render(got)
     assert "Membership of the theme's 103 companies, as checked on" in html
+
+
+# ---------- next-engine (the live R67 Hotels deck): a move's quote never says the layer it moves the company out of ----------
+def test_an_audit_quote_saying_the_present_layers_name_moves_nobody():
+    """Fails before: on the live Hotels input (18 Nov), TBO Tek went from "Platforms and marketplaces" to "Travel booking and tour package
+    sellers" with the reason "“is in the business of operating multiple online technology platforms”, not what “Platforms and marketplaces”
+    names". Now it stays with the platforms."""
+    _, out = _replay(R69 / "hotels.json")
+    lay, c = _where(out, "TBOTEK")
+    assert lay == "Platforms and marketplaces", (lay, c.get("refit"))

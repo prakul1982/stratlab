@@ -4172,6 +4172,12 @@ def audit_moves(vc: list[dict], evidence, theme: str, words_of=None, ask=None, k
         # three core words): the old quote is read by the same measure as a stable placement, half the core or more
         if not verbatim(qo, text) or names_core(words(c), v, theme) or (qo_core and len(qo_core) * 2 >= len(core)):
             continue                         # a quote not in its words, or its own words name its present layer's work: it stays
+        # r69e (the live R67 Hotels deck: TBO Tek moved out of "Platforms and marketplaces" on its words "operating multiple online technology
+        # platforms", the reason printing them as "not what “Platforms and marketplaces” names"): a quote that says a word of its present
+        # layer's own name, as written, is no evidence against that layer, whatever word any company may use
+        said_name = [w for w in re.findall(r"[a-z]+", shown(v).lower()) if len(w) >= 4 and w not in _JOINING]
+        if any(_word_near(a, w) for w in said_name for a in re.findall(r"[a-z]+", qo.lower())):
+            continue
         if sizes[id(v)] <= 2 or to == shown(v):
             continue
         if to:
