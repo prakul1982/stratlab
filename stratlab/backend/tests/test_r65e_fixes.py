@@ -134,7 +134,7 @@ def test_3c_a_page_read_with_no_revenue_is_a_page_read(monkeypatch):
 def test_4a_the_growth_question_asks_what_the_layers_companies_sell_never_what_banks_make(monkeypatch):
     """Fails before: 17 live R64 decks, Regional banks, P&C insurance, REITs, NBFCs, Software and Utilities among them, asked "Is the
     difference in demand, in prices, or in the products each layer's companies make?" of layers of banks, insurers and landlords, which
-    make no products. The question asks what each layer's companies sell, whatever their business."""
+    make no products. The question asks what each layer's companies offer, whatever their business ("sell" reads as advice: test_r17)."""
     from app import deck as D
     from app.intel import theme_data as TD
     lay = lambda name, g: {"layer": name, "model": {"id": "lending"}, "companies": [   # noqa: E731
@@ -144,7 +144,7 @@ def test_4a_the_growth_question_asks_what_the_layers_companies_sell_never_what_b
     monkeypatch.setattr(TD, "rank_pair", lambda gm, *a, **k: (max(gm, key=lambda t: t[1]), min(gm, key=lambda t: t[1])))
     qs = D.economics_questions({"chain": {}}, shown, {}, D._pc)
     q = next(x for x in qs if x.startswith("Median revenue growth in the latest year"))
-    assert q.endswith("Is the difference in demand, in prices, or in what each layer's companies sell?"), q
+    assert q.endswith("Is the difference in demand, in prices, or in what each layer's companies offer?"), q
     assert not any("companies make?" in x for x in qs)
 
 
