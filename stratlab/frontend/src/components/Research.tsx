@@ -10,6 +10,7 @@ import { fmtDate, marketTz, monthLong, num, pct, price, safeHref, signCls, signe
 import {
   SETTLING, bandPosition, metricText, holderRowName, missingLine, monthsOld, newsWhen, ordinal, plausibleRange, priceLabel, researchApi, staleQuarter, trendShort, trendValue, useWatchlist, watchNote,
   type Company, type CompanyAI, type Idea, type MetricGroup, type MetricItem, type NewsItem, type Quote, type Region, type SeriesPoint,
+  metricFoots,
 } from "../lib/research";
 import { companyLoader, PriceChart as PriceChartView } from "../charts/price/lazy";
 import { surpriseShown } from "../lib/surprise";
@@ -232,11 +233,10 @@ const industryWord = (industry?: string | null): string => (/\bbank/i.test(indus
 /** Key numbers: each group is a small table (the group's name | Value | Basis | Range bar), the tables in two columns of one width (CSS columns balance them, in reading order on a phone). A long note is a numbered note under the tables, its mark beside the value (UI-CO item 2). */
 export function MetricsGrid({ groups, currency, industry }: { groups: MetricGroup[]; currency: string; industry?: string | null }) {
   const used = Object.entries(TERMS).filter(([k]) => groups.some((g) => g.items.some((m) => m.label === k)));
-  const foot: { n: number; label: string; text: string }[] = [];
   // LIVE9B-012: a group where only some rows have a basis gives those as numbered notes too, not a Basis column empty in three of its four rows
   // (Sales growth, Profit growth); and a basis too long for a narrow cell is a note as well (Div yield's ran to five lines)
   const sparse = (g: MetricGroup) => { const n = g.items.filter((m) => m.note).length; return n > 0 && n * 2 < g.items.length; };
-  for (const g of groups) for (const m of g.items) if (m.note && (m.note.length > LONG_NOTE || sparse(g))) foot.push({ n: foot.length + 1, label: m.label, text: m.note });
+  const foot = metricFoots(groups.flatMap((g) => g.items.filter((m) => m.note && (m.note.length > LONG_NOTE || sparse(g)))), () => true);
   const mark = (m: { label: string; note?: string | null }) => foot.find((f) => f.label === m.label && f.text === m.note);
   const anyBar = groups.some((g) => g.items.some((m) => bandPosition(m.label, m.value, industry)));
   // LIVE4-013: the note says which spans are this industry's, or that they are the same for all (a bank and a defence maker had identical

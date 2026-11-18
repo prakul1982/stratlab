@@ -49,9 +49,16 @@ def pick(rows: list[dict], versions: list | None = None) -> dict | None:
     return pdfs[0] if pdfs else None
 
 
-def chosen() -> dict | None:
+def chosen(deck_id: str | None = None) -> dict | None:
+    """The deck to offer; with `deck_id` (the one /info named, LIVE12B-021), that same deck while it is still a current kept PDF, so the
+    file downloaded is the theme the link says even when a newer deck has been kept since the page read /info."""
     try:
-        return pick(computed.entries(KIND))
+        rows = computed.entries(KIND)
+        if deck_id:
+            same = next((r for r in rows if r.get("id") == deck_id and _is_pdf(r.get("label") or "") and current(r)), None)
+            if same:
+                return same
+        return pick(rows)
     except Exception:
         return None
 
@@ -67,13 +74,14 @@ def file_name(theme: str) -> str:
 def sample_info():
     """Whether there is a sample deck to download, and which theme it is (the Plans page and the deck lock show the link only then)."""
     r = chosen()
-    return {"available": bool(r), "theme": _name(r["label"]) if r else None, "region": r.get("region") if r else None}
+    return {"available": bool(r), "theme": _name(r["label"]) if r else None, "region": r.get("region") if r else None, "id": r.get("id") if r else None}
 
 
 @router.get("/pricing/sample-deck")
-def sample_deck():
-    """The sample deck's PDF, for anyone (no sign-in): an existing kept theme deck, sent as it was made."""
-    r = chosen()
+def sample_deck(id: str | None = None):
+    """The sample deck's PDF, for anyone (no sign-in): an existing kept theme deck, sent as it was made. `id`: the deck /info named (the
+    link carries it), so the label and the file are the same theme (LIVE12B-021: "Cement" downloaded the Oil and gas deck)."""
+    r = chosen((id or "")[:200] or None)
     got = computed.get_hk(KIND, r["id"]) if r else None
     body = None
     if got and isinstance(got.get("value"), str):

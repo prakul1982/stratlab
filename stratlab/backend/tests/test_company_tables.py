@@ -133,7 +133,7 @@ def test_statements_in_full_never_fill_a_missing_figure():
     assert keys == ["pl", "balance", "cashflow", "ratios_table"]
     sec = {s["key"]: {r["label"]: r for r in s["rows"]} for s in v["sections"]}
     assert sec["pl"]["Sales"]["values"] == [100, 110, 120, 130, 150, 180] and sec["pl"]["Sales"]["kind"] == "money"   # no TTM, "+" dropped
-    assert sec["pl"]["EPS in Rs"]["kind"] == "per_share"
+    assert sec["pl"]["EPS (₹)"]["kind"] == "per_share"          # (updated on purpose, LIVE12B-017: "EPS in Rs" is written with the rupee sign)
     assert sec["balance"]["Reserves"]["values"] == [40, 50, 60, None, 80, 90]           # Mar 2024 not stored: None, the half-year left out
     assert sec["cashflow"]["Cash from Operating Activity"]["values"] == [None, None, None, None, 16, 21]
     ratios = sec["ratios_table"]
