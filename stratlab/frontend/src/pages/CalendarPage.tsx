@@ -65,12 +65,16 @@ export function CalendarPage() {
   // the window: today to the last day the results calendar covers (this week and next)
   const today = res && res !== "error" ? res.today : istToday();
   const until = res && res !== "error" && res.weeks.length ? res.weeks[res.weeks.length - 1].to : fmtIso(addDays(today, 13));
+  // LIVE13A-011: read once the results calendar has said its window (read before it, on a guessed window, and again after it, the list
+  // was drawn, emptied and drawn again: CLS 0.278 on a first load)
+  const resReady = res !== null;
   useEffect(() => {
+    if (!resReady) return;
     let live = true;
     setMoney(null);
     api<MoneyView>(`/money/calendar?start=${today}&end=${until}&cats=tax,money,custom`).then((x) => live && setMoney(x)).catch(() => live && setMoney("error"));
     return () => { live = false; };
-  }, [today, until, tries]);
+  }, [today, until, tries, resReady]);
 
   const rows = useMemo(() => {
     const ok = <T,>(v: T | null | "error"): v is T => !!v && v !== "error";
@@ -115,6 +119,19 @@ export function CalendarPage() {
           <span className="k-lbl">Type</span>
           <ChipSet label="Type" options={TYPES.map((t) => ({ value: t, label: TYPE_CHIP[t] }))} on={types} onToggle={(v) => toggle(v as CalType)} />
         </div>
+        {/* LIVE13A-011: the size and sector row holds its place while the first answer is out (it arrived with it and pushed the list down
+            88px); disabled until then */}
+        {scope === "all" && !facets && res !== "error" && (
+          <div className="k-toolbar" data-testid="cal-facets-wait" aria-busy="true">
+            <div className="k-field">
+              <span className="k-lbl">Company size</span>
+              <div className="k-chipset" role="group" aria-label="Company size">{Object.values(SIZE_NAME).map((l) => <button key={l} type="button" className="k-chip" aria-pressed={false} disabled>{l}</button>)}</div>
+            </div>
+            <Field label={region === "IN" ? "Sector" : "Industry division"}>
+              {(id) => <Select id={id} value="" disabled onChange={() => undefined} options={[{ value: "", label: "All" }]} />}
+            </Field>
+          </div>
+        )}
         {scope === "all" && facets && (
           <div className="k-toolbar">
             <div className="k-field">
@@ -134,7 +151,8 @@ export function CalendarPage() {
         </p>
       </Card>
       {failed.length > 0 && <ErrorState title={`Some dates couldn't be read: ${failed.join(", ")}`} action={{ label: "Try again", onClick: () => setTries((x) => x + 1) }}>The rest are below.</ErrorState>}
-      {loading && !rows.length ? <Card><Skeleton label="Reading the calendars" /></Card> : (
+      {/* LIVE13A-011: the list is drawn once, when every calendar has answered (drawn as each came, rows were added and taken away) */}
+      {loading ? <Card><Skeleton label="Reading the calendars" /></Card> : (
         <Card label="Dates" testId="cal-all">
           <DataTable csv="money calendar" stack label="Every date, this week and next" columns={cols} rows={rows} rowKey={(r) => r.id}
             empty={types.length ? "Nothing dated in these two weeks for this choice." : "Pick at least one type above."} />

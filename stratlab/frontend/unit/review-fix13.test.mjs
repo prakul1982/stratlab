@@ -26,7 +26,9 @@ test("LIVE11A-019: the Usual move column goes when no answered row has one; zero
   const rows = Array.from({ length: 40 }, (_, i) => ({ symbol: `S${i}` }));
   const back = Object.fromEntries(rows.slice(0, 30).map((r) => [r.symbol, null]));          // 10 rows never answered in time
   assert.equal(movesEmpty(rows, back), true);
-  assert.equal(movesEmpty(rows, { ...back, S3: { moves: { avg: 4 } } }), false);
+  // (updated on purpose, fix18 LIVE13A-005: one row's move among 30 no longer keeps the column; three do)
+  assert.equal(movesEmpty(rows, { ...back, S3: { moves: { avg: 4 } } }), true);
+  assert.equal(movesEmpty(rows, { ...back, S3: { moves: { avg: 4 } }, S4: { moves: { avg: 2 } }, S5: { moves: { avg: 1 } } }), false);
   assert.equal(movesEmpty(rows, Object.fromEntries(rows.slice(0, 5).map((r) => [r.symbol, null]))), false);   // too few back yet
   assert.equal(movesEmpty([{ symbol: "A", moves: { avg: 1 } }], {}), false);
   const f = read("src/components/CalendarFilters.tsx");

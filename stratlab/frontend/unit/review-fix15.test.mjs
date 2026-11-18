@@ -26,7 +26,8 @@ test("LIVE12A-008: the Usual move column goes when no row has a usual move (a 's
   const rows = Array.from({ length: 30 }, (_, i) => ({ symbol: `S${i}` }));
   const back = Object.fromEntries(rows.map((r, i) => [r.symbol, i % 3 ? null : { moves: null, since: { date: "2026-11-17", pct: -0.4 } }]));
   assert.equal(movesEmpty(rows, back), true);
-  assert.equal(movesEmpty(rows, { ...back, S1: { moves: { avg: 3, last: [1] } } }), false);
+  // (updated on purpose, fix18 LIVE13A-005: one row's move among 30 no longer keeps the column; three do)
+  assert.equal(movesEmpty(rows, { ...back, S1: { moves: { avg: 3, last: [1] } }, S2: { moves: { avg: 2, last: [1] } }, S4: { moves: { avg: 1, last: [1] } } }), false);
   const f = read("src/components/CalendarFilters.tsx");
   assert.match(f, /export const sizeChoices = \(sizes: Facets\["sizes"\], picked: string\[\], narrowed = false\) => sizes\.filter\(\(s\) => narrowed \|\| s\.count > 0 \|\| picked\.includes\(s\.id\)\);/);
   assert.match(f, /options=\{sizeChoices\(facets\.sizes, filters\.size, active > 0\)\.map/);

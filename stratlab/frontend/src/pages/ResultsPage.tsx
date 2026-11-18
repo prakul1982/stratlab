@@ -15,7 +15,7 @@ import { Info } from "../components/ui";
 import { Earlier } from "../components/Earlier";
 import { Card, CardHead, CheckField, DataTable, ShowLess, EmptyState, ErrorState, Field, PageHeader, Seg, Select, Signed, Skeleton, StockPicker, Working, type Column } from "../components/kit";
 import { ReportScope } from "../components/kit/ReportFigure";
-import { capAt, laterDays, movesEmpty, whenShort } from "../lib/resultsRows";
+import { capAt, laterDays, movesEmpty, purposeShown, whenShort } from "../lib/resultsRows";
 
 /** Today in the market's calendar (ISO), the day the "Today" chip stands for. */
 const todayIn = (region: Region): string | null => dayIn(new Date(), marketTz(region));
@@ -206,7 +206,7 @@ export function ResultsPage() {
     // two lines a row (owner, 5 Nov: "still shit ui", rows stacked company, name, purpose and filing link four lines high): the symbol and
     // its tags with the name beside it, then the meeting and a small link to the filing; a long line ends in "…" with the whole of it on hover
     { key: "co", header: "Company", rowHeader: true, cell: (r) => {
-      const purpose = r.purpose;
+      const purpose = purposeShown(r.region, r.purpose);
       const numbers = r.out?.numbers.length ? ` · ${r.out.numbers.map((x) => `${x.label} ${x.value}`).join(" · ")} (as stated)` : "";
       const plain = !r.out && !r.when && /^financial results$/i.test(r.purpose.trim());
       return (
@@ -220,7 +220,7 @@ export function ResultsPage() {
           </span>
           {/* LIVE5-002: the name starts the second line (beside the symbol and its tags it was cut to 1-3 letters at 1280); a plain results
               meeting leaves the line to it, any other meeting follows it */}
-          <span className="k-note k-muted res-sub" title={[r.name, r.when ? whenShort(r.when) : null, r.out ? `${purpose} · Filed ${resultDay(r.out.at)}: ${r.out.title}${numbers}` : purpose].filter(Boolean).join(" · ")}>
+          <span className="k-note k-muted res-sub" title={[r.name, r.when ? whenShort(r.when) : null, r.out ? `${r.purpose} · Filed ${resultDay(r.out.at)}: ${r.out.title}${numbers}` : r.purpose].filter(Boolean).join(" · ")}>
             {r.name && <span className="res-name">{r.name}</span>}
             <span className={`res-purpose${plain ? " res-plain" : ""}`}>
               {purpose}

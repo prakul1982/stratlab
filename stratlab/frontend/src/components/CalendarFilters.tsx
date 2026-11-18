@@ -76,9 +76,12 @@ export function CalendarFilters({ region, facets, filters, set, firstSort, sorts
             {(id) => <Select id={id} value={filters.on} onChange={(v) => set({ on: v })} options={days} />}
           </Field>
           {children}
-          <Field label="Sort by">
-            {(id) => <Select id={id} value={filters.sort || firstSort} onChange={(v) => set({ sort: v })} options={Object.entries(sorts).map(([value, label]) => ({ value, label }))} />}
-          </Field>
+          {/* LIVE13A-005: two of the grid's columns on a wide screen, so its longest choice is never cut ("Market value, largest f" at 1280) */}
+          <div className="res-sort">
+            <Field label="Sort by">
+              {(id) => <Select id={id} value={filters.sort || firstSort} onChange={(v) => set({ sort: v })} options={Object.entries(sorts).map(([value, label]) => ({ value, label }))} />}
+            </Field>
+          </div>
           {region === "IN" && facets.fo != null && (facets.fo > 0 || filters.fo) && (
             <CheckField checked={filters.fo} onChange={(on) => set({ fo: on })} label={<>F&amp;O stocks only ({facets.fo})
               <Info label="About F&O stocks">The stocks the exchange trades futures and options in, from its lot-size file.</Info></>} />

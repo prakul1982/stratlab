@@ -56,3 +56,18 @@ test("LIVE13A-007: Mood's companies in the headlines are one row each", async ()
     { name: "Tata Consultancy Services (IT sector)", ticker: "TCS" }, { name: "Titan Company (consumer durables)", ticker: "" }, { name: "Indian IT stocks", ticker: "INFY" }]);
   assert.deepEqual(rows.map((r) => r.name), ["Tata Consultancy Services", "Titan Company"]);
 });
+
+test("LIVE13A-005: Results' Usual move column needs three rows with a move; a US meeting is said one way; the sort box spans two columns", async () => {
+  const { movesEmpty, purposeShown, MIN_MOVES } = await import("../src/lib/resultsRows.ts");
+  const rows = Array.from({ length: 408 }, (_, i) => ({ symbol: `S${i}` }));
+  const back = Object.fromEntries(rows.map((r) => [r.symbol, null]));
+  assert.equal(MIN_MOVES, 3);
+  assert.equal(movesEmpty(rows, { ...back, S7: { moves: { avg: 16.7, last: [1] } } }), true);          // one value in 408 rows: no column
+  assert.equal(movesEmpty(rows, { ...back, S1: { moves: { avg: 1 } }, S2: { moves: { avg: 2 } }, S3: { moves: { avg: 3 } } }), false);
+  assert.equal(movesEmpty([{ symbol: "A" }, { symbol: "B" }], { A: { moves: { avg: 2 } }, B: null }), false);   // one of two: half of them
+  assert.equal(purposeShown("US", "Quarterly results (fiscal Q3 2027)"), "Quarterly results");
+  assert.equal(purposeShown("US", "Quarterly results (quarter ended Oct 2026)"), "Quarterly results");
+  assert.equal(purposeShown("IN", "Financial results (quarter ended Sep 2026)"), "Financial results (quarter ended Sep 2026)");
+  assert.match(read("src/components/CalendarFilters.tsx"), /<div className="res-sort">\s*<Field label="Sort by">/);
+  assert.match(read("src/styles-invest.css"), /@media \(min-width: 900px\) \{ \.res-filter-grid > \.res-sort \{ grid-column: span 2;/);
+});
