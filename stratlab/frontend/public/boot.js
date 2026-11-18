@@ -87,13 +87,12 @@
     }
   } catch (e) { /* storage off */ }
 
-  // the home address (LIVE13B-001): its start-up frame is the landing's hero, which another address served this file (a visitor's /trade
-  // before its sign-in panel, an ad visit's own landing) does not show
+  // the home address: only it shows the landing's start-up hero (LIVE13B-001)
   try {
     var path = location.pathname;
     if ((path === "/" || path === "/index.html") && !/[?&](fbclid=|utm_source=(facebook|fb|ig|instagram|meta)\b)/i.test(location.search || ""))
       document.documentElement.setAttribute("data-home", "1");
-  } catch (e) { /* no address to read */ }
+  } catch (e) {}
 
   // the saved light or dark choice, here as well as in theme.js: if that file fails to load the page still draws in the right theme
   try { var saved = localStorage.getItem("stratlab-theme"); if (saved) document.documentElement.dataset.theme = saved; } catch (e) { /* storage off */ }

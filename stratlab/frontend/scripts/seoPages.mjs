@@ -211,6 +211,10 @@ export async function libraryEntries(env = process.env, get = globalThis.fetch) 
   }
 }
 
+/** A plain script as shipped: its whole-line comments left out (LIVE13B-001/004: boot.js, which every visitor downloads before anything else,
+ * was a third comments, some 3 KB of the landing's 450 KB budget). The source in public/ keeps them; the code is unchanged. */
+export const leanScript = (src) => src.replace(/^[ \t]*\/\*[\s\S]*?\*\/[ \t]*\n/gm, "").replace(/^[ \t]*\/\/.*\n/gm, "");
+
 /** The built file of the landing heading's italic face: Fraunces 400 italic, Latin, as woff2. */
 export const heroFonts = (names) => names.filter((n) => /^fraunces-latin-400-italic-[\w-]+\.woff2$/.test(n)).sort();
 
@@ -224,6 +228,8 @@ export function seoPages() {
       const template = readFileSync(join(out, "index.html"), "utf8");
       const entries = await libraryEntries();
       const fonts = heroFonts(readdirSync(join(out, "assets")));
+      const boot = join(out, "boot.js");
+      writeFileSync(boot, leanScript(readFileSync(boot, "utf8")));
       for (const [file, html] of [...pageFiles(template, fonts), ...libraryFiles(template, entries)]) {
         mkdirSync(dirname(join(out, file)), { recursive: true });
         writeFileSync(join(out, file), html);

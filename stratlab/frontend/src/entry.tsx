@@ -63,7 +63,8 @@ async function start() {
   const appCode = account ? import("./main") : null;      // the app's code downloads beside the small helpers below, not after them
   appCode?.catch(() => undefined);
   // LIVE11B-004: whether Indian data is offline, asked now beside the app's code and the sign-in check, so the first page frame carries the line
-  if (account) import("./lib/http").then((m) => m.prefetchPublic("/public/data-online")).catch(() => undefined);
+  // LIVE13B-004: and the account itself (/me), with the saved sign-in's token, not after the app's ~90 files (lib/accountEarly.ts)
+  if (account) import("./lib/accountEarly").then((m) => m.startAccountReads()).catch(() => undefined);
   // LIVE12A-013: a visitor's page questions, its page code and the visitor half are asked for now, beside the two small helpers below,
   // not after them: the landing's chunks waited a round trip for the helpers first (LCP 3.7 s desktop, 3.2 s phone)
   if (!account) {

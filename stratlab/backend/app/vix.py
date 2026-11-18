@@ -413,6 +413,19 @@ def panel(options_data=None, now: datetime | None = None, feed=None) -> dict:
             "note": NOTE, "today": today.isoformat(), "session": session_now(now)}
 
 
+def brief_panel(options_data=None, now: datetime | None = None, feed=None) -> dict:
+    """What a tile shows (the Trade home's India VIX): the value now, its change and day, from the one quick read the panel starts with. The
+    panel's minute line, a year of history and NIFTY's ATM IV are each a read of their own, and the tile waited for all of them (LIVE13B-012:
+    still a grey bar at 10.8 s on a phone while its three neighbours had their values)."""
+    now = (now or datetime.now(timezone.utc)).astimezone(IST)
+    today = now.date()
+    hist = daily((today - timedelta(days=CHART_DAYS)).isoformat(), today)
+    q = settled(quote_now(feed) or feed_quote(options_data, today), now, hist)
+    value_day = None if q else (hist[-1][0] if hist else None)
+    return {"quote": q, "value": q["value"] if q else (hist[-1][1][3] if hist else None), "value_day": value_day,
+            "today": today.isoformat(), "session": session_now(now)}
+
+
 def within_line(q: dict | None, line: list[dict]) -> dict | None:
     """The quote, marked `range_off_line` when the exchange's day high or low lies outside the minute line drawn beside
     it: its figures can carry an opening tick the chart leaves out (R79-002: "Today's range 14.32 – 16.67" beside a line
@@ -534,10 +547,12 @@ def use_options(fn):
 
 
 @router.get("")
-def vix_panel(profile=Depends(current_profile)):
-    """India VIX now, today's line, the last year's closes and where today sits among them, and NIFTY's ATM IV."""
+def vix_panel(brief: bool = False, profile=Depends(current_profile)):
+    """India VIX now, today's line, the last year's closes and where today sits among them, and NIFTY's ATM IV. `brief`: the value, its
+    change and day only, for a tile (brief_panel)."""
     first_read()
-    return ok(panel(_options["fn"]() if _options["fn"] else None))
+    opts = _options["fn"]() if _options["fn"] else None
+    return ok(brief_panel(opts) if brief else panel(opts))
 
 
 @router.get("/history")

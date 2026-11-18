@@ -15,7 +15,9 @@ const mem0 = new Map();
 globalThis.localStorage ??= { getItem: (k) => mem0.get(k) ?? null, setItem: (k, v) => mem0.set(k, String(v)), removeItem: (k) => mem0.delete(k) };
 
 test("LIVE11B-004: the data status is asked for as the app starts, and the page waits for it (a moment at most) so the offline line is in the first frame", () => {
-  assert.match(read("src/entry.tsx"), /if \(account\) import\("\.\/lib\/http"\)\.then\(\(m\) => m\.prefetchPublic\("\/public\/data-online"\)\)/);
+  // (updated on purpose, LIVE13B-004: the data status and the account are asked together, from lib/accountEarly, still only for a saved sign-in)
+  assert.match(read("src/entry.tsx"), /if \(account\) import\("\.\/lib\/accountEarly"\)\.then\(\(m\) => m\.startAccountReads\(\)\)/);
+  assert.match(read("src/lib/accountEarly.ts"), /export function startAccountReads\(\): void \{\n  prefetchPublic\("\/public\/data-online"\);/);
   const app = read("src/lib/app.tsx");
   assert.match(app, /publicGet<\{ data_online: boolean; data_note\?: DataNote \}>\("\/public\/data-online"\)/);
   assert.match(app, /export const DATA_STATUS_WAIT_MS = 1500;/);
@@ -98,7 +100,9 @@ test("LIVE11B (phone): statements show three periods at a time on a phone; share
   assert.deepEqual(periodWindow(10, 3, 9), { from: 0, to: 3, earlier: false, later: true });         // the oldest window, never past it
   assert.deepEqual(periodWindow(5, 12, 0), { from: 0, to: 5, earlier: false, later: false });        // a desktop: every period
   const st = read("src/components/CompanyStatements.tsx");
-  assert.match(st, /const win = periodWindow\(cols\.length, phone \? 3 : cols\.length, back\);/);
+  // (updated on purpose, LIVE12B-017: three at a time unless three don't fit the card; then as many as fit, two at the least)
+  assert.match(st, /const PHONE_PERIODS = 3;/);
+  assert.match(st, /const win = periodWindow\(cols\.length, phone \? per : cols\.length, back\);/);
   assert.match(st, /\)\)\.slice\(win\.from, win\.to\),/);
   assert.match(read("src/components/ShareholdingHistory.tsx"), /columns=\{columns\} grid=\{!phone\} stack=\{phone\} \/>/);
 });
