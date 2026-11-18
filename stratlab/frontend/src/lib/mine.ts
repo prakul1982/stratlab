@@ -35,7 +35,10 @@ export const goldInr10g = (usdPerOz: number, inrPerUsd: number) => (usdPerOz * i
 
 /** `day`: the session of the last close (its calendar day in the market's zone), so a move that isn't today's says its day.
  * `at`: when the candles were read (ms), the time the card says its prices are from (LIVE-1). */
-export interface Series { values: number[]; last: number; prev: number | null; changePct: number | null; day?: string | null; at?: number }
+export interface Series { values: number[]; last: number; prev: number | null; changePct: number | null; day?: string | null; at?: number;
+  /** a level kept in this browser from an earlier visit that is no longer the latest (read mid-session, or a newer close has
+   * passed since): drawn faded with the time it was read until the fresh read replaces it (LIVE11B-010) */
+  stale?: boolean }
 
 /** The markets whose prices the strip shows: India and the US for their indices, and the dollar and gold, which trade round
  * the clock from Sunday evening to Friday evening. The strip reads again each minute while one of them trades. */
@@ -102,12 +105,41 @@ export const SERIES_LIVE_KEEP_MS = 45_000;
 const STRIP_KEY = "stratlab.strip.v1";
 const STRIP_MAX_AGE_MS = 4 * 86400_000;
 
+/** When each tile's market's close is final (its close plus the settle step), in the market's own clock: a kept level read before
+ * it on its own day was an intraday level, not the day's close. */
+const TILE_FINAL: Record<string, string> = { IN: "15:45", US: "16:50" };
+const KEPT_FRESH_MS = SERIES_KEEP_MS;
+
+function wall(at: number, tz: string): { day: string; hm: string } {
+  const d = new Date(at);
+  return { day: d.toLocaleDateString("en-CA", { timeZone: tz }), hm: d.toLocaleTimeString("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }) };
+}
+const nextWeekday = (day: string) => { let d = addDaysIso(day, 1); while ([0, 6].includes(new Date(`${d}T12:00:00Z`).getUTCDay())) d = addDaysIso(d, 1); return d; };
+
+/** Whether a level kept from an earlier visit can't be shown as the latest (LIVE11B-010: the first open of the day showed yesterday's
+ * 14:38 IST NIFTY 25,448 +0.62% "on 17 Nov" against the real close 25,387 +0.38%, and the S&P 500's 16 Nov close after its 17 Nov
+ * one). An index's level is stale when it was read during its own session more than a few minutes ago, or when a later session of its
+ * market has closed since; the dollar and gold, which trade round the clock, once a few minutes old. */
+export function keptStale(id: string, x: Pick<Series, "day" | "at">, now = Date.now()): boolean {
+  const t = MARKET_TILES.find((m) => m.id === id);
+  const at = x.at ?? 0;
+  if (!t || !x.day) return true;
+  const region = "research" in t.from ? t.from.research[0] : null;
+  const tz = region ? TILE_TZ[region] : null, final = region ? TILE_FINAL[region] : null;
+  if (!tz || !final) return now - at > KEPT_FRESH_MS;
+  const read = wall(at, tz), here = wall(now, tz);
+  const midSession = read.day === x.day && read.hm < final;
+  const next = nextWeekday(x.day);
+  const newerClose = here.day > next || (here.day === next && here.hm >= final);
+  return newerClose || (midSession && now - at > KEPT_FRESH_MS);
+}
+
 export function keptStrip(now = Date.now(), store: Pick<Storage, "getItem"> | null = (() => { try { return localStorage; } catch { return null; } })()): Record<string, Series> {
   try {
     const got = JSON.parse(store?.getItem(STRIP_KEY) ?? "null") as Record<string, Series> | null;
     const out: Record<string, Series> = {};
     for (const [id, x] of Object.entries(got ?? {})) {
-      if (x && Array.isArray(x.values) && x.values.length && typeof x.last === "number" && typeof x.day === "string" && now - (x.at ?? 0) < STRIP_MAX_AGE_MS) out[id] = x;
+      if (x && Array.isArray(x.values) && x.values.length && typeof x.last === "number" && typeof x.day === "string" && now - (x.at ?? 0) < STRIP_MAX_AGE_MS) out[id] = { ...x, stale: keptStale(id, x, now) };
     }
     return out;
   } catch { return {}; }
@@ -116,7 +148,7 @@ export function keptStrip(now = Date.now(), store: Pick<Storage, "getItem"> | nu
 export function keepStripTile(id: string, x: Series, store: Pick<Storage, "getItem" | "setItem"> | null = (() => { try { return localStorage; } catch { return null; } })()): void {
   try {
     const all = JSON.parse(store?.getItem(STRIP_KEY) ?? "null") ?? {};
-    all[id] = { ...x, values: x.values.slice(-23) };
+    all[id] = { ...x, values: x.values.slice(-23), stale: undefined };
     store?.setItem(STRIP_KEY, JSON.stringify(all));
   } catch { /* storage full or off */ }
 }

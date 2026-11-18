@@ -69,7 +69,8 @@ test("DB-008: each expiry choice shows its date, the fallback chips match the se
   assert.equal(expiryChoiceLabel("Nearest", "2026-10-27", (d) => d.slice(5)), "Nearest · 10-27");
   assert.deepEqual(POPULAR_FALLBACK.slice(0, 5).map((u) => u.name), ["NIFTY", "BANKNIFTY", "SENSEX", "FINNIFTY", "MIDCPNIFTY"]);
   const src = read("src/pages/OptionsPage.tsx");
-  assert.match(src, /has monthly expiries only, so Nearest and Monthly are the same day\./);
+  // (updated on purpose, LIVE11B-005: the sentence is worked out from the expiry calendar in lib/options.ts sameExpiryNote)
+  assert.match(read("src/lib/options.ts"), /has monthly expiries only, so Nearest and Monthly are the same day\./);
   assert.match(src, /placeholder=\{und\?\.freeze \? `\$\{und\.freeze\.toLocaleString\("en-IN"\)\}, the exchange's`/);
 });
 

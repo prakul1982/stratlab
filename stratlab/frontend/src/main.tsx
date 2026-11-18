@@ -232,7 +232,7 @@ function TourRoute() {
 }
 
 function Routed() {
-  const { session, ready, dataOffline, meError, me, markets } = useApp();
+  const { session, ready, dataOffline, dataNote, dataKnown, meError, me, markets } = useApp();
   const loc = useLocation();
   const nav = useNavigate();
   useEffect(() => { pageview(loc.pathname); }, [loc.pathname]);    // usage analytics: off without a key
@@ -257,11 +257,14 @@ function Routed() {
   // a saved sign-in the sign-in service didn't answer for is not "signed out": say it couldn't load, offer Reload (R20-002)
   if (!session && sessionUnconfirmed(ready, session)) return <><main><LoadFailed what="your account" /></main><Tracking /></>;
   if (!session) return <><VisitorApp /><Tracking /></>;
+  // the data status first (a moment at most, asked for beside the sign-in check): the offline line is then drawn with the page, never
+  // pushed in over it a second later (LIVE11B-004)
+  if (!dataKnown) return <><main><h1 className="sr-only">Opening StratLab</h1><Opening label="Opening StratLab" /></main><Tracking /></>;
   return (
     <Shell ask={<Tracking />}>
       <ViewAsBanner />{/* the owner is viewing the app as another plan: on every page until it is turned off */}
       {meError && <div className="banner" role="alert"><span>StratLab couldn't load your account: {meError}</span><AccountRetry /></div>}
-      {dataOffline && !meError && <DataBanner note={me?.data_note ?? null} market={markets.find((m) => m.id === "IN")} />}
+      {dataOffline && !meError && <DataBanner note={me ? me.data_note ?? null : dataNote} market={markets.find((m) => m.id === "IN")} />}
       {me?.promo && loc.pathname !== "/" && loc.pathname !== "/plans" && !SPACE_HOMES.includes(loc.pathname) && <PromoBanner until={me.promo.until} />}{/* those show a countdown */}
       <PageLock />{/* a paid feature this plan lacks: said at the top, honestly (the server refuses it either way) */}
       {/* a page whose code is still on its way still has its one heading (axe page-has-heading-one, R7O-010) */}

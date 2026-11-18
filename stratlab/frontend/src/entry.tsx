@@ -61,6 +61,8 @@ async function start() {
   const account = !isPublicForAll(path) && wantsAccount({ supabaseUrl: window.STRATLAB_CONFIG?.SUPABASE_URL, search: location.search, hash: location.hash, storage: localStorage });
   const appCode = account ? import("./main") : null;      // the app's code downloads beside the small helpers below, not after them
   appCode?.catch(() => undefined);
+  // LIVE11B-004: whether Indian data is offline, asked now beside the app's code and the sign-in check, so the first page frame carries the line
+  if (account) import("./lib/http").then((m) => m.prefetchPublic("/public/data-online")).catch(() => undefined);
   const [{ captureRef }, { startErrorReports }] = await Promise.all([import("./lib/share"), import("./lib/sentry")]);
   if (!account) holdStartup(root);    // the page's own words, drawn again until its code is here (R10V-006); not for a saved sign-in (R29B-019)
   captureRef();                       // a friend's invite link: kept until sign-in

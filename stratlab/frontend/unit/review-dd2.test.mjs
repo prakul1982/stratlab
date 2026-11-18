@@ -48,7 +48,8 @@ test("DD-006, DC-002, DP2-036: the weekend line says when the market opens, on o
   assert.equal(line.short, "Indian markets open Mon 26 Oct, 09:15 IST");
   assert.doesNotMatch(line.full, /reconnect|work as usual|data login/);
   const main = read("src/main.tsx");
-  assert.match(main, /<DataBanner note=\{me\?\.data_note \?\? null\} market=\{markets\.find\(\(m\) => m\.id === "IN"\)\} \/>/);
+  // (updated on purpose, LIVE11B-004: before /me is in, the note is the public data-status answer's, so the line is in the first frame)
+  assert.match(main, /<DataBanner note=\{me \? me\.data_note \?\? null : dataNote\} market=\{markets\.find\(\(m\) => m\.id === "IN"\)\} \/>/);
   assert.doesNotMatch(main, /work as usual/);
   assert.match(read("src/styles.css"), /\.banner\.data-banner \{ padding: 6px 14px; font-size: 13\.5px; margin-bottom: 14px; flex-wrap: nowrap; \}/);
 });

@@ -891,6 +891,14 @@ def health():
             "ai_configured": any(p["in_use"] for p in ai_health()), "version": build_info.info()["short"]}
 
 
+@app.get("/public/data-online")
+def data_status():
+    """Public: whether Indian prices are read live and, while they aren't, the same note /me carries (India closed today
+    anyway, when the next data login runs). The app asks for it as it starts, beside the sign-in check, so the page's first
+    frame already carries the offline line instead of pushing the page down when /me answers later (LIVE11B-004)."""
+    return {"data_online": kite.ready(), "data_note": data_note()}
+
+
 @app.get("/version")
 def version():
     """Public: which build is running (the commit, its branch, when it was built if the deploy says, when this server

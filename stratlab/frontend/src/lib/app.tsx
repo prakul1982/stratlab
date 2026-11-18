@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/auth-js";
 import { api, ApiError, setApiHandlers, supabase } from "./api";
+import { publicGet } from "./http";
 import { clearLocalData } from "./localData";
 import { signOutHere, signingOutOnPurpose } from "./signout";
 import { clearSignInEnded, noteSignInEnded, noteSignInUnfinished } from "./signin";
@@ -19,6 +20,9 @@ import { toastMs } from "./toastTime";
 
 const ME_RETRY_MS = 1500;
 const SESSION_RETRY_MS = [2000, 5000];
+/** The longest the signed-in page waits for the public data-status answer before drawing without it (LIVE11B-004). */
+export const DATA_STATUS_WAIT_MS = 1500;
+export type DataNote = { closed: "weekend" | "holiday" | null; back_at: string | null } | null;
 
 /** No session, but one is saved in this browser: the sign-in service didn't answer while it was renewed (R20-002). The
  * person is still signed in; the page says it couldn't load instead of offering sign-in. */
@@ -37,6 +41,11 @@ interface AppState {
   notebooksFailed: boolean;
   markets: Market[];
   dataOffline: boolean;
+  /** the offline note (India closed today anyway, when data comes back): /me's, or the public data-status answer's before /me is in */
+  dataNote: DataNote;
+  /** whether the data status is known (or stopped being waited for): the page's first frame then carries the offline line, so it
+   * doesn't arrive a second later and push the page down (LIVE11B-004: /new moved 0.294 when the line came with /me) */
+  dataKnown: boolean;
   toast: Toast;
   notify: (msg: string, action?: { label: string; run: () => void }) => void;
   fail: (e: unknown) => void;
@@ -92,6 +101,9 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
   const [notebooksFailed, setNotebooksFailed] = useState(false);
   const [markets, setMarkets] = useState<Market[]>([]);
   const [dataOffline, setDataOffline] = useState(false);
+  const [dataNote, setDataNote] = useState<DataNote>(null);
+  const [dataKnown, setDataKnown] = useState(false);
+  const meIn = useRef(false);
   const [toast, setToast] = useState<Toast>(null);
   const timer = useRef<number>(undefined);
   const [spaceHere, setSpaceHere] = useState<SpaceView | null>(savedView);
@@ -138,7 +150,10 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
       });
       setMe(m);
       setMeError(null);
+      meIn.current = true;
       setDataOffline(!m.data_online);
+      setDataNote(m.data_note ?? null);
+      setDataKnown(true);
     } catch (e) {
       setMeError((e as Error).message);
     }
@@ -152,6 +167,19 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
     try { const got = await api<NotebookItem[]>("/notebooks"); if (n === nbSeq.current) { setNotebooks(got); setNotebooksFailed(false); } }
     catch (e) { if (n !== nbSeq.current) return; setNotebooks((x) => x ?? []); setNotebooksFailed(true); fail(e); }
   }, [fail]);
+
+  // LIVE11B-004: the data status from the public answer entry.tsx asked for as the page started (beside the sign-in check), so the
+  // offline line is in the page's first frame; /me's own answer, when it comes, is the one kept
+  useEffect(() => {
+    let live = true;
+    const cap = window.setTimeout(() => setDataKnown(true), DATA_STATUS_WAIT_MS);
+    publicGet<{ data_online: boolean; data_note?: DataNote }>("/public/data-online").then((st) => {
+      if (!live || meIn.current) return;
+      setDataOffline(!st.data_online);
+      setDataNote(st.data_note ?? null);
+    }).catch(() => undefined).finally(() => { window.clearTimeout(cap); if (live) setDataKnown(true); });
+    return () => { live = false; window.clearTimeout(cap); };
+  }, []);
 
   useEffect(() => {
     setApiHandlers({
@@ -256,11 +284,11 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
   const space: SpaceView = spaceHere ?? viewFromSaved(me?.prefs?.space) ?? viewForFocus(me?.prefs?.focus) ?? "trade";
 
   const value = useMemo<AppState>(() => ({
-    session, ready, me, meError, notebooks, notebooksFailed, markets, dataOffline, toast, notify, fail, refreshMe, refreshNotebooks,
+    session, ready, me, meError, notebooks, notebooksFailed, markets, dataOffline, dataNote, dataKnown, toast, notify, fail, refreshMe, refreshNotebooks,
     allIndicators: !!me?.plan_info.indicators, fno: !!me?.plan_info.fno, level: me?.prefs?.level ?? null, setLevel,
     focus: me?.prefs?.focus ?? null, setFocus, savePrefs, space, setSpace, theme, setTheme,
     viewAs: me?.is_admin ? me.view_as ?? null : null, setViewAs,
-  }), [session, ready, me, meError, notebooks, notebooksFailed, markets, dataOffline, toast, notify, fail, refreshMe, refreshNotebooks, setLevel, setFocus, savePrefs, space, setSpace, theme, setTheme, setViewAs]);
+  }), [session, ready, me, meError, notebooks, notebooksFailed, markets, dataOffline, dataNote, dataKnown, toast, notify, fail, refreshMe, refreshNotebooks, setLevel, setFocus, savePrefs, space, setSpace, theme, setTheme, setViewAs]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
