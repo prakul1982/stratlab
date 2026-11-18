@@ -246,3 +246,17 @@ def test_a_cut_quote_never_ends_on_a_joining_word():
     assert not got.rstrip("…”").endswith(("the", "“the", "and", ",")) and got.endswith("…") or got.endswith("…”"), got
     assert B.cut_end("sold to custom smelters, and the") == "sold to custom smelters"
     assert B.cut_end("pipes, sheets &") == "pipes, sheets"
+
+
+# ---------- 009: the finding first ----------
+def test_a_ranking_line_leads_with_its_finding():
+    """Fails before: the chain's line (printed on the deck, the blog excerpt and the page), the deck's question and its growth line opened
+    "Among the 4 layers with at least 5 companies with the figure, ..."."""
+    from tests.test_r25_deck import block
+    from app.intel import theme_data as D
+    c = D.chain_table([block("A", 6, 26.55), block("B", 6, 14.9)])
+    assert c["line"].startswith("Median EBITDA margin is highest in A") and ", among the 2 layers with at least" in c["line"], c["line"]
+    import inspect
+    from app import deck
+    src = inspect.getsource(deck)
+    assert 'f"Among the {len(chain.get(' not in src and 'f"Among layers of at least' not in src

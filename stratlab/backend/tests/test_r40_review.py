@@ -172,7 +172,7 @@ def test_a_split_layer_named_by_how_its_companies_earn_is_shown_never_ranked():
     ch = D.chain_table([blk("Analog chips", 30.0), blk("Power chips", 20.0), blk("Makers of their own products", 45.0, how=True)])
     assert ch["highest"] == "Analog chips" and set(ch["compared"]) == {"Analog chips", "Power chips"}
     assert ch["line"].endswith("Shown, not ranked: Makers of their own products (45.0%), a group by how they earn, of different businesses.")
-    assert ch["line"].startswith("Among the 2 layers with at least 5 companies with the figure and one kind of business")
+    assert ch["line"].startswith("Median EBITDA margin is highest in") and "among the 2 layers with at least 5 companies with the figure and one kind of business." in ch["line"]  # r69e (LIVE13A-009, updated on purpose): the finding first, the layers it ranks after it
 
 
 # ---------- 5. auto ----------

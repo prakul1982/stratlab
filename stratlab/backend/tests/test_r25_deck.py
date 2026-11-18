@@ -198,7 +198,7 @@ def test_a_gap_said_beside_two_figures_is_the_difference_of_the_figures_as_print
     b = {"layer": "X", "stats": {"ebitda": {"median": 26.55, "n": 3}}, "left_out": 0, "stats_over": "own", "companies": []}
     assert D.margin_line(b, 24.94) is None                  # changed on purpose (R27): the whole map's median is in no table, so never quoted
     c = D.chain_table([block("A", 3, 26.55), block("B", 5, 24.94)])
-    assert c["line"].endswith("a gap of 1.7 points.")
+    assert "a gap of 1.7 points, among the " in c["line"]  # r69e (LIVE13A-009, updated on purpose): the finding first, the layers it ranks after it
 
 
 # ---------- 4. one page on how the figures shown are built ----------

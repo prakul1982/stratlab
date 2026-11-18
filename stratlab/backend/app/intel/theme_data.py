@@ -1786,9 +1786,11 @@ def _chain_table(blocks: list[dict]) -> dict:
             whole = one_precision(whole, hi["ebitda"], lo["ebitda"])          # gl52: both figures and the gap at one precision
             # r64e (LIVE11A-009: the live Cement deck's "lowest in Cement integrated producers (8.2%, 26 of 27 companies)" over a table
             # of its "(larger)" 12.6% and "(smaller)" 3.6% rows only): a layer ranked as its two halves together says so beside its figure
-            line = (f"{rank_scope(len(have), out)}, median EBITDA margin is highest in {hi['layer']} ({HALVES_SAID if hi.get('halves') else ''}{pts(hi['ebitda'], whole)}{few(hi['ebitda_n'], hi['n'])}) "
-                    f"and lowest in {lo['layer']} ({HALVES_SAID if lo.get('halves') else ''}{pts(lo['ebitda'], whole)}{few(lo['ebitda_n'], lo['n'])}), "
-                    f"a gap of {gap_of(hi['ebitda'], lo['ebitda'], whole)} points.")
+            # r69e (LIVE13A-009: blog excerpts and deck headlines in five shapes, Telecom's "…; among the map's layers, the "Other" group left
+            # out, among the 2 layers with at…"): the finding first, the layers it ranks after it, in the line every surface prints
+            line = finding_first(f"{rank_scope(len(have), out)}, median EBITDA margin is highest in {hi['layer']} ({HALVES_SAID if hi.get('halves') else ''}{pts(hi['ebitda'], whole)}{few(hi['ebitda_n'], hi['n'])}) "
+                                 f"and lowest in {lo['layer']} ({HALVES_SAID if lo.get('halves') else ''}{pts(lo['ebitda'], whole)}{few(lo['ebitda_n'], lo['n'])}), "
+                                 f"a gap of {gap_of(hi['ebitda'], lo['ebitda'], whole)} points.")
             beyond = beyond_words(out, "ebitda", hi["ebitda"], lo["ebitda"], lambda x: pts(x, whole))
     measure = "ebitda"
     if len(have) < 2:
@@ -1819,9 +1821,9 @@ def _chain_table(blocks: list[dict]) -> dict:
             else:
                 out = unranked_rows(rows, lend, "roe")
                 w_ = one_precision(True, hi["roe"], lo["roe"])          # gl52: one precision for both figures
-                line = (f"{rank_scope(len(lend), out)}, median return on equity is highest in {hi['layer']} ({HALVES_SAID if hi.get('halves') else ''}{pts(hi['roe'], w_)}{few(hi['roe_n'], hi['n'])}) "
-                        f"and lowest in {lo['layer']} ({HALVES_SAID if lo.get('halves') else ''}{pts(lo['roe'], w_)}{few(lo['roe_n'], lo['n'])}), "
-                        f"a gap of {gap_of(hi['roe'], lo['roe'])} points.").replace(".0 points", " points")
+                line = finding_first((f"{rank_scope(len(lend), out)}, median return on equity is highest in {hi['layer']} ({HALVES_SAID if hi.get('halves') else ''}{pts(hi['roe'], w_)}{few(hi['roe_n'], hi['n'])}) "
+                                      f"and lowest in {lo['layer']} ({HALVES_SAID if lo.get('halves') else ''}{pts(lo['roe'], w_)}{few(lo['roe_n'], lo['n'])}), "
+                                      f"a gap of {gap_of(hi['roe'], lo['roe'])} points.").replace(".0 points", " points"))
                 beyond = beyond_words(out, "roe", hi["roe"], lo["roe"], lambda x: pts(x, True))
         else:
             line = None             # nothing to set side by side: no line at all (R18: the deck said it couldn't be done)

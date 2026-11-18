@@ -4386,9 +4386,10 @@ def _findings(slides: list, v: dict, cov: dict, ebm, cap, eyebrow: str, today: d
             high=fast[0], low=slow[0])
         # m2: one sentence that says which layers it ranks (the headline floor), the fastest and the slowest in it
         kinds = {(t[5] or {}).get("family") for t in gm if isinstance(t[5], dict)} - {None, ""}       # a layer of another family is left out of it
-        lines = [f"Among layers of at least {HEADLINE_MIN} companies with the figure{' and one kind of business' if len(kinds) > 1 else ''}, revenue grew fastest in the latest year in {fast[0]} "
+        lines = [f"Revenue grew fastest in the latest year in {fast[0]} "
                  f"(median {_chg(fast[1])}, median {mword} {f_(fast[2])}, {of_words(fast[3], fast[4])}) and slowest in {slow[0]} "
-                 f"(median {_chg(slow[1])}, {f_(slow[2])}, {of_words(slow[3], slow[4])})."]
+                 f"(median {_chg(slow[1])}, {f_(slow[2])}, {of_words(slow[3], slow[4])}), among layers of at least {HEADLINE_MIN} companies with the "
+                 f"figure{' and one kind of business' if len(kinds) > 1 else ''}."]
     else:
         g = (sec.get("growth") or {}).get("median") or {}
         m_ = ((sec.get("medians") or {}).get(measure) or {}).get("median")
@@ -7548,13 +7549,14 @@ def economics_questions(v: dict, shown: list, sec: dict, ebm) -> list[str]:
     hi, lo = rows.get(chain.get("highest")), rows.get(chain.get("lowest"))
     from .intel.theme_data import HEADLINE_MIN, of_words as ow, period_basis, rank_pair
     # m2: the question says which layers its highest and lowest are of, as the headline it repeats does
-    scope_ = f"Among the {len(chain.get('compared') or [])} layers with at least {HEADLINE_MIN} companies with the figure, " if len(chain.get("compared") or []) >= 2 else ""
+    # r69e (LIVE13A-009): the finding first, the layers it ranks after it
+    scope_ = f", among the {len(chain.get('compared') or [])} layers with at least {HEADLINE_MIN} companies with the figure" if len(chain.get("compared") or []) >= 2 else ""
     if hi and lo and chain.get("measure") == "roe":
-        out.append(f"{scope_}{hi['layer']} has the highest median return on equity ({_pc(hi['roe'])}, {ow(hi['roe_n'], hi.get('n'))}) and {lo['layer']} the lowest "
-                   f"({_pc(lo['roe'])}, {ow(lo['roe_n'], lo.get('n'))}). What in each layer's business makes that gap? The figures show the gap, not its cause.")
+        out.append(f"{hi['layer']} has the highest median return on equity ({_pc(hi['roe'])}, {ow(hi['roe_n'], hi.get('n'))}) and {lo['layer']} the lowest "
+                   f"({_pc(lo['roe'])}, {ow(lo['roe_n'], lo.get('n'))}){scope_}. What in each layer's business makes that gap? The figures show the gap, not its cause.")
     elif hi and lo:
-        out.append(f"{scope_}{hi['layer']} has the highest median EBITDA margin ({ebm(hi['ebitda'])}, {ow(hi['ebitda_n'], hi.get('n'))}) and {lo['layer']} the lowest "
-                   f"({ebm(lo['ebitda'])}, {ow(lo['ebitda_n'], lo.get('n'))}). What in each layer's business makes that gap? The figures show the gap, not its cause.")
+        out.append(f"{hi['layer']} has the highest median EBITDA margin ({ebm(hi['ebitda'])}, {ow(hi['ebitda_n'], hi.get('n'))}) and {lo['layer']} the lowest "
+                   f"({ebm(lo['ebitda'])}, {ow(lo['ebitda_n'], lo.get('n'))}){scope_}. What in each layer's business makes that gap? The figures show the gap, not its cause.")
     q = sec.get("quarter") or {}
     if q.get("quarter") and (q.get("sales") or {}).get("n", 0) >= MIN_BASE:
         base = base_quarter(q["quarter"])
