@@ -47,6 +47,8 @@ export function checkoutCur(cur: PriceCur, usd: UsdRow | null, period: Period, c
 }
 
 export const rupeeText = (inr: number) => `₹${inr.toLocaleString("en-IN")}`;
+/** "US price $8": a plan's own dollar price, beside its rupee price. */
+export const usPriceText = (usd: number) => `US price ${dollarText(usd)}`;
 export const dollarText = (usd: number) => `$${usd.toLocaleString("en-US", { minimumFractionDigits: usd % 1 ? 2 : 0, maximumFractionDigits: 2 })}`;
 
 /** What a paid plan's card says. `shown`: the main price. `about`: the line beside it ("about $8" beside rupees; "Charged as ₹699
@@ -57,8 +59,10 @@ export type CardPrice = { shown: string; about: string | null; charged: string; 
 export function cardPrice(o: { plan: "basic" | "pro"; period: Period; cur: PriceCur; inr: number; usd: UsdRow | null; checkoutOn: boolean;
   /** "about $8" for a rupee amount (lib/usdAbout aboutUsd at today's rate) */ aboutUsd: (inr: number) => string }): CardPrice {
   const { plan, period, cur, inr, usd, checkoutOn } = o;
-  if (cur !== "USD" || !usd) return { shown: rupeeText(inr), about: inr > 0 ? o.aboutUsd(inr) : null, charged: rupeeText(inr), chargedCur: "INR", usdShown: false };
-  const amount = period === "year" ? usd[`${plan}_year`] : usd[plan];
+  const amount = usd ? (period === "year" ? usd[`${plan}_year`] : usd[plan]) : 0;
+  // LIVE11B-001 (LIVE10B-001): beside a rupee price, StratLab's own US price when it has one ("US price $8"), not the rupees converted
+  // ("about $7"), which read as a second, different dollar price
+  if (cur !== "USD" || !usd) return { shown: rupeeText(inr), about: inr > 0 ? (usd ? usPriceText(amount) : o.aboutUsd(inr)) : null, charged: rupeeText(inr), chargedCur: "INR", usdShown: false };
   if (chargedInUsd(usd, period, checkoutOn)) return { shown: dollarText(amount), about: null, charged: dollarText(amount), chargedCur: "USD", usdShown: true };
   return { shown: dollarText(amount), about: `Charged as ${rupeeText(inr)} in rupees`, charged: rupeeText(inr), chargedCur: "INR", usdShown: true };
 }

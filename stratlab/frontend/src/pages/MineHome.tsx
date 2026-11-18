@@ -11,7 +11,7 @@ import { useLiveRefresh } from "../lib/liveRefresh";
 import { useMarketsLive } from "../lib/marketLive";
 import { MARKET_TILES, STRIP_MARKETS, goldInr10g, moverDay, tileMarket, tileToday, tileWhen, useComingUpAll, useMarketStrip, type Up } from "../lib/mine";
 import { goldLineParts, type IndiaGold } from "../lib/gold";
-import { fmtDate, monthShort } from "../lib/format";
+import { fmtDate, fmtDateTime, monthShort } from "../lib/format";
 import { CARDS, DEFAULT_LAYOUT, cleanLayout, slotSpans, type CardId, type Layout } from "../lib/mineLayout";
 import { usePersisted } from "../lib/persist";
 import { keepMovers, readKeptMovers } from "../lib/mineMovers";
@@ -286,7 +286,9 @@ function MarketsCard({ later }: { later: boolean }) {
   useLiveRefresh(later && live, () => { api<IndiaGold>("/money/gold").then(setGold).catch(() => undefined); });
   const { markets } = useApp();
   // when the levels were read, for the line under the tiles: the newest of the six
-  const readAt = Math.max(0, ...Object.values(series).map((s) => s?.at ?? 0));
+  const readAt = Math.max(0, ...Object.values(series).map((s) => (s && !s.stale ? s.at ?? 0 : 0)));
+  // LIVE11B-010: levels kept from an earlier visit that are no longer the latest are drawn faded, with the time they were read
+  const keptAt = Math.max(0, ...Object.values(series).map((s) => (s?.stale ? s.at ?? 0 : 0)));
   const closed = (id: string | null) => { const m = id ? markets.find((x) => x.id === id) : null; return !!m && !marketState(m).open; };
   // the US closing prints settle about 50 minutes after the bell (the server's SETTLE_MIN): until then a tile's last value is the last trade
   const settling = (id: string | null) => usSettling(id === "US" ? markets.find((x) => x.id === id) : null);
@@ -306,7 +308,14 @@ function MarketsCard({ later }: { later: boolean }) {
               {s === undefined ? <span className="mine-mkt-hold" aria-hidden="true"><span className="mine-mkt-v"><span className="k-skel w70" /></span>
                 <span className="k-stat-d mine-hold-ghost"><Delta value={0.5}>+0.00%</Delta><span className="k-note nowrap"> on 00 Oct</span></span><span className="mine-spark-hold" /></span>
                 : s === null ? <span className="k-stat-d">Not available right now</span>
-                : (
+                : s.stale ? (
+                  <span className="mine-mkt-old" data-testid="mine-mkt-old" title={`Kept from your last visit, read ${fmtDateTime(s.at ?? 0, { tz: IST, zone: true, year: false })}`}>
+                    <span className="mine-mkt-v">{t.fmt(s.last)}</span>
+                    <span className="k-stat-d">{s.changePct != null ? <Delta value={s.changePct}>{pct(s.changePct, 2)}</Delta> : "No change to show"}
+                      <span className="k-note nowrap"> read {fmtTime(s.at ?? 0, { tz: IST })}</span></span>
+                    <Spark values={s.values} tone={s.changePct != null && s.changePct < 0 ? "down" : "up"} label={`${t.label}, last month, as last read`} />
+                  </span>
+                ) : (
                   <>
                     <span className="mine-mkt-v">{t.fmt(s.last)}</span>
                     <span className="k-stat-d">{s.changePct != null ? <Delta value={s.changePct}>{pct(s.changePct, 2)}</Delta> : "No change to show"}
@@ -324,7 +333,8 @@ function MarketsCard({ later }: { later: boolean }) {
       {goldShort ? <p className="k-note k-muted" data-testid="mine-gold-inr">Gold: {goldShort}</p>
         : series.gold && gold === undefined && <p className="k-note k-muted k-meta-wait" aria-hidden="true">Gold: ₹0,00,000 per 10 g in India, the price Net worth uses.</p>}
       {/* when the levels were read: the time moves with them as they are read again (LIVE-1); the same words whether a market is open or not, so the card does not change height at the open */}
-      {readAt > 0 && <p className="k-note k-muted" data-testid="mine-mkt-at">Levels read at {fmtTime(readAt, { tz: IST, zone: true })}, and again each minute while a market is open.</p>}
+      {readAt > 0 ? <p className="k-note k-muted" data-testid="mine-mkt-at">Levels read at {fmtTime(readAt, { tz: IST, zone: true })}, and again each minute while a market is open.</p>
+        : keptAt > 0 && <p className="k-note k-muted" data-testid="mine-mkt-at">Faded levels are from your last visit, read {fmtDateTime(keptAt, { tz: IST, zone: true, year: false })}: the latest are on their way.</p>}
     </Card>
   );
 }

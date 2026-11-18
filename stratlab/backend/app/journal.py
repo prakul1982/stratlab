@@ -1233,6 +1233,14 @@ def check_costs(ts: list[dict], sym: str = "₹") -> dict:
         status, detail = "pass", f"Charges took {data['pct']:.1f}% of the gross profit. Even with charges doubled, your trades would still be {money(doubled, sym)} up."
     else:
         status, detail = "warn", f"Charges took {data['pct']:.1f}% of the gross profit. With charges doubled, the profit would be gone."
+    # LIVE11B (LIVE10B-039): charges a broker's file listed without the STT are understated, so a pass can't rest on them
+    short = sum(1 for t in ts if t.get("no_stt"))
+    if short and status == "pass":
+        status = "warn"
+        detail += (f" But {'1 trade' if short == 1 else f'{short} trades'} (marked *) {'has' if short == 1 else 'have'} charges below the STT alone, "
+                   "as the broker's file listed them, so the real charges are higher than counted here.")
+    if short:
+        data["no_stt"] = short
     return {"id": "costs", "title": title, "status": status, "detail": detail, "data": data}
 
 
@@ -1248,6 +1256,9 @@ def verdict(ts: list[dict], capital: float | None = None, sym: str = "₹") -> d
 def decide(checks: list[dict], n: int, net: float, wins: int) -> dict:
     by = {c["id"]: c["status"] for c in checks}
     line = win_rate_line(n, wins)
+    # the coin sentence once on the screen: in the Luck-or-edge check when that check carries it, else here (LIVE11B-007: it was in both)
+    if line and any(c["id"] == "luck" and line in str(c.get("detail") or "") for c in checks):
+        line = None
     if n < 15:
         verdict_ = "not_enough"
         summary_ = (f"Only {n} closed trade{'s' if n != 1 else ''} here. That's too few to tell a real edge from a lucky "

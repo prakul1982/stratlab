@@ -78,6 +78,7 @@ from .engine import walkforward
 from . import rule_check
 from .engine.verdict import restate_empty, restated as verdict_restated, with_notes, with_yearly
 from .data import DataError, Registry, split_id
+from .data.stored_india import StoredIndia
 from .data import calendar as trading_calendar
 from .intel import routes as research_routes
 from .intel.company import Research, at_live_price
@@ -145,6 +146,10 @@ manager = LiveManager(kite, hub, markets, options_data)
 recorder = Recorder(options_data, db.add_option_snapshot, parse_targets(settings.OPTION_SNAPSHOTS), settings.OPTION_SNAPSHOT_MINUTES,
                     prune=db.delete_option_snapshots_before, keep_days=settings.OPTION_SNAPSHOT_KEEP_DAYS)
 research_hub = Research(kite, yahoo=markets.providers["US"].yahoo)   # one Yahoo client (and cache) for both
+# LIVE11B-013: India's daily tests on the stored daily closes while the broker's data login is off (data/stored_india.py)
+markets.providers["IN"].stored = StoredIndia(lambda sym: research_hub.chart("IN", sym, "max", "1d")["candles"],
+                                             kept_fn=lambda token: kite.kept_instrument(token),
+                                             known_fn=lambda sym: (stock_pages.find("IN", sym) or (None, None))[1])
 # a currency option's underlying when its future has no live quote: the spot pair it settles against (R13-002)
 options_data.spot_source = lambda pair: (lambda m: {"price": m.get("price"), "at": m.get("at")})(research_hub.yahoo.meta(pair))
 options_data.spot_close = lambda pair, day: next((b["c"] for b in research_hub.yahoo.chart(pair, "1d", 7, ttl=60, exact=True)["candles"]
@@ -889,6 +894,14 @@ def health():
     return {"ok": True, "data_online": kite.ready(), "feed_connected": hub.connected,
             "feed": "connected" if hub.connected else "disconnected" if hub.started else "idle",
             "ai_configured": any(p["in_use"] for p in ai_health()), "version": build_info.info()["short"]}
+
+
+@app.get("/public/data-online")
+def data_status():
+    """Public: whether Indian prices are read live and, while they aren't, the same note /me carries (India closed today
+    anyway, when the next data login runs). The app asks for it as it starts, beside the sign-in check, so the page's first
+    frame already carries the offline line instead of pushing the page down when /me answers later (LIVE11B-004)."""
+    return {"data_online": kite.ready(), "data_note": data_note()}
 
 
 @app.get("/version")
@@ -1849,14 +1862,16 @@ def backtest_slot(profile):
         yield box["limit"]
 
 
-def run_test(profile, strategy: Strategy, req) -> dict:
+def run_test(profile, strategy: Strategy, req, hint: dict | None = None) -> dict:
     if not strategy.entry:
         err(400, "no_entry_rules", "Add at least one buy rule first.")
     with backtest_slot(profile) as limit:
-        data = research.load(markets, strategy, req)
+        data = research.load(markets, strategy, req, **({"hint": hint} if hint else {}))
         check_features(profile, strategy, data["inst"])
         out = compute.run(strategy, data)                   # in a worker process: other pages stay quick meanwhile
         db.add_usage(profile["id"], "backtest")
+    if data.get("stored_through"):
+        out["stored_through"] = data["stored_through"]      # run on the stored daily closes while the live data was offline
     invite_rewards.safe_touch(profile, "backtest")
     used = backtests_used(profile)
     out["usage"] = {"backtests_used": used, "backtests_limit": limit}
@@ -1935,8 +1950,11 @@ def instrument_summary(inst_id: str | None, currency: str | None = None) -> dict
     try:
         return get_instrument(inst_id)[1]
     except (HTTPException, KiteNotReady, DataError):
-        # market data is briefly offline: keep the id, details fill in on the next save
-        return {"id": inst_id}
+        # market data is briefly offline: the stored record of a stock, an ETF or an index when there is one (LIVE11B-013), else keep the
+        # id, details fill in on the next save
+        prov = markets.provider(split_id(inst_id)[0])
+        got = _quiet(getattr(prov, "stored", None).resolve, split_id(inst_id)[1]) if getattr(prov, "stored", None) else None
+        return got or {"id": inst_id}
 
 
 @app.get("/notebooks")
@@ -2114,8 +2132,14 @@ def run_experiment(nid: str, req: ExperimentReq, profile=Depends(current_profile
     else:
         if not req.bars and not req.instrument:
             req.instrument = (nb.get("instrument") or {}).get("id")
-        out = run_test(profile, strategy, req)
+        # the notebook's own record names its instrument only while that market's live data is off (a stored daily test, LIVE11B-013)
+        held = markets.provider(split_id(req.instrument)[0]) if req.instrument else None
+        out = run_test(profile, strategy, req, **({"hint": nb.get("instrument")} if held is not None and not held.ready() else {}))
         rec = research.record(out, strategy, req.label, version, db.now_iso())
+        if out.get("stored_through") and isinstance(rec.get("verdict"), dict):
+            # LIVE11B-013: said on the verdict, with the last close it read
+            day = date.fromisoformat(out["stored_through"])
+            rec["verdict"] = with_notes(rec["verdict"], [f"Indian live data was offline, so this ran on the stored daily closes, up to the close of {day.day} {day:%b %Y}."])
     rec["req_days"] = req.days
     stop_note = research.assumed_stop_note(nb.get("gaps"), strategy)
     if stop_note and isinstance(rec.get("verdict"), dict):
@@ -5633,7 +5657,7 @@ def stock_price_refresh_once(sleep=time.sleep) -> dict:
     for region, (limit, gap) in PRICE_REFRESH.items():
         # India: a page read at the close before the exchange's official close was out takes it once it is (R7O-004)
         extra = {"official": lambda s, d: official_close.official(s, d, use_quote=False),
-                 "official_ready": official_close.settled} if region == "IN" else {}
+                 "official_ready": official_close.settled, "official_range": official_close.day_range} if region == "IN" else {}
         before = price_refresh_status.get(region) if isinstance(price_refresh_status.get(region), dict) else {}
         try:
             price_refresh_status[region] = stock_page_store.refresh_prices(region, bars_of, scan.analyse, limit=limit, gap=gap, sleep=sleep, **extra)
@@ -6217,10 +6241,48 @@ def options_ready():
         err(503, "data_offline", offline_when("Option quotes come from the live feed, which is offline until the daily data login completes."))
 
 
+UNDERLYINGS_KEY = "options:underlyings:last"     # app_settings: the last list of option underlyings read from the live contract list
+_underlyings_kept = {"day": None}
+
+
+def keep_underlyings(rows: list[dict]) -> None:
+    """The day's list of option underlyings, kept once a day for the hours the live feed is offline (LIVE11B-006)."""
+    today = positioning.ist_now().date().isoformat()
+    if _underlyings_kept["day"] == today or not rows:
+        return
+    try:
+        db.set_setting(UNDERLYINGS_KEY, json.dumps({"day": today, "rows": rows}))
+        _underlyings_kept["day"] = today
+    except Exception as e:                         # the page has its answer either way
+        print("option underlyings not kept:", str(e)[:120])
+
+
+def stored_underlyings() -> list[dict] | None:
+    """The last kept list of option underlyings with the expiries already past taken out, each marked `stored` (the exchange's list of
+    F&O underlyings changes rarely; their quotes need the live feed). None when nothing was kept."""
+    today = positioning.ist_now().date().isoformat()
+    try:
+        kept = json.loads(db.get_setting(UNDERLYINGS_KEY) or "null") or {}
+    except Exception:                              # the store down or a value of another shape: nothing kept
+        kept = {}
+    out = []
+    for u in (kept.get("rows") if isinstance(kept, dict) else None) or []:
+        if not isinstance(u, dict):
+            continue
+        ex = [e for e in u.get("expiries") or [] if isinstance(e, str) and e >= today]
+        if not ex:
+            continue
+        lots = {e: n for e, n in (u.get("lots") or {}).items() if e in ex}
+        out.append({**u, "expiries": ex, "lots": lots, "lot": lots.get(ex[0], u.get("lot")), "stored": True})
+    return out or None
+
+
 @app.get("/options/underlyings")
 def options_underlyings(profile=Depends(current_profile)):
     options_ready()
-    return options_data.underlyings()
+    got = options_data.underlyings()
+    keep_underlyings(got)              # for the hours the feed is offline (/options/recorded lists it then)
+    return got
 
 
 def recorded_options(exchange: str, underlying: str, expiry: str = "current") -> "opt_recorded.Recorded":
@@ -6248,6 +6310,15 @@ def options_recorded(profile=Depends(current_profile)):
             rec = None
         if rec:
             out.append(opt_recorded.Recorded(ex, name, rec).underlying())
+    # every other F&O underlying from the last list the live feed gave, marked stored: browsable in the picker outside market hours,
+    # priced once the feed is back (LIVE11B-006: "Other underlyings (0)" with the feed offline)
+    have = {(u.get("exchange"), u.get("name")) for u in out}
+    try:
+        kept = stored_underlyings() or []
+    except Exception as e:                         # the recorded ones still answer
+        print("kept underlyings unavailable:", str(e)[:120])
+        kept = []
+    out += [u for u in kept if (u.get("exchange"), u.get("name")) not in have]
     return out
 
 
@@ -8209,6 +8280,9 @@ def news_view(issue: dict) -> dict:
     # every section that lists figures as a table (O5): drawn by the Briefs page, the email and the PDF alike, from the stored issue
     from .newsletter import tables as news_tables
     out["tables"] = news_tables.of(issue)
+    # the index moves are the Indices table's: the summary over it starts after them, not with the same figures again (LIVE11B-015)
+    if any(t.get("title") == "Indices" for t in out["tables"] if isinstance(t, dict)):
+        out["summary"] = news.write.without_moves(out.get("summary"), issue.get("indices"))
     return out
 
 
@@ -8240,7 +8314,8 @@ def news_list(kind: str = "market", region: str = "IN", limit: int = 20, profile
         err(400, "bad_kind", "Pick the market brief or my stocks.")
     scope = ("US" if region.upper() == "US" else "IN") if kind == "market" else profile["id"]
     return {"issues": [{**{k: i.get(k) for k in ("id", "kind", "region", "day", "weekly", "subject")},
-                        "preview": email_kit.short_line(news_write.past_today(i.get("summary"), i, _news_today(i)), 200)}
+                        # the title names the lead index's move and the brief's table every index's: the preview starts after them (LIVE11B-015)
+                        "preview": email_kit.short_line(news_write.past_today(news_write.without_moves(i.get("summary"), i.get("indices")), i, _news_today(i)), 200) or None}
                        for i in news.recent(kind, scope, max(1, min(60, limit)))]}
 
 

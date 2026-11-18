@@ -7,7 +7,7 @@ import { useMarketRefresh } from "../lib/marketLive";
 import { axisInrFor, dayIn, money, price, fmtDate, fmtDateTime, IST, tzLabel } from "../lib/format";
 import { chainStamp, exchangeTime, optionsMarket } from "../lib/marketHours";
 import { HELP } from "../lib/help";
-import { blankOptions, clampTyped, FALLBACK_HOURS, convertOptLimit, expiryChoices, IMPORTED, isAutoName, OPTIONS_DRAFT, OPTIONS_NOTES, legName, legWords, levelText, lotOf, mergeDraft, offsetsIn, optMoney, payoff, pickedExpiry, PICKS, POPULAR_FALLBACK, rangeText, recordedLine, sessionFor, signalFrom, startWhenText, signalLine, spotText, staleQuoteLine, STRUCTURES, STT_NOTE, timingIssues } from "../lib/options";
+import { blankOptions, clampTyped, FALLBACK_HOURS, convertOptLimit, expiryChoices, IMPORTED, isAutoName, OPTIONS_DRAFT, OPTIONS_NOTES, legName, legWords, levelText, lotOf, mergeDraft, offsetsIn, optMoney, payoff, pickedExpiry, PICKS, POPULAR_FALLBACK, rangeText, recordedLine, sameExpiryNote, sessionFor, signalFrom, startWhenText, signalLine, spotText, staleQuoteLine, STRUCTURES, STT_NOTE, timingIssues } from "../lib/options";
 import type { LiveRow, Notebook, OptChain, OptCharges, OptionStrategy, OptLeg, OptPreview, StrikePick, Underlying } from "../lib/types";
 import { PayoffChart, type PayoffCurve, type PayoffMarker } from "../components/Charts";
 import { ModelInputs, ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
@@ -551,8 +551,9 @@ export function OptionsPage() {
   const vf = s.vix;
   const expiryNames: Record<string, string> = { current: "the nearest expiry", next: "the next expiry", month: "the monthly expiry" };
   const exp = pickedExpiry(und?.expiries, s.expiry), lot = lotOf(und, s.expiry);
-  // one expiry a month (BANKNIFTY, FINNIFTY): Nearest and Monthly are the same day, and the page says so
-  const sameExpiry = (und?.expiries?.length ?? 0) > 1 && new Set(und!.expiries.map((e) => e.slice(0, 7))).size === und!.expiries.length;
+  // Nearest and Monthly one contract: said from the expiry calendar (monthly-only, or this week's weekly being the month's last, moved
+  // for a holiday when it was), never "monthly expiries only" for an index with weeklies (LIVE11B-005)
+  const sameExpiry = sameExpiryNote(s.underlying, und?.expiries, optionsMarket(markets, s.exchange)?.holidays, shortDay);
   // the times checked against each other and the exchange's hours (DB-004)
   const hours = optionsMarket(markets, s.exchange)?.hours ?? FALLBACK_HOURS[s.exchange];
   const timeIssues = timingIssues(s.timing, hours?.open, hours?.close);
@@ -614,7 +615,7 @@ export function OptionsPage() {
               {und && <span className="k-note" data-testid="opt-expiry-note">{[preview ? expiryName(preview.expiry) : exp ? expiryName(exp) : "", (preview ? preview.lot : lot) != null ? `lot ${preview ? preview.lot : lot} ${s.underlying}` : ""].filter(Boolean).join(" · ")}</span>}
               {/* LIVE10B-017: an expiry that is today says so ("Start over" after midday gave today's contract with nothing saying it ends in hours) */}
               {(preview?.expiry ?? exp)?.slice(0, 10) === dayIn(new Date(), IST) && <span className="k-note" data-testid="opt-expiry-today">This expiry is today{s.exchange === "NFO" || s.exchange === "BFO" ? ": the contracts end at 15:30 IST" : ""}.</span>}
-              {sameExpiry && <span className="k-note" data-testid="opt-expiry-same">{s.underlying} has monthly expiries only, so Nearest and Monthly are the same day.</span>}
+              {sameExpiry && <span className="k-note" data-testid="opt-expiry-same">{sameExpiry}</span>}
             </div>
           </FieldGroup>
           <FieldGroup label="Strategy" wide>

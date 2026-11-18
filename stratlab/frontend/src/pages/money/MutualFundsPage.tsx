@@ -12,7 +12,7 @@ import { CostCell, CostDetail, CostHow, CostNotes, costFigures, costStatsShown, 
 import { BehaviourDetail, BehaviourHow, BehaviourNotes, behaviourFigures, GapCell, behaviourShown, behaviourStatsShown, hasGap, useFundBehaviour } from "./FundBehaviour";
 import { Earlier } from "../../components/Earlier";
 import { movedYearNote, openFy } from "../../lib/fy";
-import { importLine } from "../../lib/mfImport";
+import { importLine, mfLockLine } from "../../lib/mfImport";
 import { useAskedFy } from "../../lib/useFy";
 import { PlanInline } from "../../components/PlanInterest";
 import { InboxNote } from "../../components/InboxNote";
@@ -317,7 +317,8 @@ export function MutualFundsPage() {
           </FoldCard>
 
           {/* the limit it lifts is named, as on Plans (DP2-012: the lock didn't say Free keeps 5 funds) */}
-          {!view.gains_allowed && <PlanNote>Capital gains for each financial year, and every scheme you hold (Free keeps {LIMITS.free.mf_schemes}), are on the {view.gains_plan} plan.</PlanNote>}
+          {/* LIVE11B-008: the schemes clause names what the plan lifts, never "every scheme you hold" to someone whose schemes are all shown */}
+          {!view.gains_allowed && <PlanNote>{mfLockLine(held.length, LIMITS.free.mf_schemes, view.gains_plan)}</PlanNote>}
           {view.gains && (
             <Card label="Capital gains">
               <CardHead title="Capital gains by financial year" actions={view.gains.years.length > 0 ? (

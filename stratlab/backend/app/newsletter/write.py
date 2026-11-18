@@ -73,6 +73,29 @@ def _pct(x) -> str:
     return "" if x is None else kit.pct(x)          # +0.62%, −0.34% (a real minus, as in the tiles)
 
 
+_FIRST_SENTENCE = re.compile(r"^\s*(.*?)\.(?:\s+|$)", re.S)
+_SPAN_TAIL = re.compile(r"\s+(?:today|over the week|on [A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2})$")
+_MOVE = re.compile(r"^(.+?) ([+\u2212-]\d[\d,]*(?:\.\d+)?%)$")
+
+
+def without_moves(text: str | None, indices: list[dict] | None) -> str | None:
+    """The summary without its opening sentence of index moves ("NIFTY 50 +0.38%; SENSEX +0.31%; NIFTY BANK −0.12% today.") when
+    every move it names is the brief's own, as its Indices table and title already show them (LIVE11B-015: one figure four times on
+    one screen: the list's title, its preview, the brief's first line and the table). Anything else in that sentence keeps it."""
+    if not text:
+        return text
+    m = _FIRST_SENTENCE.match(text)
+    moves = {str(i.get("name")): _pct(i.get("change_pct")) for i in indices or [] if isinstance(i, dict) and i.get("change_pct") is not None}
+    if not m or not moves:
+        return text
+    parts = [p.strip() for p in re.split(r";\s*|,\s*(?:and\s+)?|\s+and\s+", _SPAN_TAIL.sub("", m.group(1).strip()))]
+    for p in parts:
+        got = _MOVE.match(p)
+        if not got or moves.get(got.group(1)) != got.group(2).replace("-", "\u2212"):
+            return text
+    return text[m.end():].strip()
+
+
 def _num(x) -> str:
     return "" if x is None else kit.num(x)          # 1,23,456.75: Indian digit grouping
 

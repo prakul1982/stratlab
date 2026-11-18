@@ -49,7 +49,9 @@ class KiteProvider:
         try:
             return self.kite.instrument(int(key))
         except ValueError:
-            return None
+            # an id by symbol ("IN:RELIANCE", picked from the stored company list while the data login was off, LIVE11B-013): the listed
+            # stock of that symbol once the broker's list can be read
+            return self.kite.equity(key) if key and self.kite.ready() else None
 
     def defaults(self) -> list[dict]:
         return self.kite.defaults()
@@ -143,6 +145,9 @@ class Registry:
             public = {k: v for k, v in m.items() if k != "provider"}     # which data provider is internal
             # the holidays from ten days back as well as ahead: a page that says "last close <day>" names the last day the exchange
             # traded, which is behind today (Market Watch said "last close Sun", the day it was read; owner, 9 Nov)
+            # offline with stored daily closes (India's, LIVE11B-013): a daily test runs on them meanwhile
+            if status == "offline" and getattr(prov, "stored", None) is not None:
+                public["stored_daily"] = True
             out.append({**public, "hours": _hours(m, local), "status": status, "max_days": getattr(prov, "max_days", None),
                         "holidays": calendar.holidays(m["id"], local - timedelta(days=HOLIDAYS_BACK), 60 + HOLIDAYS_BACK)})
         return out

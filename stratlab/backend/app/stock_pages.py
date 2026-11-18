@@ -826,12 +826,16 @@ def with_new_close(f: dict, bars: list[dict], analyse=None) -> dict:
     return out
 
 
-def with_official_close(f: dict, close) -> dict:
+def with_official_close(f: dict, close, day_range: tuple | None = None) -> dict:
     """A page's facts with the exchange's official close of the same day in place of the candle's last trade
-    (R7O-004): the market value and P/E move with it, the dividend yield against it, the year's range takes it in."""
+    (R7O-004): the market value and P/E move with it, the dividend yield against it, the year's range takes it in, and the
+    session's own high and low from the same file when given (LIVE11B-012: a high made that day was left out of the range, so
+    "vs 52-week high" read 0.0% for ETERNAL at 375.05 under its 378.00 high of the day)."""
     old, new = _num(f.get("price")), _num(close)
     if not new or new <= 0:
         return f
+    if day_range:
+        f = with_day_range(f, new, *day_range)
     out = {**f, "price_official": True, "price_basis": "close"}
     if not old or old <= 0 or old == new:
         return out
@@ -847,6 +851,18 @@ def with_official_close(f: dict, close) -> dict:
         out["high52"] = new
     if _num(f.get("low52")) is not None and new < _num(f["low52"]):
         out["low52"] = new
+    return out
+
+
+def with_day_range(f: dict, close: float, high, low) -> dict:
+    """The year's range widened by one session's high and low (never narrowed), each a print of that session: a high at or above
+    the close and a low at or below it, within RANGE_SLACK of the page's range (a figure beyond it is another basis)."""
+    hi, lo, cur_hi, cur_lo = _num(high), _num(low), _num(f.get("high52")), _num(f.get("low52"))
+    out = dict(f)
+    if hi is not None and hi >= close and cur_hi is not None and cur_hi < hi <= cur_hi * RANGE_SLACK:
+        out["high52"] = hi
+    if lo is not None and 0 < lo <= close and cur_lo is not None and cur_lo / RANGE_SLACK <= lo < cur_lo:
+        out["low52"] = lo
     return out
 
 
@@ -1803,7 +1819,7 @@ class Pages:
             return got
 
     def refresh_prices(self, region: str, bars_of, analyse=None, limit: int = 200, gap: float = 1.0, sleep=time.sleep,
-                       now: datetime | None = None, official=None, official_ready=None) -> dict:
+                       now: datetime | None = None, official=None, official_ready=None, official_range=None) -> dict:
         """After a market's close: re-read the price of stored pages whose last close is older than the market's, the
         largest companies first, at most `limit` a run with `gap` seconds between reads (so people's pages and
         backtests keep the price sources' room). `bars_of(region, symbol)` gives a company's daily candles, read after
@@ -1842,8 +1858,10 @@ class Pages:
                 if f and official and str(f.get("price_at") or "") == day.isoformat() and not f.get("price_official"):
                     c = official(symbol, day.isoformat())
                     if c is not None:
-                        _put(key, {**stored, "facts": with_official_close(f, c)})
-                        self._priced(region, symbol, with_official_close(f, c))
+                        # the day's high and low from the same file (LIVE11B-012)
+                        moved = with_official_close(f, c, official_range(symbol, day.isoformat()) if official_range else None)
+                        _put(key, {**stored, "facts": moved})
+                        self._priced(region, symbol, moved)
                         self.mem.pop(key)
                         self.mem.pop(f"html:{region}:{symbol}")
                         swapped += 1

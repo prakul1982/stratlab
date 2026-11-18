@@ -2422,6 +2422,10 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .mine-mkt-v { font-size: 20px; font-weight: 600; letter-spacing: -.01em; }
 /* LIVE7B-012: a tile still being read is as tall as a read one: the value's line (a bar in it), the change line's space, the month line's space */
 .mine-mkt-hold { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+/* LIVE11B-010: a level kept from an earlier visit that is no longer the latest: faded, the same shape as a fresh tile */
+.mine-mkt-old { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.mine-mkt-old .mine-mkt-v { color: var(--muted); font-weight: 500; }
+.mine-mkt-old .k-spark { opacity: .45; }
 .mine-mkt-hold .mine-mkt-v { display: flex; align-items: center; min-height: 30px; }
 .mine-hold-ghost .k-note { display: block; }   /* the day under the change, as it wraps in a tile a sixth of the card wide */
 .mine-hold-ghost { visibility: hidden; }
@@ -2437,6 +2441,10 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .mine-tl-i .body .k-stat-d { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
 @media (max-width: 760px) { .mine-tl-i .body .k-stat-d { -webkit-line-clamp: 2; } }
 .mine-tl-i .body a { color: inherit; text-decoration: none; }
+/* LIVE11B: the whole row is the link's target (at least 44px tall), not its 23px title line */
+.mine-tl-i { position: relative; min-height: 44px; }
+.mine-tl-i .body a::after { content: ""; position: absolute; inset: 0; }
+.mine-tl-i:has(.body a):hover { background: var(--paper-2); }
 .mine-tl-i .body a:hover { text-decoration: underline; }
 .mine-movers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .mine-movers li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--s3); align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
@@ -2946,9 +2954,16 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .space-panels.even { align-items: stretch; }
 .space-panels > :only-child { grid-column: 1 / -1; }      /* the other card is not there (no market events): this one takes the row */
 .fs-compact .k-row { justify-content: space-between; flex-wrap: wrap; }
-/* LIVE7B-027: the one line of first steps is as wide as its words and its button, not a full-width card with half of it empty */
-.fs-compact { width: fit-content; max-width: 100%; }
-.fs-wait { visibility: hidden; }   /* LIVE7B-012: the line's place kept while it is read, nothing shown in it */
+/* LIVE11B-009: the one line of first steps is a slim row across the page: the steps done as a bar fills the middle (LIVE7B-027's card as
+   wide as its words left the rest of the row empty), the whole list opens under it on a click */
+.fs-line { display: grid; grid-template-columns: auto minmax(80px, 1fr) auto auto; align-items: center; gap: 8px 14px; }
+.fs-line .fs-bar { min-width: 80px; }
+.fs-wait .fs-line { grid-template-columns: auto minmax(80px, 1fr) auto; }
+@media (max-width: 640px) { .fs-line { display: flex; flex-wrap: wrap; } .fs-line .fs-bar { flex: 1 1 120px; } }
+.fs-compact .fs-list { margin-top: 8px; }
+.fs-wait { visibility: hidden; }
+/* LIVE11B-014: on a phone the VIX tile's day takes a line of its own, with no "·" left hanging at the end of the line above */
+@media (max-width: 640px) { .vix-sep { display: none; } .vix-day { display: block; } }   /* LIVE7B-012: the line's place kept while it is read, nothing shown in it */
 
 /* the Help page's explanations, one line each until opened (DI-014) */
 .help-topics { display: flex; flex-direction: column; }

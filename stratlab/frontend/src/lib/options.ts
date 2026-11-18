@@ -376,3 +376,35 @@ export function expiryChoices(expiries: string[] | undefined, picked: string, fm
   }
   return { options: [current, { value: "next", label: expiryChoiceLabel("Next", next, fmt) }, { value: "month", label: expiryChoiceLabel("Monthly", month, fmt) }], value };
 }
+
+const dayMs = 86_400_000;
+const isoDay = (e: string) => e.slice(0, 10);
+const utcDay = (e: string) => Date.UTC(+e.slice(0, 4), +e.slice(5, 7) - 1, +e.slice(8, 10));
+const WEEKDAY = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/** The line under the expiry choices when Nearest and Monthly are one contract, said from the expiry calendar itself (LIVE11B-005:
+ * "NIFTY has monthly expiries only" while NIFTY's next expiry was a weekly one a week later, Nearest being the month's last only because
+ * the 24 Nov expiry had moved to Mon 23 Nov for a holiday). Expiries a week or so apart are weekly ones; only a list of three or more,
+ * each in its own month and weeks apart, is "monthly expiries only". An expiry on another weekday than the rest, the day after it an
+ * exchange holiday, says it was moved. null when Nearest and Monthly differ. */
+export function sameExpiryNote(underlying: string, expiries: string[] | undefined, holidays: string[] | undefined, fmt: (d: string) => string): string | null {
+  const ex = (expiries ?? []).map(isoDay);
+  if (ex.length < 2) return null;
+  const month = ex.filter((e) => e.slice(0, 7) === ex[0].slice(0, 7)).pop();
+  if (month !== ex[0]) return null;
+  const gaps = ex.slice(1).map((e, i) => (utcDay(e) - utcDay(ex[i])) / dayMs);
+  const weekly = gaps.some((g) => g <= 10);
+  const monthlyOnly = !weekly && ex.length >= 3 && new Set(ex.map((e) => e.slice(0, 7))).size === ex.length && gaps.every((g) => g >= 21);
+  if (monthlyOnly) return `${underlying} has monthly expiries only, so Nearest and Monthly are the same day.`;
+  // moved for a holiday: the usual weekday is the next expiry's; the day it would have been, in the same week, is an exchange holiday
+  const wd = (e: string) => new Date(utcDay(e)).getUTCDay();
+  let moved = "";
+  if (weekly && wd(ex[0]) !== wd(ex[1])) {
+    const ahead = (wd(ex[1]) - wd(ex[0]) + 7) % 7;
+    const usual = new Date(utcDay(ex[0]) + ahead * dayMs).toISOString().slice(0, 10);
+    if (ahead > 0 && ahead <= 3 && (holidays ?? []).includes(usual)) moved = ` It is on ${WEEKDAY[wd(ex[0])]} ${fmt(ex[0])}, moved from ${WEEKDAY[wd(usual)]} ${fmt(usual)}, an exchange holiday.`;
+  }
+  return weekly
+    ? `This week's expiry, ${fmt(ex[0])}, is also the month's last, so Nearest and Monthly are the same day.${moved}`
+    : `The nearest expiry, ${fmt(ex[0])}, is also the month's last, so Nearest and Monthly are the same day.`;
+}

@@ -202,9 +202,15 @@ test("the homes don't repeat the side menu; the first steps are one short line (
     const steps = page.locator(".first-steps");
     if (await steps.count()) {
       await expect(steps, path).toHaveClass(/fs-compact/);
-      await expect(steps.locator("ol, progress"), `${path}: no checklist`).toHaveCount(0);
+      // (updated on purpose, LIVE11B-009: one slim row across the page, its middle the steps-done bar, the list only on a click; the card as
+      // wide as its words left the rest of its row empty)
+      await expect(steps.locator("ol"), `${path}: no checklist until asked`).toHaveCount(0);
       const [s, m] = [(await steps.boundingBox())!, (await page.locator("#main .page").boundingBox())!];
-      expect(s.width, `${path}: the line is as wide as its words`).toBeLessThan(m.width * 0.85);
+      expect(s.width, `${path}: the row runs across the page`).toBeGreaterThan(m.width * 0.95);
+      expect(s.height, `${path}: one slim row`).toBeLessThan(80);
+      await steps.getByRole("button", { name: /^All \d steps$/ }).click();
+      await expect(steps.locator("ol li"), `${path}: the list on a click`).not.toHaveCount(0);
+      await steps.getByRole("button", { name: "Fewer" }).click();
     }
   }
   await expect(page.locator(".sidebar").getByRole("link").first()).toBeVisible();

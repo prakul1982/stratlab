@@ -97,7 +97,7 @@ export function NewsPage() {
 
       {listError ? (
         <Card><ErrorState title="Couldn't load the news" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{listError} Check your connection and try again; your newsletter settings are safe.</ErrorState></Card>
-      ) : !rows ? <Card><Skeleton label="Loading the issues" lines={4} /></Card>
+      ) : !rows ? <Card><Skeleton label="Loading the issues" lines={6} page /></Card>
         : !rows.length ? (
           // My stocks is about the stocks you hold or watch: with none, none ever comes, so it says what starts it (DP2-034)
           tab === "mine"

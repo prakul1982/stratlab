@@ -64,9 +64,10 @@ test("checkout charges dollars only when dollar checkout is on and the server ha
 });
 
 test("a card's price and its charge agree in every case", () => {
-  // rupees: as before, "₹699" with "about $8"
+  // rupees: "₹699" with the US price beside it (updated on purpose, LIVE11B: beside a rupee price, StratLab's own US price when the table has one, not the rupees converted)
   assert.deepEqual(pc.cardPrice({ plan: "basic", period: "month", cur: "INR", inr: 699, usd: USD, checkoutOn: true, aboutUsd: about }),
-    { shown: "₹699", about: "about $8", charged: "₹699", chargedCur: "INR", usdShown: false });
+    { shown: "₹699", about: "US price $8", charged: "₹699", chargedCur: "INR", usdShown: false });
+  assert.equal(pc.cardPrice({ plan: "basic", period: "month", cur: "INR", inr: 699, usd: null, checkoutOn: true, aboutUsd: about }).about, "about $8");
   // dollars shown, checkout in rupees: "$8", with the rupee charge beside it, and the charge is the rupee amount
   assert.deepEqual(pc.cardPrice({ plan: "basic", period: "month", cur: "USD", inr: 699, usd: USD, checkoutOn: true, aboutUsd: about }),
     { shown: "$8", about: "Charged as ₹699 in rupees", charged: "₹699", chargedCur: "INR", usdShown: true });
@@ -92,7 +93,7 @@ test("a card's price and its charge agree in every case", () => {
 
 test("a lock's price sentence follows the currency shown, with the rupee charge while checkout is in rupees", () => {
   const p = { offer: { mode: "paid", payments: true, yearly: true }, countries: { US: "USD" }, usd_inr: { rate: 88 }, currencies: { INR, USD } };
-  assert.equal(planPriceLine("basic", p), "Basic is ₹699 a month (about $8) or ₹6,999 a year (about $80).");          // rupees: unchanged
+  assert.equal(planPriceLine("basic", p), "Basic is ₹699 a month (US price $8) or ₹6,999 a year (US price $80).");          // rupees, with the US price beside each (updated on purpose, LIVE11B: beside a rupee price, StratLab's own US price when the table has one, not the rupees converted)
   assert.equal(planPriceLine("basic", p, "USD", false), "Basic is $8 a month or $80 a year, charged as ₹699 or ₹6,999 in rupees.");
   assert.equal(planPriceLine("pro", { ...p, currencies: { INR, USD: USD_PLANS } }, "USD", true), "Pro is $20 a month or $200 a year.");
   assert.equal(planPriceLine("pro", { ...p, currencies: { INR, USD: USD_PLANS } }, "USD", false), "Pro is $20 a month or $200 a year, charged as ₹1,999 or ₹19,999 in rupees.");

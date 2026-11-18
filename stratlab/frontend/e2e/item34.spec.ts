@@ -41,15 +41,16 @@ test("/plans signed out, en-US browser: dollars with the rupee charge beside the
   await expect(page.getByTestId("about-basic")).toHaveText("Charged as ₹699 in rupees");
   await page.getByRole("radiogroup", { name: "Prices in" }).getByRole("radio", { name: "₹ INR" }).click();
   await expect(basic.locator(".lp-amount")).toContainText("₹699");
-  await expect(page.getByTestId("about-basic")).toHaveText("about $8");
+  // (updated on purpose, LIVE11B: beside a rupee price, StratLab's own US price when it has one, not the rupees converted)
+  await expect(page.getByTestId("about-basic")).toHaveText("US price $8");
   await expect(page.locator('.lp-price[data-plan="pro"] .lp-amount')).toContainText("₹1,999");
-  await expect(page.getByTestId("about-pro")).toHaveText("about $22");
+  await expect(page.getByTestId("about-pro")).toHaveText("US price $20");
   await expect(page.locator('.lp-price[data-plan="free"] .lp-amount')).toContainText("₹0");
   await expect(page.getByTestId("about-free")).toHaveCount(0);
   // the year, too, and its saving
   await page.getByRole("radio", { name: /^Yearly/ }).click();
   await expect(page.locator('.lp-price[data-plan="basic"] .lp-amount')).toContainText("₹6,999");
-  await expect(page.getByTestId("about-basic")).toHaveText("about $78");
+  await expect(page.getByTestId("about-basic")).toHaveText("US price $80");
   await expect(basic.locator(".lp-save")).toContainText(/Saves ₹[\d,]+ \(about \$\d+\) a year/);
   // on ₹, never a dollar amount as a card's main price, and the rate said once under the plans
   for (const amount of await page.locator(".lp-amount").allInnerTexts()) expect(amount).toMatch(/^₹/);
@@ -66,7 +67,7 @@ test("the landing page's plans say the same for an en-US visitor", async ({ page
   await expect(sec.getByTestId("about-basic")).toHaveText("Charged as ₹699 in rupees");
   await sec.getByRole("radiogroup", { name: "Prices in" }).getByRole("radio", { name: "₹ INR" }).click();
   await expect(sec.locator('.lp-price[data-plan="basic"] .lp-amount')).toContainText("₹699");
-  await expect(sec.getByTestId("about-basic")).toHaveText("about $8");
+  await expect(sec.getByTestId("about-basic")).toHaveText("US price $8");          // (updated on purpose, LIVE11B: beside a rupee price, StratLab's own US price when it has one, not the rupees converted)
   await expect(sec).not.toContainText("$8 /");
   expect(errors).toEqual([]);
 });
@@ -80,8 +81,8 @@ test("signed in: the Plans cards, the subscribe step and its checkout are in rup
   await page.addInitScript(() => localStorage.setItem("stratlab.price-currency", "INR"));       // a US visitor who chose ₹ on the switch
   const errors = await visit(page, "/plans", info.project.name === "phone" ? 276 : 273);          // two Free accounts no other spec uses
   await expect(page.locator(".k-plan-price").nth(1)).toContainText("₹699", { timeout: 30_000 });
-  await expect(page.getByTestId("about-basic")).toHaveText("about $8");
-  await expect(page.getByTestId("about-pro")).toHaveText("about $22");
+  await expect(page.getByTestId("about-basic")).toHaveText("US price $8");          // (updated on purpose, LIVE11B: beside a rupee price, StratLab's own US price when it has one, not the rupees converted)
+  await expect(page.getByTestId("about-pro")).toHaveText("US price $20");
   await expect(page.getByTestId("usd-note")).toContainText("charged in rupees");
   await page.getByRole("button", { name: "Upgrade to Basic" }).click();
   const confirm = page.getByRole("dialog").getByTestId("plan-confirm");

@@ -132,8 +132,9 @@ test("R8O-006, item 34: a visitor who once chose euros sees the rupee charge wit
     countries: { ...j.countries, DE: "EUR" }, usd_inr: { rate: 90, fallback: false } })));
   // changed on purpose by item 34 (owner, 29 Oct): rupees first, the dollar beside them, whatever was chosen on this device before
   const errors = await open(page, "/plans", visitor, { "stratlab.currency": "EUR" });
-  await expect(page.getByTestId("about-basic")).toHaveText("about $8", { timeout: 30_000 });
-  await expect(page.getByTestId("about-pro")).toHaveText("about $22");
+  // (updated on purpose, LIVE11B: the dollar beside the rupees is StratLab's own US price when it has one, not the rupees converted)
+  await expect(page.getByTestId("about-basic")).toHaveText("US price $8", { timeout: 30_000 });
+  await expect(page.getByTestId("about-pro")).toHaveText("US price $20");
   await expect(page.locator(".k-plan-price").nth(1)).toContainText("₹699");
   const main = page.locator("main");
   await expect(main.getByTestId("usd-note")).toContainText("at ₹90 to the dollar (today's rate)");

@@ -144,7 +144,7 @@ test.describe("US dollar prices", () => {
       // rupees, kept for the next visit, and no "automatic" line once chosen
       await sw.getByRole("radio", { name: "₹ INR" }).click();
       await expect(basic.locator(".lp-amount")).toContainText("₹6,999");
-      await expect(page.getByTestId("about-basic")).toHaveText("about $78");
+      await expect(page.getByTestId("about-basic")).toHaveText("US price $80");          // (updated on purpose, LIVE11B: beside a rupee price, StratLab's own US price when it has one, not the rupees converted)
       await expect(page.getByTestId("cur-auto")).toHaveCount(0);
       await page.reload();
       await expect(page.locator('.lp-price[data-plan="basic"] .lp-amount')).toContainText("₹699", { timeout: 30_000 });
@@ -231,7 +231,7 @@ test.describe("US dollar prices", () => {
       const sec = page.locator("#pricing");
       await sec.scrollIntoViewIfNeeded();
       await expect(sec.locator('.lp-price[data-plan="basic"] .lp-amount')).toContainText("₹699", { timeout: 30_000 });
-      await expect(sec.getByTestId("about-basic")).toHaveText("about $8");
+      await expect(sec.getByTestId("about-basic")).toHaveText("US price $8");          // (updated on purpose, LIVE11B: beside a rupee price, StratLab's own US price when it has one, not the rupees converted)
       const sw = sec.getByRole("radiogroup", { name: "Prices in" });
       await expect(sw.getByRole("radio", { name: "₹ INR" })).toHaveAttribute("aria-checked", "true");
       await expect(sec.getByTestId("cur-auto")).toHaveCount(0);
