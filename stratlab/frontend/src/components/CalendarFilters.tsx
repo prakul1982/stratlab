@@ -21,6 +21,8 @@ export const SIZE_NAME: Record<string, string> = { large: "Large", mid: "Mid", s
 export const indexChoices = (indices: Facets["indices"], picked: string) => indices.filter((i) => i.count > 0 || i.id === picked);
 
 /** How many of the shared choices are set (`sort` counts when it is not the page's first). */
+/** The size chips worth offering: a size with companies, or one already picked (LIVE12A-008: "Large 0 · Mid 0 · Small 0" beside "Micro 10"). */
+export const sizeChoices = (sizes: Facets["sizes"], picked: string[]) => sizes.filter((s) => s.count > 0 || picked.includes(s.id));
 export const calCount = (f: CalFilters, firstSort: string) => f.size.length + (f.sector ? 1 : 0) + (f.index ? 1 : 0) + (f.fo ? 1 : 0) + (f.on ? 1 : 0) + (f.sort && f.sort !== firstSort ? 1 : 0);
 
 /** The filters kept on this device (a per-viewer convenience: storage can be off, then they start clear). */
@@ -54,7 +56,7 @@ export function CalendarFilters({ region, facets, filters, set, firstSort, sorts
           <div className="k-field wide">
             <div className="k-label-row"><span className="k-lbl">Company size</span>
               <Info label="About company size">{region === "IN" ? "By rank in market value among the listed companies the app keeps, as for the screener: large is the 100 largest, mid the 101st to 250th, small the 251st to 500th, micro the rest." : "By market value: large $10 billion and up, mid $2 to 10 billion, small $300 million to 2 billion, micro under $300 million."}</Info></div>
-            <ChipSet label="Company size" options={facets.sizes.map((s) => ({ value: s.id, label: `${SIZE_NAME[s.id]} ${s.count}` }))} on={filters.size}
+            <ChipSet label="Company size" options={sizeChoices(facets.sizes, filters.size).map((s) => ({ value: s.id, label: `${SIZE_NAME[s.id]} ${s.count}` }))} on={filters.size}
               onToggle={(v) => set({ size: filters.size.includes(v) ? filters.size.filter((x) => x !== v) : [...filters.size, v] })} />
             {/* said whenever the size counts fall short of the total, not only once a size is picked (CX2 / LIVE10A-020: "10 companies" over
                 sizes adding to 9) */}

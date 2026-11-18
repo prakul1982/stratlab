@@ -1902,6 +1902,8 @@ a.k-chip { display: inline-flex; align-items: center; text-decoration: none; }
    (R5O-017: hundreds of targets under 32px on ETF vs NAV, Market events and the screener) */
 @media (max-width: 640px) {
   .k-table td a, .k-table th a, .k-table td .btn.sm, .k-table td button, .k-cal-ev a, .k-cal-evs button { min-height: 32px; display: inline-flex; align-items: center; }
+  /* LIVE12A-005: a flex box drops the space between a link's parts, so a symbol ran into its name ("FIXComfort Systems"): the gap stands for it */
+  .k-table td a, .k-table th a, .k-cal-ev a { column-gap: 0.3em; }
   .k-table td .info-btn { display: grid; min-height: 40px; }   /* VR1-163: an (i) in a row's name keeps its own 40px box and circle, not the 32px inline-flex of other table buttons */
   .k-table td input[type="checkbox"], .k-table th input[type="checkbox"] { min-width: 24px; min-height: 24px; margin: 4px; }
   /* R6O-024: the screener's sort headers, the chart's icon buttons, a card's small header links and the reminder ticks

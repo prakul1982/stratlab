@@ -79,3 +79,18 @@ def test_the_sector_charts_are_brought_to_the_close_by_their_own_job_soon_after_
     monkeypatch.setattr(M, "rotation_after_close", lambda now=None: ran.append("price pass"))
     M.stock_price_refresh_once(sleep=lambda s: None)
     assert "price pass" not in ran
+
+
+# ---------- LIVE12A-012 / -017: Mood's live breadth line says which quarter-hour's count it is; the live rows don't say "closing" ----------
+def test_moods_live_breadth_line_names_its_count_and_the_rows_say_so_far():
+    from app.intel import mood
+    today = {"day": "2026-11-17", "adv": {"value": 261, "prev": 250}, "dec": {"value": 238, "prev": 249}, "unch": {"value": 1, "prev": 1},
+             "stocks": {"value": 500}, "pct20": {"value": 74.8}, "pct50": {"value": 57.4}, "pct200": {"value": 50.0}}
+    live = {"adv": 118, "dec": 382, "unch": 0, "pct20": 67.2, "pct50": 51.2, "pct200": 48.2, "at": "09:30"}
+    b = mood.breadth_block(today, live, "NIFTY 500", "2026-11-18")
+    line = next(x for x in mood.lines_of({"breadth": b, "is_open": True, "region": "IN"}) if "rose and" in x)
+    assert "118 of 500 NIFTY 500 stocks rose and 382 fell so far today (the 09:30 IST count)" in line
+    rows = {r["key"]: r["means"] for r in b["rows"]}
+    assert "closing" not in rows["adv"] and "closing" not in rows["dec"]
+    shut = mood.breadth_block(today, None, "NIFTY 500", "2026-11-17")
+    assert {r["key"]: r["means"] for r in shut["rows"]}["adv"] == "Stocks closing above the previous close."

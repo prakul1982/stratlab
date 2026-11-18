@@ -31,11 +31,12 @@ export const whenShort = (when: string | null | undefined): string | null =>
   when ? when.replace(/^./, (c) => c.toUpperCase()) : null;
 
 /** Whether the "Usual move" column has nothing to show (LIVE11A-019: "–" on every US row while it stayed): no row carries earlier moves
- * and every answer back has none, once all rows or at least `enough` of them have been answered (rows past the reads' time limit are
+ * and every answer back has none (a "since the latest results" line alone included), once all rows or at least `enough` of them have been answered (rows past the reads' time limit are
  * never answered, and kept the column up before). */
 export function movesEmpty(rows: { symbol: string; moves?: unknown }[], moves: Record<string, { moves?: unknown; since?: unknown } | null | undefined>, enough = 24): boolean {
   if (!rows.length || rows.some((r) => r.moves)) return false;
   const back = rows.filter((r) => moves[r.symbol] !== undefined);
   if (back.length < Math.min(rows.length, enough)) return false;
-  return back.every((r) => { const a = moves[r.symbol]; return !a?.moves && !a?.since; });
+  // LIVE12A-008: a "since the latest results" line alone is no usual move: the column of "–" stayed for it (NVDA "– / since Tue 17 Nov")
+  return back.every((r) => !moves[r.symbol]?.moves);
 }
