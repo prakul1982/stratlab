@@ -6,7 +6,7 @@ import { eyebrowOf } from "../lib/eyebrow";
 import { useApp } from "../lib/app";
 import { marketState } from "../lib/marketHours";
 import { researchApi, useRegion, type Region } from "../lib/research";
-import { PERIODS, PERIOD_LABEL, PERIOD_SHORT, closesNote, closesTail, colorValue, isPeriod, matches, type ColorBy, type GroupBy, type HeatView, type Period, type Placed, type SizeBy, type Tile } from "../lib/heatmap";
+import { PERIODS, PERIOD_LABEL, PERIOD_SHORT, closesNote, colorValue, dayLine, isPeriod, matches, type ColorBy, type GroupBy, type HeatView, type Period, type Placed, type SizeBy, type Tile } from "../lib/heatmap";
 import { Treemap, TreemapLegend } from "../components/chart/Treemap";
 import { Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, Field, FieldGroup, PageHeader, Seg, Select, Signed, Working, type Column } from "../components/kit";
 import { ReportScope } from "../components/kit/ReportFigure";
@@ -115,6 +115,12 @@ export function HeatmapPage() {
   const href = (t: Tile) => `/research/${region}/${encodeURIComponent(t.s)}`;
   const name = cos ? cos.name : view?.universe_name ?? "";
   const colorTitle = color === "change" ? `Change, ${PERIOD_LABEL[period].toLowerCase()}` : color === "vs" ? `Change less the index's, ${PERIOD_LABEL[period].toLowerCase()}` : "Volume against its 20-day average";
+  const asOf = view?.as_of ? fmtDate(view.as_of) : null;
+  const { markets } = useApp();
+  const open = (() => { const m = markets.find((x) => x.id === region); return m ? marketState(m).open : false; })();      // LIVE9A-010
+  // LIVE13A-012/-029: the live round's prices in the session and the day's last trades after the bell, said as such
+  const line = view ? dayLine(view, open, "map", (d) => fmtDate(d), region === "IN" ? "IST" : "ET") : null;
+  const priceLabel = line?.price ?? "Last close";
   const tip = (p: Placed) => {
     const t = p.tile, chg = t.r[pi], vs = colorValue(t, "vs", period, index);
     return (
@@ -122,7 +128,7 @@ export function HeatmapPage() {
         <div className="hm-tip-name">{t.n}</div>
         <div className="hm-tip-sub">{t.s}{t.layer ? ` · ${t.layer}` : t.sec ? ` · ${t.sec}` : ""}</div>
         <dl>
-          <dt>Last close</dt><dd>{t.px == null ? "–" : price(t.px, ccy)}</dd>
+          <dt>{priceLabel}</dt><dd>{t.px == null ? "–" : price(t.px, ccy)}</dd>
           <dt>{PERIOD_LABEL[period]}</dt><dd><Signed value={chg} fmt={(v) => pct(v, 2)} /></dd>
           {vs != null && <><dt>Less the index</dt><dd><Signed value={vs}>{figureText(vs, "vs")}</Signed></dd></>}
           <dt>Market value</dt><dd>{capText(t.cap)}</dd>
@@ -145,15 +151,12 @@ export function HeatmapPage() {
   const cols: Column<Tile>[] = [
     { key: "n", header: "Company", rowHeader: true, wrap: true, cell: (t) => <Link className="link" to={href(t)}><b>{t.s}</b> <span className="k-muted">{t.n}</span></Link> },
     { key: "g", header: cos ? "Layer" : "Sector", wrap: true, narrow: false, cell: (t) => (cos ? t.layer : t.sec) ?? "–" },
-    { key: "px", header: "Last close", numeric: true, cell: (t) => (t.px == null ? "–" : price(t.px, ccy)) },
+    { key: "px", header: priceLabel, numeric: true, cell: (t) => (t.px == null ? "–" : price(t.px, ccy)) },
     { key: "chg", header: PERIOD_LABEL[period], numeric: true, sortable: true, brief: true, cell: (t) => <Signed value={t.r[pi]} fmt={(v) => pct(v, 2)} /> },
     { key: "vs", header: "Less the index", numeric: true, sortable: true, cell: (t) => { const v = colorValue(t, "vs", period, index); return <Signed value={v}>{figureText(v, "vs")}</Signed>; } },
     { key: "cap", header: "Market value", numeric: true, sortable: true, cell: (t) => capText(t.cap) },
     { key: "vol", header: "Volume vs average", numeric: true, sortable: true, tight: false, cell: (t) => figureText(t.vx, "volume") },
   ];
-  const asOf = view?.as_of ? fmtDate(view.as_of) : null;
-  const { markets } = useApp();
-  const open = (() => { const m = markets.find((x) => x.id === region); return m ? marketState(m).open : false; })();      // LIVE9A-010
   const cut = !!view && !cos && view.matching > view.shown;
   return (
     <div className="k-page hm-page">
@@ -198,11 +201,11 @@ export function HeatmapPage() {
         ) : (
           <Card label="The heatmap" testId="heatmap">
             <CardHead title={`${name}: ${PERIOD_LABEL[period].toLowerCase()}`} infoLabel="About the heatmap"
-              info={`Each tile is one company. Its area is its share of the ${size === "cap" ? "market value" : size === "traded" ? "value traded" : "number"} of the companies shown; its colour follows the legend. A group's own figure is the average of its tiles, each weighted by its size. Changes are from daily closing prices${asOf ? `, the latest ${asOf}` : ""}.`}
+              info={`Each tile is one company. Its area is its share of the ${size === "cap" ? "market value" : size === "traded" ? "value traded" : "number"} of the companies shown; its colour follows the legend. A group's own figure is the average of its tiles, each weighted by its size. Changes are from daily closing prices${asOf ? `, the latest ${asOf}` : ""}${view.live ? `, each brought to the ${line?.source} from the same starting close` : ""}.`}
               actions={<><input className="k-input sm hm-search" type="search" aria-label="Find a company" placeholder="Find a company" autoComplete="off" value={query} onChange={(e) => setQuery(e.target.value)} />
                 <Seg label="Show as" value={table ? "table" : "map"} onChange={(v) => set({ view: v === "table" ? "table" : null })} options={[{ value: "map", label: "Map" }, { value: "table", label: "Table" }]} /></>} />
             <p className="hm-facts" data-testid="hm-facts">
-              {asOf && <span data-testid="hm-day">Closes of <b>{asOf}</b>{closesTail(open)}</span>}
+              {line && <span data-testid="hm-day">{line.lead}<b>{line.day}</b>{line.tail}</span>}
               {!cos && index?.[pi] != null && <span>{view.index.name} <b><Signed value={index[pi]} fmt={(v) => pct(v, 2)} /></b></span>}
               <span><b>{counts.up}</b> up, <b>{counts.down}</b> down{counts.flat ? <>, <b>{counts.flat}</b> unchanged</> : null}</span>
               {/* LIVE12A-010: with companies left out of the map (no value on record), the count says how many are on it ("500 companies" sat
@@ -214,7 +217,7 @@ export function HeatmapPage() {
             {busy && <Working small label="Reading the new settings" />}
             {noIndex && <p className="k-note">The index has no figure for this period yet, so there is nothing to set the changes against. Pick Change, or another period.</p>}
             {table ? (
-              <ReportScope section={`Heatmap: ${name}`} source={`Daily closing prices${asOf ? `, the latest ${asOf}` : ""}`}>
+              <ReportScope section={`Heatmap: ${name}`} source={view.live && line ? `Daily closing prices brought to the ${line.source}` : `Daily closing prices${asOf ? `, the latest ${asOf}` : ""}`}>
               <DataTable csv={`heatmap ${name} ${PERIOD_SHORT[period]}`} label={`${name}: every company`} columns={cols} rows={shown} rowKey={(t) => t.s} stack compact phonePage={40} pageDesktop
                 sort={{ key: sort.key, desc: sort.desc, onSort: (k) => setSort((s) => ({ key: k, desc: s.key === k ? !s.desc : true })) }}
                 empty="No company matches what you typed." />

@@ -561,8 +561,28 @@ def us_rows(frm: date, to: date) -> list[dict]:
 TEASER_LINKS = {"notice", "join"}       # what a plan without the full calendar sees of a call's links (plans.py earnings_calls)
 
 
+ZONE_HOURS = {"IST": 5.5, "SGT": 8, "HKT": 8, "JST": 9, "GMT": 0, "UTC": 0, "BST": 1, "CET": 1, "EST": -5, "EDT": -4}
+HELD_AFTER = 60 * 60          # seconds after its start that today's call is taken as held
+
+
+def held_today(r: dict, today: date, now: datetime) -> bool:
+    """LIVE13A-027: a row of today whose start (its time in its zone, or India's time when none is filed for an Indian row) is HELD_AFTER
+    past: held, not coming up (at 14:47 IST "Coming up" still listed that morning's 06:30 and 09:00 IST meetings)."""
+    if r.get("date") != today.isoformat() or not r.get("time"):
+        return False
+    tz = r.get("tz") or ("IST" if r.get("region", "IN") == "IN" else None)
+    if tz not in ZONE_HOURS:
+        return False
+    m = re.match(r"^(\d{1,2}):(\d{2})$", str(r["time"]))
+    if not m:
+        return False
+    start = datetime.combine(today, datetime.min.time()).replace(hour=int(m.group(1)) % 24, minute=int(m.group(2)))
+    start_utc = start - timedelta(hours=ZONE_HOURS[tz])
+    return (now.astimezone(ZoneInfo("UTC")).replace(tzinfo=None) - start_utc).total_seconds() >= HELD_AFTER
+
+
 def view(region: str, scope: str = "all", mine: set[str] | None = None, when: str = "upcoming", kind: str = "all", q: str = "",
-         today: date | None = None, limit: int = MAX_ROWS, full: bool = True) -> dict:
+         today: date | None = None, limit: int = MAX_ROWS, full: bool = True, now: datetime | None = None) -> dict:
     """The calendar's rows: `when` "upcoming" (today to UPCOMING_DAYS ahead, soonest first) or "past" (the last PAST_DAYS,
     latest first, with what was filed after); `kind` "call", "meet" or "all"; `mine` the person's stocks (scope "mine").
     Without `full` (a plan without the full calendar): this week's rows only (to Sunday), each with its notice and webcast
@@ -575,6 +595,13 @@ def view(region: str, scope: str = "all", mine: set[str] | None = None, when: st
         to = today + timedelta(days=6 - today.weekday())
         scope, kind, q = "all", "all", ""
     rows = india_rows(frm, to) if region == "IN" else us_rows(frm, to)
+    if region == "IN" and full:
+        # today's calls already held move from "Coming up" to "Held" (LIVE13A-027)
+        now = now or datetime.now(ZoneInfo("UTC"))
+        if past:
+            rows += [r for r in india_rows(today, today) if r.get("until") is None and held_today(r, today, now)]
+        else:
+            rows = [r for r in rows if r.get("until") or not held_today(r, today, now)]
     for r in rows:
         if not full:
             r["links"] = [x for x in r["links"] if x["kind"] in TEASER_LINKS]

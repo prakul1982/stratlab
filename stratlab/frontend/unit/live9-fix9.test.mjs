@@ -87,7 +87,11 @@ test("heatmap: the facts line says the last close while the market is open", asy
   const { closesTail } = await import("../src/lib/heatmap.ts");
   assert.equal(closesTail(false), "");
   assert.match(closesTail(true), /^, the last close · the market is open; the map is redrawn after today's close$/);
-  assert.match(src("pages/HeatmapPage.tsx"), /Closes of <b>\{asOf\}<\/b>\{closesTail\(open\)\}/);
+  // (updated on purpose, fix18 LIVE13A-012/-029: the line comes from dayLine, which keeps this tail when no live prices are in)
+  const { dayLine } = await import("../src/lib/heatmap.ts");
+  const l = dayLine({ as_of: "2026-11-17" }, true, "map", (d) => d, "IST");
+  assert.equal(`${l.lead}${l.day}${l.tail}`, `Closes of 2026-11-17${closesTail(true)}`);
+  assert.match(src("pages/HeatmapPage.tsx"), /\{line\.lead\}<b>\{line\.day\}<\/b>\{line\.tail\}/);
 });
 
 // ---------- LIVE9A-015: US IPO sizes with the underwriters' option, and a missed pricing day ----------

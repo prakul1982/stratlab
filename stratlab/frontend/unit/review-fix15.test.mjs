@@ -26,7 +26,8 @@ test("LIVE12A-008: the Usual move column goes when no row has a usual move (a 's
   const rows = Array.from({ length: 30 }, (_, i) => ({ symbol: `S${i}` }));
   const back = Object.fromEntries(rows.map((r, i) => [r.symbol, i % 3 ? null : { moves: null, since: { date: "2026-11-17", pct: -0.4 } }]));
   assert.equal(movesEmpty(rows, back), true);
-  assert.equal(movesEmpty(rows, { ...back, S1: { moves: { avg: 3, last: [1] } } }), false);
+  // (updated on purpose, fix18 LIVE13A-005: one row's move among 30 no longer keeps the column; three do)
+  assert.equal(movesEmpty(rows, { ...back, S1: { moves: { avg: 3, last: [1] } }, S2: { moves: { avg: 2, last: [1] } }, S4: { moves: { avg: 1, last: [1] } } }), false);
   const f = read("src/components/CalendarFilters.tsx");
   assert.match(f, /export const sizeChoices = \(sizes: Facets\["sizes"\], picked: string\[\], narrowed = false\) => sizes\.filter\(\(s\) => narrowed \|\| s\.count > 0 \|\| picked\.includes\(s\.id\)\);/);
   assert.match(f, /options=\{sizeChoices\(facets\.sizes, filters\.size, active > 0\)\.map/);
@@ -64,7 +65,8 @@ test("LIVE12A-010: a mid-size heatmap tile (about 57 × 53 px) names a long symb
   const width = (text) => text.length * 6.5;
   assert.deepEqual(tileWords("HINDUNILVR", "+1.2%", 57, 53, width), { px: 10, fig: false, split: 5 });
   assert.deepEqual(tileWords("BAJAJ-AUTO", "+1.2%", 46, 50, width), { px: 9, fig: false, split: 6 });       // split after the hyphen
-  assert.deepEqual(tileWords("HINDUNILVR", "+1.2%", 60, 40, width), { px: 0, fig: false });                   // one line's height: none
+  // (updated on purpose, fix18 LIVE13A-012: ten letters don't fit one line at 60px, and a 40px-tall tile now names them over two lines)
+  assert.deepEqual(tileWords("HINDUNILVR", "+1.2%", 60, 40, width), { px: 10, fig: false, split: 5 });
   assert.match(read("src/components/chart/Treemap.tsx"), /\{split \? <>\{p\.tile\.s\.slice\(0, split\)\}<wbr \/>\{p\.tile\.s\.slice\(split\)\}<\/> : p\.tile\.s\}/);
   assert.match(read("src/components/chart/treemap.css"), /\.hm-sym\.two \{ white-space: normal; width: min-content;/);
   const h = read("src/pages/HeatmapPage.tsx");

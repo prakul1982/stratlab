@@ -7,7 +7,7 @@ import { eyebrowOf } from "../lib/eyebrow";
 import { fmtDate, marketTz, safeHref } from "../lib/format";
 import { useRegion, type Region } from "../lib/research";
 import { RegionSwitch } from "../components/Research";
-import { Card, DataTable, EmptyState, ErrorState, PageHeader, PlanNote, Seg, Skeleton, type Column } from "../components/kit";
+import { Card, CardHead, CsvButton, DataTable, EmptyState, ErrorState, PageHeader, PlanNote, Seg, Skeleton, type Column } from "../components/kit";
 
 /* /research/earnings-calls (f5): the Calendar's "Earnings calls" tab. Every results call and meeting with analysts or investors
  * coming up, India from the companies' own notices to the exchange (date, time and zone as filed, the notice and a webcast or
@@ -37,16 +37,20 @@ export function callDay(r: Pick<CallRow, "date" | "until">): string {
 
 /** The time as filed with its zone ("16:00 IST"), the US session ("After the close, ET"), or nothing when the filing gives none. */
 export function callTime(r: Pick<CallRow, "time" | "tz" | "session">): string | null {
-  if (r.time) return `${r.time}${r.tz ? ` ${r.tz}` : ""}`;
+  // LIVE13A-027: a time filed without its zone says so ("09:00" sat between "09:00 IST" and "09:00 SGT")
+  if (r.time) return `${r.time}${r.tz ? ` ${r.tz}` : ", zone not given"}`;
   if (r.session) return `${r.session[0].toUpperCase()}${r.session.slice(1)}${r.tz ? `, ${r.tz}` : ""}`;
   return null;
 }
+
+/** LIVE13A-027: one link per kind of document ("Notice ↗ Notice ↗" for a notice filed twice): the first of each label. */
+export const oneEach = <L extends { label: string }>(links: L[]): L[] => links.filter((x, i) => links.findIndex((y) => y.label === x.label) === i);
 
 function Links({ r }: { r: CallRow }) {
   if (!r.links.length) return <span className="k-muted">–</span>;
   return (
     <span className="calls-links">
-      {r.links.map((x) => (
+      {oneEach(r.links).map((x) => (
         <a key={x.url} className="link" href={safeHref(x.url)} target="_blank" rel="noopener noreferrer">
           {x.label}<span aria-hidden="true"> ↗</span><span className="sr-only">, {r.name} (opens in a new tab)</span>
         </a>
@@ -122,7 +126,9 @@ export function EarningsCallsPage() {
           <Card><EmptyState title="The first read hasn't finished">The exchange's notices are read each evening after the filings of the day; the calendar fills after that read.</EmptyState></Card>
         ) : (
           <Card label={when === "past" ? "Calls held" : "Calls coming up"} testId="calls-table">
-            <DataTable csv="earnings calls" stack label={when === "past" ? "Earnings calls and meetings held" : "Earnings calls and meetings coming up"} columns={cols}
+            {/* LIVE13A-027: the CSV in a head beside the list's name, never alone on the card's first row */}
+            <CardHead title={when === "past" ? "Held" : "Coming up"} actions={data.rows.length ? <CsvButton name="earnings calls" label={when === "past" ? "Earnings calls and meetings held" : "Earnings calls and meetings coming up"} columns={cols} rows={data.rows} /> : undefined} />
+            <DataTable stack label={when === "past" ? "Earnings calls and meetings held" : "Earnings calls and meetings coming up"} columns={cols}
               rows={data.rows} rowKey={(r) => r.id}
               empty={data.scope === "mine" ? "None of your stocks has a call or meeting in these days." : q ? "No company by that name has a call in these days." : "Nothing in these days."} />
             {data.more > 0 && <p className="k-small k-muted">The first {data.rows.length.toLocaleString("en-IN")} are shown; find a company or narrow the type to see the other {data.more.toLocaleString("en-IN")}.</p>}

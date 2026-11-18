@@ -187,7 +187,9 @@ def breadth_block(view_today: dict | None, live: dict | None, group_name: str, s
            "pct200": num(lv.get("pct200")) if lv else v("pct200"),
            # the live count's own quarter-hour ("12:15", IST), so the page says which count it is (LIVE4-005: Mood's 111/388 "read 12:29"
            # beside Breadth's 123/376 "as of 12:30" were two different rounds with nothing saying so)
-           "at": (lv.get("at") or None) if lv else None}
+           "at": (lv.get("at") or None) if lv else None,
+           # LIVE13A-030: the count at the closing prices, said as such (the 15:30 round before it is "before the closing prices")
+           "at_close": bool(lv.get("close")) if lv else False}
     out["ratio"] = round(adv / dec, 2) if adv is not None and dec else None
     rows = []
 
@@ -199,7 +201,8 @@ def breadth_block(view_today: dict | None, live: dict | None, group_name: str, s
     # LIVE12A-017: a live count is of stocks above the previous close so far, not closing above it
     row("adv", "Stocks that rose", adv, before("adv"), "count", "Stocks above the previous close at the latest count." if lv else "Stocks closing above the previous close.")
     row("dec", "Stocks that fell", dec, before("dec"), "count", "Stocks below the previous close at the latest count." if lv else "Stocks closing below the previous close.")
-    row("unch", "Unchanged", unch, before("unch"), "count", "Stocks closing at the previous close.")
+    # LIVE13A-015: the unchanged row too ("Stocks closing at the previous close" under "Today, 14:00")
+    row("unch", "Unchanged", unch, before("unch"), "count", "Stocks at the previous close at the latest count." if lv else "Stocks closing at the previous close.")
     # LIVE5-003: the live rounds count today's new 52-week highs and lows too (a day's high past the last 251 sessions' highest), so
     # after the close the day's figure is in its own column, not "At the close" for the hours until the evening run
     hi_now, lo_now = (num(lv.get("hi")), num(lv.get("lo"))) if lv else (out["highs"], out["lows"])
@@ -381,7 +384,8 @@ def lines_of(p: dict) -> list[str]:
         # LIVE12A-012: in session the count says its own quarter-hour, so a card read at 09:36 with the 09:30 count is never taken for the
         # table's later figures beside it ("118 … rose and 382 fell so far today" at 09:54 while Breadth showed 77/422 at 09:45)
         at = f" (the {b['at']} {ZONE.get(p.get('region'), '')} count)".replace(" )", ")") if b.get("at") else ""
-        when = (f"so far today{at}" if p.get("is_open", True) else f"on {day_words(b.get('day'))}" if b.get("day") else "") if b.get("live") \
+        shut = " (the count at the closing prices)" if b.get("at_close") else f" (the {b['at']} {ZONE.get(p.get('region'), '')} count, before the closing prices)".replace(" ,", ",") if b.get("at") else ""
+        when = (f"so far today{at}" if p.get("is_open", True) else f"on {day_words(b.get('day'))}{shut}" if b.get("day") else "") if b.get("live") \
             else f"on {day_words(b.get('day'))}" if b.get("day") else ""
         tail = f"; {fpct(b['pct50'], 1, sign=False)} are above their 50-day average" if b.get("pct50") is not None else ""
         out.append(("breadth", f"{fnum(b['adv'])} of {fnum(b['stocks'])} {b['group']} stocks rose and {fnum(b['dec'])} fell {when}{tail}.".replace("  ", " ")))
@@ -868,7 +872,10 @@ class Mood:
             live = None
             if region in breadth_live.LIVE_REGIONS:
                 lv = breadth_live.settled(breadth_live.view(group, ready=self.hub._kite()), (vt.get("today") or {}).get("day"))
-                live = {**lv["latest"], "at": lv.get("as_of")} if lv and lv.get("state") in ("live", "final") and lv.get("latest") else None
+                # LIVE13A-030: whether the day's last count is the one at the closing prices (the round after the bell), not the 15:30
+                # round run in the closing minute: two figures were both "the 15:30 IST count" on 18 Nov (125/374, then 123/376)
+                live = {**lv["latest"], "at": lv.get("as_of"), "close": lv.get("state") == "final" and bool(lv.get("close"))} \
+                    if lv and lv.get("state") in ("live", "final") and lv.get("latest") else None
             b = breadth_block(vt.get("today"), live, vt["group"]["name"], today_s)
         except Exception as e:
             print("breadth unavailable:", region, str(e)[:100])

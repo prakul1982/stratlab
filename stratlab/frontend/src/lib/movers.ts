@@ -16,7 +16,11 @@ export type MoversView = {
   lists: Record<ListId, { total: number; rows: MoverRow[] }>;
   /** Free: the top rows of the default index only; `plan` names the plan with the rest */
   locked: boolean; plan?: string;
+  /** LIVE13A-012/-029: the live round's prices of a later day than `as_of`, and whether the latest session's closes are still being added */
+  live?: import("./heatmap").LiveOf | null; behind?: boolean;
 };
+
+export type { DayOf, LiveOf } from "./heatmap";
 
 /** Each list's tab name, what it is sorted by (one line under the table), and its own figure's column. */
 export const LIST_META: Record<ListId, { label: string; what: string; figure: string }> = {
