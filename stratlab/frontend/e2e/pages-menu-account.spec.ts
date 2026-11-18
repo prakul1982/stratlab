@@ -11,7 +11,7 @@ test.describe("a visitor from the UK", () => {
   test("sees prices in rupees, with the dollar figure beside them", async ({ page }) => {
     const errors = await open(page, "/plans", "Plans");
     await expect(page.getByText("₹699 / month", { exact: true })).toBeVisible();
-    await expect(page.getByTestId("about-basic")).toHaveText(/^about \$\d+$/);
+    await expect(page.getByTestId("about-basic")).toHaveText(/^US price \$\d+$/);          // (updated on purpose, LIVE11B: beside a rupee price, StratLab's own US price when it has one, not the rupees converted)
     await expect(page.locator("main")).not.toContainText("£");
     await sane(page, errors);
   });

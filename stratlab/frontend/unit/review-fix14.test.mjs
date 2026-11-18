@@ -113,7 +113,7 @@ test("LIVE11B-009: the first steps are one slim row across the page with the who
   assert.match(fs, /\{open && list\}/);
   const css = read("src/styles.css");
   assert.doesNotMatch(css, /\.fs-compact \{ width: fit-content; max-width: 100%; \}/);
-  assert.match(css, /\.fs-line \.fs-bar \{ flex: 1 1 120px; min-width: 80px; \}/);
+  assert.match(css, /\.fs-line \{ display: grid; grid-template-columns: auto minmax\(80px, 1fr\) auto auto;/);
 });
 
 test("LIVE11B: beside a rupee price, StratLab's own US price when the prices table has one", async () => {
@@ -133,4 +133,18 @@ test("LIVE11B: a Coming-up row is its link's target, at least 44px tall, not the
 
 test("LIVE11B-015: the briefs list holds the screen while it is read", () => {
   assert.match(read("src/pages/NewsPage.tsx"), /<Skeleton label="Loading the issues" lines=\{6\} page \/>/);
+});
+
+test("LIVE11B-013: an offline market with stored daily closes is searchable for a daily test, and says so", async () => {
+  const D = await import("../src/lib/dataBack.ts");
+  assert.equal(D.searchableNow({ status: "offline", stored_daily: true }), true);
+  assert.equal(D.searchableNow({ status: "offline" }), false);
+  assert.equal(D.searchableNow({ status: "live" }), true);
+  assert.equal(D.offlineTail({ status: "offline", stored_daily: true }), " (daily closes)");
+  assert.equal(D.offlineTail({ status: "offline" }), " (offline)");
+  const line = D.storedDailyLine("India", { closed: null, back_at: "2026-11-18T08:00:00+05:30" }, "Asia/Kolkata");
+  assert.equal(line, "Live India data is offline right now; it reconnects on Wed 18 Nov, 08:00 IST. Daily tests run now on the stored daily closes, up to the last close; intraday timeframes, futures and options need the live data.");
+  const home = read("src/pages/Home.tsx");
+  assert.match(home, /\) : market && searchableNow\(market\) \? \(/);
+  assert.match(read("src/pages/MarketPage.tsx"), /\{market && searchableNow\(market\) && market\.id !== "CSV" && \(/);
 });

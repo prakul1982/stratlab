@@ -47,3 +47,18 @@ export function closedLine(closed: "weekend" | "holiday", nextOpen: string | nul
     short: nextOpen ? `Indian markets open ${nextOpen}` : `Indian markets ${closed === "weekend" ? "closed for the weekend" : "closed today"}`,
   };
 }
+
+/** Whether a market's instruments can be picked for a test now: live, or offline with stored daily closes a daily test runs on (LIVE11B-013:
+ * "₹ India (offline)" shut every Indian test until the 08:00 IST data login, though a daily test reads only past closes). */
+export const searchableNow = (m: Pick<Market, "status" | "stored_daily"> | null | undefined): boolean =>
+  !!m && (m.status === "live" || (m.status === "offline" && !!m.stored_daily));
+
+/** A market chip's tail: "(offline)", or "(daily closes)" while daily tests run on the stored closes. */
+export const offlineTail = (m: Pick<Market, "status" | "stored_daily">): string =>
+  m.status !== "offline" ? "" : m.stored_daily ? " (daily closes)" : " (offline)";
+
+/** The line under the search while a daily test runs on stored closes: when the live data is back, and what works meanwhile. */
+export function storedDailyLine(marketName: string, note: DataNote | null | undefined, localTz?: string): string {
+  const back = reconnectAt(note, localTz);
+  return `Live ${marketName} data is offline right now${back ? `; it reconnects on ${back}` : ""}. Daily tests run now on the stored daily closes, up to the last close; intraday timeframes, futures and options need the live data.`;
+}

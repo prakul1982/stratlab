@@ -41,6 +41,7 @@ export interface Market {
   hours: { open: string | null; close: string | null; days: string; fo_close?: string | null } | null; what: string; costs: string;
   brokerage: number; status: "live" | "offline" | "soon"; max_days: Record<Tf, number> | null;
   holidays?: string[];      // weekday closures in the next few weeks, as dates in the exchange's own calendar
+  stored_daily?: boolean;   // offline, but a daily test runs on its stored daily closes meanwhile (India's, LIVE11B-013)
 }
 
 export type VerdictKind = "edge" | "mixed" | "luck" | "not_enough" | "no_edge";

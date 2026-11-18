@@ -17,6 +17,7 @@ import { VerdictBadge } from "../components/ui";
 import { Badge, Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, Notice, PageHeader, Seg, Skeleton, type Column } from "../components/kit";
 import "./trade/trade.css";
 import { scrollBehavior } from "../lib/motion";
+import { offlineTail, searchableNow, storedDailyLine } from "../lib/dataBack";
 
 export type Where = { market: string; instrument: Instrument | null };
 
@@ -60,7 +61,7 @@ export function useCreateNotebook(where?: Where | null) {
 
 /** Step 1 of a new notebook: the market and instrument to test on. */
 function WhereToTest({ where, setWhere }: { where: Where; setWhere: (w: Where) => void }) {
-  const { markets } = useApp();
+  const { markets, me } = useApp();
   const usable = markets.filter((m) => m.status !== "soon");
   const soon = markets.filter((m) => m.status === "soon");
   const market = markets.find((m) => m.id === where.market);
@@ -68,7 +69,7 @@ function WhereToTest({ where, setWhere }: { where: Where; setWhere: (w: Where) =
     <Card label="Where to test">
       <CardHead title="1. Where do you want to test it?" info={`${HELP.markets} Picking a stock or coin is optional: if your idea names one, we'll find it for you.`} infoLabel="About markets" />
       <ChipBar label="Market" value={where.market} onChange={(id) => setWhere({ market: id, instrument: null })}
-        options={usable.map((m) => ({ value: m.id, label: `${[...m.symbol].length === 1 && m.symbol !== "+" ? m.symbol + " " : ""}${m.name}${m.status === "offline" ? " (offline)" : ""}` }))} />
+        options={usable.map((m) => ({ value: m.id, label: `${[...m.symbol].length === 1 && m.symbol !== "+" ? m.symbol + " " : ""}${m.name}${offlineTail(m)}` }))} />
       {soon.length > 0 && <p className="k-note">Coming soon: {soon.map((m) => m.name).join(", ")}. Until then, use "Your own data" with a CSV.</p>}
       {/* LIVE10A-028: while the markets are read, the chips and the search box keep their place, so step 2 doesn't move down when they come */}
       {!markets.length ? <div className="k-where-wait" role="status" aria-busy="true" aria-label="Reading the markets"><span className="lp-skel" /><span className="lp-skel" /></div>
@@ -83,6 +84,12 @@ function WhereToTest({ where, setWhere }: { where: Where; setWhere: (w: Where) =
         </div>
       ) : market && market.status === "live" ? (
         <InstrumentSearch market={market} compact onPick={(i) => setWhere({ market: where.market, instrument: i })} />
+      ) : market && searchableNow(market) ? (
+        // LIVE11B-013: offline overnight, an Indian daily test still runs, on the stored daily closes
+        <>
+          <InstrumentSearch market={market} compact onPick={(i) => setWhere({ market: where.market, instrument: i })} />
+          <p className="k-note" data-testid="stored-daily-note">{storedDailyLine(market.name, me?.data_note)}</p>
+        </>
       ) : market ? (
         <Notice tone="warn">{market.name} data is offline right now. Pick another market, or write your idea now and choose later.</Notice>
       ) : null}
@@ -161,7 +168,7 @@ export function NewNotebook({ hide = [] }: { hide?: string[] }) {
     let last = "";
     try { last = localStorage.getItem(LAST_MARKET) || ""; } catch { /* private mode */ }
     const usable = (id: string) => markets.some((m) => m.id === id && m.status !== "soon");
-    setWhere({ market: usable(last) ? last : markets.find((m) => m.id === "IN" && m.status === "live") ? "IN" : "CRYPTO", instrument: null });
+    setWhere({ market: usable(last) ? last : markets.find((m) => m.id === "IN" && searchableNow(m)) ? "IN" : "CRYPTO", instrument: null });
   }, [markets, where.market]);
   // "where you left off" is the market of the last notebook made here, not of the last chip glanced at: a look at Crypto made the page open on
   // Crypto for good for a person with no crypto notebook (LIVE1A-003)

@@ -2956,8 +2956,10 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 .fs-compact .k-row { justify-content: space-between; flex-wrap: wrap; }
 /* LIVE11B-009: the one line of first steps is a slim row across the page: the steps done as a bar fills the middle (LIVE7B-027's card as
    wide as its words left the rest of the row empty), the whole list opens under it on a click */
-.fs-line { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; }
-.fs-line .fs-bar { flex: 1 1 120px; min-width: 80px; }
+.fs-line { display: grid; grid-template-columns: auto minmax(80px, 1fr) auto auto; align-items: center; gap: 8px 14px; }
+.fs-line .fs-bar { min-width: 80px; }
+.fs-wait .fs-line { grid-template-columns: auto minmax(80px, 1fr) auto; }
+@media (max-width: 640px) { .fs-line { display: flex; flex-wrap: wrap; } .fs-line .fs-bar { flex: 1 1 120px; } }
 .fs-compact .fs-list { margin-top: 8px; }
 .fs-wait { visibility: hidden; }
 /* LIVE11B-014: on a phone the VIX tile's day takes a line of its own, with no "·" left hanging at the end of the line above */

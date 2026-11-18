@@ -211,3 +211,54 @@ def test_the_cost_check_is_not_passed_on_charges_that_leave_stt_out():
     c = J.check_costs(marked)
     assert c["status"] == "warn" and "2 trades (marked *) have charges below the STT alone" in c["detail"] and c["data"]["no_stt"] == 2
     assert J.verdict(marked)["verdict"] != "edge"
+
+
+# ---------- LIVE11B-013: Indian daily tests run on the stored daily closes while the broker's data login is off ----------
+from tests.test_notebooks import EMA, api  # noqa: E402,F401  (fixture)
+
+
+def _daily(n=900, end="2026-11-17"):
+    import math
+    from datetime import date as _d, timedelta as _td
+    out, d = [], _d.fromisoformat(end)
+    while len(out) < n:
+        if d.weekday() < 5:
+            out.append(d)
+        d -= _td(days=1)
+    out.reverse()
+    return [{"t": f"{x.isoformat()}T00:00:00+05:30", "o": 100 + 20 * math.sin(i / 25), "h": 102 + 20 * math.sin(i / 25),
+             "l": 98 + 20 * math.sin(i / 25), "c": 100 + 20 * math.sin(i / 25) + 0.5, "v": 1000.0} for i, x in enumerate(out)]
+
+
+def test_an_indian_daily_test_runs_on_stored_closes_while_offline_and_says_so(api):
+    from app.data.stored_india import StoredIndia
+    bars = _daily()
+    asked = []
+    prov = main.markets.providers["IN"]
+    assert not prov.ready()                                        # the fake broker isn't logged in
+    prov.stored = StoredIndia(lambda sym: asked.append(sym) or bars, kept_fn=lambda t: None,
+                              known_fn=lambda s: {"name": "Reliance Industries Ltd"} if s == "RELIANCE" else None)
+    try:
+        m = {x["id"]: x for x in api.get("/markets").json()}
+        assert m["IN"]["status"] == "offline" and m["IN"]["stored_daily"] is True
+        nb = api.post("/notebooks", json={"name": "Daily cross", "question": "q", "strategy": EMA, "instrument": "IN:RELIANCE"}).json()
+        assert nb["instrument"]["symbol"] == "RELIANCE" and nb["instrument"]["stored"] is True
+        r = api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 730})
+        assert r.status_code == 200, r.text
+        v = r.json()["experiment"]["verdict"]
+        assert v["summary"].endswith("Indian live data was offline, so this ran on the stored daily closes, up to the close of 17 Nov 2026.")
+        assert asked and asked[0] == "RELIANCE"
+        # an intraday timeframe still needs the live data, said in words; a company with no stored closes is offline as before
+        api.put(f"/notebooks/{nb['id']}", json={"strategy": {**EMA, "tf": "15m"}})
+        r = api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 60})
+        assert r.status_code == 503 and "set the timeframe to Daily" in r.json()["detail"]["message"]
+        nb2 = api.post("/notebooks", json={"name": "x", "question": "q", "strategy": EMA, "instrument": "IN:NOSUCHCO"}).json()
+        r = api.post(f"/notebooks/{nb2['id']}/experiments", json={"days": 730})
+        assert r.status_code == 503
+        # a broker id is named from the notebook's own record of its instrument
+        got = prov.stored.resolve("738561", {"id": "IN:738561", "symbol": "RELIANCE", "name": "RELIANCE INDUSTRIES", "type": "EQ", "exchange": "NSE"})
+        assert got["symbol"] == "RELIANCE" and got["id"] == "IN:738561" and not got["fno"]
+        assert prov.stored.resolve("12345", {"id": "IN:12345", "symbol": "NIFTY26NOVFUT", "type": "FUT"}) is None
+        assert prov.stored.resolve("NIFTY 50")["type"] == "INDEX"
+    finally:
+        del prov.stored

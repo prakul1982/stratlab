@@ -10,7 +10,7 @@ import { InstrumentSearch } from "../components/InstrumentSearch";
 import { SurvBadges } from "../components/Surveillance";
 import { Card, CardHead, ChipBar, EmptyState, Field, FieldGroup, FormActions, FormGrid, Notice, PageHeader, Select, Skeleton, TilePicker } from "../components/kit";
 import { HELP } from "../lib/help";
-import { INDIA_FEED, offlineLine } from "../lib/dataBack";
+import { INDIA_FEED, offlineLine, searchableNow, storedDailyLine } from "../lib/dataBack";
 import { NotebookProblem, useNotebook } from "./NotebookPage";
 import "./trade/trade.css";
 import { scrollBehavior } from "../lib/motion";
@@ -209,15 +209,17 @@ export function MarketPage() {
           We're connecting a data source for {market.name}. Meanwhile, you can export candles from any charting site as a CSV and test on them with your own data.
         </EmptyState>
       )}
-      {market && market.status === "offline" && (
+      {market && market.status === "offline" && !searchableNow(market) && (
         // India's data comes back with the daily data login, at the time the top banner gives, and no promise of a few minutes (DA-004)
         <Notice tone="warn">{INDIA_FEED.has(market.id) ? offlineLine(market.name, me?.data_note) : `Market data for ${market.name} is offline right now. Try again later.`}</Notice>
       )}
 
-      {market && market.status === "live" && market.id !== "CSV" && (
+      {market && searchableNow(market) && market.id !== "CSV" && (
         <Card label="Instrument">
           <CardHead title={`Search ${market.name}`} />
           <InstrumentSearch market={market} onPick={choose} autoFocus />
+          {/* LIVE11B-013: offline overnight, a daily test still runs on the stored daily closes */}
+          {market.status === "offline" && <p className="k-note" data-testid="stored-daily-note">{storedDailyLine(market.name, me?.data_note)}</p>}
         </Card>
       )}
       {market && market.status === "live" && market.id !== "CSV" && <GroupPicker key={market.id} nb={nb} market={market} onDone={() => nav(`/n/${nb.id}`)} />}
