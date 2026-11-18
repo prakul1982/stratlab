@@ -68,6 +68,11 @@ test("the theme page is a deep dive made of tables, with each company only where
   // a layer: its companies in their own words, the median and the range as rows; the wrong placement (ONGC under steel) isn't there
   const steel = page.locator("#layer-1");
   await expect(steel).toContainText("Steel making");
+  // (updated on purpose, r69e LIVE13A-013: on a phone a layer's tables are a press away under its description; the press opens them)
+  if (phone) {
+    await expect(steel.locator("table").first()).toBeHidden();
+    await steel.getByTestId("phone-fold").getByText(/^Show its \d+ compan(y|ies) and figures$/).click();
+  }
   await expect(steel.getByRole("table").first().locator("tbody tr")).toHaveCount(5);        // Tata Steel, JSW Steel, SAIL, Median, Range
   await expect(steel).toContainText("In its own words");
   await expect(steel.locator('tr[data-kind="median"]')).toContainText("Median");
