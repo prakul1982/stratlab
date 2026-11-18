@@ -84,7 +84,14 @@ async function start() {
     visitor.startVisitor(root);
     void early;
   }
-  if (import.meta.env.PROD) import("./lib/pwa").then((m) => m.registerPwa({ later: !account })).catch(() => undefined);
+  // Release 71: a visitor's page downloads the install and offline helper only after it has loaded (it registered later anyway, and
+  // an install offer that comes first is kept by the start-up script), so the landing's first download stays under its budget
+  const pwa = () => import("./lib/pwa").then((m) => m.registerPwa({ later: !account })).catch(() => undefined);
+  if (import.meta.env.PROD) {
+    if (account) pwa();
+    else if (document.readyState === "complete") window.setTimeout(pwa, 4000);
+    else window.addEventListener("load", () => window.setTimeout(pwa, 4000), { once: true });
+  }
 }
 
 /* A failed download of the app's own chunk on the first load (a dropped connection; seen once on Safari as an "Unhandled Promise
