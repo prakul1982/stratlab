@@ -288,7 +288,10 @@ SECTIONS = (("pl", "Profit and loss"), ("balance", "Balance sheet"), ("cashflow"
 
 
 def _label(k: str) -> str:
-    return re.sub(r"\s*\+\s*$", "", str(k)).strip()
+    """A row's label as the page writes it: the source's trailing "+" (an expandable row there) dropped, and "in Rs" as the rupee sign
+    the rest of the page uses (LIVE12B-017: "EPS in Rs" beside ₹ everywhere else is "EPS (₹)")."""
+    t = re.sub(r"\s*\+\s*$", "", str(k)).strip()
+    return re.sub(r"\s+in\s+Rs\.?$", " (₹)", t, flags=re.I)
 
 
 def kind_of(label: str) -> str:

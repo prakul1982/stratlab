@@ -39,6 +39,18 @@
 :root[data-theme="dark"] { --b-paper: #141311; --b-card: #1F1D1A; --b-ink: #EFE9DC; --b-muted: #B3AC9C; --b-line: #34312A; --b-on-ink: #141311; color-scheme: dark; }
 html, body { margin: 0; background: var(--b-paper); }
 .boot-head { max-width: 720px; margin: 0 auto; padding: 14px 16px; font: 600 18px/1 system-ui, -apple-system, "Segoe UI", sans-serif; display: flex; flex-wrap: wrap; align-items: center; column-gap: 20px; }
+/* LIVE12B-001: the home page while its code downloads, for a visitor whose browser runs scripts: the landing's own frame (the header on
+ * the hero's edges, the hero's heading at its size and place) and nothing else, not the crawler's six paragraphs and four buttons as a
+ * plain text page for seconds. A browser with scripts off, or a crawler, still reads every word (the rule needs scripting). */
+@media (scripting: enabled) {
+  html:has(.boot-hero) .boot-head { max-width: 1180px; box-sizing: border-box; padding: 12px clamp(16px, 4vw, 40px); }
+  html:has(.boot-hero) .boot-nav { margin-left: auto; column-gap: 22px; font-size: 14.5px; }
+  .boot.boot-hero { max-width: 1180px; box-sizing: border-box; padding: calc(clamp(40px, 7vw, 96px) + 16px) clamp(16px, 4vw, 40px) 0; }
+  @media (min-width: 1001px) { .boot.boot-hero { padding-top: calc(clamp(40px, 7vw, 96px) + 120px); } }
+  @media (max-width: 1000px) { html:has(.boot-hero) .boot-nav { display: none; } }
+  .boot.boot-hero > :not(h1) { display: none; }
+  .boot.boot-hero h1 { font: 400 clamp(44px, 6.2vw, 80px)/1 var(--serif, Georgia, serif); letter-spacing: -.035em; max-width: 12ch; }
+}
 /* the site's public pages, for a reader or a crawler that runs no script (AS1): the same list as the pages the server draws */
 .boot-nav { display: flex; flex-wrap: wrap; column-gap: 14px; font: 500 15px/1 system-ui, -apple-system, "Segoe UI", sans-serif; }
 .boot-head .boot-nav a { gap: 0; color: var(--b-muted); }
@@ -79,7 +91,7 @@ html[data-saved] [data-boot]::before { content: "Opening StratLab…"; font: 600
 <div id="root">
 <header class="boot-head"><a href="/" aria-label="StratLab home"><img src="/favicon.svg" alt="" width="28" height="28"><span>StratLab</span></a><nav class="boot-nav" aria-label="Site"><a href="/library">Library</a><a href="/stocks">Companies</a><a href="/themes">Themes</a><a href="/blog">Blog</a><a href="/pricing">Plans</a><a href="/about">About</a><a href="/contact">Contact</a></nav></header>
 <main>
-<div class="boot boot-wait" data-boot>
+<div class="boot boot-wait boot-hero" data-boot>
 <h1>Is your trading idea skill or luck?</h1>
 <p>Backtest trading ideas on years of real prices and paper trade them; options are paper trading only. Research companies, track your money. Facts, not tips.</p>
 <p class="boot-foot"><a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/contact">Contact</a> · <a href="/about">About</a></p>

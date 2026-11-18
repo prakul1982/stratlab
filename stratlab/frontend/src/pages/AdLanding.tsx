@@ -78,7 +78,7 @@ export function AdLanding() {
           <div className="adl-go">
             <button type="button" className="btn lp-cta adl-cta" onClick={() => void go()}><Google />Try free with Google</button>
             <EmailWay next={null} className="lp-cta-2" />
-            <span className="small muted">Free to start · No card · No code</span>
+            <span className="small muted">Free to start · No card · No coding</span>
           </div>
           {error && <p className="banner" role="alert">{error}</p>}
           <Link className="small adl-more" to="/">See everything StratLab does →</Link>

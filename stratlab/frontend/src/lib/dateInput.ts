@@ -90,3 +90,10 @@ export function dayName(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
   return `${days[utc(iso).getUTCDay()]} ${d} ${MONTH_NAMES[m - 1].replace(/^./, (c) => c.toUpperCase())} ${y}`;
 }
+
+/** The empty box's example for a date ahead ("e.g. 18 Feb 2027"), `days` after today: a form asking for a day to come never shows a
+ * past day as its example (LIVE12B-019: "e.g. 14 Aug 2025" in the token's end date, on 18 Nov 2026). */
+export function aheadExample(days: number, now: Date = new Date()): string {
+  const t = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() + days));
+  return `e.g. ${showDay(t.toISOString().slice(0, 10))}`;
+}

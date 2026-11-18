@@ -196,6 +196,14 @@ export function useMarketStrip(enabled = true, live = false): Record<string, Ser
 }
 
 /* ---------- coming up ---------- */
+/** A row's line under its title, unless it only says the title again (LIVE12B-007: "India GDP: Quarterly Estimates of GDP for Q2,
+ * FY 2026-27" over "Quarterly Estimates of GDP for Q2, FY 2026-27."): "" then. */
+export function detailBeyond(title: string, detail: string): string {
+  const core = (s: string) => s.toLowerCase().replace(/[.\s]+$/, "").replace(/\s+/g, " ").trim();
+  const d = core(detail);
+  return d && core(title).includes(d) ? "" : detail;
+}
+
 export interface Up { key: string; date: string; title: string; detail: string; to?: string; tag: string; tone: "warn" | "plain" }
 type MoneyEv = { id: string; date: string; title: string; cat: string; kind: string; detail: string; amount: number | null; symbol: string | null; url: string | null };
 type MoneyView = { events: MoneyEv[]; today: string; market_on?: boolean };
@@ -247,6 +255,7 @@ export function useComingUpAll(enabled = true): Up[] | null {
           to: `/research/${r.region}/${encodeURIComponent(r.symbol)}`, tag: "Results", tone: "plain" });
       }
       const seen = new Set<string>();
+      for (const u of out) u.detail = detailBeyond(u.title, u.detail);
       setRows(out.sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title)).filter((u) => (seen.has(u.key) ? false : (seen.add(u.key), true))));
     });
     return () => { live = false; };

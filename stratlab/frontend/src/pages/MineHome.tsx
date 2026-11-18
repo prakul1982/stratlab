@@ -320,7 +320,7 @@ function MarketsCard({ later }: { later: boolean }) {
                     <span className="mine-mkt-v">{t.fmt(s.last)}</span>
                     <span className="k-stat-d">{s.changePct != null ? <Delta value={s.changePct}>{pct(s.changePct, 2)}</Delta> : "No change to show"}
                       {/* a move that isn't today's says its day (R7T-003) */}
-                      {s.changePct != null && (() => { const w = tileWhen(s.day, tileToday(t), (d) => fmtDate(d, { year: false }), closed(tileMarket(t)), !!tileMarket(t), settling(tileMarket(t)), !tileMarket(t)); return w && <span className={w.includes("settling") ? "k-note" : "k-note nowrap"} data-testid="mine-mkt-when"> {w}</span> /* "on 16 Oct" stays together (R53-008); the long settling words wrap inside the tile (R89-003) */; })()}</span>
+                      {s.changePct != null && (() => { const w = tileWhen(s.day, tileToday(t), (d) => fmtDate(d, { year: false }), closed(tileMarket(t)), !!tileMarket(t), settling(tileMarket(t)), !tileMarket(t)); return w && <span className={`mine-mkt-when ${w.includes("settling") ? "k-note" : "k-note nowrap"}`} data-testid="mine-mkt-when"> {w}</span> /* "on 16 Oct" stays together (R53-008); the long settling words wrap inside the tile (R89-003) */; })()}</span>
                     <Spark values={s.values} tone={s.changePct != null && s.changePct < 0 ? "down" : "up"} label={`${t.label}, last month`} />
                   </>
                 )}
