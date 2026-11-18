@@ -173,7 +173,8 @@ def test_indo_national_is_screened_out_of_fmcg_never_parked_in_other_on_the_live
     assert DK.off_industry_line({"placements": out["placements"]}) == (
         "Outside the theme's definition: High Energy Batteries (India) Ltd (filed under Household Products; no description of its own; its "
         "name names batteries, torches and electrical goods); Indo National Ltd (filed under Household Products; its principal business is of "
-        "batteries, torches and electrical goods).")
+        # r67e (P0-1, updated on purpose): the words of its own sentence that name the kind quoted beside it
+        "batteries, torches and electrical goods: its own words, “manufactures and markets batteries”).")
     # every other company keeps its live layer (the one other difference is the replay's own, before this change too)
     live = layers(inputs("fmcg")["value_chain"])
     assert {s for s, x in layers(out["value_chain"]).items() if live.get(s) != x} == {"GPAPL"}

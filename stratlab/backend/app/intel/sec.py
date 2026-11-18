@@ -2187,7 +2187,7 @@ def section(text: str, start: str, end: str, cap: int = 60000) -> str:
 # ---------- what a company says it does, from its annual report (themes: a profile or encyclopedia line too thin to show the business) ----------
 BUSINESS_BYTES = 6 * 1024 * 1024       # of an annual report read for the start of its business part: the part sits near the front
 BUSINESS_FORMS = ("10-K", "10-KT", "20-F", "40-F")
-BUSINESS_KEY = ("business", 2)         # lane n2: the reads kept before a 20-F's Item 4 was read (TSMC's and UMC's: nothing) are read again
+BUSINESS_KEY = ("business", 3)         # lane n2: the reads kept before a 20-F's Item 4 was read (TSMC's and UMC's: nothing) are read again; r67e: 3, the openings kept before a sentence of how the company is held was passed over and a list of what it owns read
 BUSINESS_PARTS = (     # (the part's heading at the start of a line, where it ends): a 10-K's Item 1 (SECTIONS), a 20-F's Item 4.B
     (r"(?:^|\n)\s*" + SECTIONS["business"][0], SECTIONS["business"][1]),
     # lane n2 (the outside review of the live R33 decks: TSMC's and UMC's 20-F gave nothing, or a line on process technology): a 20-F's
@@ -2232,7 +2232,7 @@ def _prose(body: str, limit: int) -> list[str]:
     """The whole sentences of a part of a report, in order: sub-headings, page numbers, table cells and sentences about the report itself
     left out; about 4 x `limit` characters of them at most."""
     picks, lines = [], []
-    for line in body.split("\n"):              # a paragraph set as one line a printed line (TSMC's 20-F) is one paragraph again
+    for line in _listed(body.split("\n")):       # a paragraph set as one line a printed line (TSMC's 20-F) is one paragraph again
         if lines and len(lines[-1].split()) >= 8 and not lines[-1].rstrip().endswith((".", "!", "?", ":", "”", '"')) and line[:1].strip():
             lines[-1] += " " + line
         else:
@@ -2242,11 +2242,69 @@ def _prose(body: str, limit: int) -> list[str]:
             continue
         for x in _SENTENCE_END.split(line):
             x = x.strip()
-            if len(x.split()) >= 6 and x.endswith((".", "!", "?")) and not _REPORT_TALK.search(x):
+            if len(x.split()) >= 6 and x.endswith((".", "!", "?")) and not _REPORT_TALK.search(x) and not _STRUCTURE.search(x):
                 picks.append(x)
         if sum(len(x) for x in picks) > 4 * limit:
             break
     return picks
+
+
+# r67e (the owner's review of the live R65 REITs deck: Vornado moved out of "Office landlords" as its words say nothing of offices; its
+# 10-K's Item 1 opens on three sentences of how it is held, "conducts its business through ... the Operating Partnership", "the sole general
+# partner of ... the common limited partnership interest", and says what it owns only in a list: "We currently own all or portions of:" /
+# "•19.2 million square feet of office space in 26 of the properties;"): a sentence of how the company is held or financed (its operating
+# partnership, its general partner's interest, its cash flow owed to creditors first) says nothing of its work, and a list the opening
+# introduces ("we own:", "consisting of:") is one sentence of its items
+_STRUCTURE = re.compile(r"\boperating partnership\b|\bgeneral partner\b|\blimited partnership (?:interest|units?)\b|\bumbrella partnership\b|"
+                        r"\bupreit\b|\bability to pay dividends\b|\bobligations to (?:its |their )?creditors\b|\bdirect and indirect subsidiaries\b",
+                        re.I)
+_LIST_ITEM = re.compile(r"^\s*(?:[•●▪◦·‣∙○■□–—-]|\(?[a-z0-9ivx]{1,3}[.)])\s*")
+LIST_CHARS = 420                        # of a list's items joined into the sentence that introduces them
+
+
+def _listed(lines: list[str]) -> list[str]:
+    """r67e: report lines with each list the prose introduces ("We currently own all or portions of:" and its bulleted items, a sub-heading
+    of the list such as "New York:" passed over) joined into that one sentence, items by "; ", at most LIST_CHARS of them, ending in a full stop."""
+    out, i = [], 0
+    while i < len(lines):
+        line = lines[i]
+        if line.rstrip().endswith(":") and len(line.split()) >= 4 and not _LIST_ITEM.match(line):
+            items, j = [], i + 1
+            while j < len(lines):
+                nxt = lines[j].strip()
+                if _LIST_ITEM.match(nxt):
+                    items.append(_LIST_ITEM.sub("", nxt).rstrip(" ;,.").replace(" and", "", 1) if nxt.rstrip().endswith("; and") else
+                                 _LIST_ITEM.sub("", nxt).rstrip(" ;,."))
+                elif nxt.endswith(":") and len(nxt.split()) <= 5:
+                    pass                                  # a heading inside the list ("New York:")
+                else:
+                    break
+                j += 1
+            if items:
+                said, size = "", 0
+                for x in items:
+                    x = x.strip()
+                    if not x.rstrip(":") or size + len(x) > LIST_CHARS:
+                        break
+                    # (an item that opens a list of its own, "51 properties consisting of:", runs on into its first item)
+                    said += ("" if not said else " " if said.endswith(":") else "; ") + x
+                    size += len(x) + 2
+                said = said.rstrip(":").strip()
+                if said:
+                    out.append(f"{line.rstrip()} {said}.")
+                    i = j
+                    continue
+        out.append(line)
+        i += 1
+    return out
+
+
+def structure_only(text: str) -> bool:
+    """r67e: whether a stored description's sentences all tell how the company is held or financed (_STRUCTURE), none what it does: the
+    opening a 10-K reader kept before it passed over them (read again, theme_routes.thin_about)."""
+    xs = [x for x in _SENTENCE_END.split(str(text or "").strip()) if len(x.split()) >= 4]
+    return bool(xs) and all(_STRUCTURE.search(x) or not _SAYS_WORK.search(x) and not re.search(r"\b(?:own|operat|lease|sell|make|provid)\w*\b", x, re.I)
+                            for x in xs) and any(_STRUCTURE.search(x) for x in xs)
 
 
 def business_opening(text: str, limit: int = 700) -> str:

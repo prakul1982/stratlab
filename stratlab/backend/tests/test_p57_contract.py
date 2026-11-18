@@ -314,7 +314,9 @@ def test_a_member_leaving_the_figures_is_never_said_to_leave_the_theme():
     now = C.snapshot(_dive({"Layer A": ["X"]}), ["X"], 1, 56, everyone={"X": ["X", "Layer A"], "Y": ["Y", "Other"], "Z": ["Z", "Other"]})
     d = C.diff(was, now)
     assert d["removed"] == [] and d["added"] == []
-    assert d["moved"] == [{"symbol": "Y", "name": "Y", "from": "Layer A", "to": "Other", "why": C.OUTSIDE_FIGURES}]
+    # r67e (P0-3, updated on purpose): a member past the figures is marked "outside"; where it sits is no reason for its move (the log's
+    # reader gives its own reason, theme_changes.reasoned)
+    assert d["moved"] == [{"symbol": "Y", "name": "Y", "from": "Layer A", "to": "Other", "outside": True}]
     gone = C.snapshot(_dive({"Layer A": ["X"]}), ["X"], 1, 56, everyone={"X": ["X", "Layer A"]})
     assert {r["symbol"] for r in C.diff(was, gone)["removed"]} == {"Y", "Z"}
 

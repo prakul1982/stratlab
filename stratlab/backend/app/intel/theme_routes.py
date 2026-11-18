@@ -125,6 +125,17 @@ def says_work(about) -> bool:
     return bool(_DOES.search(str(about or "")))
 
 
+def sec_business_v() -> int:
+    """r67e: the version of the annual report reader's opening (sec.BUSINESS_KEY), kept beside a description read with it."""
+    from .sec import BUSINESS_KEY
+    return BUSINESS_KEY[1]
+
+
+def sec_structure_only(about) -> bool:
+    from .sec import structure_only
+    return structure_only(str(about or ""))
+
+
 def thin_about(got: dict, region: str = "", name: str = "") -> bool:
     """Whether a stored description is read once more: too thin to show the business and kept before the current format (GPT review of
     R31.5: Bharti Airtel's profile line names no mobile service; R35: a US company with no encyclopedia article had none at all, and its
@@ -136,6 +147,11 @@ def thin_about(got: dict, region: str = "", name: str = "") -> bool:
     # v55 (R55): none found for a listing line (a depositary receipt) looked up under its listed name, kept before its issuer was looked up
     # ("issuer"): read once more, under the issuer's name
     if not about and name and theme_base.listing_line(name) and "issuer" not in got:
+        return True
+    # r67e (the live R65 REITs deck: Vornado's stored words, its 10-K's three sentences of how it is held, "conducts its business through
+    # ... the Operating Partnership", none of what it owns): a US company's stored words that only tell how it is held or financed, kept
+    # before the annual report's reader passed over such sentences (sec.BUSINESS_KEY), are read once more
+    if region == "US" and about and got.get("bv") != sec_business_v() and sec_structure_only(about):
         return True
     # gl52 (R52): 5, a US company's stored words with no sentence of its own about its work (an encyclopedia's opening only: Visa,
     # Mastercard, Fortinet) are read once more, so its annual report's opening is added (evidence_reader)
@@ -339,6 +355,7 @@ def evidence_reader(region: str, names: dict, budget: float | None = None, again
             hit = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "about": theme_check.kept_description(about), "industry": industry,
                    "v": ABOUT_V, **({"owed": True} if owed else {}), **({"no_page": True} if no_page else {}),
                    **({"filed": True} if filed_first and not owed else {}),          # e57: its annual report read first (read_chip_making)
+                   **({"bv": sec_business_v()} if region == "US" else {}),          # r67e: the annual report reader it was read with
                    # v55: the issuer a listing line was looked up under
                    **({"issuer": plain_name(names.get(sym) or "")} if theme_base.listing_line(names.get(sym) or "") else {})}
             try:
@@ -541,10 +558,10 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57, 59: 58, 60: 59, 61: 60, 62: 61, 63: 62, 64: 63, 65: 64, 66: 65, 67: 66, 68: 67}  # rules versions whose change only adds to a kept placement (r582, R58.2: the answers unchanged, layers of one company, the figures' window, names its companies' lines say; r58, R58: the answers unchanged, the taxonomy and scale rules; r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57, 59: 58, 60: 59, 61: 60, 62: 61, 63: 62, 64: 63, 65: 64, 66: 65, 67: 66, 68: 67, 69: 68}  # rules versions whose change only adds to a kept placement (r582, R58.2: the answers unchanged, layers of one company, the figures' window, names its companies' lines say; r58, R58: the answers unchanged, the taxonomy and scale rules; r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
-EARLIER_MAX = 23                # (r66e: 23, one more for the version R66 carries; r65e: 22, one more for the version R65 carries; r64e: 21, one more for the version R64 carries; r63e: 20, one more for the version R63 carries; r62: 19, one more for the version R62 carries; r60: 18, one more for the version R60 carries; r59: 17, one more for the version R59 carries; r582: 16, one more for the version R58.2 carries; r581: 15, one more for the version R58.1 carries; r58: 14, one more for the version R58 carries; r572: 13, one more for the version R57.2 carries; r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
+EARLIER_MAX = 24                # (r67e: 24, one more for the version R67 carries; r66e: 23, one more for the version R66 carries; r65e: 22, one more for the version R65 carries; r64e: 21, one more for the version R64 carries; r63e: 20, one more for the version R63 carries; r62: 19, one more for the version R62 carries; r60: 18, one more for the version R60 carries; r59: 17, one more for the version R59 carries; r582: 16, one more for the version R58.2 carries; r581: 15, one more for the version R58.1 carries; r58: 14, one more for the version R58 carries; r572: 13, one more for the version R57.2 carries; r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
 
 
 def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
@@ -1735,8 +1752,10 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
         for v in m.get("value_chain") or []:
             for c in v.get("companies") or []:
                 if c.get("ticker"):
+                    rf = c.get("refit") if isinstance(c.get("refit"), dict) else {}
                     everyone.setdefault(c["ticker"], [c.get("name") or c["ticker"], v.get("layer") or "",
-                                                      theme_changes.member_why(c, v.get("layer") or "")])     # r62: its reason
+                                                      theme_changes.member_why(c, v.get("layer") or ""),       # r62: its reason
+                                                      rf.get("why") or c.get("sold_by") or ""])     # r67e: why it is in this layer
         theme_changes.record(r, m.get("_library") or theme, hit, _map_names(fm), m.get("generated_at"), theme_base.RULES, refresh,
                              everyone=everyone)   # f4: "What changed"
         theme_changes.flag(r, m.get("_library") or theme, hit.get("coverage"))          # cl48: the admins' alert (coverage_checks)
