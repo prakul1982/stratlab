@@ -76,7 +76,8 @@ def clip_words(text, n: int) -> str:
     return cut + ("…”" if cut.count("“") > cut.count("”") else "…")
 
 
-_JOINS = re.compile(r"[\s,;:(–-]+(?:and|or|of|the|a|an|for|in|to|with|by|on|at|from|its|their|as|&)$", re.I)
+# (r69e, the live R67 US metals deck p.8: "… custom smelters”, and “the…”": a joining word just after an opening quote is one too)
+_JOINS = re.compile(r"[\s,;:(–\-“‘\"]+(?:and|or|of|the|a|an|for|in|to|with|by|on|at|from|its|their|as|&)$", re.I)
 
 
 def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None, everyone: dict | None = None) -> dict:

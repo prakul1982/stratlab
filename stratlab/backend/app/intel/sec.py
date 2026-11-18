@@ -1679,9 +1679,14 @@ class SEC(Source):
                     raise
                 facts = None
             before = self.predecessor(cik, subs) if _forms(subs) & {"8-K12B", "8-K12G3"} else None
+            reporting_name = ""
             if before:                            # the years before a new holding company took over: the old company's
                 try:
                     old = self._json(f"/api/xbrl/companyfacts/CIK{before[0]:010d}.json")
+                    # r69e (owner, 18 Nov: XOM shown as "ExxonMobil Holdings Corp"): the company whose reports the figures are, the
+                    # registrant that still files them, named as its own filings name it (dei EntityRegistrantName: "Exxon Mobil
+                    # Corporation"), never the new holding company's interim name
+                    reporting_name = str(old.get("entityName") or (before[1] or {}).get("name") or "").strip()
                     facts = merge_facts(old, facts) if facts else old
                 except SourceError as e:
                     if e.busy:
@@ -1690,6 +1695,8 @@ class SEC(Source):
                 raise NoNumbers(self.name, no_results(subs, None, symbol))
             facts = self.with_latest_annual(cik, subs, facts)
             p = build(facts, subs, symbol=symbol.upper())
+            if reporting_name:
+                p["name"], p["registrant"] = reporting_name, p.get("name") or ""
             if facts.get("annual_unread"):
                 p["annual_unread"] = str(facts["annual_unread"].get("filed") or "")[:10] or True
             latest = latest_filing(subs, ANNUAL_FORMS)

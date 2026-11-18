@@ -78,6 +78,15 @@ export function olderNote(o: { at: string | null; rechecking: boolean } | null |
   return `This is the theme as it was checked${o.at ? ` on ${fmtDay(o.at.slice(0, 10))}` : ""}, under an earlier version of StratLab's checks.`
     + (o.rechecking ? " It is being checked again now and fills in here when that is done." : "");
 }
+/** r69e (LIVE13A-003: "Last updated 7 Nov, 16:33 ET" beside "This is the theme as it was checked on 18 Nov 2026"): one date logic for a
+ *  theme's head: the map's own date and the day it was checked, each said as what it is, when they are different days; else the one stamp. */
+export function mapStamp(generatedAt: number | null | undefined, checked: string | null | undefined, written: string, fmtDay: (iso: string) => string): string | null {
+  if (!generatedAt) return null;
+  const made = new Date(generatedAt * 1000).toISOString().slice(0, 10);
+  const day = checked ? checked.slice(0, 10) : null;
+  if (!day || day === made) return `Last updated ${written}`;
+  return `Map made ${fmtDay(made)} · checked ${fmtDay(day)}`;
+}
 /** r66e (LIVE12A-001: "Checked against its own description; no line of it is quoted here" on 30 rows of one table, "No description in its own
  *  words yet" on 20 more): the companies with no line quoted are counted in one line above the table, their cells left empty. */
 export function unquotedLine(checked: number, none: number): string | null {

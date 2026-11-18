@@ -35,7 +35,8 @@ test("e54: the members card says each base company's evidence and the counts lin
 test("l55: the members card says the membership check's count by state and each layer's states, never a confirmed total", async () => {
   const T = await import("../src/lib/theme.ts");
   const dive = { evidence: { A: "description_verified", B: "industry_code_supported" }, membership_check: { outside: { C: "industry_code_supported" }, checked: 3, total: 4, history: [] } };
-  assert.equal(T.membershipLine(dive, ["A", "B", "C", "D"]), "Membership checked 3 of 4: 1 description-verified · 2 industry-supported · 1 not checked");
+  // r69e (LIVE13A-002, updated on purpose): the states after the colon add up to the companies checked
+  assert.equal(T.membershipLine(dive, ["A", "B", "C", "D"]), "Membership checked 3 of 4: 1 description-verified · 2 industry-supported; 1 not checked");
   assert.equal(T.evidenceLine(dive, ["A"]), "1 description-verified · 0 industry-supported · 0 not checked");
   assert.equal(T.membershipLine({}, ["A"]), "");
   for (const v of Object.values(T.EVIDENCE_ONE)) assert.doesNotMatch(v, /confirmed/i);

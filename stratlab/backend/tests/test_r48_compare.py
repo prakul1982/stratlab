@@ -124,7 +124,7 @@ def test_every_ranking_the_deck_makes_has_its_basis_and_the_findings_point_to_it
     m, f = chem()
     v, slides = deck_of("IN", m, f)
     t = texts(slides)
-    assert "revenue grew fastest in the latest year in Custom synthesis manufacturers" in t
+    assert "Revenue grew fastest in the latest year in Custom synthesis manufacturers" in t  # r69e (LIVE13A-009, updated on purpose): the finding first, the layers it ranks after it
     claims = [p[0] for p in basis_pages(slides)]          # (updated on purpose, ex49: each comparison's claim is its page's takeaway)
     assert any(c.startswith("Revenue growth in the latest year (median) by layer, among layers with at least 5 companies with the figure: highest "
                             "Custom synthesis manufacturers, lowest Basic organic intermediates. p. ") for c in claims)

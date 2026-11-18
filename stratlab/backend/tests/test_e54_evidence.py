@@ -72,7 +72,7 @@ def test_the_membership_row_counts_the_industry_only_companies_and_every_wordles
     rows = {r[0]: r for r in deck.confidence_rows(v, {"total": 2}, date(2026, 11, 14))}
     # l55 (R55, updated on purpose): by the state's name
     assert rows["Membership"][1] == ("1 of the 2 membership-checked are industry-supported (kept on their official industry only). "
-                                     "1 company with figures have no description in their own words yet: Beta Inc.")
+                                     "1 company with figures has no description in its own words yet: Beta Inc.")          # r69e (LIVE13B-009, updated on purpose): one company has
     assert "1 description-verified, 1 industry-supported, 0 not checked" in rows["Universe"][1] and "confirmed" not in rows["Universe"][1]
 
 

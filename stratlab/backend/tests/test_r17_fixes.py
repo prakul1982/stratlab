@@ -182,8 +182,8 @@ def test_the_highest_and_lowest_layer_are_named_when_every_layer_is_an_official_
     where = next(c for c in cards if c["title"] == "Where the margin sits")["lines"][0]
     # R18: whole figures print whole; R22: a highest or lowest median on 4 companies or fewer says its count
     # changed on purpose (m2): the headline says in its own sentence which layers it ranks
-    assert where.startswith("Among the ") and where.endswith(" layers with at least 3 companies with the figure, median EBITDA margin is highest in Film "
-                                                              "(19%, 4 companies) and lowest in Converters (12%), a gap of 7 points.")
+    assert where.startswith("Median EBITDA margin is highest in Film (19%, 4 companies) and lowest in Converters (12%), a gap of 7 points, among the ") \
+        and where.endswith(" layers with at least 3 companies with the figure.")  # r69e (LIVE13A-009, updated on purpose): the finding first, the layers it ranks after it
     assert "stands apart" not in texts(slides)
     _, sb = deck_of(*theme_b())                 # one layer: nothing claimed and (R18, changed on purpose) nothing said about it
     assert "Fewer than two layers" not in texts(sb) and not any(c["title"] == "Where the margin sits" for s in sb if s.title == "Key findings"
@@ -234,7 +234,7 @@ def test_industry_economics_is_computed_and_traceable(monkeypatch):
     # the questions sit under a table of the part when they fit, so no page is half empty
     q = next(it for s in slides for b in s.blocks if b["kind"] == "cards" for it in b["items"] if it.get("title") == "Questions the figures raise")["lines"]
     assert any("on the quarter to Jun 2025" in x for x in q)                                    # the base quarter is stated
-    assert any("with at least 3 companies with the figure, Film has the highest median EBITDA margin" in x for x in q)      # m2 (on purpose): its scope said
+    assert any(x.startswith("Film has the highest median EBITDA margin") and "with at least 3 companies with the figure. " in x for x in q)      # m2 (on purpose): its scope said; r69e (LIVE13A-009, updated on purpose): the finding first
     t = texts([s for s in slides if s.eyebrow and "Industry economics" in s.eyebrow]).lower()
     for word in ("buy", "sell", "avoid", "attractive", "undervalued", "overvalued", "recommend", "target price"):
         assert not _re.search(rf"\b{word}\b", t), word

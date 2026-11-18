@@ -37,6 +37,11 @@ VERSION = 3                     # part of a stored piece's key and of a dive's: 
                                 # behind the latest report)
 BUDGET = 20.0                   # seconds of reading a theme's build may spend on filings before the rest go to the worker
 MAX_QUEUE = 200
+# r69e (the live REITs theme: FFO and P/FFO missing for most property owners, their US pieces read before a property owner's FFO lines were
+# part of the read, kept under VERSION 3 and never read again): the lines a US piece's read holds, kept with it; a property owner's piece
+# read before them is read once more (stale_for_property), within the memory guard's turn, never the whole sector's figures (VERSION stays)
+REIT_V = 1
+_PROPERTY_ROW = re.compile(r"real estate|\breits?\b|property", re.I)
 PAUSE = 1.0                     # seconds between documents from the exchange's archive (shareholders.py's pace)
 LIST_PATH = "/api/integrated-filing-results"
 REFERER = "https://www.nseindia.com/companies-listing/corporate-integrated-filing"
@@ -524,8 +529,27 @@ def read(region: str, symbol: str, family: str) -> dict | None:
     except Exception as e:
         print("sector metrics: not read:", region, symbol, type(e).__name__, str(e)[:100])
         return None
+    if family == "us":
+        got = {**got, "reit_v": REIT_V}          # r69e: read with a property owner's FFO lines
     computed.put(KIND, key(region, symbol), got, label=symbol, region=region)
     return got
+
+
+def property_row(row: dict) -> bool:
+    """r69e: a company whose industry names real estate or property (a REIT, a property owner), from its page's or the map's industry."""
+    ind = row.get("industry")
+    text = " ".join([*(ind if isinstance(ind, (list, tuple)) else [ind or ""]), str(row.get("map_industry") or ""), str(row.get("sector") or "")])
+    return bool(_PROPERTY_ROW.search(text))
+
+
+def stale_for_property(row: dict, piece: dict | None) -> bool:
+    """r69e: a US property owner's piece read before its FFO lines were part of the read (no "reit_v"): read once more."""
+    return isinstance(piece, dict) and piece.get("family") == "us" and int(piece.get("reit_v") or 0) < REIT_V and property_row(row)
+
+
+def current_piece(piece: dict | None) -> bool:
+    """r69e: a stored piece that stands as read (any piece but a US one read before the FFO lines; that one stands only off a property owner)."""
+    return isinstance(piece, dict) and (piece.get("family") != "us" or int(piece.get("reit_v") or 0) >= REIT_V)
 
 
 _q: list = []
@@ -539,19 +563,27 @@ def _work():
             if not _q:
                 _worker["on"] = False
                 return
-            region, symbol, family = _q.pop(0)
-        if stored(region, symbol) is None:
+            region, symbol, family, *again = _q.pop(0)
+        if again and again[0]:
+            # r69e: a property owner's piece read again for its FFO lines, once (it is kept with them), in the memory guard's turn
+            if not current_piece(stored(region, symbol)):
+                from .. import memguard
+                with memguard.heavy("sector metrics: property lines"):
+                    read(region, symbol, family)
+        elif stored(region, symbol) is None:
             read(region, symbol, family)
 
 
-def queue(region: str, symbol: str, family: str) -> None:
-    """Read later, on the one worker thread (started here, it stops when the queue is empty). Nothing is queued with no source set up."""
+def queue(region: str, symbol: str, family: str, again: bool = False) -> None:
+    """Read later, on the one worker thread (started here, it stops when the queue is empty). Nothing is queued with no source set up.
+    `again` (r69e): read even though a piece is stored (a property owner's piece without its FFO lines)."""
     if _feeds["sec" if family == "us" else "nse"] is None:
         return
+    item = (region, symbol, family, True) if again else (region, symbol, family)
     with _qlock:
-        if (region, symbol, family) in _q or len(_q) >= MAX_QUEUE:
+        if item in _q or (region, symbol, family) in _q or len(_q) >= MAX_QUEUE:
             return
-        _q.append((region, symbol, family))
+        _q.append(item)
         if _worker["on"]:
             return
         _worker["on"] = True
@@ -576,6 +608,18 @@ def reader(region: str, fresh: bool = False, budget: float = BUDGET):
         if kept is None:
             queue(region, symbol, family)
         return kept
+
+    def again(symbol: str, family: str):
+        """r69e: a stored piece read once more (a property owner's, for its FFO lines): now while the budget lasts, else on the worker."""
+        if until[0] is None:
+            until[0] = time.time() + budget
+        if time.time() < until[0]:
+            got = read(region, symbol, family)
+            if got is not None:
+                return got
+        queue(region, symbol, family, again=True)
+        return None
+    get.again = again
     return get
 
 
@@ -584,7 +628,8 @@ def any_stored(region: str, symbols: list) -> bool:
     if not symbols:
         return False
     ix = computed.index(KIND).get("entries") or {}
-    return any(computed.hkey(key(region, s)) in ix for s in symbols)
+    # r69e: a pending piece counts once it is stored as read now (a property owner's re-read with its FFO lines, not its older piece)
+    return any(computed.hkey(key(region, s)) in ix and current_piece(stored(region, s)) for s in symbols)
 
 
 # ---------- a theme's figures ----------

@@ -120,7 +120,7 @@ def test_a_lender_theme_shows_lenders_measures_and_never_a_column_that_is_empty_
     assert "EBITDA margin" not in chain["head"] and "ROCE" not in chain["head"]
     for col in ("ROE", "NII / assets", "Gross NPA", "P/B"):
         assert col in chain["head"], col
-    assert v["chain"]["measure"] == "roe" and "median return on equity is highest in" in v["chain"]["line"]          # m2: after the headline's own scope ("Among the 2 layers with ...")
+    assert v["chain"]["measure"] == "roe" and "edian return on equity is highest in" in v["chain"]["line"]          # m2: after the headline's own scope ("Among the 2 layers with ..."); r69e (LIVE13A-009, updated on purpose): now its first words
     cards = next(b for s in slides if s.title == "Key findings" for b in s.blocks if b["kind"] == "cards")["items"]
     assert any(c["title"] == "Where the return sits" for c in cards)
     assert "Fewer than two layers" not in texts(slides) and "EBITDA margin –" not in texts(slides)

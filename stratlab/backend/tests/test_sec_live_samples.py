@@ -60,6 +60,8 @@ def test_a_new_holding_company_shows_its_predecessors_years():
     assert row(p, "balance", "Borrowings")["Dec 2025"] == 43500.0
     assert any(d["kind"] == "annual_report" for d in p["documents"])          # the old company's 10-Ks
     assert not any(c.startswith("/submissions/CIK0001193125") for c in calls)  # a filing agent isn't a candidate
+    # r69e (owner, 18 Nov): named as the registrant whose reports the figures are names itself, not the holding company's interim name
+    assert p["name"] == "Exxon Mobil Corporation" and p["registrant"] == "ExxonMobil Holdings Corp"
 
 
 # ---------- banks, lessors and plant ----------

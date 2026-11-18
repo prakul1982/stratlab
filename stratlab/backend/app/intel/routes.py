@@ -1107,11 +1107,13 @@ def sector(q: str, region: str = "IN", refresh: bool = False, profile=Depends(cu
             return ok({**sector_served(r, old["payload"]),
                        "older": {"at": computed._iso(old["at"]) if old.get("at") else None, "rechecking": theme_recheck.ask(r, old["name"])}})
     if hit is not None:
+        # r69e (LIVE13A-003: "Last updated 7 Nov" beside "checked on 18 Nov"): the read says when it was checked, beside when its map was made
+        checked_at = {"checked_at": computed._iso(hit["at"]) if hit.get("at") else None}
         if not refresh:
-            return ok(sector_served(r, hit["payload"]))
+            return ok({**sector_served(r, hit["payload"]), **checked_at})
         state = computed.refresh_gate(profile, "theme", hit["at"])
         if state != "go":
-            return ok({**sector_served(r, hit["payload"]), "refresh_state": state})
+            return ok({**sector_served(r, hit["payload"]), **checked_at, "refresh_state": state})
         theme_library.mark_refreshing(r, hit["name"], by=computed.plan_word(profile))
     elif refresh:
         state = computed.refresh_gate(profile, "theme", A.stored_at("sector", (r, " ".join(q.split())[:80].lower())))

@@ -3200,6 +3200,9 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 /* ---- themes: the deep dive (THEME-1) ---- */
 /* LIVE12A-007: a company's own words are the widest column of its layer's table, never squeezed narrower than its labels beside it */
 @media (min-width: 901px) { #theme-members .k-table td.k-lead { min-width: 18rem; } }
+/* r69e (LIVE13A-013: Arteris's quote a ~165 px column 290 px tall, the 18rem not reaching the layer tables, which hold the words under the
+   name): in a layer's table the company cell, which carries its own words, keeps a reading width beside the figures */
+@media (min-width: 901px) { [id^="layer-"] .k-tbl-wrap .k-table tbody th.k-wrap { min-width: 18rem; } }
 .k-section-title { font-family: var(--serif); font-size: var(--t-card); font-weight: 600; margin: var(--s5) 0 0; }
 .k-table tr[data-kind="median"] > * { border-top: 2px solid var(--line-2); font-weight: 600; }
 .k-table tr[data-kind="range"] > * { color: var(--muted); font-size: var(--t-note); }
@@ -3274,6 +3277,9 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .k-tbl-wrap.k-fit .k-table th, .k-tbl-wrap.k-fit .k-table td { overflow-wrap: normal; word-break: normal; }
   .k-tbl-wrap.k-fit .k-table tbody th > a:first-child, .k-tbl-wrap.k-fit .k-table tbody th > b:first-child,
   .k-tbl-wrap.k-fit .k-table :is(button, .btn, .k-badge, .k-chip, .k-delta) { white-space: nowrap; }
+  /* r69e (LIVE13A-013: the theme's "Every company, sortable", 1,077 px in a 1,004 px card): a sortable column's header is a button whose
+     words wrap like any header's, so the ten figures fit their card */
+  .k-tbl-wrap.k-fit .k-table th button.k-th-sort { white-space: normal; text-align: inherit; }
 }
 
 /* R15 #3 (owner, 7 Nov): Net worth's "Where you stand": the headline (figure large, its change beside it) on the left half, what you own,
@@ -3342,3 +3348,5 @@ th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
 /* Owner (18 Nov, "center align everything properly"): each total, its heading and its change centred in its column */
 .h-sum.wide .k-table th, .h-sum.wide .k-table td { text-align: center; }
 .h-sum.wide .k-table td .k-sub-line { display: flex; justify-content: center; margin-top: 4px; }
+.k-phone-fold > summary { list-style: none; display: inline-flex; margin: 8px 0; cursor: pointer; }   /* r69e: a layer's tables a press away on a phone */
+.k-phone-fold > summary::-webkit-details-marker { display: none; }

@@ -589,10 +589,10 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57, 59: 58, 60: 59, 61: 60, 62: 61, 63: 62, 64: 63, 65: 64, 66: 65, 67: 66, 68: 67, 69: 68, 70: 69}  # rules versions whose change only adds to a kept placement (r582, R58.2: the answers unchanged, layers of one company, the figures' window, names its companies' lines say; r58, R58: the answers unchanged, the taxonomy and scale rules; r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57, 59: 58, 60: 59, 61: 60, 62: 61, 63: 62, 64: 63, 65: 64, 66: 65, 67: 66, 68: 67, 69: 68, 70: 69, 71: 70}  # rules versions whose change only adds to a kept placement (r582, R58.2: the answers unchanged, layers of one company, the figures' window, names its companies' lines say; r58, R58: the answers unchanged, the taxonomy and scale rules; r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
-EARLIER_MAX = 25                # (r68e: 25, one more for the version R68 carries; r67e: 24, one more for the version R67 carries; r66e: 23, one more for the version R66 carries; r65e: 22, one more for the version R65 carries; r64e: 21, one more for the version R64 carries; r63e: 20, one more for the version R63 carries; r62: 19, one more for the version R62 carries; r60: 18, one more for the version R60 carries; r59: 17, one more for the version R59 carries; r582: 16, one more for the version R58.2 carries; r581: 15, one more for the version R58.1 carries; r58: 14, one more for the version R58 carries; r572: 13, one more for the version R57.2 carries; r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
+EARLIER_MAX = 26                # (r69e: 26, one more for the version R69 carries; r68e: 25, one more for the version R68 carries; r67e: 24, one more for the version R67 carries; r66e: 23, one more for the version R66 carries; r65e: 22, one more for the version R65 carries; r64e: 21, one more for the version R64 carries; r63e: 20, one more for the version R63 carries; r62: 19, one more for the version R62 carries; r60: 18, one more for the version R60 carries; r59: 17, one more for the version R59 carries; r582: 16, one more for the version R58.2 carries; r581: 15, one more for the version R58.1 carries; r58: 14, one more for the version R58 carries; r572: 13, one more for the version R57.2 carries; r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
 
 
 def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
@@ -1588,7 +1588,9 @@ def requeue(r: str, dive: dict) -> None:
     deck's 7 of 19). The queue skips one already queued or stored; nothing is queued with no source set up."""
     fams = dive.get("metrics_families") or {}
     for s_ in dive.get("metrics_pending") or []:
-        if fams.get(s_):
+        if fams.get(s_) and (p_ := sector_metrics.stored(r, s_)) is not None and not sector_metrics.current_piece(p_):
+            sector_metrics.queue(r, s_, fams[s_], again=True)          # r69e: one waiting for a re-read of its stored piece
+        elif fams.get(s_):
             sector_metrics.queue(r, s_, fams[s_])
 
 
@@ -1768,6 +1770,11 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
     # r65e: every member of the map with its layer, so a fall says why for the members past the figures' window too
     now_all = {c["ticker"]: {"layer": v.get("layer") or "", "refit": c.get("refit"), "unread": c.get("unread")}
                for v in m.get("value_chain") or [] for c in v.get("companies") or [] if c.get("ticker")}
+    # r69e (LIVE13A-002: Semiconductors "101 of 103: 93 · 8 · 2" in the app, "103 of 103: 94 · 9 · 0" in the deck, "101 companies ... 91 · 8 · 2"
+    # on the public page): the members' tally by evidence state worked out once, with the read it is of, and kept with the dive, so the app,
+    # the deck and the public page say the same counts of the same read
+    hit["tally"] = theme_data.checked_tally(hit.get("membership_evidence"), (hit.get("membership_check") or {}).get("outside"), len(now_all))
+    hit["tally_at"] = str(hit.get("as_of") or datetime.now(timezone.utc).date().isoformat())[:10]
     ctl = theme_changes.coverage_control(hit["coverage"], before, hit, now_all)   # d53: layers lost too
     pc = theme_changes.population_change(before, hit)      # r68e: each company that joined or left the core members, with why
     if pc:
@@ -2110,6 +2117,7 @@ def deck_view(r: str, m: dict, dive: dict, extra: dict | None = None) -> dict:
             # e54 (R54): each checked company's evidence state and the membership check's progress outside the figures' window
             "evidence": dive.get("evidence") or {}, "membership_evidence": dive.get("membership_evidence"),
             "membership_check": dive.get("membership_check") or {},
+            "tally": dive.get("tally"), "tally_at": dive.get("tally_at"),          # r69e (LIVE13A-002): the one count every surface says
             "news": None, "listings": None, "prices": None, "business": None, **(extra or {})}
 
 
