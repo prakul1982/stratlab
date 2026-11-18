@@ -21,7 +21,8 @@ test("LIVE10B-001: the rupee note names StratLab's US prices and says only rupee
   const note = usdNote(93.56, false, { basic: 8, pro: 20 });
   assert.match(note, /^Prices in ₹ are charged in rupees\./);
   assert.doesNotMatch(note, /Every price is charged in rupees/);
-  assert.match(note, /at ₹93\.56 to the dollar \(today's rate\): StratLab's US prices are Basic \$8 and Pro \$20 a month/);
+  // (updated on purpose, LIVE11B: beside a rupee price, StratLab's own US price when the table has one, not the rupees converted)
+  assert.match(note, /The US price beside each is StratLab's own price in dollars \(Basic \$8 and Pro \$20 a month; Prices in: \$ USD\); other dollar figures are rounded, at ₹93\.56 to the dollar \(today's rate\)/);
   assert.doesNotMatch(usdNote(93.56), /US prices/);                                   // no US prices read: not named
   for (const p of ["src/pages/PlansPage.tsx", "src/pages/Login.tsx"]) assert.match(read(p), /usdNote\(rate, pricing\?\.usd_inr\?\.fallback, usd\)/);
 });

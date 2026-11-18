@@ -948,7 +948,8 @@ def net_worth_value(uid: str) -> dict:
     no_nav = [r for r in held if r["value"] is None]
     value = sum(r["value"] for r in held if r["value"] is not None) + sum(r["invested"] or 0 for r in no_nav)
     dates = sorted(r["nav_date"] for r in held if r["value"] is not None and r.get("nav_date"))
-    return {"value": float(value), "as_of": dates[0] if dates else None,
+    # LIVE11B-008: the newest NAV date, as the funds page's "NAVs up to" says it; the oldest beside it when the schemes' dates differ
+    return {"value": float(value), "as_of": dates[-1] if dates else None, **({"as_of_from": dates[0]} if dates and dates[0] != dates[-1] else {}),
             "stmt_nav": sum(1 for r in held if r["value"] is not None and r.get("nav_source") == "statement"),
             "at_cost": sum(1 for r in no_nav if r["invested"] is not None),
             "missing": sum(1 for r in no_nav if r["invested"] is None)}

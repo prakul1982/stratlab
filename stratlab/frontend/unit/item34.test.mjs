@@ -32,9 +32,12 @@ test("the dollar figure: whole dollars at the app's rate, always 'about', the fi
 test("a lock's price sentence is rupees first with the dollar beside each amount, whatever currencies the table has", () => {
   const p = { offer: paid, countries: { US: "USD" }, usd_inr: { rate: 88 }, currencies: { INR,
     USD: { symbol: "$", name: "US dollar", basic: 8, pro: 20, basic_year: 80, pro_year: 200, charged_in: "USD", yearly_charged_in: "USD" } } };
-  assert.equal(planPriceLine("basic", p), "Basic is ₹699 a month (about $8) or ₹6,999 a year (about $80).");
-  assert.equal(planPriceLine("pro", p), "Pro is ₹1,999 a month (about $23) or ₹19,999 a year (about $227).");
-  assert.equal(planPriceLine("pro", { ...p, offer: { ...paid, yearly: false } }), "Pro is ₹1,999 a month (about $23).");
+  // (updated on purpose, LIVE11B: beside a rupee price, StratLab's own US price when the table has one, not the rupees converted)
+  assert.equal(planPriceLine("basic", p), "Basic is ₹699 a month (US price $8) or ₹6,999 a year (US price $80).");
+  assert.equal(planPriceLine("pro", p), "Pro is ₹1,999 a month (US price $20) or ₹19,999 a year (US price $200).");
+  assert.equal(planPriceLine("pro", { ...p, offer: { ...paid, yearly: false } }), "Pro is ₹1,999 a month (US price $20).");
+  const { USD: _drop, ...rupeesOnly } = p.currencies;
+  assert.equal(planPriceLine("pro", { ...p, currencies: rupeesOnly }), "Pro is ₹1,999 a month (about $23) or ₹19,999 a year (about $227).");
   // never dollars alone: a currency of its own in the table changes nothing
   assert.doesNotMatch(planPriceLine("basic", p), /^Basic is \$/);
 });

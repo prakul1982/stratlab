@@ -18,6 +18,7 @@ export function FirstSteps({ onShown, compact }: { onShown?: (shown: boolean) =>
   const { fail, me, session } = useApp();
   const [view, setView] = useState<View | null>(null);
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
   const guiding = useGuideOpen();
 
   // LIVE7B-012: whether the line showed last time on this device, so its place is kept while the list is read (it came in late at the top of
@@ -36,7 +37,7 @@ export function FirstSteps({ onShown, compact }: { onShown?: (shown: boolean) =>
   useEffect(() => { if (view) try { localStorage.setItem(key, view.show ? "1" : "0"); } catch { /* storage blocked */ } }, [view, key]);
 
   // while it is read: the same one line, held empty, where it showed last time
-  if (holding) return <Card compact className="first-steps fs-compact fs-wait" label="Your first steps"><div className="k-row" aria-hidden="true"><span className="k-small"><b>Your first steps</b></span><span className="btn quiet sm fs-hold">Hide this</span></div></Card>;
+  if (holding) return <Card compact className="first-steps fs-compact fs-wait" label="Your first steps"><div className="fs-line" aria-hidden="true"><span className="k-small"><b>Your first steps</b></span><span className="fs-bar" /><span className="btn quiet sm fs-hold">Hide this</span></div></Card>;
   if (!shown || !view) return null;
   const dismiss = async () => {
     setBusy(true);
@@ -44,14 +45,30 @@ export function FirstSteps({ onShown, compact }: { onShown?: (shown: boolean) =>
     catch (e) { fail(e); } finally { setBusy(false); }
   };
   const total = view.steps.length;
+  const list = (
+    <ol className="fs-list" id="fs-steps">
+      {view.steps.map((s) => (
+        <li key={s.id} className={s.done ? "done" : ""} data-step={s.id}>
+          <span className="fs-tick" aria-hidden="true">{s.done ? "✓" : ""}</span>
+          {s.done ? <span className="fs-title">{s.title}<span className="sr-only"> (done)</span></span>
+            : <Link className="fs-title fs-go" to={s.to}>{s.title}</Link>}
+        </li>
+      ))}
+    </ol>
+  );
   if (compact) {
     const next = view.steps.find((s) => !s.done);
+    // LIVE11B-009: one slim row across the page (the steps done as a bar, the next one, the whole list on a click), not a short card
+    // with the rest of its row empty
     return (
       <Card compact className="first-steps fs-compact" label="Your first steps">
-        <div className="k-row">
+        <div className="fs-line">
           <span className="k-small"><b>Your first steps</b> · {view.done} of {total} done{next && <> · next: <Link className="link" to={next.to}>{next.title}</Link></>}</span>
-          <button className="btn quiet sm" disabled={busy} onClick={dismiss}>Hide this</button>
+          <progress className="k-progress fs-bar" aria-label="First steps done" max={total} value={view.done} />
+          <button type="button" className="btn quiet sm" aria-expanded={open} aria-controls="fs-steps" onClick={() => setOpen((o) => !o)}>{open ? "Fewer" : `All ${total} steps`}</button>
+          <button type="button" className="btn quiet sm" disabled={busy} onClick={dismiss}>Hide this</button>
         </div>
+        {open && list}
       </Card>
     );
   }
@@ -60,15 +77,7 @@ export function FirstSteps({ onShown, compact }: { onShown?: (shown: boolean) =>
       <CardHead title="Your first steps" actions={<button className="btn quiet sm" disabled={busy} onClick={dismiss}>Hide this</button>} />
       <span className="k-small k-muted">{view.done} of {total} done. Each one ticks itself when you've done it.</span>
       <progress className="k-progress" aria-label="First steps done" max={total} value={view.done} />
-      <ol className="fs-list">
-        {view.steps.map((s) => (
-          <li key={s.id} className={s.done ? "done" : ""} data-step={s.id}>
-            <span className="fs-tick" aria-hidden="true">{s.done ? "✓" : ""}</span>
-            {s.done ? <span className="fs-title">{s.title}<span className="sr-only"> (done)</span></span>
-              : <Link className="fs-title fs-go" to={s.to}>{s.title}</Link>}
-          </li>
-        ))}
-      </ol>
+      {list}
     </Card>
   );
 }

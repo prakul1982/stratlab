@@ -276,6 +276,23 @@ def before_ex_date(symbol: str, day, now: datetime | None = None) -> bool:
     return any(d < ex <= today for ex in _ex_dates().get(base_symbol(symbol), ()))
 
 
+def day_range(symbol: str, day) -> tuple[float | None, float | None] | None:
+    """(high, low) of one stock's session on `day` from the exchange's cash bhavcopy (read once a day and kept in memory), for the
+    price job: a page moved to that day's official close takes the day's own high and low into its 52-week range (LIVE11B-012:
+    KOTAKBANK's 499.90 high of 17 Nov was missing from its "vs 52-week high" after the close). None when the file isn't at hand."""
+    files_fn = _src.get("files")
+    sym = str(symbol or "").upper()
+    if not files_fn or not sym or before_ex_date(sym, day):
+        return None
+    try:
+        from . import exchange_days
+        row = (exchange_days.cash_closes(files_fn(), date.fromisoformat(_day(day))) or {}).get(sym)
+    except Exception as e:                       # no range today: the close alone, as before
+        print("official closes: day range:", sym, str(e)[:120])
+        return None
+    return (row.get("high"), row.get("low")) if isinstance(row, dict) else None
+
+
 def official(symbol: str, day, use_quote: bool = True, now: datetime | None = None) -> float | None:
     """The exchange's close of one stock on one day: the bhavcopy's, else (with `use_quote`) a same-day quote's."""
     sym = str(symbol or "").upper()

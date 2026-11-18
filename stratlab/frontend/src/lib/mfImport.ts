@@ -8,3 +8,11 @@ export function importLine(r: { added: number; duplicates: number; schemes: numb
     + (r.duplicates > 0 ? `, ${r.duplicates} already saved (skipped)` : "")
     + `, from ${kept === r.schemes ? `${r.schemes} scheme${r.schemes === 1 ? "" : "s"}` : `${kept} of the file's ${r.schemes} schemes`}.`;
 }
+
+/** The Free plan's lock line on the funds page: capital gains, and the scheme cap only once the schemes held reach it (LIVE11B-008: "every
+ * scheme you hold (Free keeps 5)" to a Free user whose 5 schemes were all shown). */
+export function mfLockLine(held: number, cap: number | null, plan: string): string {
+  return cap != null && held >= cap
+    ? `Capital gains for each financial year, and more than ${cap} schemes, are on the ${plan} plan.`
+    : `Capital gains for each financial year are on the ${plan} plan.`;
+}

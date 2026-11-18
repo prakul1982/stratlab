@@ -115,3 +115,13 @@ export function yearLabel(col: string, region: Region): string {
 export function downloadPath(region: Region, symbol: string, what: "peers.csv" | "statements.xlsx" | "statements.csv", basis?: string): string {
   return `/research/company/${region}/${encodeURIComponent(symbol)}/${what}${basis ? `?basis=${encodeURIComponent(basis)}` : ""}`;
 }
+
+/** The columns a table of periods shows at a time (LIVE11B: a phone shows three years, not a 1,164px table scrolled sideways): `size`
+ * periods ending `back` windows before the newest (the periods run oldest to newest), and whether there are earlier or later ones. */
+export function periodWindow(n: number, size: number, back: number): { from: number; to: number; earlier: boolean; later: boolean } {
+  const k = Math.max(1, Math.min(size, n));
+  const maxBack = Math.max(0, Math.ceil(n / k) - 1);
+  const b = Math.max(0, Math.min(back, maxBack));
+  const to = Math.max(k, n - b * k), from = Math.max(0, to - k);
+  return { from, to, earlier: from > 0, later: to < n };
+}

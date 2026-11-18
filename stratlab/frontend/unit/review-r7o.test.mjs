@@ -52,7 +52,8 @@ test("Plans: a price converted from the rupee charge is said as 'about', beside 
   assert.equal(aboutLine({ ...sar, symbol: "$", converted: false }, "USD", "basic"), null);   // dollars: $8 and $20 as the owner set them, no conversion claimed
   // item 34: the Plans cards' "about" figure is the dollar at the app's USD/INR rate, beside every rupee price
   // (updated on purpose: owner 16 Nov, the card is drawn by lib/priceCurrency cardPrice, with the same "about $" beside a rupee price)
-  assert.match(read("src/lib/priceCurrency.ts"), /about: inr > 0 \? o\.aboutUsd\(inr\) : null/);
+  // (updated on purpose, LIVE11B: beside a rupee price, StratLab's own US price when the table has one, not the rupees converted)
+  assert.match(read("src/lib/priceCurrency.ts"), /about: inr > 0 \? \(usd \? usPriceText\(amount\) : o\.aboutUsd\(inr\)\) : null/);
   assert.match(read("src/pages/PlansPage.tsx"), /aboutUsd: \(v\) => aboutUsd\(v, rate\)/);
 });
 

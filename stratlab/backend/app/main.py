@@ -5641,7 +5641,7 @@ def stock_price_refresh_once(sleep=time.sleep) -> dict:
     for region, (limit, gap) in PRICE_REFRESH.items():
         # India: a page read at the close before the exchange's official close was out takes it once it is (R7O-004)
         extra = {"official": lambda s, d: official_close.official(s, d, use_quote=False),
-                 "official_ready": official_close.settled} if region == "IN" else {}
+                 "official_ready": official_close.settled, "official_range": official_close.day_range} if region == "IN" else {}
         before = price_refresh_status.get(region) if isinstance(price_refresh_status.get(region), dict) else {}
         try:
             price_refresh_status[region] = stock_page_store.refresh_prices(region, bars_of, scan.analyse, limit=limit, gap=gap, sleep=sleep, **extra)
@@ -6225,10 +6225,46 @@ def options_ready():
         err(503, "data_offline", offline_when("Option quotes come from the live feed, which is offline until the daily data login completes."))
 
 
+UNDERLYINGS_KEY = "options:underlyings:last"     # app_settings: the last list of option underlyings read from the live contract list
+_underlyings_kept = {"day": None}
+
+
+def keep_underlyings(rows: list[dict]) -> None:
+    """The day's list of option underlyings, kept once a day for the hours the live feed is offline (LIVE11B-006)."""
+    today = positioning.ist_now().date().isoformat()
+    if _underlyings_kept["day"] == today or not rows:
+        return
+    try:
+        db.set_setting(UNDERLYINGS_KEY, json.dumps({"day": today, "rows": rows}))
+        _underlyings_kept["day"] = today
+    except Exception as e:                         # the page has its answer either way
+        print("option underlyings not kept:", str(e)[:120])
+
+
+def stored_underlyings() -> list[dict] | None:
+    """The last kept list of option underlyings with the expiries already past taken out, each marked `stored` (the exchange's list of
+    F&O underlyings changes rarely; their quotes need the live feed). None when nothing was kept."""
+    today = positioning.ist_now().date().isoformat()
+    try:
+        kept = json.loads(db.get_setting(UNDERLYINGS_KEY) or "null") or {}
+    except (ValueError, TypeError):
+        kept = {}
+    out = []
+    for u in kept.get("rows") or []:
+        ex = [e for e in u.get("expiries") or [] if e >= today]
+        if not ex:
+            continue
+        lots = {e: n for e, n in (u.get("lots") or {}).items() if e in ex}
+        out.append({**u, "expiries": ex, "lots": lots, "lot": lots.get(ex[0], u.get("lot")), "stored": True})
+    return out or None
+
+
 @app.get("/options/underlyings")
 def options_underlyings(profile=Depends(current_profile)):
     options_ready()
-    return options_data.underlyings()
+    got = options_data.underlyings()
+    keep_underlyings(got)              # for the hours the feed is offline (/options/recorded lists it then)
+    return got
 
 
 def recorded_options(exchange: str, underlying: str, expiry: str = "current") -> "opt_recorded.Recorded":
@@ -6256,6 +6292,10 @@ def options_recorded(profile=Depends(current_profile)):
             rec = None
         if rec:
             out.append(opt_recorded.Recorded(ex, name, rec).underlying())
+    # every other F&O underlying from the last list the live feed gave, marked stored: browsable in the picker outside market hours,
+    # priced once the feed is back (LIVE11B-006: "Other underlyings (0)" with the feed offline)
+    have = {(u.get("exchange"), u.get("name")) for u in out}
+    out += [u for u in stored_underlyings() or [] if (u.get("exchange"), u.get("name")) not in have]
     return out
 
 
@@ -8217,6 +8257,9 @@ def news_view(issue: dict) -> dict:
     # every section that lists figures as a table (O5): drawn by the Briefs page, the email and the PDF alike, from the stored issue
     from .newsletter import tables as news_tables
     out["tables"] = news_tables.of(issue)
+    # the index moves are the Indices table's: the summary over it starts after them, not with the same figures again (LIVE11B-015)
+    if any(t.get("title") == "Indices" for t in out["tables"] if isinstance(t, dict)):
+        out["summary"] = news.write.without_moves(out.get("summary"), issue.get("indices"))
     return out
 
 
@@ -8248,7 +8291,8 @@ def news_list(kind: str = "market", region: str = "IN", limit: int = 20, profile
         err(400, "bad_kind", "Pick the market brief or my stocks.")
     scope = ("US" if region.upper() == "US" else "IN") if kind == "market" else profile["id"]
     return {"issues": [{**{k: i.get(k) for k in ("id", "kind", "region", "day", "weekly", "subject")},
-                        "preview": email_kit.short_line(news_write.past_today(i.get("summary"), i, _news_today(i)), 200)}
+                        # the title names the lead index's move and the brief's table every index's: the preview starts after them (LIVE11B-015)
+                        "preview": email_kit.short_line(news_write.past_today(news_write.without_moves(i.get("summary"), i.get("indices")), i, _news_today(i)), 200) or None}
                        for i in news.recent(kind, scope, max(1, min(60, limit)))]}
 
 

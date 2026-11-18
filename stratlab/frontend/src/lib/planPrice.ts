@@ -1,6 +1,6 @@
 /* A plan's price in words, from the /pricing table: pure (no network), so the unit tests and currency.ts share it. */
 import type { CurrencyRow, Pricing } from "./currency";
-import { chargedInUsd, dollarText, rupeeText, usdRowOf, type PriceCur } from "./priceCurrency";
+import { chargedInUsd, dollarText, rupeeText, usdRowOf, usPriceText, type PriceCur } from "./priceCurrency";
 import { inrWithUsd, usdRate } from "./usdAbout";
 
 export function money(row: CurrencyRow | undefined, v: number, code: string): string {
@@ -26,5 +26,9 @@ export function planPriceLine(plan: "basic" | "pro", p: Pricing, cur: PriceCur =
     const rupeesToo = !chargedInUsd(usd, "month", usdCheckout) || (yearly && !chargedInUsd(usd, "year", usdCheckout));
     return rupeesToo ? `${shown}, charged as ${rupeeText(inr[plan])}${yearly ? ` or ${rupeeText(inr[`${plan}_year`])}` : ""} in rupees.` : `${shown}.`;
   }
+  // beside the rupee prices, StratLab's own US prices when it has them, never the rupees converted (LIVE11B: "₹6,999 a year (about $75)"
+  // against a US yearly price of $80)
+  const us = usdRowOf(p);
+  if (us) return `${name} is ${rupeeText(inr[plan])} a month (${usPriceText(us[plan])})${yearly ? ` or ${rupeeText(inr[`${plan}_year`])} a year (${usPriceText(us[`${plan}_year`])})` : ""}.`;
   return `${name} is ${inrWithUsd(inr[plan], rate, "month")}${yearly ? ` or ${inrWithUsd(inr[`${plan}_year`], rate, "year")}` : ""}.`;
 }

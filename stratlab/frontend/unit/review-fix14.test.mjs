@@ -79,3 +79,58 @@ test("LIVE11B-010: a level kept from yesterday's session (or before a newer clos
   assert.match(page, /: s\.stale \? \(\s*<span className="mine-mkt-old" data-testid="mine-mkt-old"/);
   assert.match(page, /Faded levels are from your last visit, read \{fmtDateTime\(keptAt, \{ tz: IST, zone: true, year: false \}\)\}: the latest are on their way\./);
 });
+
+test("LIVE11B-008: the funds page's lock names the scheme cap only once the schemes held reach it", async () => {
+  const { mfLockLine } = await import("../src/lib/mfImport.ts");
+  assert.equal(mfLockLine(3, 5, "Basic"), "Capital gains for each financial year are on the Basic plan.");
+  assert.equal(mfLockLine(5, 5, "Basic"), "Capital gains for each financial year, and more than 5 schemes, are on the Basic plan.");
+  assert.doesNotMatch(read("src/pages/money/MutualFundsPage.tsx"), /every scheme you hold \(Free keeps/);
+});
+
+test("LIVE11B-007: the bad-luck drawdown line says 'at or above' (the worst order can be more than 5% of the reshuffles)", () => {
+  assert.match(read("src/pages/trade/JournalPage.tsx"), /· 95% of reshuffles at or above <span className="nowrap">\{m\(-d\.p95\)\}<\/span>/);
+});
+
+test("LIVE11B (phone): statements show three periods at a time on a phone; shareholding is a card per quarter", async () => {
+  const { periodWindow } = await import("../src/lib/companyTables.ts");
+  assert.deepEqual(periodWindow(12, 3, 0), { from: 9, to: 12, earlier: true, later: false });       // the newest three
+  assert.deepEqual(periodWindow(12, 3, 1), { from: 6, to: 9, earlier: true, later: true });
+  assert.deepEqual(periodWindow(10, 3, 9), { from: 0, to: 3, earlier: false, later: true });         // the oldest window, never past it
+  assert.deepEqual(periodWindow(5, 12, 0), { from: 0, to: 5, earlier: false, later: false });        // a desktop: every period
+  const st = read("src/components/CompanyStatements.tsx");
+  assert.match(st, /const win = periodWindow\(cols\.length, phone \? 3 : cols\.length, back\);/);
+  assert.match(st, /\)\)\.slice\(win\.from, win\.to\),/);
+  assert.match(read("src/components/ShareholdingHistory.tsx"), /columns=\{columns\} grid=\{!phone\} stack=\{phone\} \/>/);
+});
+
+test("LIVE11B-014: the VIX tile's day takes its own line on a phone, with no '·' left at a line's end", () => {
+  assert.match(read("src/styles.css"), /@media \(max-width: 640px\) \{ \.vix-sep \{ display: none; \} \.vix-day \{ display: block; \} \}/);
+});
+
+test("LIVE11B-009: the first steps are one slim row across the page with the whole list on a click", () => {
+  const fs = read("src/components/FirstSteps.tsx");
+  assert.match(fs, /aria-expanded=\{open\} aria-controls="fs-steps" onClick=\{\(\) => setOpen\(\(o\) => !o\)\}>\{open \? "Fewer" : `All \$\{total\} steps`\}<\/button>/);
+  assert.match(fs, /\{open && list\}/);
+  const css = read("src/styles.css");
+  assert.doesNotMatch(css, /\.fs-compact \{ width: fit-content; max-width: 100%; \}/);
+  assert.match(css, /\.fs-line \.fs-bar \{ flex: 1 1 120px; min-width: 80px; \}/);
+});
+
+test("LIVE11B: beside a rupee price, StratLab's own US price when the prices table has one", async () => {
+  const pc = await import("../src/lib/priceCurrency.ts");
+  const USD = { symbol: "$", name: "US dollar", basic: 8, pro: 20, basic_year: 80, pro_year: 200, charged_in: "INR", yearly_charged_in: "INR" };
+  const about = (v) => `about $${Math.round(v / 93.47)}`;
+  assert.equal(pc.cardPrice({ plan: "basic", period: "month", cur: "INR", inr: 699, usd: USD, checkoutOn: false, aboutUsd: about }).about, "US price $8");
+  assert.equal(pc.cardPrice({ plan: "pro", period: "year", cur: "INR", inr: 19999, usd: USD, checkoutOn: false, aboutUsd: about }).about, "US price $200");
+  assert.equal(pc.cardPrice({ plan: "pro", period: "month", cur: "INR", inr: 1999, usd: null, checkoutOn: false, aboutUsd: about }).about, "about $21");
+});
+
+test("LIVE11B: a Coming-up row is its link's target, at least 44px tall, not the 23px title line", () => {
+  const css = read("src/styles.css");
+  assert.match(css, /\.mine-tl-i \{ position: relative; min-height: 44px; \}/);
+  assert.match(css, /\.mine-tl-i \.body a::after \{ content: ""; position: absolute; inset: 0; \}/);
+});
+
+test("LIVE11B-015: the briefs list holds the screen while it is read", () => {
+  assert.match(read("src/pages/NewsPage.tsx"), /<Skeleton label="Loading the issues" lines=\{6\} page \/>/);
+});
