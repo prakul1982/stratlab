@@ -90,11 +90,32 @@ const MAIL_SVG = '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24
 
 /** The template with the home page's start-up frame: the landing's header (the site's links in the same `boot-nav` for a reader with
  * no script) and its hero copy over the page's own words, which stay in the HTML for crawlers and for scripts off. */
+/** LIVE14A-014 / LIVE14B-003: the start-up hero's heading and lede in the app's own serif faces under a name of their own that waits for the
+ * file (font-display: block, the browser's few seconds), never painted first in the stand-in serif. Painted first in Georgia (106,888 px²
+ * at 0.9 s), the heading was a smaller paint than the app's heading drawn over it in Fraunces at 2.8 s (132,870 px²), so the browser took
+ * that later paint as the page's largest (LCP 2.8-2.9 s), and the swap moved the phone's lede (CLS 0.026). Painted once in its own face,
+ * the frame's heading is the largest paint and the app's, the same size in the same place, is not a larger one. The same files the page
+ * preloads; nothing when the build has none (a dev server). */
+export function bootFaces(template) {
+  const face = (re) => (re.exec(template) ?? [])[0];
+  const normal = face(/\/assets\/fraunces-latin-400-normal-[\w-]+\.woff2/), italic = face(/\/assets\/fraunces-latin-400-italic-[\w-]+\.woff2/);
+  if (!normal) return "";
+  const rule = (style, url) => `@font-face{font-family:"Fraunces Boot";font-style:${style};font-weight:400;font-display:block;src:url(${url}) format("woff2")}`;
+  // ...and laid out, while its face is on its way, as it will be in it, so nothing under it moves when the face comes: the heading's 12ch box
+  // in the face's own units (12 × its "0", 0.649 em; the stand-in's ch is another width), and the stand-in serif of a Linux or Android
+  // browser scaled to the face's widths (DejaVu Serif runs 11% wider: the phone's heading took three lines for two, and the lede and buttons
+  // moved up 42 px when the face came, CLS 0.022 in the test, 0.026 live)
+  return `<style>${rule("normal", normal)}${italic ? rule("italic", italic) : ""}`
+    + `@font-face{font-family:"Fraunces Boot Stand-in";src:local("DejaVu Serif");size-adjust:90%}`
+    + `[data-boot] .lp-h1,[data-boot] .lp-lede{font-family:"Fraunces Boot","Fraunces Boot Stand-in",Georgia,serif}[data-boot] .lp-h1{max-width:7.78em}</style>\n`;
+}
+
 export function heroFrame(template, { heading, summary, after = "", fonts = [] }) {
   // the heading's italic face ("skill"), asked for at once beside the upright one index.html already asks for (publicFonts.mjs): the frame's
   // heading is the page's largest paint, drawn again when a face it waits for arrives (the landing waits for them anyway, entry.tsx)
   fonts = fonts.filter((f) => !template.includes(`/assets/${f}"`));
   if (fonts.length) template = template.replace("</head>", () => fonts.map((f) => `<link rel="preload" as="font" type="font/woff2" crossorigin href="/assets/${attr(f)}">\n`).join("") + "</head>");
+  template = template.replace("</head>", () => bootFaces(template) + "</head>");
   const head = /<header class="boot-head">[\s\S]*?<nav class="boot-nav" aria-label="Site">([\s\S]*?)<\/nav><\/header>/;
   const m = head.exec(template);
   if (!m) throw new Error("index.html has no start-up header");
