@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 import httpx
 
+from app import main  # noqa: F401, I001  (first: the app loads its jobs before the modules built on them)
 from app.intel import yahoo as Y
 from app.intel.company import index_level
 
