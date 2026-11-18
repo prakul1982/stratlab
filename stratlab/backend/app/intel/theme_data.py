@@ -4031,6 +4031,21 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
         except Exception as e:
             print("theme data: sector figures not read:", s, type(e).__name__, str(e)[:100])
             piece = None
+        if sector_metrics.stale_for_property(r, piece):
+            # r69e: a property owner's piece read before its FFO lines: read once more (now within the budget, else on the worker); its
+            # older figures stand meanwhile, the company said as waiting for its figures
+            again = getattr(src.metrics, "again", None)
+            newer = None
+            if again is not None:
+                try:
+                    newer = again(s, fam)
+                except Exception as e:
+                    print("theme data: sector figures not read again:", s, type(e).__name__, str(e)[:100])
+            if newer is not None:
+                piece = newer
+            else:
+                pending.append(s)
+                pending_fam[s] = fam
         if piece is None:
             pending.append(s)
             pending_fam[s] = fam

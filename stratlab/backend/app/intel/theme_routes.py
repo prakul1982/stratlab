@@ -1588,7 +1588,9 @@ def requeue(r: str, dive: dict) -> None:
     deck's 7 of 19). The queue skips one already queued or stored; nothing is queued with no source set up."""
     fams = dive.get("metrics_families") or {}
     for s_ in dive.get("metrics_pending") or []:
-        if fams.get(s_):
+        if fams.get(s_) and (p_ := sector_metrics.stored(r, s_)) is not None and not sector_metrics.current_piece(p_):
+            sector_metrics.queue(r, s_, fams[s_], again=True)          # r69e: one waiting for a re-read of its stored piece
+        elif fams.get(s_):
             sector_metrics.queue(r, s_, fams[s_])
 
 

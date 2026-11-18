@@ -333,3 +333,85 @@ def test_an_audit_quote_saying_the_present_layers_name_moves_nobody():
     _, out = _replay(R69 / "hotels.json")
     lay, c = _where(out, "TBOTEK")
     assert lay == "Platforms and marketplaces", (lay, c.get("refit"))
+
+
+# ---------- the REITs theme's FFO: a property owner's piece read before its FFO lines is read once more ----------
+def test_a_property_owners_piece_read_before_its_ffo_lines_is_read_once_more(monkeypatch):
+    """Fails before: the live REITs dive had FFO and P/FFO for almost none of its property owners: their US pieces were read before FFO's lines
+    were part of the read and, kept under the same version, were never read again. Now such a piece (no "reit_v") of a company whose industry
+    names real estate is read once more, its older figures standing meanwhile and the company waiting for its figures; once read (kept with
+    "reit_v") it stands, and no other company's piece is read again."""
+    from app import computed
+    from app.intel import sector_metrics as M
+    reit = {"symbol": "O", "industry": ["Real Estate Investment Trusts"], "profile": "other"}
+    soft = {"symbol": "MSFT", "industry": ["Services-Prepackaged Software"], "profile": "other"}
+    old = {"family": "us", "metrics": {"sbc_share": {"v": 1.0}}, "end": "2025-12-31"}
+    new = {**old, "metrics": {**old["metrics"], "ffo": {"v": 3500.0, "period": "FY 2025"}, "ffo_share": {"v": 65.0, "period": "FY 2025"}},
+           "reit_v": M.REIT_V}
+    assert M.stale_for_property(reit, old) and not M.stale_for_property(soft, old) and not M.stale_for_property(reit, new)
+    assert not M.current_piece(old) and M.current_piece(new) and M.current_piece({"family": "bank"}) and not M.current_piece(None)
+    # a read now keeps the piece with the lines it was read with
+    monkeypatch.setitem(M._feeds, "sec", lambda: object())
+    monkeypatch.setattr(M, "read_us", lambda sym, client: {"family": "us", "metrics": {}, "end": "2025-12-31"})
+    puts = []
+    monkeypatch.setattr(computed, "put", lambda kind, k, v, **kw: puts.append(v))
+    assert M.read("US", "O", "us")["reit_v"] == M.REIT_V and puts[-1]["reit_v"] == M.REIT_V
+    # the reader reads it again within the budget; past it, the worker is asked (again=True)
+    monkeypatch.setattr(M, "read", lambda region, sym, fam: new)
+    get = M.reader("US")
+    assert get.again("O", "us") is new
+    queued = []
+    monkeypatch.setattr(M, "read", lambda region, sym, fam: None)
+    monkeypatch.setattr(M, "queue", lambda region, sym, fam, again=False: queued.append((sym, again)))
+    get = M.reader("US", budget=0.0)
+    assert get.again("O", "us") is None and queued == [("O", True)]
+    # a dive waiting on it is worked out again only once its piece is the new one
+    monkeypatch.setattr(computed, "index", lambda kind: {"entries": {computed.hkey(M.key("US", "O")): {}}})
+    monkeypatch.setattr(M, "stored", lambda region, sym: old)
+    assert M.any_stored("US", ["O"]) is False
+    monkeypatch.setattr(M, "stored", lambda region, sym: new)
+    assert M.any_stored("US", ["O"]) is True
+
+
+def test_the_dive_takes_a_property_owners_re_read_ffo(monkeypatch):
+    """theme_data.build: the stale piece is read again through the reader's `again`, and its FFO reaches the company's row."""
+    from app.intel import sector_metrics as M
+    from app.intel import theme_data as D
+    old = {"family": "us", "metrics": {}, "end": "2025-12-31"}
+    new = {"family": "us", "metrics": {"ffo": {"v": 3500.0, "period": "FY 2025"}, "ffo_share": {"v": 65.0, "period": "FY 2025"}},
+           "end": "2025-12-31", "reit_v": M.REIT_V}
+
+    def metrics(sym, fam):
+        return old
+    metrics.again = lambda sym, fam: new
+    row = {"symbol": "O", "industry": ["Real Estate Investment Trusts"], "profile": "other", "cap": 50000.0}
+    assert M.stale_for_property(row, metrics("O", "us"))
+    import inspect
+    assert "again = getattr(src.metrics, \"again\", None)" in inspect.getsource(D.build)
+    piece = metrics.again("O", "us")
+    M.apply(row, piece)
+    assert row["ffo_share"] == 65.0 and row["p_ffo"] == round(50000.0 / 3500.0, 1)
+
+
+def test_the_worker_reads_a_property_owners_piece_again_once_in_the_memory_guards_turn(monkeypatch):
+    from app import memguard
+    from app.intel import sector_metrics as M
+    old = {"family": "us", "metrics": {}}
+    store = {"O": old, "MSFT": old}
+    reads, turns = [], []
+    monkeypatch.setattr(M, "stored", lambda region, sym: store.get(sym))
+
+    def read(region, sym, fam):
+        reads.append(sym)
+        store[sym] = {**old, "reit_v": M.REIT_V}
+    monkeypatch.setattr(M, "read", read)
+    real = memguard.heavy
+
+    def heavy(name, force_release=False):
+        turns.append(name)
+        return real(name, force_release)
+    monkeypatch.setattr(memguard, "heavy", heavy)
+    M._q[:] = [("US", "O", "us", True), ("US", "O", "us", True), ("US", "MSFT", "us")]
+    M._worker["on"] = True
+    M._work()
+    assert reads == ["O"] and turns == ["sector metrics: property lines"]       # once; a plain item with a piece stored is not read
