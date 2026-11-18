@@ -298,3 +298,25 @@ def test_each_reit_is_said_by_its_ffo_state():
     assert "worked out for 2 of the 3 property owners with figures (AFFO too for 1): BXP Trust, SLG Trust" in got
     assert "missing in the stored data for 1 (the filed gains on property sales" in got and "): VNO Trust" in got
     assert "not applicable to the 1 mortgage REITs and other lenders with figures, which earn on loans, not on property they own: AGNC Trust" in got
+
+
+# ---------- P2 a short table chunk never takes a near-empty page ----------
+def test_a_tables_page_less_than_half_full_takes_the_part_of_its_next_row_that_fits():
+    """Fails before: the live R66 REITs deck's coverage table put two short rows on p.6 and left the page mostly empty, the next row (nearly
+    a page tall) whole on p.7. Now the page takes the part of that row that fits, the rest carried on in "<row> (continued)"; no word is
+    lost and the table takes no more pages."""
+    head, widths, w, h = deck.COVERAGE_HEAD, [1.8, 1.4, 8.9], deck.CW, deck.BOT - deck.TOP
+    long_ = " ".join(f"Company {i} Inc.: from “Layer A” to “Other”, as its own words don't say it sells what “Layer A” is;" for i in range(60))
+    rows = [["Not in the sources", "", "Property and leasing: occupancy and rent per square foot aren't in the results formats read."],
+            ["In informative layers", "142 of 195", "in a layer the map names; the other 53 in “Other”."],
+            ["Moved by what its layer is", "11", long_]]
+    while len(deck.table_pages(head, [rows[2]], widths, w, h)) > 1:          # the long row: one page whole, as the live one
+        rows[2][2] = rows[2][2].rsplit(";", 2)[0] + ";"
+    pages = deck.table_pages(head, rows, widths, w, h)
+    assert len(pages) <= 2
+    assert pages[0][-1][0] == "Moved by what its layer is" and pages[1][0][0] == "Moved by what its layer is (continued)"
+    assert " ".join(r[2] for p in pages for r in p if r[0].startswith("Moved")).split() == rows[2][2].split()
+    # (guard) a page already half full sends a row that doesn't fit to the next page whole
+    full = [[f"Row {i}", "1", "a short line of text " * 12] for i in range(6)] + [rows[2]]
+    got = deck.table_pages(head, full, widths, w, h)
+    assert all(not r[0].endswith("(continued)") for p in got for r in p) or deck.table_height(head, got[0][:-1], widths, w) < deck.FLOW_FILL * h

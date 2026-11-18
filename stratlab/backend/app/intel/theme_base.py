@@ -1768,7 +1768,7 @@ def whole_stems(text) -> set[str]:
     return kind_stems(_short_joined(text))
 
 
-def name_says(name: str, text: str, theme_words: set, description: str = "") -> tuple[bool, bool]:
+def name_says(name: str, text: str, theme_words: set, description: str = "", by_property: bool = True) -> tuple[bool, bool]:
     """(whether a layer's name states a kind of business beyond the theme's own words, whether a company's own words say it) (d1): a
     hyphenated word of the name is one word ("off-price", never "off" by chance), the others by their stems (kind_stems). r60: or words
     that say the layer's concept (concept_said: "direct-to-home" says "satellite"), by its name or its own `description`."""
@@ -1782,14 +1782,14 @@ def name_says(name: str, text: str, theme_words: set, description: str = "") -> 
         return False, False
     t = str(text or "").lower()
     # r68e: a property owner's layer is said by the kind of property its words name, never by a word they share ("communities")
-    pf = property_fit(name, t)
+    pf = property_fit(name, t) if by_property else None
     if pf is not None:
         return True, pf
     mine = kind_stems(t)
     # a stem of five letters or more says the longer word it starts ("steel" says "steelmaking")
     near = lambda a, b: a == b or (min(len(a), len(b)) >= 5 and (a.startswith(b) or b.startswith(a)))      # noqa: E731
     said = any(re.search(r"\b" + r"[- ]?".join(map(re.escape, w.split("-"))) + r"\b", t) for w in joined) or any(near(a, b) for a in mine for b in rest)
-    return True, said or bool(concept_said(name, t, description))
+    return True, said or bool(concept_said(name, t, description, by_property))
 
 
 FILING_TITLES = "From its own filings:"
@@ -3460,13 +3460,13 @@ RENAME_TOP = 5                  # p57: the largest companies with words of their
 CONTRACT_SINGLE = 2             # a layer a rule made with this many companies or fewer, new to the published version, is not made
 
 
-def shares_vocabulary(name: str, text: str = "", industry=None) -> bool:
+def shares_vocabulary(name: str, text: str = "", industry=None, by_property: bool = True) -> bool:
     """p57: whether a company's own words or its official industry share a word of what is made or done with a layer's name (kind_stems,
     the theme's own words counted: a software maker says "Software products and subscriptions"). A name stating no kind of business is
     shared by everyone."""
     if not name_says(name, "", set())[0]:
         return True
-    if text and name_says(name, text, set())[1]:
+    if text and name_says(name, text, set(), by_property=by_property)[1]:
         return True
     if industry and not re.search(NO_ONE_BUSINESS, plain_industry(industry), re.I):
         ind = kind_stems(plain_industry(industry))
@@ -4785,8 +4785,10 @@ def truthful_layers(vc: list[dict], published: dict, evidence, theme: str) -> tu
             top = [c for c in sorted(v["companies"], key=lambda c: -(c.get("cap") or 0))
                    if len(own_text(evidence(c.get("ticker")) if evidence else "").strip()) >= 40][:RENAME_TOP]
             text = lambda c: own_text(evidence(c.get("ticker")))      # noqa: E731
-            new_n = sum(1 for c in top if shares_vocabulary(_HALF_RX.sub("", v["layer"]), text(c), c.get("industry")))
-            old_n = sum(1 for c in top if shares_vocabulary(was, text(c), c.get("industry")))
+            # (r68e: two names of the same kinds of property are told apart by their other words, as before)
+            bp_ = layer_property_types(was) != layer_property_types(_HALF_RX.sub("", v["layer"]))
+            new_n = sum(1 for c in top if shares_vocabulary(_HALF_RX.sub("", v["layer"]), text(c), c.get("industry"), bp_))
+            old_n = sum(1 for c in top if shares_vocabulary(was, text(c), c.get("industry"), bp_))
             # r571 (the live R57 Medical devices deck: "Surgical robotics systems" over its makers of no robots): never back to a name
             # whose own words (none other layer's name says) few of its companies say
             dw = distinct_words({"layer": was}, [x for x in vc if x is not v and not x.get("official")], kind_stems(theme))
@@ -6293,22 +6295,22 @@ def property_fit(name: str, text: str) -> bool | None:
     return bool(lt & ct)
 
 
-def layer_concepts(layer: str, description: str = "") -> list[str]:
+def layer_concepts(layer: str, description: str = "", by_property: bool = True) -> list[str]:
     """r60: the patterns of the words that say a layer's concept (LAYER_CONCEPTS), by its name (a half's "(larger)" aside) or the first
     sentence of its own description."""
     name = _HALF_RX.sub("", str(layer or "")).lower()
     first = re.split(r"(?<=[.!?])\s", " ".join(str(description or "").split()), maxsplit=1)[0].lower()
-    pts = layer_property_types(name)          # r68e: a property owner's layer's concept is the kinds of property its name names
+    pts = layer_property_types(name) if by_property else set()          # r68e: a property owner's layer's concept is the kinds of property its name names
     return [says for by_name, by_desc, says in LAYER_CONCEPTS if re.search(by_name, name) or (first and re.search(by_desc, first))] \
         + [says for t, _, says in PROPERTY_TYPES if t in pts]
 
 
-def concept_said(layer: str, text: str, description: str = "") -> re.Match | None:
+def concept_said(layer: str, text: str, description: str = "", by_property: bool = True) -> re.Match | None:
     """r60: the first words of a company's own words that say a concept of a layer (layer_concepts); None when none do."""
     t = str(text or "")
     if not t.strip():
         return None
-    hits = [m for rx in layer_concepts(layer, description) for m in [re.search(rx, t, re.I)] if m]
+    hits = [m for rx in layer_concepts(layer, description, by_property) for m in [re.search(rx, t, re.I)] if m]
     return min(hits, key=lambda m: (m.start(), m.group(0))) if hits else None
 
 

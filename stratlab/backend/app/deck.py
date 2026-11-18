@@ -1073,6 +1073,37 @@ def split_tall(head: list, rows: list, widths: list, w: float, h: float, strong=
     return out
 
 
+FLOW_FILL = 0.5                 # r68e: a table's page filled less than this share takes the part of its next row that fits
+FLOW_WORDS = 12                 # ...a part of at least this many words, with as many left for the row that carries it on
+
+
+def fill_piece(head: list, above: list, r: list, widths: list, w: float, h: float, strong=(), compact: bool = False) -> tuple | None:
+    """r68e: (the part of row `r` that fits under the rows `above` in a w x h table, the rest as a row "<label> (continued)"), cut in its
+    longest cell at a word; None when less than FLOW_WORDS words fit or would be left."""
+    j = max(range(len(r)), key=lambda k: len(str(r[k] or "")))
+    words = str(r[j] or "").split()
+    if len(words) < 2 * FLOW_WORDS:
+        return None
+
+    def fits(piece) -> bool:
+        return len(table_layout({"head": head, "rows": above + [piece], "widths": widths, "numeric": [False] * len(head), "strong": strong,
+                                 "compact": compact}, w, h)["rows"]) >= len(above) + 1
+    lo, hi = 0, len(words) - FLOW_WORDS
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        piece = list(r)
+        piece[j] = " ".join(words[:mid])
+        if fits(piece):
+            lo = mid
+        else:
+            hi = mid - 1
+    if lo < FLOW_WORDS:
+        return None
+    head_piece, rest = list(r), [f"{r[0]} (continued)" if j else ""] + [""] * (len(r) - 1)
+    head_piece[j], rest[j] = " ".join(words[:lo]), " ".join(words[lo:])
+    return head_piece, rest
+
+
 def table_pages(head: list, rows: list, widths: list, w: float, h: float, most: int = 14, first: tuple | None = None, strong=(), compact: bool = False) -> list[list]:
     """`rows` cut into pages a table of `head` shows in full in a w x h box (the first page in `first`, (w, h), when it is smaller): as
     many rows a page as fit (at most `most`), so no row is ever left off a slide. A page that starts inside a group repeats the group's
@@ -1088,6 +1119,15 @@ def table_pages(head: list, rows: list, widths: list, w: float, h: float, most: 
             n -= 1
         while n > 1 and isinstance(rows[i + n - 1], dict):
             n -= 1
+        # r68e (R68, the owner's review of the live R66 REITs deck: its coverage table's p.6 two short rows and the rest of the page empty, the
+        # next row, nearly a page tall, sent whole to p.7): a page less than FLOW_FILL full whose next row doesn't fit in what is left takes
+        # the part of that row that does, cut at a word, the rest carried on in a row labelled "(continued)"
+        if i + n < len(rows) and n < most and not isinstance(rows[i + n], dict) and \
+                table_height(head, lead + rows[i:i + n], widths, pw) < FLOW_FILL * ph:
+            got = fill_piece(head, lead + rows[i:i + n], rows[i + n], widths, pw, ph, strong, compact)
+            if got:
+                rows = rows[:i + n] + list(got) + rows[i + n + 1:]
+                n += 1
         chunk = rows[i:i + n]
         for r in chunk:
             if isinstance(r, dict):
