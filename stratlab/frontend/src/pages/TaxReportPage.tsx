@@ -578,7 +578,7 @@ function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omi
             {/* VR1-144: no second copy of the total's figure here: the summary at the top of the page and the table below carry it */}
             <span className="k-note">{REGIME[t.regime]} · {y.inputs.resident ? "resident" : "non-resident"}, aged {AGE_TEXT[y.inputs.age ?? "below60"]}{t.rebate > 0 ? ` · 87A rebate ${inr(t.rebate)}` : ""}{t.surcharge > 0 ? ` · surcharge ${inr(t.surcharge)}` : ""} · cess {inr(t.cess)}{!y.inputs.saved ? " · no other income entered yet" : ""}</span>
           </div>
-          <FigureTable label="Where the tax comes from" header="Income" valueHeader="Amount" noteHeader={null}
+          <FigureTable label="Where the tax comes from" header="Tax" valueHeader="Amount" noteHeader={null}
             rows={chips.map(([label, v, info]) => ({ key: label, label: <>{label} <Info label={`About ${label}`}>{info}</Info></>, value: inr(v) }))} />
           {y.other_regime && <p className="k-note">With the same figures, the {REGIME[y.other_regime.regime].toLowerCase()} works out to {inr(y.other_regime.total)}{y.other_regime.regime === "old" ? " (with the deductions entered, if any)" : ""}.</p>}
           {/* the Act's renumbering is said once, in the working below, not here as well (LIVE9B-018: printed twice on the page) */}

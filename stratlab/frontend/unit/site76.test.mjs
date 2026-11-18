@@ -161,3 +161,13 @@ test("LIVE14B-015 / LIVE14A: the weekday once in Coming up; /news's heading is i
   assert.doesNotMatch(mine, /<span aria-hidden="true">\{d\.w\}<\/span>\{u\.tone === "warn"/);
   assert.match(read("src/pages/NewsPage.tsx"), /<PageHeader eyebrow="After each market close" title="Today's brief"/);
 });
+
+test("LIVE14B-011 / LIVE14B-010: the funds page's count line names no plan; the tax table's head is 'Tax'", () => {
+  assert.match(read("src/pages/money/MutualFundsPage.tsx"), /<p className="k-note">\{schemes\.length\} of \{view\.limit\} free schemes used\.<\/p>/);
+  assert.match(read("src/pages/TaxReportPage.tsx"), /<FigureTable label="Where the tax comes from" header="Tax" valueHeader="Amount"/);
+});
+
+test("LIVE14B-015: the breadth card after the close says its day twice at most (eyebrow and column), no 'Prices as of' foot", () => {
+  const card = read("src/components/BreadthCard.tsx");
+  assert.doesNotMatch(card, /<AsOf parts=\{\[\["Prices", d\.as_of\]\]\}/);
+});

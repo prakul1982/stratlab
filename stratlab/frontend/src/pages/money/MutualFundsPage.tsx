@@ -289,7 +289,8 @@ export function MutualFundsPage() {
               // (LIVE13B-007: a class with no sub-category in its funds' records says so with a dash, not a blank cell)
               rows={view.allocation.map((a) => ({ key: a.broad, name: a.broad, count: a.schemes, detail: a.subs.map((s) => s.sub).join(", ") || "–", value: inr(a.value), pct: a.pct }))} />
             {/* what the plan includes, said where the numbers are: the menu has no lock on this page, it is free in the main */}
-            {view.limit != null && <p className="k-note">{schemes.length} of {view.limit} free schemes used. Basic keeps every scheme, with capital gains by year.</p>}
+            {/* LIVE14B-011: the count only; what Basic adds, with its price, is the one lock further down (three Basic lines on one page) */}
+            {view.limit != null && <p className="k-note">{schemes.length} of {view.limit} free schemes used.</p>}
           </Card>}
 
           {held.length > 0 && (costsShown(costs) || behaviourShown(habits)) && (
