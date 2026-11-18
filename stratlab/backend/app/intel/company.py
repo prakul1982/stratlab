@@ -1284,8 +1284,30 @@ class Research:
                 m = {**m, **{x: k.get(x) for x in ("price", "prev_close", "change_pct", "high", "low", "at")}}
             if m.get("price") is None:
                 continue
-            out.append(index_level(name, m, region, now))
+            out.append(self._pinned(region, index_level(name, m, region, now)))
         return out
+
+    PIN_NOISE = 0.0001        # a closed session's level read again within this share of the first reading is that reading (LIVE12A-014)
+    PIN_KEEP = 120            # closed sessions' levels kept, the oldest dropped first
+
+    def _pinned(self, region: str, lvl: dict) -> dict:
+        """LIVE12A-014: one figure for a closed session's level. The quote source answered the same 17 Nov close as 50,759.42 on one load
+        and 50,759.40 on the next; once the session is over and settled, the first reading stands for every later read that differs from
+        it by rounding noise only (a real correction, larger, replaces it). A live, settling or pre-close level is never pinned."""
+        day = lvl.get("day")
+        if lvl.get("live") or lvl.get("settling") or lvl.get("pre_close") or not day or lvl.get("price") is None:
+            return lvl
+        pins = self.__dict__.setdefault("_level_pins", {})
+        key, price = (region, lvl["name"], day), float(lvl["price"])
+        was = pins.get(key)
+        if was is None or abs(price - was) > abs(was) * self.PIN_NOISE:
+            pins[key] = price
+            while len(pins) > self.PIN_KEEP:
+                pins.pop(next(iter(pins)))
+            return lvl
+        hi = lvl.get("high52")
+        return {**lvl, "price": was, "change_pct": change_2dp(was, lvl.get("prev_close"), lvl.get("change_pct")),
+                "from_high_pct": ((was / hi - 1) * 100) if hi else lvl.get("from_high_pct")}
 
     # ---------- served from memory (R24-001) ----------
     PULSE_FRESH = 15          # seconds the index levels are served from memory before a read behind the page

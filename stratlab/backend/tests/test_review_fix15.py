@@ -94,3 +94,27 @@ def test_moods_live_breadth_line_names_its_count_and_the_rows_say_so_far():
     assert "closing" not in rows["adv"] and "closing" not in rows["dec"]
     shut = mood.breadth_block(today, None, "NIFTY 500", "2026-11-17")
     assert {r["key"]: r["means"] for r in shut["rows"]}["adv"] == "Stocks closing above the previous close."
+
+
+# ---------- LIVE12A-014: one figure for a closed session's index level ----------
+def test_a_closed_sessions_index_level_is_one_figure_across_reads():
+    from types import SimpleNamespace
+    import time_machine
+    from app.intel.company import Research
+
+    class Quotes:
+        def __init__(self):
+            self.prices = {"^GSPC": [6000.11, 6000.12], "^IXIC": [21000.5, 21000.5], "^DJI": [50759.42, 50759.40, 50300.0]}
+
+        def meta(self, sym):
+            seq = self.prices[sym]
+            p = seq.pop(0) if len(seq) > 1 else seq[0]
+            return {"price": p, "prev_close": 50000.0 if sym == "^DJI" else p, "at": "2026-11-17T21:00:00+00:00"}
+    y = Quotes()
+    hub = Research(None, finnhub=SimpleNamespace(ready=lambda: False), yahoo=y, screener=object(), news=object(), wiki=object())
+    with time_machine.travel(datetime(2026, 11, 18, 4, 0, tzinfo=timezone.utc), tick=False):
+        dow = lambda: next(i for i in hub.indices("US") if i["name"] == "DOW JONES")      # noqa: E731
+        first, second = dow(), dow()
+        assert first["day"] == "2026-11-17" and first["price"] == 50759.42
+        assert second["price"] == 50759.42 and second["change_pct"] == first["change_pct"]          # the same close, the same figure
+        assert dow()["price"] == 50300.0                                                            # a real correction replaces it
