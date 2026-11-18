@@ -234,3 +234,12 @@ def test_us_names_end_in_one_punctuation():
     assert [display_name("US", n) for n in ("Apple Inc.", "Amazon.com Inc", "Meta Platforms, Inc.", "MICROSOFT CORP")] == \
         ["Apple Inc", "Amazon.com Inc", "Meta Platforms Inc", "Microsoft Corp"]
     assert display_name("IN", "Larsen & Toubro Ltd.") == "Larsen & Toubro Ltd."          # India's names as the exchange lists them
+
+
+# ---------- LIVE11A-022: a landing card leads with the verdict that it trailed buy and hold, then the checks ----------
+def test_a_card_line_leads_with_the_shortfall_then_what_the_checks_test():
+    from app import library
+    from tests.test_review_r6v import SEED
+    v = library.restated(SEED)
+    assert v["card_headline"] == "Trailed buy and hold by 117.1 points after costs. Checks of the result itself: 3 of 4 checks run · all 3 passed."
+    assert v["fact_headline"].startswith("117.1 points behind")                         # the library's own pages keep their words

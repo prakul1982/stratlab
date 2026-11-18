@@ -75,3 +75,9 @@ test("LIVE11A-029: a price this device read during a session that has closed is 
   assert.equal(readInSession(nse, "2026-11-17T08:50:00Z", new Date("2026-11-17T09:00:00Z")), false);   // still trading
   assert.match(read("src/components/watch/WatchPanel.tsx"), /return !!m && readInSession\(m, at\);/);
 });
+
+test("LIVE11A-022: the landing's sample cards show the server's verdict-first line when it has one", () => {
+  const page = read("src/pages/Login.tsx");
+  assert.match(page, /<span className="small">\{e\.verdict\.card_headline \?\? e\.verdict\.fact_headline \?\? e\.verdict\.headline\}<\/span>/);
+  assert.match(page, /e\.verdict\.card_headline \?\? e\.verdict\.fact_headline \?\? e\.verdict\.headline\);/);
+});

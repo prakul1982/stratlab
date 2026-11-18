@@ -2458,7 +2458,7 @@ def rotation_day(region: str, now: datetime | None = None) -> str:
     """LIVE11A-007: the session a sector chart should run to: the latest one whose close is ROTATION_AFTER past. India's prices are taken as
     settled three hours after its close (18:30 IST), by when the broker may be offline for the night, so the copy kept at 16 Nov stood until
     the next morning ("Closes up to 16 Nov" at 04:40 IST, 13 h after the 17 Nov close)."""
-    return stock_pages.last_close(region, now, after=ROTATION_AFTER)[0].isoformat()
+    return stock_pages.last_session(region, now, ROTATION_AFTER)[0].isoformat()
 
 
 def rotation_behind(kept: dict | None, region: str, now: datetime | None = None) -> bool:

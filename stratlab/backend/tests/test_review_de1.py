@@ -522,6 +522,8 @@ def test_a_kept_copy_of_the_old_shape_is_worked_out_again(monkeypatch):
         def ready(self): return True
     monkeypatch.setattr(main.markets, "provider", lambda r: Prov())
     monkeypatch.setattr(main.stock_pages, "last_close", lambda r, now=None: (date(2026, 10, 22), None))
+    # (updated on purpose, fix13 LIVE11A-007: the sector chart's session is its own day, a quarter hour after the close)
+    monkeypatch.setattr(main.stock_pages, "last_session", lambda r, now=None, after=0: (date(2026, 10, 22), None))
     monkeypatch.setattr(main.rotation, "run", lambda m, region, s, mem, interval, tail: ran.append((region, interval)) or
                         {"rows": [1], "skipped": [], "as_of": "2026-10-22", "v": rotation.VERSION})
     for r in ("IN", "US"):

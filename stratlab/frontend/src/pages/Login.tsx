@@ -27,7 +27,7 @@ import { CONFIG } from "../lib/adsConfig";
 
 /** A landing card's checks line, unless its headline already gives the count (R61-007). */
 const cardChecks = (e: LibEntry) => underHeadline(lostMoney(e.verdict.verdict, e.stats?.ret) ? LOST_CHECKS : checksLine(e.verdict.passed, e.verdict.total),
-  e.verdict.fact_headline ?? e.verdict.headline);
+  e.verdict.card_headline ?? e.verdict.fact_headline ?? e.verdict.headline);
 // asked for again when its download fails, like every other lazy piece (R64-005: a 502 on a chunk just after a deploy)
 // ADS-1, AS1: the ad slot's code loads only when ads can draw here; with ads off (the default) the landing page asks for no extra file
 const ADS_HERE = adsLive(CONFIG, "public");
@@ -781,7 +781,7 @@ function LibraryExamples() {
               <Link key={e.id} to={`/library/${encodeURIComponent(e.id)}`} className="lp-card lp-example">
                 {eyebrow && <span className="eyebrow">{eyebrow}</span>}
                 <b className="serif">{title}</b>
-                <span className="small">{e.verdict.fact_headline ?? e.verdict.headline}</span>
+                <span className="small">{e.verdict.card_headline ?? e.verdict.fact_headline ?? e.verdict.headline}</span>
                 {/* the count once: most headlines already end with it */}
                 {cardChecks(e) && <span className="small muted">{cardChecks(e)}</span>}
                 <span className="small lp-space-go">Open the verdict and rules →</span>
