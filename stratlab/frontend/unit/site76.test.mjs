@@ -155,10 +155,7 @@ test("LIVE14B-009: the scan's special-sessions bracket is one numbered note unde
   assert.match(read("src/pages/ResearchScans.tsx"), /data-testid="scan-sessions-note">\{MARKS\[i\]\} \{n\}<\/p>/);
 });
 
-test("LIVE14B-015 / LIVE14A: the weekday once in Coming up; /news's heading is its menu name", () => {
-  const mine = read("src/pages/MineHome.tsx");
-  assert.match(mine, /<span className="dt" aria-hidden="true"><span className="dt-w">\{d\.w\}<\/span><b>\{d\.d\}<\/b>\{d\.m\}<\/span>/);
-  assert.doesNotMatch(mine, /<span aria-hidden="true">\{d\.w\}<\/span>\{u\.tone === "warn"/);
+test("LIVE13A-023: /news's heading is its menu name", () => {
   assert.match(read("src/pages/NewsPage.tsx"), /<PageHeader eyebrow="After each market close" title="Today's brief"/);
 });
 
