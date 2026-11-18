@@ -213,6 +213,24 @@ class _Turns:
                 self._queue.remove(ticket)
                 self._cond.notify_all()
 
+    def acquire_idle(self, name: str, timeout: float) -> bool:
+        """r69e (live R68 logs: page-prices, stock-desks, screens-index and corp-actions waited 20-129 s behind the theme re-check): the turn
+        taken only when no job holds it and none waits for it, so a background job of low priority never stands in front of another; False
+        when that did not happen within `timeout` (the caller does its work later; it never runs without the turn)."""
+        me = threading.get_ident()
+        with self._cond:
+            if self._owner == me:
+                self._depth += 1
+                return True
+            deadline = time.monotonic() + timeout
+            while not (self._owner is None and not self._queue):
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    return False
+                self._cond.wait(min(left, 1.0))
+            self._owner, self._depth, self.name, self.since = me, 1, name, time.time()
+            return True
+
     def release(self) -> bool:
         """One level out; True when this was the outermost (the lock is free again after it)."""
         with self._cond:
@@ -261,6 +279,21 @@ def heavy(name: str, force_release: bool = False):
     finally:
         outer = TURNS.release() if got else True
         if outer:
+            try:
+                release_memory(force=force_release)
+            except Exception as e:
+                print("memguard: release failed:", str(e)[:120])
+
+
+@contextlib.contextmanager
+def heavy_idle(name: str, timeout: float, force_release: bool = True):
+    """r69e: a heavy piece of background work of low priority (the theme re-check): it takes the turn only when no other job holds or waits
+    for it (TURNS.acquire_idle) and yields False, running nothing, when it could not within `timeout`; memory handed back afterwards."""
+    got = TURNS.acquire_idle(name, timeout)
+    try:
+        yield got
+    finally:
+        if got and TURNS.release():
             try:
                 release_memory(force=force_release)
             except Exception as e:

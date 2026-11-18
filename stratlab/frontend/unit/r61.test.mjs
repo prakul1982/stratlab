@@ -30,7 +30,9 @@ test("R61: every visitor's Continue with Google has the email way beside it, dra
   const way = read("src/components/EmailWay.tsx");
   assert.match(way, /if \(!emailSignInOn\(\)\) return null;/);
   assert.match(way, /<a className=\{`btn outline\$\{small \? " sm" : ""\} email-way/);    // R64: a real button, never a text line
-  assert.match(way, /<Mail \/>Sign in with email/);
+  // (updated on purpose, LIVE12B-024: the words are a prop, "Sign in with email" unless a plan card names its plan)
+  assert.match(way, /label = "Sign in with email"/);
+  assert.match(way, /<Mail \/>\{label\}/);
   assert.match(read("src/lib/signin.ts"), /export const EMAIL_SIGNIN_PATH = "\/login#email";/);
   const login = read("src/pages/Login.tsx");
   assert.ok((login.match(/<EmailWay\b/g) ?? []).length >= 4, "hero, closing call, plan cards and the rule template");

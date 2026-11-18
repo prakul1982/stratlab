@@ -68,7 +68,12 @@ test("Free: three peers and the company's own row, three years of profit and los
   await st.scrollIntoViewIfNeeded();
   const pl = st.getByRole("table", { name: /Profit and loss/ });
   await expect(pl).toBeVisible({ timeout: 20_000 });
-  await expect(pl.locator("thead th")).toHaveCount(4);                           // the row names and three years
+  // (updated on purpose, LIVE12B-017: on a phone the window holds the periods that fit the card, two at 412 px, with Earlier for the third;
+  // three there were wider than the card and the first was out of view sideways)
+  if (phone) {
+    await expect(pl.locator("thead th")).toHaveCount(3);
+    await expect(st.getByTestId("ct-window").getByRole("button", { name: "← Earlier" })).toBeEnabled();
+  } else await expect(pl.locator("thead th")).toHaveCount(4);                   // the row names and three years
   await expect(st.getByRole("radio", { name: "Balance sheet" })).toHaveCount(0);
   await expect(st.getByText(/years of profit and loss, the balance sheet, cash flow, ratios and the last \d+ quarters/)).toBeVisible();
   await sane(page, errors, "#co-statements");
@@ -204,7 +209,8 @@ test("LIVE8B-003: a statements table wider than its card opens on the latest yea
   await expect(pl).toBeVisible({ timeout: 20_000 });
   const wrap = st.locator(".k-tbl-wrap").first();
   // the card narrower than the years (a 12-year table in a 1,004 px card at 1440): squeeze the box, then scroll it to the latest year
-  await wrap.evaluate((b) => { (b as HTMLElement).style.maxWidth = "360px"; b.scrollLeft = b.scrollWidth; });
+  // (updated on purpose, LIVE12B-017: a phone's window now fits its card, so the box is squeezed narrower there to make it scroll)
+  await wrap.evaluate((b, w) => { (b as HTMLElement).style.maxWidth = w; b.scrollLeft = b.scrollWidth; }, phone ? "200px" : "360px");
   expect(await wrap.evaluate((b) => b.scrollLeft)).toBeGreaterThan(0);
   const box = await wrap.boundingBox();
   for (const cell of [pl.locator("tbody th[scope=row]").first(), pl.locator("thead th").first()]) {

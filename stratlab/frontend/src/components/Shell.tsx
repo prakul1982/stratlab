@@ -23,6 +23,7 @@ import { watchSize } from "../lib/resize";
 import { importWithRetry } from "../lib/lazyRetry";
 import { scrollBehavior } from "../lib/motion";
 import { setSectionUser } from "../lib/sections";
+import { callsInFlight, onIdle } from "../lib/inflight";
 
 // the pop-ups load when they first open, so they don't slow down the first page
 const SearchPalette = lazy(() => importWithRetry(() => import("./SearchPalette")).then((m) => ({ default: m.SearchPalette })));
@@ -45,7 +46,27 @@ const MINE_PAGES = ["/account", "/settings", "/assistant", "/app", "/invite"];
 
 /** `ask`: the analytics question (Tracking), in the page column after the page (LIVE8B-004: above it, its arrival after the first paint
  * pushed the page down, CLS 0.19 a time). */
-export function Shell({ children, ask }: { children: ReactNode; ask?: ReactNode }) {
+/** True once the page's calls to the server have all been back for a moment (or after CALLS_SETTLE_CAP at the most): the analytics question
+ * then comes after the page's cards have their content, so their filling in never pushes it down the screen (LIVE13B-011: on a phone it
+ * was drawn mid-screen at y 712 while /mine's cards loaded, then moved to y 2,496, CLS 0.117). */
+const CALLS_QUIET_MS = 700, CALLS_SETTLE_CAP = 6_000;
+function useCallsSettled(): boolean {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    if (on) return;
+    let quiet = 0;
+    const done = () => setOn(true);
+    const wait = () => { window.clearTimeout(quiet); quiet = window.setTimeout(() => { if (!callsInFlight()) done(); }, CALLS_QUIET_MS); };
+    // armed when a call comes back with none left out (the page's code may still be on its way at first, with no call asked yet)
+    const stop = onIdle(wait);
+    const cap = window.setTimeout(done, CALLS_SETTLE_CAP);
+    return () => { stop(); window.clearTimeout(quiet); window.clearTimeout(cap); };
+  }, [on]);
+  return on;
+}
+
+export function Shell({ children, ask: question }: { children: ReactNode; ask?: ReactNode }) {
+  const ask = useCallsSettled() ? question : null;
   useScrollMemory();
   const { notebooks, markets, me, focus, space: saved, setSpace } = useApp();
   const [open, setOpen] = useState(false);

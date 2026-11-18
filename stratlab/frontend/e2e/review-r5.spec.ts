@@ -314,7 +314,9 @@ test.describe("gate and not-found pages (R5V-013, R5V-014)", () => {
 test.describe("keyboard, landmarks and small targets (R5V-016, R5V-017)", () => {
   test("a skip link is the first stop; the policies sit in a main landmark", async ({ page }) => {
     await open(page);
-    await expect(page.locator(".lp-nav")).toBeVisible({ timeout: 30_000 });         // the page itself, not the plain start-up text it replaces
+    // (updated on purpose, LIVE13B-001: the start-up frame wears the landing's own header now, so the page itself is the frame gone)
+    await expect(page.locator(".lp-nav")).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator("[data-boot]")).toHaveCount(0, { timeout: 30_000 });
     await page.keyboard.press("Tab");
     await expect(page.getByRole("link", { name: "Skip to main content" })).toBeFocused();
     await page.keyboard.press("Enter");

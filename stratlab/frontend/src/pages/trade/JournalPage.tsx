@@ -440,7 +440,10 @@ function CheckCard({ c }: { c: Check }) {
         {c.id === "sample" && d && <div className="j-big">{d.trades}</div>}
         {c.id === "luck" && d && <Halves a={d.earlier} b={d.later} an={d.earlier_n} bn={d.later_n} />}
         {c.id === "shuffle" && d && d.unit === "pct" && <DrawdownBand yours={d.yours} p95={d.p95} worst={d.worst} />}
-        {c.id === "shuffle" && d && d.unit === "rupees" && <p className="k-small">Yours <span className="nowrap">{m(-d.yours)}</span> · 95% of reshuffles at or above <span className="nowrap">{m(-d.p95)}</span> · worst <span className="nowrap">{m(-d.worst)}</span></p>}
+        {/* LIVE13B-013: with few losses the 95% line and the worst are one figure (all the losses in a row): said once */}
+        {c.id === "shuffle" && d && d.unit === "rupees" && (m(-d.p95) === m(-d.worst)
+          ? <p className="k-small">Yours <span className="nowrap">{m(-d.yours)}</span> · worst reshuffle <span className="nowrap">{m(-d.worst)}</span>, which is also the level 95% of reshuffles stay at or above</p>
+          : <p className="k-small">Yours <span className="nowrap">{m(-d.yours)}</span> · 95% of reshuffles at or above <span className="nowrap">{m(-d.p95)}</span> · worst <span className="nowrap">{m(-d.worst)}</span></p>)}
         {c.id === "costs" && d && <p className="k-small">Gross <span className="nowrap"><Signed value={d.gross}>{signed(d.gross)}</Signed></span> · charges <span className="nowrap">{m(d.charges)}</span> · doubled <span className="nowrap"><Signed value={d.doubled}>{signed(d.doubled)}</Signed></span></p>}
         <p className="k-small k-muted">{c.detail}</p>
         {c.id === "shuffle" && d?.unit === "rupees" && <span className="k-note">Enter your trading capital (Capital and brokerage) to see this as a %.</span>}

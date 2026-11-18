@@ -1209,7 +1209,7 @@ body:has(main .k-state.error button, main .k-state.error a.btn) .banner .account
 /* Trade home's market figures (DC-001): laid out as the tool strip, but its own class (the strip is the tools' row) */
 .trade-market { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .trade-market b.num { font-size: 1.15rem; line-height: 1.3; }
-.trade-market .space-card-line { min-height: 0; }   /* VR1-020: the two-line room left the tile with no caption half blank */
+.trade-market .space-card-line { min-height: 1.4em; }   /* VR1-020: not two lines of room; R73: one line held, so a note arriving late (VIX "reading…", then its day) never grows the tile */
 .space-card { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 14px 16px; color: var(--ink); text-decoration: none; }
 .space-card:hover { border-color: var(--ink-2); color: var(--ink); }
 .space-card-lead { border-color: var(--blue); background: var(--blue-soft); }

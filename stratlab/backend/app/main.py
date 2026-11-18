@@ -5221,7 +5221,7 @@ def stock_page_bars(region: str, co: dict) -> list[dict]:
         # own candles are read as before (official_close.widen_to_range)
         try:
             rep = official_close.ranges() or {}
-            bars = stock_pages.fit_to_exchange_range(bars, official_close.range_row(sym, rep), rep.get("day"))
+            bars = stock_pages.fit_to_exchange_range(bars, official_close.range_row(sym, rep), rep.get("day"), official_close.report_through(rep))
         except Exception as e:                       # the candles as they are rather than none
             print("52-week report for the public page:", sym, str(e)[:120])
     return bars

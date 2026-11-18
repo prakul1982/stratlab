@@ -180,8 +180,12 @@ test("DI-023: on a phone the tour opens the menu for the steps about it, and clo
   await answer(request, u, "money", "money");
   const errors = await signIn(page, u, "/money");
   await expect(page.locator("main h1")).toBeVisible({ timeout: 30_000 });
-  await page.evaluate(() => window.dispatchEvent(new CustomEvent("stratlab:tour", { detail: { tour: "mine" } })));
   const tour = page.getByRole("dialog", { name: "Tour: Getting around" });
+  // R73: asked again until the tour shows (as e2e/intro.spec.ts's openTour): a page still drawing its first frame may not be listening yet
+  await expect(async () => {
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent("stratlab:tour", { detail: { tour: "mine" } })));
+    await expect(tour).toBeVisible({ timeout: 5000 });
+  }).toPass({ timeout: 30_000 });
   await expect(tour).toContainText("My space is yours", { timeout: 30_000 });
   await expect(page).toHaveURL(/\/mine$/);
   await tour.getByRole("button", { name: "Next" }).click();

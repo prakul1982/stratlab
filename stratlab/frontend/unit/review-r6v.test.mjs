@@ -27,7 +27,8 @@ test("every StratLab library strategy gets its own HTML with its own title and a
   assert.doesNotMatch(page, /<link rel="canonical" href="https:\/\/stratlab\.studio\/">/);
   for (const html of Object.values(files)) assert.doesNotMatch(html, /recommend|buy now|should buy/i);
   // (R8V-008: the library files also take the entries the build read from the server, so the call has a second argument)
-  assert.match(read("scripts/seoPages.mjs"), /\[\.\.\.pageFiles\(template\), \.\.\.libraryFiles\(template, entries\)\]/);
+  // (updated on purpose, LIVE13B-001: pageFiles also takes the built font files, for the home page's start-up heading)
+  assert.match(read("scripts/seoPages.mjs"), /\[\.\.\.pageFiles\(template, fonts\), \.\.\.libraryFiles\(template, entries\)\]/);
 });
 
 test("a library page says its dates as days and its universe once (R6V-004)", () => {

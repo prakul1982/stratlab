@@ -67,7 +67,11 @@ export function costFigures(q: CostsQuery): Figure[] {
 }
 
 /** What the costs need said under their stats: why there are none yet, the funds left out, what the plan keeps back. */
-export function CostNotes({ q }: { q: CostsQuery }) {
+/** What the plan keeps back of the costs, or null when nothing is: one line, so a card can join it with the habits' (LIVE13B-007). */
+export const costLock = (q: CostsQuery): { what: string; plan: string } | null =>
+  q.c && q.c.total && !q.c.full && !q.failed ? { what: "each TER's parts, the rupees per fund, both plans side by side, TER changes since you bought and category changes", plan: q.c.plan } : null;
+
+export function CostNotes({ q, lock = true }: { q: CostsQuery; lock?: boolean }) {
   const { c, failed, retry } = q;
   if (failed) return <EmptyState title="Fund costs couldn't be loaded" action={{ label: "Try again", onClick: retry }}>Fund costs couldn't be read just now.</EmptyState>;
   if (c?.state === "reading") return <EmptyState title="Reading each fund's costs">Costs are being read; check back shortly.</EmptyState>;
@@ -76,7 +80,7 @@ export function CostNotes({ q }: { q: CostsQuery }) {
   return (
     <>
       {c.unmatched.length > 0 && <p className="k-note">{c.unmatched.length} fund{c.unmatched.length === 1 ? " is" : "s are"} not in the TER disclosure yet, so {c.unmatched.length === 1 ? "it is" : "they are"} left out of the costs.</p>}
-      {!c.full && <PlanNote>Each TER's parts, the rupees per fund, both plans side by side, TER changes since you bought and category changes are on the {c.plan} plan.</PlanNote>}
+      {lock && !c.full && <PlanNote>Each TER's parts, the rupees per fund, both plans side by side, TER changes since you bought and category changes are on the {c.plan} plan.</PlanNote>}
     </>
   );
 }
