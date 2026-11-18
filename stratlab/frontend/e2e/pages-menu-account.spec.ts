@@ -236,28 +236,25 @@ test("the menu (IA-1): a space's short list of entries, the one you are in lit, 
   await expect(page.getByRole("radiogroup", { name: "Watchlist view" }).getByRole("radio", { name: "At a glance" })).toHaveAttribute("aria-checked", "true");
   await expect(page.getByTestId("hub-tabs").locator("a")).toHaveText(["Stocks", "Alerts"]);
 
-  // the keyboard: Tab from the search button passes the space's home and the highlighted Themes beside it (R16, changed on purpose:
-  // owner, 7 Nov) and lands on the first entry, with a visible focus ring
+  // the keyboard: Tab from the search button passes the space's home and lands on the first entry, Themes (owner, 18 Nov, changed on
+  // purpose: Themes is Invest's first entry, no pill beside the home link), with a visible focus ring
   side = await menu(page, phone);
   await side.getByRole("button", { name: /Ask or do anything/ }).focus();
   await page.keyboard.press("Tab");
   await expect(side.getByRole("link", { name: "Invest home" })).toBeFocused();
   await page.keyboard.press("Tab");
-  const themes = side.locator(".side-home a.side-feature");
-  await expect(themes).toBeFocused();
-  await expect(themes).toHaveText("Themes");
-  await expect(themes).toHaveAttribute("href", "/research/themes");
-  await expect(themes).not.toHaveAttribute("aria-current", /.*/);
-  await page.keyboard.press("Tab");
   const first = side.locator(".side-entries > .side-entry > .side-head > a").first();
   await expect(first).toBeFocused();
+  await expect(first).toHaveText("Themes");
+  await expect(first).toHaveAttribute("href", "/research/themes");
   expect(await first.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe("solid");
   await sane(page, errors);
 });
 
-// R16 (owner, 7 Nov: Themes is one of StratLab's best tools but was buried in Invest → Themes): highlighted beside the space's home on
-// the menu's first row, in every space, on a laptop and in the phone's drawer; it opens Themes, whose own Invest entry is the one lit
-test("R16: the highlighted Themes link heads the menu in My space and Invest (not Trade or Money) and opens Themes", async ({ page }, info) => {
+// R16 (owner, 7 Nov: Themes is one of StratLab's best tools but was buried in Invest → Themes). Changed on purpose (owner, 18 Nov: "put it
+// at top like above the companies"): Themes is ONE entry, the first of Invest's menu above Companies, its own row with its compass icon
+// styled like the other entries; no orange pill beside the space's home in any space, no second Themes entry lower in Invest's list
+test("R16: Themes is Invest's first menu entry, above Companies, styled like the others, once in the menu, and opens Themes", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   await page.route("**/me/prefs", (r) => (r.request().method() === "PUT" ? r.fulfill({ json: { prefs: {} } }) : r.fallback()));
   const errors = await open(page, "/research", "Companies");
@@ -266,32 +263,37 @@ test("R16: the highlighted Themes link heads the menu in My space and Invest (no
     await side.getByRole("group", { name: "Space" }).getByRole("button", { name }).click();
     const again = await menu(page, phone);
     await expect(again.getByRole("group", { name: "Space" }).getByRole("button", { name })).toHaveAttribute("aria-pressed", "true");
-    const themes = again.getByRole("navigation", { name: "Main" }).locator(".side-home a.side-feature");
-    // owner, 7 Nov (changed on purpose): My space and Invest only; Trade and Money stay as they were
-    if (name === "Trade" || name === "Money") {
+    const nav = again.getByRole("navigation", { name: "Main" });
+    // the space's home alone on the first row: no pill beside it, in any space
+    await expect(nav.locator(".side-home a"), name).toHaveCount(1);
+    await expect(nav.locator(".side-feature"), name).toHaveCount(0);
+    const themes = nav.getByRole("link", { name: "Themes", exact: true });
+    if (name !== "Invest") {
       await expect(themes, name).toHaveCount(0);
       if (phone) await page.keyboard.press("Escape");
       continue;
     }
-    await expect(themes, name).toBeVisible();
-    await expect(themes).toHaveText("Themes");
-    // on the first row, beside the home link, and tinted with the accent
-    const [home, t] = await Promise.all([again.locator(".side-home > a").first().boundingBox(), themes.boundingBox()]);
-    expect(Math.abs(home!.y - t!.y), `${name}: Themes shares the home link's row`).toBeLessThanOrEqual(1);
-    // the home link's words stay on one line, whole (owner, 7 Nov: "Invest home" broke onto two lines)
-    const label = again.locator(".side-home > a").first().locator(".side-home-label");
+    await expect(themes, "one Themes entry in Invest's menu").toHaveCount(1);
+    const heads = nav.locator(".side-entries > .side-entry > .side-head > a");
+    await expect(heads.first()).toHaveText("Themes");
+    await expect(heads.nth(1)).toHaveText("Companies");
+    await expect(heads.first().locator("svg")).toHaveCount(1);
+    // styled like the other entries: the same height, left edge and border, no accent edge (both read at once: the phone's drawer slides)
+    const [t, c] = await heads.evaluateAll((els) => els.slice(0, 2).map((el) => { const s = getComputedStyle(el), b = el.getBoundingClientRect();
+      return { h: Math.round(b.height), x: Math.round(b.left), edge: s.borderLeftWidth, bg: s.backgroundColor }; }));
+    expect(t, "Themes looks like Companies").toEqual(c);
+    // the home label stays on one line, whole (owner, 7 Nov: "Invest home" broke onto two lines)
+    const label = nav.locator(".side-home > a").first().locator(".side-home-label");
     expect(await label.evaluate((el) => el.scrollWidth <= el.clientWidth + 1 && el.getBoundingClientRect().height < 24), `${name}: home label fits on one line`).toBe(true);
-    expect(await themes.evaluate((el) => getComputedStyle(el).borderLeftWidth)).toBe("3px");
     if (phone) await page.keyboard.press("Escape");
   }
   const side = await menu(page, phone);
   await side.getByRole("group", { name: "Space" }).getByRole("button", { name: "Invest" }).click();
-  await (await menu(page, phone)).locator(".side-home a.side-feature").click();
+  await (await menu(page, phone)).getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Themes", exact: true }).click();
   await expect(page).toHaveURL(/\/research\/themes$/);
   await expect(page.getByTestId("page-breadcrumb").or(page.locator(".crumb-row")).first()).toContainText(/Invest\s*›\s*Themes/);
   const after = await menu(page, phone);
-  // the one lit item is Invest's own Themes entry, never the shortcut
-  await expect(after.locator(".side-home a.side-feature")).not.toHaveAttribute("aria-current", /.*/);
+  // the one lit item is Invest's Themes entry (ui-lint R7)
   await expect(after.locator('[aria-current="page"]')).toHaveCount(1);
   await expect(after.locator('.side-entry[data-group="themes"] a')).toHaveAttribute("aria-current", "page");
   await sane(page, errors);
