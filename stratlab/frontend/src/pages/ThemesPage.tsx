@@ -189,7 +189,8 @@ export function ThemesPage() {
             <StoredNote busy={rf.busy} state={rf.state} at={r.generated_at > 0 ? r.generated_at : null} tz={marketTz(region)} />
             {olderNote(r.older, fmtDate) && <p className="k-note" data-testid="theme-older">{olderNote(r.older, fmtDate)}</p>}
             {r.summary && <p className="k-lede">{r.summary}</p>}
-            {r.core && <p className="k-small">Everything converges on <b>{r.core}</b>.</p>}
+            {/* LIVE13A-020 (LIVE12A-021): after a colon the phrase keeps its own capital ("converges on Leading-edge…" read as a typo) */}
+            {r.core && <p className="k-small">The point everything converges on: <b>{r.core}</b>.</p>}
             <ThemeDownloads r={r} dive={dive} region={region} theme={q} />
             {/* L4: the theme's companies as tiles, grouped by layer, sized by market value and coloured by what the price did */}
             {r.value_chain.some((v) => v.companies.length > 0) && (

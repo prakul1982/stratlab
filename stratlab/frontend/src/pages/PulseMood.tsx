@@ -85,7 +85,7 @@ export function BreadthTable({ b: given, open = true, behind = false }: { b: Non
     { key: "m", header: "Measure", rowHeader: true, wrap: true, cell: (r) => <><b>{r.label}</b><span className="k-sub-line">{r.means}</span></> },
     // live, the 52-week highs and lows are counted at the close: their cell says so rather than standing empty (owner, 5 Nov)
     // the live count's own quarter-hour in its header, so Mood's count and Breadth's are each labelled with their round (LIVE4-005)
-    { key: "now", header: b.live ? (b.at ? `Today, ${b.at}` : "Today") : day(b.day), numeric: true, brief: true, cell: (r) => (r.now == null ? (b.live ? <span className="k-muted" title="Counted from the exchange's evening price file">{waiting}</span> : "–") : r.kind === "share" ? `${r.now.toFixed(1)}%` : whole(r.now)) },
+    { key: "now", header: b.live ? (b.at_close ? "Today, at the close" : b.at ? `Today, ${b.at}` : "Today") : day(b.day), numeric: true, brief: true, cell: (r) => (r.now == null ? (b.live ? <span className="k-muted" title="Counted from the exchange's evening price file">{waiting}</span> : "–") : r.kind === "share" ? `${r.now.toFixed(1)}%` : whole(r.now)) },
     { key: "prev", header: day(b.prev_day) || "Day before", numeric: true, cell: (r) => (r.before == null ? "–" : r.kind === "share" ? `${r.before.toFixed(1)}%` : whole(r.before)) },
     // LIVE10A-024: more stocks falling or at 52-week lows is no good news: those rows' changes in the plain chip ("New 52-week lows ▲+1" was green)
     { key: "chg", header: "Change", numeric: true, cell: (r) => (r.change == null ? "–" : <Delta badRise={r.key === "dec" || r.key === "lows"} value={r.change}>{r.kind === "share" ? signedPts(r.change) : signedWhole(r.change)}</Delta>) },
@@ -94,7 +94,7 @@ export function BreadthTable({ b: given, open = true, behind = false }: { b: Non
     <Card testId="pulse-breadth">
       <CardHead title={`How many stocks took part · ${b.group}`} info={`The stocks of ${b.group} counted ${when}${b.live ? (open ? " (a count every quarter hour from live prices, the 52-week highs and lows among them)" : " (the last quarter hour's count from live prices; the evening's count from the exchange's price file replaces it)") : ""}. Every stock counts once, whatever its size.`} />
       <DataTable stack compact label={`Breadth of ${b.group}`} columns={cols} rows={b.rows} rowKey={(r) => r.key} />
-      {b.ratio != null && <p className="k-note">{whole(b.adv)} rose to {whole(b.dec)} fell: {b.ratio.toFixed(2)} to 1, of {whole(b.stocks)} stocks{b.live && b.at ? `, in the ${b.at} IST count` : ""}.</p>}
+      {b.ratio != null && <p className="k-note">{whole(b.adv)} rose to {whole(b.dec)} fell: {b.ratio.toFixed(2)} to 1, of {whole(b.stocks)} stocks{b.live && b.at_close ? ", in the count at the closing prices" : b.live && b.at ? `, in the ${b.at} IST count${open ? "" : ", before the closing prices"}` : ""}.</p>}
     </Card>
   );
 }
@@ -196,14 +196,14 @@ export function GlobalTable({ g, region, today }: { g: NonNullable<PulseMood["gl
   );
 }
 
-export function CalendarTable({ c, today }: { c: NonNullable<PulseMood["calendar"]>;
+export function CalendarTable({ c, today, region = "IN" }: { c: NonNullable<PulseMood["calendar"]>; region?: Region;
   /** the market's date now: a result or event dated before it is over, never "coming up" (LIVE9A-002: "13 Nov Results" on 16 Nov) */
   today?: string | null }) {
   type Row = { key: string; when: string; kind: string; what: ReactNode };
   const ahead = <T,>(xs: T[], at: (x: T) => string | null | undefined) => xs.filter((x) => { const d = at(x); return !today || !d || d.slice(0, 10) >= today; });
   const rows: Row[] = [
     ...ahead(c.results, (r) => r.date).map((r) => ({ key: `r-${r.symbol}-${r.date}`, when: day(r.date), kind: "Results", what: <>{r.name}{r.purpose ? <span className="k-sub-line">{r.purpose}</span> : null}</> })),
-    ...c.ipos.map((i) => ({ key: `i-${i.name}`, when: i.close ? `closes ${day(i.close)}` : "open", kind: "IPO open", what: <>{i.name}{i.low != null && i.high != null ? <span className="k-sub-line">Price band {i.low}–{i.high}</span> : null}</> })),
+    ...c.ipos.map((i) => ({ key: `i-${i.name}`, when: i.close ? `closes ${day(i.close)}` : "open", kind: "IPO open", what: <>{i.name}{i.low != null && i.high != null ? <span className="k-sub-line">Price band {region === "US" ? "$" : "₹"}{i.low}–{i.high}</span> : null}</> })),
     ...ahead(c.events, (e) => e.date).map((e) => ({ key: `e-${e.date}-${e.title}`, when: `${day(e.date)}${e.time ? `, ${e.time}` : ""}`, kind: "Event", what: e.title })),
   ];
   const cols: Column<Row>[] = [

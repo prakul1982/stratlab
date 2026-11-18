@@ -56,7 +56,8 @@ test("LIVE11B-002: the signed-out view of an app page is drawn in /login's frame
   assert.doesNotMatch(gate.slice(gate.indexOf("export function SignInGate"), gate.indexOf("export function NotFound")), /<PublicFrame className="gate">\s*<PageHeader eyebrow="StratLab" title=\{title\}/);
   // the words: both ways in while email sign-in is on, Google alone only while it is the only way
   assert.match(gate, /const how = email \? "sign in with Google or your email" : "sign in with Google";/);
-  assert.match(gate, /Signing in only reads your name and email from Google\{email \? ", or only your email address by email" : ""\}\./);
+  // (updated on purpose, fix18 LIVE13A-018: one plain sentence for each way in)
+  assert.match(gate, /Google sign-in reads only your name and email address\{email \? "; email sign-in reads only your email address" : ""\}\./);
   assert.doesNotMatch(gate, /Sign in with Google to continue|sign in with Google and the page opens/);
 });
 

@@ -8337,7 +8337,7 @@ def news_list(kind: str = "market", region: str = "IN", limit: int = 20, profile
     scope = ("US" if region.upper() == "US" else "IN") if kind == "market" else profile["id"]
     return {"issues": [{**{k: i.get(k) for k in ("id", "kind", "region", "day", "weekly", "subject")},
                         # the title names the lead index's move and the brief's table every index's: the preview starts after them (LIVE11B-015)
-                        "preview": email_kit.short_line(news_write.past_today(news_write.without_moves(i.get("summary"), i.get("indices")), i, _news_today(i)), 200) or None}
+                        "preview": email_kit.short_line(news_write.past_today(news_write.without_moves(i.get("summary"), i.get("indices"), i.get("sections")), i, _news_today(i)), 200) or None}
                        for i in news.recent(kind, scope, max(1, min(60, limit)))]}
 
 

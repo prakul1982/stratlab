@@ -71,3 +71,51 @@ test("LIVE13A-005: Results' Usual move column needs three rows with a move; a US
   assert.match(read("src/components/CalendarFilters.tsx"), /<div className="res-sort">\s*<Field label="Sort by">/);
   assert.match(read("src/styles-invest.css"), /@media \(min-width: 900px\) \{ \.res-filter-grid > \.res-sort \{ grid-column: span 2;/);
 });
+
+test("LIVE13A-015: Mood's Coming up says the price band in rupees (or dollars)", () => {
+  assert.match(read("src/pages/PulseMood.tsx"), /Price band \{region === "US" \? "\$" : "₹"\}\{i\.low\}–\{i\.high\}/);
+  assert.match(read("src/pages/Research.tsx"), /<CalendarTable c=\{mood\.calendar\} today=\{dayIn\(new Date\(\), marketTz\(region\)\)\} region=\{region\} \/>/);
+});
+
+test("LIVE13A-030: Mood's breadth table and note say the count at the closing prices apart from the 15:30 round", () => {
+  const m = read("src/pages/PulseMood.tsx");
+  assert.match(m, /b\.live && b\.at_close \? ", in the count at the closing prices" : b\.live && b\.at \? `, in the \$\{b\.at\} IST count\$\{open \? "" : ", before the closing prices"\}`/);
+  assert.match(m, /header: b\.live \? \(b\.at_close \? "Today, at the close" :/);
+});
+
+test("LIVE13A-018: /login's two buttons one height, a plain sentence, the company directories two to a row, no lone eyebrow word", () => {
+  const css = read("src/styles.css");
+  assert.match(css, /\.lp-hero-login \.lp-hero-copy:has\(\.email-slot, \.email-signin\) \.lp-cta \{ min-height: 44px; \}/);
+  assert.match(css, /\.email-signin-row \.btn \{ min-height: 44px; \}/);
+  assert.match(css, /\.legal-links\[aria-label="Browse companies"\] \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(css, /\.eyebrow \{[^}]*text-wrap: balance; \}/);
+  for (const p of ["src/pages/Login.tsx", "src/pages/Gate.tsx"]) {
+    assert.match(read(p), /Google sign-in reads only your name and email address\{/);
+    assert.doesNotMatch(read(p), /Signing in only reads/);
+  }
+});
+
+test("LIVE13A-027: earnings calls show one link per document, say a missing zone, and keep the CSV in a head", async () => {
+  const src = read("src/pages/EarningsCallsPage.tsx");
+  assert.match(src, /export const oneEach = <L extends \{ label: string \}>\(links: L\[\]\): L\[\] => links\.filter\(\(x, i\) => links\.findIndex\(\(y\) => y\.label === x\.label\) === i\);/);
+  assert.match(src, /\{oneEach\(r\.links\)\.map\(/);
+  assert.match(src, /if \(r\.time\) return `\$\{r\.time\}\$\{r\.tz \? ` \$\{r\.tz\}` : ", zone not given"\}`;/);
+  assert.match(src, /<CardHead title=\{when === "past" \? "Held" : "Coming up"\} actions=\{data\.rows\.length \? <CsvButton name="earnings calls"/);
+  assert.doesNotMatch(src, /<DataTable csv="earnings calls"/);
+});
+
+test("LIVE13A-020: a theme's central point follows a colon, so its own capital reads right", () => {
+  assert.match(read("src/pages/ThemesPage.tsx"), /The point everything converges on: <b>\{r\.core\}<\/b>\./);
+  assert.doesNotMatch(read("src/pages/ThemesPage.tsx"), /Everything converges on <b>/);
+});
+
+test("LIVE13A-019: on a phone a wrapped card title keeps its (i) after its last word, a lone CSV stays on the title's line, Movers' lists are rows of two", () => {
+  const css = read("src/styles.css");
+  assert.match(css, /\.k-card-titlerow \{ display: block; \}\n  \.k-card-titlerow > \.k-card-title \{ display: inline; \}/);
+  assert.match(css, /\.k-card-head:has\(> \.k-card-actions > \[data-csv\]:only-child\) \{ flex-wrap: nowrap; align-items: flex-start; \}/);
+  assert.match(read("src/pages/movers.css"), /\.mv-page \.k-chiprow\.wrap \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+});
+
+test("LIVE12A-011: Breadth's range chips and + Custom are two even rows on a phone", () => {
+  assert.match(read("src/styles.css"), /\.breadth-bar \.k-chiprow\.wrap \{ display: grid; grid-template-columns: repeat\(4, minmax\(0, 1fr\)\); gap: 6px; \}/);
+});

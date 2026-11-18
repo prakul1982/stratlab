@@ -69,7 +69,9 @@ test("a long page intro shows one short sentence (or the words before its colon)
   const two = "Pick the conditions; see every company that meets them. Nothing here scores companies: the list starts with the largest market value; sort by any column.";
   assert.deepEqual(splitLede(two), { first: "Pick the conditions; see every company that meets them.", joint: "", rest: "Nothing here scores companies: the list starts with the largest market value; sort by any column." });
   const colon = "What foreign and domestic institutions bought and sold in India's cash market, in ₹ crore: the exchange's provisional figures, published each evening, and every recorded day.";
-  assert.deepEqual(splitLede(colon), { first: "What foreign and domestic institutions bought and sold in India's cash market, in ₹ crore", joint: ":", rest: "the exchange's provisional figures, published each evening, and every recorded day." });
+  // (updated on purpose, fix18: an intro is cut only at a sentence's end, never at its colon, which left half a sentence showing)
+  assert.equal(splitLede(colon), null);
+  assert.equal(splitLede("For each India watchlist company: the price trend, where its sector sits in the rotation, red-flag filings, the investor checklist and how well management delivered on past targets. Facts to read, not advice."), null);
   // a first sentence longer than the limit, with no early colon, shows whole
   const long = "x".repeat(LEDE_MAX + 5) + ". Then more.";
   assert.equal(splitLede(long), null);

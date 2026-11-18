@@ -123,3 +123,112 @@ def test_companies_in_the_headlines_are_one_row_each():
            {"name": "Titan Company (consumer durables)", "ticker": "", "why": head}, {"name": "Infosys (IT)", "ticker": "INFY", "why": head}]
     out = grounding.one_row_per_company(hot)
     assert [(h["name"], h["ticker"]) for h in out] == [("Tata Consultancy Services", "TCS"), ("Titan Company", "TITAN"), ("Infosys", "INFY")]
+
+
+# ---------- LIVE13A-015: Mood's live unchanged row doesn't say "closing" ----------
+def test_moods_live_unchanged_row_says_the_latest_count():
+    from app.intel import mood
+    today = {"day": "2026-11-17", "adv": {"value": 261, "prev": 250}, "dec": {"value": 238, "prev": 249}, "unch": {"value": 1, "prev": 1},
+             "stocks": {"value": 500}, "pct20": {"value": 74.8}, "pct50": {"value": 57.4}, "pct200": {"value": 50.0}}
+    live = {"adv": 122, "dec": 376, "unch": 2, "pct20": 67.2, "pct50": 51.2, "pct200": 48.2, "at": "14:00"}
+    rows = {r["key"]: r["means"] for r in mood.breadth_block(today, live, "NIFTY 500", "2026-11-18")["rows"]}
+    assert rows["unch"] == "Stocks at the previous close at the latest count."
+    shut = mood.breadth_block(today, None, "NIFTY 500", "2026-11-17")
+    assert {r["key"]: r["means"] for r in shut["rows"]}["unch"] == "Stocks closing at the previous close."
+
+
+# ---------- LIVE13A-028: the headlines' read never goes back to an older stamp within a session ----------
+def test_the_sessions_newer_headline_read_is_shown_when_the_moves_return_to_an_older_reads_band(monkeypatch):
+    from app import main  # noqa: F401  (loads the app first)
+    from app.intel import routes as research_routes
+    from tests.test_review_fix12 import _open_market
+    store = {}
+    _open_market(monkeypatch, store)
+    reads = {}
+
+    def call(profile, kind, key, ttl, refresh, build, **k):
+        if key not in reads:
+            reads[key] = {"tone": f"read for {key[3]}", "hot": [], "flows": [], "themes": [], "generated_at": 100.0 + len(reads)}
+            store[repr(("pulse", key))] = reads[key]                     # kept under its key, as the AI store does
+        return reads[key]
+    monkeypatch.setattr(research_routes, "ai_call", call)
+    monkeypatch.setattr(research_routes, "pulse_behind", lambda key, write: write() and True)       # written at once, for the test
+    band = {"b": ("band A",)}
+    monkeypatch.setattr(research_routes, "mood_key", lambda indices, is_open: band["b"])
+    first = json.loads(research_routes.pulse_ai("US", "", False, {"id": "pro"}).body)              # 14:12: band A's read
+    band["b"] = ("band B",)
+    research_routes.pulse_ai("US", "", False, {"id": "basic"})                                     # 14:34: band B's read written
+    newer = json.loads(research_routes.pulse_ai("US", "", False, {"id": "basic"}).body)
+    band["b"] = ("band A",)                                                                         # 14:50: back to band A
+    again = json.loads(research_routes.pulse_ai("US", "", False, {"id": "pro"}).body)
+    assert first["generated_at"] < newer["generated_at"] == again["generated_at"] and again["tone"] == newer["tone"]
+
+
+# ---------- LIVE13A-030: the day's two last counts are labelled apart ----------
+def test_after_the_close_the_count_at_the_closing_prices_is_said_apart_from_the_1530_round():
+    from app.intel import mood
+    today = {"day": "2026-11-17", "adv": {"value": 261, "prev": 250}, "dec": {"value": 238, "prev": 249}, "unch": {"value": 1, "prev": 1},
+             "stocks": {"value": 500}, "pct20": {"value": 74.8}, "pct50": {"value": 57.4}, "pct200": {"value": 50.0}}
+    before = mood.breadth_block(today, {"adv": 125, "dec": 374, "unch": 1, "pct50": 50.0, "at": "15:30", "close": False}, "NIFTY 500", "2026-11-18")
+    after = mood.breadth_block(today, {"adv": 123, "dec": 376, "unch": 1, "pct50": 50.0, "at": "15:30", "close": True}, "NIFTY 500", "2026-11-18")
+    line = lambda b: next(x for x in mood.lines_of({"breadth": b, "is_open": False, "region": "IN"}) if "rose and" in x)      # noqa: E731
+    assert "125 of 500 NIFTY 500 stocks rose and 374 fell on" in line(before) and "(the 15:30 IST count, before the closing prices)" in line(before)
+    assert "123 of 500 NIFTY 500 stocks rose and 376 fell on" in line(after) and "(the count at the closing prices)" in line(after)
+    assert before["at_close"] is False and after["at_close"] is True
+
+
+# ---------- LIVE13A-016: a Briefs list line adds a fact to its title ----------
+def test_a_briefs_line_that_was_only_the_index_moves_says_the_briefs_next_fact():
+    from app.newsletter.write import other_fact, without_moves
+    idx = [{"name": "NIFTY 50", "change_pct": -0.61}, {"name": "SENSEX", "change_pct": -0.39}, {"name": "NIFTY BANK", "change_pct": -0.79}]
+    only = "NIFTY 50 −0.61%; SENSEX −0.39%; NIFTY BANK −0.79% today."
+    rot = [{"title": "Indices", "items": [{"text": "NIFTY 50: 25,387.40"}]}, {"title": "Sector rotation", "items": [{"text": "a"}, {"text": "b"}]}]
+    assert without_moves(only, idx, rot) == "2 sectors moved to another quadrant on the rotation chart."
+    scan = [{"title": "Newly matched Stage 2 + Supertrend today (NIFTY 500)", "items": [{"text": "x"}]}]
+    assert without_moves(only, idx, scan) == "1 stock from the NIFTY 500 newly matched the Stage 2 + Supertrend rule."
+    heads = [{"title": "Headlines", "items": [{"text": "Sensex slips as IT stocks fall"}]}]
+    assert without_moves(only, idx, heads) == "In the headlines: Sensex slips as IT stocks fall."
+    assert without_moves(only, idx, []) == only and other_fact(None) is None           # nothing else in it: the moves stay (LIVE12B-025)
+
+
+# ---------- LIVE13A-027: a call held this morning is under Held, not Coming up ----------
+def test_todays_calls_already_held_move_from_coming_up_to_held(monkeypatch):
+    from datetime import date as D
+    from app import concalls as C, db
+    from tests.test_f5_concalls import seed
+    store = {}
+    monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    seed(store, D(2026, 11, 18))
+    doc = json.loads(store[C.KEY])
+    doc["events"] += [{"id": "SBIN|2026-11-18|meet", "symbol": "SBIN", "name": "State Bank", "date": "2026-11-18", "type": "meet", "time": "09:00", "tz": "IST",
+                       "filed": "2026-11-16T18:00", "links": []},
+                      {"id": "AZAD|2026-11-18|call", "symbol": "AZAD", "name": "Azad", "date": "2026-11-18", "type": "call", "time": "06:30", "tz": None,
+                       "filed": "2026-11-16T18:00", "links": []},
+                      {"id": "LATE|2026-11-18|call", "symbol": "LATE", "name": "Late Co", "date": "2026-11-18", "type": "call", "time": "16:00", "tz": "IST",
+                       "filed": "2026-11-16T18:00", "links": []}]
+    store[C.KEY] = json.dumps(doc)
+    C.forget()
+    now = datetime(2026, 11, 18, 9, 17, tzinfo=timezone.utc)                # 14:47 IST
+    up = [r["symbol"] for r in C.view("IN", today=D(2026, 11, 18), now=now)["rows"]]
+    assert "SBIN" not in up and "AZAD" not in up and "LATE" in up
+    held = [r["symbol"] for r in C.view("IN", when="past", today=D(2026, 11, 18), now=now)["rows"]]
+    assert held[:2] == ["SBIN", "AZAD"] or set(held[:2]) == {"SBIN", "AZAD"}
+
+
+# ---------- LIVE13A-022: every US IPO row says its exchange ----------
+def test_a_us_ipo_row_without_an_exchange_takes_the_one_its_sec_filing_list_names():
+    from app import ipo
+    class Sec:
+        asked = []
+
+        def filings(self, cik, ttl=0):
+            self.asked.append(cik)
+            return {"cik": cik, "exchanges": {"1001": ["Nasdaq"], "1002": ["NYSE"]}.get(cik, []), "filings": {}}
+    rows = [{"id": "us-sec-1001", "market": "US", "name": "Aspen Co", "exchange": None},
+            {"id": "us-x", "market": "US", "name": "Bio Co", "cik": "1002", "exchange": None},
+            {"id": "us-y", "market": "US", "name": "Wide Co", "exchange": "NASDAQ Global"},
+            {"id": "in-z", "market": "IN", "name": "Indian Co", "exchange": None}]
+    sec, problems = Sec(), []
+    assert ipo.fill_exchanges(rows, sec, problems) == 2
+    assert [r["exchange"] for r in rows] == ["NASDAQ", "NYSE", "NASDAQ Global", None] and sec.asked == ["1001", "1002"] and not problems

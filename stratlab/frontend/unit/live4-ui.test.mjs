@@ -117,7 +117,8 @@ test("LIVE4-005 / 007: the live count's time in its header; the read time with i
   assert.equal(P.sessionHeader(null, (d) => d), "Today");
   assert.equal(P.sessionHeader("2026-11-05", () => "5 Nov"), "5 Nov");
   const mood = read("src/pages/PulseMood.tsx");
-  assert.match(mood, /header: b\.live \? \(b\.at \? `Today, \$\{b\.at\}` : "Today"\) : day\(b\.day\)/);
+  // (updated on purpose, fix18 LIVE13A-030: the count at the closing prices is headed "Today, at the close", every other live count by its time)
+  assert.match(mood, /header: b\.live \? \(b\.at_close \? "Today, at the close" : b\.at \? `Today, \$\{b\.at\}` : "Today"\) : day\(b\.day\)/);
   // (merged with LIVE4-024's "read day, time" line: the time part carries the zone)
   assert.match(mood, /\$\{fmtTime\(m\.read_at, \{ tz: marketTz\(region\), zone: true \}\)\}/);
   assert.doesNotMatch(mood, /toLocaleTimeString\(region/);

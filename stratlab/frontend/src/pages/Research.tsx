@@ -603,7 +603,7 @@ export function PulsePage() {
       {mood && <Pair nl={mood.flows?.rows.length ? mood.flows.rows.length + 1 : 0} nr={mood.risk?.rows.length ?? 0}
         left={mood.flows ? <FlowsTable f={mood.flows} source={ai?.flows_source} /> : null} right={mood.risk ? <RiskTable r={mood.risk} /> : null} />}
       {mood?.global && <GlobalTable g={mood.global} region={region} today={dayIn(new Date(), marketTz(region))} />}
-      {mood?.calendar && <CalendarTable c={mood.calendar} today={dayIn(new Date(), marketTz(region))} />}
+      {mood?.calendar && <CalendarTable c={mood.calendar} today={dayIn(new Date(), marketTz(region))} region={region} />}
       {ai && companyRows(ai.hot).length > 0 && <HotTable ai={ai} region={region} />}
       {ai && ai.flows.length > 0 && <TopicsTable ai={ai} />}
       {ai && ai.themes.length > 0 && <ThemesTable ai={ai} region={region} />}

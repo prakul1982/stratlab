@@ -81,7 +81,8 @@ test("a signed-out app page is drawn in /login's frame and names both ways in wi
   await expect(page.locator("footer.lp-foot")).toContainText("Research and paper trading only. No real orders are placed.");
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
   await expect(page.getByTestId("email-signin")).toBeVisible();
-  await expect(page.locator("main")).toContainText("Signing in only reads your name and email from Google, or only your email address by email.");
+  // (updated on purpose, fix18 LIVE13A-018: one plain sentence for each way in)
+  await expect(page.locator("main")).toContainText("Google sign-in reads only your name and email address; email sign-in reads only your email address.");
   // the same header box as /login's
   const gate = (await page.locator("header.lp-nav").boundingBox())!;
   await page.goto("/login");

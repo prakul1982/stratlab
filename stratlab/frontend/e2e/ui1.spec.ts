@@ -83,11 +83,16 @@ test("item 3: a company's update filings are one clean list, repeats folded (own
 
 // Item 2 (owner, 18 Nov): a long intro is one short sentence with "More"; a card's method notes are one closed "About these figures" fold
 test("item 2: a long intro is one sentence with More, and a card's notes are a closed fold (owner, 18 Nov)", async ({ page }) => {
-  const errors = await open(page, "/invest/flows", "Flows");
+  // (updated on purpose, fix18: an intro is cut only at a sentence's end; Flows' first sentence is long, so it shows whole, and the
+  // screener's two sentences show the first with More)
+  let errors = await open(page, "/invest/flows", "Flows");
+  await expect(page.locator(".k-page-head .k-lede")).toContainText("the exchange's provisional figures, published each trading evening");
+  await expect(page.locator(".k-page-head .k-lede").getByRole("button", { name: "More" })).toHaveCount(0);
+  errors = errors.concat(await open(page, "/research/screens", "Filter companies by plain facts"));
   const lede = page.locator(".k-page-head .k-lede");
   const rest = lede.getByTestId("lede-rest");
   await expect(rest).toBeHidden();
-  await expect(lede).toContainText("What foreign and domestic institutions bought and sold");
+  await expect(lede).toContainText("Pick the conditions; see every company that meets them.");
   await lede.getByRole("button", { name: "More" }).click();
   await expect(rest).toBeVisible();
   await expect(lede.getByRole("button", { name: "Less" })).toHaveAttribute("aria-expanded", "true");

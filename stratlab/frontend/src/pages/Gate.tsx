@@ -102,7 +102,7 @@ export function SignInGate() {
         </Card>
       )}
       {/* LIVE12B-004: the same consent line as /login's: this block makes an account the same way */}
-      <p className="small muted">Signing in only reads your name and email from Google{email ? ", or only your email address by email" : ""}. By continuing you agree to the <Link className="link" to="/terms">Terms</Link> and <Link className="link" to="/privacy">Privacy policy</Link>. No card needed. <Link className="link" to="/">What is StratLab?</Link></p>
+      <p className="small muted">Google sign-in reads only your name and email address{email ? "; email sign-in reads only your email address" : ""}. By continuing you agree to the <Link className="link" to="/terms">Terms</Link> and <Link className="link" to="/privacy">Privacy policy</Link>. No card needed. <Link className="link" to="/">What is StratLab?</Link></p>
     </SignInFrame>
   );
 }
