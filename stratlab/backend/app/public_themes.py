@@ -199,6 +199,16 @@ def _dive(region: str, name: str, p: dict) -> dict:
     return dive if isinstance(dive, dict) else {}
 
 
+def dive_caps(dive: dict) -> dict:
+    """r66e: {symbol: market value} as the theme's stored dive holds them (its layers, sub-themes and leaders), the app's and the deck's."""
+    out: dict = {}
+    for x in (dive.get("layers") or []) + (dive.get("subs") or []) + [{"companies": (dive.get("sections") or {}).get("leaders") or []}]:
+        for c in (x or {}).get("companies") or []:
+            if isinstance(c, dict) and c.get("symbol") and isinstance(c.get("cap"), (int, float)) and c["cap"] > 0:
+                out.setdefault(c["symbol"], c["cap"])
+    return out
+
+
 def _evidence(dive: dict):
     """e54: symbol -> its evidence state as the theme's stored dive keeps it (the figures' window, then the companies the membership check
     reached beyond it), "membership_unverified" for one neither has; None for a dive kept before the states were (nothing is claimed)."""
@@ -232,7 +242,10 @@ def view(entry: dict, p: dict) -> dict:
     """What a theme page shows: checked companies only, reported figures only."""
     region = entry["region"]
     dive = _dive(region, entry["name"], p)
-    caps, revs, ev = _index_caps(region), {**_index_sales(region), **_revenues(region, entry["name"], p, dive)}, _evidence(dive)
+    # r66e (LIVE12A-014: Ambuja ₹97,122 cr in the app beside ₹97,008 crore here at the same close): the market values of the theme's stored
+    # dive, the ones its app page and deck show, at the dive's own price date; the index's only for a company the dive doesn't hold
+    dcaps = dive_caps(dive)
+    caps, revs, ev = {**_index_caps(region), **dcaps}, {**_index_sales(region), **_revenues(region, entry["name"], p, dive)}, _evidence(dive)
     known = stock_pages.companies(region)
     layers = []
     for v in theme_layers(p):
@@ -272,7 +285,8 @@ def view(entry: dict, p: dict) -> dict:
             # confirmed yet not listed here, so the page says how many it leaves out
             "all": len({c.get("ticker") for v_ in p.get("value_chain") or [] if isinstance(v_, dict) for c in v_.get("companies") or []
                         if isinstance(c, dict) and c.get("ticker")}),
-            "prices": _price_day(region, {c["symbol"] for v in layers for c in v["companies"] if c.get("cap")}),
+            "prices": (str(dive.get("as_of"))[:10] if dcaps and dive.get("as_of") else None)
+            or _price_day(region, {c["symbol"] for v in layers for c in v["companies"] if c.get("cap")}),
             "day": _map_day(region, p, entry),
             "indexable": len(layers) >= MIN_LAYERS and n >= MIN_MEMBERS}
 

@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from app import blog, blog_pages, blog_research as BR, computed, sample_deck
+from app.intel.theme_data import finding_first
 from tests import world as W
 
 SEEDS = Path(BR.__file__).with_name("blog_themes")
@@ -69,7 +70,8 @@ def test_every_committed_post_passes_its_checks_and_every_figure_it_prints_is_in
     tiles = [t["l"] for t in next(b for b in post["blocks"] if b["t"] == "stats")["items"]]
     assert any("highest" in t for t in tiles) == bool(chain.get("highest") and chain.get("lowest"))
     if chain.get("line"):
-        assert post["summary"].startswith(chain["line"][:60].replace(".0 points", " points")[:40])
+        # r66e (LIVE12A-009, updated on purpose): the excerpt is the chain's line with its finding first (theme_data.finding_first)
+        assert post["summary"].startswith(finding_first(chain["line"])[:60].replace(".0 points", " points")[:40])
     links = json.dumps(post["blocks"])
     assert src["page"].startswith("/themes/") and f'"href": "{src["page"]}"' in links and '"href": "/research/themes?q=' in links
 
@@ -106,8 +108,9 @@ def test_a_bank_theme_post_reads_its_layers_on_lenders_measures_and_says_its_cha
     src = committed()["theme-private-banks-margins-in"]
     post = BR.theme_post_from(src)
     assert post["title"] == "Private banks: where the return on equity sits along the chain"
-    assert post["summary"].startswith("Among the 2 layers with at least 5 companies with the figure, median return on equity is highest in Large "
-                                      "deposit-led universal banks (13.6%)")
+    # r66e (LIVE12A-009, updated on purpose): the excerpt leads with the finding, the layers it ranks said after it
+    assert post["summary"].startswith("Median return on equity is highest in Large deposit-led universal banks (13.6%)")
+    assert "among the 2 layers with at least 5 companies with the figure" in post["summary"]
     table = next(b for b in post["blocks"] if b["t"] == "table")
     assert table["head"] == ["Layer", "Companies", "Revenue", "Net margin", "ROE", "NII / assets", "Gross NPA", "P/B"]
     assert table["rows"][0] == ["Large deposit-led universal banks", "5", "₹7.75 lakh cr", "27.6%", "13.6%", "3.5%", "– (1 of 5)", "2.1x"]

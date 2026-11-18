@@ -70,7 +70,13 @@ def clip_words(text, n: int) -> str:
     if sp > n // 2:
         cut = cut[:sp]
     cut = cut.rstrip(" ,;:(“‘—-")
+    # r66e (the live R65 US metals deck, p.11: "“ready-mix concrete and asphalt) and…”"): never ended on a joining word
+    while (j := _JOINS.search(cut)):
+        cut = cut[:j.start()].rstrip(" ,;:(“‘—-")
     return cut + ("…”" if cut.count("“") > cut.count("”") else "…")
+
+
+_JOINS = re.compile(r"[\s,;:(–-]+(?:and|or|of|the|a|an|for|in|to|with|by|on|at|from|its|their|as|&)$", re.I)
 
 
 def snapshot(dive: dict, members=(), stamp: float | int = 0, rules=None, everyone: dict | None = None) -> dict:
@@ -260,6 +266,21 @@ def published_members(got: dict | None) -> dict:
     return out
 
 
+def moved_why(layer: str, syms, now: dict) -> str:
+    """r66e (the live R65 Fertilizers deck, p.7: "“Commodity chemicals” removed (18 companies: 18 to “Other fertilizers and agrochemical
+    companies”)" with no reason, while each of its companies' moves said why the layer was not made): a removed layer the placement gave no
+    reason for takes the one reason its companies' moves out of it all give ("mwhy"), said of the layer; "" when they give none or several."""
+    mw = now.get("mwhy") if isinstance(now.get("mwhy"), dict) else {}
+    said = {str(mw[s_]) for s_ in syms if mw.get(s_)}
+    if len(said) != 1:
+        return ""
+    r = said.pop()
+    head = f"“{layer}” "
+    if not r.startswith(head):
+        return ""                  # a reason of the company's own, not of the layer
+    return clip_words("it " + r[len(head):].replace(": listed in the theme's", ": its companies listed in the theme's"), 220)
+
+
 def _layer_events(was: dict, now: dict) -> tuple[list[dict], set]:
     """(the layers renamed, split, merged, added or removed, the (from, to) pairs those events explain)."""
     old_names, new_names = was["layers"], now["layers"]
@@ -319,7 +340,8 @@ def _layer_events(was: dict, now: dict) -> tuple[list[dict], set]:
     went = lambda g: dict(Counter(now["layers"][now["cos"][s_][1]] if s_ in now["cos"] else (rest_layer(now, s_) or "")      # noqa: E731
                                   if s_ in (now.get("rest") or {}) else "" for s_ in src[g]).most_common())
     why = {x.get("layer"): x.get("why") for x in now.get("gone") or [] if isinstance(x, dict)}
-    out += [{"kind": "removed", "from": [g], "to": [], "n": len(src[g]), "went": went(g), **({"why": why[g]} if why.get(g) else {})}
+    out += [{"kind": "removed", "from": [g], "to": [], "n": len(src[g]), "went": went(g),
+             **({"why": why[g]} if why.get(g) else {"why": moved_why(g, src[g], now)} if moved_why(g, src[g], now) else {})}
             for g in gone if g not in used_g]
     # r581 (the live R58 Insurance deck: "“Distribution and aggregation” added (1 company)", a layer of an earlier published version kept
     # with its one member): a layer the placement kept from the published version says so ("back")
@@ -548,18 +570,30 @@ UNNAMED = ("no longer in the theme's map", BUSINESS + "the theme's new map doesn
 QUOTE_MAX = 200
 
 
+_VERB_END = re.compile(r"\s(?:and|or|of|the|a|an|in|to|with|for|by|is|are|was|its|their|manufactures|makes|sells|produces|provides|offers|"
+                       r"supplies|operates|designs|develops|distributes|markets|engaged)$", re.I)
+
+
 def first_sentence(words) -> str:
     """The first sentence of a company's own words (its industry line left out), at most QUOTE_MAX characters, cut at a clause."""
     text = re.sub(r"^\s*Industry:[^.]*\.\s*", "", str(words or "")).strip()
     if not text or text.startswith("From its own filings:"):
         return ""
+    # r66e (LIVE12A-006: BigBloc's move "its own words say “Incorporated in 2015, BigBloc Construction Ltd manufactures”", cut before what it
+    # manufactures): a heading a profile glues on ends the sentence before it, its founding-history opening is left off, and a cut never
+    # ends on the verb or joining word before what the company makes
+    from .theme_base import _HEADING, _HISTORY
+    text = " ".join(_HEADING.sub(". ", text).split()).lstrip(". ")
+    text = _HISTORY.sub("", text, count=1).strip() or text
     # r581 (the live R58 Automotive deck: SBI Cards' quote ran past "... registered with the RBI." into "The Company is engaged in issuing
     # credit cards to", and the deck's reader took the full stop inside the quote for the end of the reason): a sentence ends after an
     # acronym of capitals too ("RBI."), never after one letter's ("U.S.")
     one = re.split(r"(?:(?<=[a-z0-9)”\"])|(?<=[A-Z]{2}))\.\s+(?=[A-Z])", text, maxsplit=1)[0].strip().rstrip(".")
     if len(one) > QUOTE_MAX:
         cut = max(one.rfind(", ", 0, QUOTE_MAX), one.rfind("; ", 0, QUOTE_MAX))
-        one = one[:cut] if cut > 40 else one[:one.rfind(" ", 0, QUOTE_MAX)]
+        one = one[:cut] if cut > 40 and not _VERB_END.search(one[:cut]) else one[:one.rfind(" ", 0, QUOTE_MAX)]
+        while _VERB_END.search(one) and " " in one:
+            one = one[:one.rfind(" ")]
     # r58 (the live R57.2 Automotive deck: SBI Cards' removal "(business membership: ...; its own words say “SBI Cards and Payment Services
     # Limited (...) is ...”)", a bracket inside the reason's own bracket, read as the reason): an aside in brackets is left out of the quote
     one = re.sub(r"\s*\([^()]*\)", "", one)
