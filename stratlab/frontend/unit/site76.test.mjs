@@ -74,3 +74,10 @@ test("LIVE14A-013: an open Indian issue without its lot or bids says why (the is
   assert.match(page, /if \(r\?\.page_at\) return `Not on NSE's issue page, read \$\{readAt\(r\.page_at\)\}`;/);
   assert.match(page, /tab === "open" && m === "IN" \? <span className="k-muted" data-testid="ipo-bids-none">\{bidsMissing\(r\)\}<\/span>/);
 });
+
+test("LIVE14B-007 / LIVE14A-012: the signed-out /plans gives the sample deck its table promises", () => {
+  const login = read("src/pages/Login.tsx");
+  assert.match(login, /import \{ SampleDeckLink \} from "\.\.\/components\/SampleDeck";/);
+  assert.match(login, /\{top && <p className="small muted" data-testid="sample-deck-line">Slide decks are on Basic and Pro\. <SampleDeckLink label="Download a sample deck" \/><\/p>\}/);
+  assert.match(read("src/components/PlanCompare.tsx"), /0 \(a sample deck to download\)/);
+});
