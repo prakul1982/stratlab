@@ -45,7 +45,9 @@ test("R9P-006 and R9P-007: the confirm step says what the rupee charge is in dol
       converted: false, charge_about: { basic: 7.23, pro: 20.67, basic_year: 72.38, pro_year: 206.82 } } }, usd_inr: { rate: 96.68, fallback: false } })));
   await page.route(`${API}/billing/subscribe`, (r) => r.fulfill({ status: 200, json: { subscription_id: "sub_test", key_id: "rzp_test", email: "", currency: "INR" } }));
   const errors = await open(page, "/plans", visitor, { "stratlab.currency": "USD" });
-  await expect(page.getByTestId("about-basic")).toHaveText("about $7", { timeout: 30_000 });          // item 34: at the app's USD/INR rate
+  // (updated on purpose, LIVE11B: beside the rupees the card names StratLab's own US price, not the rupees converted, which read as a second
+  // dollar price; the confirm step below still says what the rupee charge is in dollars)
+  await expect(page.getByTestId("about-basic")).toHaveText("US price $8", { timeout: 30_000 });
   await expect(page.locator(".k-plan-price").nth(1)).toContainText("₹699");        // DK-001: the rupee price is the main price
   await page.getByRole("button", { name: "Upgrade to Basic" }).click();
   const confirm = page.getByRole("dialog").getByTestId("plan-confirm");
