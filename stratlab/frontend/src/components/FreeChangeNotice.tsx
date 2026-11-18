@@ -1,18 +1,36 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { CHANGE_KEEPS, changeDay, changeRows, changeSeenKey, changeTitle } from "../lib/freeChange";
+
+const LINE_KEY = "stratlab.freeChange.line";
 
 /** FREE-TIER: the one-time notice for an account in its grace (me.free_change): when its Free counts change and each change, old and
  * new. Account has it in full, as a Limit / Now / From table (LIVE8B-006: twelve sentences in a box, twice); My space has one line
  * linking to it, so its cards stay on the first screen. "Got it" hides it on both pages for good (on this device); nothing is emailed. */
 export function FreeChangeNotice({ line = false }: { line?: boolean }) {
-  const { me } = useApp();
+  const { me, session } = useApp();
   const fc = me?.free_change ?? null;
   const key = fc ? changeSeenKey(fc) : "";
   const [seen, setSeen] = useState(() => {
     try { return !!key && localStorage.getItem(key) === "1"; } catch { return false; }
   });
+  // LIVE12B-022: the line as it showed last time on this device, held (unseen) while the account loads, so My space's cards aren't pushed
+  // down when it comes
+  const lastKey = `${LINE_KEY}.${session?.user?.id ?? me?.id ?? "guest"}`;
+  const [last] = useState<string | null>(() => { try { return localStorage.getItem(lastKey); } catch { return null; } });
+  const showing = !!fc && !seen;
+  useEffect(() => {
+    if (!line || !me) return;
+    try { if (showing && fc) localStorage.setItem(lastKey, changeTitle(fc)); else localStorage.removeItem(lastKey); } catch { /* storage off */ }
+  }, [line, me, showing, fc, lastKey]);
+  if (line && !me && last) {
+    return (
+      <div className="k-notice warn free-change-line fc-wait" aria-hidden="true" inert>
+        <span><b>{last}.</b> <span className="link">See what changes</span></span><span className="btn sm">Got it</span>
+      </div>
+    );
+  }
   if (!fc || seen) return null;
   const done = () => {
     try { localStorage.setItem(key, "1"); } catch { /* private window: hidden for this visit */ }

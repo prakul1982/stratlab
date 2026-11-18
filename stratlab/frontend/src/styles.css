@@ -2399,6 +2399,8 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .mine-slot .k-card-head:has(> .k-card-actions > a:only-child) { flex-wrap: nowrap; align-items: flex-start; }
 .mine-slot .k-card-head:has(> .k-card-actions > a:only-child) > .k-card-actions { flex: none; }
 .mine-slot .k-card-head:has(> .k-card-actions > a:only-child) .k-card-title { min-width: 0; }
+/* LIVE12B-007: a card head with no button (Paper sessions) has its title at the top too, level with its neighbours' titles beside "Open" */
+.mine-slot .k-card-head:not(:has(> .k-card-actions)) { align-items: flex-start; }
 /* the lines sit on one level across a row, whatever text a tile has above its line (DI-010: Gold's note pushed its line down) */
 .mine-mkt .k-spark { margin-top: auto; }
 /* two lists side by side keep their own height: stretched to the longer one, the shorter left a big blank box (R5O-036) */
@@ -2420,6 +2422,7 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 @media (max-width: 520px) { .mine-markets { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .mine-mkt { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: var(--s3); border: 1px solid var(--line); border-radius: 12px; }
 .mine-mkt-v { font-size: 20px; font-weight: 600; letter-spacing: -.01em; }
+.mine-mkt-when { display: block; }   /* LIVE12B-007: the day on its own line under the change in every tile ("today" sat beside USD/INR's) */
 /* LIVE7B-012: a tile still being read is as tall as a read one: the value's line (a bar in it), the change line's space, the month line's space */
 .mine-mkt-hold { display: flex; flex-direction: column; gap: 4px; flex: 1; }
 /* LIVE11B-010: a level kept from an earlier visit that is no longer the latest: faded, the same shape as a fresh tile */
@@ -2705,6 +2708,11 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .email-signin-row .btn { flex: 1 1 100%; justify-content: center; }
   .legal-links[aria-label="Policies"], .legal-links[aria-label="Explore"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; row-gap: 0; }
 }
+/* LIVE12B-008: /login's form loads after the page's first frame; its place is held at the form's own height, so nothing under it moves */
+.email-slot { min-height: 136px; max-width: 460px; width: 100%; }
+@media (max-width: 640px) { .email-slot { min-height: 188px; } }
+/* LIVE12B-004 (owner pattern 13): beside the email form, the Google button is the form's width, on /login and the sign-in gate alike */
+.lp-hero-login .lp-hero-copy:has(.email-slot, .email-signin) .lp-cta { width: 100%; max-width: 460px; justify-content: center; }
 .email-signin-code { letter-spacing: .2em; font-family: var(--mono); max-width: 220px; }
 .email-signin .banner { margin-bottom: 0; }
 /* the plans' currency switch (components/CurrencySwitch.tsx) */
@@ -2957,11 +2965,14 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 /* LIVE11B-009: the one line of first steps is a slim row across the page: the steps done as a bar fills the middle (LIVE7B-027's card as
    wide as its words left the rest of the row empty), the whole list opens under it on a click */
 .fs-line { display: grid; grid-template-columns: auto minmax(80px, 1fr) auto auto; align-items: center; gap: 8px 14px; }
+.fs-compact > .fs-line { flex: 1 1 100%; min-width: 0; }   /* LIVE12B-006: the row fills its card, the bar the middle and the buttons at the right edge */
 .fs-line .fs-bar { min-width: 80px; }
-.fs-wait .fs-line { grid-template-columns: auto minmax(80px, 1fr) auto; }
+.fs-wait .fs-line:has(> .fs-hold) { grid-template-columns: auto minmax(80px, 1fr) auto; }
 @media (max-width: 640px) { .fs-line { display: flex; flex-wrap: wrap; } .fs-line .fs-bar { flex: 1 1 120px; } }
 .fs-compact .fs-list { margin-top: 8px; }
-.fs-wait { visibility: hidden; }
+.fs-wait, .fc-wait { visibility: hidden; }
+/* LIVE12B-019 (owner pattern 4): the brokers' Connect buttons one width, whatever the broker's name (157, 148 and 135 px before) */
+.broker-connect { min-width: 10.5rem; justify-content: center; }
 /* LIVE11B-014: on a phone the VIX tile's day takes a line of its own, with no "·" left hanging at the end of the line above */
 @media (max-width: 640px) { .vix-sep { display: none; } .vix-day { display: block; } }   /* LIVE7B-012: the line's place kept while it is read, nothing shown in it */
 

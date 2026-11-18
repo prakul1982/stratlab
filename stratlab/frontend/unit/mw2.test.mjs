@@ -240,7 +240,8 @@ test("the panel is never off-screen after the window is resized, and its size an
   assert.deepEqual(L.clampLayout(kept, 1920, 1080), kept);                      // room for it: exactly as it was left
   const launcher = read("src/components/watch/Launcher.tsx"), p = read("src/components/watch/WatchPanel.tsx"), css = read("src/components/watch/watch.css");
   // kept on this device under the person's own key, and read again against the window each time its size changes
-  assert.match(launcher, /usePersisted<PanelLayout>\(`\$\{LAYOUT_KEY\}\.\$\{mode === "app" \? userId \?\? "guest" : "visitor"\}`, DEFAULT_LAYOUT\)/);
+  // (updated on purpose, LIVE12B-011: before the account answers, the saved sign-in's own id, not the guest's key)
+  assert.match(launcher, /usePersisted<PanelLayout>\(`\$\{LAYOUT_KEY\}\.\$\{mode === "app" \? userId \?\? who \?\? "guest" : "visitor"\}`, DEFAULT_LAYOUT\)/);
   assert.match(launcher, /const layout = useMemo\(\(\) => clampLayout\(raw, vw, vh\), \[raw, vw, vh\]\)/);
   assert.match(launcher, /window\.addEventListener\("resize", on\)/);
   // the top bar's button on a phone goes by what is drawn: a sheet kept open but not shown at load opens on the first press
