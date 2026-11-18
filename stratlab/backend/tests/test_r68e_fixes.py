@@ -8,6 +8,8 @@ P0-1 the core vs adjacent financial population is stable: the live R66 Payments 
      "Core and adjacent" row).
 """
 import pathlib
+
+import pytest
 import sys
 
 from app import deck
@@ -184,3 +186,75 @@ def test_vornado_with_its_10k_list_is_an_office_landlord_on_the_live_r66_reits_i
            "in 26 of the properties; 2.3 million square feet of street retail space in 60 of the properties.")
     _, out = _reits({"VNO": vno})
     assert next(v["layer"] for v in out["value_chain"] for c in v["companies"] if c["ticker"] == "VNO") == "Office landlords"
+
+
+# ---------- P0-3 no loss of verified evidence ----------
+JINDAL = ("Jindal Steel & Power Limited (JSPL) is an Indian steel and energy company. It manufactures steel through blast furnace and "
+          "direct reduced iron routes, with plants at Raigarh and Angul, and makes plates, rails, structurals and wire rods.")
+
+
+def test_a_companys_earlier_or_fuller_name_is_not_another_companys():
+    """Fails before: R66's reader of another company's opening (own_part) read "Jindal Steel & Power Limited", Jindal Steel Limited's name
+    before 2025, as another company's and left it no words of its own: description-verified as a steel mill in R65, "no description of its
+    own is stored yet" in R66. A subject saying every word of a name of two words or more is the company itself."""
+    from app.intel import theme_base as B
+    assert B.own_part(JINDAL, "Jindal Steel Limited") == JINDAL
+    assert B.own_part("Adani Ports and Special Economic Zone Limited is India's largest port operator.", "Adani Ports & SEZ Ltd")
+    # (guard, r66e) a name of one word, or a subject naming another company, still loses those sentences
+    assert B.own_part("Toyo Tire Corporation is a Japanese tire maker.", "TOYO Co., Ltd") == ""
+    assert B.names_other("Jindal Saw Limited makes ductile iron pipes.", "Jindal Steel Limited")
+
+
+@pytest.fixture
+def w(monkeypatch):
+    from app import computed
+    from app.intel import theme_library, theme_recheck
+    from tests import world
+    built = world.build(monkeypatch)
+    computed.reset_for_tests()
+    theme_library._refreshing.clear()
+    theme_recheck._asked.clear()
+    yield built
+    built["close"]()
+
+
+def test_a_read_that_leaves_no_words_keeps_the_words_the_record_had(w, monkeypatch):
+    """Fails before: a stored description read as another company's was dropped and the record read again, and a read that left no words of
+    the company's own (its fuller name read as another's) was stored over it: the words it was verified on were gone. Now the record keeps
+    the words it had ("was_about", with what the new read opened on), each later reader reads them again, and a record left with no words by
+    an earlier version of that reader is read once more."""
+    import json
+    from app import db
+    from app.intel import theme_base as B
+    from app.intel import theme_routes as T
+    key = "theme:evidence:IN:JINDALSTEL"
+    db.set_setting(key, json.dumps({"at": "2026-11-16T00:00:00+00:00", "about": JINDAL, "industry": "Iron & Steel", "v": T.ABOUT_V}))
+    monkeypatch.setattr(T, "_index_name", lambda region, sym: "Jindal Steel Limited")
+    monkeypatch.setattr(T, "own_filings", lambda region, sym: "")
+    # an older reader's verdict (another company's words), as R66's: the record is read again and the read gives none of its own
+    real = B.own_part
+    monkeypatch.setattr(T.theme_base, "own_part", lambda about, name="": "" if "Jindal Steel & Power" in str(about) else real(about, name))
+    monkeypatch.setattr(T, "india_profile", lambda screener, sym, code_of=None: {"about": JINDAL, "industry_path": ["Iron & Steel"]})
+    T.EVIDENCE_CACHE.pop(key)
+    got = T.evidence_reader("IN", {"JINDALSTEL": "Jindal Steel Limited"})(["JINDALSTEL"])[0]
+    stored = json.loads(db.get_setting(key))
+    assert not stored["about"] and stored["was_about"] == JINDAL and stored["other"].startswith("Jindal Steel & Power Limited")
+    assert stored["op"] == T.OWN_PART_V and not (got.get("JINDALSTEL") or {}).get("about")
+    # today's reader reads the kept words as its own again
+    monkeypatch.setattr(T.theme_base, "own_part", real)
+    assert T.own_got("IN", "JINDALSTEL", stored, "Jindal Steel Limited")[0]["about"] == JINDAL
+    T.EVIDENCE_CACHE.pop(key)
+    assert T._about_reader("IN", {"JINDALSTEL": "Jindal Steel Limited"}, 0)("JINDALSTEL") == JINDAL
+    # a record with no words kept before this reader's version, of a company with a page, is read once more; one of today's is not
+    assert T.thin_about({"at": "2026-11-17T09:00:00+00:00", "about": "", "v": T.ABOUT_V})
+    assert not T.thin_about({"at": "2026-11-10T00:00:00+00:00", "about": "", "v": T.ABOUT_V})          # kept before R66 ran: never emptied by it
+    assert not T.thin_about({"at": "2026-11-16T00:00:00+00:00", "about": "", "v": T.ABOUT_V, "op": T.OWN_PART_V})
+    assert not T.thin_about({"at": "2026-11-16T00:00:00+00:00", "about": "", "v": T.ABOUT_V, "no_page": True})
+
+
+def test_a_company_whose_words_were_read_as_another_companys_says_so_where_it_is_not_checked():
+    """Fails before: "no description of its own is stored yet" for a company whose stored description was read as another company's. Now
+    the reason quotes what it opened on."""
+    why = D.unchecked_why({"name": "TOYO Co., Ltd"}, None, "Toyo Tire Corporation is a Japanese tire maker.")
+    assert "opens on another company's name (“Toyo Tire Corporation is a Japanese tire maker.”)" in why
+    assert D.unchecked_why({"name": "X Ltd"}, None) == "no description of its own is stored yet, so its membership is not checked yet"

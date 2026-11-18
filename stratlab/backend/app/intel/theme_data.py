@@ -3683,18 +3683,23 @@ def same_names(blocks: list[dict], vc: list[dict]) -> None:
                                                            if now else "") + tail}
 
 
-def unchecked_why(c: dict, about: str | None = None) -> str:
+def unchecked_why(c: dict, about: str | None = None, other: str = "") -> str:
     """v55 (R55): why a company the map named from another industry is not checked yet, said by what is missing: no description of its own
-    stored (for a listing line, the issuer it stands for, theme_base.listing_line), or no answer yet from the check of the words it has."""
+    stored (for a listing line, the issuer it stands for, theme_base.listing_line), or no answer yet from the check of the words it has.
+    r68e (R68, the owner's review of the live R66 Building materials deck: Jindal Steel, description-verified in R65, "no description of its
+    own is stored yet" in R66): one whose stored description was read as another company's says so, with the words it opened on (`other`)."""
     from .theme_base import issuer_name, listing_line
     line = listing_line(c.get("name") or "")
+    if not (c.get("what") or about) and other:
+        return ((f"{line}; " if line else "") + f"its stored description opens on another company's name (“{other}”), so it is not read as "
+                "its own words and its membership is not checked yet; it is read again")
     if not (c.get("what") or about):
         return (f"{line}; no description of {issuer_name(c.get('name') or '')} is stored yet, so its membership is not checked yet" if line
                 else "no description of its own is stored yet, so its membership is not checked yet")
     return (f"{line}; " if line else "") + "the check of its own words has not answered yet"
 
 
-def theme_record(c: dict, status: str, about: str | None = None) -> dict:
+def theme_record(c: dict, status: str, about: str | None = None, other: str = "") -> dict:
     """c1 (R44, the outside review of the live Release 43 decks, ask 3: "keep theme membership separate from comparison eligibility, each with
     its reason"): a company's place in the theme, {"in", "status", "by", "why"}, decided apart from whether its figures are compared
     (calc_record, comparison_said). "in": confirmed in the theme (membership "core" or "exposure"); a company "unverified" is listed, never in
@@ -3724,7 +3729,7 @@ def theme_record(c: dict, status: str, about: str | None = None) -> dict:
         elif status == "exposure":
             why = f"the theme's map names it, {frm}; its own words were checked to show the theme's work"
         else:
-            why = f"the theme's map names it, {frm}; its own words are not confirmed to show the theme's work yet ({unchecked_why(c, about)})"
+            why = f"the theme's map names it, {frm}; its own words are not confirmed to show the theme's work yet ({unchecked_why(c, about, other)})"
     if c.get("basis") == "words" and isinstance(c.get("kept_member"), str) and c["kept_member"].startswith("kept in the theme:"):
         # r58: a company kept in the theme on its own words against one layer's answer (theme_base.layer_answer_removals) is in it by those
         # words, never "filed under an official industry of the theme"
@@ -3918,10 +3923,12 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
             rows[s]["name"] = shown_name(c.get("name"), rows[s]["name"]) or rows[s]["name"]
             rows[s]["status"] = every_status[s]
             rows[s]["evidence"] = every_evidence[s]
-            rows[s]["theme"] = theme_record(c, rows[s]["status"], src.about(s))     # c1: in the theme, with its reason (apart from any comparison)
+            other_ = getattr(src.about, "other_of", None)          # r68e: why it has no words of its own, when they were read as another's
+            other_ = (other_(s) or "") if callable(other_) else ""
+            rows[s]["theme"] = theme_record(c, rows[s]["status"], src.about(s), other_)     # c1: in the theme, with its reason (apart from any comparison)
             rows[s]["theme"]["evidence"] = every_evidence[s]
             if every_status[s] == "unverified" and every_evidence[s] != "not_confirmed":
-                rows[s]["theme"]["unchecked"] = unchecked_why(c, src.about(s))       # v55: what is missing, never "other work"
+                rows[s]["theme"]["unchecked"] = unchecked_why(c, src.about(s), other_)       # v55: what is missing, never "other work"
             if c.get("base") and rows[s]["status"] == "core" and membership(c, words, principal=False) == "unverified":
                 where, said = principal_business(c, src.about(s), seg_list(s))
                 rows[s]["theme"]["why"] += (f"; its own words name other work, but its principal business ({PRINCIPAL_WORDS[where]}"

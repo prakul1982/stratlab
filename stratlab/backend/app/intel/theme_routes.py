@@ -111,6 +111,11 @@ def own_filings(region: str, sym: str) -> str:
     return ("From its own filings: " + ". ".join(keep[:FILING_LINES]) + ".")[:FILING_CHARS] if keep else ""
 
 
+# r68e (R68): the version of the reader that takes another company's opening sentences off a stored description (theme_base.own_part,
+# names_other), kept beside every description read since; a stored record left with no description by an earlier version of it is read once
+# more (thin_about), and a record whose description a read emptied keeps the words it had ("was_about") until a read gives words again
+OWN_PART_V = 2
+OWN_PART_SINCE = "2026-11-17"           # the first day R66's version of it ran live (the live R65 decks were made on 17 Nov, R66's on 18 Nov)
 ABOUT_WORDS, ABOUT_V = 30, 5          # R34: a stored description under 30 words, kept before this format, is read again once (in the same bounded batches); lane n2: 4, one that doesn't say what the company does (says_work)
 # lane n2 (the outside review of the live R33 decks: UMC's article, "a Taiwanese company based in Hsinchu ... founded as Taiwan's first
 # semiconductor company", has 40 words and none of what it does, so its foundry business, said in its 20-F, never reached its model)
@@ -143,6 +148,11 @@ def thin_about(got: dict, region: str = "", name: str = "") -> bool:
     where the only line was an encyclopedia's) kept before R35 and not about a company at all (live: Ichor Holdings held the Greek myth)."""
     about = str(got.get("about") or "")
     if got.get("owed"):
+        return True
+    # r68e (the live R66 Building materials deck: Jindal Steel Limited's stored words emptied by R66's reader, which read its earlier name as
+    # another company's): a record with no description, kept by R66's version of that reader (on or after the day it first ran, before
+    # this version) and not one of a company with no page, is read once more; records kept before it were never emptied by it
+    if not about and got.get("op") != OWN_PART_V and not got.get("no_page") and str(got.get("at") or "")[:10] >= OWN_PART_SINCE:
         return True
     # v55 (R55): none found for a listing line (a depositary receipt) looked up under its listed name, kept before its issuer was looked up
     # ("issuer"): read once more, under the issuer's name
@@ -291,10 +301,22 @@ def own_got(region: str, sym: str, got: dict, name: str = "") -> tuple[dict, boo
     the encyclopedia's title was checked): a stored description without the opening sentences that speak of another company
     (theme_base.own_part), and whether that took anything off. Every reader of the stored descriptions reads it this way."""
     about = str((got or {}).get("about") or "")
+    nm = name or _index_name(region, sym)
     if not about:
+        # r68e: a record a read emptied keeps the words it had: read again by today's reader, they are its words when it finds them its own
+        was = theme_base.own_part(str((got or {}).get("was_about") or ""), nm)
+        return ({**got, "about": was, "restored": True}, False) if was else (got, False)
+    own = theme_base.own_part(about, nm)
+    if own == about:
         return got, False
-    own = theme_base.own_part(about, name or _index_name(region, sym))
-    return ({**got, "about": own, "other_cut": True}, True) if own != about else (got, False)
+    # r68e: what was taken off, said where its membership is not checked for it (theme_data.unchecked_why)
+    return {**got, "about": own, "other_cut": True, **({} if own else {"other": opening_of(about)})}, True
+
+
+def opening_of(about: str) -> str:
+    """r68e: a description's opening as a reason quotes it (its first sentence, at most 90 characters on a whole word)."""
+    first = re.split(r"(?<=[.;!?])\s+(?=[A-Z“\"(])", " ".join(str(about or "").split()), maxsplit=1)[0]
+    return first if len(first) <= 90 else first[:90].rsplit(" ", 1)[0] + "…"
 
 
 def evidence_reader(region: str, names: dict, budget: float | None = None, again=()):
@@ -311,11 +333,13 @@ def evidence_reader(region: str, names: dict, budget: float | None = None, again
     def read(sym):
         key = f"theme:evidence:{region}:{sym}"
         hit = EVIDENCE_CACHE.get(key)
+        prior: dict = {}
         if hit is None:
             try:
                 got = db.json_value(db.get_setting(key), {})
             except Exception:
                 got = {}
+            prior = got
             got, cut = own_got(region, sym, got, names.get(sym) or "")
             # r66e: a stored description that is wholly another company's is read again (the encyclopedia's title is checked now)
             if cut and not got.get("about"):
@@ -351,8 +375,15 @@ def evidence_reader(region: str, names: dict, budget: float | None = None, again
             if not filed_first and (len(about.split()) < ABOUT_WORDS or (region == "US" and not (says_work(about) and theme_base.has_own_line(about, names.get(sym) or "")))):
                 filed, owed = filed_business(region, sym)
                 about = " ".join(x for x in (about, filed) if x)
+            read_ = about
             about = theme_base.own_part(about, names.get(sym) or _index_name(region, sym))          # r66e: never another company's words
+            # r68e (P0, the owner's review of the live R66 decks: "no loss of verified evidence"): a read that leaves no words of its own
+            # never takes away the words the record had: they are kept ("was_about", with what the new read opened on) and read again
+            # by each later reader (own_got)
+            old_ = str((prior or {}).get("about") or (prior or {}).get("was_about") or "")
+            keep_ = ({"was_about": old_[:3000], "was_at": (prior or {}).get("was_at") or (prior or {}).get("at")} if not about and old_ else {})
             hit = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "about": theme_check.kept_description(about), "industry": industry,
+                   "op": OWN_PART_V, **keep_, **({"other": opening_of(read_)} if read_ and not about else {}),
                    "v": ABOUT_V, **({"owed": True} if owed else {}), **({"no_page": True} if no_page else {}),
                    **({"filed": True} if filed_first and not owed else {}),          # e57: its annual report read first (read_chip_making)
                    **({"bv": sec_business_v()} if region == "US" else {}),          # r67e: the annual report reader it was read with
@@ -1222,6 +1253,7 @@ def _about_reader(region: str, names: dict, limit: int = DESCRIBE_READS):
     run (largest first), so a theme of hundreds fills in over a few views without a burst of reads."""
     reads = {"n": 0, "missed": 0}
     lock = threading.Lock()
+    notes: dict = {}          # r68e: the opening of a stored description read as another company's, by symbol (unchecked_why)
 
     def about_of(sym):
         k = f"theme:evidence:{region}:{sym}"
@@ -1233,6 +1265,8 @@ def _about_reader(region: str, names: dict, limit: int = DESCRIBE_READS):
             except Exception:
                 got = {}
             got, _ = own_got(region, sym, got, names.get(sym) or "")          # r66e: never another company's words
+            if got.get("other") and not got.get("about"):
+                notes[sym] = str(got["other"])
             if got.get("at") and not thin_about(got, region, names.get(sym) or ""):
                 hit = got
                 EVIDENCE_CACHE.set(k, hit, 6 * 3600)
@@ -1255,6 +1289,7 @@ def _about_reader(region: str, names: dict, limit: int = DESCRIBE_READS):
                 return stale
         return hit.get("about") or own_filings(region, sym) or None         # no description: the lines of its own filings
     about_of.reads = reads
+    about_of.other_of = lambda sym: notes.get(sym, "")
     return about_of
 
 
@@ -1277,6 +1312,8 @@ def kept_about(region: str):
         about(sym)
         return str(raw.get(sym) or "").startswith("From its own filings:")
     about.filed_only = filed_only
+    # r68e: the opening of its stored description read as another company's, when that is why it has none ("" else)
+    about.other_of = lambda sym: (about(sym), "" if seen.get(sym) else read.other_of(sym))[1]
     return about
 
 

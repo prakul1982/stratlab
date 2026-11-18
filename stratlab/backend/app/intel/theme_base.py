@@ -5874,10 +5874,27 @@ def _co_same_word(a: str, b: str) -> bool:
     return a == b or (min(len(a), len(b)) >= 4 and (a.startswith(b) or b.startswith(a)))
 
 
+def fuller_name(subj: list[str], own: list[str]) -> bool:
+    """r68e (R68, the owner's review of the live R66 Building materials deck: Jindal Steel Limited, description-verified as a steel mill in
+    R65, "no description of its own is stored yet" in R66: its words open on "Jindal Steel & Power Limited", its name before 2025, read as
+    another company's): a subject that says every word of a name of two words or more (a word, or the initials of the subject's words that
+    follow: "SEZ" of "Special Economic Zone") is the company under its fuller or earlier name. A name of one word (TOYO) never is."""
+    words = [w for w in subj if w not in _NAME_LEGAL and w not in _NAME_LINK]
+    if len(own) < 2:
+        return False
+
+    def said(o):
+        if any(_co_same_word(w, o) for w in words):
+            return True
+        return len(o) >= 2 and any("".join(w[0] for w in words[i:i + len(o)]) == o for i in range(len(words)))
+    return all(said(o) for o in own)
+
+
 def names_other(sentence: str, name: str) -> bool:
-    """r66e: whether a sentence opens on another company than `name` that shares its first word (Toyo Tire for TOYO Co., Ltd)."""
+    """r66e: whether a sentence opens on another company than `name` that shares its first word (Toyo Tire for TOYO Co., Ltd). r68e: never
+    the company under its fuller or earlier name (fuller_name: "Jindal Steel & Power Limited" for Jindal Steel Limited)."""
     subj, own = _subject(sentence), _co_name_words(name)
-    if len(subj) < 2 or not own or not _co_same_word(subj[0], own[0]):
+    if len(subj) < 2 or not own or not _co_same_word(subj[0], own[0]) or fuller_name(subj, own):
         return False
     flat = "".join(own)
     for w in subj[1:]:
