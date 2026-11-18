@@ -3213,7 +3213,8 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
 @media (min-width: 901px) { #theme-members .k-table td.k-lead { min-width: 18rem; } }
 /* r69e (LIVE13A-013: Arteris's quote a ~165 px column 290 px tall, the 18rem not reaching the layer tables, which hold the words under the
    name): in a layer's table the company cell, which carries its own words, keeps a reading width beside the figures */
-@media (min-width: 901px) { [id^="layer-"] .k-tbl-wrap .k-table tbody th.k-wrap { min-width: 18rem; } }
+/* (R75: only the cell that carries the company's words; the layer's other tables, operating figures of 9 columns, keep their own widths, R27) */
+@media (min-width: 901px) { [id^="layer-"] .k-tbl-wrap .k-table tbody th.k-wrap:has(.k-sub-line) { min-width: 18rem; } }
 .k-section-title { font-family: var(--serif); font-size: var(--t-card); font-weight: 600; margin: var(--s5) 0 0; }
 .k-table tr[data-kind="median"] > * { border-top: 2px solid var(--line-2); font-weight: 600; }
 .k-table tr[data-kind="range"] > * { color: var(--muted); font-size: var(--t-note); }
@@ -3288,9 +3289,6 @@ svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-ri
   .k-tbl-wrap.k-fit .k-table th, .k-tbl-wrap.k-fit .k-table td { overflow-wrap: normal; word-break: normal; }
   .k-tbl-wrap.k-fit .k-table tbody th > a:first-child, .k-tbl-wrap.k-fit .k-table tbody th > b:first-child,
   .k-tbl-wrap.k-fit .k-table :is(button, .btn, .k-badge, .k-chip, .k-delta) { white-space: nowrap; }
-  /* r69e (LIVE13A-013: the theme's "Every company, sortable", 1,077 px in a 1,004 px card): a sortable column's header is a button whose
-     words wrap like any header's, so the ten figures fit their card */
-  .k-tbl-wrap.k-fit .k-table th button.k-th-sort { white-space: normal; text-align: inherit; }
 }
 
 /* R15 #3 (owner, 7 Nov): Net worth's "Where you stand": the headline (figure large, its change beside it) on the left half, what you own,
