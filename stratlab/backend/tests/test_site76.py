@@ -121,3 +121,21 @@ def test_live14a_013_an_indian_issue_row_says_whether_its_issue_page_was_found_a
     assert read["page"] is True and read["page_at"] == "2026-11-18T18:45:00+00:00"
     listed = ipo.list_row({**base, "open": "2026-10-01", "close": "2026-10-03", "listing": "2026-10-08", "symbol": "X", "series": "EQ"}, now)
     assert "page" not in listed
+
+
+def test_live14b_006_the_share_capital_count_the_latest_quarters_eps_agrees_with_beats_a_source_count_off_by_under_the_drift():
+    """TCS on 18 Nov: the source's ₹8,48,791 cr at ₹2,380 is 356.6 crore shares; the capital (₹362 cr of ₹1 shares) and the Sep 2026
+    quarter (13,934 ÷ 38.37) both say ~362, so ₹8.61 lakh cr. Wipro: the source's 990 crore agrees with its Sep 2026 capital (₹1,981 cr of
+    ₹2) and quarter (3,200 ÷ 3.23 = 991) after the year's buyback: it stands (the 20-F's 1,048.8 crore is of 31 Mar 2026, before it)."""
+    from app.intel.screener import market_cap, quarter_shares
+    tcs = market_cap(848791.0, 2380.0, 362.0, 1.0, False, (363.56, 0.05), None, 363.15)
+    assert round(tcs) == 861560
+    wipro = market_cap(183289.0, 185.0, 1981.0, 2.0, False, (1023.45, 0.05), None, 990.71)
+    assert wipro == 183289.0
+    # without a quarter's EPS the rule is as before (the source stands within SHARES_DRIFT)
+    assert market_cap(848791.0, 2380.0, 362.0, 1.0, False, (363.56, 0.05), None, None) == 848791.0
+    # a quarter count far from the capital's (a large minority share in the profit) decides nothing
+    assert market_cap(848791.0, 2380.0, 362.0, 1.0, False, None, None, 420.0) == 848791.0
+    p = {"quarters": {"cols": ["Jun 2026", "Sep 2026"], "rows": {"Net Profit": [13420.0, 13934.0], "EPS in Rs": [36.9, 38.37]}}}
+    assert round(quarter_shares(p), 1) == 363.1
+    assert quarter_shares({"quarters": {"cols": ["Sep 2026"], "rows": {"Net Profit": [None], "EPS in Rs": [1.0]}}}) is None
