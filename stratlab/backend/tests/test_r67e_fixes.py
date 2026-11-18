@@ -148,3 +148,87 @@ def test_the_deck_prints_each_move_into_other_with_its_reason():
     row = deck.cohort_row(v)
     assert "Vornado Realty Trust (from “Office landlords”: its own words, official industry and name say no word of “Office landlords”" in row[2]
     assert len(deck.move_reason(why)) <= deck.MOVE_REASON_CHARS and deck.move_reason(why).endswith("…")
+
+
+def test_deck_check_fails_a_move_into_or_out_of_other_with_no_reason():
+    """Fails before: deck_check passed "from “Other ...” to “...”: still in the theme, outside the largest companies ..." and "moved into
+    “Other ...” 1: X (from “...”)" with no reason (13 of the live R65 decks fail it now)."""
+    import pathlib
+    import sys
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "scripts"))
+    import deck_check
+    head = "On 18 Nov 2026, against the version stored before it, after a re-check under new placement rules: "
+    out_ = head + ("moved between layers 1: Abpro Holdings, Inc. (from “Other biotech companies” to “Clinical biotechs”: still in the theme, "
+                   "outside the largest companies whose figures are worked out).")
+    assert deck_check.check_text(out_)["counts"]["move unexplained"] == 1
+    into = head + "moved into “Other REITs” 1: Vornado Realty Trust (from “Office landlords”)."
+    assert deck_check.check_text(into)["counts"]["move unexplained"] == 1
+    said = head + ("moved into “Other REITs” 1: Vornado Realty Trust (from “Office landlords”: its own words say no word of “Office landlords”); "
+                   "moved between layers 1: Abpro Holdings, Inc. (from “Other biotech companies” to “Clinical biotechs”: its own words say "
+                   "“a clinical-stage company”).")
+    assert not deck_check.check_text(said)["counts"]["move unexplained"]
+
+
+# ---------- P1 / P2: sector figures, coverage said apart, reporting basis, empty columns, shorter explanations ----------
+def _reits(ffo_for=()):
+    cos = [{"symbol": s, "name": s, "revenue": 1000.0, "profit": 100.0, **({"ffo_share": 55.0, "p_ffo": 14.2} if s in ffo_for else {})}
+           for s in ("BXP", "SLG", "VNO")]
+    return {"region": "US", "layers": [{"layer": "Office landlords", "model": {"family": "property"}, "companies": cos}]}
+
+
+def test_a_reit_deck_says_for_how_many_property_owners_ffo_is_worked_out_and_why_not_for_the_rest():
+    """Fails before: the live R65 REITs deck said nothing of FFO or P/FFO (none of its stored figures has them)."""
+    got = deck.not_in_sources(_reits())
+    assert ("FFO (NAREIT) and P/FFO: not available for the 3 property owners with figures (the filed gains on property sales, which NAREIT "
+            "FFO deducts, are not among the lines stored for them)") in got
+    assert "FFO (NAREIT) and P/FFO for all 3 property owners with figures" in deck.not_in_sources(_reits(("BXP", "SLG", "VNO")))
+    assert "for 1 of the 3 property owners with figures, not available for 2" in deck.not_in_sources(_reits(("BXP",)))
+    assert "FFO" not in deck.not_in_sources({**_reits(), "region": "IN"})            # worked out from the SEC's company facts only
+
+
+def test_layer_statistics_say_the_maps_members_apart_from_the_companies_with_figures():
+    """Fails before: Biotech's layer tables gave "40" companies a layer with nothing saying figures are worked out for 100 of the map's 821."""
+    v = {"figures": {"of": 821, "shown": 100}}
+    assert deck.figures_scope(v).startswith("Companies: each layer's companies with figures; figures are worked out for 100 of the map's 821 members")
+    assert deck.figures_scope({"figures": {"of": 100, "shown": 100}}) == ""
+
+
+def test_a_banks_revenue_basis_is_beside_its_figure():
+    """Fails before: Huntington's $8.17 bn printed with no basis beside it (the basis only in a note pages away)."""
+    hb = {"symbol": "HBAN", "name": "Huntington Bancshares Inc", "revenue": 8166.0, "bank": True, "profile": "bank",
+          "revenue_basis": {"key": "parts", "words": "net interest income plus noninterest income, as filed", "standard": "US GAAP", "fte": False}}
+    ubs = {"symbol": "UBS", "name": "UBS Group AG", "revenue": 40000.0, "bank": True, "profile": "bank",
+           "revenue_basis": {"key": "parts", "words": "net interest income plus net fee and commission income, as filed", "standard": "IFRS"}}
+    cols = deck.co_cols([hb])
+    assert ("revenue", "Revenue (US GAAP)") == cols[0][:2]
+    mixed = deck.co_cols([hb, ubs])
+    assert mixed[0][0] == "revenue_b" and deck.co_cell(hb, "revenue_b", lambda x: f"${x / 1000:.2f} bn") == "$8.17 bn (US GAAP)"
+    plain = {"symbol": "X", "name": "X", "revenue": 10.0}
+    assert deck.co_cols([plain])[0][:2] == ("revenue", "Revenue")                   # guard: no basis, as it was
+
+
+def test_a_column_empty_for_every_row_or_of_another_sector_is_dropped():
+    """Fails before: the P&C tables carried REIT FFO / P-FFO columns, "–" or "– (1 of 15)" in every row, and an insurer's P/FFO."""
+    head, rows, widths, _ = deck.drop_empty(["Layer", "Net margin", "P/FFO"], [["A", "8.4%", "– (1 of 15)"], ["B", "10.0%", "–"]], [2, 1, 1])
+    assert head == ["Layer", "Net margin"]
+    ins = {"symbol": "TIPT", "name": "Tiptree Inc.", "revenue": 2000.0, "profile": "insurer", "p_ffo": 18.0, "ffo_share": 5.0}
+    assert not {"p_ffo", "ffo_share"} & {c[0] for c in deck.co_cols([ins])}
+    assert deck.co_cell(ins, "p_ffo", str) == "–"
+    reit = {"symbol": "BXP", "name": "BXP", "revenue": 3000.0, "profile": "other", "p_ffo": 12.0, "ffo_share": 40.0}
+    assert "p_ffo" in {c[0] for c in deck.co_cols([reit])}                           # guard: a property owner's own
+
+
+def test_classification_explanations_are_one_short_clause_and_said_once_for_companies_moved_alike():
+    """Fails before: REITs p.7 printed each move's whole reason, asides and all, once a company (12 moves, a page of small type)."""
+    why = ("its own words don't say it sells computing, capacity, hosting or data centres, what “Towers, data centres and niche property” is "
+           "(“cloud” said of another product is a word about that product); its own words share most with what “Healthcare property owners” is")
+    assert deck.short_reason(why) == ("its own words don't say it sells computing, capacity, hosting or data centres, what “Towers, data centres "
+                                      "and niche property” is")
+    one = "a layer of one company a rule would make (“Media and content”), new to the published version: not made"
+    v = {"layers": [{"layer": "Other", "basis": "rest", "companies": [
+        {"symbol": "LAMR", "name": "Lamar Advertising Co", "refit": {"from": "Media and content", "why": one}},
+        {"symbol": "OUT", "name": "OUTFRONT Media Inc.", "refit": {"from": "Media and content", "why": one}}]}]}
+    n, said = deck.refit_line(v)
+    assert n == 2 and said == ("Lamar Advertising Co and OUTFRONT Media Inc: from “Media and content” to “Other”, as a layer of one company a rule "
+                               "would make, new to the published version: not made.")
+    assert len(deck.short_reason("x " * 200)) <= deck.REASON_CHARS

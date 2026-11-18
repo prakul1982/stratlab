@@ -49,7 +49,9 @@ Failures (the exit code is 1 when any deck has one):
   move unexplained  c54 (the owner's review of the live R53 decks: Intel moved "from “Makers of their own products” to “Chip equipment and
                subsystem suppliers”", Indo National into "Branded packaged foods manufacturing", UFP into "Surgical robotics systems", with
                nothing showing they sell what those layers are): a change log's move between layers into a layer named by what it sells (not
-               "Other", not a group named by how its companies earn) with no reason beside it
+               "Other", not a group named by how its companies earn) with no reason beside it; r67e (the owner's review of the live R65
+               decks, P0): a move into or out of "Other" too, and one whose only words are where it sits now ("still in the theme, outside
+               the largest companies whose figures are worked out")
   scope core   c54 (the live R53 Automotive deck: "Vehicle financiers" of lenders among the core makers; FMCG's "Mining, oil, gas and farming"):
                a layer named by a business outside the theme's own (lenders or financiers, contractors or EPC, laboratories, mining, oil
                and gas, farming), the theme's own name stating none of it, in a deck that says no company is an adjacent participant
@@ -552,6 +554,8 @@ _SCOPE_THEME = re.compile(r"bank|lend|loan|credit|financ|nbfc|construct|infrastr
                           r"health ?care services|mining|metal|oil|gas|energy|commodit|agri|farm|plantation|fertili|coal|steel|petro|chemical|resource|"
                           r"utilit|power|renewable", re.I)
 _TITLE = re.compile(r"THEME DEEP DIVE\s+(.+?)\s{2,}|THEME DEEP DIVE\s*\n\s*(.+)|^\s*(.+)\n.*· Theme deep dive", re.I)
+_NOT_A_REASON = "still in the theme, outside the largest companies"
+_INTO_OTHER = re.compile(r"moved into “([^”]+)” \d[\d,]*: (.*?)(?=; (?:moved|removed|added)\b|\.\s|$)")
 _REMOVED = re.compile(r"“([^”]+)” removed \((\d[\d,]*) compan(?:y|ies)([^)]*)\)(, [a-z][^;.]*)?")
 LOST_MIN = 5
 
@@ -565,8 +569,16 @@ def c54_checks(pages: list[str], layers: set, add) -> None:
             continue
         for m in _MOVE.finditer(flat):
             to = re.sub(r" \((?:larger|smaller)\)$", "", m.group(3))
-            if not m.group(4) and to not in BY_HOW and not to.startswith("Other ") and to != re.sub(r" \((?:larger|smaller)\)$", "", m.group(2)):
+            frm = re.sub(r" \((?:larger|smaller)\)$", "", m.group(2))
+            # r67e (the owner's review of the live R65 decks, P0: every move between an informative layer and "Other", both ways, with a
+            # company-level reason): where it sits now ("still in the theme, outside the largest companies ...") is no reason for a move
+            why = (m.group(4) or "").strip(" :")
+            if to != frm and (not why or why.startswith(_NOT_A_REASON)) and (to not in BY_HOW or to.startswith("Other ") or frm.startswith("Other ")):
                 add("move unexplained", n, m.group(0).strip(" ,:")[:160])
+        for m in _INTO_OTHER.finditer(flat):
+            for it in re.finditer(r"([A-Z0-9][^,;:()“”]{1,80}?) \(from “([^”]+)”(:[^)]*)?\)", m.group(2)):
+                if not (it.group(3) or "").strip(" :"):
+                    add("move unexplained", n, f"into “{m.group(1)}”: {it.group(0)}"[:160])
         for m in _REMOVED.finditer(flat):
             if _num(m.group(2)) >= LOST_MIN and "to “" not in m.group(3) and not m.group(4):
                 add("layer lost unsaid", n, m.group(0)[:160])
