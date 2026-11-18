@@ -129,12 +129,18 @@ export interface PricesNote {
   /** the session the prices are of (YYYY-MM-DD) */ closeDay: string | null;
   /** rows still on an older stored close (their price not read yet), and that close's day */ older: number; olderDay: string | null;
   /** whether prices are still being asked for */ reading?: boolean;
+  /** whether the market trades now, and whether the newest price is then over a few minutes old (LIVE14A-001) */ open?: boolean; behind?: boolean;
 }
 
 /** The line under a calendar's tables that says what its prices are (LIVE5-001: "last close, Thu 5 Nov" was taken from the first
  * row's stored close while the rows above it showed Fri 6 Nov's): the day is the session the prices read are of, and rows still
  * on an older close are counted and their day said. */
 export function pricesNote(o: PricesNote, day: (iso: string) => string): string {
+  // LIVE14A-001: while the market trades, prices the source stopped updating are said to be as of their time, never live and never
+  // "the market is not trading now" (10:52 ET prices at 14:30 ET)
+  if (o.open && o.behind && o.asOf) {
+    return `Prices as of ${o.asOf}, the latest the price source has sent: not live. Each row's price shows its time, and they are read again each minute while the market trades.`;
+  }
   if (o.live && o.asOf) {
     return `Prices as of ${o.asOf}, read for ${o.rows > o.cap ? `the first ${o.cap} of the ${o.rows}` : `the ${o.rows}`} companies shown and again each minute while the market trades.`;
   }
@@ -143,4 +149,14 @@ export function pricesNote(o: PricesNote, day: (iso: string) => string): string 
   if (!o.older || !o.olderDay || (o.closeDay && o.olderDay >= o.closeDay)) return base;
   const one = o.older === 1;
   return `${base} ${o.older} ${one ? "company's price" : "companies' prices"} ${o.reading ? (one ? "is still being read" : "are still being read") : "couldn't be read just now"}; ${one ? "it shows" : "they show"} the close of ${day(o.olderDay)}, in grey.`;
+}
+
+/** LIVE14A-001: a price read over this long ago while its market trades is not a live one: its row says its time. */
+export const QUOTE_DELAYED_MS = 5 * 60_000;
+
+/** "as of 10:52 ET" for a row's price read over QUOTE_DELAYED_MS ago while the market trades (the source stopped sending newer ones:
+ * the results page showed 10:52 ET prices at 14:30 ET with no time); null for a fresh price, or once the market is shut. */
+export function quoteDelayed(at: string | null | undefined, open: boolean, time: (iso: string) => string, now = Date.now()): string | null {
+  const t = at ? Date.parse(at) : NaN;
+  return open && Number.isFinite(t) && now - t > QUOTE_DELAYED_MS ? `as of ${time(at as string)}` : null;
 }

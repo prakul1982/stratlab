@@ -172,6 +172,9 @@ def last_session_move(q: dict | None, bars: list[dict] | None, region: str = "IN
             "change_day": m["day"]}
 
 
+LEVEL_DELAYED = 5 * 60    # seconds after which today's index level, read while the market trades, is "as of" its time, not live
+
+
 def index_level(name: str, q: dict, region: str, now: datetime | None = None) -> dict:
     """One index's tile: its level and change with the session they are of. `stale`: the market is open today and this
     quote is still a previous session's, so its change is that session's and is never shown as today's (R7T-003: SENSEX
@@ -198,10 +201,21 @@ def index_level(name: str, q: dict, region: str, now: datetime | None = None) ->
                 pre_close = True                   # the session has closed but this level is from before the close
         except (TypeError, ValueError):
             pass
+    # LIVE14A-001: today's level read over LEVEL_DELAYED ago while the market trades is not live: it is "as of" its time (a source
+    # that stopped sending newer ones kept 10:52 ET under "Live index levels" and "today" for 3.7 h)
+    delayed = False
+    if is_open and day == today and q.get("at"):
+        try:
+            t0 = datetime.fromisoformat(str(q["at"]).replace("Z", "+00:00"))
+            t0 = t0 if t0.tzinfo else t0.replace(tzinfo=timezone.utc)
+            delayed = ((now or datetime.now(timezone.utc)) - t0).total_seconds() > LEVEL_DELAYED
+        except (TypeError, ValueError):
+            pass
     return {"name": name, "price": price, "change_pct": change_2dp(price, q.get("prev_close"), q.get("change_pct")),
             "prev_close": q.get("prev_close"), "high52": hi, "low52": q.get("low52"),
             "from_high_pct": ((price / hi - 1) * 100) if hi else None, "at": at, "day": day,
-            "live": bool(is_open and day == today), "stale": bool(is_open and (day is None or day < today)),
+            "live": bool(is_open and day == today and not delayed), "delayed": delayed,
+            "stale": bool(is_open and (day is None or day < today)),
             "settling": bool(settling and (day is None or day == settling)), "pre_close": pre_close}
 
 

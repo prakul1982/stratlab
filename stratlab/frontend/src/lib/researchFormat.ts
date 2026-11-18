@@ -233,19 +233,28 @@ export function newsWhen(iso: string | null | undefined, now: Date = new Date())
 
 /** Pulse's opening line, naming only the sections the page shows (R12-011: it promised "where money is flowing" on a
  * page that showed the mood and headlines alone). `ai` is the mood read as loaded, or null before it comes. */
-export function pulseLede(closedDay?: string | null, settling = false): string {
-  // after the close the levels are the close's: "Last close, 9 Oct", never "Live" (R13-007)
-  const lead = closedDay && settling ? `${SETTLING} · ${closedDay}: index levels` : closedDay ? `Last close, ${closedDay}: index levels` : "Live index levels";
+export function pulseLede(closedDay?: string | null, settling = false, delayedAt?: string | null): string {
+  // after the close the levels are the close's: "Last close, 9 Oct", never "Live" (R13-007); in the session a level the source stopped
+  // updating is "as of" its time, never "Live" (LIVE14A-001: 10:52 ET levels under "Live index levels" at 14:35 ET)
+  const lead = closedDay && settling ? `${SETTLING} · ${closedDay}: index levels` : closedDay ? `Last close, ${closedDay}: index levels`
+    : delayedAt ? `Index levels as of ${delayedAt}, the latest the price source has sent,` : "Live index levels";
   // the page is the figures behind the mood (how many stocks took part, sectors, flows, risk), then what the headlines say (MOOD-1).
   // Two short sentences that name only what the page always shows: the AI's sections were listed in one run-on sentence that
   // grew when the read arrived, moving the page (LIVE3-016, LIVE3-012)
   return `${lead} and the figures behind the market's mood. Below them, what the headlines say.`;
 }
 
+/** The time of the oldest delayed level while none is live (LIVE14A-001), for the line under Pulse's title; null otherwise. */
+export function pulseDelayedAt(indices: { live?: boolean; delayed?: boolean; at?: string | null }[] | null | undefined): string | null {
+  if (!indices?.length || !indices.some((i) => i.delayed)) return null;
+  return indices.filter((i) => i.delayed && i.at).map((i) => i.at as string).sort()[0] ?? null;
+}
+
 /** The session Pulse's index levels are the close of, when none of them is live (the market has closed); null while any
  * index trades, or before the levels load. */
-export function pulseClosedDay(indices: { live?: boolean; day?: string | null }[] | null | undefined): string | null {
-  if (!indices?.length || indices.some((i) => i.live || !i.day)) return null;
+export function pulseClosedDay(indices: { live?: boolean; delayed?: boolean; day?: string | null }[] | null | undefined): string | null {
+  // a delayed level is of a session still trading, not a closed one (LIVE14A-001)
+  if (!indices?.length || indices.some((i) => i.live || i.delayed || !i.day)) return null;
   return indices.map((i) => i.day as string).sort().slice(-1)[0];
 }
 

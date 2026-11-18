@@ -7,7 +7,7 @@ import { useCompanyScope } from "../lib/useCompanyScope";
 import { ago, arrowOf, dayIn, fmtTime, marketTz, pct, price, safeHref } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { LIVE_ROWS, useRowQuotes } from "../lib/rowQuotes";
-import { READ_UNTIL_MS, pricesNote, readRows, sessionDayOf, shownOrder } from "../lib/rowReads";
+import { READ_UNTIL_MS, pricesNote, quoteDelayed, readRows, sessionDayOf, shownOrder } from "../lib/rowReads";
 import { REGION_NAME, screenCap, useRegion, type Region } from "../lib/research";
 import { RegionSwitch } from "../components/Research";
 import { CalendarFilters, NO_CAL, SIZE_NAME, calCount, keepFilters, keptFilters, type CalFilters, type Facets } from "../components/CalendarFilters";
@@ -124,7 +124,7 @@ export function ResultsPage() {
   const shown = useMemo(() => (data ? shownOrder(data.weeks, data.today) : []), [data]);
   const symbols = useMemo(() => [...new Set(shown.map((r) => r.symbol))], [shown]);
   const quoted = useMemo(() => symbols.slice(0, LIVE_ROWS), [symbols]);
-  const { quotes, quoteAt, live: isLive, reading: quotesReading } = useRowQuotes(region, quoted);
+  const { quotes, quoteAt, live: isLive, reading: quotesReading, open: marketOn } = useRowQuotes(region, quoted);
   const [moves, setMoves] = useState<Record<string, MovesAnswer | null>>({});
   const [implied, setImplied] = useState<Record<string, Implied | null>>({});
   // false once the server says option prices can't be read now (the broker not connected): the column is hidden and one line says why
@@ -198,7 +198,8 @@ export function ResultsPage() {
   const olderRows = closeDay ? [...new Map(shown.filter((r) => quotes[r.symbol]?.price == null && r.last != null && r.last_at && r.last_at.slice(0, 10) < closeDay)
     .map((r) => [r.symbol, r])).values()] : [];
   const pricesLine = pricesNote({ live: isLive, asOf: quoteAt ? fmtTime(quoteAt, { tz, zone: true }) : null, rows: symbols.length, cap: LIVE_ROWS, closeDay,
-    older: olderRows.length, olderDay: olderRows.map((r) => r.last_at!.slice(0, 10)).sort()[0] ?? null, reading: quotesReading }, resultDay);
+    older: olderRows.length, olderDay: olderRows.map((r) => r.last_at!.slice(0, 10)).sort()[0] ?? null, reading: quotesReading,
+    open: marketOn, behind: !!quoteDelayed(quoteAt, marketOn, String) }, resultDay);
 
   const mvEmpty = movesEmpty(shown, moves);
   const columns: Column<ResultRow>[] = [
@@ -237,7 +238,12 @@ export function ResultsPage() {
     { key: "px", header: "Price", numeric: true, brief: true, csvHeader: "Price now", cell: (r) => {
       const x = quotes[r.symbol];
       // LIVE9A-028: an Indian share is priced to the paisa ("₹0.7800" had four places under ₹1)
-      if (x?.price != null) return <span title={x.at ? `Read ${fmtTime(x.at, { tz: marketTz(region), zone: true })}` : undefined}>{price(x.price, cur, region === "IN" ? 2 : undefined)}</span>;
+      if (x?.price != null) {
+        // LIVE14A-001: a price the source stopped updating while the market trades carries its time on the row ("as of 10:52 ET")
+        const late = quoteDelayed(x.at, marketOn, (t) => fmtTime(t, { tz: marketTz(region), zone: true }));
+        return <span className={late ? "res-px" : undefined} title={x.at ? `Read ${fmtTime(x.at, { tz: marketTz(region), zone: true })}` : undefined}>{price(x.price, cur, region === "IN" ? 2 : undefined)}
+          {late && <span className="k-note k-muted res-px-at" data-testid="res-px-at">{late}</span>}</span>;
+      }
       return r.last == null ? <span className="k-muted">–</span> : <span className="k-muted" title={r.last_at ? `Last close, ${resultDay(r.last_at)}` : "Last close"}>{price(r.last, cur, region === "IN" ? 2 : undefined)}</span>;
     } },
     { key: "day", header: "Day", numeric: true, brief: true, cell: (r) => {

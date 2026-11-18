@@ -881,7 +881,10 @@ class Mood:
             print("breadth unavailable:", region, str(e)[:100])
             b = None
         typ = typical_move((f_typ.result(timeout=60) or {}).get(sym) or [])
-        lvl = next((i for i in levels if i.get("name") == name), None)
+        # LIVE14A-001: a level the source stopped updating mid-session ("as of 10:52 ET" at 14:13 ET) is no ground for the day's tone or its
+        # size against the usual: only levels read in the last minutes are (`fresh`); the tables keep every level with its time
+        fresh = [i for i in levels if not i.get("delayed")]
+        lvl = next((i for i in fresh if i.get("name") == name), None)
         cmp = compare_today(name, (lvl or {}).get("change_pct"), typ)
         try:
             metas = f_risk.result(timeout=30)
@@ -906,10 +909,10 @@ class Mood:
              "risk": {"rows": risk} if risk else None, "global": {"rows": glob} if glob else None,
              "calendar": cal if any(cal.values()) else None,
              # the index moves the headline is worked out from, so a later read of the session can word it again (LIVE11A-001)
-             "moves": [{"name": i["name"], "change_pct": i["change_pct"]} for i in levels if i.get("name") and num(i.get("change_pct")) is not None][:4]}
+             "moves": [{"name": i["name"], "change_pct": i["change_pct"]} for i in fresh if i.get("name") and num(i.get("change_pct")) is not None][:4]}
         # LIVE9A-002: the headline sets the index moves against a breadth count of the same session only (at 14:23 ET on Mon 16 Nov: "all
         # three indices down on the day, but 313 of 499 S&P 500 stocks rose", the count being Friday's); the dated line under it stays
-        p["headline"] = headline_of(levels, sectors, cmp, same_session(b, p["session"]))
+        p["headline"] = headline_of(fresh, sectors, cmp, same_session(b, p["session"]))
         p["lines"] = lines_of(p)
         bad = verify(p)
         if bad:                           # a line the tables don't bear out is never shown (the tables still are)

@@ -156,6 +156,27 @@ def _first_trade_day(meta: dict) -> str | None:
         return None
 
 
+OTHER_HOST = "https://query2.finance.yahoo.com"     # the source's second host (its search already lives there)
+EDGE_STALE = 600             # seconds: an answer whose own session trades now and whose last trade is older is a kept copy (LIVE14A-001)
+EDGE_AFTER = 6 * 3600        # ...and for this long after the session's close, a last trade that far before the close
+
+
+def stale_edge(meta: dict, now: float) -> bool:
+    """Whether an answer looks like a copy the source's edge kept: its own regular session (its currentTradingPeriod) is trading now and
+    its last trade is over EDGE_STALE seconds old, or the session closed under EDGE_AFTER ago and its last trade is that far before the
+    close. False when it can't be said (no period, no time)."""
+    try:
+        p = meta["currentTradingPeriod"]["regular"]
+        start, end = float(p.get("start") or 0), float(p["end"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    t = meta.get("regularMarketTime")
+    if not isinstance(t, (int, float)) or not start <= now < end + EDGE_AFTER or meta.get("instrumentType") == "CRYPTOCURRENCY":
+        return False
+    # in the session: over EDGE_STALE old now; after it: a last trade over EDGE_STALE before the close (a copy from mid-session)
+    return min(now, end) - t > EDGE_STALE
+
+
 # the market whose trading days a Yahoo answer follows, by its instrument type, else by its exchange's zone
 MARKET_OF = {"CURRENCY": "FX", "FUTURE": "CMDTY", "Asia/Kolkata": "IN", "America/New_York": "US", "Europe/London": "UK",
              "Europe/Berlin": "EU", "Asia/Tokyo": "JP"}
@@ -232,14 +253,17 @@ class Yahoo(Source):
         return self.fetch(f"/v8/finance/chart/{symbol}", {"interval": interval, "period1": now - days * 86400,
                                                           "period2": now, "includePrePost": "false"}, ttl=0)
 
-    def _chart(self, symbol: str, tf: str, days: int, interval: str, ttl: float | None, with_time: bool = False):
+    def _chart(self, symbol: str, tf: str, days: int, interval: str, ttl: float | None, with_time: bool = False,
+               fresh: bool = False):
+        """`fresh`: the other host and a window rounded to the minute, an address the source's edge has not kept (see meta)."""
         now = int(time.time())
         # round the window so repeated calls share a cache entry
-        step = 3600 if tf == "1d" else 60
+        step = 3600 if tf == "1d" and not fresh else 60
         end = now - now % step + step
         params = {"interval": interval, "period1": end - days * 86400, "period2": end,
                   "includePrePost": "false", "events": "div,splits"}
-        data, at = self.fetch(f"/v8/finance/chart/{symbol}", params,
+        path = f"{OTHER_HOST if fresh else ''}/v8/finance/chart/{symbol}"
+        data, at = self.fetch(path, params,
                               ttl=ttl if ttl is not None else (1800 if tf == "1d" else 60), with_time=True)
         res = ((data or {}).get("chart") or {}).get("result") or []
         if not res:
@@ -334,10 +358,35 @@ class Yahoo(Source):
                 continue
         return out
 
+    EDGE_MISS_FOR = 600          # seconds a symbol whose fresh re-ask was no newer is not re-asked (a thin stock's old last trade)
+
+    def _fresher(self, symbol: str, got: dict, now: float | None = None) -> dict:
+        """LIVE14A-001: on 18 Nov the source's edge answered some addresses with a copy frozen at 10:52 ET for hours while NYSE traded
+        (^IXIC 24,322.71 and LOW $217.71 on one host and address, the live level on the other), so Mood's index rows and the results
+        page's prices stayed at 10:52 under "today". An answer whose own session is trading and whose last trade is over EDGE_STALE
+        old is asked once more at an address the edge has not kept; the newer of the two answers stands."""
+        now = time.time() if now is None else now
+        if not stale_edge(got.get("meta") or {}, now):
+            return got
+        misses = self.__dict__.setdefault("_edge_miss", {})
+        if now - misses.get(symbol, 0.0) < self.EDGE_MISS_FOR:
+            return got
+        try:
+            alt = self._chart(symbol, "1d", 7, INTERVAL["1d"][0], 60, fresh=True)
+        except SourceError:
+            return got
+        if (alt["meta"].get("regularMarketTime") or 0) > (got["meta"].get("regularMarketTime") or 0) and not stale_edge(alt["meta"], now):
+            misses.pop(symbol, None)
+            return alt
+        if len(misses) > 2000:
+            misses.clear()
+        misses[symbol] = now
+        return alt if (alt["meta"].get("regularMarketTime") or 0) > (got["meta"].get("regularMarketTime") or 0) else got
+
     def meta(self, symbol: str) -> dict:
         """Price, previous close, day range and 52-week range for one symbol."""
         # exact: a fresh short window, never cut from a long download, so the last sessions are today's
-        got = self.chart(symbol, "1d", 7, ttl=60, exact=True)
+        got = self._fresher(symbol, self.chart(symbol, "1d", 7, ttl=60, exact=True))
         m = got["meta"]
         day = _meta_day(m)
         if day and not any(c["t"][:10] >= day for c in got["candles"]):
