@@ -97,7 +97,7 @@ test("IA-1: search finds every page by its old name and its new one, and says wh
   assert.equal(screener.title, "Find stocks › Figures (Screener)");
   assert.equal(placeName(locate("/research/themes")), "Themes");
   // a renamed tab's browser title names its entry; an unchanged one keeps its title
-  assert.equal(titleFor("/research/screens"), "Figures · Find stocks · StratLab");
+  assert.equal(titleFor("/research/screens"), "Figures · StratLab");      // (updated on purpose, owner 18 Nov: one tab-title pattern, "Page · StratLab")
   assert.equal(titleFor("/holdings"), "Holdings · StratLab");
 });
 

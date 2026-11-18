@@ -31,7 +31,7 @@ import { liveQuote, useLiveRefresh } from "../lib/liveRefresh";
 import { useShareCompany } from "../components/ShareCompany";
 import { MoreMenu } from "../components/MoreMenu";
 import { suggestions, type Suggestion } from "../components/CompanyCombobox";
-import { knownName, rememberName, useDocTitle } from "../lib/title";
+import { companyName, knownName, rememberName, useDocTitle } from "../lib/title";
 import { DealsPanel } from "../components/Deals";
 import { StoredNote, StoredStamp, useStoredRefresh } from "../components/StoredStamp";
 import { SaveButton } from "../components/SavedSearches";
@@ -265,8 +265,9 @@ function CompanyView() {
   const nav = useNavigate();
   useEffect(() => { if (moved) nav(`/research/${region}/${encodeURIComponent(sym)}${window.location.search}`, { replace: true }); }, [moved, region, sym, nav]);
   const share = useShareCompany(region, sym);
-  // the name and the symbol, then the price (R8O-009); the name is kept for the next first frame (lib/title titleFor)
-  useDocTitle(c ? `${c.name || c.symbol}${c.name && c.name.toUpperCase() !== c.symbol ? ` (${c.symbol})` : ""}${c.quote?.price != null ? ` ${price(c.quote.price, c.currency || (region === "IN" ? "INR" : "USD"))}` : ""}` : null);
+  // the name and the symbol (R8O-009), as the first frame gives them: "Reliance Industries (RELIANCE) · StratLab", one pattern
+  // with every other tab and no price (owner, 18 Nov); the name is kept for the next first frame (lib/title titleFor)
+  useDocTitle(c ? companyName(c.name, c.symbol) : null);
   useEffect(() => { if (c) rememberName(region, c.symbol, c.name); }, [c, region]);
   // the price and the day's change again each minute while the market trades; the rest of the page stays as read
   useLiveRefresh(!!c?.market_open && (c.quote?.at == null || liveQuote(c.quote.at)), () => {

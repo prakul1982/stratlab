@@ -4,7 +4,7 @@ import { isPlansPath, slimOf, visitorView } from "../lib/deepLinks";
 import { applySeo, seoFor, type SeoKind } from "../lib/seo";
 import { HOME_TITLE, landingHeading, landingIntro } from "../content/seo";
 import { heldStartup } from "../lib/held";
-import { NOT_FOUND_TITLE, signedOutTitle } from "../lib/title";
+import { NOT_FOUND_TITLE, signedOutTitle, withBrand } from "../lib/title";
 import { Opening } from "../components/LoadGuard";
 import { importWithRetry } from "../lib/lazyRetry";
 import { PublicMarkets } from "../components/watch/PublicLauncher";
@@ -54,8 +54,8 @@ export function VisitorApp({ userId }: { userId?: string } = {}) {
     // a strategy's page arrives with its own title and tags from the build; until its data is here the tab keeps them, not
     // "Strategy library" for a second and then its name again (R10V-006)
     if (start && view.kind === "libraryEntry" && document.title && document.title !== HOME_TITLE) return;
-    const title = view.kind === "notfound" ? NOT_FOUND_TITLE : view.kind === "verdict" ? "Shared verdict · StratLab"
-      : view.kind === "libraryEntry" ? "Strategy library · StratLab" : signedOutTitle(pathname);
+    const title = view.kind === "notfound" ? NOT_FOUND_TITLE : view.kind === "verdict" ? withBrand("Shared verdict")
+      : view.kind === "libraryEntry" ? withBrand("Strategy library") : signedOutTitle(pathname);
     document.title = title;
     applySeo(seoFor(pathname, kind, view.kind === "libraryEntry" ? { index: false } : {}), title);
   }, [pathname, kind, view.kind]);

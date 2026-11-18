@@ -38,6 +38,7 @@ from . import blog, db, instrument_kinds, memguard, sector_members, site_pages, 
 from .branding import public_text
 from .config import settings
 from .intel.net import TTLCache
+from .titles import page_title
 
 REGIONS = {"in": "IN", "us": "US"}
 FRESH = 24 * 3600              # the longest a stored page is kept, whatever the market did (the reported numbers change quarterly)
@@ -2867,7 +2868,7 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
     deep = app + "/deep"
     test = f"{site}/new?market={market}&symbol={quote(symbol, safe='')}"
     country = "US" if region == "US" else "India"
-    title = f"{name} ({symbol}) share price, financials and filings · StratLab"
+    title = page_title(f"{name} ({symbol}) share price, financials and filings")
     if not f:
         desc = f"{name} ({symbol}), listed in {country}. Test a trading idea on it or read its numbers on StratLab."
         body = f"""<h1>{e(name)} <span class="muted">({e(symbol)})</span></h1>
@@ -3554,7 +3555,7 @@ def not_found(region: str | None, symbol: str) -> str:
     if kind:
         return _not_company_page(region, s, kind)
     site = settings.PUBLIC_SITE_URL
-    title = "Company not found · StratLab"
+    title = page_title("Company not found")
     body = (f"<h1>No company page for {e(s)}</h1>" + (other_market(region, s) or "")
             + '<p class="muted">Check the symbol, or find the company by its name.</p>' + _find_form(region, s))
     return _page(_head(title, "No listed company has that symbol.", site + "/stocks", robots="noindex,follow"), None, body)
@@ -3571,7 +3572,7 @@ def busy_page(region: str | None, symbol: str, name: str | None = None) -> str:
     s = (symbol or "")[:40].upper()
     who = f"{e(name)} ({e(s)})" if name else e(s)
     path = f"/stocks/{(region or 'IN').lower()}/{quote(s, safe='')}"
-    head = _head(f"{s}: being prepared · StratLab", "This company's page is being prepared.", site + path,
+    head = _head(page_title(f"{s}: being prepared"), "This company's page is being prepared.", site + path,
                  extra=f'<meta http-equiv="refresh" content="{BUSY_REFRESH}">', robots="noindex,follow")
     body = (f"<h1>{who}: this page is being prepared</h1>"
             f'<p class="muted">StratLab is gathering this company\'s reported numbers and prices. The page loads by itself '
@@ -3586,7 +3587,7 @@ def _not_company_page(region: str | None, symbol: str, kind: str) -> str:
     s = symbol.upper()
     market = "US" if region == "US" else "IN"
     app = f"{site}/research/{market}/{quote(s, safe='')}"
-    title = f"{s} is {kind} · StratLab"
+    title = page_title(f"{s} is {kind}")
     body = (f"<h1>{e(s)} is {e(kind)}</h1>"
             f'<p>Public pages here cover listed companies, with their reported results. {e(s)} isn\'t a company, so it '
             f"has no page of its own. Inside StratLab you can chart it and test a trading idea on its prices.</p>"
@@ -3639,7 +3640,7 @@ def index_page(region: str | None, q: str = "") -> str:
                 body.append(f"<h2>{head}</h2>{cap}{_links(r.lower(), big)}")
             body.append(az_nav(r))                    # SEO-1: every company a click or two from here
     canonical = site + (f"/stocks/{region.lower()}" if region else "/stocks")
-    return _page(_head({"IN": "Company pages: India · StratLab", "US": "Company pages: US · StratLab"}.get(region or "", "Company pages: India and US · StratLab"),
+    return _page(_head({"IN": page_title("Company pages: India"), "US": page_title("Company pages: US")}.get(region or "", page_title("Company pages: India and US")),
                        f"Find any company listed in {where.replace(' (NSE and BSE)', '').replace('India and the US', 'India or the US')}: price, results, "
                        "margins, debt and filings, from reported data.", canonical, ld, robots="noindex,follow" if q else "index,follow"),
                  None, "".join(body))
@@ -3842,7 +3843,7 @@ def letter_page(region: str, letter: str, page: int = 1) -> str | None:
     pages = pages_of(n)
     of = f", page {page} of {pages}" if pages > 1 else ""
     what = "starting with a digit or a symbol" if letter == OTHER else f"starting with {letter}"
-    title = f"{where} listed companies {what}{of} · StratLab"
+    title = page_title(f"{where} listed companies {what}{of}")
     desc = (f"{n:,} companies listed in {place} {what}{of}, {_span_text(region, syms)}. Each links to its price, "
             "results and filings.")
     if len(desc) > DESCRIPTION_MAX:
@@ -3886,7 +3887,7 @@ def index_page_of_list(region: str, slug: str, page: int = 1) -> str | None:
     of = f", page {page} of {pages}" if pages > 1 else ""
     when = f" The list is as of {as_of}." if as_of else ""
     shown = syms[(page - 1) * DIR_PAGE:page * DIR_PAGE]
-    title = f"{name} companies: all {len(syms):,} members{of} · StratLab"
+    title = page_title(f"{name} companies: all {len(syms):,} members{of}")
     desc = f"The {len(syms):,} companies in the {name} that have a StratLab page{of}, A to Z, each with its price, results and filings."
     canonical = site + index_path(region, slug, page)
     crumbs, ld = _crumbs([("Companies", "/stocks"), (where, f"/stocks/{region.lower()}"), (name, index_path(region, slug, page))])
@@ -3904,7 +3905,7 @@ def dir_not_found(region: str | None) -> str:
     site = settings.PUBLIC_SITE_URL
     body = ('<h1>No such list</h1><p class="muted">There is no list of companies at this address. Find the company by its name, '
             f'or <a href="/stocks{"/" + region.lower() if region else ""}">browse the companies</a>.</p>' + _find_form(region))
-    return _page(_head("List not found · StratLab", "No such list of companies.", site + "/stocks", robots="noindex,follow"), None, body)
+    return _page(_head(page_title("List not found"), "No such list of companies.", site + "/stocks", robots="noindex,follow"), None, body)
 
 
 def indexes_of(region: str, symbol: str) -> list[tuple[str, str]]:

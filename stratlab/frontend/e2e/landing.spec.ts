@@ -37,7 +37,7 @@ test("landing: the three spaces with Trade first, alerts, plans, FAQ and markets
   await expect(page.locator(".lp-space .lp-space-list li"), "each space lists three things it does").toHaveCount(9);
   await expect(page.locator("#trade .lp-options")).toContainText("Paper trade option structures");
   // what search engines and link previews show says the same
-  await expect(page).toHaveTitle("StratLab: backtest trading ideas, research stocks, track money");
+  await expect(page).toHaveTitle("StratLab");      // (updated on purpose, owner 18 Nov: one tab-title pattern, "Page · StratLab"): the landing page is the brand alone
   for (const sel of ['meta[name="description"]', 'meta[property="og:description"]']) await expect(page.locator(sel)).toHaveAttribute("content", /trad/i);
   // what ships today, one line each
   // the long lists show a few and fold the rest: open them, everything is still there

@@ -27,6 +27,7 @@ from fastapi import APIRouter
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from . import db, job_status
+from .titles import page_title
 
 IST, ET = ZoneInfo("Asia/Kolkata"), ZoneInfo("America/New_York")
 ZONE = {"IN": (IST, "IST"), "US": (ET, "ET"), "both": (IST, "IST")}
@@ -403,6 +404,6 @@ def page_html(v: dict) -> str:
              "@media (max-width:640px){.ds th:nth-child(n){width:auto}.ds table,.ds tbody,.ds tr,.ds th,.ds td{display:block;width:auto}.ds thead{position:absolute;left:-9999px}"
              ".ds tr{padding:10px 0;border-bottom:1px solid var(--line)}.ds th[scope=row],.ds td{border:0;padding:2px 0;text-align:left;position:static;min-width:0}"
              ".ds td:nth-of-type(1)::before{content:'Last updated: ';color:var(--muted)}.ds td:nth-of-type(2)::before{content:'Next due: ';color:var(--muted)}}</style>")
-    head = sp._head("Data status · StratLab", "When each StratLab dataset was last updated and when it is next due: prices, breadth, filings, "
+    head = sp._head(page_title("Data status"), "When each StratLab dataset was last updated and when it is next due: prices, breadth, filings, "
                     "results, flows, briefs and more.", f"{site}/status", style)
     return sp._page(head, None, "".join(body))

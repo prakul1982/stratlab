@@ -30,6 +30,7 @@ from .config import settings
 from .intel import theme_library
 from .intel.grounding import ADVICE
 from .responses import err, ok
+from .titles import page_title
 
 router = APIRouter(tags=["share"])
 page_router = APIRouter(include_in_schema=False)
@@ -335,7 +336,7 @@ def render(token: str, snap: dict) -> str:
     e = html.escape
     site = settings.PUBLIC_SITE_URL
     app = site + (snap.get("app") or "/")
-    title = f"{snap['title']}: {'theme' if snap['kind'] == 'theme' else 'deep dive'} snapshot · StratLab"
+    title = page_title(f"{snap['title']}: {'theme' if snap['kind'] == 'theme' else 'deep dive'} snapshot")
     head = stock_pages._head(title, description(snap), url(token), robots="noindex,follow", og_type="article")
     made = day_text(snap.get("made"))
     as_of = snap.get("as_of") or ""

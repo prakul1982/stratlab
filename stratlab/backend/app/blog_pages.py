@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from . import admin, ads, blog, blog_research, stock_pages as sp
 from .config import settings
 from .responses import err, ok
+from .titles import page_title
 
 router = APIRouter(tags=["blog"], include_in_schema=False)
 admin_router = APIRouter(tags=["admin"])
@@ -37,13 +38,13 @@ FEED_CACHE = "public, max-age=300, s-maxage=600, stale-while-revalidate=600"
 LIST_CACHE = "public, max-age=60, s-maxage=600, stale-while-revalidate=600"
 FACTS = "Facts, not advice. Data and method for research and education; not investment advice or a recommendation about any security."
 KIND_NAME = {"brief": "Market brief", "research": "Research"}
-TITLES = {None: ("StratLab blog: daily market briefs and research from market data",
+TITLES = {None: ("Blog: daily market briefs and research from market data",       # the page's name; page_title adds the brand
                  "Daily India and US market briefs and research built from StratLab's own data: index closes, sector rotation, strategy tests, IPO "
                  "listings and SIPs. Facts and method, not advice."),
-          "brief": ("Daily market briefs for India and the US · StratLab",
+          "brief": ("Daily market briefs for India and the US",
                     "Each trading day's India and US market brief: index closes, sector rotation and stocks newly matching a price rule, built after "
                     "the close from market data. Facts, not advice."),
-          "research": ("Research from StratLab's own data · StratLab",
+          "research": ("Research from StratLab's own data",
                        "Research posts built from StratLab's own data: classic strategies across markets after costs, IPO listing days and SIP against "
                        "lump sum, each with its data, period, method and limits.")}
 PATHS = {None: "/blog", "brief": "/blog/briefs", "research": "/blog/research"}
@@ -162,13 +163,13 @@ def _html(body: str, status: int = 200, headers: dict | None = None) -> HTMLResp
 
 def _unavailable() -> HTMLResponse:
     """The posts can't be read right now: a page a visitor can read, never cached, and 503 so a crawler tries again."""
-    body = sp._page(sp._head("The blog is busy · StratLab", "The blog can't be read right now.", _site() + "/blog", robots="noindex,follow"), None,
+    body = sp._page(sp._head(page_title("The blog is busy"), "The blog can't be read right now.", _site() + "/blog", robots="noindex,follow"), None,
                     '<h1>The blog is busy</h1><p class="muted">Please try again in a minute.</p>')
     return HTMLResponse(body, status_code=503, headers={"Retry-After": "120", "Cache-Control": "no-store"})
 
 
 def _not_found(what: str = "post") -> HTMLResponse:
-    body = sp._page(sp._head("Page not found · StratLab", "That blog page doesn't exist.", _site() + "/blog", f"<style>{STYLE}</style>", robots="noindex,follow"), None,
+    body = sp._page(sp._head(page_title("Page not found"), "That blog page doesn't exist.", _site() + "/blog", f"<style>{STYLE}</style>", robots="noindex,follow"), None,
                     f'<h1>That {e(what)} isn\'t here</h1><p class="muted">It may have been moved or taken down.</p>'
                     '<div class="ctas"><a class="btn" href="/blog">All blog posts</a><a class="btn ghost" href="/blog/briefs">Market briefs</a></div>')
     return HTMLResponse(body, status_code=404, headers={"Cache-Control": "public, max-age=60, s-maxage=60"})
@@ -205,9 +206,8 @@ def list_page(kind: str | None, page: int) -> HTMLResponse:
     if page > pages or (page > 1 and not rows):
         return _not_found("page")
     canonical = site + path + (f"?page={page}" if page > 1 else "")
-    title, desc = TITLES[kind]
-    if page > 1:
-        title, desc = title.replace(" · StratLab", "") + f" (page {page}) · StratLab", desc
+    name, desc = TITLES[kind]
+    title = page_title(f"{name} (page {page})" if page > 1 else name)
     cards = "".join(
         f'<li><a class="post" href="/blog/{e(r["slug"])}"><span class="kind">{e(_kind_line(r))} · {e(_when(r["published_at"]))}</span>'
         f'<h2>{e(r["title"])}</h2><p>{e(_shorten(_card_text(r), 220))}</p></a></li>' for r in rows)
@@ -223,7 +223,7 @@ def list_page(kind: str | None, page: int) -> HTMLResponse:
         + (f'<link rel="next" href="{site}{path}?page={page + 1}">\n' if page < pages else "")
     ld = sp._ld([{"@context": "https://schema.org", "@type": "Blog", "name": "StratLab blog", "url": site + "/blog", "inLanguage": "en",
                   "publisher": {"@type": "Organization", "name": "StratLab", "url": site + "/"}},
-                 _crumbs(("Blog", site + "/blog"), *([(TITLES[kind][0].split(" · ")[0], site + path)] if kind else []))])
+                 _crumbs(("Blog", site + "/blog"), *([(TITLES[kind][0], site + path)] if kind else []))])
     intro = {None: "Daily market briefs and research built from StratLab's own data. Every post gives its data, its period and its method.",
              "brief": "Each trading day's India and US market brief, written after the close from market data.",
              "research": "Research built from StratLab's own data, each with its data source, period, method and limits."}[kind]
@@ -247,7 +247,7 @@ def post_page(slug: str) -> HTMLResponse:
     indexable = bool(post.get("indexable"))
     before, after = blog.neighbours(post) if indexable else (None, None)
     published, modified = str(post["published_at"]), str(post["updated_at"])
-    title = f"{post['title']} · StratLab"
+    title = page_title(post["title"])
     desc = _shorten(post["summary"])
     blocks = (post.get("body") or {}).get("blocks") or []
     art = {"@context": "https://schema.org", "@type": "Article", "headline": post["title"][:110], "description": desc,

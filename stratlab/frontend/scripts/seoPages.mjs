@@ -8,7 +8,7 @@
 // unit/seo.test.mjs checks the output of these functions.
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { absolute, BROWSE_COMPANIES, HOME_DESCRIPTION, INSTAGRAM, LIBRARY_SEEDS, libraryMeta, NOT_FOUND_DESCRIPTION, PAGES, SITE } from "../src/content/seo.ts";
+import { absolute, BROWSE_COMPANIES, HOME_DESCRIPTION, INSTAGRAM, LIBRARY_SEEDS, libraryMeta, NOT_FOUND_DESCRIPTION, PAGES, SITE, withBrand } from "../src/content/seo.ts";
 import { FAQ, faqText } from "../src/content/faq.ts";
 import { AD_PAGE } from "../src/content/ad.ts";
 import { DEFAULT_BUSINESS, inline, LEGAL_BLOCKS as POLICY_BLOCKS, LEGAL_UPDATED } from "../src/content/legal.ts";
@@ -163,7 +163,7 @@ export function pageFiles(template, fonts = []) {
       body: LEGAL_BLOCKS[p.path] ? legalBody(p.path, p.heading) : "",
       after: p.path === "/library" ? LIBRARY_LINKS : p.path === "/" ? HOME_LINKS : p.path === "/plans" ? plansList() : "",
       faq: p.path === "/faq", hero: p.path === "/", fonts })]);
-  files.push(["404.html", pageHtml(template, { title: "Page not found · StratLab", description: NOT_FOUND_DESCRIPTION, canonical: null, index: false,
+  files.push(["404.html", pageHtml(template, { title: withBrand("Page not found"), description: NOT_FOUND_DESCRIPTION, canonical: null, index: false,
     heading: "Page not found", summary: [NOT_FOUND_DESCRIPTION], after: NOT_FOUND_LINKS, readable: true })]);
   return files;
 }

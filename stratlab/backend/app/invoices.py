@@ -16,6 +16,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 
 from . import db
+from .titles import page_title
 
 SELLER = "invoice:seller"
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -311,7 +312,7 @@ def html(inv: dict) -> str:
     # opened under the site's own origin: no script may run but the print button's own (a second guard after escaping)
     return f"""<!doctype html><html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="{CSP}">
-<title>{e(title)} {e(inv['number'])}</title>
+<title>{e(page_title(f"{title} {inv['number']}"))}</title>
 <style>body{{font:14px/1.5 'IBM Plex Sans',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1D1B17;background:#F5F1E8;max-width:760px;margin:32px auto;padding:0 16px}}
 h1{{font:600 26px/1.2 Fraunces,Georgia,serif;margin:0 0 4px}}h3{{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#5C574D;margin:16px 0 4px}}
 button{{font:600 14px inherit;background:#1F4FB5;color:#fff;border:0;border-radius:10px;padding:10px 18px;cursor:pointer;margin-bottom:16px}}
