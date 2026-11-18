@@ -13,7 +13,7 @@ import { ChainCard, ClaimsCard, LayerCard, ListingsCard, MembersCard, NewsCard, 
 import { ChangesCard } from "../components/ThemeChanges";
 import { SaveButton, SavedList } from "../components/SavedSearches";
 import { themeReady, themeSnap } from "../lib/savedSnap";
-import { Card, CardHead, DataTable, Disclosure, ErrorState, Notice, PageHeader, PageNav, ShowLess, Skeleton, Working } from "../components/kit";
+import { Card, CardHead, CardNote, DataTable, Disclosure, ErrorState, Notice, PageHeader, PageNav, ShowLess, Skeleton, Working } from "../components/kit";
 import { watchSize } from "../lib/resize";
 import { fundName, themeFunds } from "../lib/themeFormat";
 
@@ -258,7 +258,7 @@ export function ThemesPage() {
               <ListingsCard items={ipos && ipos.checked ? ipos.items : null} checked={(ipos?.checked || ipos?.pending) ?? true} region={dive.region} />
             </>
           )}
-          <p className="k-note">The text on this page that describes how a layer or sub-theme works is written by AI from general knowledge, with no figures. Every company of the theme's official industries is listed, whatever the AI says; a company the AI added from another industry is kept only while its own description doesn't show otherwise, with its words shown where they confirm the work. Every figure is from the companies' reported numbers or stored pages, with its year and basis.</p>
+          <CardNote summary="About this page"><p>The text on this page that describes how a layer or sub-theme works is written by AI from general knowledge, with no figures. Every company of the theme's official industries is listed, whatever the AI says; a company the AI added from another industry is kept only while its own description doesn't show otherwise, with its words shown where they confirm the work. Every figure is from the companies' reported numbers or stored pages, with its year and basis.</p></CardNote>
         </>
       )}
     </div>

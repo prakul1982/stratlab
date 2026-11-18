@@ -5,7 +5,7 @@ import { useApp } from "../lib/app";
 import { download as saveFile } from "../lib/share";
 import { pct, pctPlain } from "../lib/format";
 import { capText, downloadPath, peText, sortPeers, wholeOnly, type PeerKey, type PeerRow, type Peers, type Region } from "../lib/companyTables";
-import { Card, CardHead, DataTable, EmptyState, ErrorState, PlanNote, Select, Signed, Skeleton, usePhone, type Column } from "./kit";
+import { Card, CardHead, CardNote, DataTable, EmptyState, ErrorState, PlanNote, Select, Signed, Skeleton, usePhone, type Column } from "./kit";
 import "./companyTables.css";
 
 /* Peers (lane c-f2): the companies of the same industry nearest in market value, with the company's own row in bold and the median of the
@@ -77,7 +77,6 @@ export function PeersCard({ region, symbol, id = "co-peers" }: { region: Region;
   return (
     <Card id={id}>
       {head(phoneSort || download ? <>{phoneSort}{download}</> : undefined)}
-      <p className="k-small k-muted">{v.basis_words[0].toUpperCase() + v.basis_words.slice(1)}{v.return_label === "ROE" ? "; compared on return on equity, as a lender" : ""}. Market value in {region === "IN" ? "rupees" : "dollars"}.</p>
       <div className="ct-peers">
         {/* on a phone the company and its five nearest, then "Show more" (LIVE8B-012: eleven stacked cards ran 2,400 px) */}
         <DataTable label={`${symbol} and its peers`} rows={rows} rowKey={(r) => r.symbol} columns={cols} foot={foot} phonePage={6}
@@ -86,6 +85,8 @@ export function PeersCard({ region, symbol, id = "co-peers" }: { region: Region;
       </div>
       {v.locked && <PlanNote plan={v.locked.plan}>{v.locked.message}</PlanNote>}
       {v.export_locked && <p className="k-note">{v.export_locked.message}</p>}
+      {/* the basis of the list, under it in the card's one fold (owner, 18 Nov), not a line between the head and the table */}
+      <CardNote summary="About this list"><p data-testid="peers-basis">{v.basis_words[0].toUpperCase() + v.basis_words.slice(1)}{v.return_label === "ROE" ? "; compared on return on equity, as a lender" : ""}. Market value in {region === "IN" ? "rupees" : "dollars"}.</p></CardNote>
     </Card>
   );
 }

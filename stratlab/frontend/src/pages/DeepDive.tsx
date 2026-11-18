@@ -14,7 +14,7 @@ import { Panel, TrendBars } from "../components/Research";
 import { BizUpdatesPanel } from "../components/BizUpdates";
 import { CompanyTables } from "../components/CompanyTables";
 import { ReportScope } from "../components/kit/ReportFigure";
-import { Badge, Card, CardHead, CsvButton, DataTable, ErrorState, Meter, PageHeader, PlanNote, Select, Signed, Skeleton, Stat, StatRow, type Column } from "../components/kit";
+import { Badge, CardNote, Card, CardHead, CsvButton, DataTable, ErrorState, Meter, PageHeader, PlanNote, Select, Signed, Skeleton, Stat, StatRow, type Column } from "../components/kit";
 import { AlertButton } from "../components/AlertForm";
 import { SaveButton } from "../components/SavedSearches";
 import { ShareCompanyButton } from "../components/ShareCompany";
@@ -142,7 +142,7 @@ function ReportCard({ c, cur = "$" }: { c: Card; cur?: string }) {
             } },
           ]} />
       ) : <p className="k-small k-muted">No specific targets were found in these {c.read.length > 0 && c.read.every((d) => d.kind === "earnings_release") ? "earnings releases" : "calls"}.</p>}
-      <p className="k-note">Checked against the reported annual and quarterly numbers: growth on the year before (within 1 point; profit within 2), operating margin (within 0.5 points; the company may quote EBITDA margin, which can differ slightly), a revenue or profit amount (at least the target, less 2%) and estimated capex (within 10%). A target the numbers can't settle (a bank's loan-to-deposit ratio, a retail mix) is settled from what the company said after the period ended, quoted word for word and checked against the document. A target repeated on later calls counts once, from the first time it was said.</p>
+      <CardNote summary="How each target is checked"><p>Checked against the reported annual and quarterly numbers: growth on the year before (within 1 point; profit within 2), operating margin (within 0.5 points; the company may quote EBITDA margin, which can differ slightly), a revenue or profit amount (at least the target, less 2%) and estimated capex (within 10%). A target the numbers can't settle (a bank's loan-to-deposit ratio, a retail mix) is settled from what the company said after the period ended, quoted word for word and checked against the document. A target repeated on later calls counts once, from the first time it was said.</p></CardNote>
     </>
   );
 }
@@ -369,7 +369,7 @@ export function DeepDivePage() {
                 ...(v.snapshot?.div_yield != null ? [{ k: "dy", name: "Dividend yield", v: `${v.snapshot.div_yield.toFixed(2)}%` }] : []),
               ]} rowKey={(r) => r.k} stack={false}
                 columns={[{ key: "n", header: "Measure", rowHeader: true, cell: (r) => r.name }, { key: "v", header: "Value", numeric: true, cell: (r) => <b>{r.v}</b> }]} /></div>
-              <p className="k-note">{v.valuation.why} A number to compare with similar companies, not a verdict on the price.</p>
+              <p className="k-note">A number to compare with similar companies, not a verdict on the price.</p>
             </Panel>
             </ReportScope>
           )}
@@ -503,8 +503,8 @@ export function DeepDivePage() {
               <DocTable label="Documents" docs={v.documents} />
             </Panel>
           )}
-          <p className="k-note inv-text">Numbers are the company's reported figures{n.capex_reported ? "" : "; capex and free cash flow are estimated from them"}.{us ? " Ratios that need a price (market value, P/E, dividend yield) use the latest share price and the share count on the company's latest report." : ""}
-            {" "}The document read quotes the company and links each point to its source; it can miss or misread things, so open the source before relying on it. Nothing here is investment advice.</p>
+          <CardNote><p className="inv-text">Numbers are the company's reported figures{n.capex_reported ? "" : "; capex and free cash flow are estimated from them"}.{us ? " Ratios that need a price (market value, P/E, dividend yield) use the latest share price and the share count on the company's latest report." : ""}
+            {" "}The document read quotes the company and links each point to its source; it can miss or misread things, so open the source before relying on it. Nothing here is investment advice.</p></CardNote>
         </>
       )}
     </div>

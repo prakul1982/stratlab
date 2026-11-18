@@ -1611,6 +1611,9 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-page-head:not(:has(> .k-eyebrow)) { padding-top: 26px; }   /* VR1-160: a page with no kicker line (Account, Settings, Plans) keeps its title where the others have it, one line down */
 .k-h1 { font-family: var(--serif); font-size: var(--t-h1); font-weight: 600; letter-spacing: -.02em; line-height: 1.1; text-wrap: balance; }
 .k-lede { font-size: var(--t-lede); color: var(--ink-2); max-width: 64ch; }
+/* a long intro's "More" (owner, 18 Nov): a quiet text button on the intro's line, its tap area 32px tall without making the line taller */
+.k-lede-more { display: inline-block; font: inherit; font-size: var(--t-label); font-weight: 600; line-height: 18px; border: 0; background: none; padding: 7px 4px; margin: -7px -2px; color: var(--blue-ink); cursor: pointer; white-space: nowrap; }
+.k-lede-more:hover { text-decoration: underline; }
 .k-meta { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; min-height: 25px; }   /* a badge's height: the "Data up to" badge that lands later doesn't move the page */
 /* VR1-051: the notebook's "Saving / Saved" text is the only thing in its header's last row, which held a 25px band of nothing under the question line:
    it sits at the header's top right instead, so the row is not there. */
@@ -2113,6 +2116,12 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-disclosure[open] > summary::before { transform: rotate(45deg); }
 .k-disclosure-body { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s1) 0 0 var(--s4); }
 .k-disclosure-body:has(> .k-tbl-wrap) { padding-left: 0; }   /* VR1-122: a table in a fold lines up with the cards around it, not 16px in */
+/* a card's notes behind one fold (kit/CardNote, owner 18 Nov): the summary in the notes' small muted type, the notes as they were inside */
+.k-cardnote > summary { font-size: var(--t-note); font-weight: 500; color: var(--muted); }
+.k-cardnote > summary:hover { color: var(--ink-2); }
+.k-cardnote .k-disclosure-body { padding-left: var(--s4); }
+.k-cardnote-body { display: flex; flex-direction: column; gap: var(--s1); font-size: var(--t-note); color: var(--muted); }
+.k-cardnote-body > p { margin: 0; }
 /* NAV3: the plans' full comparison is one fold of several tables, each under its heading: they line up with the glance table above */
 .k-compare .k-disclosure-body { padding-left: 0; }
 /* FoldCard (owner, 5 Nov: "make it like a dropdown everywhere"): a card that is one row until opened; the title is the button and the

@@ -4,7 +4,7 @@ import { safeHref, fmtDate } from "../lib/format";
 import { bizChange, bizValue, foldFilings, periodName, monthIndex, monthOf } from "../lib/biz";
 import { LineChart } from "./Charts";
 import { AlertButton } from "./AlertForm";
-import { DataTable, EmptyState, Notice, ShowLess, Skeleton } from "./kit";
+import { CardNote, DataTable, EmptyState, Notice, ShowLess, Skeleton } from "./kit";
 import { PlanActions } from "./PlanInterest";
 
 /* Monthly and quarterly business updates read into numbers (biz_updates.py): the company's filed figures with the line
@@ -156,6 +156,6 @@ export function BizUpdatesPanel({ symbol, wrap }: { symbol: string; wrap: (body:
       {groups.length > files.length && <button className="btn quiet sm k-btn-end" onClick={() => setMore(true)}>Show all {groups.length}</button>}
       {more && groups.length > FILINGS_FIRST && <ShowLess className="btn quiet sm k-btn-end" onLess={() => setMore(false)} />}
       {v.problems.length > 0 && <p className="k-note">{v.problems.slice(0, 3).join(" · ")}</p>}
-      <p className="k-note">{v.note}</p>
+      {v.note && <CardNote><p>{v.note}</p></CardNote>}
     </div>, right);
 }

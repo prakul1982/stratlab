@@ -80,6 +80,9 @@ test("Free: three peers and the company's own row, three years of profit and los
   await expect(holding.locator("tbody tr")).toHaveCount(1);
   await expect(sh.getByRole("img")).toHaveCount(0);
   await expect(sh.getByText(/quarters and the chart of who owns it are on the Basic plan/)).toBeVisible();
+  // (updated on purpose, owner 18 Nov: the card's notes are in its one fold, "About these figures", closed until asked)
+  await expect(sh.getByText(/pledged isn't in the stored filings/)).toBeHidden();
+  await sh.locator(".k-cardnote summary").click();
   await expect(sh.getByText(/pledged isn't in the stored filings/)).toBeVisible();
   await sane(page, errors, "#co-holding-history");
   if (SHOTS) await peers.screenshot({ path: `${SHOTS}/company-peers-free-${info.project.name}.png` });

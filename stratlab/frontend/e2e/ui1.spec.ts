@@ -80,3 +80,24 @@ test("item 3: a company's update filings are one clean list, repeats folded (own
   await expect(rows).toHaveCount(6);
   await sane(page, errors);
 });
+
+// Item 2 (owner, 18 Nov): a long intro is one short sentence with "More"; a card's method notes are one closed "About these figures" fold
+test("item 2: a long intro is one sentence with More, and a card's notes are a closed fold (owner, 18 Nov)", async ({ page }) => {
+  const errors = await open(page, "/invest/flows", "Flows");
+  const lede = page.locator(".k-page-head .k-lede");
+  const rest = lede.getByTestId("lede-rest");
+  await expect(rest).toBeHidden();
+  await expect(lede).toContainText("What foreign and domestic institutions bought and sold");
+  await lede.getByRole("button", { name: "More" }).click();
+  await expect(rest).toBeVisible();
+  await expect(lede.getByRole("button", { name: "Less" })).toHaveAttribute("aria-expanded", "true");
+  await page.goto("/research/IN/RELIANCE");
+  const deals = page.locator(".k-card", { has: page.getByRole("heading", { name: "Deals and insider trades" }) });
+  await deals.scrollIntoViewIfNeeded();
+  const fold = deals.locator(".k-cardnote");
+  await expect(fold.locator("summary")).toHaveText("About these figures", { timeout: 30_000 });
+  await expect(deals.getByText(/From exchange disclosures over the last year/)).toBeHidden();
+  await fold.locator("summary").click();
+  await expect(deals.getByText(/From exchange disclosures over the last year/)).toBeVisible();
+  await sane(page, errors);
+});

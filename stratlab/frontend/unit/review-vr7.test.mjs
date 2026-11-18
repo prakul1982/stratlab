@@ -37,7 +37,8 @@ test("VR7-006 (UI-CO item 2): Key numbers are tables of one width in two balance
   const src = read("src/components/Research.tsx");
   assert.match(src, /<div key=\{g\.title\} className="inv-mt">/);
   assert.match(src, /data-testid="krail-legend"/);
-  assert.match(src, /<\/div>\n\s*\{anyBar && <p[^\n]*krail-legend[^\n]*<\/p>\}\n\s*\{foot\.length > 0 && <ul className="k-note cmp-foots" data-testid="metric-notes">.*<\/ul>\}\n\s*\{used\.length > 0/);
+  // (updated on purpose, owner 18 Nov: the bars' legend is in the card's one fold, "How to read the bars")
+  assert.match(src, /<\/div>\n\s*\{anyBar && <CardNote summary="How to read the bars"><p[^\n]*krail-legend[^\n]*<\/p><\/CardNote>\}\n\s*\{foot\.length > 0 && <ul className="k-note cmp-foots" data-testid="metric-notes">.*<\/ul>\}\n\s*\{used\.length > 0/);
 });
 
 test("VR7-007: on a visitor's wide page the cookie question is a slim bar along the foot of the window, in the app it stays the corner card", () => {

@@ -61,3 +61,32 @@ test("update filings: date | subject (two lines at most) | link on one grid; fiv
   assert.match(css, /\.biz-title \{ display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; \}/);
   assert.match(css, /\.biz-link \{ white-space: nowrap; justify-self: end; \}/);
 });
+
+// item 2 (owner, 18 Nov: "hide these type of information in a drop down … everything this just clutters the pages")
+test("a long page intro shows one short sentence (or the words before its colon); the rest is behind More", async () => {
+  const { splitLede, LEDE_MAX } = await import("../src/lib/lede.ts");
+  assert.equal(splitLede("A short intro that fits."), null);
+  const two = "Pick the conditions; see every company that meets them. Nothing here scores companies: the list starts with the largest market value; sort by any column.";
+  assert.deepEqual(splitLede(two), { first: "Pick the conditions; see every company that meets them.", joint: "", rest: "Nothing here scores companies: the list starts with the largest market value; sort by any column." });
+  const colon = "What foreign and domestic institutions bought and sold in India's cash market, in ₹ crore: the exchange's provisional figures, published each evening, and every recorded day.";
+  assert.deepEqual(splitLede(colon), { first: "What foreign and domestic institutions bought and sold in India's cash market, in ₹ crore", joint: ":", rest: "the exchange's provisional figures, published each evening, and every recorded day." });
+  // a first sentence longer than the limit, with no early colon, shows whole
+  const long = "x".repeat(LEDE_MAX + 5) + ". Then more.";
+  assert.equal(splitLede(long), null);
+  const ph = read("src/components/kit/PageHeader.tsx");
+  assert.match(ph, /<span hidden=\{!more\} data-testid="lede-rest">/);
+  assert.match(ph, /aria-expanded=\{more\}/);
+});
+
+test("a card's method and source notes are one closed fold at its foot (kit/CardNote), on the company page, the deep dive and more", () => {
+  const note = read("src/components/kit/CardNote.tsx");
+  assert.match(note, /<Disclosure className="k-cardnote" summary=\{summary\}/);
+  assert.match(note, /summary = "About these figures"/);
+  for (const [f, re] of [["src/components/Filings.tsx", /<CardNote><p>From the company's filings/], ["src/components/Deals.tsx", /<CardNote><p>From exchange disclosures/],
+    ["src/components/BizUpdates.tsx", /<CardNote><p>\{v\.note\}<\/p><\/CardNote>/], ["src/components/NamedHolders.tsx", /<CardNote><p>\{v\.note\}/],
+    ["src/components/CompanyLinks.tsx", /<CardNote><p>\{v\.note\}<\/p><\/CardNote>/], ["src/components/ShareholdingHistory.tsx", /<CardNote><p>\{v\.pledge_note\}<\/p><\/CardNote>/],
+    ["src/components/CompanyPeers.tsx", /<CardNote summary="About this list">/], ["src/pages/DeepDive.tsx", /<CardNote summary="How each target is checked">/],
+    ["src/pages/HoldingsPage.tsx", /<CardNote summary="How your holdings are kept">/], ["src/pages/ThemesPage.tsx", /<CardNote summary="About this page">/]]) assert.match(read(f), re, f);
+  // the deep dive's valuation note no longer repeats its (i)
+  assert.doesNotMatch(read("src/pages/DeepDive.tsx"), /<p className="k-note">\{v\.valuation\.why\}/);
+});
