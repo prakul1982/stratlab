@@ -123,3 +123,42 @@ for (const narrow of [false, true]) test(`LIVE14A-014 / LIVE14B-003: the landing
   expect(last.size, "the frame's heading or lede, at its final size").toBeGreaterThan(20000);
   expect(cls, "nothing on the landing moves").toBeLessThan(0.01);
 });
+
+// LIVE14B-001: the first signed-in page of a browser (live: /mine heading at 7.9 s, /trade/journal 9.3 s). Measured here, the fake world on
+// a throttled link (150 ms, 1.6 Mbit/s): before, /me was asked for at ~2.9 s, once a file of the app's code had come behind ~40 others
+// (1.15 s on a 100 ms, 20 Mbit/s link); now at ~0.4 s (0.25 s), when /config.js has run. (Asking for the page's own file beside the app's
+// was tried and measured slower on the throttled link, 3.7 s against 3.2 s for the heading: it shared the bandwidth, so it is not done.)
+for (const [path, file] of [["/mine", "MineHome"], ["/trade/journal", "JournalPage"]] as const) test(`LIVE14B-001: ${path} opened in a new browser asks for the account at the start`, async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop", "one size is enough");
+  const route = async (p: Page) => p.route("**/*", (r) => {
+    const host = new URL(r.request().url()).hostname;
+    return host === "127.0.0.1" || host === "localhost" ? r.fallback() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" });
+  });
+  const n = 281;
+  await route(page);
+  await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, sessionFor(n));
+  await page.goto("/mine");                   // the first-visit question answered once, outside the measured load
+  const welcome = page.getByRole("dialog", { name: "What brings you here?" });
+  await welcome.waitFor({ timeout: 6000 }).then(() => welcome.getByRole("button", { name: /^All of it/ }).click()).catch(() => undefined);
+  const ctx = await page.context().browser()!.newContext({ viewport: { width: 1440, height: 900 } });      // a cold browser: nothing cached
+  const p = await ctx.newPage();
+  await route(p);
+  // the live server's /me takes its time and a preflight round trip from a browser far from it (0.3-1.4 s in its logs); here 800 ms
+  await p.route(/:\d+\/me$/, async (r) => { if (r.request().method() === "GET") await new Promise((ok) => setTimeout(ok, Number(process.env.ME_DELAY ?? 800))); return r.fallback(); });
+  await p.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, sessionFor(n));
+  const cdp = await ctx.newCDPSession(p);
+  await cdp.send("Network.enable");
+  const fast = process.env.PROBE_FAST === "1";
+  await cdp.send("Network.emulateNetworkConditions", { offline: false, latency: fast ? 100 : 150, downloadThroughput: (fast ? 20 : 1.6) * 1024 * 1024 / 8, uploadThroughput: 750 * 1024 / 8 });
+  const t0 = Date.now();
+  const asked: Record<string, number> = {}, done: Record<string, number> = {};
+  const name = (u: string) => (new URL(u).pathname.match(/^\/assets\/([A-Za-z]+)-[\w-]{8}\.js$/)?.[1] ?? new URL(u).pathname);
+  p.on("request", (q) => { asked[name(q.url())] ??= Date.now() - t0; });
+  p.on("requestfinished", (q) => { done[name(q.url())] ??= Date.now() - t0; });
+  await p.goto(path);
+  await p.locator("main h1").first().waitFor({ timeout: 60_000 });
+  const h1 = Date.now() - t0;
+  await ctx.close();
+  info.annotations.push({ type: "timing", description: `${path}: /me asked ${asked["/me"]} ms, ${file} asked ${asked[file]} ms, main done ${done.main} ms, h1 ${h1} ms` });
+  expect(asked["/me"], "the account is asked for before the app's code has arrived").toBeLessThan(done.main);
+});

@@ -112,3 +112,25 @@ test("LIVE14A-014 / LIVE14B-003: the landing's start-up heading and lede wait fo
   const other = Object.fromEntries(pageFiles(tpl))["about/index.html"];
   assert.ok(!other || !other.includes("Fraunces Boot"));
 });
+
+test("LIVE14B-001: boot.js asks for a saved sign-in's account the moment /config.js says where the server is", () => {
+  const src = read("public/boot.js");
+  // run boot.js's code against a stand-in window: setting the config fires one /me with the saved token
+  const calls = [];
+  const store = new Map([["sb-demo-auth-token", JSON.stringify({ access_token: "tok", expires_at: Math.floor(Date.now() / 1000) + 3600 })], ["stratlab.viewas.v1", "basic"]]);
+  const win = { addEventListener() {}, location: { pathname: "/mine", search: "" } };
+  const doc = { documentElement: { setAttribute() {}, dataset: {} }, addEventListener() {}, getElementById: () => null, readyState: "loading" };
+  const fetchStub = (url, o) => { calls.push([url, o.headers]); return Promise.resolve({}); };
+  new Function("window", "document", "localStorage", "sessionStorage", "fetch", "location", src)(win, doc,
+    { getItem: (k) => store.get(k) ?? null, key: (i) => [...store.keys()][i], get length() { return store.size; }, setItem() {} },
+    { getItem: () => null, setItem() {} }, fetchStub, win.location);
+  win.STRATLAB_CONFIG = { API_BASE: "https://api.example", SUPABASE_URL: "https://demo.supabase.co" };
+  assert.equal(win.STRATLAB_CONFIG.API_BASE, "https://api.example");          // the config still reads back
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], "https://api.example/me");
+  assert.equal(calls[0][1].Authorization, "Bearer tok");
+  assert.equal(calls[0][1]["X-View-As"], "basic");
+  assert.equal(win.__stratlabEarlyMe.token, "tok");
+  win.STRATLAB_CONFIG = { API_BASE: "https://api.example", SUPABASE_URL: "https://demo.supabase.co" };        // a second write: asked once
+  assert.equal(calls.length, 1);
+});
