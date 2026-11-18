@@ -620,8 +620,10 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
                   )}
                 </div>
                 {"note" in act ? <span className="lp-plan-note small muted">{act.note}</span>
-                  : <><button type="button" className={`btn ${p === "pro" ? "" : "outline"}`} disabled={loading} onClick={() => void signIn(act.buy ? "/plans" : null)}>{act.label}</button>
-                    <EmailWay next={act.buy ? "/plans" : null} className="lp-plan-email" /></>}
+                  // LIVE11B-001: the Google and email buttons are ONE row of the card's four-row subgrid (name, price, ways in, list): as two
+                  // children the email button took the list's row and the list ran under it, its ticks boxed under "Sign in with email"
+                  : <div className="lp-plan-ways"><button type="button" className={`btn ${p === "pro" ? "" : "outline"}`} disabled={loading} onClick={() => void signIn(act.buy ? "/plans" : null)}>{act.label}</button>
+                    <EmailWay next={act.buy ? "/plans" : null} className="lp-plan-email" /></div>}
                 {/* on a phone the five lines are one fold under the button (LIVE5 partial: three cards of five lines were 2,100 px) */}
                 <PhoneFold label={`What ${PLAN_NAME[p]} includes`}>
                 <ul className="lp-plan-list">

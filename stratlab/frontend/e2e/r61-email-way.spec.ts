@@ -63,3 +63,31 @@ test("email sign-in on: the landing hero offers email beside Google, and it open
   await expect(page.getByLabel("Sign in with email")).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+// LIVE11B-001 (Release 66 live: the plan cards' email button took the feature list's grid row and boxed its ticks at 1440; on a phone the
+// "What … includes" fold sat on the button): with email sign-in on, each plan card's email button sits under its Google button and above
+// the list, overlapping nothing, at desktop and phone widths
+test("email sign-in on: each plan card's email button is under its Google button and clear of the feature list", async ({ page }) => {
+  await withConfig(page, { EMAIL_SIGNIN: "on" });
+  await page.goto("/plans");
+  const cards = page.locator(".lp-price[data-plan]");
+  await expect(cards.first().getByTestId("email-way")).toBeVisible({ timeout: 30_000 });
+  const n = await cards.count();
+  expect(n).toBeGreaterThanOrEqual(3);
+  for (let i = 0; i < n; i++) {
+    const card = cards.nth(i);
+    const wayEl = card.getByTestId("email-way");
+    if (!(await wayEl.count())) continue;                 // a card with a note instead of buttons (the plan you are on)
+    const way = (await wayEl.boundingBox())!;
+    const google = (await card.locator(".lp-plan-ways > .btn").first().boundingBox())!;
+    expect(way.y, "email under Google").toBeGreaterThanOrEqual(google.y + google.height - 1);
+    expect(way.height, "the email button is a button's height, not the list's").toBeLessThan(64);
+    // the next thing below (the list, or on a phone its fold) starts under the email button
+    const below = card.locator(".lp-plan-list, .k-phonefold, details, button[aria-expanded]").filter({ hasNot: page.getByTestId("email-way") });
+    for (const b of await below.all()) {
+      const r = await b.boundingBox();
+      if (!r || r.y + r.height <= way.y) continue;
+      expect(r.y, "nothing in the card starts over the email button").toBeGreaterThanOrEqual(way.y + way.height - 1);
+    }
+  }
+});

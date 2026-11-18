@@ -3234,7 +3234,8 @@ th > .k-report { position: absolute; right: 4px; top: 50%; margin: -12px 0 0; }
 .email-way { display: inline-flex; align-items: center; justify-content: center; gap: 10px; text-decoration: none; white-space: nowrap; }
 .email-way > svg { flex: none; }
 .email-way.sm { gap: 8px; }
-.lp-plan-email { width: 100%; }
+.lp-plan-ways { display: flex; flex-direction: column; gap: 8px; }        /* LIVE11B-001: one subgrid row holding both ways in */
+.lp-plan-ways > .btn { width: 100%; }
 .lp-final-ways { justify-content: center; }
 /* LIVE11A-011: the theme's member tables share one column grid, so "Market value" and the quote sit at the same x in every layer's table
    (each sized its own columns: x 1075 in one, 1205 in the next); a phone reads them as cards */
