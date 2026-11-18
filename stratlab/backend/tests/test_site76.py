@@ -154,3 +154,23 @@ def test_live14a_008_a_public_theme_tables_membership_and_revenue_cells_wrap_so_
     assert '.cotbl td[data-label="Membership"]{white-space:normal;min-width:8em}' in html
     assert '.cotbl td[data-label="Revenue"]{white-space:normal}' in html
     assert 'data-label="Membership">industry-supported (official industry only)</td>' in html
+
+
+def test_live14b_002_the_vix_tile_reads_a_few_weeks_of_closes_and_its_answer_is_shared_while_the_market_is_shut(monkeypatch):
+    """LIVE14B-002: /trade/vix?brief=true took 2.05 s against 0.4-0.7 s for the other tiles at 00:35 IST (market shut): it read five years of
+    stored closes and the exchange's index list for a value and a change. Now BRIEF_DAYS of closes, and one answer shared for everyone."""
+    from datetime import date as _date
+    from app import vix
+    vix.forget()
+    asked, quotes = [], []
+    monkeypatch.setattr(vix, "daily", lambda since=None, today=None: asked.append(since) or [("2026-11-18", [15.5, 16.0, 15.2, 15.57])])
+    monkeypatch.setattr(vix, "quote_now", lambda feed=None: quotes.append(1) or {"value": 15.57, "change": 0.05, "as_of": "2026-11-18T15:30:00+05:30"})
+    monkeypatch.setattr(vix, "official_close", lambda day, fetch=False: 15.57)
+    monkeypatch.setattr(vix, "_trading", lambda now: False)
+    a = vix.brief_panel(None)
+    b = vix.brief_panel(None)
+    assert a == b and a["value"] == 15.57
+    assert len(quotes) == 1                                                          # the second visit is answered from the kept copy
+    since = _date.fromisoformat(asked[0])
+    assert (_date.today() - since).days <= vix.BRIEF_DAYS + 1                        # weeks of closes, not five years
+    vix.forget()
