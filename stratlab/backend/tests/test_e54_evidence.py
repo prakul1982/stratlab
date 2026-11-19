@@ -209,7 +209,8 @@ def test_the_public_page_says_each_companys_evidence_state_from_the_stored_dive(
     monkeypatch.setattr(public_themes, "_index_caps", lambda r: {})
     monkeypatch.setattr(public_themes.stock_pages, "companies", lambda r: set())
     v = public_themes.view({"region": "IN", "name": "Ships", "label": "Ships", "slug": "ships", "at": None}, payload)
-    assert v["evidence"] == {"description_verified": 1, "industry_code_supported": 1, "list_supported": 0, "membership_unverified": 1}
+    # e80 (updated on purpose: LIVE16A-008, the members whose own words describe other work are counted too, so the parts add up)
+    assert v["evidence"] == {"description_verified": 1, "industry_code_supported": 1, "list_supported": 0, "membership_unverified": 1, "not_confirmed": 0}
     page = public_themes.render(v)
     # l55 (R55, the owner's review of the live R54 decks, updated on purpose): the deck's state names, never "confirmed"
     assert "Membership: 1 description-verified, 1 industry-supported, 1 not checked." in page

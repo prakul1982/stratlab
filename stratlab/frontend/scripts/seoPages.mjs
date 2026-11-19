@@ -88,6 +88,18 @@ const MARK_SVG = '<svg width="19" height="46" viewBox="254 174 156 382" aria-hid
 const GOOGLE_SVG = '<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>';
 const MAIL_SVG = '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/></svg>';
 
+/** The template with the landing's own header in place of the plain one: the logo, the site's links (in the same `boot-nav` for a reader with
+ * no script) and their phone menu, then `end` (the home page's Sign in button; none on the sign-in page itself). */
+function landingHead(template, end) {
+  const head = /<header class="boot-head">[\s\S]*?<nav class="boot-nav" aria-label="Site">([\s\S]*?)<\/nav><\/header>/;
+  const m = head.exec(template);
+  if (!m) throw new Error("index.html has no start-up header");
+  const links = m[1];
+  return template.replace(head, () => `<header class="lp-nav" data-boot-head><a href="/" class="brand" aria-label="StratLab home"><span class="logo logo-46">${MARK_SVG}<span class="logo-word"><b>Strat</b>Lab</span></span></a>`
+    + `<nav class="boot-nav" aria-label="Site">${links}</nav><details class="lp-menu"><summary>Menu</summary><nav aria-label="Site (menu)">${links}</nav></details>`
+    + `${end}</header>`);
+}
+
 /** The template with the home page's start-up frame: the landing's header (the site's links in the same `boot-nav` for a reader with
  * no script) and its hero copy over the page's own words, which stay in the HTML for crawlers and for scripts off. */
 export function heroFrame(template, { heading, summary, after = "", fonts = [] }) {
@@ -95,13 +107,7 @@ export function heroFrame(template, { heading, summary, after = "", fonts = [] }
   // heading is the page's largest paint, drawn again when a face it waits for arrives (the landing waits for them anyway, entry.tsx)
   fonts = fonts.filter((f) => !template.includes(`/assets/${f}"`));
   if (fonts.length) template = template.replace("</head>", () => fonts.map((f) => `<link rel="preload" as="font" type="font/woff2" crossorigin href="/assets/${attr(f)}">\n`).join("") + "</head>");
-  const head = /<header class="boot-head">[\s\S]*?<nav class="boot-nav" aria-label="Site">([\s\S]*?)<\/nav><\/header>/;
-  const m = head.exec(template);
-  if (!m) throw new Error("index.html has no start-up header");
-  const links = m[1];
-  template = template.replace(head, () => `<header class="lp-nav" data-boot-head><a href="/" class="brand" aria-label="StratLab home"><span class="logo logo-46">${MARK_SVG}<span class="logo-word"><b>Strat</b>Lab</span></span></a>`
-    + `<nav class="boot-nav" aria-label="Site">${links}</nav><details class="lp-menu"><summary>Menu</summary><nav aria-label="Site (menu)">${links}</nav></details>`
-    + `<a class="btn outline sm boot-js" href="/login">Sign in</a></header>`);
+  template = landingHead(template, `<a class="btn outline sm boot-js" href="/login">Sign in</a>`);
   const block = /<div class="boot[^"]*" data-boot>\n<h1>[^<]*<\/h1>\n<p>[^<]*<\/p>\n(<p class="boot-foot">[\s\S]*?<\/p>)\n<\/div>/;
   const b = block.exec(template);
   if (!b) throw new Error("index.html has no start-up block");
@@ -116,8 +122,42 @@ export function heroFrame(template, { heading, summary, after = "", fonts = [] }
   return template.replace(block, () => frame);
 }
 
+// ---------- the sign-in page's start-up frame (LIVE16B-001) ----------
+// /login and /signup while the code downloads: the sign-in page itself (the landing's header, the heading, one line, Continue with Google
+// and the email form, the small print), drawn from the HTML with the app's stylesheet and the classes pages/Login.tsx draws, so the real
+// choices are on screen at once and nothing moves when the app draws over them. It said "StratLab signs in with your Google account" with no
+// button for up to 3.25 s (live, 19 Nov), though email sign-in is on. A press or a typed address before the app is ready is kept by
+// public/signin-early.js and done by the app once it draws (both buttons start disabled and that script enables them, so a press before it
+// has run is never a plain form submit that reloads the page and loses the address); with email sign-in off in /config.js that script takes the email way out.
+export const loginWords = (signup) => {
+  const verb = signup ? "Sign up" : "Sign in";
+  return { verb, lede: `${verb} with your Google account or your email address: no password to set up.`,
+    small: "Google sign-in reads only your name and email address; email sign-in reads only your email address. By continuing you agree to the " };
+};
+
+export function loginFrame(template, { heading, summary, signup = false }) {
+  template = landingHead(template, "");
+  const block = /<div class="boot[^"]*" data-boot>\n<h1>[^<]*<\/h1>\n<p>[^<]*<\/p>\n(<p class="boot-foot">[\s\S]*?<\/p>)\n<\/div>/;
+  const b = block.exec(template);
+  if (!b) throw new Error("index.html has no start-up block");
+  const w = loginWords(signup);
+  const lede = text(w.lede).replace(" or your email address", '<span data-boot-or> or your email address</span>');
+  const small = text(w.small).replace("; email sign-in reads only your email address", '<span data-boot-or>; email sign-in reads only your email address</span>');
+  const words = (summary ?? []).map((p) => `<p class="boot-text">${text(p)}</p>`).join("\n");
+  const frame = `<section id="top" class="lp-hero ruled boot-login" data-boot>\n<div class="lp-wrap lp-hero-grid lp-hero-solo lp-hero-login"><div class="stack g22 lp-hero-copy">\n`
+    + `<span class="eyebrow">Is your trading idea <em>skill</em> or luck?</span>\n<h1 class="serif lp-h1 lp-own-h1">${text(heading)}</h1>\n<p class="serif lp-lede">${lede}</p>\n`
+    + `<div class="row wrap g12"><button type="button" class="btn lp-cta" data-boot-google disabled>${GOOGLE_SVG}Continue with Google</button></div>\n`
+    + `<div class="email-signin" data-boot-email><p class="email-signin-or" aria-hidden="true"><span>or</span></p><form class="email-signin-form" novalidate>`
+    + `<label for="boot-email" class="email-signin-label">${w.verb} with email</label><div class="email-signin-row">`
+    + `<input id="boot-email" class="k-input" autocomplete="email" inputmode="email" placeholder="you@example.com" aria-describedby="boot-email-help" type="email" name="email">`
+    + `<button type="submit" class="btn outline" disabled>Email me a code</button></div><span id="boot-email-help" class="small muted">We email a one-time code and link. No password.</span></form></div>\n`
+    + `<p class="small muted">${small}<a class="link" href="/terms">Terms</a> and <a class="link" href="/privacy">Privacy policy</a>.</p>\n`
+    + `${words}\n${b[1].replace('class="boot-foot"', 'class="boot-foot boot-text"')}\n</div></div>\n</section>`;
+  return template.replace(block, () => frame).replace("</body>", '<script src="/signin-early.js" async></script>\n</body>');
+}
+
 /** The template (index.html as built) with one page's own tags, and its own heading and words in the plain block. */
-export function pageHtml(template, { title, description, canonical, index, jsonld = "", heading, summary, faq = false, body = "", after = "", readable = !!body, hero = false, fonts = [] }) {
+export function pageHtml(template, { title, description, canonical, index, jsonld = "", heading, summary, faq = false, body = "", after = "", readable = !!body, hero = false, login = null, fonts = [] }) {
   const swap = (re, to) => {
     if (!re.test(template)) throw new Error(`index.html has no ${re}`);
     template = template.replace(re, () => to);
@@ -135,6 +175,7 @@ export function pageHtml(template, { title, description, canonical, index, jsonl
   swap(/<meta name="twitter:description" content="[^"]*">/, `<meta name="twitter:description" content="${attr(description)}">`);
   swap(/<!--jsonld-->/, jsonld);
   if (heading && hero) return heroFrame(template, { heading, summary: summary?.length ? summary : [description], after, fonts });
+  if (heading && login) return loginFrame(template, { heading, summary: summary?.length ? summary : [description], signup: login === "signup" });
   if (heading) {
     // the page's one heading and its words, where index.html has the home page's (the app replaces the block when it draws)
     const boot = /(<div class="boot[^"]*" data-boot>\n)<h1>[^<]*<\/h1>\n<p>[^<]*<\/p>/;
@@ -162,7 +203,7 @@ export function pageFiles(template, fonts = []) {
       jsonld: p.path === "/" ? homeJsonLd() : p.path === "/faq" ? faqJsonLd() : p.path === "/plans" ? plansJsonLd() : "", heading: p.heading, summary: p.summary,
       body: LEGAL_BLOCKS[p.path] ? legalBody(p.path, p.heading) : "",
       after: p.path === "/library" ? LIBRARY_LINKS : p.path === "/" ? HOME_LINKS : p.path === "/plans" ? plansList() : "",
-      faq: p.path === "/faq", hero: p.path === "/", fonts })]);
+      faq: p.path === "/faq", hero: p.path === "/", login: p.path === "/login" ? "login" : p.path === "/signup" ? "signup" : null, fonts })]);
   files.push(["404.html", pageHtml(template, { title: withBrand("Page not found"), description: NOT_FOUND_DESCRIPTION, canonical: null, index: false,
     heading: "Page not found", summary: [NOT_FOUND_DESCRIPTION], after: NOT_FOUND_LINKS, readable: true })]);
   return files;

@@ -24,7 +24,8 @@ const menuBoxes = (page: Page) => page.evaluate(() => {
   }).filter((b) => b.bottom > b.top);
   const p = pill?.getBoundingClientRect();
   return { nav: { top: n.top, bottom: n.bottom }, pill: p ? { top: p.top, bottom: p.bottom, left: p.left, right: p.right } : null,
-    line: row ? getComputedStyle(row).borderTopWidth : null, items, over: nav.scrollHeight - nav.clientHeight, top: nav.scrollTop };
+    line: row ? getComputedStyle(row).borderTopWidth : null, edge: pill ? getComputedStyle(pill).borderTopWidth : null,
+    fill: pill ? getComputedStyle(pill).backgroundColor : null, items, over: nav.scrollHeight - nav.clientHeight, top: nav.scrollTop };
 });
 
 /** Companies and Market today open, as the owner had them: on Breadth (Market today is the section it is in) with Companies and Market
@@ -52,9 +53,10 @@ async function twoOpen(page: Page, phone: boolean) {
   return nav;
 }
 
-// owner (18 Nov): the "More below" pill sat over "ETF vs NAV" at 1440x900 with Companies and Market today open. It has a row of its own
-// under the menu's edge line now, so no menu item is ever under it, and it goes once the menu's last item is in view.
-for (const [w, h] of [[1440, 900], [1280, 800]] as const) {
+// owner (18 Nov): the "More below" pill sat over "ETF vs NAV" at 1440x900 with Companies and Market today open. It sits under the menu's
+// box now, so no menu item is ever under it, and it goes once the menu's last item is in view; since 19 Nov it is quiet words with no box
+// and no line of its own (1280x720 added then, the owner's other laptop size).
+for (const [w, h] of [[1440, 900], [1280, 800], [1280, 720]] as const) {
   test(`the "More below" pill never covers a menu item, and goes when the last item is in view, at ${w}x${h}`, async ({ page }, info) => {
     test.skip(info.project.name === "phone", "a laptop's size; the phone drawer has its own test");
     await page.setViewportSize({ width: w, height: h });
@@ -78,7 +80,10 @@ async function expectNeverCovered(page: Page, nav: ReturnType<Page["locator"]>) 
     await page.waitForTimeout(150);
     const m = await menuBoxes(page);
     if (!m.pill) continue;
-    expect(m.line, "the pill's row has the menu's edge line above it").toBe("1px");
+    // updated on purpose (owner, 19 Nov: the boxed pill between two lines "looks trash"): quiet words, no box, no second line
+    expect(m.line, "the cue's row draws no line of its own: the foot's edge is the one line").toBe("0px");
+    expect(m.edge, "the cue has no box").toBe("0px");
+    expect(m.fill, "the cue has no fill").toBe("rgba(0, 0, 0, 0)");
     expect(m.pill.top, `${at}: the pill is under the menu, not over it`).toBeGreaterThanOrEqual(m.nav.bottom);
     const under = m.items.filter((b) => b.top < m.pill!.bottom && b.bottom > m.pill!.top && b.left < m.pill!.right && b.right > m.pill!.left);
     expect(under.map((b) => b.name), `${at}: menu items under the pill`).toEqual([]);

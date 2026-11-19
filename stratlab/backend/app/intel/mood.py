@@ -388,7 +388,13 @@ def lines_of(p: dict) -> list[str]:
         when = (f"so far today{at}" if p.get("is_open", True) else f"on {day_words(b.get('day'))}{shut}" if b.get("day") else "") if b.get("live") \
             else f"on {day_words(b.get('day'))}" if b.get("day") else ""
         tail = f"; {fpct(b['pct50'], 1, sign=False)} are above their 50-day average" if b.get("pct50") is not None else ""
-        out.append(("breadth", f"{fnum(b['adv'])} of {fnum(b['stocks'])} {b['group']} stocks rose and {fnum(b['dec'])} fell {when}{tail}.".replace("  ", " ")))
+        if p.get("is_open") and not b.get("live") and b.get("day") and p.get("session") and str(b["day"]) < str(p["session"]):
+            # LIVE16A-014: a read during the session carries an earlier session's count only as that close's, said first ("186 of 500 … on
+            # 18 Nov" in the 09:38 ET read of 19 Nov read as the day's count)
+            out.append(("breadth", f"At the {day_words(b['day'])} close, before today's session: {fnum(b['adv'])} of {fnum(b['stocks'])} {b['group']} "
+                                   f"stocks rose and {fnum(b['dec'])} fell{tail}."))
+        else:
+            out.append(("breadth", f"{fnum(b['adv'])} of {fnum(b['stocks'])} {b['group']} stocks rose and {fnum(b['dec'])} fell {when}{tail}.".replace("  ", " ")))
     s = p.get("sectors")
     if s:
         lead, lag = s["rows"][0], s["rows"][-1]
@@ -478,6 +484,8 @@ def missing_parts(p: dict | None) -> list[str]:
         out.append(f"breadth of {s}" + (f" (has {b.get('day')})" if b.get("day") else ""))
     if p.get("region") == "IN" and (p.get("flows") or {}).get("as_of") != s:
         out.append(f"flows of {s}")
+    if p.get("pre_close"):
+        out.append("closes of " + ", ".join(p["pre_close"]))       # LIVE16A-001: a level from before the close is not the day's close
     return out
 
 
@@ -540,6 +548,26 @@ def newest_rows(p: dict, other: dict | None) -> dict:
         if rows != mine:
             out = {**out, blk: {**p[blk], "rows": rows}}
     return out
+
+
+def other_index_rows(p: dict, region: str, other_levels: list[dict] | None) -> dict:
+    """LIVE16A-014: the other market's main index under "Markets overseas" at that market's own latest level, the app's own reading (the
+    US card said "NIFTY 50 ▼ −0.63% on 18 Nov" at 19:56 IST, hours after India closed 19 Nov up 1.14%). A row is replaced only by a newer
+    day's level."""
+    if not p or not other_levels or not (p.get("global") or {}).get("rows"):
+        return p
+    name, sym = INDEX_SYMBOL["IN" if region == "US" else "US"]
+    lvl = next((i for i in other_levels if i.get("name") == name and i.get("day") and num(i.get("price")) is not None), None)
+    if not lvl:
+        return p
+    day, rows, changed = str(lvl["day"])[:10], [], False
+    for r in p["global"]["rows"]:
+        if r.get("symbol") == sym and day > str(r.get("day") or ""):
+            c = num(lvl.get("change_pct"))
+            r = {**r, "price": num(lvl["price"]), "change_pct": round(c, 2) if c is not None else None, "day": day, "same_day": day == p.get("today")}
+            changed = True
+        rows.append(r)
+    return {**p, "global": {**p["global"], "rows": rows}} if changed else p
 
 
 def session_of(levels: list[dict], name: str) -> str | None:
@@ -654,7 +682,8 @@ class Mood:
         out: dict[str, dict] = {}
         for i in range(0, len(symbols), CHUNK):
             try:
-                out.update({k: v for k, v in (self.hub.quotes(region, symbols[i:i + CHUNK]) or {}).items() if v})
+                # LIVE16A-001: a quote that is still a copy the source's edge kept from mid-session is left out, never listed as the day's move
+                out.update({k: v for k, v in (self.hub.quotes(region, symbols[i:i + CHUNK]) or {}).items() if v and not v.get("edge_stale")})
             except Exception as e:
                 print("mood quotes unavailable:", region, str(e)[:100])
         return out
@@ -887,7 +916,9 @@ class Mood:
         typ = typical_move((f_typ.result(timeout=60) or {}).get(sym) or [])
         # LIVE14A-001: a level the source stopped updating mid-session ("as of 10:52 ET" at 14:13 ET) is no ground for the day's tone or its
         # size against the usual: only levels read in the last minutes are (`fresh`); the tables keep every level with its time
-        fresh = [i for i in levels if not i.get("delayed")]
+        # LIVE16A-001: nor is a level read after the close that is from before it (pre_close: a copy kept at 10:52 ET, read at 17:06 ET,
+        # gave "all three indices down on the day" over a NASDAQ close of +0.42%)
+        fresh = [i for i in levels if not i.get("delayed") and not i.get("pre_close")]
         lvl = next((i for i in fresh if i.get("name") == name), None)
         cmp = compare_today(name, (lvl or {}).get("change_pct"), typ)
         try:
@@ -914,6 +945,10 @@ class Mood:
              "calendar": cal if any(cal.values()) else None,
              # the index moves the headline is worked out from, so a later read of the session can word it again (LIVE11A-001)
              "moves": [{"name": i["name"], "change_pct": i["change_pct"]} for i in fresh if i.get("name") and num(i.get("change_pct")) is not None][:4]}
+        # LIVE16A-001: the indices whose level read after the close is from before it: the read is not the session's final one until they are in
+        stale_levels = [i["name"] for i in levels if i.get("pre_close") and i.get("name")]
+        if stale_levels:
+            p["pre_close"] = stale_levels
         # LIVE9A-002: the headline sets the index moves against a breadth count of the same session only (at 14:23 ET on Mon 16 Nov: "all
         # three indices down on the day, but 313 of 499 S&P 500 stocks rose", the count being Friday's); the dated line under it stays
         p["headline"] = headline_of(fresh, sectors, cmp, same_session(b, p["session"]))
@@ -937,6 +972,10 @@ class Mood:
         if value:
             other = self.payloads.kept("US" if region == "IN" else "IN")
             value = newest_rows(value, other[1] if other else None)
+            try:
+                value = other_index_rows(value, region, self.hub.indices_now("US" if region == "IN" else "IN", wait=0.0)[0])
+            except Exception:
+                pass
         return value, at
 
     def _get(self, region: str, wait: float = 20.0) -> tuple[dict | None, float | None]:

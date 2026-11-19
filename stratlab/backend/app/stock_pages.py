@@ -1713,6 +1713,10 @@ def fresh(stored: dict | None, region: str, now: float | None = None) -> bool:
         return False
     if (stored["facts"].get("v") or 1) < FACTS_VERSION:
         return False                     # a page built before the facts a page shows now: rebuilt when next opened
+    if cap_rule_due(stored["facts"]):
+        # LIVE16B-002: an Indian page built before today's share-count rules is built again when next opened, not only in its turn in the
+        # screens' sweep (20 pages a half hour, behind the pages with none): TCS's page still said ₹8.35 lakh cr 1.5 h after Release 78
+        return False
     if financial_mismatch(stored["facts"]) and now - ts >= UNREAD_FRESH:
         return False                     # r581: a financial filer's revenue below its net profit: built again (at most hourly)
     if revenue_part_due(stored["facts"]) and now - ts >= UNREAD_FRESH:
@@ -2569,7 +2573,7 @@ th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:
 .cotbl{overflow-x:auto}.cotbl th.l,.cotbl td.l{text-align:left}.cotbl td:first-child{white-space:normal;min-width:150px;position:static}
 .cotbl td[data-label=Membership]{white-space:normal;min-width:8em}.cotbl td[data-label=Revenue]{white-space:normal}.cotbl td[data-label=Revenue]>span>span{white-space:nowrap}
 .cotbl th:first-child{position:static}
-@media (max-width:640px){.cotbl[data-stack]{overflow:visible}.cotbl[data-stack] table,.cotbl[data-stack] tbody{display:block;min-width:0;width:100%}.cotbl[data-stack] thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}.cotbl[data-stack] tr{display:block;padding:10px 0;border-bottom:1px solid var(--line)}.cotbl[data-stack] td{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:2px 0;border:0;white-space:normal;text-align:right}.cotbl[data-stack] td:first-child{display:block;min-width:0;font-weight:600;padding:0 0 4px;text-align:left}.cotbl[data-stack] td[data-label]::before{content:attr(data-label);flex:none;color:var(--muted);font-size:13px;font-weight:400;text-align:left}}
+@media (max-width:640px){.cotbl[data-stack]{overflow:visible}.cotbl[data-stack] table,.cotbl[data-stack] tbody{display:block;min-width:0;width:100%}.cotbl[data-stack] thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}.cotbl[data-stack] tr{display:block;padding:10px 0;border-bottom:1px solid var(--line)}.cotbl[data-stack] td{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:2px 0;border:0;white-space:normal;text-align:right}.cotbl[data-stack] td:first-child{display:block;min-width:0;font-weight:600;padding:0 0 4px;text-align:left}.cotbl[data-stack] td[data-label]::before{content:attr(data-label);flex:none;color:var(--muted);font-size:13px;font-weight:400;text-align:left}.cotbl[data-stack] td:empty{display:none}.cotbl[data-stack] tr{padding:6px 0}.cotbl[data-stack] td:first-child a{display:inline-block;min-height:32px;line-height:32px}}
 ul.plain{list-style:none;padding:0;margin:0}ul.plain li{padding:10px 0;border-bottom:1px solid var(--line)}ul.plain li:last-child{border-bottom:0}
 .ctas{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
 ul.dir{list-style:none;padding:0;margin:16px 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));gap:8px}

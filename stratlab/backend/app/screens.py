@@ -194,6 +194,12 @@ def row(region: str, symbol: str, f: dict) -> dict | None:
            # a foreign company's page (a 20-F filer, depositary shares): a US company's peers aren't foreign filers (R10V-007)
            "foreign": bool(f["foreign"]) if region == "US" and f.get("foreign") is not None else None,
            "price_at": str(f.get("price_at") or "")[:10] or None, "built_at": f.get("built_at")}
+    # LIVE16A-005: the currency a US-listed company reports in when it isn't the dollar (a foreign filer), and today's dollars for one unit of
+    # it, for the results page, which printed Alibaba's RMB 270 billion revenue as "$270.00 billion"
+    cur = str(f.get("report_currency") or "").upper()
+    if region == "US" and re.fullmatch(r"[A-Z]{3}", cur) and cur != "USD":
+        fx = f.get("fx") if isinstance(f.get("fx"), dict) else {}
+        out["report_currency"], out["fx_usd"] = cur, _num(fx.get("rate"))
     # LIVE10A-007: the newest full year's revenue as the page files it, for the public theme pages' Revenue column (29 of 49 pages had it
     # empty: their theme's stored dive is kept only under the current rules, so a page waited for someone to open the theme in the app)
     unit = str(f.get("unit") or ("$ million" if region == "US" else "₹ crore"))

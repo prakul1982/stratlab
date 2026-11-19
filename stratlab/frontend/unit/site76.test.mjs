@@ -69,10 +69,12 @@ test("LIVE14A-009: Usual move per day's table; the quarter before the one being 
 
 test("LIVE14A-013: an open Indian issue without its lot or bids says why (the issue page found or not, read or not, and when)", () => {
   const page = read("src/pages/IposPage.tsx");
-  assert.match(page, /if \(r\?\.page === false\) return "No NSE issue page for it yet \(the lot and bids are read there\)";/);
+  // (updated on purpose, LIVE16B-006: short in its numbers column, the why in the cell's hover text)
+  assert.match(page, /if \(r\?\.page === false\) return "No NSE page yet";/);
+  assert.match(page, /export const NO_PAGE_WHY = "NSE has no issue page for it yet; the lot and bids are read there\.";/);
   assert.match(page, /if \(r\?\.page && !r\.page_at\) return "NSE's issue page not read yet";/);
   assert.match(page, /if \(r\?\.page_at\) return `Not on NSE's issue page, read \$\{readAt\(r\.page_at\)\}`;/);
-  assert.match(page, /tab === "open" && m === "IN" \? <span className="k-muted" data-testid="ipo-bids-none">\{bidsMissing\(r\)\}<\/span>/);
+  assert.match(page, /tab === "open" && m === "IN" \? <span className="k-muted" data-testid="ipo-bids-none" title=\{r\.page === false \? NO_PAGE_WHY : undefined\}>\{bidsMissing\(r\)\}<\/span>/);
 });
 
 test("LIVE14B-007 / LIVE14A-012: the signed-out /plans gives the sample deck its table promises", () => {

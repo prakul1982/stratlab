@@ -1142,7 +1142,7 @@ def _journal_count(uid: str) -> int:
 
 # LIVE7B-002: a Refresh of a stored read is a fresh AI read, held to that one daily count (no separate refresh count)
 USAGE_LABELS = {"research_ai": "Fresh AI reads, refreshes included", "search_ai": "AI answers in the search box",
-                "theme": "New themes mapped", "backtest": "Backtests", "ai": "AI strategy builds",
+                "theme": "New themes mapped", "backtest": "Backtests", "ai": "AI strategy builds", "ai_day": "AI strategy builds today",
                 "deepdive": "Company deep dives", "deck": "Decks (PDF or PowerPoint)", "stock_alerts": "Active stock alerts",
                 "screens": "Saved screens", "holdings": "Stocks in My Holdings", "mf_schemes": "Mutual fund schemes",
                 "networth_items": "Net worth entries", "journal_trades": "Journal trades kept"}
@@ -1173,6 +1173,11 @@ def my_usage(profile=Depends(current_profile)):
     resets = {"research_ai": "day", "search_ai": "day", "theme": "month", "backtest": "month", "ai": "month", "deepdive": "month",
               "deck": "month"}
     rows = [{"key": k, "label": USAGE_LABELS[k], "used": counts[k].result(), "limit": limits[k], "resets": resets[k]} for k in counts]
+    if info["ai_builds_per_month"] is None and not is_admin:
+        # LIVE16B-008: unlimited builds a month still have the daily safety cap (ai_allowance), as /new and Plans say ("up to 200 a day"):
+        # the table showed "AI strategy builds 5 (no limit)" with no daily row
+        rows.insert(next(i for i, r in enumerate(rows) if r["key"] == "ai") + 1,
+                    {"key": "ai_day", "label": USAGE_LABELS["ai_day"], "used": n(lambda: db.count_usage(uid, "ai", day)), "limit": AI_BUILDS_PER_DAY, "resets": "day"})
     try:
         kept = json.loads(my_limits(profile).body)["rows"]
     except Exception:
@@ -5840,7 +5845,8 @@ def breadth_load(region: str, symbol: str, days: int, max_wait: float | None = N
         if not inst:
             raise LookupError("not listed")
         return kite.history(inst["token"], "1d", days, store=False, **({"max_wait": max_wait} if max_wait is not None else {}))
-    return markets.provider(region).history({"token": symbol}, "1d", days)
+    # the day's closes as settled, never a copy the source's edge kept from mid-session (LIVE16A-001)
+    return markets.provider(region).history({"token": symbol}, "1d", days, settled=True)
 
 
 STOCK_OPTIONS = "NFO"                  # the exchange segment NSE's stock options are listed under in the broker's instrument list
@@ -5898,7 +5904,7 @@ def breadth_index(region: str, symbol: str, days: int) -> list[dict]:
         if not hit:
             raise LookupError("index not found")
         return kite.history(hit["token"], "1d", days, store=False)
-    return markets.provider(region).history({"token": symbol}, "1d", days)
+    return markets.provider(region).history({"token": symbol}, "1d", days, settled=True)      # as breadth_load (LIVE16A-001)
 
 
 def breadth_alerts(region: str, groups: list[str], now):
@@ -5908,7 +5914,14 @@ def breadth_alerts(region: str, groups: list[str], now):
 breadth_runner = breadth.Runner(lambda r, s, d: breadth_load(r, s, d), lambda r, s, d: breadth_index(r, s, d),
                                 lambda name: filings_feed.index_members(name), lambda: filings_feed.all_equities(),
                                 after=lambda r, g, now: breadth_alerts(r, g, now))
-breadth_job = breadth.Job(breadth_runner, lambda r: kite.ready() if r == "IN" else True)
+def _mood_again(region: str) -> None:
+    """The Mood card read again for everyone (after a breadth run that corrected the stored closes, LIVE16A-001)."""
+    from .intel import routes as intel_routes
+    intel_routes.mood_hub().refresh_now(region)
+
+
+breadth_job = breadth.Job(breadth_runner, lambda r: kite.ready() if r == "IN" else True,
+                          check_read=lambda r, s: breadth_load(r, s, 30, **({"max_wait": 5.0} if r == "IN" else {})), after_repair=_mood_again)
 breadth_live_runner = breadth_live.Live(
     lambda syms: kite.quote(syms), kite.ready,
     lambda region, now: breadth_live.rebuild_base(lambda r, s, d: breadth_load(r, s, d), region, now))

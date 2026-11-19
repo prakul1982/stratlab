@@ -45,7 +45,10 @@ METHOD = ("How companies are chosen: a theme's companies come from its official 
           "no figure on this page.")
 # l55 (R55, the owner's review of the live R54 decks): the evidence states by the same names as the deck, never one "confirmed" total
 EVIDENCE_PUBLIC = {"description_verified": "description-verified", "industry_code_supported": "industry-supported (official industry only)",
-                   "list_supported": "list-supported (the theme's own list only)", "membership_unverified": "not checked"}
+                   "list_supported": "list-supported (the theme's own list only)", "membership_unverified": "not checked",
+                   # e80 (LIVE16A-008: Fertilizers "284 companies" beside "266 description-verified, 12 industry-supported, 0 not checked"): a
+                   # member whose own words describe other work is said, in its row and in every tally, so the parts add up to the whole
+                   "not_confirmed": "own words describe other work"}
 # fix20 (LIVE14A-004: Fertilizers "284 companies ...: 266 description-verified, 12 industry-supported, 0 not checked", 278 of 284): the members
 # whose own words describe other work said too, as the app and the deck say them, so the parts add up to the whole
 EVIDENCE_PUBLIC_MANY = (("description_verified", "description-verified"), ("industry_code_supported", "industry-supported"),
@@ -97,6 +100,22 @@ def entries(region: str | None = None) -> list[dict]:
         key, rank = (e["region"], slug(name)), (m["rules"], str(e.get("at") or ""))
         if key not in best or rank > best[key][0]:
             best[key] = (rank, row)
+    # e80 (LIVE16A-009: Public sector banks' public page "checked under an earlier version ... being checked again now" for 4 h and more while
+    # its app page said "checked 19 Nov"): an entry kept under older rules whose theme the library now finds under today's rules by another
+    # name (the re-check kept it there) stands for nothing: its address answers 301 to that theme's page
+    for k, (rank, row) in list(best.items()):
+        if row["rules"] >= theme_base.RULES:
+            continue
+        try:
+            now = theme_library.find(row["region"], row["name"])
+        except Exception:
+            now = None
+        if not now or now.get("name") == row["name"]:
+            continue
+        cur = best.get((row["region"], slug(str(now.get("name") or ""))))
+        if cur and cur[1]["rules"] >= theme_base.RULES:
+            cur[1]["aliases"] = [x for x in dict.fromkeys(cur[1]["aliases"] + [row["slug"]] + row["aliases"]) if x and x != cur[1]["slug"]]
+            best.pop(k, None)
     return sorted((row for _, row in best.values()), key=lambda x: (x["region"], x["label"].lower()))
 
 
@@ -303,11 +322,16 @@ def view(entry: dict, p: dict) -> dict:
     # e77 (the R76 decks: "OSI Systems Inc" in the deck beside "Osi Systems Inc" here; "ExxonMobil Holdings Corp" after the owner's "Exxon Mobil
     # Corporation"): each company named as the app's rows and the deck name it (the stored dive's name), a reporting registrant's name first
     named = dive_names(dive)
+    # e80 (LIVE16A-007: "Empire State Realty Trust, Inc. ESRT $1.5B" and "Empire State Realty OP, L.P. ESBA $1.4B" both listed): a company the
+    # dive found listed under two symbols (theme_data.same_company) is listed once, under the symbol the dive keeps
+    twice = {str(x.get("symbol")) for x in dive.get("duplicates") or [] if isinstance(x, dict) and x.get("symbol")}
     layers = []
     for v in theme_layers(p):
         rows = []
         for c in v["companies"]:
             sym = c["ticker"]
+            if sym in twice:
+                continue
             rev = revs.get(sym)
             # e54: what its place rests on; a company the map added is shown only confirmed by its own words (share.checked)
             state = "description_verified" if c.get("verified") is True else (ev(sym) if ev else None)
@@ -455,8 +479,10 @@ def render(v: dict) -> str:
             ev = ""
             if state:                  # e54: never said confirmed by its own words when it isn't
                 ev = f'<td class="l">{e(EVIDENCE_PUBLIC[c["evidence"]]) if c.get("evidence") and c["evidence"] != "description_verified" else "" if c.get("evidence") else "–"}</td>'
-            if ev:
+            if ev and ev != '<td class="l"></td>':
                 ev = ev.replace('<td class="l">', '<td class="l" data-label="Membership">', 1)
+            # e80 (LIVE16A-019 / LIVE15A-019: every phone card of a description-verified company carried an empty "Membership" label): an
+            # empty cell keeps the table's columns and carries no label, so a phone's stacked card shows no row for it
             rows += (f'<tr><td>{name}</td><td class="l" data-label="Ticker">{e(c["symbol"])}</td><td data-label="Market value">{e(c["cap"]) if c["cap"] else "–"}</td>'
                      + (f'<td data-label="Revenue">{rev}</td>' if has_rev else "") + f"{ev}</tr>")
         thead = ('<tr><th scope="col">Company</th><th scope="col" class="l">Ticker</th><th scope="col">Market value</th>'

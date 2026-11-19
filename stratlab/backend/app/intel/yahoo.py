@@ -161,17 +161,18 @@ EDGE_STALE = 600             # seconds: an answer whose own session trades now a
 EDGE_AFTER = 6 * 3600        # ...and for this long after the session's close, a last trade that far before the close
 
 
-def stale_edge(meta: dict, now: float) -> bool:
+def stale_edge(meta: dict, now: float, after: float | None = EDGE_AFTER) -> bool:
     """Whether an answer looks like a copy the source's edge kept: its own regular session (its currentTradingPeriod) is trading now and
-    its last trade is over EDGE_STALE seconds old, or the session closed under EDGE_AFTER ago and its last trade is that far before the
-    close. False when it can't be said (no period, no time)."""
+    its last trade is over EDGE_STALE seconds old, or the session closed under `after` seconds ago and its last trade is that far before
+    the close. `after` None: at any time after that close (LIVE16A-001: a kept copy's trading period is the one it was kept in, so a
+    copy of 18 Nov at 10:52 ET read on 19 Nov still names the 18 Nov session, which closed at 16:00 ET). False when it can't be said."""
     try:
         p = meta["currentTradingPeriod"]["regular"]
         start, end = float(p.get("start") or 0), float(p["end"])
     except (KeyError, TypeError, ValueError):
         return False
     t = meta.get("regularMarketTime")
-    if not isinstance(t, (int, float)) or not start <= now < end + EDGE_AFTER or meta.get("instrumentType") == "CRYPTOCURRENCY":
+    if not isinstance(t, (int, float)) or now < start or (after is not None and now >= end + after) or meta.get("instrumentType") == "CRYPTOCURRENCY":
         return False
     # in the session: over EDGE_STALE old now; after it: a last trade over EDGE_STALE before the close (a copy from mid-session)
     return min(now, end) - t > EDGE_STALE
@@ -390,13 +391,13 @@ class Yahoo(Source):
         copy too, None: no close is given rather than an older level."""
         now = time.time() if now is None else now
         got = self.chart(symbol, "1d", days, ttl=ttl)
-        if not stale_edge(got.get("meta") or {}, now):
+        if not stale_edge(got.get("meta") or {}, now, after=None):
             return got
         try:
             alt = self._chart(symbol, "1d", days, INTERVAL["1d"][0], 60, fresh=True)
         except SourceError:
             return None
-        return None if stale_edge(alt.get("meta") or {}, now) else alt
+        return None if stale_edge(alt.get("meta") or {}, now, after=None) else alt
 
     def meta(self, symbol: str) -> dict:
         """Price, previous close, day range and 52-week range for one symbol."""
@@ -412,9 +413,13 @@ class Yahoo(Source):
                 pass
         price, prev = m.get("regularMarketPrice"), _previous_close(m, got["candles"])
         fix = _session_close(m, got["candles"])
-        if fix:
-            return {**self._meta_out(m, symbol, fix["price"], fix["prev"]), "high": fix["high"], "low": fix["low"], "at": fix["at"]}
-        return self._meta_out(m, symbol, price, prev)
+        out = {**self._meta_out(m, symbol, fix["price"], fix["prev"]), "high": fix["high"], "low": fix["low"], "at": fix["at"]} if fix \
+            else self._meta_out(m, symbol, price, prev)
+        # LIVE16A-001: still a kept copy after asking again (a mid-session level, after the close too): said so, so a page that keeps the
+        # day's closes for hours (company.quotes) does not keep it, and the Mood card neither words the day from it nor lists it
+        if stale_edge(m, time.time(), after=None):
+            out["edge_stale"] = True
+        return out
 
     @staticmethod
     def _meta_out(m: dict, symbol: str, price, prev) -> dict:

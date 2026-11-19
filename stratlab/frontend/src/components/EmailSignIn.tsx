@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
-import { emailSignInOn, sendEmailCode, verifyEmailCode } from "../lib/signin";
+import { early, emailSignInOn, sendEmailCode, verifyEmailCode } from "../lib/signin";
 import { codeDigits, emailLooksRight, emailSignInProblem } from "../lib/signinError";
 
 /** Seconds before another email can be asked for: the sign-in service allows one a minute for an address, so the button waits too. */
@@ -11,7 +11,8 @@ export const RESEND_WAIT = 60;
  * /config.js switches email sign-in on (EMAIL_SIGNIN), so nothing shows before the sign-in service's email provider is set up. */
 export function EmailSignIn({ next, signup = false }: { next?: string | null; signup?: boolean }) {
   const id = useId();
-  const [email, setEmail] = useState("");
+  // the address typed into the start-up frame's box before this one drew (LIVE16B-001), not lost when the app takes over
+  const [email, setEmail] = useState(() => early().email ?? "");
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -20,10 +21,14 @@ export function EmailSignIn({ next, signup = false }: { next?: string | null; si
   // R61: opened from an "or sign in with email" link (/login#email), the address box is ready to type in
   const box = useRef<HTMLInputElement>(null);
   useEffect(() => {
+    const e = early();
+    // "Email me a code" pressed in the start-up frame: sent now, once; the frame's box had the focus: this one has it
+    if (e.way === "email" && emailSignInOn()) { e.way = undefined; void send(e.email ?? ""); }
+    else if (e.focus && box.current) box.current.focus({ preventScroll: true });
     if (location.hash !== "#email" || !box.current) return;
     box.current.focus({ preventScroll: true });
     box.current.scrollIntoView({ block: "center" });
-  }, []);
+  }, []);     // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (wait <= 0) return;
     const t = window.setTimeout(() => setWait((w) => w - 1), 1000);

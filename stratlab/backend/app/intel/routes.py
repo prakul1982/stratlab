@@ -1087,6 +1087,16 @@ def sector_served(r: str, payload: dict) -> dict:
     return {**{k: v for k, v in out.items() if k != "_library"}, "ai": None}
 
 
+def listed_once(r: str, out: dict, name: str) -> dict:
+    """e80 (LIVE16A-007: Empire State Realty Trust and Empire State Realty OP, L.P. both on the members table): a company its stored dive found
+    listed under two symbols (theme_data.same_company) listed once, under the symbol the dive keeps."""
+    twice = theme_routes.dive_duplicates(r, name, str(out.get("sector") or "")) if name else set()
+    if not twice:
+        return out
+    return {**out, "value_chain": [{**v, "companies": [c for c in v.get("companies") or [] if c.get("ticker") not in twice]}
+                                   for v in out.get("value_chain") or []]}
+
+
 @router.get("/sector")
 def sector(q: str, region: str = "IN", refresh: bool = False, profile=Depends(current_profile)):
     """A theme's read. R19: from the theme library when it holds this theme (however it's written), at once and for everyone; worked
@@ -1110,10 +1120,10 @@ def sector(q: str, region: str = "IN", refresh: bool = False, profile=Depends(cu
         # r69e (LIVE13A-003: "Last updated 7 Nov" beside "checked on 18 Nov"): the read says when it was checked, beside when its map was made
         checked_at = {"checked_at": computed._iso(hit["at"]) if hit.get("at") else None}
         if not refresh:
-            return ok({**sector_served(r, hit["payload"]), **checked_at})
+            return ok({**listed_once(r, sector_served(r, hit["payload"]), hit["name"]), **checked_at})
         state = computed.refresh_gate(profile, "theme", hit["at"])
         if state != "go":
-            return ok({**sector_served(r, hit["payload"]), **checked_at, "refresh_state": state})
+            return ok({**listed_once(r, sector_served(r, hit["payload"]), hit["name"]), **checked_at, "refresh_state": state})
         theme_library.mark_refreshing(r, hit["name"], by=computed.plan_word(profile))
     elif refresh:
         state = computed.refresh_gate(profile, "theme", A.stored_at("sector", (r, " ".join(q.split())[:80].lower())))

@@ -155,8 +155,9 @@ def page_key(region: str, name: str) -> list | None:
 def current(region: str, name: str) -> bool:
     """Whether a theme's read is stored under today's rules and its dive under today's versions (under the key its page reads)."""
     from . import theme_library
+    from . import theme_routes
     key = page_key(region, name)
-    return key is not None and computed.get(theme_library.DIVE, key, count=False) is not None
+    return key is not None and (computed.get(theme_library.DIVE, key, count=False) is not None or theme_routes.unkept_dive(key) is not None)
 
 
 class NotDone(Exception):
@@ -264,7 +265,9 @@ def step(work=None, now: float | None = None) -> dict | None:
             from . import theme_library
             kept = isinstance(key, list) and computed.get(theme_library.DIVE, key, count=False) is not None
             outcome = "rebuilt" if kept or current(region, name) else "failed"
-            why = "" if outcome == "rebuilt" else "its dive was not kept"
+            big = computed.last_unkept.get(theme_library.DIVE)
+            # e80 (LIVE16A-003): why it was not kept, when the store refused it as too big
+            why = "" if outcome == "rebuilt" else "its dive was not kept" + (f" (too big: {big:,} bytes)" if big else "")
     except Yielded as e:
         outcome, why = "yielded", str(e)
     except NotDone as e:

@@ -187,10 +187,17 @@ class YahooProvider:
         per_day = self.info["per_day"][tf]
         return math.ceil(candles / per_day * 7 / 5) + 3
 
-    def history(self, inst: dict, tf: str, days: int, ttl: float | None = None) -> list[dict]:
-        """`ttl`: the oldest cached answer to reuse, in seconds (None: the source's own default)."""
+    def history(self, inst: dict, tf: str, days: int, ttl: float | None = None, settled: bool = False) -> list[dict]:
+        """`ttl`: the oldest cached answer to reuse, in seconds (None: the source's own default). `settled` (daily candles only): the newest
+        candle must be the session's real close (Yahoo.closing_chart), else DataError; for what stores the day's closes (LIVE16A-001: the
+        evening's breadth run stored the US heatmap and movers from a copy the source's edge kept at 10:52 ET, TJX +10.20% for +8.05%)."""
         try:
-            c = self.yahoo.chart(inst["token"], tf, days, ttl=ttl) if ttl is not None else self.yahoo.chart(inst["token"], tf, days)
+            if settled and tf == "1d":
+                c = self.yahoo.closing_chart(inst["token"], days, **({"ttl": ttl} if ttl is not None else {}))
+                if c is None:
+                    raise DataError(f"{inst['token']}: the source still sends a copy from before the close; the day's close is read again later.")
+            else:
+                c = self.yahoo.chart(inst["token"], tf, days, ttl=ttl) if ttl is not None else self.yahoo.chart(inst["token"], tf, days)
         except SourceError as e:
             raise DataError(str(e)) from None
         k = self._scale(inst, c["meta"])

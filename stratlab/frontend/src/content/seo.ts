@@ -109,8 +109,8 @@ export const PAGES: PageMeta[] = [
   // addresses that open the landing page at a place, or ask for sign-in: not pages of their own, so not indexed (the landing page is
   // what search engines list: /features is also kept out, by vercel.json's noindex header). Not indexed, so no canonical address either.
   { path: "/help", title: withBrand("Help"), description: "Help with StratLab: the questions people ask first, and how to reach a person.", index: false, heading: "Help" },
-  { path: "/login", title: withBrand("Sign in"), description: "StratLab signs in with your Google account: no password to set up.", index: false, heading: "Sign in to StratLab" },
-  { path: "/signup", title: withBrand("Sign up"), description: "Create a free StratLab account with Google. No card needed.", index: false, heading: "Sign up for StratLab" },
+  { path: "/login", title: withBrand("Sign in"), description: "Sign in to StratLab with your Google account or your email address: no password to set up.", index: false, heading: "Sign in to StratLab" },
+  { path: "/signup", title: withBrand("Sign up"), description: "Create a free StratLab account with your Google account or your email address. No card needed.", index: false, heading: "Sign up for StratLab" },
 ];
 
 /** StratLab's own library strategies, [id, name], as backend/app/library_seed.py publishes them (backend test

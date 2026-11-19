@@ -24,6 +24,18 @@ from . import db
 PREFIX = "cres:"
 INDEX = "cres:idx:"
 ENTRY_MAX = 600 * 1024              # bytes: a result bigger than this isn't kept (a theme's read is about 60-150 KB)
+# e80 (LIVE16A-003, the owner's P0: the Semiconductors, Software and REITs dives said "the theme's last stored read; the new read is being
+# worked out" for hours after the R78 re-check, with Camden's $13 m and the 13 Nov prices): a theme's dive with its company rows outgrew
+# ENTRY_MAX (Semiconductors 710 KB on 17 Nov, REITs 601 KB on 18 Nov), so each new dive was worked out and never kept, the re-check found
+# no dive and gave up, and every page was served the last dive that had fitted (Semiconductors 13 Nov, REITs 17 Nov). A kind whose results
+# are known to be larger keeps them up to its own bound
+KIND_MAX = {"theme:dive": 4 * 1024 * 1024}
+last_unkept: dict = {}              # kind -> the size of the last result not kept as too big (the re-check says why)
+
+
+def entry_max(kind: str) -> int:
+    """The largest result a kind keeps."""
+    return max(ENTRY_MAX, KIND_MAX.get(kind, 0))
 LABELS = {"ai:company": "Company AI reads", "ai:compare": "Head-to-head AI reads", "ai:ideas": "Search box: idea answers",
           "ai:ask": "Search box: questions", "ai:sector": "Theme maps (AI)", "ai:sector_claims": "Theme tailwinds and risks (checked)",
           "ai:sector_checked3": "Theme membership (checked)", "ai:pulse": "Market mood: headline reads", "theme": "Theme library",
@@ -183,8 +195,9 @@ def put(kind: str, key, value, label: str = "", region: str = "", meta: dict | N
     except (TypeError, ValueError) as ex:
         print("computed: not kept (not JSON):", kind, str(ex)[:100])
         return None
-    if len(text) > ENTRY_MAX:
+    if len(text) > entry_max(kind):
         print("computed: not kept (too big):", kind, len(text))
+        last_unkept[kind] = len(text)
         return None
     entry: dict = {}
 

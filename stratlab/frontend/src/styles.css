@@ -234,13 +234,14 @@ a.link { margin-inline: -2px; }
 .side-groups[data-fade="bottom"] { -webkit-mask-image: linear-gradient(#000 calc(100% - 32px), transparent); mask-image: linear-gradient(#000 calc(100% - 32px), transparent); }
 .side-groups[data-fade="top"] { -webkit-mask-image: linear-gradient(transparent, #000 24px); mask-image: linear-gradient(transparent, #000 24px); }
 .side-groups[data-fade="both"] { -webkit-mask-image: linear-gradient(transparent, #000 24px, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(transparent, #000 24px, #000 calc(100% - 32px), transparent); }
-/* "More below": the faded edge's words, just above the menu's foot (R5O-038), in a row of its own under the menu's edge line, so it
-   never sits over a menu item (owner, 18 Nov) */
-.side-more-row { flex: none; display: flex; justify-content: center; padding: 2px 0; border-top: 1px solid var(--line-2); }
-.side-more { flex: none; display: inline-flex; align-items: center; gap: 4px; margin: 0; padding: 2px 10px;
-  border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font: 500 12px var(--sans); cursor: pointer; }
-.side-more svg { transform: rotate(90deg); }
-.side-more:hover { color: var(--ink); }
+/* "More below": the faded edge's words, just above the menu's foot (R5O-038). A quiet line of muted words and a chevron, with no box and
+   no line of its own: the foot's top edge is the one line between the menu and the foot (owner, 19 Nov: the boxed pill between two lines
+   "looks trash"). It takes the space it needs below the menu's visible box while it shows, so it never sits over a menu item (owner, 18 Nov) */
+.side-more-row { flex: none; display: flex; justify-content: center; padding: 3px 0; }
+.side-more { flex: none; display: inline-flex; align-items: center; gap: 4px; margin: 0; padding: 1px 8px; border: 0; border-radius: 6px;
+  background: none; color: var(--muted); font: 500 12px/18px var(--sans); cursor: pointer; }
+.side-more svg { transform: rotate(90deg); opacity: .8; }
+.side-more:hover { color: var(--ink); background: var(--side-hover); }
 .side-group { display: flex; flex-direction: column; gap: 2px; }
 .side-head { display: flex; align-items: center; gap: 4px; }
 .side-toggle { flex: none; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: none; cursor: pointer; color: var(--muted); position: relative; }
@@ -2007,6 +2008,7 @@ a.k-chip { display: inline-flex; align-items: center; text-decoration: none; }
   .k-tbl-wrap.stack.compact .k-table td[data-label]::before { display: inline; margin-right: 4px; }
   .k-tbl-wrap.stack.compact .k-table td.k-brief { font-size: var(--t-label); }
   .k-tbl-wrap.stack.compact .k-table td.k-brief::before { display: none; }
+  .k-tbl-wrap.stack.compact .k-table td.k-brief.k-brief-label::before { display: inline; margin-right: 4px; }
   .k-tbl-wrap.stack.compact .k-table td.k-phone-off { display: none; }
   .k-tbl-wrap.stack.compact .k-table td.k-wrap { flex: 1 1 auto; min-width: 0; white-space: normal; }   /* a column of words (an event's details) may wrap, and takes the rest of its line */
   .k-tbl-wrap.stack.compact .k-table td.k-act, .k-tbl-wrap.stack.compact .k-table td.k-row-note, .k-tbl-wrap.stack.compact .k-table td.k-empty-row { flex: 1 1 100%; white-space: normal; }
@@ -2587,6 +2589,7 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .k-plan-body { display: flex; flex-direction: column; gap: var(--s4); }
 .k-plan-body > :last-child { margin-top: auto; }
 .k-plan.pro { border: 2px solid var(--ink); }
+.k-plan.picked { box-shadow: 0 0 0 3px var(--blue); }   /* the plan picked on a plan card before signing in (LIVE16B-001) */
 @media (min-width: 601px) and (max-width: 1000px) { /* a tablet: two columns, the last plan across both, never one narrow column */
   .k-plans { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .k-plans > .k-plan:last-child:nth-child(odd) { grid-column: 1 / -1; }
