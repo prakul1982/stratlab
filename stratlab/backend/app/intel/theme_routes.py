@@ -319,6 +319,10 @@ def own_got(region: str, sym: str, got: dict, name: str = "") -> tuple[dict, boo
     (theme_base.own_part), and whether that took anything off. Every reader of the stored descriptions reads it this way."""
     about = str((got or {}).get("about") or "")
     nm = name or _index_name(region, sym)
+    if (got or {}).get("wiki"):
+        theme_base.note_encyclopedia(got["wiki"])          # e80: never quoted as its own words (theme_base.encyclopedia_sentence)
+    if region == "US" and about:
+        theme_base.note_us_voice(about)                    # e80: records read before the extract was kept apart
     if not about:
         # r68e: a record a read emptied keeps the words it had: read again by today's reader, they are its words when it finds them its own
         was = theme_base.own_part(str((got or {}).get("was_about") or ""), nm)
@@ -367,7 +371,7 @@ def evidence_reader(region: str, names: dict, budget: float | None = None, again
                 if age < (EVIDENCE_DAYS if got.get("about") else NO_DESCRIPTION_DAYS):
                     hit = got
         if hit is None:
-            about, industry, no_page, owed, filed_first = "", "", False, False, False
+            about, industry, no_page, owed, filed_first, wiki = "", "", False, False, False, ""
             if region == "IN":
                 p = india_profile(R.hub.screener, sym)
                 no_page = p is None
@@ -384,6 +388,7 @@ def evidence_reader(region: str, names: dict, budget: float | None = None, again
                 if not fits_company(names.get(sym) or sym, w):       # R35: another company's article, or one about no company (Toyo Tires, the myth's Ichor)
                     w = {}
                 about = " ".join(x for x in (about, w.get("extract") or "") if x)
+                wiki = " ".join(str(w.get("extract") or "").split())
             # R35: still thin: what its latest annual report says it does (US), a few a minute; lane n2: also when the words it has don't
             # say what it does (UMC's article: where it is and when it was founded), a 20-F's Item 4 as a 10-K's Item 1
             # gl52 (R52, the rotating review of Release 51: Visa, Mastercard, Fortinet, Trade Desk, NetEase and CoreWeave with "No description
@@ -401,6 +406,8 @@ def evidence_reader(region: str, names: dict, budget: float | None = None, again
             keep_ = ({"was_about": old_[:3000], "was_at": (prior or {}).get("was_at") or (prior or {}).get("at")} if not about and old_ else {})
             hit = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "about": theme_check.kept_description(about), "industry": industry,
                    "op": OWN_PART_V, **keep_, **({"other": opening_of(read_)} if read_ and not about else {}),
+                   # e80 (LIVE16A-002): the encyclopedia's extract run into the words, kept apart too: its sentences are never quoted
+                   **({"wiki": wiki[:3000]} if wiki and about else {}),
                    "v": ABOUT_V, **({"owed": True} if owed else {}), **({"no_page": True} if no_page else {}),
                    **({"filed": True} if filed_first and not owed else {}),          # e57: its annual report read first (read_chip_making)
                    **({"bv": sec_business_v()} if region == "US" else {}),          # r67e: the annual report reader it was read with
@@ -611,10 +618,10 @@ def listed_as(name, symbol):
     return grounding.listed_name(name, symbol, symbol)
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57, 59: 58, 60: 59, 61: 60, 62: 61, 63: 62, 64: 63, 65: 64, 66: 65, 67: 66, 68: 67, 69: 68, 70: 69, 71: 70, 72: 71, 73: 72, 74: 73}  # rules versions whose change only adds to a kept placement (e78, R73: the answers unchanged, a concept's words read with the company's name aside and an earlier narrower name's move out no finding; e77, R72: the answers unchanged, a way of earning taking a company into a layer only where its words bear it out; r582, R58.2: the answers unchanged, layers of one company, the figures' window, names its companies' lines say; r58, R58: the answers unchanged, the taxonomy and scale rules; r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57, 59: 58, 60: 59, 61: 60, 62: 61, 63: 62, 64: 63, 65: 64, 66: 65, 67: 66, 68: 67, 69: 68, 70: 69, 71: 70, 72: 71, 73: 72, 74: 73, 75: 74}  # rules versions whose change only adds to a kept placement (e80, R75: the answers unchanged, encyclopedia sentences no line of own words; e78, R73: the answers unchanged, a concept's words read with the company's name aside and an earlier narrower name's move out no finding; e77, R72: the answers unchanged, a way of earning taking a company into a layer only where its words bear it out; r582, R58.2: the answers unchanged, layers of one company, the figures' window, names its companies' lines say; r58, R58: the answers unchanged, the taxonomy and scale rules; r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
-EARLIER_MAX = 29                # (e79: 29, one more for the version R74 carries; e78: 28, one more for the version R73 carries; e77: 27, one more for the version R72 carries; r69e: 26, one more for the version R69 carries; r68e: 25, one more for the version R68 carries; r67e: 24, one more for the version R67 carries; r66e: 23, one more for the version R66 carries; r65e: 22, one more for the version R65 carries; r64e: 21, one more for the version R64 carries; r63e: 20, one more for the version R63 carries; r62: 19, one more for the version R62 carries; r60: 18, one more for the version R60 carries; r59: 17, one more for the version R59 carries; r582: 16, one more for the version R58.2 carries; r581: 15, one more for the version R58.1 carries; r58: 14, one more for the version R58 carries; r572: 13, one more for the version R57.2 carries; r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
+EARLIER_MAX = 30                # (e80: 30, one more for the version R75 carries; e79: 29, one more for the version R74 carries; e78: 28, one more for the version R73 carries; e77: 27, one more for the version R72 carries; r69e: 26, one more for the version R69 carries; r68e: 25, one more for the version R68 carries; r67e: 24, one more for the version R67 carries; r66e: 23, one more for the version R66 carries; r65e: 22, one more for the version R65 carries; r64e: 21, one more for the version R64 carries; r63e: 20, one more for the version R63 carries; r62: 19, one more for the version R62 carries; r60: 18, one more for the version R60 carries; r59: 17, one more for the version R59 carries; r582: 16, one more for the version R58.2 carries; r581: 15, one more for the version R58.1 carries; r58: 14, one more for the version R58 carries; r572: 13, one more for the version R57.2 carries; r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
 
 
 def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
@@ -1794,6 +1801,65 @@ def _rebuild_behind(r: str, theme: str, m: dict, key: list) -> bool:
     return True
 
 
+def pending_stored(r: str, dive: dict) -> list[str]:
+    """The companies whose filed sector figures a dive was waiting for and that are stored since (sector_metrics.any_stored, one by one)."""
+    return [s_ for s_ in dive.get("metrics_pending") or [] if sector_metrics.any_stored(r, [s_])]
+
+
+def stale_marks(r: str, dive: dict) -> dict:
+    """e80: the companies of a dive just worked out that a kept dive's staleness checks mark ({"stored", "rebuilt", "restated"}): kept with
+    it, so a check that the rebuild could not clear (a page whose revenue stays apart from the piece's, Camden's) does not mark the dive
+    stale again on every read, and the page never says "being worked out" for ever."""
+    out = {}
+    for k, fn in (("stored", pending_stored), ("rebuilt", pages_rebuilt), ("restated", pages_restated)):
+        try:
+            out[k] = sorted(fn(r, dive))
+        except Exception as e:
+            print("theme dive: marks not kept:", k, type(e).__name__, str(e)[:100])
+            out[k] = []
+    return out
+
+
+# e80 (LIVE16A-003): a dive the store refused to keep (computed.put None) is served from this process until a kept one replaces it, never
+# the last dive that had been kept (the 13 Nov Semiconductors dive under "being worked out", 19 Nov)
+UNKEPT_MAX = 6
+_UNKEPT: dict = {}
+
+
+def keep_unkept(key: list, value: dict) -> None:
+    k = json.dumps(key, default=str)
+    _UNKEPT.pop(k, None)
+    _UNKEPT[k] = {"value": value, "at": time.time()}
+    while len(_UNKEPT) > UNKEPT_MAX:
+        _UNKEPT.pop(next(iter(_UNKEPT)))
+
+
+def unkept_dive(key: list) -> dict | None:
+    return _UNKEPT.get(json.dumps(key, default=str))
+
+
+_DUPS: dict = {}            # e80: (market, theme) -> (when read, {symbols the newest kept dive lists once under another symbol})
+DUPS_EVERY = 600.0
+
+
+def dive_duplicates(r: str, name: str, label: str = "") -> set:
+    """e80 (LIVE16A-007): the symbols the theme's newest kept dive found to be another listing of a company it keeps (theme_data.same_company),
+    read at most every DUPS_EVERY seconds (a theme's read is served many times; the dive is large)."""
+    k = (r, name)
+    hit = _DUPS.get(k)
+    if hit and time.time() - hit[0] < DUPS_EVERY:
+        return hit[1]
+    try:
+        dive = (latest_dive(r, name, label) or {}).get("dive") or {}
+    except Exception:
+        dive = {}
+    got = {str(x.get("symbol")) for x in dive.get("duplicates") or [] if isinstance(x, dict) and x.get("symbol")}
+    _DUPS[k] = (time.time(), got)
+    if len(_DUPS) > 200:
+        _DUPS.clear()
+    return got
+
+
 def latest_dive(r: str, name: str, label: str = "") -> dict | None:
     """r66e (LIVE12A-002: Private banks ready in 57 s, its dive worked out inside the page's request after a dive text bump, as there was no
     dive kept under today's versions to serve meanwhile): the newest dive kept for this theme under any versions ({"dive", "at"}), found by
@@ -1822,12 +1888,18 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
     fm, figures = theme_base.for_figures(m)
     key = dive_key(r, theme, m)
     if not refresh and not rebuild:
-        kept = computed.get(theme_library.DIVE, key)
+        kept = computed.get(theme_library.DIVE, key) or unkept_dive(key)
         if kept is not None and isinstance((kept.get("value") or {}).get("dive"), dict):
+            # e80 (LIVE16A-003: dives "being worked out" for hours after the re-check): a company the dive was worked out for again and
+            # still has the same mark (its page's revenue apart from the piece's, its rebuilt page's lines, its stored sector figure) is not
+            # a reason to work it out once more: only a company marked since it was kept (`seen`, stale_marks)
+            seen = kept["value"].get("seen") if isinstance(kept["value"].get("seen"), dict) else {}
+            new_marks = lambda k, got: bool(set(got) - set(seen.get(k) or []))      # noqa: E731
+            dv = kept["value"]["dive"]
             stale = pieces_moved(r, kept["value"].get("pieces") or {}) \
-                or sector_metrics.any_stored(r, kept["value"]["dive"].get("metrics_pending") or []) or prices_moved(r, kept) \
-                or bool(pages_rebuilt(r, kept["value"]["dive"])) \
-                or bool(pages_restated(r, kept["value"]["dive"]))         # e79: a page rebuilt since with another revenue for the year
+                or new_marks("stored", pending_stored(r, dv)) or prices_moved(r, kept) \
+                or new_marks("rebuilt", pages_rebuilt(r, dv)) \
+                or new_marks("restated", pages_restated(r, dv))         # e79: a page rebuilt since with another revenue for the year
             if not stale:
                 requeue(r, kept["value"]["dive"])
                 return kept["value"]["dive"]
@@ -1848,6 +1920,17 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
     src = sources(r, theme, fresh=True) if refresh else sources(r, theme)
     hit = theme_data.build(r, theme, fm, src)
     hit["placements"], hit["figures"] = m.get("placements"), figures
+    # e80 (LIVE16A-011: IT services "No listed company is shown for the layer IT services ..." above a members table listing 5 in it, e79's
+    # wording never shown): a layer's companies counted on the whole map, not on the figures' window the dive is built from (for_figures),
+    # where a layer of members none of which is among the largest held none
+    placed_in: dict = {}
+    for v in m.get("value_chain") or []:
+        placed_in.setdefault(str(v.get("layer") or ""), set()).update(c.get("ticker") for c in v.get("companies") or [] if c.get("ticker"))
+    for b in hit.get("layers") or []:
+        if isinstance(b, dict) and b.get("layer") is not None and not b.get("companies"):
+            n = len(placed_in.get(str(b["layer"]), ()))
+            if n > int(b.get("placed") or 0):
+                b["placed"] = n
     hit["coverage"] = map_coverage(m)          # R44: of every company the map places, not only those the figures were read for
     hit["data_gaps"] = dive_gaps(r, m, src)     # e57 (RC7): members above the median market value with no words of their own or no figures
     before = theme_changes.stored(r, m.get("_library") or theme).get("snap")
@@ -1882,8 +1965,14 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
     # makes) nor logged as a change
     if (m.get("placements") or {}).get("checked") and not m.get("_older"):
         pieces = getattr(src, "pieces", None) or {}
-        computed.put(theme_library.DIVE, key, {"dive": hit, "pieces": pieces, "priced": priced_mark(r, list(pieces))}, label=m.get("sector") or theme,
-                     region=r, by=by, meta={"q": m.get("_library") or theme_library.normalise(theme, r), "rules": theme_base.RULES})
+        value = {"dive": hit, "pieces": pieces, "priced": priced_mark(r, list(pieces)), "seen": stale_marks(r, hit)}
+        _DUPS[(r, m.get("_library") or theme_library.normalise(theme, r))] = (time.time(), {str(x.get("symbol")) for x in hit.get("duplicates") or []
+                                                                                           if isinstance(x, dict) and x.get("symbol")})
+        if computed.put(theme_library.DIVE, key, value, label=m.get("sector") or theme,
+                        region=r, by=by, meta={"q": m.get("_library") or theme_library.normalise(theme, r), "rules": theme_base.RULES}) is None:
+            keep_unkept(key, value)          # e80: not kept (the store refused it): served from here, never the older dive, until it is
+        else:
+            _UNKEPT.pop(json.dumps(key, default=str), None)
         # p57: every member of the checked map with its layer, so a company leaving the figures is never said to leave the theme
         everyone: dict = {}
         for v in m.get("value_chain") or []:

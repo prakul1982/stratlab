@@ -255,7 +255,7 @@ def test_e79_a_layer_with_members_and_no_figures_says_how_many_it_lists(monkeypa
     assert {b["layer"]: b["placed"] for b in dive["layers"]}["Integrated oil majors"] == 2
 
 
-def test_e79_versions():
-    assert B.RULES == 74 and TR.PLACE_CARRY[74] == 73 and TR.EARLIER_MAX == 29
-    assert D.DIVE_TEXT == 45 and deck.THEME_DECK_VERSION == 85 and SM.VERSION == 3
+def test_e79_versions():          # e80 (LIVE16A, the R78 decks): RULES 75, EARLIER_MAX 30, deck 86, dive text 46 (updated on purpose)
+    assert B.RULES == 75 and TR.PLACE_CARRY[75] == 74 and TR.PLACE_CARRY[74] == 73 and TR.EARLIER_MAX == 30
+    assert D.DIVE_TEXT == 46 and deck.THEME_DECK_VERSION == 86 and SM.VERSION == 3
     assert json and computed and time        # (imports kept for the replays above)

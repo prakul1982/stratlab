@@ -335,7 +335,10 @@ def _layer_events(was: dict, now: dict) -> tuple[list[dict], set]:
             continue
         d = dests[g][0]
         if d not in used_d and srcs[d] == [g]:
-            out.append({"kind": "renamed", "from": [g], "to": [d], "n": m[(g, d)]})
+            # e80 (LIVE16A-012: IT services' log "Layer renamed It services → IT services" again on 19 Nov): a name that only changes its
+            # letters' case is the same layer: its members are not moved and no rename is said
+            if g.lower() != d.lower():
+                out.append({"kind": "renamed", "from": [g], "to": [d], "n": m[(g, d)]})
             used_g.add(g)
             used_d.add(d)
             pairs.add((g, d))
@@ -634,6 +637,52 @@ def first_sentence(words) -> str:
     return one.strip(" ,;:").replace("“", "‘").replace("”", "’").replace("(", "").replace(")", "")
 
 
+def work_sentence(words) -> str:
+    """e80 (LIVE16A-006: InPoint's move "its own words say “Sound Point CRE is a subsidiary of Sound Point Capital Management, LP”", Medalist's
+    "“We revoked our REIT election effective January 1, 2026”"): the first sentence of a company's words that is its own line about its work
+    (theme_base.own_words), never one of how it is held, managed or taxed (sec.structure_only, reit_tax_said); "" when none is."""
+    from .sec import reit_tax_said, structure_only
+    from .theme_base import _sentences, own_words
+    text = re.sub(r"^\s*Industry:[^.]*\.\s*", "", str(words or "")).strip()
+    if not text or text.startswith("From its own filings:"):
+        return ""
+    flat = " ".join(text.split())
+    parts = [y for x in _sentences(flat) for y in re.split(r"(?:(?<=[a-z0-9)”\"])|(?<=[A-Z]{2}))\.\s+(?=[A-Z])", x) if y.strip()]
+    for x in parts[:12]:
+        if len(x.split()) < 4 or structure_only(x) or reit_tax_said(x) or _MANAGED.search(x) or not own_words(x.rstrip(".;"), ""):
+            continue
+        return first_sentence(x)
+    return ""
+
+
+# e80: a sentence of who a company is a subsidiary of, who manages or advises it, or its REIT election, is no line of its work
+_MANAGED = re.compile(r"\b(?:is|are)\s+(?:a|an|the)\s+(?:wholly[- ]owned\s+)?subsidiary\s+of\b|\b(?:externally|internally)\s+managed\b|"
+                      r"\b(?:our|its)\s+(?:adviser|advisor|sponsor|manager)\b|\bREIT\s+election\b|\bsole\s+general\s+partner\b", re.I)
+_POSITIVE_LAYER = re.compile(r"(?:its own words say it sells what|its official industry or way of earning says it sells what|its own words say what|"
+                             r"the map placed it in|its own words were checked to show it is of|its official industry is what|by how it earns:|"
+                             r"of its official industry, the one|the theme's map places it in)\s+“([^”]+)”")
+_NEGATIVE_LAYER = re.compile(r"(?:don't say (?:it sells|they sell) (?:[^“]{0,80}?)what|say no word of|moved it out of)\s+“([^”]+)”")
+
+
+def fit_reason(why: str, frm: str, to: str) -> str | None:
+    """e80 (LIVE16A-006: Essex "→ Residential landlords: its own words say it sells what “Manufactured housing and RV communities” is", Armour
+    "→ Mortgage REITs: its own words don't say it sells what “Digital infrastructure owners” is" for a move from "Other"): a move's reason as
+    printed beside it. A reason that says why the company is in a layer names the layer it moved TO (the layer it was judged for, renamed or
+    merged since, is said as the one it is in now); one that says why it left a layer names the layer it moved FROM. None when the reason is
+    of a third layer (a step of the check between the two): the move is then said from its own words (reasoned)."""
+    if not why:
+        return why
+    a, b = _HALF_NAME.sub("", str(frm or "")), _HALF_NAME.sub("", str(to or ""))
+    out = why
+    for m in list(_POSITIVE_LAYER.finditer(why)):
+        if _HALF_NAME.sub("", m.group(1)) not in (b, a) or (_HALF_NAME.sub("", m.group(1)) == a and a != b):
+            out = out.replace(f"“{m.group(1)}”", f"“{to}”", 1)
+    for m in _NEGATIVE_LAYER.finditer(out):
+        if _HALF_NAME.sub("", m.group(1)) != a:
+            return None
+    return out
+
+
 def unnamed_why(why: str, words=None, industry: str = "", theme_words: set | None = None) -> str:
     """r572: a removal's reason with what its own words or filings say, when its reason was only that the map no longer names it."""
     if why not in UNNAMED:
@@ -672,7 +721,10 @@ def reasoned(entries: list, words_of=None, industry_of=None, theme_words: set | 
         if r.get("why") == OUTSIDE_FIGURES:            # r67e: a log kept before: where it sits is no reason for its move
             r = {**{k: x for k, x in r.items() if k != "why"}, "outside": True}
         if r.get("why"):
-            return r
+            fit = fit_reason(str(r["why"]), r.get("from") or "", r.get("to") or "")          # e80: the layer it moved to (or from)
+            if fit:
+                return {**r, "why": fit}
+            r = {k: x for k, x in r.items() if k != "why"}
         a, b = _HALF_NAME.sub("", str(r.get("from") or "")), _HALF_NAME.sub("", str(r.get("to") or ""))
         if a == b:
             return {**r, "why": "the same layer, split into halves by market value"}
@@ -681,15 +733,37 @@ def reasoned(entries: list, words_of=None, industry_of=None, theme_words: set | 
             ind = (industry_of(r["symbol"]) if industry_of is not None else "") or ""
         except Exception:
             w, ind = None, ""
-        q = first_sentence(w)
+        q = work_sentence(w)          # e80: a line of its work, never one of how it is held or taxed
         said = f"its own words say “{q}”" if q else f"filed under {ind}" if ind else ""
+        if not said and w:
+            said = (f"no line of its own words says a named layer's work" if str(b).startswith("Other ") else
+                    f"no line of its own words says a layer's work; the theme's map places it in “{b}”")
         if not said:
             # r67e (P0-3): never a move with no reason: one with no words of its own stored and no industry says so
             said = ("no words of its own are stored, so none says a named layer's work" if str(b).startswith("Other ") else
                     f"no words of its own are stored; the theme's map places it in “{b}”")
         return {**r, "why": said}
-    return [{**e, **({"removed": [why(r) for r in e.get("removed") or []]} if e.get("removed") else {}),
-             **({"moved": [move_why(r) for r in e.get("moved") or []]} if e.get("moved") else {})} for e in entries]
+    def clean(r):
+        # e80 (the R78 US Media deck: "added 4: iHeartMedia, ... (filed under an official industry of the theme; True)", a 16 Nov entry kept
+        # with a flag printed as its reason): a flag run on after a reason is no part of it
+        if isinstance(r, dict) and isinstance(r.get("why"), str) and _FLAG_TAIL.search(r["why"]):
+            return {**r, "why": _FLAG_TAIL.sub("", r["why"])}
+        return r
+    def case_only(x) -> bool:
+        return isinstance(x, dict) and x.get("kind") == "renamed" and len(x.get("from") or []) == 1 and len(x.get("to") or []) == 1 \
+            and str(x["from"][0]).lower() == str(x["to"][0]).lower()
+    def counted(e):
+        n = sum(1 for x in e.get("layers") or [] if case_only(x))
+        if not n or not isinstance((e.get("counts") or {}).get("layers"), int):
+            return {}
+        return {"counts": {**e["counts"], "layers": max(0, e["counts"]["layers"] - n)}}
+    return [{**e, **counted(e), **({"layers": [x for x in e.get("layers") or [] if not case_only(x)]} if e.get("layers") else {}),
+             **({"removed": [why(clean(r)) for r in e.get("removed") or []]} if e.get("removed") else {}),
+             **({"added": [clean(r) for r in e.get("added") or []]} if e.get("added") else {}),
+             **({"moved": [move_why(clean(r)) for r in e.get("moved") or []]} if e.get("moved") else {})} for e in entries]
+
+
+_FLAG_TAIL = re.compile(r"(?:\s*;\s*(?:True|False|None))+\s*$")
 
 
 # e77 (LIVE14A-007: Cement's log moved Kanoria 7 times in 4 days, three of them on 17 Nov; REITs moved Adamas Trust Other -> Mortgage REITs
