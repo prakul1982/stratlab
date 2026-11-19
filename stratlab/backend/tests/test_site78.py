@@ -230,3 +230,31 @@ def test_live15a_015_a_changed_issue_size_keeps_what_it_was_and_the_day(monkeypa
     kept = json.loads(store[ipo.ROWS_KEY + "IN"])["rows"][0]
     assert kept["size_was"]["amount"] == 9001.0
     assert ipo.list_row(kept, at)["size_was"]["amount"] == 9001.0
+
+
+# ---------- LIVE15A-016 / LIVE15B-005: stored Indian pages built before the share-count rule are built again, the largest first ----------
+def test_live15a_016_a_stored_indian_page_from_before_the_share_count_rule_is_built_again_first(monkeypatch):
+    from app import screens, stock_pages as SP
+    from app.intel.screener import CAP_RULE
+    old_tcs = {"v": SP.FACTS_VERSION, "region": "IN", "symbol": "TCS", "name": "TCS", "price": 2379.5, "market_cap": 849000.0}
+    assert SP.cap_rule_due(old_tcs)
+    assert not SP.cap_rule_due({**old_tcs, "cap_rule": CAP_RULE})                    # built under the rule: never again for it
+    assert not SP.cap_rule_due({**old_tcs, "market_cap": 900.0})                     # a small company waits for its usual rebuild
+    assert not SP.cap_rule_due({**old_tcs, "region": "US"})
+    built = time.time() - 2 * 3600
+    rows = [("stocks:page:IN:TCS", json.dumps({"ts": built, "facts": old_tcs})),
+            ("stocks:page:IN:NEW", json.dumps({"ts": built, "facts": {**old_tcs, "symbol": "NEW", "name": "New", "cap_rule": CAP_RULE}}))]
+    monkeypatch.setattr(screens.db, "all_settings_with_prefix", lambda prefix: rows if prefix == "stocks:page:IN:" else [])
+    monkeypatch.setattr(screens.deals, "buys", lambda: {"buys": {}, "from": None})
+    monkeypatch.setattr(SP, "due_marks", lambda region: {})
+    monkeypatch.setattr(SP, "nse_twins", lambda: {})
+    index = screens.build_index("IN", store=False)
+    assert "TCS" in index["_old"] and index["_old"]["TCS"] >= screens.BEHIND_FIRST and "NEW" not in index["_old"]
+
+
+def test_live15a_016_an_indian_page_build_records_the_share_count_rule():
+    import inspect
+    src = inspect.getsource(main.stock_page_facts) if hasattr(main, "stock_page_facts") else open(main.__file__).read()
+    assert 'checks["cap_rule"] = CAP_RULE' in src
+    from app import stock_pages as SP
+    assert '"cap_rule")' in inspect.getsource(SP.facts)
