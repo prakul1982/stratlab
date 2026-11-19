@@ -882,17 +882,32 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
         # is written in the background; only a session's very first read is waited for.
         session = pulse_session(indices) if is_open else None
         latest_key = (r, f.lower(), PULSE_LATEST)
-        if session is not None and not refresh and not A.peek("pulse", key):
-            last = A.get("pulse", latest_key)
-            if last is not None and last.get("session") == session:
-                pulse_behind(repr(key), write)
-                return ok({**last, "updating": True})
-        out = write()
-        if session is not None and out.get("generated_at"):
+
+        def keep_latest(out: dict) -> None:
             last = A.get("pulse", latest_key)
             if last is None or (last.get("generated_at") or 0) < out["generated_at"]:
                 A.keep("pulse", latest_key, {**{k: v for k, v in out.items() if k not in ("refresh_state", "updating")}, "session": session},
                        CLOSED_MOOD_TTL)
+
+        def write_behind():
+            # LIVE17A-006: the newer read, once written, is the session's latest straight away (it was kept only when a later visit
+            # asked for the same key, so a key that moved on meanwhile left the 09:38 ET read up for hours)
+            out = write(True)
+            if isinstance(out, dict) and out.get("generated_at") and not out.get("unavailable"):
+                keep_latest(out)
+            return out
+        if session is not None and not refresh and not A.peek("pulse", key):
+            last = A.get("pulse", latest_key)
+            if last is not None and last.get("session") == session:
+                # LIVE17A-006: "being written" only while a write is under way; after a failed one the read shown is said plainly, with its
+                # time, and the next try waits PULSE_RETRY_AFTER (at 13:32 ET the 09:38 ET read still said a newer one was being written)
+                writing = pulse_behind(repr(key), write_behind) or pulse_writing(repr(key))
+                return ok({**last, "updating": True} if writing else {k: v for k, v in last.items() if k != "session"})
+        out = write()
+        if session is not None and out.get("generated_at"):
+            last = A.get("pulse", latest_key)
+            if last is None or (last.get("generated_at") or 0) < out["generated_at"]:
+                keep_latest(out)
             elif not refresh and last.get("session") == session and (last.get("generated_at") or 0) > out["generated_at"]:
                 # LIVE13A-028: the moves came back to a band an earlier read was written for: the session's newer read is shown, so the
                 # stamp never goes back ("14:34 IST" at 14:36, then "14:12 IST" at 14:50 over the same words)
@@ -918,24 +933,46 @@ def pulse_session(indices: list[dict]) -> list:
     return [[i.get("name"), i.get("day")] for i in indices]
 
 
+PULSE_RETRY_AFTER = 600          # seconds: a background read that failed is not tried again for the same key before this (LIVE17A-006)
+PULSE_WRITE_MAX = 300            # seconds: a background read still going after this is no longer said to be "being written"
+_pulse_started: dict[str, float] = {}
+_pulse_failed: dict[str, float] = {}
+
+
 def pulse_behind(key: str, write) -> bool:
     """Write the market's newer read in a background thread, once per key at a time (a second visit while it is being
-    written starts nothing). False when it is already being written."""
+    written starts nothing). False when it is already being written, or when its last try failed under PULSE_RETRY_AFTER ago."""
     with _pulse_running_lock:
-        if key in _pulse_running or len(_pulse_running) >= 8:
+        if key in _pulse_running or len(_pulse_running) >= 8 or time.time() - _pulse_failed.get(key, 0) < PULSE_RETRY_AFTER:
             return False
         _pulse_running.add(key)
+        _pulse_started[key] = time.time()
 
     def run():
+        failed = True
         try:
-            write(True)
+            got = write()
+            failed = not (isinstance(got, dict) and got.get("generated_at"))
         except Exception as e:  # noqa: BLE001  (a failed background read leaves the shown one; the next visit asks again)
             print("pulse read: background write failed:", str(e)[:160])
         finally:
             with _pulse_running_lock:
                 _pulse_running.discard(key)
+                _pulse_started.pop(key, None)
+                if failed:
+                    _pulse_failed[key] = time.time()
+                    if len(_pulse_failed) > 200:
+                        _pulse_failed.clear()
+                else:
+                    _pulse_failed.pop(key, None)
     threading.Thread(target=run, daemon=True, name="pulse-read").start()
     return True
+
+
+def pulse_writing(key: str) -> bool:
+    """Whether a background read for `key` is under way now (and not stuck past PULSE_WRITE_MAX)."""
+    with _pulse_running_lock:
+        return key in _pulse_running and time.time() - _pulse_started.get(key, 0) < PULSE_WRITE_MAX
 
 
 def before_close_at(region: str, indices: list[dict]) -> str | None:

@@ -430,7 +430,7 @@ def test_us_names_read_as_names_and_one_point_is_a_point():
     assert mood.short_name("Procter & Gamble Company") == "Procter & Gamble"
     assert mood.points(1) == "1 point" and mood.points(36) == "36 points" and mood.points(1.2) == "1 point"
     p = {"movers": [{"index": "S&P 500", "adding": [{"name": "Costco Wholesale", "points": 1.0}], "taking": [{"name": "NVIDIA", "points": -1.0}]}]}
-    assert mood.lines_of(p) == ["Costco Wholesale added about 1 point to the S&P 500 and NVIDIA took off about 1 point."]
+    assert mood.lines_of(p) == ["Costco Wholesale added about 1 point to the S&P 500 and NVIDIA took about 1 point off it."]
 
 
 def test_after_the_close_the_compare_line_is_about_the_last_session():
