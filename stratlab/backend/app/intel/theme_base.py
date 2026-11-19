@@ -210,7 +210,17 @@ def industry_label(name) -> str:
     """An official industry as the name of a layer of its companies (d1): its plain name without the SEC's "Retail-" kind of prefix, in
     sentence case ("Retail-Family Clothing Stores" -> "Family clothing stores")."""
     t = re.sub(r"^[A-Za-z]+-\s*(?=[A-Z])", "", plain_industry(name)).replace(" & ", " and ")
-    return (t[:1].upper() + t[1:].lower()) if t else t
+    if not t:
+        return t
+    # fix20 (LIVE14B-005, the IT services sample deck: a layer "It services"): a word in capitals of the industry's own name (IT, BPO, EMS,
+    # LPG) keeps them; any other word is lower case after the first
+    caps = not plain_industry(name).isupper()
+
+    def part(w: str, first: bool) -> str:
+        if caps and len(w) >= 2 and w.isupper() and w.isalpha():
+            return w
+        return w[:1].upper() + w[1:].lower() if first else w.lower()
+    return " ".join("-".join(part(p_, i == 0 and j == 0) for j, p_ in enumerate(w.split("-"))) for i, w in enumerate(t.split(" ")))
 
 
 def key(name) -> str:
@@ -5763,7 +5773,7 @@ def listed_out(vc: list[dict], words_of, theme: str, moved_before: dict | None =
                 # moved out of a layer whose words still hold no line of it stays where that re-check put it, never flipping back
                 back = by_name.get(_HALF_RX.sub("", left)) if left and not left.startswith("Other ") else None
                 gone.append((c, back if back is not None and back is not v else rest_v,
-                             f"its own words hold no line that says what “{shown}” is: the last re-check moved it out, it stays where it was"))
+                             f"its own words hold no line that says what “{shown}” is: the last re-check moved it out of that layer, and it stays out"))
             else:
                 keep.append(c)
         if mostly:                        # (r65e: one kept by its words beyond the window, however its way of earning was read, marked too)
@@ -5928,9 +5938,35 @@ _MARKUP = re.compile(r"\*+|#+")
 _HEADING = re.compile(r"\s*\b(?:company|business|corporate)\s+(?:overview|profile|description)\s*:?|\s*\babout\s+(?:us|the\s+company)\s*:"
                       r"|\s+\b(?:(?:ultimate\s+)?holding|parent)\s+company\s*:|\s+\bregistered\s+office\s*:"
                       # r64e (LIVE11A-003: Deccan Cements "... wind sources Product Profile: a) Ordinary Portland Cement (OPC): ...")
-                      r"|\s+\b(?:product|products|key\s+products?)\s+(?:profile|portfolio|range|mix)\s*:", re.I)
+                      r"|\s+\b(?:product|products|key\s+products?)\s+(?:profile|portfolio|range|mix)\s*:"
+                      # fix20 (LIVE14A-003: Andhra Cements "...manufacturing and selling cement Corporate History & Ownership Changes Andhra
+                      # Cements Limited has undergone ..."): a page's heading in title case run into the text before the next sentence
+                      r"|\s+(?-i:(?:[A-Z][a-z]+\s+){0,2}(?:History|Overview|Background|Milestones|Timeline)(?:\s+(?:&|and)\s+[A-Z][a-z]+)*"
+                      r"(?:\s+[A-Z][a-z]+)?)(?=\s+[A-Z])", re.I)
+# R76 (CI: Sarda Proteins' "...deals in the trading of Solar Cells Business Overview: The co. historically dealt in protein and food products.
+# In Sep 2024, it expanded ... solar-cell manufacturing ...", cut at "Business Overview:", left no own words and was read as a food company):
+# own_words ends a line only at a page's title-case history heading run into it (Andhra Cements), never at the "Business Overview:" label a
+# description opens its account with
+_HEADING_RUN_IN = re.compile(r"\s+(?-i:(?:[A-Z][a-z]+\s+){0,2}(?:History|Overview|Background|Milestones|Timeline)(?:\s+(?:&|and)\s+[A-Z][a-z]+)*"
+                             r"(?:\s+[A-Z][a-z]+)?)(?=\s+[A-Z])(?!\s*:)")
 _GLUED = re.compile(r"(?i)\b(incorporated|established|founded|set up|formed)(in)(\d{4})")
 _HISTORY = re.compile(r"^(?:originally\s+)?(?:incorporated|established|founded|set up|formed|promoted)\b[^,.;]*?\b(?:in|on)\s+\d{4}\s*(?:,|as\b[^,]*,|and\b)?\s*", re.I)
+# fix20 (LIVE14A-003: Prism Johnson "...was incorporated in 1992 and is amongst the largest ..."): a founding clause after the company's name
+# left off, so its sentence says what it is now
+_HISTORY_MID = re.compile(r"\b(?:was|has been)\s+(?:originally\s+)?(?:incorporated|established|founded|set up|formed)\b[^,.;]*?\b(?:in|on)\s+"
+                          r"(?:\w+\s+)?(?:\d{1,2}(?:st|nd|rd|th)?,?\s+)?(?:19|20)\d\d\s*,?\s*and\s+(?=(?:is|are|has|have|operates|manufactures|makes|"
+                          r"provides|offers|sells|produces)\b)", re.I)
+# fix20 (LIVE14A-003: Shell "Measured by both its own emissions ..., Shell was the ninth-largest corporate producer of greenhouse gas emissions
+# in the period 1988–2015", an encyclopedia's sentence): a ranking in the past tense, a sentence opening "Measured by" or one of a period of
+# years is a third party's account, never the company's own words about its work
+_THIRD_PARTY = re.compile(r"\b(?:was|were)\s+(?:the|one\s+of\s+the|among\s+the)\s+(?:[\w-]+\s+){0,2}?(?:[\w]+-)?(?:largest|biggest|smallest|"
+                          r"top)\b|^measured\s+by\b|\bin\s+the\s+period\s+(?:19|20)\d\d", re.I)
+
+
+def without_history(text: str) -> str:
+    """fix20: a description's founding clause after the company's name left off ("X Limited was incorporated in 1992 and is ..." -> "X Limited
+    is ...")."""
+    return _HISTORY_MID.sub("", str(text or ""))
 # a results or sales line, not what the company does: "reported total dispatches of 7,34,403 units in October 2026"
 _PRESS = re.compile(r"\b(?:reported|announced|posted|recorded|registered|clocked)\b.{0,60}\d|\b\d[\d,.]*\s*(?:units|crore|lakh|million|billion)\b.{0,30}"
                     r"\b(?:in|for|during)\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|q[1-4]|fy)", re.I)
@@ -6163,6 +6199,14 @@ def own_words(text, name: str = "") -> str:
     # “Company,” “our,” or “we”)"): the bracket a filing defines its own name in says nothing of the work, and is left out
     t = _DEFINES.sub("", t).strip()
     t = t[:1].upper() + t[1:] if t[:1].islower() and str(text or "").lstrip(" “”\"'").startswith("(") else t
+    # fix20 (LIVE14A-003): a heading run into the text ends it there; a founding clause after the name is left off; a third party's account
+    # (a past ranking, "Measured by", a period of years) is no line of its own words
+    hd = _HEADING_RUN_IN.search(t)
+    if hd and hd.start() > 0:
+        t = t[:hd.start()].rstrip(" ,;:")
+    t = without_history(t)
+    if _THIRD_PARTY.search(t):
+        return ""
     if not t or t.startswith("From its own filings:") or _FILING_TITLE.match(t) or _ENCYCLOPEDIA.search(_ABBR_DOT.sub(r"\1", t)) or _ADDS.match(t) or _WHERE.match(t):
         return ""
     # r62 (LIVE10A-004): markup taken off; a cut subject or end, an unclosed quote, a ranked list or another company's subject is no line

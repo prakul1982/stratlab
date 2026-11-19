@@ -151,7 +151,8 @@ test("DP2-023, DP1-023, DP2-024: plain 'Sent by', no address printed, a far leve
 test("DP2-030: the daily report isn't shown ticked on Free; an empty email box says where alerts go; Daily explains itself", () => {
   const s = read("src/components/AlertSettings.tsx");
   assert.match(s, /<CheckField checked=\{canReport && alerts\.daily\} disabled=\{!canReport\}/);
-  assert.match(s, /hint=\{!alerts\.email\.trim\(\) && me\.email \? "Empty: alerts go to the email you sign in with\." : undefined\}/);
+  // (updated on purpose, site76 LIVE14B-014: the sign-in address needs confirming too, as the test button's line says)
+  assert.match(s, /hint=\{!alerts\.email\.trim\(\) && me\.email \? "Empty: alerts go to the email you sign in with, once it is confirmed\." : undefined\}/);
   assert.match(s, /k-hint-line k-form-wide" data-testid="alert-where"/);
   const n = read("src/components/NewslettersCard.tsx");
   assert.match(n, /if \(plan\) \{ setAsked\(\{ key, plan \}\); return; \}/);

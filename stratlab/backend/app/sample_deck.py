@@ -42,11 +42,20 @@ def pick(rows: list[dict], versions: list | None = None) -> dict | None:
     newest, else the newest; None when no current PDF is kept (the pages then show no link until a deck is made again)."""
     from .intel import theme_library
     pdfs = [r for r in rows if _is_pdf(r.get("label") or "") and current(r, versions)]
+    # fix20 (LIVE14B-005: the IT services deck, the newest kept, handed out as the showcase with engine notes in it): a deck whose publication
+    # gate passed every item first, SAMPLE_THEME's before any other; one with a failed item only when no clean one is kept
+    pdfs = sorted(pdfs, key=lambda r: not clean(r))
     region, theme = SAMPLE_THEME
     for r in pdfs:
-        if r.get("region") == region and theme_library.normalise(_name(r.get("label") or ""), region) == theme:
+        if r.get("region") == region and theme_library.normalise(_name(r.get("label") or ""), region) == theme and (clean(r) or not clean(pdfs[0])):
             return r
     return pdfs[0] if pdfs else None
+
+
+def clean(row: dict) -> bool:
+    """fix20: whether a kept deck's publication gate (kept with it: theme_routes.theme_dive_deck) passed every item."""
+    items = ((row.get("meta") or {}).get("gate") or {}).get("items")
+    return bool(items) and all(isinstance(x, dict) and x.get("ok") for x in items)
 
 
 def chosen(deck_id: str | None = None) -> dict | None:

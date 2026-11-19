@@ -6,12 +6,12 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, type ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { asOf, dayIn, fmtDate, marketTz, pct, price, quoteAt, safeHref, signed } from "../lib/format";
+import { asOf, dayIn, fmtDate, fmtTime, marketTz, pct, price, quoteAt, safeHref, signed } from "../lib/format";
 import { HELP } from "../lib/help";
 import { marketState } from "../lib/marketHours";
 import { eyebrowOf } from "../lib/eyebrow";
 import {
-  REGION_NAME, SETTLING, atPrice, holderRowName, STARTER_TICKERS, bigMoney, canonTicker, linkLabel, settlingNow, indexWhen, metricText, monthsOld, priceLabel, pulseClosedDay, pulseLede, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist, watchNote, withMore,
+  REGION_NAME, SETTLING, atPrice, holderRowName, STARTER_TICKERS, bigMoney, canonTicker, linkLabel, settlingNow, indexWhen, metricText, monthsOld, priceLabel, pulseClosedDay, pulseDelayedAt, pulseLede, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist, watchNote, withMore,
   type Company, type CompareAI, type Idea, type IndexLevel, type PulseAI, type PulseData, type Quote, type Region, type WatchItem,
 } from "../lib/research";
 import { askAgain, PULSE_PENDING_EVERY_MS, PULSE_SLOW_MS, pulseLoad } from "../lib/pulseLoad";
@@ -90,11 +90,14 @@ export function indexLevel(name: string, price: number): string {
   return price.toLocaleString(name.includes("NIFTY") || name === "SENSEX" ? "en-IN" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/** An index's market zone, from its name (India's are NIFTY and SENSEX), for the time of a delayed level. */
+const indexTz = (name: string) => marketTz(/NIFTY|SENSEX/.test(name) ? "IN" : "US");
+
 export function IndexStrip({ indices, missing }: { indices: IndexLevel[] | null; missing?: string[] }) {
   if (!indices) return <div className="k-skel-index"><Skeleton label="Loading the market" lines={2} /></div>;          // the table's height while it loads (LIVE3-012)
   if (!indices.length) return <EmptyState title="Index levels are unavailable right now">They come back on their own; this page checks again when you open it.</EmptyState>;
   // a table, not tiles each with its own small line (MOOD-1, the owner's "wherever you can, just make a table")
-  return <IndexTable indices={indices} missing={missing} dayText={(d) => fmtDate(d, { year: false })} whenOf={(i) => indexWhen(i, (d) => fmtDate(d, { year: false }))} />;
+  return <IndexTable indices={indices} missing={missing} dayText={(d) => fmtDate(d, { year: false })} whenOf={(i) => indexWhen(i, (d) => fmtDate(d, { year: false }), (t) => fmtTime(t, { tz: indexTz(i.name), zone: true }))} />;
 }
 
 /** A box that finds a company by name or symbol and opens its page. */
@@ -133,7 +136,8 @@ function usePulse(region: Region) {
   }, [region, again]);
   // the levels again each minute while they're live, in place: a failed read keeps the ones shown
   const reload = () => { researchApi.pulse(region).then((d) => { if (!d.pending && d.indices.length) setData((cur) => (cur ? d : cur)); }).catch(() => undefined); };
-  useLiveRefresh(!!data?.indices.some((i) => i.live), reload);
+  // a delayed level is asked for again too: the next read may be live (LIVE14A-001)
+  useLiveRefresh(!!data?.indices.some((i) => i.live || i.delayed), reload);
   return { data, error, slow, state: pulseLoad({ data, error, slow }), retry: () => setAgain((n) => n + 1), reload };
 }
 
@@ -567,7 +571,7 @@ export function PulsePage() {
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/pulse")} title={PULSE_TITLE}
-        lede={pulseLede((() => { const d = pulseClosedDay(data?.indices); return d ? fmtDate(d, { year: false }) : null; })(), !!data?.indices.some((i) => i.settling))}
+        lede={pulseLede((() => { const d = pulseClosedDay(data?.indices); return d ? fmtDate(d, { year: false }) : null; })(), !!data?.indices.some((i) => i.settling), (() => { const t = pulseDelayedAt(data?.indices); return t ? fmtTime(t, { tz: marketTz(region), zone: true }) : null; })())}
         asOf={data?.indices.map((i) => i.at).filter(Boolean).sort().pop() ?? undefined} asOfPending={!data} asOfLabel="Prices as of" asOfTz={marketTz(region)} />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
       <Card><CardHead title={`${REGION_NAME[region]} index levels`} /><PulseLevels p={levels} /></Card>

@@ -1439,10 +1439,14 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
     name = public_text(p.get("name") or symbol)
     if region == "US":
         name = strip_registration(name)
+        if p.get("registrant") and name:
+            # fix20 (owner, 18 Nov: "Exxon Mobil Corporation"): a company whose figures are its predecessor's reports is named as that
+            # registrant names itself (sec.SEC.company); the listed holding company's own name kept beside it, so a theme shows this one
+            checks = {**checks, "registrant": public_text(str(p["registrant"]))}
     return {
         "v": FACTS_VERSION, **{k: checks[k] for k in ("sales_usd", "cap_unverified", "not_company", "divs_paid", "pe_basis", "pe_end", "eps",
                                                       "foreign", "profit_usd", "annual_unread", "annual_filed", "annual_form", "no_numbers", "cap_why",
-                                                      "type_unread", "eps_q", "no_interest", "pe_oneoff", "revenue_basis")
+                                                      "type_unread", "eps_q", "no_interest", "pe_oneoff", "revenue_basis", "registrant")
                                if checks.get(k) is not None},
         "region": region, "symbol": symbol, "name": name, "exchange": exchange,
         "industry": _dedupe(public_text(str(x)) for x in (p.get("industry_path") or []) if x)[:4],
@@ -1573,7 +1577,8 @@ def unique_filings(rows: list[dict]) -> list[dict]:
     return out
 
 
-_REGISTRATION = re.compile(r"\s*/\s*(?:[A-Za-z]{2,3}|NEW)\s*/?\s*$")      # "/DE/", "/MD/", "/CAN/" (any case), "/NEW"
+# "/DE/", "/MD/", "/CAN/" (any case), "/NEW"; fix20 (the live R75 US Steel and metals deck: "Southern Copper Corp/"): a lone trailing "/"
+_REGISTRATION = re.compile(r"\s*/\s*(?:(?:[A-Za-z]{2,3}|NEW)\s*/?)?\s*$")
 
 
 def strip_registration(name: str | None) -> str | None:
@@ -2459,6 +2464,7 @@ th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:
 .badge{display:inline-block;border:1px solid var(--orange-ink);color:var(--orange-ink);background:var(--orange-soft);border-radius:999px;padding:2px 10px;font-size:13px;font-weight:600}
 /* LIVE9A-011: a public theme layer's companies as a table: names and tickers left, figures right, the name wrapping, sideways scroll on a phone */
 .cotbl{overflow-x:auto}.cotbl th.l,.cotbl td.l{text-align:left}.cotbl td:first-child{white-space:normal;min-width:150px;position:static}
+.cotbl td[data-label=Membership]{white-space:normal;min-width:8em}.cotbl td[data-label=Revenue]{white-space:normal}.cotbl td[data-label=Revenue]>span>span{white-space:nowrap}
 .cotbl th:first-child{position:static}
 @media (max-width:640px){.cotbl[data-stack]{overflow:visible}.cotbl[data-stack] table,.cotbl[data-stack] tbody{display:block;min-width:0;width:100%}.cotbl[data-stack] thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}.cotbl[data-stack] tr{display:block;padding:10px 0;border-bottom:1px solid var(--line)}.cotbl[data-stack] td{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:2px 0;border:0;white-space:normal;text-align:right}.cotbl[data-stack] td:first-child{display:block;min-width:0;font-weight:600;padding:0 0 4px;text-align:left}.cotbl[data-stack] td[data-label]::before{content:attr(data-label);flex:none;color:var(--muted);font-size:13px;font-weight:400;text-align:left}}
 ul.plain{list-style:none;padding:0;margin:0}ul.plain li{padding:10px 0;border-bottom:1px solid var(--line)}ul.plain li:last-child{border-bottom:0}
@@ -2680,9 +2686,12 @@ _WORDS3 = {"THE", "AND", "FOR", "OIL", "GAS", "NEW", "ONE", "TWO", "SUN", "AIR",
            "AMP", "ARC", "ASH", "AVE", "BEE", "BET", "BUS", "COM", "DAY", "DEN", "DIG", "DRY", "EGG", "ELF", "END", "ERA", "FAN", "FAR", "FEW",
            "GEM", "GUY", "HAT", "HIT", "INK", "INN", "ION", "JOY", "LEE", "LEG", "LID", "LOT", "MAP", "MET", "NUT", "ODD", "OLD", "ORE", "PAN",
            "PEN", "PIE", "PIN", "RIM", "ROW", "RUB", "SAT", "SET", "SON", "TAP", "TIE", "TIP", "TOW", "TUB", "URN", "VIA", "WAX", "ZEN", "ACT",
-           "ADD", "ANT", "ASK", "ILL", "OFF", "SPA", "TRY", "FLY", "FRY", "SHY", "STY", "DRY", "CRY", "SLY", "SPY", "PLY", "GYM", "MRS", "INT"}
+           "ADD", "ANT", "ASK", "ILL", "OFF", "SPA", "TRY", "FLY", "FRY", "SHY", "STY", "DRY", "CRY", "SLY", "SPY", "PLY", "GYM", "MRS", "INT",
+           "GAP", "PAR", "JOE"}
 _KEEP_UPPER = {"IBM", "AMD", "AIG", "UPS", "PNC", "PPG", "ICE", "CME", "USA", "US", "UK", "LLC", "LP", "NV", "SA", "AG", "SE", "ETF",
-               "REIT", "ADR", "II", "III", "IV", "NVIDIA", "ASML", "HSBC", "UBS", "BHP", "SAP", "TSMC", "KLA", "CSX", "AT&T"}
+               "REIT", "ADR", "II", "III", "IV", "NVIDIA", "ASML", "HSBC", "UBS", "BHP", "SAP", "TSMC", "KLA", "CSX", "AT&T",
+               # fix20 (the live R75 decks: "Gatx Corp", "Caci International", "Veon", "Equinor Asa"): letters, and the legal forms ASA and SAB
+               "GATX", "CACI", "VEON", "ASA", "SAB"}
 # words title case gets wrong, as the companies write them
 _SPELLED = {"JPMORGAN": "JPMorgan", "PAYPAL": "PayPal", "MCDONALDS": "McDonalds", "EBAY": "eBay", "BLACKROCK": "BlackRock",
             "FEDEX": "FedEx", "MASTERCARD": "Mastercard", "SALESFORCE": "Salesforce", "SERVICENOW": "ServiceNow",
@@ -2690,19 +2699,28 @@ _SPELLED = {"JPMORGAN": "JPMorgan", "PAYPAL": "PayPal", "MCDONALDS": "McDonalds"
             "CONOCOPHILLIPS": "ConocoPhillips", "PEPSICO": "PepsiCo", "ABBVIE": "AbbVie", "NVIDIA": "NVIDIA", "AUTOZONE": "AutoZone",
             "MCKESSON": "McKesson", "MCCORMICK": "McCormick", "DOORDASH": "DoorDash", "CROWDSTRIKE": "CrowdStrike",
             "MONGODB": "MongoDB", "DUPONT": "DuPont", "GODADDY": "GoDaddy", "HUBSPOT": "HubSpot", "DEXCOM": "DexCom",
-            "NETAPP": "NetApp", "ONEOK": "ONEOK", "IDEXX": "IDEXX", "BIOGEN": "Biogen"}
+            "NETAPP": "NetApp", "ONEOK": "ONEOK", "IDEXX": "IDEXX", "BIOGEN": "Biogen",
+            "MCMORAN": "McMoRan"}           # fix20 (the live R75 US Steel and metals deck: "Freeport-Mcmoran"): read in each part of a hyphened word
 
 
-def proper_name(name: str | None) -> str | None:
+def proper_name(name: str | None, symbol: str | None = None) -> str | None:
     """A company name that arrives in capitals from a filing ("MICROSOFT CORP") in title case ("Microsoft Corp"); acronyms
     (IBM, AT&T, a short run of consonants like CVS) and a name that already has lower case are left as they are; a filing's
     state suffix ("APPLIED MATERIALS INC /DE", "REALTY /MD/") or a re-registration mark ("COSTCO WHOLESALE CORP /NEW") is
-    dropped. A capitals name with a mixed-case ending ("ELI LILLY & Co") counts as capitals."""
+    dropped. A capitals name with a mixed-case ending ("ELI LILLY & Co") counts as capitals.
+    fix20 (the live R75 decks: "Ati" for ATI Inc, "Nov Inc." for NOV Inc., "Bok Financial", "Southern Copper Corp/"): a lone trailing
+    "/" is dropped (strip_registration); a name of three-letter words only with its legal form in its own case ("NOV Inc.", "SES AI
+    Corp") is the company's own spelling and kept; with the company's `symbol`, a three-letter word that is the symbol or its start
+    ("ATI" of ATI, "BOK" of BOKF: a four-letter symbol's start) and no word (_WORDS3) is its letters."""
     if name:
         name = strip_registration(name) or name
         # an index list's "Home Depot (The)" is "The Home Depot"
         name = re.sub(r"^(.+?),?\s*\(The\)$", r"The \1", name.strip(), flags=re.I)
     core = re.sub(r"\s+(?:Co|Inc|Corp|Ltd)\.?$", "", name or "")
+    caps = re.findall(r"[A-Za-z]+", core)
+    if name and re.search(r"[a-z]", name) and core == core.upper() and caps and all(len(w) <= 3 and w not in _WORDS3 for w in caps):
+        return name
+    sym = re.sub(r"[^A-Z]", "", str(symbol or "").upper())
     if name and core != core.upper() and re.search(r"[a-z]", core):
         # a name in its own case with the filing's legal ending in capitals ("TransDigm Group INC", "TFS Financial CORP") or a joining
         # word in title case ("Bank Of Montreal"): only those words change (rel1, LIVE9A-011)
@@ -2723,14 +2741,18 @@ def proper_name(name: str | None) -> str | None:
             return w.replace(core, _SPELLED[core])
         if core in ("LTD", "CO", "INC", "CORP"):
             return w[:1] + w[1:].lower()
+        if core == "SPA" and w == name.split(" ")[-1]:          # fix20 (the live R75 US Oil and gas deck: "Eni Spa"): an Italian SpA
+            return w.replace("SPA", "SpA")
         if core in _KEEP_UPPER or (len(core) <= 4 and not re.search(r"[AEIOUY]", core)) or re.search(r"[A-Za-z]&[A-Za-z]", w):
             return w
-        if len(core) == 3 and core.isalpha() and core not in _WORDS3 and re.search(r"[^AEIOUY]{2}", core):
+        if len(core) == 3 and core.isalpha() and core not in _WORDS3 and (re.search(r"[^AEIOUY]{2}", core) or sym == core or (len(sym) == 4 and sym.startswith(core))):
             return w                                  # three letters with two consonants together that aren't a word are letters: "UFJ", "GSI" (rel1, LIVE9A-011)
         if core in ("OF", "AND", "THE", "FOR") and w != name.split(" ")[0]:
             return w.lower()
-        return "-".join(x[:1] + x[1:].lower() for x in w.split("-"))
-    return re.sub(r"\bAmazon Com\b", "Amazon.com", " ".join(word(w) for w in name.split(" ")))
+        return "-".join(x.replace(p_, _SPELLED[p_]) if p_ in _SPELLED else x[:1] + x[1:].lower()
+                        for x in w.split("-") for p_ in [re.sub(r"[^A-Za-z&]", "", x)])
+    out = re.sub(r"\bAmazon Com\b", "Amazon.com", " ".join(word(w) for w in name.split(" ")))
+    return re.sub(r"\b(SAB?) De (CV)\b", r"\1 de \2", out)              # fix20: a Mexican "SAB DE CV" as written, "SAB de CV"
 
 
 _IN_SMALL = {"of", "and", "the", "for", "in", "to", "on", "at", "by"}
@@ -2860,7 +2882,7 @@ def render(f: dict | None, region: str, symbol: str, name: str | None, extras: d
     canonical = site + path(region, symbol)
     name = (f or {}).get("name") or name or symbol
     if region == "US":                    # filings' capitals; Indian names are kept as listed ("ITC Ltd", not "Itc Ltd")
-        name = proper_name(name)
+        name = proper_name(name, symbol)
     else:
         name = tidy_in_name(name)           # (LIVE2-017) "Of" and "TATA CONSUMER PRODUCTS LIMITED" in one style
     market = "US" if region == "US" else "IN"
@@ -3686,7 +3708,7 @@ def label_of(region: str, symbol: str, co: dict | None = None) -> str:
     with no name."""
     co = co if co is not None else companies(region).get(symbol) or {}
     name = co.get("name")
-    return str((proper_name(name) if region == "US" else tidy_in_name(name)) or symbol)
+    return str((proper_name(name, symbol) if region == "US" else tidy_in_name(name)) or symbol)
 
 
 def directory(region: str) -> dict:

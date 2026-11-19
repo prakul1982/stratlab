@@ -113,7 +113,8 @@ test("R90-008/010/012: a US company's move says its day after the close; Pulse a
   assert.match(read("src/components/Research.tsx"), /closed && \(q\.change_day \|\| quoteDay\) \? `on \$\{fmtDate\(\(q\.change_day \|\| quoteDay\)!, \{ year: false \}\)\}` : since/);
   // (updated on purpose, LIVE9A-031: one fixed title; live or last close is said in the line under it, pulseLede)
   assert.match(read("src/pages/Research.tsx"), /title=\{PULSE_TITLE\}/);
-  assert.match(read("src/lib/researchFormat.ts"), /closedDay \? `Last close, \$\{closedDay\}: index levels` : "Live index levels"/);
+  // (updated on purpose, site76 LIVE14A-001: in the session a level the source stopped updating says its time, never "Live")
+  assert.match(read("src/lib/researchFormat.ts"), /closedDay \? `Last close, \$\{closedDay\}: index levels`\n    : delayedAt \? `Index levels as of \$\{delayedAt\}, the latest the price source has sent,` : "Live index levels"/);
   assert.match(read("src/pages/money/MoneyCalendarPage.tsx"), /asOfLabel="As of"/);
 });
 

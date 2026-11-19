@@ -23,6 +23,7 @@ import { STAGES_EXPLAINED } from "../lib/stageNote";
 import { SaveButton, SavedList } from "../components/SavedSearches";
 import { readSaved } from "../lib/saved";
 import { unreadLine, unreadSymbols } from "../lib/filingsText";
+import { MARKS, scanNotes } from "../lib/scanNotes";
 import { FilingRow, SummaryLine, type FilingItem, type FilingSummary } from "../components/Filings";
 import { QUADRANTS, QuadrantTag, RotationChart, useAnimate, type Quadrant, type RotationRow } from "../components/Rotation";
 import {
@@ -320,7 +321,12 @@ export function ScanPage() {
           {preset.rules && <p className="k-note" data-testid="custom-rules-said">Rules: {preset.rules.join("; ")}. {preset.within === 1 ? "A match is a stock where they held on the latest candle." : `A match is a stock where they held on any of the last ${preset.within} candles.`}</p>}
           {preset.basis === "whole_session" && <p className="k-note" data-testid="scan-whole-session">The session is still going. A volume rule holds a whole day's volume against an average, so it is judged on the last whole session; today's volume so far is not compared.</p>}
           {preset.live && !preset.basis && <p className="k-note" data-testid="scan-live-note">The session is still going: each price is the last price so far, not a close.</p>}
-          <DataTable csv={`scan ${preset.name}`} stack phonePage={25} label={`${preset.name}: ${preset.scan_name}`} rows={preset.rows} rowKey={(r) => r.symbol} sticky={preset.rows.length > 12} empty="No stock matches this rule right now."
+          {(() => {
+            // LIVE14B-009: the special-sessions bracket said once under the table, its mark on each row it applies to
+            const said = scanNotes(preset.rows.map((r) => r.detail));
+            const rows = preset.rows.map((r, i) => ({ ...r, detail: said.details[i] ?? r.detail }));
+            return <>
+          <DataTable csv={`scan ${preset.name}`} stack phonePage={25} label={`${preset.name}: ${preset.scan_name}`} rows={rows} rowKey={(r) => r.symbol} sticky={preset.rows.length > 12} empty="No stock matches this rule right now."
             columns={[
               { key: "s", header: "Stock", rowHeader: true, wrap: true, cell: (r) => (
                 <><Link className="link" to={link(r.symbol)}><b>{r.symbol}</b></Link>
@@ -330,6 +336,9 @@ export function ScanPage() {
               { key: "m", header: preset.scan === CUSTOM_ID ? "Matches your rules" : `Matches ${scan.name.toLowerCase()}`, wrap: true, lead: true, cell: (r) => <>{asOf(r.day)}<span className="k-sub-line">{sessions(r.days_ago, preset.basis ? "whole" : preset.live ? "live" : undefined)}</span></> },
               { key: "d", header: "The numbers", wrap: true, cell: (r) => r.detail || "–" },
             ]} />
+          {said.notes.map((n, i) => <p key={n} className="k-note" data-testid="scan-sessions-note">{MARKS[i]} {n}</p>)}
+            </>;
+          })()}
           {preset.matches > preset.rows.length && <p className="k-note">Showing the first {preset.rows.length} of {preset.matches.toLocaleString("en-IN")} matches, the most recent first.</p>}
           {(preset.missing.length > 0 || preset.problems.length > 0) && <p className="k-note">Skipped: {[...preset.missing, ...preset.problems].join(" · ")}</p>}
         </Card>

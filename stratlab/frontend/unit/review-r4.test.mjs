@@ -143,7 +143,8 @@ test("the sidebar shows which edge has more behind it, and its scrollbar on hove
 test("Settings words its test line from the boxes that are there (R4-020)", () => {
   const s = read("components/AlertSettings.tsx");
   assert.match(s, /ch\.telegram && "save a Telegram chat ID"/);
-  assert.match(s, /ch\.email && "save an email address and confirm it"/);
+  // (updated on purpose, site76 LIVE14B-014: with the box empty, the sign-in address is the one to confirm)
+  assert.match(s, /ch\.email && \(!alerts\.email\.trim\(\) && me\.email \? "confirm the email you sign in with, or save another and confirm it" : "save an email address and confirm it"\)/);
   assert.match(s, /ch\.push && "turn on phone notifications"/);
   assert.match(s, /disabled=\{!!testWhy\} title=\{testWhy \?\? undefined\}/);
 });

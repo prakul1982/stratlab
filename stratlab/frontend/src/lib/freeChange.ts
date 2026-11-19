@@ -41,5 +41,6 @@ export function graceLine(fc: FreeChange): string {
   const moved = fc.rows.filter((r) => r.before !== r.after), n = moved.length;
   // LIVE13B-006: "your earlier limits on 10 counts" read like ten backtests; it is how many of the card's limits are still the earlier ones
   const higher = n > 0 && moved.every((r) => r.before == null || (r.after != null && r.before > r.after)) ? "earlier, higher" : "earlier";
-  return `Until ${changeDay(fc.on)}, ${n === 1 ? `one of the limits above stays at your ${higher} level` : `${n} of the limits above stay at your ${higher} levels`}.`;
+  // LIVE14B-016: "10 of the limits above" stood under a card listing 5; the count is of the account's limits, each in Account's table
+  return `Until ${changeDay(fc.on)}, ${n === 1 ? `one of your Free limits stays at your ${higher} level` : `${n} of your Free limits stay at your ${higher} levels`}.`;
 }

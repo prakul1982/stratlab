@@ -73,7 +73,10 @@ PRETAX = ("IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItems
           "IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments",
           "ProfitLossBeforeTax")
 TAX = ("IncomeTaxExpenseBenefit", "IncomeTaxExpenseBenefitContinuingOperations", "IncomeTaxExpenseContinuingOperations")
-INTEREST = ("InterestExpense", "InterestExpenseNonoperating", "InterestExpenseDebt", "InterestAndDebtExpense", "FinanceCosts")
+# fix20 (the live R75 US Steel and metals deck: Metallus "EBITDA margin not stored", its 10-K giving no operating profit line and its interest
+# as InterestExpenseOperating): the last one read, a lender's interest never added back (build `lender`)
+INTEREST = ("InterestExpense", "InterestExpenseNonoperating", "InterestExpenseDebt", "InterestAndDebtExpense", "FinanceCosts",
+            "InterestExpenseOperating")
 # a bank's revenue when it files no total: interest and dividend income plus everything else it earns (fees)
 BANK_INTEREST = ("InterestAndDividendIncomeOperating", "InterestIncomeOperating", "InterestAndFeeIncomeLoansAndLeases",
                  "InterestAndFeeIncomeLoansAndLeasesHeldInPortfolio", "RevenueFromInterest")

@@ -117,6 +117,20 @@ function bestYear(r: Report, cur: number | null, asked: number | null): { fy: nu
   return openFy(r.years.map((y) => y.fy), r.current_fy, (fy) => r.years.some((y) => y.fy === fy && hasTrades(y)), undefined, cur == null ? asked : null);
 }
 
+/** LIVE14B-008: what the report put above the upload card on this browser's last visit (the year's tax and the "Prices as of" pill), so
+ * the first frame holds their place: on a phone both came in at ~5.5 s and pushed "Upload your trades" ~200 px down (CLS 0.168). With
+ * nothing kept the place is held (most visits are by someone with trades); a visit with none forgets it. */
+const HOLD_KEY = "stratlab.tax.hold.v1";
+export function taxHold(): { head: boolean; pill: boolean } {
+  try {
+    const v = JSON.parse(localStorage.getItem(HOLD_KEY) ?? "null");
+    return v && typeof v === "object" ? { head: v.head !== false, pill: v.pill !== false } : { head: true, pill: true };
+  } catch { return { head: true, pill: true }; }
+}
+function keepTaxHold(v: { head: boolean; pill: boolean }) {
+  try { localStorage.setItem(HOLD_KEY, JSON.stringify(v)); } catch { /* a private window: the place is held next time too */ }
+}
+
 export function TaxReportPage() {
   const { fail, notify, me } = useApp();
   // FREE-TIER: the report on screen is for everyone; its CSV and PDF downloads are Basic's (a Free account in its grace still has them)
@@ -216,6 +230,8 @@ export function TaxReportPage() {
   const y = useMemo(() => rep?.years.find((x) => x.fy === fy) ?? null, [rep, fy]);
   const name = (k: string) => rep?.names[k]?.symbol ?? k;
   const has = !!rep && (rep.trades > 0 || rep.business_lines > 0 || (rep.mf?.count ?? 0) > 0);
+  const [hold] = useState(taxHold);
+  useEffect(() => { if (rep) keepTaxHold({ head: !!(has && y?.total.available), pill: !!rep.below_cost.open }); }, [rep, has, y]);
 
   // DH-005: the year's losses (and those brought in) are rows too, so each column adds up to the net shown under it
   const lossRows: Bucket[] = y ? [
@@ -269,7 +285,7 @@ export function TaxReportPage() {
   // today's prices only value open lots: with none open, nothing here is at today's price, so no "Prices as of" (R64-010)
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Money · Tax" title="Capital gains on your shares" asOf={rep?.below_cost.open ? rep.prices_at : undefined} asOfLabel="Prices as of"
+      <PageHeader eyebrow="Money · Tax" title="Capital gains on your shares" asOf={rep?.below_cost.open ? rep.prices_at : undefined} asOfPending={!rep && !error && hold.pill} asOfLabel="Prices as of"
         lede="Your tradebooks from every broker, matched first in, first out: short- and long-term gains for each financial year, with the exemption and set-off."
         info="Add F&O and your other income for the year's total tax. Only you can see your trades." infoLabel="About the tax report" />
       {/* LIVE1B-068: a year with no trades (a link to this year, or a returning visit) says so, and where the trades are, beside the
@@ -283,6 +299,7 @@ export function TaxReportPage() {
         ) : null;
       })()}
       {rep && has && y && <Headline y={y} payable={rep.payable?.fy === y.fy ? rep.payable : null} />}
+      {!rep && !error && hold.head && <Card compact label="The year's tax" className="tax-head-hold"><Skeleton label="Working out the year's tax" lines={1} /></Card>}
       {/* LIVE1B-010: the note is one sentence; what the estimate covers is said once, in the total's card */}
       <Notice label="Estimate only"><b>Estimate only.</b> An estimate from the files you uploaded and the income you entered, not tax advice. Check it with a chartered accountant (CA) before you file or pay tax.</Notice>
 
@@ -561,7 +578,7 @@ function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omi
             {/* VR1-144: no second copy of the total's figure here: the summary at the top of the page and the table below carry it */}
             <span className="k-note">{REGIME[t.regime]} · {y.inputs.resident ? "resident" : "non-resident"}, aged {AGE_TEXT[y.inputs.age ?? "below60"]}{t.rebate > 0 ? ` · 87A rebate ${inr(t.rebate)}` : ""}{t.surcharge > 0 ? ` · surcharge ${inr(t.surcharge)}` : ""} · cess {inr(t.cess)}{!y.inputs.saved ? " · no other income entered yet" : ""}</span>
           </div>
-          <FigureTable label="Where the tax comes from" header="Income" valueHeader="Amount" noteHeader={null}
+          <FigureTable label="Where the tax comes from" header="Tax" valueHeader="Amount" noteHeader={null}
             rows={chips.map(([label, v, info]) => ({ key: label, label: <>{label} <Info label={`About ${label}`}>{info}</Info></>, value: inr(v) }))} />
           {y.other_regime && <p className="k-note">With the same figures, the {REGIME[y.other_regime.regime].toLowerCase()} works out to {inr(y.other_regime.total)}{y.other_regime.regime === "old" ? " (with the deductions entered, if any)" : ""}.</p>}
           {/* the Act's renumbering is said once, in the working below, not here as well (LIVE9B-018: printed twice on the page) */}

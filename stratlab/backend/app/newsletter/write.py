@@ -40,6 +40,11 @@ ALLOWED_CAPS = {"US", "IN", "IST", "AI", "NSE", "BSE", "ST", "S2", "IPO", "QIP",
 _cache = TTLCache(max_items=200)
 
 
+
+def group_words(group: str) -> str:
+    """A scanned group as "from the …" says it: "the NIFTY 50", never "the NIFTY 50 stocks" after "2 stocks" (LIVE14A-020)."""
+    return re.sub(r"\s+stocks$", "", str(group or "").strip())
+
 def banned(text: str) -> bool:
     return bool(_BANNED.search(text or ""))
 
@@ -89,7 +94,7 @@ def other_fact(sections: list[dict] | None) -> str | None:
         if title.startswith(("Newly matched Stage 2", "Newly in Stage 2")) and items:
             group = re.search(r"\(([^)]+)\)\s*$", title)
             rule = "the Stage 2 + Supertrend rule" if title.startswith("Newly matched") else "Stage 2"
-            return f"{len(items)} stock{'s' if len(items) != 1 else ''}{f' from the {group.group(1)}' if group else ''} newly matched {rule}."
+            return f"{len(items)} stock{'s' if len(items) != 1 else ''}{f' from the {group_words(group.group(1))}' if group else ''} newly matched {rule}."
     heads = [str(i.get("text") or "").strip() for i in by.get("Headlines") or [] if isinstance(i, dict) and str(i.get("text") or "").strip()]
     return f"In the headlines: {heads[0].rstrip('.')}." if heads else None
 
@@ -326,7 +331,7 @@ def template(f: dict) -> str:
         scan = f.get("scan") or {}
         if scan.get("st_s2"):
             n = len(scan["st_s2"])
-            parts.append(f"{n} stock{'s' if n != 1 else ''} from the {scan['group']} newly matched the Stage 2 + Supertrend rule {'in the last 5 days' if f['weekly'] else 'today'}.")
+            parts.append(f"{n} stock{'s' if n != 1 else ''} from the {group_words(scan['group'])} newly matched the Stage 2 + Supertrend rule {'in the last 5 days' if f['weekly'] else 'today'}.")
         if scan.get("stage2"):
             n = len(scan["stage2"])
             parts.append(f"{n} {'other ' if scan.get('st_s2') else ''}stock{'s' if n != 1 else ''} newly entered Stage 2 {'in the last 5 days' if f['weekly'] else 'today'} without the Supertrend.")

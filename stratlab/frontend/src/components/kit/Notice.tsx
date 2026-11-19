@@ -5,7 +5,7 @@ import { useLockSlot } from "../../lib/lockSlot";
 import type { StateAction } from "./States";
 import { CFG } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { canBuy, unlockHint } from "../../lib/offer";
+import { canBuy, priceAfterWords, unlockHint } from "../../lib/offer";
 import { usePlanPrice } from "../../lib/currency";
 import { PlanActions } from "../PlanInterest";
 import { Lock } from "../Icons";
@@ -49,9 +49,14 @@ export function PlanNote({ children, plan }: { children: ReactNode;
   const { me } = useApp();
   const words = useRef<HTMLSpanElement>(null);
   const [named, setNamed] = useState<"basic" | "pro" | null>(null);
+  // LIVE14A-016 (LIVE13A-017): the words ending on what that plan gives ("…Basic gives 5 a month.") take its price as "It is ₹699 a month…",
+  // not "Basic is ₹699 a month…" (the plan named twice in a row)
+  const [said, setSaid] = useState("");
   useLayoutEffect(() => {
-    const m = /\b(Basic|Pro)\b/.exec(words.current?.textContent ?? "");
+    const text = words.current?.textContent ?? "";
+    const m = /\b(Basic|Pro)\b/.exec(text);
     setNamed(m ? (m[1] === "Pro" ? "pro" : "basic") : null);
+    if (text !== said) setSaid(text);
   });
   const price = usePlanPrice(plan ?? named);
   // one lock wording everywhere (DP2-022, DP1-018): the line icon, what is locked and on which plan (and when a monthly count
@@ -69,6 +74,6 @@ export function PlanNote({ children, plan }: { children: ReactNode;
     if (now !== again) setAgain(now);
   });
   return <Notice className="plan-note" actions={<PlanActions source="lock" />}><span className="plan-lock" aria-hidden="true"><Lock /></span><span ref={words}>{children}</span>{" "}
-    <span ref={priced} data-plan-price={price ?? undefined}>{unlockHint(me?.offer, CFG.CONTACT_EMAIL || undefined, again ? null : price)}</span>
+    <span ref={priced} data-plan-price={price ?? undefined}>{unlockHint(me?.offer, CFG.CONTACT_EMAIL || undefined, again ? null : priceAfterWords(said, price))}</span>
     {waiting && <span className="k-meta-wait" aria-hidden="true" data-price-wait>Basic is ₹000 a month (about $0) or ₹0,000 a year (about $00).</span>}</Notice>;
 }

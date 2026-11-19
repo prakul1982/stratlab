@@ -39,7 +39,8 @@ async function sane(page: Page, errors: string[]) {
 
 test("O5, O6: a brief's sections are tables, and the PDF button downloads the brief", async ({ page }, info) => {
   const phone = info.project.name === "phone";
-  const errors = await open(page, "/news?tab=IN", "Briefs", phone ? 283 : 282);
+  // (updated on purpose, site76 LIVE14A: the page's heading is "Today's brief", as its menu item and tab say; ready on its own line)
+  const errors = await open(page, "/news?tab=IN", "After each market close", phone ? 283 : 282);
   // the daily issue, opened by name: on a Saturday the newest issue is the weekly one, whose index table has "Week %" in place of
   // the day's change and the 52-week high (it failed every weekend while the test read whichever issue came first)
   await page.getByRole("button", { name: /Market Brief India/ }).filter({ hasNotText: "Weekly" }).first().click();

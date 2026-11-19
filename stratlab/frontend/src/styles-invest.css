@@ -219,6 +219,9 @@
 .biz-old { color: var(--muted); }
 .res-sym { display: flex; align-items: baseline; gap: 6px; flex-wrap: nowrap; white-space: nowrap; min-width: 0; }
 .res-moves { display: flex; flex-wrap: wrap; gap: 0 8px; }
+/* LIVE14A-001: a price the source stopped updating mid-session carries its time under it ("as of 10:52 ET") */
+.res-px { display: inline-flex; flex-direction: column; align-items: flex-end; line-height: 1.3; }
+.res-px-at { white-space: nowrap; }
 /* a results row is two lines (owner, 5 Nov): the symbol, its tags and the name, then the meeting and a small filing link; what is longer than
    the column ends in an ellipsis, the whole of it in the tooltip */
 .res-co { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; min-width: 11rem; max-width: 19rem; line-height: 1.4; }

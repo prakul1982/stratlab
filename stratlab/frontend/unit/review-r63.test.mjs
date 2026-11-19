@@ -36,7 +36,8 @@ test("R63-002: prices on an open page are read again each minute while they're l
   assert.equal(liveQuote("2026-10-16T10:00:00Z", now), false);
   assert.equal(liveQuote(null, now), false);
   const src = read("src/pages/Research.tsx");
-  assert.match(src, /useLiveRefresh\(!!data\?\.indices\.some\(\(i\) => i\.live\)/);
+  // (updated on purpose, site76 LIVE14A-001: a delayed level is asked for again too)
+  assert.match(src, /useLiveRefresh\(!!data\?\.indices\.some\(\(i\) => i\.live \|\| i\.delayed\)/);
   assert.match(src, /useLiveRefresh\(!!c\?\.market_open && \(c\.quote\?\.at == null \|\| liveQuote\(c\.quote\.at\)\)/);
   assert.match(src, /useLiveRefresh\(!!quotes && Object\.values\(quotes\)\.some\(\(q\) => liveQuote\(q\?\.at\)\)/);
 });

@@ -369,8 +369,21 @@ def eps_shares(p: dict) -> tuple[float, float] | None:
     return n / e, EPS_AGREE + (0.005 if abs(n) < 10 else 0.5) / abs(n)
 
 
+QUARTER_AGREE = 0.01          # the latest quarter's net profit ÷ its EPS and the share capital's count this close are one count (LIVE14B-006)
+
+
+def quarter_shares(p: dict) -> float | None:
+    """The shares, in crore, the newest quarter's earnings per share were worked out on: that quarter's net profit ÷ its EPS (a quarter
+    with both). The count of the shares in issue during the latest quarter, after any buyback or issue in the year. None without them."""
+    q = p.get("quarters") or {}
+    eps, profit = _row(q, "EPS"), _row(q, "Net Profit")
+    pairs = [(n, e) for n, e in zip(profit, eps) if n and e and n / e > 0 and abs(n) >= 10]
+    return pairs[-1][0] / pairs[-1][1] if pairs else None
+
+
 def market_cap(cap_cr: float | None, price: float | None, equity_cr: float | None, face: float | None, issued_since: bool = False,
-               eps_count: tuple[float, float] | None = None, alt_count: tuple[float, float] | None = None) -> float | None:
+               eps_count: tuple[float, float] | None = None, alt_count: tuple[float, float] | None = None,
+               q_count: float | None = None) -> float | None:
     """Market value in crore: price times the shares in issue. The source's own figure is price times its share count at
     the moment it was read, which can lag (TCS, 8 Oct 2026: the screener said 370.3 crore shares, the company page
     361.7, from two reads). The share capital over the face value counts the shares from the balance sheet; when the
@@ -399,6 +412,11 @@ def market_cap(cap_cr: float | None, price: float | None, equity_cr: float | Non
             # while its EPS is the parent's (lane dat57: JSW Steel's ₹305 cr of capital at ₹1 against 244.5 cr shares in issue,
             # standalone profit ₹6,522 cr ÷ EPS 26.67 = 244.5 cr; its value showed ₹4.11 lakh cr against ₹3.30 lakh cr)
             return cap_cr
+    if q_count and abs(shares / q_count - 1) <= QUARTER_AGREE and abs(source / q_count - 1) > QUARTER_AGREE:
+        # LIVE14B-006: the share capital's count is the one the newest quarter's EPS was worked out on, and the source's isn't: the source's
+        # count lags or leads by less than SHARES_DRIFT, which let it stand (TCS, 18 Nov: 356.7 crore shares in the source's ₹8.49 lakh cr,
+        # 362 in the capital and 13,934 ÷ 38.37 = 363 in the Sep 2026 quarter; 2,379.50 × 361.8 = ₹8.61 lakh cr)
+        return round(price * shares, 2)
     if abs(source / shares - 1) > SHARES_DRIFT and shares >= source * (1 - TRUST_GAP):
         return round(price * shares, 2)
     return cap_cr
@@ -461,7 +479,7 @@ def summary(p: dict, listed_on: str | None = None) -> dict:
         latest_yoy = {"sales": grow(s_now, s_prev), "profit": grow(p_now, p_prev), "basis": "year",
                       "of": f"Year to {y_now} vs year to {y_prev}" if y_now and y_prev else None}
     cap = market_cap(num(r.get("Market Cap")), price, equity[-1] if equity else None, face, balance_ends_before(p, listed_on),
-                     eps_shares(p), tuple(p["std_eps_count"]) if p.get("std_eps_count") else None)
+                     eps_shares(p), tuple(p["std_eps_count"]) if p.get("std_eps_count") else None, quarter_shares(p))
     pe, pe_why = checked_pe(p, price, cap)
     src_cap = num(r.get("Market Cap"))
     if pe is not None and pe_basis(p) is None and src_cap and cap and price and equity and face and abs(cap / src_cap - 1) > SHARES_DRIFT:

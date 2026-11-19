@@ -1665,6 +1665,9 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 /* MO-3b: figures in a compact card spread over its width (they sat in its left two thirds, sized to their text), each in an equal column */
 .k-card.compact > .k-stats { flex: 1 1 100%; }
 .k-card.compact .k-card-title { font-size: 17px; }
+/* LIVE14B-008: the year's tax figure's place, held while the tax report loads (its one-row table's height), so the upload card doesn't move */
+.tax-head-hold { min-height: 85px; }
+@media (max-width: 640px) { .tax-head-hold { min-height: 145px; } }
 /* a table in a compact card (a strip of a few figures) fills the card's width, not the width of its words (owner, 5 Nov: the tax
    report's two-figure table stopped two thirds of the way across its card) */
 .k-card.compact > :is(.k-facts, .k-tbl-wrap) { flex: 1 1 100%; min-width: 0; }
@@ -1896,6 +1899,9 @@ a.k-chip { display: inline-flex; align-items: center; text-decoration: none; }
 /* LIVE5-002: a column marked `narrow: false` leaves the table when the table is narrower than a wide desktop's (a 1280 or 1024 screen),
    measured on the table's own box, so the rest stay in view without sideways scrolling */
 .k-tbl-wrap.has-narrow { container-type: inline-size; }
+/* LIVE14A-008: the theme's "Every company" table, ten figure columns: closer columns so it fits a 1,004 px card (it was 1,065-1,100 px) */
+.leaders-tbl .k-table th, .leaders-tbl .k-table td { padding-left: 6px; padding-right: 6px; }
+.leaders-tbl .k-table td.k-wrap, .leaders-tbl .k-table th.k-wrap { min-width: 140px; }
 @container (max-width: 899px) { .k-table th.k-narrow-off, .k-table td.k-narrow-off { display: none; } }
 @container (max-width: 719px) {
   .k-table th.k-tight-off, .k-table td.k-tight-off, .k-table .k-tight-hide { display: none; }
@@ -2635,6 +2641,13 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
    choices takes two columns of an ordinary form, so it isn't squeezed. */
 .k-form > .k-field > .k-seg { width: max-content; max-width: 100%; min-height: var(--ctl); align-items: stretch; box-sizing: border-box; }
 .k-form > .k-field > .k-seg button { flex: 1 1 auto; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; }
+/* LIVE14B-012: on a phone a switch takes the row like every other one: /plans' "Billed" Monthly/Yearly sat at ~270 px over a full-width
+   "Prices in", and a card head's switch ("Add to my trades / Start again with this file") was stacked in a 165-250 px box at the row's end */
+@media (max-width: 480px) {
+  .k-form > .k-field > .k-seg { width: 100%; }
+  .k-card-head > .k-card-actions:has(> .k-seg:only-child) { flex: 1 1 100%; }
+  .k-card-head > .k-card-actions > .k-seg:only-child { width: 100%; }
+}
 @media (min-width: 640px) { .k-form > .k-field:has(> .k-seg button:nth-child(3)) { grid-column: span 2; } }
 .k-form.k-form-trio > .k-field:has(> .k-seg button:nth-child(3)) { grid-column: auto; }
 /* where the buttons are 44px to tap (a phone), the track has no padding: a padded one was 50px beside 44px boxes */

@@ -589,6 +589,11 @@ def _base_args(region: str, theme: str, inds: dict) -> dict:
             "sized": theme_base.in_band(region, theme_base.size_band(theme), _rows(region))}
 
 
+def listed_as(name, symbol):
+    """fix20: a base company's name as with_base lists it: the exchange list's, a short word that is its symbol kept as its letters."""
+    return grounding.listed_name(name, symbol, symbol)
+
+
 PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57, 59: 58, 60: 59, 61: 60, 62: 61, 63: 62, 64: 63, 65: 64, 66: 65, 67: 66, 68: 67, 69: 68, 70: 69, 71: 70}  # rules versions whose change only adds to a kept placement (r582, R58.2: the answers unchanged, layers of one company, the figures' window, names its companies' lines say; r58, R58: the answers unchanged, the taxonomy and scale rules; r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
@@ -970,7 +975,7 @@ def quick(region: str, theme: str, m: dict) -> dict:
     out = {**m, "value_chain": [{**v, "companies": unconfirmed(v.get("companies"))} for v in m.get("value_chain") or []],
            "sub_themes": [{**x, "companies": unconfirmed(x.get("companies"))} for x in m.get("sub_themes") or []]}
     out["placements"] = {"checked": False, "pending": len(_map_names(m)), "left_out": 0}
-    out = theme_base.with_base(m, out, _rows(region), inds["industries"], grounding.listed_name, **_base_args(region, theme, inds))
+    out = theme_base.with_base(m, out, _rows(region), inds["industries"], listed_as, **_base_args(region, theme, inds))
     out = theme_identity.one_listing(out)                          # e57 (RC7)
     out = placed(region, theme, m, out, ask=None)                  # the answer kept with the map, else by the companies' words (no AI here)
     key = check_key(region, theme, m)
@@ -1209,7 +1214,7 @@ def _check(region: str, theme: str, m: dict) -> dict:
         out = theme_base.keep_confirmed(out, mi, previous_confirmed(region, theme, m))
         about_ = _about_reader(region, _map_names(mi), 0)
         out = theme_base.keep_published(out, pub, lambda s_: about_(s_), rename=theme_base.answer_renames(kept_ans))
-        out = theme_base.with_base(mi, out, _rows(region), inds["industries"], grounding.listed_name, **_base_args(region, theme, inds))
+        out = theme_base.with_base(mi, out, _rows(region), inds["industries"], listed_as, **_base_args(region, theme, inds))
         # e57 (RC6): a checked pick's industry peers above the theme's median market value considered, joining on their own stored words
         try:
             out = theme_identity.with_peers(out, _rows(region), kept_about(region), theme)

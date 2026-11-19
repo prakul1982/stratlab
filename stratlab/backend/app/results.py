@@ -594,9 +594,22 @@ def us_out(fh, sec, r: dict) -> dict | None:
             "url": rel["url"] if rel else None, "numbers": nums}
 
 
-def check_out(region: str, sources: dict, symbols: set[str], today: date | None = None) -> list[dict]:
+LARGEST_LOOKED = 40          # the largest companies of the window whose release is looked for too, tracked or not (LIVE14A-009)
+
+
+def largest_due(region: str, rows: list[dict], frm: str, to: str, n: int = LARGEST_LOOKED) -> set[str]:
+    """The `n` largest companies (by the stored market value) with a results day from `frm` to `to` and no filing seen yet: the rows a
+    person looks at first on the results page. LIVE14A-009: LOW's release, filed before the open on 18 Nov, was not on its row 8 h later
+    (only the companies someone tracks were looked up), so the row said "Rev – Profit –" all day."""
+    caps = {s: (r.get("market_cap") or 0) for s, r in _snap(region).items()}
+    due = {r["symbol"] for r in rows if frm <= r["date"] <= to and not r.get("out")}
+    return set(sorted(due, key=lambda s: -(caps.get(s) or 0))[:n])
+
+
+def check_out(region: str, sources: dict, symbols: set[str], today: date | None = None, tracked: set[str] | None = None) -> list[dict]:
     """For tracked companies whose results day was today or the last two days and whose filing we haven't seen:
-    look for it. Each one found is stored on its calendar row and returned (once)."""
+    look for it. Each one found is stored on its calendar row and returned (once). `tracked`: the companies someone follows, when
+    `symbols` holds others too (the largest of the day): a filing found for one nobody follows has nobody to tell."""
     today = today or local_today(region)
     frm = (today - timedelta(days=OUT_DAYS)).isoformat()
     waiting = [r for r in load(region)["rows"] if frm <= r["date"] <= today.isoformat() and not r.get("out") and r["symbol"] in symbols]
@@ -615,7 +628,8 @@ def check_out(region: str, sources: dict, symbols: set[str], today: date | None 
             rows = load(region)["rows"]
             for r in rows:
                 if (r["symbol"], r["date"]) in done:
-                    r["out"], r["told"] = done[(r["symbol"], r["date"])], False    # told once its people have it
+                    # told once its people have it; nobody to tell for a company nobody tracks
+                    r["out"], r["told"] = done[(r["symbol"], r["date"])], (tracked is not None and r["symbol"] not in tracked)
             save(region, rows)
     return found
 
@@ -840,7 +854,9 @@ class Job:
         who = _get(who)
         symbols = {s for (r, s) in who if r == region}
         sent = 0
-        check_out(region, self.sources(), symbols, day)
+        # the day's largest companies too, so the page's first rows carry their release within the hour (LIVE14A-009)
+        look = symbols | largest_due(region, load(region)["rows"], frm, day.isoformat())
+        check_out(region, self.sources(), look, day, tracked=symbols)
         told = [r for r in load(region)["rows"] if frm <= r["date"] <= day.isoformat() and r.get("out")
                 and r.get("told") is False and r["symbol"] in symbols]  # filed but not (fully) told: a cut-short run resumes
         # (a row filed before "told" was kept has no flag: it was told then)

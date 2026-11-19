@@ -37,7 +37,7 @@ FEW_BASE = 4                  # a highest or lowest median on this many companie
 COMPARE_MIN = MIN_BASE
 # R31 (the owner's review of the live R30 decks): a layer-vs-layer headline (the value chain's line, findings, questions) needs at least this
 # many companies with the figure in each layer it compares; tables still show every layer and mark (green, red) those of COMPARE_MIN or more
-DIVE_TEXT = 41         # r69e (R69): a sub-theme whose name joins parts takes, for each, the one layer that says it; a year's EBITDA margin worked out to one decimal as the latest one is; r68e (R68): the theme's rules read by the map's own name whatever search reached it (the core-and-adjacent split the same on every path), the split versioned and each company joining or leaving the core members said; r67e (R67): every move the theme's change log serves with the dive said with its company's reason (a member past the figures with the placement's), a layer past the figures renamed no move, a screened-out company's own words quoted; r66e (R66): a dated head count, a rebranding or a listing line never quoted as a company's own words, a stored description of another company never read as its own; r65e (R65): a layer of one official industry its companies' words don't say listed in "Other" with the reason, a coverage fall's why counting the members past the figures' window; r64e (R64): a layer whose name states distributors says its distributors are in its figures by their own words, a stored change-log reason ended on a whole word, a company's quote a whole sentence (LIVE11A-003), a sub-theme filled from the layer it was named for (LIVE11A-005), a margin beyond revenue named on its row (LIVE11A-008), a halves-together ranking figure said so (LIVE11A-009); r63e (R63): kept weekly P/E points of another membership out of the theme's history, a US bank's revenue not on the FTE basis where its page keeps no lines, two listings one of whose words names the other by its symbol kept once; r62 (R62): farm-input makers a theme's core kind with their suppliers adjacent or outside its core business, regulated, merchant, equipment and contracting operating models never ranked together, one company's figures under two symbols with one description kept once, NII / assets beyond half of assets out of every median; r60 (R60): a company's line read by its layer's concept too (theme_base.layer_concepts), layers of one company kept; r59 (R59): the placement's listed_out and the figures' window change which companies a layer's figures and table hold; r582 (R58.2): a connectivity operator whose principal words name its layer's own work (cable) in a layer whose name says none of the kind's words is of the theme's work, not adjacent; r581 (R58.1): a company kept in the theme on its own words against one layer's answer quotes the sentence that says the theme's work; r58 (R58, the owner's review of the live R57.2 decks): non-bank financiers and broadband operators as adjacent participants, a company kept on its own words against one layer's answer in the theme by those words, a parent and its subsidiary filer merged when the filer's titles are all it has stored; r572 (R57.2, the live R57.1 decks): a company in its layer's figures as the map placed it, its own words contradicting nothing ("by_map"); p57 (R56 review): a published member kept through a re-check says so in its place in the theme (theme_record "kept_member"); t56 (R55 review): the placements' taxonomy guard (layers restored, the informative share guarded) and each company the map's check left out with its business-membership reason; v55 (R55 review): a company the map named from another industry whose check gave no answer is in the theme when its principal business, in its own words, fits the theme (membership), else not checked yet, never "own words describe other work" (evidence_state, unchecked_why, data_checks "unchecked"); c54 (R53 review): scope boundaries apart from the core members (SCOPE_KINDS, scope_adjacent), a member with no stored figures listed (no_figures_row), one company under two symbols merged when its stored description names the other (same_company); d53 (R53): one company under two symbols merged (same_company), adjacent participants apart from the core members (BUSINESS_KINDS, adjacent_of), companies spending ahead of their revenue apart from the margin medians (DEVELOPER), an early-stage layer's commercial companies against its own stage's median (stage_check), layer names a line says as the dive shows them (same_names); gl52 (R52): "none_found" and "unfit" reasons, no "read as" for a low-confidence model, one precision in a headline gap, halves ranked as one, the stock-pay rule, theme size by a conglomerate's theme segment; rv51 (R51): a layer's business model only from its own records (named_fit); a company of the theme's industries whose principal business fits it never screened out by its words (membership); gl50 (R50): a chain with no way of earning read shown, not ranked; a parent's listed subsidiary out of totals adding both; the latest quarter most companies report; a clinical-stage layer's commercial companies out of its figures; ex49 (R49): each company left out of a layer's figures with its precise reason (a different revenue model with both models, insufficient evidence with what is missing, the part of a partial one), the capital-intensity proxy labelled and its inputs checked, layers ranked only of one business model the map's words support, which net-above-EBITDA lines are still missing; vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R47): a company listed in its layer as another way of earning is said so in the layer's line, the coverage control (theme_changes.coverage_control); vf46 (R46): each checked figure's source record and statement lines, a net margin above EBITDA reconciled line by line; c1 (R44): each company's place in the theme with its reason ("theme": theme_record) apart from its comparison decision ("comparison"), a layer named by how its companies earn says why it is never ranked; R44.1: a loss in a verification reason printed with the real minus (deck 55, dive text 15, updated on purpose); R44 (lane v1): each unusual figure verified against its own filed figures, not reconciled or invalid (verify_net, figure_states), never dropped by a cutoff alone; the dive's coverage of informative layers; R43.1: the whole-point margins counted among the margins there are ("3 of the 1" on the live Insurance deck); d1: halves of a split layer never ranked, no ranking on a gap under a point, peers named and like for like, every company in a layer or "Other", the not-checked-yet mark; LIVE7A (lane t1): every company at the index's newest close and one price date, own words without encyclopedia leads or a cut word, whole-point margins and gaps printed whole, operating figures of old periods left out and listed once, click-bait headlines left out, "Dividend: Dividend" said once; R40: a layer the split named only by how its companies earn is never ranked ("a group by how they earn, of different businesses"), a market-value half with fewer than 3 companies in its figures undone; LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
+DIVE_TEXT = 42         # fix20 (the live R75 decks, LIVE14): an encyclopedia's ranking, a founding clause or a heading never a company's own words; a sub-theme no member fits not shown; an adjacent participant listed in the US but based abroad, or a holding company of other members, said as what it is, never "its principal business is of listed in the US, based abroad"; a US member named as its reporting registrant names itself (Exxon Mobil Corporation) and its page's own name tidied with its symbol (ATI, not "Ati"; no lone "/"); r69e (R69): a sub-theme whose name joins parts takes, for each, the one layer that says it; a year's EBITDA margin worked out to one decimal as the latest one is; r68e (R68): the theme's rules read by the map's own name whatever search reached it (the core-and-adjacent split the same on every path), the split versioned and each company joining or leaving the core members said; r67e (R67): every move the theme's change log serves with the dive said with its company's reason (a member past the figures with the placement's), a layer past the figures renamed no move, a screened-out company's own words quoted; r66e (R66): a dated head count, a rebranding or a listing line never quoted as a company's own words, a stored description of another company never read as its own; r65e (R65): a layer of one official industry its companies' words don't say listed in "Other" with the reason, a coverage fall's why counting the members past the figures' window; r64e (R64): a layer whose name states distributors says its distributors are in its figures by their own words, a stored change-log reason ended on a whole word, a company's quote a whole sentence (LIVE11A-003), a sub-theme filled from the layer it was named for (LIVE11A-005), a margin beyond revenue named on its row (LIVE11A-008), a halves-together ranking figure said so (LIVE11A-009); r63e (R63): kept weekly P/E points of another membership out of the theme's history, a US bank's revenue not on the FTE basis where its page keeps no lines, two listings one of whose words names the other by its symbol kept once; r62 (R62): farm-input makers a theme's core kind with their suppliers adjacent or outside its core business, regulated, merchant, equipment and contracting operating models never ranked together, one company's figures under two symbols with one description kept once, NII / assets beyond half of assets out of every median; r60 (R60): a company's line read by its layer's concept too (theme_base.layer_concepts), layers of one company kept; r59 (R59): the placement's listed_out and the figures' window change which companies a layer's figures and table hold; r582 (R58.2): a connectivity operator whose principal words name its layer's own work (cable) in a layer whose name says none of the kind's words is of the theme's work, not adjacent; r581 (R58.1): a company kept in the theme on its own words against one layer's answer quotes the sentence that says the theme's work; r58 (R58, the owner's review of the live R57.2 decks): non-bank financiers and broadband operators as adjacent participants, a company kept on its own words against one layer's answer in the theme by those words, a parent and its subsidiary filer merged when the filer's titles are all it has stored; r572 (R57.2, the live R57.1 decks): a company in its layer's figures as the map placed it, its own words contradicting nothing ("by_map"); p57 (R56 review): a published member kept through a re-check says so in its place in the theme (theme_record "kept_member"); t56 (R55 review): the placements' taxonomy guard (layers restored, the informative share guarded) and each company the map's check left out with its business-membership reason; v55 (R55 review): a company the map named from another industry whose check gave no answer is in the theme when its principal business, in its own words, fits the theme (membership), else not checked yet, never "own words describe other work" (evidence_state, unchecked_why, data_checks "unchecked"); c54 (R53 review): scope boundaries apart from the core members (SCOPE_KINDS, scope_adjacent), a member with no stored figures listed (no_figures_row), one company under two symbols merged when its stored description names the other (same_company); d53 (R53): one company under two symbols merged (same_company), adjacent participants apart from the core members (BUSINESS_KINDS, adjacent_of), companies spending ahead of their revenue apart from the margin medians (DEVELOPER), an early-stage layer's commercial companies against its own stage's median (stage_check), layer names a line says as the dive shows them (same_names); gl52 (R52): "none_found" and "unfit" reasons, no "read as" for a low-confidence model, one precision in a headline gap, halves ranked as one, the stock-pay rule, theme size by a conglomerate's theme segment; rv51 (R51): a layer's business model only from its own records (named_fit); a company of the theme's industries whose principal business fits it never screened out by its words (membership); gl50 (R50): a chain with no way of earning read shown, not ranked; a parent's listed subsidiary out of totals adding both; the latest quarter most companies report; a clinical-stage layer's commercial companies out of its figures; ex49 (R49): each company left out of a layer's figures with its precise reason (a different revenue model with both models, insufficient evidence with what is missing, the part of a partial one), the capital-intensity proxy labelled and its inputs checked, layers ranked only of one business model the map's words support, which net-above-EBITDA lines are still missing; vr48 (R48): figures reconciled with the year's lines before any is held, the comparison basis (updated on purpose); cl48 (R47): a company listed in its layer as another way of earning is said so in the layer's line, the coverage control (theme_changes.coverage_control); vf46 (R46): each checked figure's source record and statement lines, a net margin above EBITDA reconciled line by line; c1 (R44): each company's place in the theme with its reason ("theme": theme_record) apart from its comparison decision ("comparison"), a layer named by how its companies earn says why it is never ranked; R44.1: a loss in a verification reason printed with the real minus (deck 55, dive text 15, updated on purpose); R44 (lane v1): each unusual figure verified against its own filed figures, not reconciled or invalid (verify_net, figure_states), never dropped by a cutoff alone; the dive's coverage of informative layers; R43.1: the whole-point margins counted among the margins there are ("3 of the 1" on the live Insurance deck); d1: halves of a split layer never ranked, no ranking on a gap under a point, peers named and like for like, every company in a layer or "Other", the not-checked-yet mark; LIVE7A (lane t1): every company at the index's newest close and one price date, own words without encyclopedia leads or a cut word, whole-point margins and gaps printed whole, operating figures of old periods left out and listed once, click-bait headlines left out, "Dividend: Dividend" said once; R40: a layer the split named only by how its companies earn is never ranked ("a group by how they earn, of different businesses"), a market-value half with fewer than 3 companies in its figures undone; LIVE6-007: a company's "what" only when it is its own words about its work (theme_base.own_words); R36: one company under two symbols kept once; R36: a ranking headline says which layers it ranks and why a shown layer beyond it is not ranked; lane m1: each company row keeps its place in its layer's calculations ("calc") and a layer's "n" is taken from them; R35: sub-theme members by their whole description, the peers behind each peer median and their price date; part of a stored dive's key (theme_routes.dive_key): bump when the dive's own sentences change, so a kept dive is made again
 HEADLINE_MIN = 5
 # R27 (headline eligibility): a comparison is said as a headline only on a figure for at least this share of the companies of each group it
 # compares (a layer, a family); one with less is shown as data, never ranked (the live R26 Semis deck: "RPO growth -3.9%" of 21 of 53)
@@ -209,6 +209,23 @@ def shown_name(*names) -> str:
     same = [c for c in cands if k(c) == k(cands[0])]
     best = next((c for c in same if "'" in c or "’" in c), cands[0])
     return _IRISH_O.sub("O'", best)
+
+
+def member_name(region: str, symbol: str, listed: str | None, own: str | None, f: dict | None = None) -> str:
+    """A theme member's name (shown_name) from the map's listed name and its stored page's own. fix20 (the live R75 decks: "ExxonMobil
+    Holdings Corp" after the owner's 18 Nov decision for "Exxon Mobil Corporation"; "Southern Copper Corp/", "Ati", "Freeport-Mcmoran"): a
+    US company whose figures are its predecessor registrant's reports (its page keeps the listed holding company as "registrant") is named
+    as that registrant names itself; any other US name the same name as the map's (letters and digits alike) is its page's own, tidied
+    with its symbol as every US name is (stock_pages.proper_name), so the app, the deck and the stock page agree."""
+    if region != "US":
+        return shown_name(listed, own) or str(own or listed or symbol)
+    tidy = stock_pages.proper_name(str(own), symbol) if own and str(own).strip() else ""
+    if tidy and isinstance(f, dict) and f.get("registrant"):
+        return " ".join(tidy.split())
+    k = lambda x: re.sub(r"[^a-z0-9]", "", str(x or "").lower())        # noqa: E731
+    if tidy and k(tidy) == k(listed):
+        return shown_name(tidy, listed) or tidy
+    return shown_name(listed, tidy or own) or str(own or listed or symbol)
 
 
 def at_close(f: dict | None, row: dict | None, region: str = "IN", symbol: str | None = None) -> dict | None:
@@ -1277,8 +1294,8 @@ def out_reason(r: dict) -> dict:
             return {"kind": "another business", "label": "another business than the layer's",
                     "detail": r.get("unfit_why") or "its own words and its official industry are not of what the layer is"}
         if why == "adjacent" and r.get("adjacent"):       # d53 (R53): another kind of business than the theme's, in one of its core layers
-            return {"kind": "another business", "label": "adjacent participant, another kind of business than the theme's",
-                    "detail": adjacent_said(r["adjacent"])}
+            return {"kind": "another business", "label": adjacent_label(r["adjacent"]), "detail": adjacent_said(r["adjacent"]),
+                    **({"abroad": True} if r["adjacent"].get("kind") == FOREIGN_KIND else {})}     # fix20: based abroad, no other business
         if why == "stage" and r.get("stage_out"):         # gl50 (R50): a commercial company in a clinical-stage or pre-revenue layer
             return {"kind": "another business", "label": "another business: a commercial company, not of the layer's stage", "detail": r["stage_out"]}
         if mid and (lid or lf):
@@ -1543,7 +1560,7 @@ def holding_across(rows: dict, parents: dict, layer_of: dict, wide: set, theme: 
         if whole_ and sum(h.get("revenue") or 0 for h in held) * 2 < whole_:
             continue
         h0 = held[0]
-        r_par["adjacent"] = {"kind": "holding companies of other members", "theme": f"own business ({theme})", "where": "holding",
+        r_par["adjacent"] = {"kind": HOLDING_KIND, "theme": f"own business ({theme})", "where": "holding",
                              "text": f"holds {h0.get('pct'):g}% of {h0.get('name')}, a member of the theme, and its figures are the whole company's"}
 
 
@@ -1679,6 +1696,7 @@ def _chain_table(blocks: list[dict]) -> dict:
                      **{k: (b["stats"].get(k) or {}).get("median") for k in FAMILY_CHAIN}, **{f"{k}_n": (b["stats"].get(k) or {}).get("n", 0) for k in FAMILY_CHAIN},
                 "model": b.get("model"), "intensity": b.get("intensity"), "basis": period_basis([c for c in b.get("companies") or [] if c.get("status") != "unverified"]),
                 **({"scale": b["scale"]} if b.get("scale") else {}), **({"adjacent": True} if b.get("adjacent") else {}),
+                **({"abroad": True} if isinstance(b.get("adjacent"), dict) and b["adjacent"].get("kind") == FOREIGN_KIND else {}),
                 "aggregate": b.get("aggregate")}
     rows = [row_of(b) for b in blocks]
     # gl52 (R52, the rotating review of Release 51: Cement's "Regional cement makers" and Airlines' "Hotels and resorts", each split into
@@ -1851,7 +1869,8 @@ RANK_WHY = {"cover": "the figure for under half its companies",
             "official": "an exchange industry, not one of the map's layers", "rest": "companies outside the map's layers",
             "how": "a group by how they earn, of different businesses", "other": "not comparable with the ranked layers",
             "half": "one half of a layer split by market value", "unread": "how its companies earn is not read",
-            "adjacent": "adjacent participants, another kind of business than the theme's"}
+            "adjacent": "adjacent participants, another kind of business than the theme's",
+            "abroad": "adjacent participants, listed in the US but based abroad"}        # fix20: a layer of companies based abroad
 # gl50 (R50): what a chain of layers whose companies' ways of earning were never read says in place of a ranking
 UNREAD_SAID = "How these layers' companies earn is not read, so they are shown, not ranked."
 UNREAD_WHY = "how their companies earn is not read"
@@ -1900,7 +1919,7 @@ def unranked_rows(rows: list, have: list, key: str) -> list[dict]:
         if r.get("rest"):
             why = "rest"
         elif r.get("adjacent"):
-            why = "adjacent"
+            why = "abroad" if r.get("abroad") else "adjacent"
         elif r.get("scale"):
             why = "half"
         elif r.get("official") and own:
@@ -3671,6 +3690,15 @@ def adjacent_said(a: dict) -> str:
         return (f"outside the theme's core business ({a.get('kind')}, its own words naming no link to the theme's {a.get('theme')}); in no core "
                 f"statistic: its principal business ({ADJACENT_WHERE.get(a.get('where'), 'its official industry')}, “{a.get('text')}”) is of "
                 f"{a.get('kind')}")
+    if a.get("kind") == FOREIGN_KIND:
+        # fix20 (the live R75 US Telecom deck: "its principal business (its official industry, “files its annual report with the SEC on Form
+        # 20-F ...”) is of listed in the US, based abroad"): adjacent by where it is based and the report it files, never by a business
+        return (f"in the theme as an adjacent participant ({FOREIGN_KIND}); not in its core statistics because it is listed in the US but "
+                f"based abroad" + (f": it {a['text']}" if a.get("text") else "") + f", apart from the theme's {a.get('theme')}")
+    if a.get("kind") == HOLDING_KIND:
+        # fix20: a holding company of other members said as one, never "its principal business is of holding companies of other members"
+        return (f"in the theme as an adjacent participant ({HOLDING_KIND}); not in its core statistics because it is a holding company of "
+                f"other members of the theme ({ADJACENT_WHERE['holding']}: “{a.get('text')}”), not a company of the theme's {a.get('theme')}")
     return (f"in the theme as an adjacent participant ({a.get('kind')}); not in its core statistics because its principal business "
             f"({ADJACENT_WHERE.get(a.get('where'), 'its official industry')}, “{a.get('text')}”) is of {a.get('kind')}, not of the theme's "
             f"{a.get('theme')}")
@@ -3784,6 +3812,8 @@ def comparison_said(rec: dict, b: dict) -> str:
         if rec.get("kind") == "not confirmed in the theme" or rec.get("why") == "not confirmed":
             return "left out of every figure: not confirmed in the theme"
         kind = rec.get("kind") or WHY_KIND.get(rec.get("why"))
+        if kind and rec.get("abroad") and rec.get("detail"):        # fix20: based abroad, never "another business"
+            return f"listed in its layer, left out of its figures: {rec['detail']}"
         if kind:
             return f"listed in its layer, left out of its figures: {kind}, {rec.get('detail') or KIND_SAID[kind]}"
         return "left out of its layer's figures"
@@ -3881,6 +3911,34 @@ POPULATION_RULE = {1: "core and adjacent by the kind of business the map's own t
                       "Form 20-F or 40-F filer) adjacent in a US theme (r69e)"}
 FOREIGN_KIND = "listed in the US, based abroad"
 _FOREIGN_FORM = re.compile(r"^\s*(20-F|40-F)\b")
+# fix20 (the live R75 US Oil and gas and US Telecom decks: "most of its companies' principal business is of listed in the US, based abroad"):
+# the two adjacent kinds that are no kind of business, each said in a sentence of its own wherever the adjacent kind is put into one: a
+# company listed in the US but based abroad (r69e), and a holding company of other members (r60)
+FOREIGN_SAID = "listed in the US but based abroad (a foreign issuer's annual report, 20-F or 40-F)"
+HOLDING_KIND = "holding companies of other members"
+
+
+def adjacent_layer_said(adj: dict) -> str:
+    """fix20: what most of an adjacent layer's companies are, after "Adjacent participants: " and before "; shown here": "most of its
+    companies' principal business is of lenders and financiers, not of the theme's own business (Payments and fintech)"; a layer of companies
+    based abroad and one of holding companies said as what they are."""
+    kind, theme = (adj or {}).get("kind") or "", (adj or {}).get("theme") or ""
+    if kind == FOREIGN_KIND:
+        return f"most of its companies are {FOREIGN_SAID}, apart from the theme's US companies"
+    if kind == HOLDING_KIND:
+        return f"most of its companies are holding companies of other members of the theme, not companies of the theme's {theme}"
+    return f"most of its companies' principal business is of {kind}, not of the theme's {theme}"
+
+
+def adjacent_label(a: dict) -> str:
+    """fix20: a left-out adjacent participant's reason as a layer's roll groups it (calc_record): "adjacent participant, another kind of
+    business than the theme's", or what it is when that is no kind of business."""
+    kind = (a or {}).get("kind")
+    if kind == FOREIGN_KIND:
+        return "adjacent participant, listed in the US but based abroad"
+    if kind == HOLDING_KIND:
+        return "adjacent participant, a holding company of other members"
+    return "adjacent participant, another kind of business than the theme's"
 
 
 def foreign_form(row: dict) -> str:
@@ -3947,7 +4005,7 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
                 rows[s] = r
     for s, c in placed.items():
         if s in rows:
-            rows[s]["name"] = shown_name(c.get("name"), rows[s]["name"]) or rows[s]["name"]
+            rows[s]["name"] = member_name(region, s, c.get("name"), rows[s]["name"], facts.get(s))
             rows[s]["status"] = every_status[s]
             rows[s]["evidence"] = every_evidence[s]
             other_ = getattr(src.about, "other_of", None)          # r68e: why it has no words of its own, when they were read as another's
@@ -4148,7 +4206,10 @@ def build(region: str, theme: str, checked: dict, src: Sources) -> dict:
             if r:
                 cos.append({"symbol": r["symbol"], "name": r["name"], "what": own_words(c.get("what"), r["name"] or "", r["symbol"]) or None, "cap": r["cap"], "sales_1y": r["sales_1y"], "ebitda": r["ebitda"], "ebitda_dp": r.get("ebitda_dp"),
                             "company_wide": r["symbol"] in wide, "year": r["year"], "bank": r.get("bank"), "net": r.get("net"), "one_off": r.get("one_off"), "roe": r.get("roe")})
-        subs.append({"name": s.get("name") or "", "detail": s.get("detail") or "", "companies": cos})
+        # fix20 (LIVE14A-006: "No listed company is shown for these sub-themes: Nitrogen fertilizers, Specialty nutrients and bio-inputs" on
+        # the Fertilizers page, "Engineering and R&D services" beside a layer of that work): a sub-theme no listed member fits is not shown
+        if cos:
+            subs.append({"name": s.get("name") or "", "detail": s.get("detail") or "", "companies": cos})
     for r in rows.values():                 # a merger or demerger broke the company's series: no growth figure for it, none in the growth totals
         r["demerger"] = demerger_on(src, r["symbol"])
         if series_break(r) or r["demerger"]:

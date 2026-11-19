@@ -123,6 +123,8 @@ export type PulseData = { indices: IndexLevel[]; headlines: NewsItem[]; missing?
 export interface IndexLevel {
   name: string; price: number; change_pct: number | null; high52: number | null; from_high_pct: number | null;
   at?: string | null; day?: string | null; live?: boolean; stale?: boolean; settling?: boolean;
+  /** LIVE14A-001: today's level, read over five minutes ago while the market trades: shown "as of" its time, never as live */
+  delayed?: boolean;
 }
 
 /** What a price read between a market's close and its settle point is called (R13-005: "Last close $336.68" at 16:12 ET,
@@ -191,7 +193,10 @@ export function priceLabel(c: Pick<Company, "market_open" | "phase" | "quote_day
 
 /** The words under an index's change: "today" only for a live level of today's session; a previous session's level while
  * the market trades says it hasn't updated; out of hours, the session it is of ("on 8 Oct"). */
-export function indexWhen(i: Pick<IndexLevel, "day" | "live" | "stale" | "settling">, dayText: (iso: string) => string): string {
+export function indexWhen(i: Pick<IndexLevel, "day" | "live" | "stale" | "settling"> & { at?: string | null; delayed?: boolean }, dayText: (iso: string) => string,
+  timeText?: (iso: string) => string): string {
+  // LIVE14A-001: a level the source stopped updating mid-session says its time, never "today" (10:52 ET shown as today at 14:35 ET)
+  if (i.delayed) return i.at && timeText ? `as of ${timeText(i.at)}` : "not updated in the last minutes";
   if (i.settling) return i.day ? `${dayText(i.day)} · closing prints still settling` : "closing prints still settling";
   if (i.stale) return i.day ? `${dayText(i.day)} close · not updated today yet` : "not updated today yet";
   if (i.live || i.live === undefined && i.day === undefined) return "today";
@@ -416,7 +421,7 @@ export function useWatchlist() {
 /* Big money in the units people say ($4.31T, ₹1.51 lakh cr): bigMoney, in format.ts. Units for groups of amounts,
  * trend values and metric figures: researchFormat.ts (no browser needed, so the unit tests read them). */
 export { bigMoney } from "./format";
-export { atPrice, focusParam, holderRowName, linkLabel, marginText, metricText, missingLine, missingWhat, millionsOf, monthsOld, newsAge, newsWhen, periodEnd, pulseClosedDay, pulseLede, resultsFiled, scaleFor, screenCap, screenNum, staleQuarter, trendShort, trendValue, usdAmount, type Scale } from "./researchFormat";
+export { atPrice, focusParam, holderRowName, linkLabel, marginText, metricText, missingLine, missingWhat, millionsOf, monthsOld, newsAge, newsWhen, periodEnd, pulseClosedDay, pulseDelayedAt, pulseLede, resultsFiled, scaleFor, screenCap, screenNum, staleQuarter, trendShort, trendValue, usdAmount, type Scale } from "./researchFormat";
 
 /* ---------- where a number sits in a typical range (from Hindsight) ----------
  * [floor, weak edge, strong edge, ceiling, higher-is-better]. Loose large-cap defaults,
