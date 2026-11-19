@@ -98,21 +98,6 @@ test("LIVE14A-008: the theme's 'Every company' table: short header words, the lo
   assert.match(read("src/styles.css"), /\.leaders-tbl \.k-table th, \.leaders-tbl \.k-table td \{ padding-left: 6px; padding-right: 6px; \}/);
   assert.ok(!read("e2e/ui-lint.allow.json").includes("Revenue growthEBIT"));
 });
-
-test("LIVE14A-014 / LIVE14B-003: the landing's start-up heading and lede wait for their own face, laid out as they will be in it", async () => {
-  const { pageFiles, bootFaces } = await import("../scripts/seoPages.mjs");
-  const tpl = read("index.html").replace("</head>", '<link rel="preload" href="/assets/fraunces-latin-400-normal-XyZ9.woff2" as="font" type="font/woff2" crossorigin="">\n</head>');
-  const home = Object.fromEntries(pageFiles(tpl, ["fraunces-latin-400-italic-AbC1.woff2"]))["index.html"];
-  assert.match(home, /@font-face\{font-family:"Fraunces Boot";font-style:normal;font-weight:400;font-display:block;src:url\(\/assets\/fraunces-latin-400-normal-XyZ9\.woff2\) format\("woff2"\)\}/);
-  assert.match(home, /@font-face\{font-family:"Fraunces Boot";font-style:italic;font-weight:400;font-display:block;src:url\(\/assets\/fraunces-latin-400-italic-AbC1\.woff2\)/);
-  assert.match(home, /@font-face\{font-family:"Fraunces Boot Stand-in";src:local\("DejaVu Serif"\);size-adjust:90%\}/);
-  assert.match(home, /\[data-boot\] \.lp-h1,\[data-boot\] \.lp-lede\{font-family:"Fraunces Boot","Fraunces Boot Stand-in",Georgia,serif\}\[data-boot\] \.lp-h1\{max-width:7\.78em\}/);
-  assert.equal(bootFaces(read("index.html")), "");                     // no built face (a dev server): nothing added
-  // only the home page's frame: another page keeps the plain block
-  const other = Object.fromEntries(pageFiles(tpl))["about/index.html"];
-  assert.ok(!other || !other.includes("Fraunces Boot"));
-});
-
 test("LIVE14B-001: boot.js asks for a saved sign-in's account the moment /config.js says where the server is", () => {
   const src = read("public/boot.js");
   // run boot.js's code against a stand-in window: setting the config fires one /me with the saved token

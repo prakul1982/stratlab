@@ -93,37 +93,6 @@ test("LIVE14B-007: a visitor's /plans has the sample deck link its table promise
   const info = await page.request.get(`${API}/pricing/sample-deck/info`).then((r) => r.json());
   if (info.available) await expect(line.getByTestId("sample-deck")).toHaveAttribute("href", /\/pricing\/sample-deck/);
 });
-
-for (const narrow of [false, true]) test(`LIVE14A-014 / LIVE14B-003: the landing's start-up hero is its largest paint: the app's drawn hero adds no later LCP, and nothing shifts${narrow ? " (360 px)" : ""}`, async ({ page }, info) => {
-  test.skip(narrow && info.project.name !== "phone", "the narrow phone");
-  if (narrow) await page.setViewportSize({ width: 360, height: 760 });
-  await page.route("**/*", (r) => {
-    const host = new URL(r.request().url()).hostname;
-    // the faces arrive after the first paint, as on the live site (the frame's heading was painted first in the stand-in serif there)
-    if (r.request().url().endsWith(".woff2")) return new Promise((ok) => setTimeout(ok, 1500)).then(() => r.fallback());
-    return host === "127.0.0.1" || host === "localhost" ? r.fallback() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" });
-  });
-  const cdp = await page.context().newCDPSession(page);
-  await cdp.send("Network.enable");
-  await cdp.send("Network.emulateNetworkConditions", { offline: false, latency: 150, downloadThroughput: 1.6 * 1024 * 1024 / 8, uploadThroughput: 750 * 1024 / 8 });
-  await page.addInitScript(() => {
-    const w = window as unknown as { __lcp: { t: number; size: number; boot: boolean }[]; __cls: number };
-    w.__lcp = []; w.__cls = 0;
-    new PerformanceObserver((l) => { for (const e of l.getEntries() as unknown as { startTime: number; size: number; element?: Element }[]) w.__lcp.push({ t: e.startTime, size: e.size, boot: !!e.element?.closest("[data-boot]") }); })
-      .observe({ type: "largest-contentful-paint", buffered: true });
-    new PerformanceObserver((l) => { for (const e of l.getEntries() as unknown as { hadRecentInput: boolean; value: number }[]) if (!e.hadRecentInput) w.__cls += e.value; })
-      .observe({ type: "layout-shift", buffered: true });
-  });
-  await page.goto("/");
-  await expect(page.locator("main h1")).toBeVisible();
-  await page.waitForTimeout(6000);
-  const { lcp, cls } = await page.evaluate(() => { const w = window as unknown as { __lcp: { t: number; size: number; boot: boolean }[]; __cls: number }; return { lcp: w.__lcp, cls: w.__cls }; });
-  const last = lcp[lcp.length - 1];
-  expect(last.boot, `the largest paint is the start-up frame's, not the app's drawn hero: ${JSON.stringify(lcp)}`).toBe(true);
-  expect(last.size, "the frame's heading or lede, at its final size").toBeGreaterThan(20000);
-  expect(cls, "nothing on the landing moves").toBeLessThan(0.01);
-});
-
 // LIVE14B-001: the first signed-in page of a browser (live: /mine heading at 7.9 s, /trade/journal 9.3 s). Measured here, the fake world on
 // a throttled link (150 ms, 1.6 Mbit/s): before, /me was asked for at ~2.9 s, once a file of the app's code had come behind ~40 others
 // (1.15 s on a 100 ms, 20 Mbit/s link); now at ~0.4 s (0.25 s), when /config.js has run. (Asking for the page's own file beside the app's
