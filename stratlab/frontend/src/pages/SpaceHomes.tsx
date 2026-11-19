@@ -163,7 +163,7 @@ function MarketStrip() {
   useMarketRefresh(["IN"], () => { api<VixBrief>("/trade/vix?brief=true").then(setVix).catch(() => undefined); }, vixIn);
   const ev = useEvents();
   const today = istToday();
-  const expiry = nextExpiry(ev?.events, today);
+  const expiry = nextExpiry(ev?.events, today, istHm());
   const fii = b && b !== "none" ? b.cash?.fii?.net ?? null : null;
   const ban = b && b !== "none" ? b.fo_ban ?? [] : null;
   const crore = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}₹${Math.abs(v).toLocaleString("en-IN", { maximumFractionDigits: 0 })} cr`;

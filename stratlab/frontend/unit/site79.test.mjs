@@ -54,3 +54,13 @@ test("LIVE16B-001: a plan card's email button carries its plan to the sign-in pa
   assert.match(read("src/pages/Login.tsx"), /if \(plan === "basic" \|\| plan === "pro"\) rememberNext\(`\/plans\?plan=\$\{plan\}`\);/);
   assert.match(read("src/pages/PlansPage.tsx"), /data-testid="plan-picked"/);
 });
+
+test("LIVE16B-003: Trade home's next F&O expiry is never one that ended earlier today", async () => {
+  const { nextExpiry } = await import("../src/lib/expiry.ts");
+  const ev = [{ kind: "expiry", date: "2026-11-19", time: "15:30", title: "SENSEX weekly expiry" },
+    { kind: "expiry", date: "2026-11-23", time: "15:30", title: "Monthly F&O expiry" }];
+  assert.equal(nextExpiry(ev, "2026-11-19", "14:10")?.title, "SENSEX weekly expiry");
+  assert.equal(nextExpiry(ev, "2026-11-19", "19:53")?.title, "Monthly F&O expiry");
+  assert.equal(nextExpiry(ev, "2026-11-19")?.title, "SENSEX weekly expiry");          // no clock given: as before
+  assert.match(read("src/pages/SpaceHomes.tsx"), /nextExpiry\(ev\?\.events, today, istHm\(\)\)/);
+});
