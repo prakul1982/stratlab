@@ -5943,6 +5943,12 @@ _HEADING = re.compile(r"\s*\b(?:company|business|corporate)\s+(?:overview|profil
                       # Cements Limited has undergone ..."): a page's heading in title case run into the text before the next sentence
                       r"|\s+(?-i:(?:[A-Z][a-z]+\s+){0,2}(?:History|Overview|Background|Milestones|Timeline)(?:\s+(?:&|and)\s+[A-Z][a-z]+)*"
                       r"(?:\s+[A-Z][a-z]+)?)(?=\s+[A-Z])", re.I)
+# R76 (CI: Sarda Proteins' "...deals in the trading of Solar Cells Business Overview: The co. historically dealt in protein and food products.
+# In Sep 2024, it expanded ... solar-cell manufacturing ...", cut at "Business Overview:", left no own words and was read as a food company):
+# own_words ends a line only at a page's title-case history heading run into it (Andhra Cements), never at the "Business Overview:" label a
+# description opens its account with
+_HEADING_RUN_IN = re.compile(r"\s+(?-i:(?:[A-Z][a-z]+\s+){0,2}(?:History|Overview|Background|Milestones|Timeline)(?:\s+(?:&|and)\s+[A-Z][a-z]+)*"
+                             r"(?:\s+[A-Z][a-z]+)?)(?=\s+[A-Z])(?!\s*:)")
 _GLUED = re.compile(r"(?i)\b(incorporated|established|founded|set up|formed)(in)(\d{4})")
 _HISTORY = re.compile(r"^(?:originally\s+)?(?:incorporated|established|founded|set up|formed|promoted)\b[^,.;]*?\b(?:in|on)\s+\d{4}\s*(?:,|as\b[^,]*,|and\b)?\s*", re.I)
 # fix20 (LIVE14A-003: Prism Johnson "...was incorporated in 1992 and is amongst the largest ..."): a founding clause after the company's name
@@ -6195,7 +6201,7 @@ def own_words(text, name: str = "") -> str:
     t = t[:1].upper() + t[1:] if t[:1].islower() and str(text or "").lstrip(" “”\"'").startswith("(") else t
     # fix20 (LIVE14A-003): a heading run into the text ends it there; a founding clause after the name is left off; a third party's account
     # (a past ranking, "Measured by", a period of years) is no line of its own words
-    hd = _HEADING.search(t)
+    hd = _HEADING_RUN_IN.search(t)
     if hd and hd.start() > 0:
         t = t[:hd.start()].rstrip(" ,;:")
     t = without_history(t)
