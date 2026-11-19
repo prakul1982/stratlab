@@ -20,7 +20,8 @@ test("LIVE4-010: DataTable's compact phone rows: two short lines, brief figures 
   assert.match(t, /phone\?: false;/);
   assert.match(t, /compact\?: boolean;/);
   assert.match(t, /\$\{stack && compact \? " compact" : ""\}/);
-  assert.match(t, /c\.brief && "k-brief", c\.phone === false && "k-phone-off"/);
+  // (updated on purpose, LIVE16A-014: a brief figure may keep its short label, `briefLabel`, between the two)
+  assert.match(t, /c\.brief && "k-brief", c\.brief && c\.briefLabel && "k-brief-label", c\.phone === false && "k-phone-off"/);
   // a lone dash is "no figure": left off a compact phone row, but a cell still loading (no text of its own) is kept
   assert.match(t, /export const dashOnly = \(text: string\): boolean => \/\^\\s\*\[–—-\]\\s\*\$\/\.test\(text\);/);
   // e79 (LIVE15A-014, updated on purpose): a phone card's lead cell that is only a dash is left out too, compact or not
