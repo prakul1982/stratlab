@@ -1,0 +1,129 @@
+"""Lane site78: the LIVE15A / LIVE15B site findings (live review after Release 77, Thu 19 Nov 2026)."""
+import json
+import time
+from datetime import date, datetime, timezone
+
+import httpx
+
+from app import main  # noqa: F401, I001  (first: the app loads its jobs before the modules built on them)
+from app.intel import yahoo as Y
+
+# 18 Nov 2026 (New York on EST): the session 09:30-16:00 ET = 14:30-21:00 UTC, the kept copy's last trade 10:52 ET, the brief built 16:50 ET
+OPEN = datetime(2026, 11, 18, 14, 30, tzinfo=timezone.utc).timestamp()
+CLOSE = datetime(2026, 11, 18, 21, 0, tzinfo=timezone.utc).timestamp()
+KEPT = datetime(2026, 11, 18, 15, 52, 49, tzinfo=timezone.utc).timestamp()
+BUILT = datetime(2026, 11, 18, 21, 50, tzinfo=timezone.utc).timestamp()
+PREV_DAY = datetime(2026, 11, 17, 14, 30, tzinfo=timezone.utc).timestamp()
+
+
+def _answer(symbol: str, prev: float, price: float, last: float) -> dict:
+    return {"chart": {"result": [{
+        "meta": {"symbol": symbol, "currency": "USD", "exchangeTimezoneName": "America/New_York", "instrumentType": "INDEX",
+                 "regularMarketPrice": price, "regularMarketTime": int(last),
+                 "currentTradingPeriod": {"regular": {"start": int(OPEN), "end": int(CLOSE)}}},
+        "timestamp": [int(PREV_DAY), int(OPEN)],
+        "indicators": {"quote": [{"open": [prev, price], "high": [prev, price], "low": [prev, price], "close": [prev, price],
+                                  "volume": [1, 1]}]}}], "error": None}}
+
+
+def _yahoo(fresh_price: float | None, fresh_last: float):
+    seen = []
+
+    def reply(r: httpx.Request):
+        seen.append(r.url.host)
+        if r.url.host == "query2.finance.yahoo.com":
+            if fresh_price is None:
+                return httpx.Response(200, json=_answer("^GSPC", 7340.53, 7303.98, KEPT))
+            return httpx.Response(200, json=_answer("^GSPC", 7340.53, fresh_price, fresh_last))
+        return httpx.Response(200, json=_answer("^GSPC", 7340.53, 7303.98, KEPT))
+    return Y.Yahoo(transport=httpx.MockTransport(reply)), seen
+
+
+# ---------- LIVE15A-001: the US brief is written from the day's closes, never a level an edge copy kept ----------
+def test_live15a_001_a_closing_read_that_is_a_kept_mid_session_copy_is_asked_again_and_the_close_stands():
+    y, seen = _yahoo(7323.63, CLOSE + 2)
+    got = y.closing_chart("^GSPC", 21, now=BUILT)
+    assert got["candles"][-1]["c"] == 7323.63
+    assert seen == ["query1.finance.yahoo.com", "query2.finance.yahoo.com"]
+
+
+def test_live15a_001_no_close_is_given_when_every_address_sends_the_kept_copy():
+    y, _ = _yahoo(None, KEPT)
+    assert y.closing_chart("^GSPC", 21, now=BUILT) is None
+
+
+def test_live15a_001_the_briefs_index_close_refuses_a_level_older_than_the_close(monkeypatch):
+    from app.newsletter import content
+    y, _ = _yahoo(None, KEPT)
+    monkeypatch.setattr(main.research_hub, "yahoo", y)
+    monkeypatch.setattr(time, "time", lambda: BUILT)
+    assert content.index_close("^GSPC", date(2026, 11, 18), prev="2026-11-17") is None
+    y2, _ = _yahoo(7323.63, CLOSE + 2)
+    monkeypatch.setattr(main.research_hub, "yahoo", y2)
+    got = content.index_close("^GSPC", date(2026, 11, 18), prev="2026-11-17")
+    assert got == {"price": 7323.63, "change_pct": round((7323.63 / 7340.53 - 1) * 100, 2)} and got["change_pct"] == -0.23
+
+
+def test_live15a_001_a_level_from_before_the_close_is_not_taken_as_the_days_close(monkeypatch):
+    from app.newsletter import content
+    monkeypatch.setattr(content, "index_close", lambda *a, **k: None)
+    live = [{"name": "S&P 500", "price": 7303.98, "change_pct": -0.5, "day": "2026-11-18", "stale": False, "pre_close": True}]
+    monkeypatch.setattr(main.research_hub, "indices", lambda region: live)
+    assert content.index_moves("US", date(2026, 11, 18), False) == []
+    live[0]["pre_close"] = False
+    assert content.index_moves("US", date(2026, 11, 18), False)[0]["price"] == 7303.98
+
+
+def test_live15a_001_a_daily_brief_with_no_index_close_waits_for_the_next_check(monkeypatch):
+    from app.newsletter import content, job
+    from zoneinfo import ZoneInfo
+    monkeypatch.setattr(content, "market_facts", lambda r, d, w: {"kind": "market", "region": r, "day": d.isoformat(), "weekly": w,
+                                                                    "headlines": [{"headline": "x"}]})
+    ny = ZoneInfo("America/New_York")
+    assert job.build_market("US", date(2026, 11, 18), store=False, now=datetime(2026, 11, 18, 16, 55, tzinfo=ny)) is None
+    monkeypatch.setattr(job, "make_issue", lambda facts, scope: {"id": "x", **facts})
+    assert job.build_market("US", date(2026, 11, 18), store=False, now=datetime(2026, 11, 18, 18, 55, tzinfo=ny))["id"] == "x"
+
+
+def test_live15a_001_the_stored_brief_and_its_post_are_set_to_the_days_closes(monkeypatch):
+    from app import blog, db
+    from app.newsletter import content, job
+    closes = {"^GSPC": (7323.63, -0.23), "^IXIC": (24429.88, 0.42), "^DJI": (50198.17, -1.11)}
+    monkeypatch.setattr(content, "INDICES", {"US": [("S&P 500", "^GSPC"), ("NASDAQ", "^IXIC"), ("DOW JONES", "^DJI")]})
+    monkeypatch.setattr(content, "index_close", lambda sym, day, since=None, prev=None:
+                        {"price": closes[sym][0], "change_pct": closes[sym][1]})
+    monkeypatch.setattr(content, "reference_day", lambda r, d, w: date(2026, 11, 17))
+    issue = {"id": "market.US.2026-11-18", "kind": "market", "region": "US", "day": "2026-11-18", "weekly": False,
+             "at": "2026-11-19T03:20+05:30", "subject": "US market brief, 18 Nov 2026: S&P 500 −0.50%", "summary": "S&P 500 −0.50%.",
+             "ai": True, "ai_summary": "The S&P 500 fell 0.50% to 7,303.98.",
+             "indices": [{"name": "S&P 500", "price": 7303.98, "change_pct": -0.5}, {"name": "NASDAQ", "price": 24322.71, "change_pct": -0.02},
+                         {"name": "DOW JONES", "price": 50089.71, "change_pct": -1.32}],
+             "sections": [{"title": "Indices", "items": [{"text": "S&P 500: 7,303.98, −0.50% on the day"}]}]}
+    today = date.today().isoformat()
+    issue["day"] = today
+    iid = f"market.US.{today}"
+    issue["id"] = iid
+    store = {"news-index:market:US": json.dumps([iid]), f"news:market:US:{today}": json.dumps(issue)}
+    monkeypatch.setattr(db, "get_setting", store.get)
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    posts = []
+    monkeypatch.setattr(blog, "rewrite_brief", lambda i: posts.append(i) or True)
+    assert job.repair_closes("US") == [iid]
+    kept = json.loads(store[f"news:market:US:{today}"])
+    assert [i["price"] for i in kept["indices"]] == [7323.63, 24429.88, 50198.17]
+    assert [i["change_pct"] for i in kept["indices"]] == [-0.23, 0.42, -1.11]
+    assert "−0.23%" in kept["subject"] and "7,303.98" not in kept["text"] and "ai_summary" not in kept
+    assert posts and posts[0]["indices"][0]["price"] == 7323.63
+    assert job.repair_closes("US") == []                     # a stored brief at the closes is left as it is
+
+
+def test_live15a_001_a_corrected_issue_rewrites_its_existing_post_in_place(monkeypatch):
+    from app import blog
+    issue = {"id": "market.US.2026-11-18", "kind": "market", "region": "US", "day": "2026-11-18", "weekly": False,
+             "indices": [{"name": "S&P 500", "price": 7323.63, "change_pct": -0.23}], "sections": []}
+    monkeypatch.setattr(blog, "_open_day", lambda r, d: True)
+    monkeypatch.setattr(blog, "get", lambda slug: {"slug": slug, "body": {"gen": blog.BRIEF_GEN}})
+    wrote = []
+    monkeypatch.setattr(blog, "_rewrite", lambda post: wrote.append(post))
+    assert blog.rewrite_brief(issue)
+    assert wrote[0]["slug"] == "us-market-brief-2026-11-18" and "−0.23%" in wrote[0]["title"]
