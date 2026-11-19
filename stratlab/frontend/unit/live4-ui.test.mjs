@@ -123,8 +123,9 @@ test("LIVE4-005 / 007: the live count's time in its header; the read time with i
   // (merged with LIVE4-024's "read day, time" line: the time part carries the zone)
   assert.match(mood, /\$\{fmtTime\(m\.read_at, \{ tz: marketTz\(region\), zone: true \}\)\}/);
   assert.doesNotMatch(mood, /toLocaleTimeString\(region/);
-  assert.match(mood, /key: "d", header: sessionHeader\(closedDay, day\)/);
-  assert.match(mood, /header: closedDay \? `Move on \$\{day\(closedDay\)\}` : "Move today"/);
+  // (updated on purpose, site78 LIVE15A-002: a session read over 20 minutes old heads the day's column with its time, not "Today")
+  assert.match(mood, /key: "d", header: !closedDay && oldAt \? `At \$\{oldAt\}` : sessionHeader\(closedDay, day\)/);
+  assert.match(mood, /header: closedDay \? `Move on \$\{day\(closedDay\)\}` : oldAt \? `Move at \$\{oldAt\}` : "Move today"/);
   assert.match(mood, /title=\{ai \? "No newer headlines yet" : "No headlines yet today"\}/);
 });
 
@@ -225,7 +226,8 @@ test("LIVE4-020: one source for the plan cards (landing and Plans page alike); t
   assert.match(login, /\{KEY\[p\]\.map\(\(f\) => <li key=\{f\}><span aria-hidden="true">✓<\/span>\{f\}<\/li>\)\}/);
   assert.match(login, /<summary>Every feature, plan by plan<\/summary>/);
   // the full lists load when the fold opens, in their own file (the landing page's JavaScript budget)
-  assert.match(login, /void import\("\.\.\/lib\/planFeatures"\)\.then\(\(m\) => setAll\(m\.FEATURES\)\)/);
+  // (updated on purpose, site78 LIVE15A-003: the module is kept, so the Free list can leave out the sample deck when the server has none)
+  assert.match(login, /void import\("\.\.\/lib\/planFeatures"\)\.then\(setAll\)/);
   assert.doesNotMatch(read("src/lib/plans.ts"), /export const FEATURES/);
   const F = await import("../src/lib/planFeatures.ts");
   for (const p of ["free", "basic", "pro"]) assert.ok(F.FEATURES[p].length >= 6, p);
