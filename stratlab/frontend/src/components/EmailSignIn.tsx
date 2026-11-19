@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { early, emailSignInOn, sendEmailCode, verifyEmailCode } from "../lib/signin";
 import { codeDigits, emailLooksRight, emailSignInProblem } from "../lib/signinError";
 
@@ -20,6 +20,11 @@ export function EmailSignIn({ next, signup = false }: { next?: string | null; si
   const [wait, setWait] = useState(0);
   // R61: opened from an "or sign in with email" link (/login#email), the address box is ready to type in
   const box = useRef<HTMLInputElement>(null);
+  // LIVE17B-002: at its box before the first paint (a phone opened from a plan card showed /plans' footer for 0.6 s, then jumped)
+  useLayoutEffect(() => {
+    if (location.hash !== "#email" || !box.current) return;
+    box.current.scrollIntoView({ block: "center", behavior: "instant" });
+  }, []);
   useEffect(() => {
     const e = early();
     // "Email me a code" pressed in the start-up frame: sent now, once; the frame's box had the focus: this one has it
@@ -27,7 +32,6 @@ export function EmailSignIn({ next, signup = false }: { next?: string | null; si
     else if (e.focus && box.current) box.current.focus({ preventScroll: true });
     if (location.hash !== "#email" || !box.current) return;
     box.current.focus({ preventScroll: true });
-    box.current.scrollIntoView({ block: "center" });
   }, []);     // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (wait <= 0) return;

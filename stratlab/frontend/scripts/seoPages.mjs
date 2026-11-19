@@ -153,7 +153,12 @@ export function loginFrame(template, { heading, summary, signup = false }) {
     + `<button type="submit" class="btn outline" disabled>Email me a code</button></div><span id="boot-email-help" class="small muted">We email a one-time code and link. No password.</span></form></div>\n`
     + `<p class="small muted">${small}<a class="link" href="/terms">Terms</a> and <a class="link" href="/privacy">Privacy policy</a>.</p>\n`
     + `${words}\n${b[1].replace('class="boot-foot"', 'class="boot-foot boot-text"')}\n</div></div>\n</section>`;
-  return template.replace(block, () => frame).replace("</body>", '<script src="/signin-early.js" async></script>\n</body>');
+  // LIVE17B-001: read from the head, first, at high priority, and run (defer) once the frame is parsed and before the app's own module: at
+  // the end of the body, async, it came behind the app's chunks and the frame's buttons waited until 3.6 s
+  const early = '<script src="/signin-early.js" defer fetchpriority="high"></script>';
+  const head = '<script src="/config.js"></script>';
+  if (!template.includes(head)) throw new Error("index.html has no config.js script");
+  return template.replace(block, () => frame).replace(head, () => `${head}\n${early}`);
 }
 
 /** The template (index.html as built) with one page's own tags, and its own heading and words in the plain block. */
@@ -175,7 +180,9 @@ export function pageHtml(template, { title, description, canonical, index, jsonl
   swap(/<meta name="twitter:description" content="[^"]*">/, `<meta name="twitter:description" content="${attr(description)}">`);
   swap(/<!--jsonld-->/, jsonld);
   if (heading && hero) return heroFrame(template, { heading, summary: summary?.length ? summary : [description], after, fonts });
-  if (heading && login) return loginFrame(template, { heading, summary: summary?.length ? summary : [description], signup: login === "signup" });
+  // LIVE17B-006: the sign-in page's own words are its lede; its description printed again under the small print (with scripts off) said the
+  // same sentence twice. Only words of its own (a summary) are added.
+  if (heading && login) return loginFrame(template, { heading, summary: summary?.length ? summary : [], signup: login === "signup" });
   if (heading) {
     // the page's one heading and its words, where index.html has the home page's (the app replaces the block when it draws)
     const boot = /(<div class="boot[^"]*" data-boot>\n)<h1>[^<]*<\/h1>\n<p>[^<]*<\/p>/;
