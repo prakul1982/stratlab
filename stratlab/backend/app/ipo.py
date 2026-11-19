@@ -1120,6 +1120,16 @@ def first_session(row: dict, day: str, listed: str | None) -> bool:
         return False
 
 
+def first_open_intraday(row: dict, yahoo, sym: str, listed: str) -> dict | None:
+    """The issue's first session's opening price from the intraday candles ({"t", "o"}), or None (not traded yet, or not readable)."""
+    try:
+        bars = yahoo.chart(sym, "5m", 5)["candles"]
+    except Exception:
+        return None
+    b = next((b for b in bars if b.get("o") and str(b.get("t", ""))[:10] >= listed and first_session(row, str(b["t"])[:10], listed)), None)
+    return {"t": str(b["t"])[:10], "o": round(float(b["o"]), 4)} if b else None
+
+
 def performance(row: dict, yahoo, today: date | None = None, now: datetime | None = None) -> dict | None:
     """A listed issue against its issue price, from the daily prices: the listing price (the first session's opening price), that
     session's close, and the latest close, each against the issue price. None until it has traded. An Indian issue's closes are the
@@ -1128,6 +1138,7 @@ def performance(row: dict, yahoo, today: date | None = None, now: datetime | Non
     listed = row.get("listing") if row["market"] == "IN" else row.get("priced")
     if not sym or not listed:
         return None
+    age = None
     try:
         age = ((today or _now().date()) - date.fromisoformat(listed)).days
         bars = yahoo.chart(sym, "1d", max(30, min(age + 15, 700)))["candles"]
@@ -1135,6 +1146,10 @@ def performance(row: dict, yahoo, today: date | None = None, now: datetime | Non
         bars = []
     first = next((b for b in bars if b["t"][:10] >= listed), None)
     opening = first
+    if (opening is None or not opening.get("o")) and age is not None and 0 <= age <= (US_FIRST_SESSION_DAYS if row.get("market") == "US" else 0):
+        # LIVE17A-007: in its first session the daily prices often have no candle yet (Anthropic, ANT: "–" four hours after it opened at
+        # $111.50): the first open is read from the day's intraday candles
+        opening = first_open_intraday(row, yahoo, sym, listed) or opening
     bars, first = _settle(row, bars, first, now or _now())
     bse = row.get("bse_perf") or {}
     issue = issue or bse.get("issue_price")
@@ -1318,6 +1333,16 @@ def official_perf(row: dict, perf: dict | None, now: datetime | None = None) -> 
             out["latest"], out["latest_date"], out["change_pct"] = c["c"], c["t"], round((c["c"] / out["issue_price"] - 1) * 100, 2)
             break
     return out
+
+
+def listing_session_now(row: dict, now: datetime) -> bool:
+    """Whether today (the market's own day) may be the issue's first session: an Indian issue's listing day; a US issue's day within
+    US_FIRST_SESSION_DAYS of its pricing."""
+    listed = row.get("listing") if row.get("market") == "IN" else row.get("priced")
+    if not listed:
+        return False
+    today = now.astimezone(IST if row.get("market") == "IN" else NY).date().isoformat()
+    return first_session(row, today, listed)
 
 
 def perf_for(row: dict, ttl: float = 600) -> dict | None:
@@ -1932,6 +1957,10 @@ def list_row(row: dict, now: datetime) -> dict:
     pub = public(row, now)
     sub = row.get("sub") or {}
     perf = official_perf(row, row.get("perf"), now)
+    if pub["stage"] == "listed" and not (perf or {}).get("listing_price") and listing_session_now(row, now):
+        # LIVE17A-007: the lists' stored figures are taken after the close; on its first session an issue's opening price is read here
+        # (kept 10 minutes for every visitor) once it has opened
+        perf = official_perf(row, perf_for(row) or perf, now)
     keys = ("id", "market", "segment", "name", "symbol", "stage", "open", "close", "close_time", "allotment", "allotment_expected", "listing", "listing_expected",
             "low", "high", "price", "lot", "min_amount", "min_basis", "size", "size_basis", "size_base", "size_parts", "issue_status", "exchanges", "exchange",
             "expected", "priced", "filed", "shares", "currency", "size_was")
