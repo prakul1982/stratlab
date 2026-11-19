@@ -1051,7 +1051,7 @@ class Job(news_job.Job):
             ran += 1
             self.status.update(last_run=now.isoformat(), last_error=None)
         for region in REGIONS:
-            if self.ready(region) and not self.runner.running:
+            if self.ready(region) and not getattr(self.runner, "running", None):
                 try:
                     self.repair(region, now)
                 except Exception as e:
