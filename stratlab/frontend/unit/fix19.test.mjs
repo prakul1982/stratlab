@@ -70,9 +70,16 @@ test("no page writes its own ' · StratLab': the app's titles go through withBra
   assert.match(read("scripts/seoPages.mjs"), /title: withBrand\("Page not found"\)/);
 });
 
-test("the sidebar's More below pill has a row of its own under the menu's edge line, and 'below' means the last item is not in view", () => {
+// updated on purpose (owner, 19 Nov: the boxed pill between two lines "looks trash"): the cue is quiet muted words with no box and no line
+// of its own; the foot's top edge is the one line between the menu and the foot. It still sits under the menu's box, never over an item.
+test("the sidebar's More below cue sits under the menu with no box or line of its own, and 'below' means the last item is not in view", () => {
   const css = read("src/styles.css"), shell = read("src/components/Shell.tsx");
-  assert.match(css, /\.side-more-row \{[^}]*border-top: 1px solid var\(--line-2\)/);
+  const row = css.match(/\n\.side-more-row \{[^}]*\}/)[0], cue = css.match(/\n\.side-more \{[^}]*\}/)[0];
+  assert.doesNotMatch(row, /border/);
+  assert.match(cue, /border: 0;/);
+  assert.match(cue, /background: none;/);
+  assert.match(cue, /color: var\(--muted\)/);
+  assert.match(css, /\n\.side-foot \{[^}]*border-top: 1px solid var\(--line\)/);
   assert.doesNotMatch(css.match(/\n\.side-more \{[^}]*\}/)[0], /z-index|position: (absolute|fixed)/);
   assert.match(shell, /<div className="side-more-row">\s*<button type="button" className="side-more"/);
   assert.match(shell, /const below = last \? last\.getBoundingClientRect\(\)\.bottom - el\.getBoundingClientRect\(\)\.bottom > 1/);

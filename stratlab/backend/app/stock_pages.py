@@ -1713,6 +1713,10 @@ def fresh(stored: dict | None, region: str, now: float | None = None) -> bool:
         return False
     if (stored["facts"].get("v") or 1) < FACTS_VERSION:
         return False                     # a page built before the facts a page shows now: rebuilt when next opened
+    if cap_rule_due(stored["facts"]):
+        # LIVE16B-002: an Indian page built before today's share-count rules is built again when next opened, not only in its turn in the
+        # screens' sweep (20 pages a half hour, behind the pages with none): TCS's page still said ₹8.35 lakh cr 1.5 h after Release 78
+        return False
     if financial_mismatch(stored["facts"]) and now - ts >= UNREAD_FRESH:
         return False                     # r581: a financial filer's revenue below its net profit: built again (at most hourly)
     if revenue_part_due(stored["facts"]) and now - ts >= UNREAD_FRESH:

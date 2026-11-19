@@ -45,7 +45,8 @@ test("rel1 item 5: a lot the exchange hasn't given is said in words, never a bar
   // (updated on purpose, site76 LIVE14A-013: the words also say whether the issue's page was found and read, and when)
   assert.match(page, /export const lotMissing = \(tab: Stage, r\?: Pick<IpoRow, "page" \| "page_at">\): string => \{\n  if \(tab === "upcoming"\) return "Not announced yet";/);
   assert.match(page, /return "Not on the exchange's page yet";/);
-  assert.match(page, /data-testid="ipo-lot-none">\{lotMissing\(tab, r\)\}/);
+  // (updated on purpose, LIVE16B-006: the cell carries the reason as hover text when NSE has no page for the issue)
+  assert.match(page, /data-testid="ipo-lot-none" title=\{r\.page === false \? NO_PAGE_WHY : undefined\}>\{lotMissing\(tab, r\)\}/);
   assert.doesNotMatch(page, /minText\(r\)\}<\/span><\/> : "–"\)/);
 });
 

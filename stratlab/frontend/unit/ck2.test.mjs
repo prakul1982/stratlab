@@ -75,7 +75,8 @@ test("CK-2 (R1, R13, R2): no card is stretched beside a taller one with its note
   assert.doesNotMatch(css, /\.k-explore \.explore-grid/);
   // Money home: the tax card's explanation is behind its (i); each card its own height
   const home = read("src/pages/SpaceHomes.tsx");
-  assert.match(home, /<Panel title=\{year \? `Tax, \$\{year\.label\}` : "Tax this year"\} info=\{how\}/);
+  // (updated on purpose, LIVE16B-004: one title from the first paint, "Tax, FY 2026-27" with the year unbroken, never "Tax this year" first)
+  assert.match(home, /<Panel title=\{taxTitle\(year \? year\.fy : thisFy\(\)\)\} info=\{how\}/);
   assert.match(home, /<p className="tiny muted">\{year\?\.count \?/);
   assert.match(home, /An estimate to check with your CA\.<\/p>/);
   assert.match(home, /className="grid2 space-panels money-panels"/);

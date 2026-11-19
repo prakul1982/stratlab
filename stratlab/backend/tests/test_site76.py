@@ -84,7 +84,8 @@ def test_live14a_001_a_level_read_long_ago_in_the_session_is_delayed_not_live():
 def test_live14a_001_the_mood_headline_rests_only_on_levels_read_in_the_last_minutes():
     from pathlib import Path
     src = Path(__file__).resolve().parents[1].joinpath("app/intel/mood.py").read_text()
-    assert 'fresh = [i for i in levels if not i.get("delayed")]' in src
+    # (updated on purpose, site79 LIVE16A-001: nor on a level read after the close that is from before it)
+    assert 'fresh = [i for i in levels if not i.get("delayed") and not i.get("pre_close")]' in src
     assert 'headline_of(fresh, sectors, cmp' in src
 
 

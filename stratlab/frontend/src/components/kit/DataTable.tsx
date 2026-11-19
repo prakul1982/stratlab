@@ -25,6 +25,9 @@ export type Column<R> = {
   lead?: boolean;                            // on a phone card (`stack`), this cell comes right under the row's name, across the card: the answer first (DE-004, DE-035)
   /** With the table's `compact`: on a phone this figure sits on the row's first line, right of the name, with no label (a price, the day's move). */
   brief?: boolean;
+  /** With `brief`: the figure keeps its short label on the phone's first line (a day: "19 Nov 186", LIVE16A-014: Mood's breadth count on a
+   *  phone said "186" with no day beside "17 Nov 75"). */
+  briefLabel?: boolean;
   /** With the table's `compact`: false leaves this column off a phone's two-line row (a figure the company page has; the desktop table keeps it). */
   phone?: false;
   /** false leaves this column off when the table is narrower than a wide desktop's (under 900 px: a 1280 or 1024 screen with the menu
@@ -41,9 +44,9 @@ export type Column<R> = {
 };
 
 const info = (c: { header?: ReactNode; info?: ReactNode }) => <Info label={`About ${typeof c.header === "string" ? c.header.toLowerCase() : "this column"}`}>{c.info}</Info>;
-const cls = (c: { numeric?: boolean; wrap?: boolean; action?: boolean; lead?: boolean; up?: boolean; corner?: boolean; brief?: boolean; phone?: false; narrow?: false; tight?: false }) =>
+const cls = (c: { numeric?: boolean; wrap?: boolean; action?: boolean; lead?: boolean; up?: boolean; corner?: boolean; brief?: boolean; briefLabel?: boolean; phone?: false; narrow?: false; tight?: false }) =>
   [c.numeric && "k-num", c.wrap && "k-wrap", c.action && "k-act", c.action && c.corner && "k-corner", c.lead && "k-lead", c.up && "k-first",
-    c.brief && "k-brief", c.phone === false && "k-phone-off", c.narrow === false && "k-narrow-off", c.tight === false && "k-tight-off"].filter(Boolean).join(" ") || undefined;
+    c.brief && "k-brief", c.brief && c.briefLabel && "k-brief-label", c.phone === false && "k-phone-off", c.narrow === false && "k-narrow-off", c.tight === false && "k-tight-off"].filter(Boolean).join(" ") || undefined;
 
 /** A cell that says only "no figure" (a dash, or nothing): a phone card leaves it out instead of a label over a dash (LIVE4-010: every
  * Results card ended "Options imply –"). */

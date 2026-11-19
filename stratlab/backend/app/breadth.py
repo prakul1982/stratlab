@@ -937,15 +937,77 @@ def check_alerts(groups: list[str], now: datetime, profile_fn, allowed_fn, send=
 
 
 # ---------- the daily job ----------
+# ---------- the stored closes checked again (LIVE16A-001) ----------
+REPAIR_AFTER = 2 * 3600       # seconds after a market's run time that the day's stored closes are checked against the settled ones
+REPAIR_CHECK = 8              # the stored rows checked: the day's most traded by value
+CLOSE_DRIFT = 0.001           # a stored close over 0.1% from the settled close of its day is not that close
+
+
+def stored_close_drift(region: str, read, n: int = REPAIR_CHECK) -> list[str]:
+    """LIVE16A-001: the US heatmap and movers stored on 18 Nov said "closes of 18 Nov" over a copy the source's edge kept at 10:52 ET (TJX
+    $143.09 +10.20% against a close of $140.30 +8.05%). The symbols, among the stored day's `n` most traded by value, whose stored last
+    close is over CLOSE_DRIFT from that day's close as `read(symbol)` (daily candles, settled) gives it now. One that can't be read is
+    passed over."""
+    doc = heatmap.load(region)
+    day, stocks = doc.get("day"), doc.get("stocks") or {}
+    if not day or not stocks:
+        return []
+    rows = {s: r for s, r in stocks.items() if isinstance(r, list) and len(r) >= 3 and r[0] and r[-2]}
+    off = []
+    for s in sorted(rows, key=lambda x: -(rows[x][0] * rows[x][-2]))[:n]:
+        try:
+            bars = read(s) or []
+        except Exception:
+            continue
+        close = next((b.get("c") for b in reversed(bars) if str(b.get("t", ""))[:10] == day), None)
+        if close and abs(rows[s][0] / close - 1) > CLOSE_DRIFT:
+            off.append(s)
+    return off
+
+
 class Job(news_job.Job):
     """After each market's close on its trading days (RUN_AT), the run for that market, marked as done in the database
     (newsjob:breadth-<region>) only once it has stored its counts, so a restart doesn't repeat it and a failed run is
-    tried again half an hour later. A market with no stored history yet is filled in at the first chance, any day."""
+    tried again half an hour later. A market with no stored history yet is filled in at the first chance, any day.
 
-    def __init__(self, runner: Runner, ready=lambda region: True):
+    LIVE16A-001: REPAIR_AFTER past the run time, once a day, the stored day's closes are checked against the settled closes
+    (`check_read(region, symbol)`, daily candles); when they differ, the market is run again (its stored rows, movers and the counts of the
+    recent days, which the run re-makes) and `after_repair(region)` reads the Mood card again from them."""
+
+    def __init__(self, runner: Runner, ready=lambda region: True, check_read=None, after_repair=None):
         super().__init__()
         self.runner, self.ready = runner, ready
+        self.check_read, self.after_repair = check_read, after_repair
         self.retry: dict[str, float] = {}
+
+    def repair(self, region: str, now: datetime) -> list[str]:
+        """The day's stored closes checked once REPAIR_AFTER past the run time, and the market run again when they are off. Returns the
+        symbols found off (empty when none, or not checked)."""
+        if not self.check_read:
+            return []
+        tz, at = RUN_AT[region]
+        local = now.astimezone(ZoneInfo(tz))
+        key = f"breadth-{region}-repair"
+        start = datetime.combine(local.date(), datetime.strptime(calendar.shifted(region, local.date(), at), "%H:%M").time(), ZoneInfo(tz))
+        if self.last.get(key) == local.date().isoformat() or local < start + timedelta(seconds=REPAIR_AFTER) \
+                or not calendar.is_trading_day(region, local.date()):
+            return []
+        self.last[key] = local.date().isoformat()
+        off = stored_close_drift(region, lambda sym: self.check_read(region, sym))
+        if not off:
+            return []
+        print(f"breadth: the stored {region} closes of {heatmap.load(region).get('day')} differ from the settled ones ({', '.join(off)}); run again")
+        try:
+            result = job_status.bounded(lambda: self.runner.run(region, now), RUN_MAX + 300, f"The {region} breadth run")
+        except Exception as e:
+            self.status["last_error"] = f"{region} repair: {str(e)[:200]}"
+            return off
+        if result.get("ok") and self.after_repair:
+            try:
+                self.after_repair(region)
+            except Exception as e:
+                print("breadth: the Mood card couldn't be read again:", str(e)[:160])
+        return off
 
     def start(self):
         threading.Thread(target=self._loop, daemon=True, name="breadth").start()
@@ -988,6 +1050,12 @@ class Job(news_job.Job):
             self.last[f"{name}-filled"] = "1"
             ran += 1
             self.status.update(last_run=now.isoformat(), last_error=None)
+        for region in REGIONS:
+            if self.ready(region) and not getattr(self.runner, "running", None):
+                try:
+                    self.repair(region, now)
+                except Exception as e:
+                    print("breadth repair:", region, str(e)[:160])
         return ran
 
     def _has_history(self, region: str, now: datetime | None = None) -> bool:

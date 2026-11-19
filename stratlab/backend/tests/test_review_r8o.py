@@ -67,7 +67,9 @@ def test_an_indian_page_of_an_older_facts_version_is_rebuilt_like_a_us_one():
     assert stock_pages.FACTS_VERSION >= 5
     close = stock_pages.last_close("IN")[1].timestamp() + stock_pages.settle("IN")
     old = {"ts": close + 60, "facts": india(v=4, div_yield=3.08)}
-    now = {"ts": close + 60, "facts": india()}
+    # (updated on purpose, site79 LIVE16B-002: a page built now carries today's share-count rule; one without it is built again when opened)
+    from app.intel.screener import CAP_RULE
+    now = {"ts": close + 60, "facts": india(cap_rule=CAP_RULE)}
     assert not stock_pages.fresh(old, "IN", now=close + 120) and stock_pages.fresh(now, "IN", now=close + 120)
 
 
