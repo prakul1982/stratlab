@@ -159,7 +159,7 @@ def view(region: str, universe: str | None = None, min_cap: float | None = None,
     out = {"market": region, "universe": group, "universe_name": g["name"], "universes": heatmap.universes(region), "as_of": doc.get("day"),
            "live": {k: v for k, v in live.items() if k != "quoted"} if live else None,
            "behind": with_live and not live and heatmap.behind(region, doc.get("day")),
-           "cap_unit": heatmap.CAP_UNIT[region], "pending": not stocks, "marks": same_day, "min_cap": min_cap, "top": top,
+           "cap_unit": heatmap.CAP_UNIT[region], "pending": not stocks, "unsettled": bool(doc.get("unsettled")), "marks": same_day, "min_cap": min_cap, "top": top,
            "members": 0, "with_prices": 0, "matching": 0, "lists": {k: {"total": 0, "rows": []} for k in LISTS}}
     if not stocks:
         return out
@@ -274,6 +274,11 @@ def public_page(region: str) -> str:
     body = [crumbs, f"<h1>{where} market movers</h1>"]
     if v["pending"]:
         body.append('<p class="muted">The lists fill in after the next market close, once each stock\'s daily close has been stored.</p>')
+    elif v.get("unsettled"):
+        # LIVE17A-001: the stored prices were found off the day's settled closes and are being read again: not called closes meanwhile
+        body.append(f'<p class="muted">{e(group)} on <b>{e(day)}</b>, at prices read during that session: the day\'s closes are being read '
+                    "again and replace them. Gainers, losers, the most traded, volume spikes and 52-week highs and lows. Facts, not advice.</p>")
+        body.append('<nav class="links" aria-label="Lists on this page">' + "".join(f'<a href="#{k}">{TITLES[k]}</a>' for k in LISTS) + "</nav>")
     else:
         body.append(f'<p class="muted">{e(group)} at the close of <b>{e(day)}</b>: gainers, losers, the most traded, volume spikes and '
                     "52-week highs and lows, from each stock's daily close. Facts, not advice.</p>")
@@ -319,7 +324,9 @@ def public_page(region: str) -> str:
              "@media (min-width:641px){.mv table{table-layout:fixed}.mv th:first-child{width:46%}}.mv td:first-child .muted{font-size:13px;margin-left:4px}.links{display:flex;flex-wrap:wrap;gap:8px 18px;margin:12px 0}"
              ".links a{display:inline-flex;align-items:center;min-height:44px}.mv-cta p{margin:0;display:flex;flex-wrap:wrap;gap:12px;align-items:center}</style>")
     title = page_title(f"{where} market movers: gainers, losers, most traded")
-    desc = (f"{group} at the close of {day}: the top gainers and losers, the most traded stocks, volume spikes and 52-week highs and lows."
+    desc = (f"{group} on {day}, at prices read during that session (the day's closes are being read again): the top gainers and losers, the "
+            "most traded stocks, volume spikes and 52-week highs and lows." if v.get("unsettled") and not v["pending"] else
+            f"{group} at the close of {day}: the top gainers and losers, the most traded stocks, volume spikes and 52-week highs and lows."
             if not v["pending"] else f"{where} stocks' gainers, losers, most traded, volume spikes and 52-week highs and lows at the close.")
     return sp._page(sp._head(title, desc, canonical, ld + style), None, "".join(body))
 

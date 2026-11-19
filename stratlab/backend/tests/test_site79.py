@@ -132,6 +132,9 @@ def test_live16a_001_stored_closes_that_differ_from_the_settled_ones_run_the_mar
             return {"ok": True}
     settled["TJX"] = 140.30
     job = breadth.Job(R(), check_read=lambda r, s: read(s), after_repair=moods.append)
+    # updated on purpose (site80, LIVE17A-001): the first check after a start runs at any hour (test_site80 covers it); this test is of the
+    # daily check after it
+    job.last["breadth-US-repair-boot"] = "2026-11-18"
     from zoneinfo import ZoneInfo
     ny = ZoneInfo("America/New_York")
     early = datetime(2026, 11, 18, 17, 30, tzinfo=ny)                 # before the run time plus two hours: not yet

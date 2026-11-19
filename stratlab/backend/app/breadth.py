@@ -972,7 +972,9 @@ class Job(news_job.Job):
 
     LIVE16A-001: REPAIR_AFTER past the run time, once a day, the stored day's closes are checked against the settled closes
     (`check_read(region, symbol)`, daily candles); when they differ, the market is run again (its stored rows, movers and the counts of the
-    recent days, which the run re-makes) and `after_repair(region)` reads the Mood card again from them."""
+    recent days, which the run re-makes) and `after_repair(region)` reads the Mood card again from them. LIVE17A-001: also once at the first
+    tick after a start, whatever the hour; while the stored rows are found off, the stored day is marked `unsettled` (heatmap.mark_unsettled)
+    and the pages don't call its prices closes."""
 
     def __init__(self, runner: Runner, ready=lambda region: True, check_read=None, after_repair=None):
         super().__init__()
@@ -987,21 +989,36 @@ class Job(news_job.Job):
             return []
         tz, at = RUN_AT[region]
         local = now.astimezone(ZoneInfo(tz))
-        key = f"breadth-{region}-repair"
+        key, boot = f"breadth-{region}-repair", f"breadth-{region}-repair-boot"
         start = datetime.combine(local.date(), datetime.strptime(calendar.shifted(region, local.date(), at), "%H:%M").time(), ZoneInfo(tz))
-        if self.last.get(key) == local.date().isoformat() or local < start + timedelta(seconds=REPAIR_AFTER) \
+        if boot not in self.last:
+            # LIVE17A-001: the stored day is checked at the first chance after a start (a deploy), whatever the hour: a day stored before
+            # this check existed (18 Nov's 10:52 ET copy, labelled "Closes of 18 Nov" all of 19 Nov) is not left until the next run
+            self.last[boot] = local.date().isoformat()
+        elif self.last.get(key) == local.date().isoformat() or local < start + timedelta(seconds=REPAIR_AFTER) \
                 or not calendar.is_trading_day(region, local.date()):
             return []
-        self.last[key] = local.date().isoformat()
-        off = stored_close_drift(region, lambda sym: self.check_read(region, sym))
+        else:
+            self.last[key] = local.date().isoformat()
+        read = lambda sym: self.check_read(region, sym)
+        off = stored_close_drift(region, read)
         if not off:
+            if heatmap.load(region).get("unsettled"):
+                heatmap.mark_unsettled(region, [])          # read again and found right: a close again
             return []
-        print(f"breadth: the stored {region} closes of {heatmap.load(region).get('day')} differ from the settled ones ({', '.join(off)}); run again")
+        day = heatmap.load(region).get("day")
+        print(f"breadth: the stored {region} closes of {day} differ from the settled ones ({', '.join(off)}); run again")
+        # never labelled a close while it isn't one: the pages say the day's prices were read in the session until the run below
+        # replaces them (and again if, run again, they still differ)
+        heatmap.mark_unsettled(region, off)
         try:
             result = job_status.bounded(lambda: self.runner.run(region, now), RUN_MAX + 300, f"The {region} breadth run")
         except Exception as e:
             self.status["last_error"] = f"{region} repair: {str(e)[:200]}"
             return off
+        still = stored_close_drift(region, read) if result.get("ok") else off
+        if still:
+            heatmap.mark_unsettled(region, still)
         if result.get("ok") and self.after_repair:
             try:
                 self.after_repair(region)
