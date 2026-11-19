@@ -207,3 +207,21 @@ def test_live16a_014_the_us_cards_nifty_row_is_indias_own_latest_level():
     assert (nifty["price"], nifty["change_pct"], nifty["day"], nifty["same_day"]) == (25514.3, 1.14, "2026-11-19", True)
     assert got["global"]["rows"][1] == p["global"]["rows"][1]
     assert mood.other_index_rows(p, "US", [{**lv[0], "day": "2026-11-17"}]) is p          # never an older day
+
+
+# ---------- LIVE16B-008: the usage table says the daily cap on unlimited AI builds ----------
+def test_live16b_008_unlimited_ai_builds_show_the_daily_cap_in_the_usage_table(monkeypatch):
+    import json as _json
+    monkeypatch.setattr(main.db, "count_usage", lambda uid, kind, since: 5)
+    monkeypatch.setattr(main, "plan_info", lambda plan, profile: {"backtests_per_month": None, "ai_builds_per_month": None, "deepdives_per_month": None,
+                                                                   "decks_per_month": None, "themes_per_month": None})
+    pro = {"id": "u-pro", "_plan": "pro", "plan": "pro", "_paid_plan": "pro", "email": "u-pro@example.com"}
+    body = _json.loads(main.my_usage(pro).body)
+    rows = (body.get("data") or body)["rows"]
+    keys = [r["key"] for r in rows]
+    day = rows[keys.index("ai") + 1]
+    assert day == {"key": "ai_day", "label": "AI strategy builds today", "used": 5, "limit": main.AI_BUILDS_PER_DAY, "resets": "day", "left": main.AI_BUILDS_PER_DAY - 5}
+    monkeypatch.setattr(main, "plan_info", lambda plan, profile: {"backtests_per_month": 5, "ai_builds_per_month": 5, "deepdives_per_month": 1,
+                                                                   "decks_per_month": 0, "themes_per_month": 1})
+    body = _json.loads(main.my_usage({**pro, "_plan": "free", "plan": "free", "_paid_plan": "free"}).body)
+    assert "ai_day" not in [r["key"] for r in (body.get("data") or body)["rows"]]      # a monthly limit: no daily row
