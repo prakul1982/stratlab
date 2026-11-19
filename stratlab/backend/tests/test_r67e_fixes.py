@@ -180,9 +180,11 @@ def test_a_reit_deck_says_for_how_many_property_owners_ffo_is_worked_out_and_why
     """Fails before: the live R65 REITs deck said nothing of FFO or P/FFO (none of its stored figures has them)."""
     got = deck.not_in_sources(_reits())
     # r68e (R68, updated on purpose: the owner's P1 "FFO/AFFO available / missing / not applicable for each REIT"): each company by its state
-    assert ("FFO (NAREIT) and P/FFO, by company: missing in the stored data for 3 of the 3 property owners with figures (the filed gains on "
+    # e78 (updated on purpose: the owner's R76 P1, FFO said as derived, an approximation of Nareit FFO, with what it leaves out)
+    assert ("and P/FFO on it, by company: missing in the stored data for 3 of the 3 property owners with figures (the filed gains on "
             "property sales, which NAREIT FFO deducts, are not among the lines stored for them)") in got
-    assert "FFO (NAREIT) and P/FFO, by company: worked out for 3 of the 3 property owners with figures" in deck.not_in_sources(_reits(("BXP", "SLG", "VNO")))
+    assert "derived FFO (an approximation of Nareit FFO, impairments of depreciable real estate" in got
+    assert "and P/FFO on it, by company: worked out for 3 of the 3 property owners with figures" in deck.not_in_sources(_reits(("BXP", "SLG", "VNO")))
     got = deck.not_in_sources(_reits(("BXP",)))
     assert "worked out for 1 of the 3 property owners with figures" in got and "missing in the stored data for 2 (" in got
     assert "FFO" not in deck.not_in_sources({**_reits(), "region": "IN"})            # worked out from the SEC's company facts only

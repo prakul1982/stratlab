@@ -38,10 +38,21 @@ class Metric(NamedTuple):
     regions: tuple = ("IN", "US")
     headline: bool = True       # whether it may headline at all (an amount never does)
     group: str = ""             # the sector family whose page carries it ("bank", "insurer", "us", "orders"); "" a page table's own figure
+    never: frozenset = frozenset()   # e78: the families it never applies to, whatever else the company is ("lending": a property owner's FFO)
 
 
-def _m(id_, label, definition, unit, period, source, limit, applies, regions=("IN", "US"), headline=True, group=""):
-    return Metric(id_, label, definition, unit, period, source, limit, frozenset(applies), tuple(regions), headline, group)
+def _m(id_, label, definition, unit, period, source, limit, applies, regions=("IN", "US"), headline=True, group="", never=()):
+    return Metric(id_, label, definition, unit, period, source, limit, frozenset(applies), tuple(regions), headline, group, frozenset(never))
+
+
+# e78 (the owner's review of the live R76 REITs deck, P0: the notes say a property owner's FFO is not applicable to mortgage REITs, yet the
+# Mortgage REITs layer and the sector table showed FFO / revenue 26.6% and P/FFO 8.4x for Starwood Property Trust, its filing holding real-estate
+# property and depreciation beside its loans): a lender (a mortgage REIT, any company whose model's family is lending) has no property owner's FFO
+PROPERTY_ONLY = ("lending",)
+FFO_DERIVED = ("Derived FFO, an approximation of Nareit FFO: net income + real-estate depreciation and amortisation − gains on property sales, "
+               "from the filed lines")
+FFO_LEAVES_OUT = ("an approximation of Nareit FFO: impairments of depreciable real estate and the adjustments for unconsolidated partnerships "
+                  "and joint ventures are not in it, and its depreciation is as filed")
 
 
 _YEAR_SRC = "Latest full year; annual accounts"
@@ -153,17 +164,20 @@ METRICS = (
     _m("deferred_growth", "Deferred revenue growth", "Deferred revenue (contract liabilities) at the fiscal year's end against a year before", "chg",
        "year", _US, "Software and licensing models only", CONTRACTED, ("US",), group="us"),
     # r62 (the owner's review of the live R60 REITs deck, P0: no FFO or AFFO): a property owner's funds from operations from its own lines
-    _m("ffo_share", "FFO / revenue", "Funds from operations (net income + real-estate depreciation and amortisation − gains on property sales, "
-       "from the filed lines) over revenue, the latest fiscal year", "pct", "year", _US, "Property owners only; depreciation as filed, "
-       "impairments not added back", ("us",), ("US",), group="us"),
-    _m("affo_share", "AFFO / revenue", "FFO less recurring capital spending (capital improvements, as filed) over revenue, the latest fiscal year",
-       "pct", "year", _US, "Only where recurring capital spending is filed; not filed otherwise", ("us",), ("US",), group="us"),
-    _m("p_ffo", "P/FFO", "Market value over funds from operations, the latest fiscal year's FFO (in place of P/E for a property owner)", "x",
-       "year", _US, "Property owners with a positive FFO only", ("us",), ("US",), group="us"),
-    _m("ffo", "FFO", "Funds from operations (net income + real-estate depreciation and amortisation − gains on property sales), the latest "
-       "fiscal year", "amt", "year", _US, "Filings in US dollars only", ("us",), ("US",), headline=False, group="us"),
-    _m("affo", "AFFO", "FFO less recurring capital spending, the latest fiscal year", "amt", "year", _US, "Only where recurring capital "
-       "spending is filed", ("us",), ("US",), headline=False, group="us"),
+    # e78 (the owner's review of the live R76 REITs deck, P1: "the stated formula omits real-estate impairments and unconsolidated JV adjustments:
+    # reconcile fully or label it a derived approximation"): labelled "derived FFO", an approximation of Nareit FFO, with what it leaves out
+    # (FFO_LEAVES_OUT), wherever it shows
+    _m("ffo_share", "Derived FFO / revenue", f"{FFO_DERIVED} over revenue, the latest fiscal year", "pct", "year", _US,
+       f"Property owners only; {FFO_LEAVES_OUT}", ("us",), ("US",), group="us", never=PROPERTY_ONLY),
+    _m("affo_share", "Derived AFFO / revenue", "Derived FFO less recurring capital spending (capital improvements, as filed) over revenue, the "
+       "latest fiscal year", "pct", "year", _US, f"Only where recurring capital spending is filed; not filed otherwise; {FFO_LEAVES_OUT}",
+       ("us",), ("US",), group="us", never=PROPERTY_ONLY),
+    _m("p_ffo", "P/FFO (derived)", "Market value over derived FFO, the latest fiscal year's (in place of P/E for a property owner)", "x",
+       "year", _US, f"Property owners with a positive derived FFO only; {FFO_LEAVES_OUT}", ("us",), ("US",), group="us", never=PROPERTY_ONLY),
+    _m("ffo", "Derived FFO", f"{FFO_DERIVED}, the latest fiscal year", "amt", "year", _US, f"Filings in US dollars only; {FFO_LEAVES_OUT}",
+       ("us",), ("US",), headline=False, group="us", never=PROPERTY_ONLY),
+    _m("affo", "Derived AFFO", "Derived FFO less recurring capital spending, the latest fiscal year", "amt", "year", _US, "Only where recurring "
+       f"capital spending is filed; {FFO_LEAVES_OUT}", ("us",), ("US",), headline=False, group="us", never=PROPERTY_ONLY),
     _m("fcf_margin", "FCF margin", "Free cash flow (cash from operations less capital spending) over revenue, the latest fiscal year", "pct", "year",
        _US, "One fiscal year", ("us",), ("US",), group="us"),
     # India defence and capital goods: only where a business update the app reads states it, with its period
@@ -347,9 +361,25 @@ def tags(region: str, row: dict, model_family: str | None = None) -> set[str]:
 
 def applies(metric_id: str, region: str, tagset: set[str]) -> bool:
     m = BY_ID.get(metric_id)
-    if m is None or region not in m.regions:
+    if m is None or region not in m.regions or m.never & tagset:
         return False
     return "*" in m.applies or bool(m.applies & tagset)
+
+
+def withhold_inapplicable(region: str, row: dict, keys, model_family: str | None = None) -> list[str]:
+    """e78: the one place a company's sector figures are held to the families they never apply to (a Metric's `never`, on the company's tags:
+    its model's family, else its layer's, and its kind): each of `keys` the row holds a value for that never applies to it is taken off the row
+    (and its source) before any table, median or workbook reads it, so the app, the deck and the workbook never show it for that company, and
+    named in the row's "not_applicable" (a mortgage REIT's FFO, AFFO and P/FFO). Figures that merely don't apply to a model stay as the
+    tables' states read them (n/a). The keys taken off."""
+    t = tags(region, row, model_family)
+    gone = [k for k in keys if row.get(k) is not None and k in BY_ID and BY_ID[k].never & t]
+    for k in gone:
+        row[k] = None
+        (row.get("sector_src") or {}).pop(k, None)
+    if gone:
+        row["not_applicable"] = sorted(set(row.get("not_applicable") or []) | set(gone))
+    return gone
 
 
 _MON = re.compile(r"([A-Z][a-z]{2}) (\d{4})")

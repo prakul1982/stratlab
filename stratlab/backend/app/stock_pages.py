@@ -1253,6 +1253,26 @@ def financial_mismatch(f: dict | None) -> bool:
     return sales > 0 and profit > sales
 
 
+def revenue_part_due(f: dict | None) -> bool:
+    """e78 (the owner's review of the live R76 REITs deck: Camden Property Trust's revenue $13 m, a part of its $1,573.5 m of property revenue,
+    beside a profit many times it): whether a stored US company page built before its principal revenue line was read beside a part of it
+    (sec.principal_lines, PRINCIPAL_RULE) has a newest reported year whose net profit is above its revenue: it is built again, so the revenue
+    a theme reads is the whole. A page built with the rule is never built again by it."""
+    if not isinstance(f, dict) or f.get("region") != "US" or f.get("no_numbers") or f.get("not_company"):
+        return False
+    from .intel.sec import PRINCIPAL_RULE
+    if (f.get("rev_rule") or 0) >= PRINCIPAL_RULE:
+        return False
+    years = [y for y in f.get("years") or [] if isinstance(y, dict) and str(y.get("year") or "").strip().upper() != "TTM"]
+    if not years:
+        return False
+    try:
+        sales, profit = float(years[-1].get("sales")), float(years[-1].get("profit"))
+    except (TypeError, ValueError):
+        return False
+    return sales > 0 and profit > sales
+
+
 def basis_missing(f: dict | None) -> bool:
     """r60b (R60, the owner's review of the live R59 decks: a regional bank's revenue beside its annual report's, the basis of neither said):
     whether a stored US page of a bank, lender or insurer with reported years was built before its revenue's lines were kept
@@ -1681,6 +1701,8 @@ def fresh(stored: dict | None, region: str, now: float | None = None) -> bool:
         return False                     # a page built before the facts a page shows now: rebuilt when next opened
     if financial_mismatch(stored["facts"]) and now - ts >= UNREAD_FRESH:
         return False                     # r581: a financial filer's revenue below its net profit: built again (at most hourly)
+    if revenue_part_due(stored["facts"]) and now - ts >= UNREAD_FRESH:
+        return False                     # e78: a revenue below the net profit, built before the principal line was read: built again
     if (stored["facts"].get("annual_unread") or stored["facts"].get("type_unread") or annual_behind(stored["facts"])) \
             and now - ts >= UNREAD_FRESH:
         return False                     # built without its latest annual report, which couldn't be read then (R8V-003, R10V-002)

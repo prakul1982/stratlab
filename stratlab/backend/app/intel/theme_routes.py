@@ -141,6 +141,11 @@ def sec_structure_only(about) -> bool:
     return structure_only(str(about or ""))
 
 
+def sec_reit_tax(about) -> bool:
+    from .sec import reit_tax_said
+    return reit_tax_said(str(about or ""))
+
+
 def thin_about(got: dict, region: str = "", name: str = "") -> bool:
     """Whether a stored description is read once more: too thin to show the business and kept before the current format (GPT review of
     R31.5: Bharti Airtel's profile line names no mobile service; R35: a US company with no encyclopedia article had none at all, and its
@@ -162,6 +167,11 @@ def thin_about(got: dict, region: str = "", name: str = "") -> bool:
     # ... the Operating Partnership", none of what it owns): a US company's stored words that only tell how it is held or financed, kept
     # before the annual report's reader passed over such sentences (sec.BUSINESS_KEY), are read once more
     if region == "US" and about and got.get("bv") != sec_business_v() and sec_structure_only(about):
+        return True
+    # e78 (the live R76 REITs deck: Essex Property Trust's stored words, its 10-K's REIT tax election and taxable REIT subsidiaries, none of
+    # its apartment communities): a US company's stored words holding a sentence of a REIT's tax status, kept before the reader passed over
+    # such sentences (sec.BUSINESS_KEY 4), are read once more
+    if region == "US" and about and got.get("bv") != sec_business_v() and sec_reit_tax(about):
         return True
     # gl52 (R52): 5, a US company's stored words with no sentence of its own about its work (an encyclopedia's opening only: Visa,
     # Mastercard, Fortinet) are read once more, so its annual report's opening is added (evidence_reader)
@@ -594,10 +604,10 @@ def listed_as(name, symbol):
     return grounding.listed_name(name, symbol, symbol)
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57, 59: 58, 60: 59, 61: 60, 62: 61, 63: 62, 64: 63, 65: 64, 66: 65, 67: 66, 68: 67, 69: 68, 70: 69, 71: 70, 72: 71}  # rules versions whose change only adds to a kept placement (e77, R72: the answers unchanged, a way of earning taking a company into a layer only where its words bear it out; r582, R58.2: the answers unchanged, layers of one company, the figures' window, names its companies' lines say; r58, R58: the answers unchanged, the taxonomy and scale rules; r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57, 59: 58, 60: 59, 61: 60, 62: 61, 63: 62, 64: 63, 65: 64, 66: 65, 67: 66, 68: 67, 69: 68, 70: 69, 71: 70, 72: 71, 73: 72}  # rules versions whose change only adds to a kept placement (e78, R73: the answers unchanged, a concept's words read with the company's name aside and an earlier narrower name's move out no finding; e77, R72: the answers unchanged, a way of earning taking a company into a layer only where its words bear it out; r582, R58.2: the answers unchanged, layers of one company, the figures' window, names its companies' lines say; r58, R58: the answers unchanged, the taxonomy and scale rules; r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
-EARLIER_MAX = 27                # (e77: 27, one more for the version R72 carries; r69e: 26, one more for the version R69 carries; r68e: 25, one more for the version R68 carries; r67e: 24, one more for the version R67 carries; r66e: 23, one more for the version R66 carries; r65e: 22, one more for the version R65 carries; r64e: 21, one more for the version R64 carries; r63e: 20, one more for the version R63 carries; r62: 19, one more for the version R62 carries; r60: 18, one more for the version R60 carries; r59: 17, one more for the version R59 carries; r582: 16, one more for the version R58.2 carries; r581: 15, one more for the version R58.1 carries; r58: 14, one more for the version R58 carries; r572: 13, one more for the version R57.2 carries; r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
+EARLIER_MAX = 28                # (e78: 28, one more for the version R73 carries; e77: 27, one more for the version R72 carries; r69e: 26, one more for the version R69 carries; r68e: 25, one more for the version R68 carries; r67e: 24, one more for the version R67 carries; r66e: 23, one more for the version R66 carries; r65e: 22, one more for the version R65 carries; r64e: 21, one more for the version R64 carries; r63e: 20, one more for the version R63 carries; r62: 19, one more for the version R62 carries; r60: 18, one more for the version R60 carries; r59: 17, one more for the version R59 carries; r582: 16, one more for the version R58.2 carries; r581: 15, one more for the version R58.1 carries; r58: 14, one more for the version R58 carries; r572: 13, one more for the version R57.2 carries; r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
 
 
 def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
@@ -1363,7 +1373,15 @@ def facts_piece(region: str, sym: str, fresh: bool = False) -> tuple[dict | None
                 return hit["value"], hit.get("at")
             # r60b (R60): a US financial filer's piece kept before its page kept its revenue's lines (stock_pages.basis_missing) is taken
             # again once the stored page keeps them, so the deck says its revenue basis; until then the deck says it is not stored
-            from ..stock_pages import basis_missing
+            from ..stock_pages import basis_missing, revenue_part_due
+            # e78: likewise a US piece whose revenue is below its net profit, kept from a page built before the principal revenue line was read
+            # (Camden Property Trust's $13 m): taken again once its stored page is built with it
+            if revenue_part_due(hit["value"]) and callable(R.public_facts):
+                page = R.public_facts(region, sym)
+                if page and not revenue_part_due(page):
+                    kept = computed.put(theme_library.FACTS, [region, sym], page, label=sym, region=region)
+                    return page, (kept or {}).get("at")
+                return hit["value"], hit.get("at")
             if basis_missing(hit["value"]) and callable(R.public_facts):
                 page = R.public_facts(region, sym)
                 if page and not basis_missing(page) and (page.get("v") or 1) >= (hit["value"].get("v") or 1):
