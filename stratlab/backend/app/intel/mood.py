@@ -478,6 +478,8 @@ def missing_parts(p: dict | None) -> list[str]:
         out.append(f"breadth of {s}" + (f" (has {b.get('day')})" if b.get("day") else ""))
     if p.get("region") == "IN" and (p.get("flows") or {}).get("as_of") != s:
         out.append(f"flows of {s}")
+    if p.get("pre_close"):
+        out.append("closes of " + ", ".join(p["pre_close"]))       # LIVE16A-001: a level from before the close is not the day's close
     return out
 
 
@@ -654,7 +656,8 @@ class Mood:
         out: dict[str, dict] = {}
         for i in range(0, len(symbols), CHUNK):
             try:
-                out.update({k: v for k, v in (self.hub.quotes(region, symbols[i:i + CHUNK]) or {}).items() if v})
+                # LIVE16A-001: a quote that is still a copy the source's edge kept from mid-session is left out, never listed as the day's move
+                out.update({k: v for k, v in (self.hub.quotes(region, symbols[i:i + CHUNK]) or {}).items() if v and not v.get("edge_stale")})
             except Exception as e:
                 print("mood quotes unavailable:", region, str(e)[:100])
         return out
@@ -887,7 +890,9 @@ class Mood:
         typ = typical_move((f_typ.result(timeout=60) or {}).get(sym) or [])
         # LIVE14A-001: a level the source stopped updating mid-session ("as of 10:52 ET" at 14:13 ET) is no ground for the day's tone or its
         # size against the usual: only levels read in the last minutes are (`fresh`); the tables keep every level with its time
-        fresh = [i for i in levels if not i.get("delayed")]
+        # LIVE16A-001: nor is a level read after the close that is from before it (pre_close: a copy kept at 10:52 ET, read at 17:06 ET,
+        # gave "all three indices down on the day" over a NASDAQ close of +0.42%)
+        fresh = [i for i in levels if not i.get("delayed") and not i.get("pre_close")]
         lvl = next((i for i in fresh if i.get("name") == name), None)
         cmp = compare_today(name, (lvl or {}).get("change_pct"), typ)
         try:
@@ -914,6 +919,10 @@ class Mood:
              "calendar": cal if any(cal.values()) else None,
              # the index moves the headline is worked out from, so a later read of the session can word it again (LIVE11A-001)
              "moves": [{"name": i["name"], "change_pct": i["change_pct"]} for i in fresh if i.get("name") and num(i.get("change_pct")) is not None][:4]}
+        # LIVE16A-001: the indices whose level read after the close is from before it: the read is not the session's final one until they are in
+        stale_levels = [i["name"] for i in levels if i.get("pre_close") and i.get("name")]
+        if stale_levels:
+            p["pre_close"] = stale_levels
         # LIVE9A-002: the headline sets the index moves against a breadth count of the same session only (at 14:23 ET on Mon 16 Nov: "all
         # three indices down on the day, but 313 of 499 S&P 500 stocks rose", the count being Friday's); the dated line under it stays
         p["headline"] = headline_of(fresh, sectors, cmp, same_session(b, p["session"]))

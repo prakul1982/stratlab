@@ -1086,7 +1086,7 @@ class Research:
                 out[s] = None
                 continue
             out[s] = q
-            if closed and q and q.get("price") is not None:
+            if closed and q and q.get("price") is not None and not q.get("edge_stale"):     # a kept mid-session copy is read again (LIVE16A-001)
                 _keep_closed_quote(region, s, q)
         return out, pending
 
