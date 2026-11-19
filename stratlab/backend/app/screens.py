@@ -322,6 +322,8 @@ def build_index(region: str, store: bool = True) -> dict:
         due = due or (stock_pages.basis_missing(facts) and started - (ages[sym] or 0) >= stock_pages.FRESH)
         # e78: a US page whose revenue is below its net profit, built before the principal revenue line was read: built again (once)
         due = due or (stock_pages.revenue_part_due(facts) and started - (ages[sym] or 0) >= stock_pages.UNREAD_FRESH)
+        # LIVE15A-016: an Indian page built before today's share-count rules (TCS ₹8.49 lakh cr on the source's count): built again (once)
+        due = due or (stock_pages.cap_rule_due(facts) and started - (ages[sym] or 0) >= stock_pages.UNREAD_FRESH)
         if not facts or (facts.get("v") or 1) < stock_pages.FACTS_VERSION or due:
             empty.add(sym)
             if stock_pages.has_content(facts):

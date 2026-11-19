@@ -128,11 +128,15 @@ def test_4_guard_meddev_groups_layer_gains_the_member_whose_words_say_diversifie
 def test_5_payments_jpmorgan_not_listed_in_card_issuers_on_no_line_of_its_words():
     # live R58.2: JPMorgan Chase moved from "Other" into "Card issuers and consumer lenders", listed there as another business, its line
     # ("It is the largest bank in the United States...") saying no word of the layer's name
+    # e79 (LIVE15A-005, updated on purpose): an encyclopedia's ranking ("It is the largest bank in the United States", "the largest of the Big
+    # Four banks") is no line of its own words now, so its line is its own sentence, "The Firm is a leader in investment banking, financial
+    # services for consumers and small businesses ...", which says the layer's word: the map's placement stands on it, said so
     d, out = _engine("payments")
     v, c = _where(out, "JPM")
-    assert v["layer"] == "Other payments and fintech companies", v["layer"]
-    assert "stays where it was" in c["refit"]["why"] and "Card issuers and consumer lenders" in c["refit"]["why"]
-    assert not c.get("kept_member") and not c.get("unfit")
+    assert v["layer"] == "Card issuers and consumer lenders", v["layer"]
+    line = B.own_line(d["evidence"]["JPM"], "JPMorgan Chase & Co")
+    assert "largest" not in line and "Big Four" not in line and "consumers" in line, line
+    assert not c.get("unfit")
 
 
 def test_6_pharma_window_adds_members_whose_line_says_the_layer():

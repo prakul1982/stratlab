@@ -41,6 +41,13 @@ MAX_QUEUE = 200
 # part of the read, kept under VERSION 3 and never read again): the lines a US piece's read holds, kept with it; a property owner's piece
 # read before them is read once more (stale_for_property), within the memory guard's turn, never the whole sector's figures (VERSION stays)
 REIT_V = 1
+# e79 (LIVE15A-008, the live R77 REITs deck: Camden Property Trust "SBC / revenue 130.8%", its stock pay over the $13 m of fee income its
+# piece was read on, beside the $1.57 bn of property revenue its rebuilt page and the appendix give): a US piece keeps the revenue its shares of
+# revenue were worked out on ("rev", USD million, REV_V); a piece whose revenue is not the row's own, or one read before it was kept for a
+# company whose revenue is now its principal line (sec.PRINCIPAL), is read once more, its shares of revenue withheld meanwhile
+REV_V = 1
+REV_SHARES = ("sbc_share", "fcf_margin", "capex_share", "rd_share", "rpo_cover", "ffo_share", "affo_share")
+REV_GAP = 0.02                  # a revenue apart from the row's by more than this share (theme_changes.REVENUE_SHARE: a restated revenue)
 _PROPERTY_ROW = re.compile(r"real estate|\breits?\b|property", re.I)
 PAUSE = 1.0                     # seconds between documents from the exchange's archive (shareholders.py's pace)
 LIST_PATH = "/api/integrated-filing-results"
@@ -492,14 +499,26 @@ def us_figures(facts: dict) -> dict:
     return {**out, "_end": end} if out else out
 
 
+def us_revenue(facts: dict, end: str | None) -> float | None:
+    """e79: the fiscal year's revenue (USD million) a US piece's shares of revenue are worked out on (us_figures' own reading), None for
+    another currency or no year."""
+    from . import sec
+    facts = sec.drop_scale_slips(facts.get("facts") or {}) if "facts" in facts else facts
+    unit = sec.currency(facts) or "USD"
+    r = sec.revenue(facts, "annual", unit).get(end) if end and unit == "USD" else None
+    return round(r / MILLION, 3) if r else None
+
+
 def read_us(symbol: str, sec_client) -> dict:
     cik = sec_client.cik(symbol)
     facts = sec_client._json(f"/api/xbrl/companyfacts/CIK{cik:010d}.json")
     got = us_figures(facts or {})
     end = got.pop("_end", None)
+    rev = us_revenue(facts or {}, end) if got and not got.get("_stale") else None
     if got.get("_stale"):
         return {"family": "us", "metrics": {}, "end": None, "none": f"latest figures are for FY {_label(got['_stale'])}"}
-    return {"family": "us", "metrics": got, "end": end, **({} if got else {"none": "no revenue in the SEC's company facts"})}
+    return {"family": "us", "metrics": got, "end": end, **({"rev": rev} if rev else {}),
+            **({} if got else {"none": "no revenue in the SEC's company facts"})}
 
 
 # ---------- kept once, read within a budget ----------
@@ -530,7 +549,7 @@ def read(region: str, symbol: str, family: str) -> dict | None:
         print("sector metrics: not read:", region, symbol, type(e).__name__, str(e)[:100])
         return None
     if family == "us":
-        got = {**got, "reit_v": REIT_V}          # r69e: read with a property owner's FFO lines
+        got = {**got, "reit_v": REIT_V, "rev_v": REV_V}          # r69e: read with a property owner's FFO lines; e79: with its revenue
     computed.put(KIND, key(region, symbol), got, label=symbol, region=region)
     return got
 
@@ -552,6 +571,35 @@ def current_piece(piece: dict | None) -> bool:
     return isinstance(piece, dict) and (piece.get("family") != "us" or int(piece.get("reit_v") or 0) >= REIT_V)
 
 
+def fresh_piece(piece: dict | None) -> bool:
+    """e79: a stored piece that stands as read now (current_piece), a US one read with the revenue its shares are of (REV_V)."""
+    return current_piece(piece) and (piece.get("family") != "us" or int(piece.get("rev_v") or 0) >= REV_V)
+
+
+def stale_for_revenue(row: dict, piece: dict | None) -> bool:
+    """e79: whether a US piece's shares of revenue rest on another revenue than its row's: the piece's revenue ("rev") more than REV_GAP from
+    the row's for the same fiscal year, or, for a piece read before its revenue was kept, a row whose revenue its page reads from the principal
+    revenue line (sec.PRINCIPAL: the rule that changed it, e78)."""
+    from .sec import PRINCIPAL
+    if not isinstance(piece, dict) or piece.get("family") != "us" or not piece.get("metrics") or not isinstance(row, dict):
+        return False
+    if int(piece.get("rev_v") or 0) < REV_V:
+        return str(row.get("rev_line") or "") in PRINCIPAL
+    rev, own = piece.get("rev"), row.get("revenue")
+    if not isinstance(rev, (int, float)) or not isinstance(own, (int, float)) or own <= 0 or row.get("currency") not in (None, "USD"):
+        return False
+    return _label(piece.get("end")) == str(row.get("year") or "") and abs(rev - own) > REV_GAP * own
+
+
+def withhold_shares(row: dict) -> list[str]:
+    """e79: a row's shares of revenue taken off while its piece is read again on its row's revenue (stale_for_revenue); the keys taken."""
+    gone = [k for k in REV_SHARES if row.get(k) is not None]
+    for k in gone:
+        row.pop(k, None)
+        (row.get("sector_src") or {}).pop(k, None)
+    return gone
+
+
 _q: list = []
 _qlock = threading.Lock()
 _worker = {"on": False}
@@ -565,8 +613,9 @@ def _work():
                 return
             region, symbol, family, *again = _q.pop(0)
         if again and again[0]:
-            # r69e: a property owner's piece read again for its FFO lines, once (it is kept with them), in the memory guard's turn
-            if not current_piece(stored(region, symbol)):
+            # r69e: a property owner's piece read again for its FFO lines, once (it is kept with them), in the memory guard's turn; e79: or
+            # for the revenue its shares are of ("rev": a piece read before that revenue was kept with it)
+            if not (fresh_piece if again[0] == "rev" else current_piece)(stored(region, symbol)):
                 from .. import memguard
                 with memguard.heavy("sector metrics: property lines"):
                     read(region, symbol, family)
@@ -574,12 +623,13 @@ def _work():
             read(region, symbol, family)
 
 
-def queue(region: str, symbol: str, family: str, again: bool = False) -> None:
+def queue(region: str, symbol: str, family: str, again: bool | str = False) -> None:
     """Read later, on the one worker thread (started here, it stops when the queue is empty). Nothing is queued with no source set up.
-    `again` (r69e): read even though a piece is stored (a property owner's piece without its FFO lines)."""
+    `again` (r69e): read even though a piece is stored (a property owner's piece without its FFO lines); e79: "rev", a piece read before the
+    revenue its shares are of was kept with it."""
     if _feeds["sec" if family == "us" else "nse"] is None:
         return
-    item = (region, symbol, family, True) if again else (region, symbol, family)
+    item = (region, symbol, family, again) if again else (region, symbol, family)
     with _qlock:
         if item in _q or (region, symbol, family) in _q or len(_q) >= MAX_QUEUE:
             return
@@ -609,15 +659,16 @@ def reader(region: str, fresh: bool = False, budget: float = BUDGET):
             queue(region, symbol, family)
         return kept
 
-    def again(symbol: str, family: str):
-        """r69e: a stored piece read once more (a property owner's, for its FFO lines): now while the budget lasts, else on the worker."""
+    def again(symbol: str, family: str, rev: bool = False):
+        """r69e: a stored piece read once more (a property owner's, for its FFO lines; e79, `rev`: for the revenue its shares are of): now
+        while the budget lasts, else on the worker."""
         if until[0] is None:
             until[0] = time.time() + budget
         if time.time() < until[0]:
             got = read(region, symbol, family)
             if got is not None:
                 return got
-        queue(region, symbol, family, again=True)
+        queue(region, symbol, family, again="rev" if rev else True)
         return None
     get.again = again
     return get

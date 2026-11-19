@@ -36,3 +36,13 @@ export function moodStale(m: PulseMood | null, now = Date.now()): boolean {
   if (!m.read_at) return false;
   return now - Date.parse(m.read_at) > (m.is_open ? MOOD_STALE_OPEN : MOOD_STALE_SHUT) * 1000;
 }
+
+/** A read made during the session that is older than this (seconds) is labelled as of its time, not as the market now (LIVE15A-002). */
+export const MOOD_OLD_OPEN = 1200;
+
+/** The read time of a session read old enough that its lines and tables are no longer the market now (LIVE15A-002: at 14:36 IST the card
+ * showed its 09:34 read, "Mixed … NIFTY 50 down", under live rows of NIFTY 50 +1.02%), else null. A closed session's read is its own. */
+export function moodOldAt(m: PulseMood | null, now = Date.now()): string | null {
+  if (!m || !m.is_open || m.during || !m.read_at) return null;
+  return now - Date.parse(m.read_at) > MOOD_OLD_OPEN * 1000 ? m.read_at : null;
+}

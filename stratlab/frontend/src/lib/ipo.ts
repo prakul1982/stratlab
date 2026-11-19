@@ -21,6 +21,8 @@ export interface IpoRow {
   page?: boolean; page_at?: string;
   /** A book-built issue with one part in rupees and one in shares: the parts, shown instead of a size until the price band gives a total. */
   size_parts?: { fresh_cr?: number; ofs_cr?: number; fresh?: number; ofs?: number };
+  /** LIVE15A-015: the size before its latest change between two reads, and the day it changed */
+  size_was?: { amount: number; on: string };
 }
 export interface AlertPrefs { on: boolean; events: EventKind[]; markets: Market[]; sme: boolean; allowed: boolean; plan: string; channels: string[]; event_names: Record<EventKind, string> }
 export interface IpoList {

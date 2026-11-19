@@ -42,6 +42,10 @@ export const FEATURES: Record<PlanId, string[]> = {
     `${L.pro.stock_alerts} stock alerts, ${L.pro.screens} saved screens, ${L.pro.holdings} holdings, unlimited Market Watch lists and indicators`],
 };
 
+/** The lists as they may be said now: with no sample deck on the server (`sample` false), Free's line doesn't promise one (LIVE15A-003). */
+export const featuresNow = (sample: boolean): Record<PlanId, string[]> =>
+  sample ? FEATURES : { ...FEATURES, free: FEATURES.free.map((f) => f.replace(", and the sample deck to download", "")) };
+
 // what every plan has (the comparison table's "On every plan" fold); here, not in plans.ts, so the landing page doesn't load it
 export const EVERYONE = ["Every market, and your own CSV",
   "Price charts: candles, Heikin-Ashi or bars, indicators, drawings kept on your account, and compare",

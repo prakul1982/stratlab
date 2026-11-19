@@ -676,11 +676,32 @@ def refresh_briefs(issues: list[dict]) -> dict:
         if int((old.get("body") or {}).get("gen") or 0) >= BRIEF_GEN:
             out["same"] += 1
             continue
-        row = _row(post)
-        _t().update({"title": row["title"], "summary": row["summary"], "body": row["body"], "indexable": row["indexable"],
-                     "updated_at": now_iso()}).eq("slug", row["slug"]).execute()
+        _rewrite(post)
         out["updated"] += 1
     return out
+
+
+def _rewrite(post: dict) -> None:
+    """A stored brief post written again in place: it keeps its first date and whether an admin hid it."""
+    row = _row(post)
+    _t().update({"title": row["title"], "summary": row["summary"], "body": row["body"], "indexable": row["indexable"],
+                 "updated_at": now_iso()}).eq("slug", row["slug"]).execute()
+
+
+def rewrite_brief(issue: dict) -> bool:
+    """A daily brief's post written again from its corrected issue (LIVE15A-001: the stored 18 Nov US post kept the 10:52 ET levels
+    after its issue's index figures were set to the day's closes). A day with no post yet gets one. Whether a post was written."""
+    try:
+        at = datetime.fromisoformat(str(issue.get("at"))) if issue.get("at") else None
+    except ValueError:
+        at = None
+    post = brief_post(issue, at)
+    if not post:
+        return False
+    if not get(post["slug"]):
+        return add_once(post)
+    _rewrite(post)
+    return True
 
 
 def backfill(issues: list[dict]) -> dict:

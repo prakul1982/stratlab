@@ -594,6 +594,27 @@ def us_out(fh, sec, r: dict) -> dict | None:
             "url": rel["url"] if rel else None, "numbers": nums}
 
 
+# LIVE15A-010: a row's growth figures are shown only when their quarter is the one this results day reports or the one before it (a
+# quarter's results come within REPORTED_WITHIN days of its end, as the page's own "previous quarter" label counts): PDD's 19 Nov row said
+# "Rev +146.0% · previous quarter, to Dec 2020", Frontline's "to Jun 2014"
+REPORTED_WITHIN = 95
+GROWTH_WITHIN = REPORTED_WITHIN + 92
+_MONTH = {m: i for i, m in enumerate(("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"), 1)}
+
+
+def too_old(of, day: str) -> bool:
+    """Whether a stored quarter ("Dec 2020 vs Dec 2019") ended over GROWTH_WITHIN days before a results day: older than the quarter being
+    reported and the one before it. False when either can't be read."""
+    m = re.match(r"([A-Z][a-z]{2}) (\d{4})", str(of or "").strip())
+    try:
+        d = date.fromisoformat(str(day)[:10])
+        y, mo = int(m.group(2)), _MONTH[m.group(1)]
+    except (AttributeError, KeyError, ValueError):
+        return False
+    end = date(y + (mo == 12), mo % 12 + 1, 1) - timedelta(days=1)
+    return (d - end).days > GROWTH_WITHIN
+
+
 LARGEST_LOOKED = 40          # the largest companies of the window whose release is looked for too, tracked or not (LIVE14A-009)
 
 
@@ -1063,6 +1084,8 @@ def view(region: str, uid: str, scope: str = "mine", q: str = "", today: date | 
 
     def rich(r: dict) -> dict:
         out = {**r, "mine": r["symbol"] in mine, **ctx.facts(r["symbol"]), "moves": _moves_of(region, r["symbol"], mv)}
+        if out.get("q") and too_old(out["q"].get("of"), r["date"]):
+            out["q"] = {"sales": None, "profit": None, "of": out["q"].get("of"), "unreported": True}
         if not r.get("name") and (ctx.snaps.get(r["symbol"]) or {}).get("name"):
             out["name"] = ctx.snaps[r["symbol"]]["name"]
         out["name"] = display_name(region, out.get("name"))

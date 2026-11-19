@@ -80,10 +80,14 @@ export function olderNote(o: { at: string | null; rechecking: boolean } | null |
 }
 /** r69e (LIVE13A-003: "Last updated 7 Nov, 16:33 ET" beside "This is the theme as it was checked on 18 Nov 2026"): one date logic for a
  *  theme's head: the map's own date and the day it was checked, each said as what it is, when they are different days; else the one stamp. */
-export function mapStamp(generatedAt: number | null | undefined, checked: string | null | undefined, written: string, fmtDay: (iso: string) => string): string | null {
+export function mapStamp(generatedAt: number | null | undefined, checked: string | null | undefined, written: string, fmtDay: (iso: string) => string,
+                         tz?: string): string | null {
   if (!generatedAt) return null;
-  const made = new Date(generatedAt * 1000).toISOString().slice(0, 10);
-  const day = checked ? checked.slice(0, 10) : null;
+  // e79 (LIVE15A-021: Textiles "Map made 15 Nov" here, "16 Nov" on the public page and the deck): each day in the market's own time, as theirs
+  const dayIn = (ms: number) => (tz ? new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(ms)
+    : new Date(ms).toISOString().slice(0, 10));
+  const made = dayIn(generatedAt * 1000);
+  const day = checked ? (tz && checked.length > 10 && !Number.isNaN(Date.parse(checked)) ? dayIn(Date.parse(checked)) : checked.slice(0, 10)) : null;
   if (!day || day === made) return `Last updated ${written}`;
   return `Map made ${fmtDay(made)} · checked ${fmtDay(day)}`;
 }
@@ -196,3 +200,15 @@ export function themeFunds<T extends { ticker: string; name: string }>(etfs: T[]
 /** LIVE11A-008: a company's EBITDA or net margin as the deck prints it: "n.m." when the server marks it beyond ±100% of revenue (Atomera
  * "−32423.1%" on the app beside "n.m." in the deck), else `shown`. */
 export const marginCell = (row: { nm?: string[] } | null | undefined, k: "ebitda" | "net", shown: string): string => (row?.nm?.includes(k) ? "n.m." : shown);
+
+const layerNames = (names: string[]): string => `the ${names.length === 1 ? "layer" : "layers"} ${names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`}`;
+/** e79 (LIVE15A-009: Fertilizers "No listed company is shown for ... Property developers: none of the companies the map named has a
+ *  description that shows it does this work" beside the members table listing three there): a layer the map places companies in but none
+ *  of them among those with figures is said as that, with how many it lists; only a layer nobody is placed in as having none. */
+export function emptyLayerLines(layers: { layer: string; companies: unknown[]; placed?: number }[]): string[] {
+  const empty = layers.filter((l) => l.companies.length === 0);
+  const held = empty.filter((l) => (l.placed ?? 0) > 0), none = empty.filter((l) => !((l.placed ?? 0) > 0));
+  const out = held.map((l) => `${l.layer}: ${l.placed} compan${l.placed === 1 ? "y" : "ies"} listed in it, none among the companies whose figures are worked out, so no figure of it is shown.`);
+  if (none.length) out.push(`No listed company is shown for ${layerNames(none.map((l) => l.layer))}: none of the companies the map named has a description that shows it does this work.`);
+  return out;
+}

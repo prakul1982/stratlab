@@ -5058,6 +5058,8 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
     # a share listed within the year: its balance sheet predates the issue, so the source's share count stands (LIVE2-025)
     snap = screener_summary(p, (prices or {}).get("range_since") if region == "IN" else None)
     if region == "IN":
+        from .intel.screener import CAP_RULE
+        checks["cap_rule"] = CAP_RULE         # LIVE15A-016: built under today's share-count rules (stock_pages.cap_rule_due)
         snap = pre_issue_cap(snap, p, listed_on)
         if not close:
             # no daily candles: the exchange's own close of the market's last session, dated (R7V-004), before the

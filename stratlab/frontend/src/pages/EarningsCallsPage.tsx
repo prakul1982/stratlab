@@ -36,9 +36,11 @@ export function callDay(r: Pick<CallRow, "date" | "until">): string {
 }
 
 /** The time as filed with its zone ("16:00 IST"), the US session ("After the close, ET"), or nothing when the filing gives none. */
-export function callTime(r: Pick<CallRow, "time" | "tz" | "session">): string | null {
+export function callTime(r: Pick<CallRow, "time" | "tz" | "session"> & { region?: string }, region?: string): string | null {
   // LIVE13A-027: a time filed without its zone says so ("09:00" sat between "09:00 IST" and "09:00 SGT")
-  if (r.time) return `${r.time}${r.tz ? ` ${r.tz}` : ", zone not given"}`;
+  // LIVE15A-024 (owner's default): an Indian company's notice with no zone is in India's time, IST, said so as "(IST assumed)"
+  const india = (region ?? r.region) === "IN";
+  if (r.time) return `${r.time}${r.tz ? ` ${r.tz}` : india ? " IST (assumed: the notice gives no zone)" : ", zone not given"}`;
   if (r.session) return `${r.session[0].toUpperCase()}${r.session.slice(1)}${r.tz ? `, ${r.tz}` : ""}`;
   return null;
 }

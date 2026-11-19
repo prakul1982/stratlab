@@ -171,3 +171,8 @@ export function unpricedRows(rows: IpoRow[], market: Market, today: string): Ipo
     return !(day && today && daysBetween(day, today) <= JUST_LISTED_DAYS);
   });
 }
+
+/** LIVE15A-015: "Changed on 19 Nov from ₹9,001 cr": an issue size that changed between two reads says what it was and when. */
+export function sizeWasText(r: Pick<IpoRow, "size_was" | "currency" | "market">): string | null {
+  return r.size_was ? `Changed on ${fmtDate(r.size_was.on, { year: false })} from ${sizeText({ ...r, size: r.size_was.amount })}` : null;
+}

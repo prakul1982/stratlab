@@ -251,8 +251,8 @@ export function DataTable<R>({ label, columns: allColumns, rows: allRows, rowKey
                   const label = c.cardLabel ?? (typeof c.header === "string" ? c.header : textOf(c.header).trim() || undefined);
                   const v = minusNode(c.cell(r));
                   // TABLE-SWEEP: an empty cell is marked, so a phone card leaves it out instead of a label over nothing; a compact phone row
-                  // leaves out a lone dash too
-                  const blank = v == null || v === "" || v === false || (cardsNow && !!compact && !c.rowHeader && dashOnly(cellText(v)));
+                  // leaves out a lone dash too, and so does any phone card's lead cell (e79, LIVE15A-014: Cement's 15 lone "–" quote lines)
+                  const blank = v == null || v === "" || v === false || (cardsNow && (!!compact || !!c.lead) && !c.rowHeader && dashOnly(cellText(v)));
                   return c.rowHeader ? <th key={c.key} scope="row" role={stack ? "rowheader" : undefined} className={cls(c)}>{v}{more}{report(r, v)}</th>
                     : <td key={c.key} role={stack ? "cell" : undefined} data-label={label} data-blank={blank ? "" : undefined} className={cls(c)}>{v}</td>;
                 })}

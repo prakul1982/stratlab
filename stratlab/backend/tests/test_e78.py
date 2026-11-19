@@ -174,7 +174,7 @@ def test_american_homes_and_essex_go_to_the_residential_layer_on_their_own_words
 
 
 def test_rules_are_bumped_and_carried():
-    assert B.RULES == 73 and TR.PLACE_CARRY[73] == 72 and TR.EARLIER_MAX == 28
+    assert B.RULES == 74 and TR.PLACE_CARRY[74] == 73 and TR.PLACE_CARRY[73] == 72 and TR.EARLIER_MAX == 29  # e79 (the live R77 decks): RULES 74, PLACE_CARRY[74] = 73, EARLIER_MAX 29, deck 85, dive text 45 (updated on purpose)
 
 
 # ---------- 4. moves into "Other": each with its reason, and the effect ----------
@@ -255,8 +255,8 @@ def test_a_single_dated_update_goes_under_the_page_before_it_and_its_references_
 
 
 def test_versions():
-    assert deck.THEME_DECK_VERSION == 84
+    assert deck.THEME_DECK_VERSION == 85  # e79 (the live R77 decks): RULES 74, PLACE_CARRY[74] = 73, EARLIER_MAX 29, deck 85, dive text 45 (updated on purpose)
     from app.intel import theme_data as D
-    assert D.DIVE_TEXT == 44
+    assert D.DIVE_TEXT == 45  # e79 (the live R77 decks): RULES 74, PLACE_CARRY[74] = 73, EARLIER_MAX 29, deck 85, dive text 45 (updated on purpose)
     from app.intel import sector_metrics as S
     assert S.VERSION == 3

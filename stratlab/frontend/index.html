@@ -52,6 +52,13 @@ html, body { margin: 0; background: var(--b-paper); }
   /* the example card beside the heading on a wide screen, its usual height held, so the heading sits where the card centres it */
   @media (min-width: 1001px) { .boot-demo { display: block; min-height: 689px; } }
 }
+/* LIVE14A-014 / LIVE14B-003: the landing's hero words (the start-up frame's and the app's, the same .lp-hero-copy) are not painted until
+ * their own faces are here (public/boot.js sets data-faces): painted first in a stand-in serif (Georgia, DejaVu Serif: whatever the device
+ * has), the app's hero drawn later in Fraunces was a larger paint, so it became the LCP (2.8 s), and the swap moved the phone's lede (CLS
+ * 0.026). Hidden, they are laid out but never shown in the stand-in, so no device's fonts decide where anything sits; at most 3 s, the
+ * browser's own wait for a font (font-display: block), if the faces never come. */
+@media (scripting: enabled) { html[data-home]:not([data-faces]) .lp-hero-copy { visibility: hidden; animation: boot-faces 0s 3s forwards; } }
+@keyframes boot-faces { to { visibility: visible; } }
 /* scripts off: the page's links as one row of buttons under the words */
 .boot-hero ul.boot-links { display: flex; flex-wrap: wrap; gap: 12px; margin: 0; padding: 0; list-style: none; }
 .boot-hero ul.boot-links a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; border: 1px solid var(--line-2, currentColor); border-radius: 10px; color: inherit; text-decoration: none; font-weight: 600; }

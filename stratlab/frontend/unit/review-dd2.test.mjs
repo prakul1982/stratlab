@@ -15,7 +15,8 @@ test("DD-001 (MOOD-1): the mood card leads with the headline from the tables' fi
   // the mood is no longer a sentence the AI wrote: its headline and lines come with the tables (mood.py), the story with the headlines it counts
   const mood = read("src/pages/PulseMood.tsx"), page = read("src/pages/Research.tsx");
   // (updated on purpose, LIVE9A-001: a read of an earlier session starts with its day)
-  assert.match(mood, /\{m\.headline \? <p className="inv-summary" data-testid="pulse-mood"><b>\{behind \? `On \$\{day\(m\.session\)\}: \$\{m\.headline\}` : m\.headline\}<\/b><\/p>/);
+  // (updated on purpose, site78 LIVE15A-002: a session read over 20 minutes old starts with its time)
+  assert.match(mood, /\{m\.headline \? <p className="inv-summary" data-testid="pulse-mood"><b>\{behind \? `On \$\{day\(m\.session\)\}: \$\{m\.headline\}` : old \? `At \$\{old\}: \$\{m\.headline\}` : m\.headline\}<\/b><\/p>/);
   assert.match(mood, /data-testid="pulse-story">The main story in today's headlines: \{story\.label\}, \{story\.n\} of \{story\.of\} \(marked above/);
   // LIVE4-006: the FII/DII source sits under the FII table, and under the read only when there is no such table
   assert.match(mood, /\{source && <p className="k-note" data-testid="pulse-flows-source">\{source\}<\/p>\}/);

@@ -146,6 +146,13 @@ def sec_reit_tax(about) -> bool:
     return reit_tax_said(str(about or ""))
 
 
+def reader_due(got: dict, region: str = "") -> bool:
+    """e79: whether a US company's stored words were read by an earlier annual report reader whose opening today's passes over (its sentences
+    of how it is held, a REIT's tax status: sec.BUSINESS_KEY), so a re-check reads them again before it places the company."""
+    about = str((got or {}).get("about") or "")
+    return bool(region == "US" and about and got.get("bv") != sec_business_v() and (sec_structure_only(about) or sec_reit_tax(about)))
+
+
 def thin_about(got: dict, region: str = "", name: str = "") -> bool:
     """Whether a stored description is read once more: too thin to show the business and kept before the current format (GPT review of
     R31.5: Bharti Airtel's profile line names no mobile service; R35: a US company with no encyclopedia article had none at all, and its
@@ -604,10 +611,10 @@ def listed_as(name, symbol):
     return grounding.listed_name(name, symbol, symbol)
 
 
-PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57, 59: 58, 60: 59, 61: 60, 62: 61, 63: 62, 64: 63, 65: 64, 66: 65, 67: 66, 68: 67, 69: 68, 70: 69, 71: 70, 72: 71, 73: 72}  # rules versions whose change only adds to a kept placement (e78, R73: the answers unchanged, a concept's words read with the company's name aside and an earlier narrower name's move out no finding; e77, R72: the answers unchanged, a way of earning taking a company into a layer only where its words bear it out; r582, R58.2: the answers unchanged, layers of one company, the figures' window, names its companies' lines say; r58, R58: the answers unchanged, the taxonomy and scale rules; r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
+PLACE_CARRY = {30: 29, 31: 30, 32: 31, 33: 32, 34: 33, 35: 34, 36: 35, 37: 36, 38: 37, 39: 38, 40: 38, 41: 40, 42: 41, 43: 42, 44: 43, 45: 44, 46: 45, 47: 46, 48: 47, 49: 48, 50: 49, 51: 50, 52: 51, 53: 52, 54: 53, 55: 54, 56: 55, 57: 56, 58: 57, 59: 58, 60: 59, 61: 60, 62: 61, 63: 62, 64: 63, 65: 64, 66: 65, 67: 66, 68: 67, 69: 68, 70: 69, 71: 70, 72: 71, 73: 72, 74: 73}  # rules versions whose change only adds to a kept placement (e78, R73: the answers unchanged, a concept's words read with the company's name aside and an earlier narrower name's move out no finding; e77, R72: the answers unchanged, a way of earning taking a company into a layer only where its words bear it out; r582, R58.2: the answers unchanged, layers of one company, the figures' window, names its companies' lines say; r58, R58: the answers unchanged, the taxonomy and scale rules; r572, R57.2: the answers unchanged, the figures' and removals' rules; r571, R57.1: the answers unchanged, the contract's fixes; p57, R56: the answers unchanged, the placement contract after every rule; t56, R55: the answers unchanged, the taxonomy guard after every rule; v55, R54: the answers unchanged, membership, stage and the fallback layer decided on the companies' own words; c54, R53: the answers unchanged, moves judged on what a layer sells; d53, R52: earlier exclusions held, the answers unchanged; R30: unknown models asked again; R31: models made exact by the evidence, layers merged; R32: chip designers made fabless, model-named layers merged; R39: the split places by fit, the answers unchanged; R40: past 39, whose placements were asked again from nothing where 38 had kept none of its own; R41: the split's rules, the answers unchanged and carried as they are, theme_base.place_rest `carried`): the one before carries, and the one before that when it kept none (placed)
 
 
-EARLIER_MAX = 28                # (e78: 28, one more for the version R73 carries; e77: 27, one more for the version R72 carries; r69e: 26, one more for the version R69 carries; r68e: 25, one more for the version R68 carries; r67e: 24, one more for the version R67 carries; r66e: 23, one more for the version R66 carries; r65e: 22, one more for the version R65 carries; r64e: 21, one more for the version R64 carries; r63e: 20, one more for the version R63 carries; r62: 19, one more for the version R62 carries; r60: 18, one more for the version R60 carries; r59: 17, one more for the version R59 carries; r582: 16, one more for the version R58.2 carries; r581: 15, one more for the version R58.1 carries; r58: 14, one more for the version R58 carries; r572: 13, one more for the version R57.2 carries; r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
+EARLIER_MAX = 29                # (e79: 29, one more for the version R74 carries; e78: 28, one more for the version R73 carries; e77: 27, one more for the version R72 carries; r69e: 26, one more for the version R69 carries; r68e: 25, one more for the version R68 carries; r67e: 24, one more for the version R67 carries; r66e: 23, one more for the version R66 carries; r65e: 22, one more for the version R65 carries; r64e: 21, one more for the version R64 carries; r63e: 20, one more for the version R63 carries; r62: 19, one more for the version R62 carries; r60: 18, one more for the version R60 carries; r59: 17, one more for the version R59 carries; r582: 16, one more for the version R58.2 carries; r581: 15, one more for the version R58.1 carries; r58: 14, one more for the version R58 carries; r572: 13, one more for the version R57.2 carries; r571: 12, one more for the version R57 carries) rv51: how many carried versions back an earlier answer of the same map is looked for (p57, R56: 11, one more for the version R56 carries; t56, R55: 10, one more for the version R55 carries; v55, R54: 9, one more for the version R54 carries, so the live IT services answer kept under 44 is still reached from 53)
 
 
 def kept_placement(region: str, theme: str, m: dict) -> tuple[dict, int | None]:
@@ -855,9 +862,15 @@ def reread_weak(region: str, out: dict, names: dict, kept: dict | None) -> list[
         s_ = c["ticker"]
         if len(want) >= PLACE_READS:
             break
+        got = _stored_evidence(region, s_)
+        # e79 (LIVE15A-004/008, the live R77 REITs re-check: Essex Property Trust still in "Other" on its stored REIT tax sentences, e78's
+        # BUSINESS_KEY 4 reader never run for it): words kept before the annual report reader of today are read again before the placement
+        # whatever the company's kept model, so the rules of today place it on the words of today
+        if reader_due(got, region):
+            want.append(s_)
+            continue
         if (models.get(s_) or "unknown") != "unknown" and conf.get(s_) != "low":
             continue
-        got = _stored_evidence(region, s_)
         # R37 (lane r2: 217 of the 255 companies of the 14 live maps with no model had no words read at all, the smaller ones a kept placement
         # never read): one never read is read too
         if not got.get("at") or thin_about(got, region):
@@ -1382,6 +1395,14 @@ def facts_piece(region: str, sym: str, fresh: bool = False) -> tuple[dict | None
                     kept = computed.put(theme_library.FACTS, [region, sym], page, label=sym, region=region)
                     return page, (kept or {}).get("at")
                 return hit["value"], hit.get("at")
+            # e79 (LIVE15A-017/008: Camden's $13 m kept in the theme's piece after its page was rebuilt to $1,574 m): a piece whose newest
+            # year's revenue the company's page, as the screens' index has it now, gives otherwise for the same year is taken again
+            if restated_since(region, sym, hit["value"]) and callable(R.public_facts):
+                page = R.public_facts(region, sym)
+                if page and not restated_since(region, sym, page):
+                    kept = computed.put(theme_library.FACTS, [region, sym], page, label=sym, region=region)
+                    return page, (kept or {}).get("at")
+                return hit["value"], hit.get("at")
             if basis_missing(hit["value"]) and callable(R.public_facts):
                 page = R.public_facts(region, sym)
                 if page and not basis_missing(page) and (page.get("v") or 1) >= (hit["value"].get("v") or 1):
@@ -1400,6 +1421,46 @@ def facts_piece(region: str, sym: str, fresh: bool = False) -> tuple[dict | None
         return None, None
     kept = computed.put(theme_library.FACTS, [region, sym], f, label=sym, region=region)
     return f, (kept or {}).get("at")
+
+
+RESTATED_SHARE = 0.02            # e79: a newest year's revenue apart from its page's by more than this share (theme_changes.REVENUE_SHARE)
+
+
+def _index_sales(region: str) -> dict:
+    """e79: {symbol: (revenue, year, unit)} of every company page as the screens' index has it now (each page's newest full year)."""
+    return {x["symbol"]: (x.get("sales"), str(x.get("sales_year") or ""), x.get("sales_unit")) for x in _routes().index_rows(region) or []
+            if isinstance(x, dict) and x.get("symbol") and isinstance(x.get("sales"), (int, float)) and x["sales"] > 0}
+
+
+def _apart(a, b) -> bool:
+    return isinstance(a, (int, float)) and isinstance(b, (int, float)) and a > 0 and b > 0 and abs(a - b) > RESTATED_SHARE * max(a, b)
+
+
+def restated_since(region: str, sym: str, f: dict | None, index: dict | None = None) -> bool:
+    """e79: whether a stored page piece's newest full year gives a revenue the company's page, as the screens' index has it now, gives
+    otherwise for the same year in the same unit (the page rebuilt since: a restated revenue, Camden's principal line)."""
+    if not isinstance(f, dict):
+        return False
+    i = (index if index is not None else _index_sales(region)).get(sym)
+    years = [y for y in f.get("years") or [] if isinstance(y, dict) and str(y.get("year") or "").strip().upper() != "TTM"]
+    if not i or not years:
+        return False
+    y = years[-1]
+    return str(y.get("year") or "")[:20] == i[1] and (f.get("unit") or None) == i[2] and _apart(theme_data.num(y.get("sales")), i[0])
+
+
+def pages_restated(region: str, dive: dict) -> list[str]:
+    """e79 (LIVE15A-017/006: the REITs dive kept with Camden's $13 m, "Figures restated ... 13 -> 1,574" in its own log): the companies of a
+    kept dive whose row's revenue the company's page, as the screens' index has it now, gives otherwise for the same year in the same unit;
+    the dive is worked out again for them (dive_of), its pieces taken again from the rebuilt pages (facts_piece, restated_since)."""
+    idx = _index_sales(region)
+    out = []
+    for b in (dive or {}).get("layers") or []:
+        for c in b.get("companies") or []:
+            i = idx.get(c.get("symbol")) if isinstance(c, dict) else None
+            if i and not c.get("fx") and c.get("unit") == i[2] and str(c.get("year") or "")[:20] == i[1] and _apart(c.get("revenue"), i[0]):
+                out.append(c["symbol"])
+    return sorted(set(out))
 
 
 def _facts_version() -> int:
@@ -1765,7 +1826,8 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
         if kept is not None and isinstance((kept.get("value") or {}).get("dive"), dict):
             stale = pieces_moved(r, kept["value"].get("pieces") or {}) \
                 or sector_metrics.any_stored(r, kept["value"]["dive"].get("metrics_pending") or []) or prices_moved(r, kept) \
-                or bool(pages_rebuilt(r, kept["value"]["dive"]))          # ex49: a page rebuilt with the lines a checked figure waits for
+                or bool(pages_rebuilt(r, kept["value"]["dive"])) \
+                or bool(pages_restated(r, kept["value"]["dive"]))         # e79: a page rebuilt since with another revenue for the year
             if not stale:
                 requeue(r, kept["value"]["dive"])
                 return kept["value"]["dive"]
@@ -1800,7 +1862,9 @@ def dive_of(r: str, theme: str, m: dict, refresh: bool = False, by: str | None =
     # on the public page): the members' tally by evidence state worked out once, with the read it is of, and kept with the dive, so the app,
     # the deck and the public page say the same counts of the same read
     hit["tally"] = theme_data.checked_tally(hit.get("membership_evidence"), (hit.get("membership_check") or {}).get("outside"), len(now_all))
-    hit["tally_at"] = str(hit.get("as_of") or datetime.now(timezone.utc).date().isoformat())[:10]
+    # e79 (LIVE15A-021: every public tally "as checked on 18 Nov 2026" after the 19 Nov re-checks, the dive's price day): the day the read was
+    # made, the day the app's head says the theme was checked
+    hit["tally_at"] = datetime.now(timezone.utc).date().isoformat()
     ctl = theme_changes.coverage_control(hit["coverage"], before, hit, now_all)   # d53: layers lost too
     pc = theme_changes.population_change(before, hit)      # r68e: each company that joined or left the core members, with why
     if pc:

@@ -8,7 +8,7 @@ import { useLiveRefresh } from "../lib/liveRefresh";
 import { ipoApi, type DocLink, type Facts, type IpoDetail, type Summary } from "../lib/ipo";
 import {
   KPI_LABELS, badgeOf, bandText, clockText, croreText, expectedText, figure, firstAndRest, freshCrore, growthPct, kpiText, minText, objectRows, partsText, periodText,
-  priceToEarnings, sharesText, sizeText, spanText, timesText, yearKey,
+  priceToEarnings, sharesText, sizeText, sizeWasText, spanText, timesText, yearKey,
 } from "../lib/ipoText";
 import { Badge, Card, CardHead, DataTable, Disclosure, FactTable, type Fact, EmptyState, ErrorState, PageHeader, PlanNote, Signed, Skeleton, type Column } from "../components/kit";
 import { LockedPreview } from "../components/LockedPreview";
@@ -36,6 +36,7 @@ function Terms({ d }: { d: IpoDetail }) {
       id: "size", k: "Issue size", v: sizeText(r),
       n: [r.size != null && r.size_parts ? `${partsText(r.size_parts)}, ${r.size_basis}` : r.size_basis && r.size_basis !== "stated" ? r.size_basis : null,
         r.size_in_bids != null ? `The exchange's bid table covers ${croreText(r.size_in_bids)}; the rest is the anchor portion${r.anchor_shares ? ` (${sharesText(r.anchor_shares)} shares)` : ""}.` : null,
+        sizeWasText(r),
       ].filter(Boolean).join(". ") || undefined,
     },
     us && r.shares != null ? { id: "shares", k: "Shares offered", v: sharesText(r.shares, "US") } : null,

@@ -755,8 +755,12 @@ class Mood:
 
     def _names(self, region: str) -> dict[str, str]:
         try:
-            from .. import screens
-            return {r["symbol"]: short_name(r.get("name") or r["symbol"], region == "US") for r in screens.load_index(region).get("rows") or []}
+            from .. import screens, stock_pages
+            # LIVE15A-025: a company put under a new holding company is named as the registrant whose reports its figures are, as its stock
+            # page, the directory and the themes name it (stock_pages.reporting_name: Mood US said "ExxonMobil Holdings" beside "Exxon Mobil
+            # Corporation" everywhere else)
+            return {r["symbol"]: short_name(stock_pages.reporting_name(region, r["symbol"]) or r.get("name") or r["symbol"], region == "US")
+                    for r in screens.load_index(region).get("rows") or []}
         except Exception:
             return {}
 

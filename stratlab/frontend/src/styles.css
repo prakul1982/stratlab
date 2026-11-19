@@ -978,8 +978,10 @@ body:has(.k-coach) .consent { visibility: hidden; }
   .consent-more { display: inline; margin-right: auto; white-space: nowrap; }
   .consent-btns .btn { flex: 0 0 96px; min-width: 0; }
   /* on a phone it takes no more than its own small box from the first line (the bar keeps its two lines); its tap area is wider */
-  .consent-x { position: relative; width: 20px; height: 18px; margin: 0 -6px 0 2px; font-size: 18px; border-radius: 4px; }
-  .consent-x::after { content: ""; position: absolute; inset: -11px -10px; }
+  /* (LIVE15B-009: its own box 24 x 24, the least a target may be, not 20 x 18; the 3 px above and below it overhang the line, so it still
+     takes no more than the line's 18 px; the tap area round it 44 x 44) */
+  .consent-x { position: relative; width: 24px; height: 24px; margin: -3px -8px -3px 2px; font-size: 18px; border-radius: 4px; }
+  .consent-x::after { content: ""; position: absolute; inset: -10px; }
 }
 
 /* search: one box for everything */

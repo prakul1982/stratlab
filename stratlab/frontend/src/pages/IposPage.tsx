@@ -6,7 +6,7 @@ import { eyebrowOf } from "../lib/eyebrow";
 import { IST, asOf, fmtDate, fmtDateTime, marketTz, pct, price } from "../lib/format";
 import { useLiveRefresh } from "../lib/liveRefresh";
 import { ipoApi, type AlertPrefs, type EventKind, type IpoList, type IpoRow, type Market, type Stage } from "../lib/ipo";
-import { TAB_LINE, badgeOf, bandText, clockText, expectedText, minText, partsText, problemNote, segmentWord, sharesText, sizeText, spanText, tabsFor, timesText, unpricedRows } from "../lib/ipoText";
+import { TAB_LINE, badgeOf, bandText, clockText, expectedText, minText, partsText, problemNote, segmentWord, sharesText, sizeText, sizeWasText, spanText, tabsFor, timesText, unpricedRows } from "../lib/ipoText";
 import { Badge, Card, CardHead, CheckField, ChipSet, DataTable, Disclosure, EmptyState, ErrorState, PageHeader, PlanNote, Seg, Signed, Skeleton, type Column } from "../components/kit";
 import "./ipo.css";
 
@@ -95,7 +95,8 @@ function columns(m: Market, tab: Stage): Column<IpoRow>[] {
     info: "The whole issue: the new shares the company issues plus any shares existing holders put up for sale (an offer for sale). The two parts are under the total when the exchange gives both.",
     cell: (r) => <>{sizeText(r)}{r.size != null && r.size_parts?.fresh_cr != null && r.size_parts?.ofs_cr != null && <span className="k-sub-line" data-testid="ipo-size-parts">{partsText(r.size_parts)}</span>}
       {/* LIVE9A-015: a US size that includes the underwriters' 15% option says so, with the size without it */}
-      {r.size_base != null && <span className="k-sub-line" data-testid="ipo-size-option">{sizeText({ ...r, size: r.size_base })} without the underwriters' 15% option</span>}</> };
+      {r.size_base != null && <span className="k-sub-line" data-testid="ipo-size-option">{sizeText({ ...r, size: r.size_base })} without the underwriters' 15% option</span>}
+      {r.size_was && <span className="k-sub-line k-muted" data-testid="ipo-size-was">{sizeWasText(r)}</span>}</> };
   const times: Column<IpoRow> = { key: "times", header: tab === "open" ? "Bids so far" : "Bids received", numeric: true, info: "How many times the shares on offer the bids came to, counting the bids placed on both exchanges (NSE and BSE), as the exchange's issue page totals them. NSE's own count alone is lower. The time of the reading is under each figure.",
     cell: (r) => (r.sub_times != null ? <>{timesText(r.sub_times)}{tab === "open" && r.sub_as_of && <span className="k-sub-line" data-testid="ipo-sub-at">as of {bidsAt(r.sub_as_of)}</span>}</>
       : tab === "open" && m === "IN" ? <span className="k-muted" data-testid="ipo-bids-none">{bidsMissing(r)}</span> : <span className="k-muted">–</span>) };

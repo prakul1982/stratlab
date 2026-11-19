@@ -30,6 +30,8 @@ export interface Layer {
   stats: { ebitda: Stat | null; net: Stat | null; roce: Stat | null }; company_wide: string[]; left_out: number; stats_over: "own" | "all";
   /** every company the layer lists; `n` of them are in its calculations */
   listed?: number;
+  /** e79: how many companies the theme's map places in the layer (a layer with members but none among those with figures) */
+  placed?: number;
   /** one official industry's companies the AI didn't place in a layer (THEMES) */
   official?: boolean; basis?: "industry" | "list";
   /** the layer's EBITDA margins are mostly filed in whole points: its median and range print whole (LIVE7A-009) */

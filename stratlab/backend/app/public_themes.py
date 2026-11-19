@@ -267,6 +267,21 @@ def _revenues(region: str, name: str, p: dict, dive: dict | None = None) -> dict
     return out
 
 
+RESTATED_SHARE = 0.02          # e79: a revenue of the same year moved by more than this share (theme_changes.REVENUE_SHARE) is restated
+
+
+def restated_sales(index: dict, dive: dict) -> dict:
+    """e79 (LIVE15A-017, the owner's P0: Camden Property Trust "$13M Dec 2025" here after its page was rebuilt to $1,574 m, the stored dive
+    still the read before): {symbol: (revenue, year, unit)}, the stored dive's figure (the app's and the deck's) unless the company's page,
+    as the screens' index has it now, gives the same year in the same unit another revenue (rebuilt since: restated): then the page's."""
+    out = {**index, **dive}
+    for s_, d in dive.items():
+        i = index.get(s_)
+        if i and str(i[1] or "") == str(d[1] or "") and i[2] == d[2] and d[0] and abs(i[0] - d[0]) > RESTATED_SHARE * max(i[0], d[0]):
+            out[s_] = i
+    return out
+
+
 def money(region: str, v, unit: str | None = None) -> str | None:
     if not isinstance(v, (int, float)) or v <= 0:
         return None
@@ -283,7 +298,7 @@ def view(entry: dict, p: dict) -> dict:
     dive_day = str(dive.get("as_of"))[:10] if dcaps and dive.get("as_of") else None
     newer = _index_newer(region, dive_day)          # r69e: a company priced at a later close than the dive's: that close's value
     caps, revs, ev = ({**_index_caps(region), **dcaps, **{k: x[0] for k, x in newer.items()}},
-                      {**_index_sales(region), **_revenues(region, entry["name"], p, dive)}, _evidence(dive))
+                      restated_sales(_index_sales(region), _revenues(region, entry["name"], p, dive)), _evidence(dive))
     known = stock_pages.companies(region)
     # e77 (the R76 decks: "OSI Systems Inc" in the deck beside "Osi Systems Inc" here; "ExxonMobil Holdings Corp" after the owner's "Exxon Mobil
     # Corporation"): each company named as the app's rows and the deck name it (the stored dive's name), a reporting registrant's name first

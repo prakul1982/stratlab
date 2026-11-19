@@ -369,6 +369,9 @@ def eps_shares(p: dict) -> tuple[float, float] | None:
     return n / e, EPS_AGREE + (0.005 if abs(n) < 10 else 0.5) / abs(n)
 
 
+# the version of the share-count rules a market value is worked out under, kept on each stored Indian page (stock_pages.cap_rule_due): 2 is
+# LIVE14B-006's share capital standing when the newest quarter's EPS count agrees with it (TCS ₹8.61 lakh cr, not the source's ₹8.49)
+CAP_RULE = 2
 QUARTER_AGREE = 0.01          # the latest quarter's net profit ÷ its EPS and the share capital's count this close are one count (LIVE14B-006)
 
 
