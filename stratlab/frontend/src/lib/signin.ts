@@ -44,16 +44,28 @@ export function startSignIn(next?: string | null) {
   return Promise.resolve();
 }
 
+/** What the sign-in page's start-up frame kept before the app drew (public/signin-early.js, LIVE16B-001): a press on one of its two ways
+ * in, the address typed and whether its box had the focus. The app does the press once, then forgets it. */
+export type Early = { way?: "google" | "email"; email?: string; focus?: boolean };
+export const early = (): Early => (window as { __stratlabEarly?: Early }).__stratlabEarly ?? {};
+
 /** The sign-in page with its email form ready to type in (R61, owner on Release 60: "no option to sign in with email on the homepage"). */
 export const EMAIL_SIGNIN_PATH = "/login#email";
 
 /** "or sign in with email" beside a Continue with Google button: the sign-in page at its email form, the page to come back to kept as for
  * Google. Only while email sign-in is on (the link isn't drawn otherwise). */
-export function startEmailSignIn(next?: string | null) {
+export function startEmailSignIn(next?: string | null, go: (to: string) => void = (to) => location.assign(to)) {
   clearSignInEnded();
   keepNext(next);
-  location.assign(EMAIL_SIGNIN_PATH);
+  go(emailSignInPath(next));
 }
+
+/** The sign-in page at its email form, with the plan a plan card picked (`next` "/plans?plan=basic") going along: /login?plan=basic#email
+ * (LIVE16B-001: the plan cards' email buttons dropped it). */
+export const emailSignInPath = (next?: string | null): string => {
+  const plan = /[?&]plan=(basic|pro)\b/.exec(next ?? "")?.[1];
+  return plan ? `/login?plan=${plan}#email` : EMAIL_SIGNIN_PATH;
+};
 
 /** Email the address a one-time sign-in code with a link (the sign-in service sends it; the same account as Google for the same
  * address, made on first use). The page to open afterwards is kept as for Google. Returns the service's error, if any. */

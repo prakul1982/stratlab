@@ -92,7 +92,8 @@ test("LIVE10B-014/033/045/003: paper start says it starts flat; one minus and gr
   assert.match(read("src/pages/CorpActionsPage.tsx"), /y > 0 && y < 0\.005 \? "<0\.01%" : pctPlain\(y, 2\)/);
   const login = read("src/pages/Login.tsx");
   assert.match(login, /const signup = login && location\.pathname === "\/signup";/);
-  assert.match(login, /\$\{signup \? "Sign up" : "Sign in"\} with your Google account or your email address/);
+  // (updated on purpose, LIVE16B-001: one line for both switch states; with email sign-in off it names Google alone, no longer the page's description)
+  assert.match(login, /\$\{signup \? "Sign up" : "Sign in"\} with your Google account\$\{emailSignInOn\(\) \? " or your email address" : ""\}/);
   assert.match(read("src/components/EmailSignIn.tsx"), /\{signup \? "Sign up" : "Sign in"\} with email<\/label>/);
 });
 

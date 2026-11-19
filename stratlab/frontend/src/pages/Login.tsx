@@ -5,7 +5,8 @@ import { cardPrice, dollarText, freePrice, usdPricesNote, usdRowOf } from "../li
 import { CurrencySwitch } from "../components/CurrencySwitch";
 import { finePrint, landingAction, pricingIntro, YEARLY_LABEL, yearlySaving } from "../lib/offer";
 import { KEY, LIMITS, PLAN_IDS, PLAN_NAME, PRICE, WHO, type PlanId } from "../lib/planCore";   // the cards only: the tables (plans.ts) stay off the landing download
-import { emailSignInOn, signIn, signInUnfinished, startSignIn } from "../lib/signin";
+import { early, emailSignInOn, signIn, signInUnfinished, startSignIn } from "../lib/signin";
+import { rememberNext } from "../lib/returnTo";
 import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 import { signInProblem } from "../lib/signinError";
 import { FAQ } from "../content/faq";
@@ -37,7 +38,12 @@ const PlanCompare = lazy(() => importWithRetry(() => import("../components/PlanC
 // sign-in by email (owner, 16 Nov): on the sign-in page only while /config.js switches it on; its code loads only then
 import { EmailWay } from "../components/EmailWay";
 import { SampleDeckLink, useSampleDeck } from "../components/SampleDeck";
-const EmailSignIn = lazy(() => importWithRetry(() => import("../components/EmailSignIn")).then((m) => ({ default: m.EmailSignIn })));
+// LIVE16B-001: on the sign-in page itself the email form's code is asked for as this file runs, and drawn straight away once here, so the form
+// the start-up frame shows is never swapped for an empty slot while it downloads
+let emailMod: typeof import("../components/EmailSignIn") | null = null;
+const loadEmail = () => importWithRetry(() => import("../components/EmailSignIn")).then((m) => { emailMod = m; return { default: m.EmailSignIn }; });
+const EmailSignIn = lazy(loadEmail);
+if (/^\/(login|signup)\/?$/.test(location.pathname)) loadEmail().catch(() => undefined);
 
 /* The public landing page: what StratLab does, in its three spaces (Trade, the strategy lab it began as, first; then
  * Invest and Money), the alerts across them, the plans, and one way in (Google sign-in). Every button that signs in
@@ -305,6 +311,15 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
   useDetailsDismiss(menu);
 
   const go = () => { void signIn().catch(() => setError("Couldn't start Google sign-in. Check your connection and try again.")); };
+  useEffect(() => {
+    if (!login) return;
+    // a plan picked on a plan card (/login?plan=basic): its card is the one marked on /plans after sign-in, by Google or by email (LIVE16B-001)
+    const plan = new URLSearchParams(location.search).get("plan");
+    if (plan === "basic" || plan === "pro") rememberNext(`/plans?plan=${plan}`);
+    // Continue with Google pressed in the start-up frame before this page drew: done now, once
+    const e = early();
+    if (e.way === "google") { e.way = undefined; go(); }
+  }, [login]);     // eslint-disable-line react-hooks/exhaustive-deps
   const cta = (label = "Continue with Google") => (
     <button type="button" className="btn lp-cta" onClick={go}><Google />{label}</button>
   );
@@ -343,7 +358,7 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
             {heading
               ? <h1 className="serif lp-h1 lp-own-h1">{heading}</h1>
               : <h1 className="serif lp-h1">Is your trading idea <em>skill</em> or luck?</h1>}
-            <p className="serif lp-lede">{login && emailSignInOn() ? `${signup ? "Sign up" : "Sign in"} with your Google account or your email address: no password to set up.` : heading && intro ? intro : "Write it in plain words. StratLab tests it on years of real prices after every charge, then checks four ways whether the result could be luck. Company research, your holdings and your tax sit beside it."}</p>
+            <p className="serif lp-lede">{login ? `${signup ? "Sign up" : "Sign in"} with your Google account${emailSignInOn() ? " or your email address" : ""}: no password to set up.` : heading && intro ? intro : "Write it in plain words. StratLab tests it on years of real prices after every charge, then checks four ways whether the result could be luck. Company research, your holdings and your tax sit beside it."}</p>
             <div className="row wrap g12">
               {cta()}
               {/* R61/R64: beside Continue with Google, the email way in as a button of its own, while email sign-in is on (the sign-in page has the form itself) */}
@@ -352,7 +367,7 @@ export function Login({ section: asked = null, heading, intro, plansOnly = false
               {full && <Link className="btn quiet lp-cta-2" to="/library">See real results, no sign-in</Link>}
             </div>
             {/* its place held from the first frame (LIVE12B-008: the form arrived after it and pushed the small print 208 px down on a phone) */}
-            {login && emailSignInOn() && <Suspense fallback={<i className="email-slot" />}><EmailSignIn signup={signup} /></Suspense>}
+            {login && emailSignInOn() && (emailMod ? <emailMod.EmailSignIn signup={signup} /> : <Suspense fallback={<i className="email-slot" />}><EmailSignIn signup={signup} /></Suspense>)}
             {error && <p className="banner" role="alert">{error}</p>}
             {login ? <p className="small muted">Google sign-in reads only your name and email address{emailSignInOn() ? "; email sign-in reads only your email address" : ""}. By continuing you agree to the <Link className="link" to="/terms">Terms</Link> and <Link className="link" to="/privacy">Privacy policy</Link>.</p> : <p className="small muted">Free to start · No card · No coding</p>}
           </div>
@@ -624,8 +639,8 @@ function Pricing({ top }: { top?: { heading: string; error: string | null } } = 
                 {"note" in act ? <span className="lp-plan-note small muted">{act.note}</span>
                   // LIVE11B-001: the Google and email buttons are ONE row of the card's four-row subgrid (name, price, ways in, list): as two
                   // children the email button took the list's row and the list ran under it, its ticks boxed under "Sign in with email"
-                  : <div className="lp-plan-ways"><button type="button" className={`btn ${p === "pro" ? "" : "outline"}`} disabled={loading} onClick={() => void signIn(act.buy ? "/plans" : null)}>{act.label}</button>
-                    <EmailWay next={act.buy ? "/plans" : null} className="lp-plan-email" label={act.label.replace("Continue with Google", "Sign in with email")} /></div>}
+                  : <div className="lp-plan-ways"><button type="button" className={`btn ${p === "pro" ? "" : "outline"}`} disabled={loading} onClick={() => void signIn(act.buy ? `/plans?plan=${p}` : null)}>{act.label}</button>
+                    <EmailWay next={act.buy ? `/plans?plan=${p}` : null} className="lp-plan-email" label={act.label.replace("Continue with Google", "Sign in with email")} /></div>}
                 {/* on a phone the five lines are one fold under the button (LIVE5 partial: three cards of five lines were 2,100 px) */}
                 <PhoneFold label={`What ${PLAN_NAME[p]} includes`}>
                 <ul className="lp-plan-list">

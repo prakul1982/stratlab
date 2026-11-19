@@ -92,7 +92,8 @@ test("LIVE12B-009, LIVE12B-024: 'Signing up only reads…' on /signup, and the p
   // (updated on purpose, R74: LIVE13A-018's one plain sentence names what each way reads, so /signup no longer says "Signing in")
   assert.match(login, /\{login \? <p className="small muted">Google sign-in reads only your name and email address/);
   assert.doesNotMatch(login, /"Signing in"\} only reads/);
-  assert.match(login, /<EmailWay next=\{act\.buy \? "\/plans" : null\} className="lp-plan-email" label=\{act\.label\.replace\("Continue with Google", "Sign in with email"\)\} \/>/);
+  // (updated on purpose, LIVE16B-001: the card's plan goes along to /plans after sign-in, by Google or by email)
+  assert.match(login, /<EmailWay next=\{act\.buy \? `\/plans\?plan=\$\{p\}` : null\} className="lp-plan-email" label=\{act\.label\.replace\("Continue with Google", "Sign in with email"\)\} \/>/);
   const { landingAction } = await import("../src/lib/offer.ts");
   const offer = { payments: true, mode: "paid" };
   const words = (p) => { const a = landingAction(offer, p); return "label" in a ? a.label.replace("Continue with Google", "Sign in with email") : a.note; };

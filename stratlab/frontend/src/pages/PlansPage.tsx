@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { changeDay, graceLine } from "../lib/freeChange";
 import { AccountWait } from "../components/AccountWait";
 import { Card, ConfirmDialog, FieldGroup, FormGrid, Notice, PageHeader, Seg } from "../components/kit";
@@ -98,6 +98,12 @@ export function PlansPage() {
   };
 
   const [switching, setSwitching] = useState<"basic" | "pro" | null>(null);
+  // LIVE16B-001: the plan picked on a plan card before signing in (/plans?plan=basic, kept through Google or the email code): its card is
+  // marked and brought into view once the account has answered
+  const picked = new URLSearchParams(location.search).get("plan");
+  useEffect(() => {
+    if (me && (picked === "basic" || picked === "pro")) document.querySelector(`[data-testid="plan-card-${picked}"]`)?.scrollIntoView({ block: "center" });
+  }, [!!me, picked]);     // eslint-disable-line react-hooks/exhaustive-deps
   // every purchase is confirmed on this page first, with the plan, the period, the amount charged and the renewal (R6V-009)
   const ask = (plan: "basic" | "pro") => setSwitching(plan);
   const given = !!me?.billing?.given_by_owner;
@@ -160,7 +166,7 @@ export function PlansPage() {
           const cur = paid === p;
           const price = priceOf(p, period);
           return (
-            <Card key={p} className={p === "pro" ? "k-plan pro" : "k-plan"}>
+            <Card key={p} className={`k-plan${p === "pro" ? " pro" : ""}${picked === p ? " picked" : ""}`} testId={`plan-card-${p}`}>
               <div className="k-stack tight">
                 <h2 className="k-card-title">{planName(p)}</h2>
                 <span className="k-small k-muted">{WHO[p]}</span>
@@ -176,6 +182,7 @@ export function PlansPage() {
               <div className="k-plan-body">
                 <ul className="k-plan-list">{KEY[p].map((f) => <li key={f}><span aria-hidden="true">✓</span>{f}</li>)}</ul>
                 {p === "free" && cur && me?.free_change && <p className="k-note" data-testid="plan-grace">{graceLine(me.free_change)} <Link className="link" to="/account#free-change">See what changes</Link></p>}
+                {picked === p && p !== "free" && !cur && <p className="k-note" data-testid="plan-picked">The plan you picked before signing in.</p>}
                 {action(p, cur)}
               </div>
             </Card>

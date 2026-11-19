@@ -59,6 +59,13 @@ html, body { margin: 0; background: var(--b-paper); }
  * browser's own wait for a font (font-display: block), if the faces never come. */
 @media (scripting: enabled) { html[data-home]:not([data-faces]) .lp-hero-copy { visibility: hidden; animation: boot-faces 0s 3s forwards; } }
 @keyframes boot-faces { to { visibility: visible; } }
+/* LIVE16B-001: the sign-in page while its code downloads is the sign-in page itself (scripts/seoPages.mjs loginFrame): Google and the email
+ * form at once. Its words for a reader with no script (who can't sign in) show only then; with email sign-in off in /config.js,
+ * public/signin-early.js marks the page and the email way goes. */
+@media (scripting: enabled) { .boot-login .boot-text { display: none; } }
+@media (scripting: none) { .boot-login [data-boot-google], .boot-login [data-boot-email] { display: none; } }
+html[data-email-off] .boot-login [data-boot-email], html[data-email-off] .boot-login [data-boot-or] { display: none; }
+.boot-login .boot-foot a { color: inherit; }
 /* scripts off: the page's links as one row of buttons under the words */
 .boot-hero ul.boot-links { display: flex; flex-wrap: wrap; gap: 12px; margin: 0; padding: 0; list-style: none; }
 .boot-hero ul.boot-links a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; border: 1px solid var(--line-2, currentColor); border-radius: 10px; color: inherit; text-decoration: none; font-weight: 600; }
