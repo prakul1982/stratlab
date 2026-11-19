@@ -321,9 +321,9 @@ export function Shell({ children, ask: question }: { children: ReactNode; ask?: 
         {spaceGroups ?? minePart}
       </nav>
       {/* the menu's faded bottom edge says there is more; this says it in words and scrolls to it (R5O-038). The mouse
-          wheel and the keyboard reach the same items, so it is left out of the Tab order and of screen readers. It has a row of its
-          own under the menu's edge line, so it never sits over a menu item, and it goes once the menu's last item is in view (owner,
-          18 Nov: it sat over "ETF vs NAV" at 1440x900) */}
+          wheel and the keyboard reach the same items, so it is left out of the Tab order and of screen readers. Quiet muted words
+          under the menu's visible box, with no box or line of their own (owner, 19 Nov), so it never sits over a menu item, and it
+          goes once the menu's last item is in view (owner, 18 Nov: it sat over "ETF vs NAV" at 1440x900) */}
       {(fade === "bottom" || fade === "both") && (
         <div className="side-more-row">
           <button type="button" className="side-more" tabIndex={-1} aria-hidden="true"
