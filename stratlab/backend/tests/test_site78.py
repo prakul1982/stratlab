@@ -258,3 +258,13 @@ def test_live15a_016_an_indian_page_build_records_the_share_count_rule():
     assert 'checks["cap_rule"] = CAP_RULE' in src
     from app import stock_pages as SP
     assert '"cap_rule")' in inspect.getsource(SP.facts)
+
+
+# ---------- LIVE15A-025 (Low): Mood names a company as its reporting registrant ----------
+def test_live15a_025_mood_names_a_company_as_its_reporting_registrant(monkeypatch):
+    from app import screens, stock_pages
+    from app.intel import mood
+    monkeypatch.setattr(screens, "load_index", lambda region: {"rows": [{"symbol": "XOM", "name": "ExxonMobil Holdings Corp"}, {"symbol": "CVX", "name": "Chevron Corp"}]})
+    monkeypatch.setattr(stock_pages, "reporting_rows", lambda region: {"XOM": {"name": "Exxon Mobil Corporation", "listed": "", "at": "2026-11-18"}})
+    names = mood.Mood(hub=None)._names("US")
+    assert names["XOM"] == "Exxon Mobil" and names["CVX"] == "Chevron"

@@ -57,3 +57,9 @@ test("LIVE15A-015: an issue size that changed between two reads says what it was
   assert.match(read("src/pages/IposPage.tsx"), /data-testid="ipo-size-was">\{sizeWasText\(r\)\}/);
   assert.match(read("src/pages/IpoPage.tsx"), /        sizeWasText\(r\),\n/);
 });
+
+test("LIVE15A-024 / LIVE15B-009 (Lows): an Indian call time with no zone is IST, said as assumed; the card's close button is 24 x 24", () => {
+  const src = read("src/pages/EarningsCallsPage.tsx");
+  assert.match(src, /const india = \(region \?\? r\.region\) === "IN";/);
+  assert.match(read("src/styles.css"), /\.consent-x \{ position: relative; width: 24px; height: 24px; margin: -3px -8px -3px 2px;/);
+});
