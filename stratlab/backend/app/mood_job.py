@@ -35,14 +35,21 @@ KEY = "moodjob:"                  # moodjob:<market> = the last trading day its 
 # market per trading day, the card's tables only (no AI read).
 OPEN_TIMES = {"IN": ("Asia/Kolkata", "09:30", "15:00"), "US": ("America/New_York", "09:45", "15:30")}
 OPEN_KEY = "moodjob-open:"
+# LIVE15A-002: at 14:36 IST India's card still carried its 09:34 read (a "Mixed … NIFTY 50 down" line, a 178/318 count and Nifty Bank
+# +0.06% under live rows of NIFTY 50 +1.02% and NIFTY BANK +1.51%) because nobody had opened the page since the open's read. While a
+# market trades (from its open read to its close) the card is read again every SESSION_EVERY seconds, at most SESSION_MAX times a day.
+SESSION_EVERY = 900.0
+SESSION_MAX = 30
 LATE_AFTER = 60                   # minutes after READ_AT with no read written: the day is late (LIVE10A-001)
 
 
 class Job:
-    def __init__(self, read=None, mood=None, opening=None):
+    def __init__(self, read=None, mood=None, opening=None, session=None):
         self.read = read or _pulse_read
         self.mood = mood or _mood_payload        # LIVE9A-001: the Mood card's own payload, of the session that closed
         self.opening = opening                   # fix11: the card's payload read once after the open (the clock's job sets it)
+        self.session = session                   # LIVE15A-002: the card's payload read again during the session (the clock's job sets it)
+        self._in_session: dict[str, tuple[str, int, float]] = {}      # market -> (day, reads today, when the last one was asked)
         self.status = {"last_run": None, "last_error": None, "written": {}}
 
     def start(self):
@@ -125,12 +132,41 @@ class Job:
                 out[region] = f"tables of {session or 'no session'}"
         return out
 
+    def tick_session(self, now: datetime) -> dict:
+        """LIVE15A-002: each market trading now (after its open read's time, before its close) has its Mood card read again when its last
+        such read was asked SESSION_EVERY ago, at most SESSION_MAX times a day, so a visit mid-session never gets the morning's read."""
+        from .data.calendar import is_trading_day
+        from .intel.company import market_open
+        out = {}
+        for region in OPEN_TIMES if self.session else ():
+            tz, at, _ = OPEN_TIMES[region]
+            local = now.astimezone(ZoneInfo(tz))
+            day = local.date().isoformat()
+            if local.strftime("%H:%M") < at or not is_trading_day(region, local.date()) or not market_open(region, now):
+                continue
+            was_day, n, last = self._in_session.get(region, ("", 0, 0.0))
+            if was_day != day:
+                n, last = 0, 0.0
+            if n >= SESSION_MAX or now.timestamp() - last < SESSION_EVERY:
+                continue
+            self._in_session[region] = (day, n + 1, now.timestamp())
+            try:
+                out[region] = self.session(region) or "no session"
+            except Exception as e:
+                out[region] = f"failed: {str(e)[:80]}"
+                print(f"mood read job: {region} {day} in session: {out[region]}")
+        return out
+
     def tick(self, now: datetime) -> dict:
         """Each market whose read is due: the read asked for once; written (or already there), the day is done."""
         try:
             self.tick_open(now)
         except Exception as e:
             print("mood read job: open read:", str(e)[:120])
+        try:
+            self.tick_session(now)
+        except Exception as e:
+            print("mood read job: in-session read:", str(e)[:120])
         out = {}
         for region in TIMES:
             day = self.due(region, now)
@@ -200,5 +236,5 @@ def _mood_open(region: str) -> str | None:
     return (routes.mood_hub().refresh_now(region) or {}).get("session")
 
 
-job = Job(opening=_mood_open)
+job = Job(opening=_mood_open, session=_mood_open)
 autofix.source(lambda: job.checks())          # LIVE10A-001: a read not written an hour after its time is re-run, then shown to the owner

@@ -127,3 +127,31 @@ def test_live15a_001_a_corrected_issue_rewrites_its_existing_post_in_place(monke
     monkeypatch.setattr(blog, "_rewrite", lambda post: wrote.append(post))
     assert blog.rewrite_brief(issue)
     assert wrote[0]["slug"] == "us-market-brief-2026-11-18" and "−0.23%" in wrote[0]["title"]
+
+
+# ---------- LIVE15A-002: the Mood card is read again on a clock while the market trades ----------
+def test_live15a_002_the_mood_card_is_read_again_every_quarter_hour_while_the_market_trades_and_no_more(monkeypatch):
+    from app import mood_job
+    from app.data import calendar as tc
+    from zoneinfo import ZoneInfo
+    monkeypatch.setattr(tc, "is_trading_day", lambda m, d: d.weekday() < 5)
+    asked = []
+    j = mood_job.Job(read=lambda r: {}, mood=lambda r, d=None: None, session=lambda r: asked.append(r) or "2026-11-19")
+    ist = ZoneInfo("Asia/Kolkata")
+    at = lambda h, m: datetime(2026, 11, 19, h, m, tzinfo=ist)          # noqa: E731
+    assert j.tick_session(at(9, 20)) == {}                               # before the open read's time
+    assert j.tick_session(at(9, 35)) == {"IN": "2026-11-19"}
+    assert j.tick_session(at(9, 40)) == {}                               # five minutes later: not yet
+    assert j.tick_session(at(9, 50)) == {"IN": "2026-11-19"}             # a quarter hour after the last
+    assert j.tick_session(at(15, 35)) == {}                              # the market has shut
+    assert asked == ["IN", "IN"]
+    # bounded: at most SESSION_MAX reads a day
+    j2 = mood_job.Job(read=lambda r: {}, mood=lambda r, d=None: None, session=lambda r: "x")
+    from datetime import timedelta
+    n = sum("IN" in j2.tick_session(at(9, 30) + timedelta(minutes=15 * k)) for k in range(30))
+    assert n == 24 <= mood_job.SESSION_MAX                               # 09:30 to 15:15 IST, every 15 minutes
+
+
+def test_live15a_002_the_clock_job_reads_the_card_in_session():
+    from app import mood_job
+    assert mood_job.job.session is mood_job._mood_open

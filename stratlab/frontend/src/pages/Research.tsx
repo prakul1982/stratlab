@@ -43,7 +43,7 @@ import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge, EtfGapDetailView } from "../components/EtfGap";
 import { typingFirst } from "../lib/typingFirst";
 import { companyRows, moodBehindNote, moodDay, PULSE_TITLE, PULSE_AI_RETRY_MS, PULSE_AI_TRIES, PULSE_UPDATING_NOTE, pulseAskAgain, pulseBeingWritten } from "../lib/pulseMood";
-import { BreadthTable, CalendarTable, FlowsTable, GlobalTable, HeadlinesTable, HotTable, IndexTable, MoodCard, MoodSkeleton, MoversTable, Pair, RiskTable, SectorsTable, ThemesTable, TopicsTable, usePulseMood } from "./PulseMood";
+import { BreadthTable, CalendarTable, FlowsTable, GlobalTable, HeadlinesTable, HotTable, IndexTable, MoodCard, MoodSkeleton, moodOldTime, MoversTable, Pair, RiskTable, SectorsTable, ThemesTable, TopicsTable, usePulseMood } from "./PulseMood";
 import { FoBadges } from "../components/FoBadges";
 import { IndexBadges } from "../components/IndexBadges";
 import { FilingsPanel } from "../components/Filings";
@@ -603,8 +603,8 @@ export function PulsePage() {
       </Card>
       {/* each block is labelled with the session its figures are of, never the new day's date before Mood's read of it (LIVE7A-001) */}
       {mood?.breadth && <BreadthTable b={mood.breadth} open={mood.is_open !== false} behind={!!moodBehindNote(mood, pulseClosedDay(data?.indices), String)} />}
-      {mood?.sectors && <SectorsTable s={mood.sectors} closedDay={moodDay(mood, pulseClosedDay(data?.indices))} />}
-      {mood?.movers?.map((m) => <MoversTable key={m.index} m={m} closedDay={moodDay(mood, pulseClosedDay(data?.indices))} />)}
+      {mood?.sectors && <SectorsTable s={mood.sectors} closedDay={moodDay(mood, pulseClosedDay(data?.indices))} oldAt={moodOldTime(mood, region)} />}
+      {mood?.movers?.map((m) => <MoversTable key={m.index} m={m} closedDay={moodDay(mood, pulseClosedDay(data?.indices))} oldAt={moodOldTime(mood, region)} />)}
       {mood && <Pair nl={mood.flows?.rows.length ? mood.flows.rows.length + 1 : 0} nr={mood.risk?.rows.length ?? 0}
         left={mood.flows ? <FlowsTable f={mood.flows} source={ai?.flows_source} /> : null} right={mood.risk ? <RiskTable r={mood.risk} /> : null} />}
       {mood?.global && <GlobalTable g={mood.global} region={region} today={dayIn(new Date(), marketTz(region))} />}
