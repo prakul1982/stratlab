@@ -5,6 +5,7 @@ import { doNotTrack } from "../lib/analytics";
 import { flushSignup, loadPixel, onSignup, pixelPageView, startClarity, stopClarity } from "../lib/track";
 import { CONFIG } from "../lib/adsConfig";
 import { useGuideOpen } from "../lib/onboarding";
+import { callsInFlight, onIdle } from "../lib/inflight";
 
 /* The one question for Google ads, the Meta Pixel and Microsoft Clarity (ADS-1), and the loader for the last two. Mounted once, in
  * the public half and in the app. Nothing is asked, and nothing loads, unless an ad slot is set up or a pixel or Clarity ID is
@@ -60,16 +61,31 @@ function askLater() {
 /** Ms after the window's load before the question is drawn: by then the page has drawn its own content, so the question, after it,
  * is never pushed down by a page still filling in (LIVE8B-004). */
 export const ASK_AFTER_LOAD_MS = 1200;
+/** LIVE16B-005: and not while the page's own calls are still out (a company page's chart and cards arrive after the window's load, and
+ * on a phone they pushed the question down under the reader: CLS 0.088); ASK_QUIET_MS after the last one is answered, at most
+ * ASK_MAX_WAIT_MS after the load whatever is still out (a page that keeps asking). */
+export const ASK_QUIET_MS = 600;
+export const ASK_MAX_WAIT_MS = 15_000;
 
-/** True once the page has loaded and had a moment to draw (or at once when it already had: a page opened later in the visit). */
+/** True once the page has loaded, its calls are back and it has had a moment to draw (or at once when it already had: a page opened
+ * later in the visit). */
 function useSettled(): boolean {
   const [on, setOn] = useState(() => settledOnce);
   useEffect(() => {
     if (on) return;
-    let t = 0;
-    const go = () => { t = window.setTimeout(() => { settledOnce = true; setOn(true); }, ASK_AFTER_LOAD_MS); };
+    let t = 0, cap = 0, stop = () => {};
+    const done = () => { stop(); window.clearTimeout(t); window.clearTimeout(cap); settledOnce = true; setOn(true); };
+    const quiet = () => {
+      window.clearTimeout(t);
+      if (callsInFlight() > 0) return;          // asked again when the last call out is answered (onIdle below)
+      t = window.setTimeout(() => (callsInFlight() > 0 ? undefined : done()), ASK_QUIET_MS);
+    };
+    const go = () => {
+      cap = window.setTimeout(done, ASK_MAX_WAIT_MS);
+      t = window.setTimeout(() => { stop = onIdle(quiet); quiet(); }, ASK_AFTER_LOAD_MS);
+    };
     if (document.readyState === "complete") go(); else window.addEventListener("load", go, { once: true });
-    return () => { window.removeEventListener("load", go); window.clearTimeout(t); };
+    return () => { window.removeEventListener("load", go); window.clearTimeout(t); window.clearTimeout(cap); stop(); };
   }, [on]);
   return on;
 }
