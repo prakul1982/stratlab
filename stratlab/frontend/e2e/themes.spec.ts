@@ -85,9 +85,10 @@ test("the theme page is a deep dive made of tables, with each company only where
   const memY = await members.evaluate((e) => e.getBoundingClientRect().top + window.scrollY);
   expect(navY, "section links above the companies").toBeLessThan(memY);
   await expect(main).not.toContainText("Oil and Natural Gas");
-  // a sub-theme with no listed company says so
-  // (updated on purpose, LIVE9A-022: the empty sub-themes are named in one line under the others)
-  await expect(page.locator("#theme-subs").getByTestId("subs-empty")).toContainText(/No listed company is shown for (this sub-theme|these sub-themes): /);
+  // (updated on purpose, fix20 LIVE14A-006: a sub-theme no listed company fits is left out of the page, not listed as empty; was
+  // LIVE9A-022's one line naming the empty sub-themes)
+  await expect(page.locator("#theme-subs").getByTestId("subs-empty")).toHaveCount(0);
+  await expect(page.locator("#theme-subs")).not.toContainText(/No listed company is shown for/);
   // claims: the one an old scheme rests on is gone, the rest is marked general background
   const claims = page.locator("#theme-claims");
   await expect(claims).toContainText("General background");
